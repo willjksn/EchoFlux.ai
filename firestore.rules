@@ -1,0 +1,53 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /** -------------------------------------------------------
+     *  Helper: Check if the authenticated user is an Admin
+     *  -------------------------------------------------------
+     *  - Prevents breaking rules when user doc doesn't exist
+     *  - Protects from undefined fields
+     */
+    function isAdmin() {
+      return request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
+    }
+
+    /** -------------------------------------------------------
+     *  USERS COLLECTION
+     *  -------------------------------------------------------
+     *  - User can read/write ONLY their own top-level user doc
+     *  - Admins can read/write ALL user docs
+     *  ------------------------------------------------------- */
+    match /users/{userId} {
+
+      // User can read/write themselves
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      // Admin override
+      allow read, write: if isAdmin();
+
+      /** ---------------------------------------------------
+       * USER SUBCOLLECTIONS (messages, posts, CRM, calendar, voices, autopilot, etc.)
+       * ----------------------------------------------------
+       * - Users can fully manage their own subcollections
+       * - Admins get full access
+       */
+      match /{subCollection=**}/{docId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read, write: if isAdmin();
+      }
+    }
+
+    /** -------------------------------------------------------
+     *  BLOCK ALL OTHER TOP-LEVEL COLLECTIONS
+     *  ------------------------------------------------------- 
+     *  You should ONLY have /users at the root.
+     *  This prevents unauthorized data being written elsewhere.
+     */
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
