@@ -120,7 +120,7 @@ export const Calendar: React.FC = () => {
         <div className="max-w-7xl mx-auto h-[calc(100vh-8rem)] flex flex-col">
             <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
                 <div className="flex items-center gap-4">
-                    <h2 className="text-3xl font-bold text-gray-900 dark:text-white">My Content Calendar</h2>
+                    <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Content Calendar</h2>
                     <div className="flex items-center bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-1">
                          <button onClick={handlePrevMonth} className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
