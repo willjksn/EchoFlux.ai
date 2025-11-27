@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from './AppContext';
 import { StrategyPlan, Platform, WeekPlan } from '../types';
-import { generateContentStrategy } from '../src/services/geminiService';
+import { generateContentStrategy } from "../src/services/geminiService"
 import { TargetIcon, SparklesIcon, CalendarIcon, CheckCircleIcon } from './icons/UIIcons';
 import { InstagramIcon, TikTokIcon, XIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
 import { UpgradePrompt } from './UpgradePrompt';

@@ -47,7 +47,7 @@ const AddClientModal: React.FC<AddClientModalProps> = ({ isOpen, onClose, onSave
     };
 
     const handleSave = () => {
-        const storageLimits = { Free: 100, Pro: 1024, Elite: 10240, Agency: 51200 };
+        const storageLimits = { Free: 100, Pro: 1024, Elite: 10240, Agency: 51200, Growth: 25600, Starter: 512 };
         const newClient: Client = {
             id: `client-${Date.now()}`,
             name,
@@ -59,7 +59,7 @@ const AddClientModal: React.FC<AddClientModalProps> = ({ isOpen, onClose, onSave
             monthlyVideoGenerationsUsed: 0,
             mediaLibrary: [],
             storageUsed: 0,
-            storageLimit: storageLimits[plan],
+            storageLimit: storageLimits[plan] || 100,
             settings: { ...defaultSettings, connectedAccounts },
             socialStats: generateMockSocialStats(),
         };
@@ -130,7 +130,7 @@ const SettingsSection: React.FC<{ title: string; children: React.ReactNode }> = 
 );
 
 export const Clients: React.FC<ClientsProps> = () => {
-    const { user, clients, setClients, teamMembers, showToast } = useAppContext();
+    const { user, clients, setClients, teamMembers, showToast, setActivePage } = useAppContext();
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     const handleAddClient = (newClient: Client) => {
@@ -143,7 +143,6 @@ export const Clients: React.FC<ClientsProps> = () => {
     };
 
     const generateApprovalLink = (clientId: string) => {
-        // Mock logic to generate link
         const link = `https://engagesuite.ai/review/${clientId}/${Date.now().toString(36)}`;
         navigator.clipboard.writeText(link);
         showToast('Approval link copied to clipboard!', 'success');
@@ -151,14 +150,23 @@ export const Clients: React.FC<ClientsProps> = () => {
         setClients(prev => prev.map(c => c.id === clientId ? {...c, approvalLink: link} : c));
     };
     
-    if (!['Elite', 'Agency'].includes(user?.plan || "") && user?.role !== 'Admin')
- {
+    // STRICT CHECK: Must be Agency or Admin
+    if ((!user || user.plan !== 'Agency') && user?.role !== 'Admin') {
         return (
-             <div className="max-w-4xl mx-auto text-center bg-white dark:bg-gray-800 p-8 rounded-xl shadow-md">
-                <BriefcaseIcon />
-                <h2 className="mt-4 text-2xl font-bold text-gray-900 dark:text-white">Upgrade to Manage Clients</h2>
-                <p className="mt-2 text-gray-600 dark:text-gray-400">Upgrade your plan to manage multiple client accounts from one dashboard.</p>
-                <button className="mt-6 px-6 py-2 bg-primary-600 text-white font-semibold rounded-md hover:bg-primary-700">View Plans</button>
+             <div className="max-w-4xl mx-auto text-center bg-white dark:bg-gray-800 p-12 rounded-xl shadow-md mt-10">
+                <div className="mx-auto flex items-center justify-center h-20 w-20 rounded-full bg-primary-100 dark:bg-primary-900/50 text-primary-600 dark:text-primary-400 mb-6">
+                    <BriefcaseIcon className="w-10 h-10"/>
+                </div>
+                <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Upgrade to Agency Plan</h2>
+                <p className="mt-4 text-lg text-gray-600 dark:text-gray-400 max-w-lg mx-auto">
+                    Client management is exclusive to our Agency plan. Manage multiple accounts, invite your team, and use white-label approval workflows.
+                </p>
+                <button 
+                    onClick={() => setActivePage('pricing')}
+                    className="mt-8 px-8 py-3 bg-primary-600 text-white font-bold rounded-full hover:bg-primary-700 shadow-lg transform transition hover:-translate-y-1"
+                >
+                    View Agency Plans
+                </button>
             </div>
         )
     }

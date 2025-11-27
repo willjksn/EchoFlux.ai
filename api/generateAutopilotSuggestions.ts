@@ -12,9 +12,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const { niche, audience, goals, channels } = req.body || {};
+  const { niche, audience, userType } = req.body || {};
 
-  if (!niche || !audience || !goals) {
+  if (!niche || !audience) {
     return res.status(400).json({ error: "Missing required fields" });
   }
 
@@ -22,29 +22,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const model = getModel("gemini-2.0-flash");
 
     const prompt = `
-You are an expert content strategist.
+You are an autopilot social media strategist.
 
-Create a 4-week content strategy for:
+Generate 3 creative campaign ideas for:
+- User type: ${userType || "creator/business"}
 - Niche: ${niche}
 - Audience: ${audience}
-- Goals: ${goals}
-- Channels: ${Array.isArray(channels) ? channels.join(", ") : channels || "general"}
 
-Return ONLY JSON exactly in this structure:
-
-{
-  "overview": "short paragraph",
-  "themes": [
-    { "name": "theme name", "description": "what it covers" }
-  ],
-  "weeklyPlan": [
-    {
-      "week": 1,
-      "focus": "theme or focus",
-      "ideas": ["idea 1", "idea 2"]
-    }
-  ]
-}
+Return ONLY JSON: ["Idea 1", "Idea 2", "Idea 3"]
 `;
 
     const response = await model.generateContent({
@@ -52,26 +37,22 @@ Return ONLY JSON exactly in this structure:
       generationConfig: { responseMimeType: "application/json" }
     });
 
-    const raw = response.response.text();
-    let json;
+    const raw = response.response.text().trim();
+    let ideas: string[];
 
     try {
-      json = parseJSON(raw);
+      ideas = parseJSON(raw);
+      if (!Array.isArray(ideas)) throw new Error("AI returned non-array");
     } catch {
-      json = {
-        overview: "Unable to parse AI response.",
-        themes: [],
-        weeklyPlan: []
-      };
+      ideas = ["Campaign Idea 1", "Campaign Idea 2", "Campaign Idea 3"];
     }
 
-    return res.status(200).json(json);
+    return res.status(200).json({ ideas });
   } catch (error: any) {
-    console.error("generateContentStrategy error:", error);
+    console.error("generateAutopilotSuggestions error:", error);
     return res.status(500).json({
-      error: "Failed to generate content strategy",
-      details: error?.message ?? String(error),
+      error: "Failed to generate suggestions",
+      details: error?.message ?? String(error)
     });
   }
 }
-

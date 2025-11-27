@@ -1,55 +1,33 @@
-
-
 import React, { useState } from 'react';
 
 const faqData = [
     {
-        question: "What is the 'Command Center' Dashboard?",
-        answer: "The Command Center is the new home screen of EngageSuite.ai. Instead of just showing a list of messages, it provides a high-level executive summary of your account. You can see your Account Health Score, upcoming posts from your calendar, a snapshot of urgent messages, and quick shortcuts to generate content or strategy. You can still toggle back to the classic 'Full Inbox' view at any time."
+        question: "What's the difference between Creator and Business mode?",
+        answer: "Creator mode is tailored for personal brand building, focusing on metrics like follower growth and engagement. Business mode transforms the app into a marketing command center, focusing on ROI metrics like website clicks, leads, and sales. The AI tools, like the Autopilot/Marketing Manager, also adapt to offer you more relevant campaign ideas."
     },
     {
-        question: "What is the Social CRM and how does it help me?",
-        answer: "The Social CRM transforms your inbox from a simple message list into a relationship management tool. You can click on any user to see a sidebar where you can add internal notes (e.g., 'VIP Client', 'Complained about shipping'), apply tags (e.g., 'Lead', 'Influencer'), and view your entire history of interactions with them. This helps you provide personalized support and track leads directly from social media."
+        question: "What is the AI Marketing Manager for businesses?",
+        answer: "This is the business version of our Autopilot. Instead of generic content ideas, it provides strategic 'Campaign Ideas' like 'Promote a Weekly Special' or 'Highlight a Customer Review'. You can select an idea or type a custom goal, and the AI will generate a complete marketing campaign—from strategy to final posts—for your approval."
     },
     {
         question: "How does the AI Content Strategist work?",
-        answer: "The Strategist takes your brand niche, target audience, and goals (e.g., Brand Awareness) and generates a comprehensive 4-week content plan. It suggests topics, formats (Reels, Posts), and themes for every day. With one click, you can 'Populate Calendar' to turn this plan into draft posts in your schedule."
+        answer: "The Strategist takes your brand niche (for Creators) or business type (for Businesses) and your goals, and generates a comprehensive multi-week content plan. It suggests topics, formats (Reels, Posts), and themes for every day. You can then 'Populate Calendar' to turn this plan into draft posts in your schedule."
     },
     {
-        question: "Can I replace tools like Linktree with EngageSuite?",
-        answer: "Yes! Our 'Smart Link-in-Bio' builder allows you to create a beautiful, branded mobile landing page for your social profiles. Unlike basic link tools, ours includes a built-in Email Capture form, allowing you to grow your newsletter list directly from Instagram or TikTok without needing a separate website."
-    },
-    {
-        question: "What is Social Listening?",
-        answer: "Social Listening allows you to track conversations happening *about* you, even if you aren't tagged. You can set up keywords for your brand name, competitors, or industry terms. EngageSuite will scan the web and social platforms to bring these mentions into your Analytics dashboard, helping you manage your reputation and find new customers."
-    },
-    {
-        question: "How do the Approval Workflows work for teams?",
-        answer: "For Agency and Elite plans, we offer a Kanban-style approval board. Team members can submit posts as 'Drafts' or 'In Review'. Managers can then review the content, leave internal comments for feedback, and move posts to 'Approved' or 'Scheduled'. We also offer 'External Approval Links' so you can share a read-only view with clients who don't have an account."
-    },
-    {
-        question: "What is the 'Remix' feature?",
-        answer: "The Remix engine helps you get more value out of every content idea. With one click, you can take a caption written for Instagram and have our AI rewrite it perfectly for LinkedIn (more professional) or X/Twitter (shorter and punchier), saving you hours of copywriting time."
-    },
-    {
-        question: "How does the Competitor Analysis work?",
-        answer: "You can add the social handles of your top competitors in the Analytics tab. We track their public metrics like engagement rates, follower growth, and posting frequency. We also analyze their top-performing content types and posting times to give you actionable insights on how to beat them."
+        question: "Can I replace Linktree with EngageSuite?",
+        answer: "Yes! Our 'Smart Link-in-Bio' builder allows you to create a beautiful, branded mobile landing page. It also includes a built-in Email Capture form, letting you grow your newsletter list directly from Instagram or TikTok without needing a separate website."
     },
     {
         question: "How does AI Image and Video generation work?",
-        answer: "You provide a text prompt describing what you want. For images, our AI generates unique visuals. For videos, we use the advanced Veo model to create high-quality clips. On premium plans, you can upload an 'AI Avatar' (base image) so the AI generates content featuring you or your product consistent style."
+        answer: "You provide a text prompt describing what you want. For images, our AI generates unique visuals. For videos, we use the advanced Veo model to create high-quality clips. On premium plans, you can upload an 'AI Avatar' (a base image) so the AI generates new content featuring you or your product in a consistent style."
     },
     {
-        question: "Can I really clone my own voice?",
-        answer: "Yes! Pro, Elite, and Agency plans allow you to upload an audio sample to create a custom AI voice clone. You can then type any script, and our AI will generate a voice-over that sounds just like you for your Reels or TikToks."
-    },
-    {
-        question: "What happens if I run out of AI credits?",
-        answer: "If you exhaust your monthly plan's allowance for images or videos, you have two options: 1) Purchase a one-time 'Credit Pack' to top up your account instantly. 2) On Elite/Agency plans, use our 'Bring Your Own Key' (BYOK) feature to connect your own Google Gemini API key and pay Google directly for usage at cost."
+        question: "What is 'Bring Your Own Key' (BYOK)?",
+        answer: "For users on our highest tiers (Elite/Agency) who have very high generation needs, we offer a BYOK model. Once you consume your generous monthly AI credits, you can connect your own Google AI API key. All subsequent AI requests will be billed directly to your Google Cloud account at their standard rates, allowing for virtually unlimited generation at cost."
     },
     {
         question: "Is my data safe when connecting accounts?",
-        answer: "Absolutely. We use official APIs and secure OAuth authentication for all social platforms (Instagram, TikTok, LinkedIn, etc.). We never see or store your passwords. You can revoke access at any time."
+        answer: "Absolutely. We use official APIs and secure OAuth authentication for all social platforms. We never see or store your passwords, and you can revoke our access at any time from your social media account settings."
     }
 ];
 

@@ -1,4 +1,3 @@
-// api/generateVideo.ts
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { verifyAuth } from "./verifyAuth.ts";
 
@@ -8,10 +7,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  // TODO: Integrate with your video generation pipeline.
+  // Intentionally not implemented yet.
   return res.status(501).json({
-    error: "Video generation is not implemented yet.",
-    note: "Connect this route to your video rendering/generation service and store a job ID.",
+    error: "Text-to-speech audio generation is not yet implemented on the server.",
+    note: "Wire this endpoint to your preferred TTS provider (e.g. ElevenLabs, Play.ht, etc.).",
   });
 }
-

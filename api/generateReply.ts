@@ -1,39 +1,41 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getModel } from "./_geminiShared.ts";
+import { verifyAuth } from "./verifyAuth.ts";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
+  const user = await verifyAuth(req);
+  if (!user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const { incomingMessage, tone, context } = (req.body as any) || {};
+  if (!incomingMessage) {
+    return res.status(400).json({ error: "Missing 'incomingMessage' in body" });
+  }
+
   try {
-    const { messageContent, messageType, platform, settings } = req.body || {};
-
-    if (!process.env.GEMINI_API_KEY) {
-      return res.status(500).json({ error: "Missing GEMINI_API_KEY" });
-    }
-
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = getModel("gemini-2.0-flash");
 
     const prompt = `
-You are a helpful social media assistant.
+You write replies to DMs/comments.
 
 Incoming message:
-"${messageContent}"
+${incomingMessage}
 
-Message type: ${messageType || "general"}
-Platform: ${platform || "generic"}
-Tone/settings JSON:
-${JSON.stringify(settings || {}, null, 2)}
+Tone: ${tone || "friendly, on-brand"}
+Context: ${context || "none"}
 
-Write a natural reply that:
-- Matches the brand tone
-- Is concise (1–3 sentences)
-- Includes emojis only if appropriate for the platform
-Return ONLY the reply text, no explanations.`;
+Write a short reply that feels human, not robotic. Do NOT add greetings if user already greeted. One reply only.
+`;
 
-    const result = await model.generateContent(prompt);
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+    });
+
     const reply = result.response.text().trim();
 
     return res.status(200).json({ reply });
@@ -41,7 +43,7 @@ Return ONLY the reply text, no explanations.`;
     console.error("generateReply error:", err);
     return res.status(500).json({
       error: "Failed to generate reply",
-      details: err?.message || String(err),
+      details: err?.message ?? String(err),
     });
   }
 }

@@ -2,13 +2,117 @@
 <html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%233B82F6'/%3E%3Cg fill='white'%3E%3Cpath d='M12 6C12 4.89543 12.8954 4 14 4H18C19.1046 4 20 4.89543 20 6V26C20 27.1046 19.1046 28 18 28H14C12.8954 28 12 27.1046 12 26V6Z' /%3E%3Cpath d='M6 12C4.89543 12 4 12.8954 4 14V18C4 19.1046 4.89543 20 6 20H26C27.1046 20 28 19.1046 28 18V14C28 12.8954 27.1046 12 26 12H6Z' /%3E%3C/g%3E%3C/svg%3E" />
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%233B82F6'/%3E%3Cg fill='white'%3E%3Cpath d='M12 6C12 4.89543 12.8954 4 14 4H18C19.1046 4 20 4.89543 20 6V26C20 27.1046 19.1046 28 18 28H14C12.8954 28 12 27.1046 12 26V6Z' /%3E%3Cpath d='M6 12C4.89543 12 4 12.8954 4 14V18C4 19.1046 4.89543 20 6 20H26C27.1046 20 28 19.1046 28 18V14C28 12.8954 27.1046 12 26 12H6Z' /%3E%3C/g%3E%3C/svg%3E"
+    />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EngageSuite.ai</title>
-  
-</head>
+
+    <!-- Tailwind via CDN (ok with Vite, since components use utility classes) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              primary: {
+                50: "#eff6ff",
+                100: "#dbeafe",
+                200: "#bfdbfe",
+                300: "#93c5fd",
+                400: "#60a5fa",
+                500: "#3b82f6",
+                600: "#2563eb",
+                700: "#1d4ed8",
+                800: "#1e40af",
+                900: "#1e3a8a",
+                950: "#172554",
+              },
+            },
+          },
+        },
+      };
+    </script>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Global styles & autofill fixes -->
+    <style>
+      html,
+      body {
+        overflow-x: hidden;
+      }
+      body,
+      button,
+      input,
+      textarea,
+      select {
+        font-family: "Inter", "Apple Color Emoji", "Segoe UI Emoji",
+          "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
+      }
+      @keyframes highlight {
+        0% {
+          background-color: rgba(59, 130, 246, 0);
+        }
+        50% {
+          background-color: rgba(59, 130, 246, 0.2);
+        }
+        100% {
+          background-color: rgba(59, 130, 246, 0);
+        }
+      }
+      .highlight-animation {
+        animation: highlight 2s ease-in-out;
+      }
+      .tour-popover {
+        position: fixed;
+        z-index: 1002;
+        background-color: white;
+        padding: 1rem;
+        border-radius: 0.75rem;
+        width: 300px;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+          0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        transition: all 0.3s ease-in-out;
+      }
+      .dark .tour-popover {
+        background-color: #1f2937; /* gray-800 */
+      }
+
+      /* Fix for browser autofill styles */
+      input:-webkit-autofill,
+      input:-webkit-autofill:hover,
+      input:-webkit-autofill:focus,
+      input:-webkit-autofill:active {
+        -webkit-text-fill-color: #111827 !important; /* dark text */
+        -webkit-box-shadow: 0 0 0 30px #ffffff inset !important; /* white bg */
+        transition: background-color 5000s ease-in-out 0s;
+      }
+      .dark input:-webkit-autofill,
+      .dark input:-webkit-autofill:hover,
+      .dark input:-webkit-autofill:focus,
+      .dark input:-webkit-autofill:active {
+        -webkit-text-fill-color: #1f2937 !important; /* readable dark text */
+        -webkit-box-shadow: 0 0 0 30px #d1d5db inset !important; /* light gray bg */
+      }
+    </style>
+
+    <!-- ⚠️ IMPORTANT: removed importmap block.
+         Vite already resolves React, Firebase, etc. from node_modules.
+         Import maps pointing to CDNs would conflict and break your app. -->
+  </head>
   <body>
     <div id="root"></div>
+    <!-- Vite entrypoint (keep this as-is if your app is already working with npm run dev) -->
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>

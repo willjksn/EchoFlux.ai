@@ -1,4 +1,4 @@
-// api/generateVideo.ts
+// api/getVideoStatus.ts
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { verifyAuth } from "./verifyAuth.ts";
 
@@ -8,10 +8,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  // TODO: Integrate with your video generation pipeline.
+  // TODO: Look up job status in your DB or provider.
   return res.status(501).json({
-    error: "Video generation is not implemented yet.",
-    note: "Connect this route to your video rendering/generation service and store a job ID.",
+    error: "Video status tracking is not implemented yet.",
+    note: "Use a job ID to fetch real status from your video provider.",
   });
 }
 

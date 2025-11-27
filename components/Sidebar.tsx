@@ -40,27 +40,20 @@ export const Sidebar: React.FC = () => {
     return null;
   }
 
-  // New Order: Command -> Creation -> Management -> Analysis -> Admin
-  const allNavItems: (Omit<NavItemProps, 'page'> & { page: Page | 'admin' })[] = [
-    // Command
+  const isBusiness = user.userType === 'Business';
+  const autopilotLabel = isBusiness ? 'Marketing Manager' : 'AI Autopilot';
+
+  const allNavItems: (Omit<NavItemProps, 'page' | 'label'> & { page: Page | 'admin', label: string })[] = [
     { page: 'dashboard', icon: <DashboardIcon />, label: 'Dashboard' },
-    
-    // Creation Suite - Grouped for better flow
     { page: 'compose', icon: <ComposeIcon />, label: 'Compose', tourId: 'tour-step-3-compose-nav' },
     { page: 'automation', icon: <AutomationIcon />, label: 'Automation' },
-    { page: 'autopilot', icon: <RocketIcon />, label: 'Autopilot', tourId: 'tour-step-autopilot-nav' },
+    { page: 'autopilot', icon: <RocketIcon />, label: autopilotLabel, tourId: 'tour-step-autopilot-nav' },
     { page: 'strategy', icon: <TargetIcon />, label: 'Strategy' },
     { page: 'opportunities', icon: <TrendingIcon />, label: 'Opportunities', tourId: 'tour-step-opportunities-nav' },
-    
-    // Management
     { page: 'calendar', icon: <CalendarIcon />, label: 'Calendar' },
     { page: 'approvals', icon: <KanbanIcon />, label: 'Approvals' },
     { page: 'bio', icon: <GlobeIcon />, label: 'Link in Bio' },
-    
-    // Analysis
     { page: 'analytics', icon: <AnalyticsIcon />, label: 'Analytics', tourId: 'tour-step-2-analytics-nav' },
-    
-    // Admin / Settings
     { page: 'team', icon: <TeamIcon />, label: 'Team', tourId: 'tour-step-team-nav' },
     { page: 'clients', icon: <BriefcaseIcon />, label: 'Clients', tourId: 'tour-step-clients-nav' },
     { page: 'settings', icon: <SettingsIcon />, label: 'Settings' },
@@ -69,9 +62,8 @@ export const Sidebar: React.FC = () => {
 
   const navItems = allNavItems.filter(item => {
       if (user.role === 'Admin') {
-          return true; // Admins see everything
+          return true;
       }
-
       switch (item.page) {
           case 'analytics':
           case 'opportunities':
@@ -79,17 +71,18 @@ export const Sidebar: React.FC = () => {
           case 'calendar':
           case 'bio':
           case 'strategy':
-          case 'autopilot': // Autopilot is now available for all paid plans
+          case 'autopilot':
               return user.plan !== 'Free';
           case 'approvals':
               return ['Elite', 'Agency'].includes(user.plan);
           case 'team':
-              return user.plan === 'Agency';
+              return user.plan === 'Agency' || user.plan === 'Growth'; // Allow Growth plan for team
           case 'clients':
-              return ['Elite', 'Agency'].includes(user.plan);
+              // STRICT CHECK: Only Agency Plan
+              return user.plan === 'Agency';
           case 'admin':
-              return false; // Non-admins never see admin page
-          default: // dashboard, compose, settings
+              return false;
+          default:
               return true; 
       }
   }) as NavItemProps[];

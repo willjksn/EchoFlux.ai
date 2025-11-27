@@ -1,6 +1,14 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+// components/Compose.tsx
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { generateCaptions, generateReply } from "../src/services/geminiService";
-import { CaptionResult, Platform, MediaItem, Client, User, HashtagSet, Post, CalendarEvent } from '../types';
+
+import {
+  CaptionResult,
+  Platform,
+  HashtagSet,
+  Post,
+  CalendarEvent,
+} from "../types";
 import {
   SparklesIcon,
   UploadIcon,
@@ -17,8 +25,8 @@ import {
   PlusIcon,
   MobileIcon,
   ClipboardCheckIcon,
-  CalendarIcon
-} from './icons/UIIcons';
+  CalendarIcon,
+} from "./icons/UIIcons";
 import {
   InstagramIcon,
   TikTokIcon,
@@ -26,35 +34,21 @@ import {
   XIcon,
   YouTubeIcon,
   LinkedInIcon,
-  FacebookIcon
-} from './icons/PlatformIcons';
-import { ImageGenerator } from './ImageGenerator';
-import { VideoGenerator } from './VideoGenerator';
-import { UpgradePrompt } from './UpgradePrompt';
-import { useAppContext } from './AppContext';
-import { MobilePreviewModal } from './MobilePreviewModal';
-import { db, storage } from '../firebaseConfig';
-import { collection, setDoc, doc } from 'firebase/firestore';
-// @ts-ignore
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+  FacebookIcon,
+} from "./icons/PlatformIcons";
+import { ImageGenerator } from "./ImageGenerator";
+import { VideoGenerator } from "./VideoGenerator";
+import { UpgradePrompt } from "./UpgradePrompt";
+import { useAppContext } from "./AppContext";
+import { MobilePreviewModal } from "./MobilePreviewModal";
 
-const fileToBase64 = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => resolve((reader.result as string).split(',')[1]);
-    reader.onerror = error => reject(error);
-  });
-};
+import { db, storage, auth } from "../firebaseConfig";
+import { collection, setDoc, doc } from "firebase/firestore";
+import * as storageApi from "firebase/storage";
 
-function base64ToBytes(base64: string) {
-  const binaryString = atob(base64);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes;
-}
+// ----------------------------------------------------
+// Helpers
+// ----------------------------------------------------
 
 const platformIcons: Record<Platform, React.ReactNode> = {
   Instagram: <InstagramIcon />,
@@ -70,6 +64,19 @@ const SpeechRecognition =
   (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 const isSpeechRecognitionSupported = !!SpeechRecognition;
 
+// 🔐 Ensure we have a logged-in user + fresh token before calling backend
+async function ensureAuth() {
+  const current = auth.currentUser;
+  if (!current) {
+    throw new Error("LOGIN_REQUIRED");
+  }
+  await current.getIdToken(true); // force refresh token
+}
+
+// ==============================
+// CaptionGenerator
+// ==============================
+
 const CaptionGenerator: React.FC = () => {
   const {
     user,
@@ -82,21 +89,25 @@ const CaptionGenerator: React.FC = () => {
     hashtagSets,
     setHashtagSets,
     composeContext,
-    addCalendarEvent
+    addCalendarEvent,
   } = useAppContext();
 
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedPlatforms, setSelectedPlatforms] = useState<Record<Platform, boolean>>({
+
+  const [selectedPlatforms, setSelectedPlatforms] = useState<
+    Record<Platform, boolean>
+  >({
     Instagram: false,
     TikTok: false,
     X: false,
     Threads: false,
     YouTube: false,
     LinkedIn: false,
-    Facebook: false
+    Facebook: false,
   });
+
   const [isPublished, setIsPublished] = useState(false);
 
   const [isListening, setIsListening] = useState(false);
@@ -104,106 +115,79 @@ const CaptionGenerator: React.FC = () => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Remix state
+  // Remix
   const [isRemixModalOpen, setIsRemixModalOpen] = useState(false);
-  const [remixTargetPlatform, setRemixTargetPlatform] = useState<Platform>('X');
-  const [remixSourceText, setRemixSourceText] = useState('');
+  const [remixTargetPlatform, setRemixTargetPlatform] =
+    useState<Platform>("X");
+  const [remixSourceText, setRemixSourceText] = useState("");
   const [isRemixing, setIsRemixing] = useState(false);
 
-  // Hashtag state
+  // Hashtags
   const [isHashtagPopoverOpen, setIsHashtagPopoverOpen] = useState(false);
-  const [newHashtagSetName, setNewHashtagSetName] = useState('');
-  const [newHashtagSetTags, setNewHashtagSetTags] = useState('');
+  const [newHashtagSetName, setNewHashtagSetName] = useState("");
+  const [newHashtagSetTags, setNewHashtagSetTags] = useState("");
 
-  // Preview state
+  // Preview
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
-  // Scheduling state
+  // Scheduling
   const [isScheduling, setIsScheduling] = useState(false);
-  const [scheduleDate, setScheduleDate] = useState('');
+  const [scheduleDate, setScheduleDate] = useState("");
 
-  // Plan + role logic
-  const isAgency = user?.plan === 'Agency' || user?.plan === 'Elite';
-  const isBusiness = user?.userType === 'Business';
-  const isAgencyPlan = user?.plan === 'Agency';
+  const isAgency = user?.plan === "Agency" || user?.plan === "Elite";
 
-  // Caption limits including new plans, with safe default
   const captionLimits = useMemo(
     () => ({
       Free: 50,
       Pro: 500,
       Elite: 1500,
       Agency: Infinity,
-      Starter: 1000,
-      Growth: 2500
     }),
     []
   );
 
-  const planKey =
-    (user?.plan as keyof typeof captionLimits) && captionLimits[user!.plan as keyof typeof captionLimits] !== undefined
-      ? (user!.plan as keyof typeof captionLimits)
-      : 'Free';
+  if (!user) return null;
 
-  const limit = captionLimits[planKey];
-  const usage = user?.monthlyCaptionGenerationsUsed || 0;
+  const limit = captionLimits[user.plan];
+  const usage = user.monthlyCaptionGenerationsUsed || 0;
   const canGenerate = usage < limit;
   const usageLeft = limit - usage;
 
-  // Dynamic goal/tone options
-  const goalOptions = useMemo(
-    () => [
-      { value: 'engagement', label: 'Increase Engagement' },
-      { value: 'sales', label: 'Drive Sales' },
-      { value: 'awareness', label: 'Build Awareness' },
-      // Followers only if NOT business or if Agency plan
-      ...((!isBusiness || isAgencyPlan)
-        ? [{ value: 'followers', label: 'Increase Followers/Fans' }]
-        : [])
-    ],
-    [isBusiness, isAgencyPlan]
-  );
-
-  const toneOptions = useMemo(
-    () => [
-      { value: 'friendly', label: 'Friendly' },
-      { value: 'witty', label: 'Witty' },
-      { value: 'inspirational', label: 'Inspirational' },
-      { value: 'professional', label: 'Professional' },
-      // Sexy tones only if NOT business or if Agency plan
-      ...((!isBusiness || isAgencyPlan)
-        ? [
-            { value: 'sexy-bold', label: 'Sexy / Bold' },
-            { value: 'sexy-explicit', label: 'Sexy / Explicit' }
-          ]
-        : [])
-    ],
-    [isBusiness, isAgencyPlan]
-  );
-
+  // -----------------------------------
+  // Pre-fill from composeContext
+  // -----------------------------------
   useEffect(() => {
     if (composeContext?.platform) {
-      setSelectedPlatforms(prev => ({ ...prev, [composeContext.platform!]: true }));
+      setSelectedPlatforms((prev) => ({
+        ...prev,
+        [composeContext.platform!]: true,
+      }));
     }
     if (composeContext?.date) {
       setIsScheduling(true);
-      setScheduleDate(new Date(composeContext.date).toISOString().slice(0, 16));
+      setScheduleDate(
+        new Date(composeContext.date).toISOString().slice(0, 16)
+      );
     }
   }, [composeContext]);
 
+  // -----------------------------------
+  // Speech recognition setup
+  // -----------------------------------
   useEffect(() => {
     if (!isSpeechRecognitionSupported) return;
 
     const recognition = new SpeechRecognition();
     recognition.continuous = false;
     recognition.interimResults = false;
-    recognition.lang = 'en-US';
+    recognition.lang = "en-US";
 
     recognition.onresult = (event: any) => {
       const transcript = event.results[0][0].transcript;
-      setComposeState(prev => ({
+      setComposeState((prev) => ({
         ...prev,
-        captionText: (prev.captionText ? prev.captionText + ' ' : '') + transcript
+        captionText:
+          (prev.captionText ? prev.captionText + " " : "") + transcript,
       }));
       setIsListening(false);
       textareaRef.current?.focus();
@@ -231,13 +215,16 @@ const CaptionGenerator: React.FC = () => {
   };
 
   const handlePlatformToggle = (platform: Platform) => {
-    setSelectedPlatforms(prev => ({ ...prev, [platform]: !prev[platform] }));
+    setSelectedPlatforms((prev) => ({
+      ...prev,
+      [platform]: !prev[platform],
+    }));
   };
 
   const resetCompose = () => {
     handleClearMedia();
     setIsScheduling(false);
-    setScheduleDate('');
+    setScheduleDate("");
     setSelectedPlatforms({
       Instagram: false,
       TikTok: false,
@@ -245,55 +232,85 @@ const CaptionGenerator: React.FC = () => {
       Threads: false,
       YouTube: false,
       LinkedIn: false,
-      Facebook: false
+      Facebook: false,
     });
   };
 
-  const uploadMedia = async (): Promise<string | undefined> => {
-    if (!composeState.media || !user) return undefined;
-
-    // If already a remote URL, return it
-    if (composeState.media.previewUrl.startsWith('http')) {
-      return composeState.media.previewUrl;
+  // ----------------------------------------------------
+  // Upload media (image/video) to Firebase Storage
+  // Return a public download URL.
+  // This is used for:
+  //  - AI captions (backend downloads from URL)
+  //  - Scheduled posts / workflow posts
+  // ----------------------------------------------------
+  const ensureMediaUploaded = async (): Promise<string | undefined> => {
+    if (!user || !composeState.media || !composeState.media.previewUrl) {
+      return undefined;
     }
 
-    if (!composeState.media.data) return undefined;
+    const currentUrl = composeState.media.previewUrl;
+
+    // Already a remote URL (Firebase Storage, etc.)
+    if (currentUrl.startsWith("http")) {
+      return currentUrl;
+    }
 
     try {
-      const timestamp = Date.now();
-      const extension = composeState.media.mimeType.split('/')[1] || 'bin';
-      const storagePath = `users/${user.id}/uploads/${timestamp}.${extension}`;
-      const storageRef = ref(storage, storagePath);
+      // `previewUrl` is probably an in-memory object URL (blob:...)
+      const resp = await fetch(currentUrl);
+      if (!resp.ok) {
+        throw new Error("Failed to read local media blob");
+      }
+      const blob = await resp.blob();
+      const mimeType =
+        composeState.media.mimeType || blob.type || "application/octet-stream";
+      const ext = mimeType.split("/")[1] || "bin";
 
-      const bytes = base64ToBytes(composeState.media.data);
+      const storagePath = `users/${user.id}/uploads/${Date.now()}.${ext}`;
+      const ref = storageApi.ref(storage, storagePath);
 
-      await uploadBytes(storageRef, bytes, {
-        contentType: composeState.media.mimeType
+      await storageApi.uploadBytes(ref, blob, { contentType: mimeType });
+      const downloadURL = await storageApi.getDownloadURL(ref);
+
+      // Update state so next calls reuse the URL
+      setComposeState((prev) => {
+        if (!prev.media) return prev;
+        return {
+          ...prev,
+          media: {
+            ...prev.media,
+            previewUrl: downloadURL,
+          },
+        };
       });
 
-      const downloadURL = await getDownloadURL(storageRef);
       return downloadURL;
     } catch (e) {
-      console.error("Upload failed:", e);
-      throw new Error("Failed to upload media.");
+      console.error("Failed to upload media", e);
+      showToast("Failed to upload media.", "error");
+      return undefined;
     }
   };
 
+  // ----------------------------------------------------
+  // Publish now (mocked social posting)
+  // ----------------------------------------------------
   const handlePublish = () => {
-    const platformsToPost = (Object.keys(selectedPlatforms) as Platform[]).filter(
-      p => selectedPlatforms[p]
-    );
+    const platformsToPost = (
+      Object.keys(selectedPlatforms) as Platform[]
+    ).filter((p) => selectedPlatforms[p]);
+
     if (!composeState.captionText.trim() && !composeState.media) {
-      showToast('Please write or generate content to post.', 'error');
+      showToast("Please write or generate content to post.", "error");
       return;
     }
     if (platformsToPost.length === 0) {
-      showToast('Please select at least one platform to post to.', 'error');
+      showToast("Please select at least one platform to post to.", "error");
       return;
     }
 
-    platformsToPost.forEach(platform => {
-      showToast(`Caption published to ${platform}!`, 'success');
+    platformsToPost.forEach((platform) => {
+      showToast(`Caption published to ${platform}!`, "success");
     });
 
     setIsPublished(true);
@@ -303,36 +320,35 @@ const CaptionGenerator: React.FC = () => {
     }, 2000);
   };
 
+  // ----------------------------------------------------
+  // Schedule post (creates Post + CalendarEvent in Firestore)
+  // ----------------------------------------------------
   const handleSchedule = async (date: string) => {
-    const platformsToPost = (Object.keys(selectedPlatforms) as Platform[]).filter(
-      p => selectedPlatforms[p]
-    );
+    const platformsToPost = (
+      Object.keys(selectedPlatforms) as Platform[]
+    ).filter((p) => selectedPlatforms[p]);
+
     if (!composeState.captionText.trim() && !composeState.media) {
-      showToast('Please add content to schedule.', 'error');
+      showToast("Please add content to schedule.", "error");
       return;
     }
     if (platformsToPost.length === 0) {
-      showToast('Please select at least one platform.', 'error');
+      showToast("Please select at least one platform.", "error");
       return;
     }
 
     setIsSaving(true);
     try {
-      let mediaUrl = composeState.media?.previewUrl;
-      if (
-        composeState.media &&
-        composeState.media.data &&
-        !composeState.media.previewUrl.startsWith('http')
-      ) {
-        mediaUrl = await uploadMedia();
-      }
+      const mediaUrl = await ensureMediaUploaded();
 
       const title = composeState.captionText.trim()
-        ? composeState.captionText.substring(0, 30) + '...'
-        : 'New Post';
+        ? composeState.captionText.substring(0, 30) +
+          (composeState.captionText.length > 30 ? "..." : "")
+        : "New Post";
 
       const postId = Date.now().toString();
 
+      // save Post in Firestore
       if (user) {
         const newPost: Post = {
           id: postId,
@@ -340,39 +356,39 @@ const CaptionGenerator: React.FC = () => {
           mediaUrl: mediaUrl,
           mediaType: composeState.media?.type,
           platforms: platformsToPost,
-          status: 'Scheduled',
+          status: "Scheduled",
           author: { name: user.name, avatar: user.avatar },
           comments: [],
           scheduledDate: new Date(date).toISOString(),
-          clientId: selectedClient?.id
+          clientId: selectedClient?.id,
         };
 
         const safePost = JSON.parse(JSON.stringify(newPost));
-        await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
+        await setDoc(doc(db, "users", user.id, "posts", postId), safePost);
       }
 
       const newEvent: CalendarEvent = {
         id: `cal-${postId}`,
         title: title,
         date: new Date(date).toISOString(),
-        type: composeState.media?.type === 'video' ? 'Reel' : 'Post',
+        type: composeState.media?.type === "video" ? "Reel" : "Post",
         platform: platformsToPost[0],
-        status: 'Scheduled',
-        thumbnail: mediaUrl
+        status: "Scheduled",
+        thumbnail: mediaUrl,
       };
 
       await addCalendarEvent(newEvent);
       showToast(
         `Post scheduled for ${new Date(date).toLocaleString([], {
-          dateStyle: 'medium',
-          timeStyle: 'short'
+          dateStyle: "medium",
+          timeStyle: "short",
         })}`,
-        'success'
+        "success"
       );
       resetCompose();
     } catch (e) {
       console.error(e);
-      showToast("Failed to schedule post.", 'error');
+      showToast("Failed to schedule post.", "error");
     } finally {
       setIsSaving(false);
     }
@@ -381,157 +397,181 @@ const CaptionGenerator: React.FC = () => {
   const handleSmartSchedule = () => {
     const now = new Date();
     const nextTuesday = new Date(now);
-    const dayOfWeek = now.getDay(); // Sunday = 0, Tuesday = 2
+    const dayOfWeek = now.getDay(); // Sun=0, Tue=2
     const daysUntilTuesday = (2 - dayOfWeek + 7) % 7;
 
     nextTuesday.setDate(
-      now.getDate() + (daysUntilTuesday === 0 && now.getHours() >= 10 ? 7 : daysUntilTuesday)
+      now.getDate() +
+        (daysUntilTuesday === 0 && now.getHours() >= 10
+          ? 7
+          : daysUntilTuesday)
     );
     nextTuesday.setHours(10, 0, 0, 0);
 
-    const isoDate = nextTuesday.toISOString();
-    setScheduleDate(isoDate.slice(0, 16));
-    handleSchedule(isoDate);
+    const iso = nextTuesday.toISOString();
+    setScheduleDate(iso.slice(0, 16));
+    handleSchedule(iso);
   };
 
-  const handleSaveToWorkflow = async (status: 'Draft' | 'In Review') => {
+  // ----------------------------------------------------
+  // Save Draft / In Review (workflow)
+  // ----------------------------------------------------
+  const handleSaveToWorkflow = async (status: "Draft" | "In Review") => {
     if (!user) return;
-    const platformsToPost = (Object.keys(selectedPlatforms) as Platform[]).filter(
-      p => selectedPlatforms[p]
-    );
+    const platformsToPost = (
+      Object.keys(selectedPlatforms) as Platform[]
+    ).filter((p) => selectedPlatforms[p]);
 
     if (!composeState.captionText.trim() && !composeState.media) {
-      showToast('Please add content first.', 'error');
+      showToast("Please add content first.", "error");
       return;
     }
 
     setIsSaving(true);
     try {
-      let mediaUrl = composeState.media?.previewUrl;
-      if (
-        composeState.media &&
-        composeState.media.data &&
-        !composeState.media.previewUrl.startsWith('http')
-      ) {
-        mediaUrl = await uploadMedia();
-      }
+      const mediaUrl = await ensureMediaUploaded();
 
       const newPost: Post = {
         id: Date.now().toString(),
         content: composeState.captionText,
         mediaUrl: mediaUrl,
         mediaType: composeState.media?.type,
-        platforms: platformsToPost.length > 0 ? platformsToPost : ['Instagram'],
-        status: status,
-        author: { name: user?.name || 'User', avatar: user?.avatar || '' },
+        platforms:
+          platformsToPost.length > 0 ? platformsToPost : ["Instagram"],
+        status,
+        author: {
+          name: user?.name || "User",
+          avatar: user?.avatar || "",
+        },
         comments: [],
-        clientId: selectedClient?.id
+        clientId: selectedClient?.id,
       };
 
-      const postsCollectionRef = collection(db, 'users', user.id, 'posts');
+      const postsCollectionRef = collection(db, "users", user.id, "posts");
       const safePost = JSON.parse(JSON.stringify(newPost));
       await setDoc(doc(postsCollectionRef, newPost.id), safePost);
+
       showToast(
-        status === 'Draft' ? 'Saved to Drafts!' : 'Submitted for Review!',
-        'success'
+        status === "Draft" ? "Saved to Drafts!" : "Submitted for Review!",
+        "success"
       );
       resetCompose();
     } catch (e) {
-      showToast('Failed to save post.', 'error');
+      showToast("Failed to save post.", "error");
       console.error(e);
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Generate captions using backend response shape (your current working logic)
-  const generateForBase64 = async (base64Data: string, mimeType: string) => {
+  // ----------------------------------------------------
+  // AI Caption generation (image-aware, via mediaUrl)
+  // ----------------------------------------------------
+  const generateCaptionsForCurrentMedia = async () => {
     if (!canGenerate) {
-      showToast('You have reached your monthly caption generation limit.', 'error');
+      showToast(
+        "You have reached your monthly caption generation limit.",
+        "error"
+      );
       return;
     }
     setIsLoading(true);
     setError(null);
-    setComposeState(prev => ({ ...prev, results: [], captionText: '' }));
+    setComposeState((prev) => ({ ...prev, results: [], captionText: "" }));
 
     try {
-      const mediaUrl = `data:${mimeType};base64,${base64Data}`;
+      await ensureAuth();
+
+      const mediaUrl = await ensureMediaUploaded();
 
       const res = await generateCaptions({
-        mediaUrl,
-        goal: composeState.postGoal,
-        tone: composeState.postTone,
-        promptText: undefined
+        mediaUrl: mediaUrl || undefined,
+        goal: composeState.postGoal || "engagement",
+        tone: composeState.postTone || "friendly",
+        // Optional: you can pass any existing text as extra context
+        promptText: undefined,
       });
 
-      let generatedResults: CaptionResult[] = [];
+      const generatedResults = (res.captions || []) as CaptionResult[];
 
-      if (Array.isArray(res)) {
-        generatedResults = res as CaptionResult[];
-      } else if (Array.isArray(res?.captions)) {
-        generatedResults = res.captions as CaptionResult[];
-      } else if (res?.caption) {
-        generatedResults = [
-          {
-            caption: res.caption,
-            hashtags: res.hashtags || []
-          }
-        ];
-      }
+      const first = generatedResults[0];
+      const firstCaptionText = first
+        ? `${first.caption}\n\n${(first.hashtags || []).join(" ")}`
+        : "";
 
-      const firstCaptionText =
-        generatedResults.length > 0
-          ? generatedResults[0].caption +
-            '\n\n' +
-            (generatedResults[0].hashtags || []).join(' ')
-          : '';
-
-      setComposeState(prev => ({
+      setComposeState((prev) => ({
         ...prev,
         results: generatedResults,
-        captionText: firstCaptionText
+        captionText: firstCaptionText,
       }));
 
       if (user) {
         setUser({
           ...user,
           monthlyCaptionGenerationsUsed:
-            (user.monthlyCaptionGenerationsUsed || 0) + 1
+            (user.monthlyCaptionGenerationsUsed || 0) + 1,
         });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError('Failed to generate captions. Ensure your API Key is configured.');
+
+      if (
+        err?.message === "LOGIN_REQUIRED" ||
+        err?.code === "functions.unauthenticated" ||
+        /Login required/i.test(err?.message || "")
+      ) {
+        setError("Please sign in again to use AI features.");
+        showToast(
+          "Your session expired. Please log out and log back in.",
+          "error"
+        );
+      } else {
+        setError(
+          "Failed to generate captions. Please verify your backend configuration."
+        );
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Auto-generate when media is added
   useEffect(() => {
-    if (composeState.media && composeState.results.length === 0 && composeState.media.data) {
-      generateForBase64(composeState.media.data, composeState.media.mimeType);
+    if (composeState.media && composeState.results.length === 0) {
+      generateCaptionsForCurrentMedia();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [composeState.media]);
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  // ----------------------------------------------------
+  // File upload handler
+  // ----------------------------------------------------
+  const handleFileChange = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const fileType = file.type.startsWith('image') ? 'image' : 'video';
+    const fileType = file.type.startsWith("image") ? "image" : "video";
 
     try {
-      const base64 = await fileToBase64(file);
-      const dataUrl = `data:${file.type};base64,${base64}`;
+      // Use an in-memory object URL for fast preview
+      const objectUrl = URL.createObjectURL(file);
 
-      setComposeState(prev => ({
+      setComposeState((prev) => ({
         ...prev,
-        media: { data: base64, mimeType: file.type, previewUrl: dataUrl, type: fileType },
+        media: {
+          data: "", // not used anymore
+          mimeType: file.type,
+          previewUrl: objectUrl,
+          type: fileType,
+        },
         results: [],
-        captionText: ''
+        captionText: "",
       }));
-    } catch (error) {
-      showToast('Failed to process file.', 'error');
-      console.error(error);
+    } catch (err) {
+      showToast("Failed to process file.", "error");
+      console.error(err);
     }
   };
 
@@ -539,20 +579,22 @@ const CaptionGenerator: React.FC = () => {
     setComposeState({
       media: null,
       results: [],
-      captionText: '',
-      postGoal: 'engagement',
-      postTone: 'friendly'
+      captionText: "",
+      postGoal: "engagement",
+      postTone: "friendly",
     });
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleRegenerate = () => {
-    if (composeState.media && composeState.media.data) {
-      generateForBase64(composeState.media.data, composeState.media.mimeType);
+    if (composeState.media) {
+      generateCaptionsForCurrentMedia();
     }
   };
 
-  // Remix Logic
+  // ----------------------------------------------------
+  // Remix
+  // ----------------------------------------------------
   const openRemixModal = (text: string) => {
     setRemixSourceText(text);
     setIsRemixModalOpen(true);
@@ -561,9 +603,11 @@ const CaptionGenerator: React.FC = () => {
   const handleRemix = async () => {
     setIsRemixing(true);
     try {
+      await ensureAuth();
+
       const settingsOverride = {
         ...settings,
-        tone: { formality: 50, humor: 50, empathy: 50 }
+        tone: { formality: 50, humor: 50, empathy: 50 },
       };
       const result = await generateReply(
         remixSourceText,
@@ -571,45 +615,68 @@ const CaptionGenerator: React.FC = () => {
         remixTargetPlatform,
         settingsOverride
       );
-      setComposeState(prev => ({ ...prev, captionText: result }));
+      setComposeState((prev) => ({ ...prev, captionText: result }));
       setIsRemixModalOpen(false);
-      showToast(`Remixed for ${remixTargetPlatform}!`, 'success');
-    } catch (e) {
-      showToast('Remix failed.', 'error');
+      showToast(`Remixed for ${remixTargetPlatform}!`, "success");
+    } catch (err: any) {
+      console.error(err);
+      if (
+        err?.message === "LOGIN_REQUIRED" ||
+        err?.code === "functions.unauthenticated"
+      ) {
+        showToast(
+          "Your session expired. Please log out and log back in.",
+          "error"
+        );
+      } else {
+        showToast("Remix failed.", "error");
+      }
     } finally {
       setIsRemixing(false);
     }
   };
 
-  // Hashtag Logic
+  // ----------------------------------------------------
+  // Hashtags
+  // ----------------------------------------------------
   const handleCreateHashtagSet = () => {
     if (!newHashtagSetName || !newHashtagSetTags) return;
-    const tags = newHashtagSetTags.split(' ').filter(t => t.startsWith('#'));
+
+    const tags = newHashtagSetTags
+      .split(" ")
+      .map((t) => t.trim())
+      .filter((t) => t.startsWith("#") && t.length > 1);
+
     if (tags.length === 0) {
-      showToast('Please include hashtags starting with #', 'error');
+      showToast("Please include hashtags starting with #", "error");
       return;
     }
+
     const newSet: HashtagSet = {
       id: Date.now().toString(),
       name: newHashtagSetName,
-      tags
+      tags,
     };
-    setHashtagSets(prev => [...prev, newSet]);
-    setNewHashtagSetName('');
-    setNewHashtagSetTags('');
-    showToast('Hashtag set saved!', 'success');
+    setHashtagSets((prev) => [...prev, newSet]);
+    setNewHashtagSetName("");
+    setNewHashtagSetTags("");
+    showToast("Hashtag set saved!", "success");
   };
 
   const handleInsertHashtags = (tags: string[]) => {
-    setComposeState(prev => ({
+    setComposeState((prev) => ({
       ...prev,
-      captionText: prev.captionText + '\n\n' + tags.join(' ')
+      captionText: prev.captionText + "\n\n" + tags.join(" "),
     }));
     setIsHashtagPopoverOpen(false);
   };
 
-  const hasContent = !!composeState.captionText.trim() || !!composeState.media;
+  const hasContent =
+    !!composeState.captionText.trim() || !!composeState.media;
 
+  // ----------------------------------------------------
+  // Render
+  // ----------------------------------------------------
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       {/* Preview Modal */}
@@ -619,7 +686,10 @@ const CaptionGenerator: React.FC = () => {
         caption={composeState.captionText}
         media={
           composeState.media
-            ? { previewUrl: composeState.media.previewUrl, type: composeState.media.type }
+            ? {
+                previewUrl: composeState.media.previewUrl,
+                type: composeState.media.type,
+              }
             : null
         }
         user={selectedClient || user}
@@ -637,21 +707,28 @@ const CaptionGenerator: React.FC = () => {
             </p>
 
             <div className="grid grid-cols-3 gap-2 mb-6">
-              {(['X', 'LinkedIn', 'Instagram', 'TikTok', 'Threads', 'Facebook'] as Platform[]).map(
-                p => (
-                  <button
-                    key={p}
-                    onClick={() => setRemixTargetPlatform(p)}
-                    className={`p-2 border rounded-lg text-sm ${
-                      remixTargetPlatform === p
-                        ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/50 text-primary-600'
-                        : 'border-gray-200 dark:border-gray-600'
-                    }`}
-                  >
-                    {p}
-                  </button>
-                )
-              )}
+              {(
+                [
+                  "X",
+                  "LinkedIn",
+                  "Instagram",
+                  "TikTok",
+                  "Threads",
+                  "Facebook",
+                ] as Platform[]
+              ).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setRemixTargetPlatform(p)}
+                  className={`p-2 border rounded-lg text-sm ${
+                    remixTargetPlatform === p
+                      ? "border-primary-500 bg-primary-50 dark:bg-primary-900/50 text-primary-600"
+                      : "border-gray-200 dark:border-gray-600"
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
             </div>
 
             <div className="flex justify-end gap-3">
@@ -674,9 +751,10 @@ const CaptionGenerator: React.FC = () => {
         </div>
       )}
 
+      {/* Header */}
       <div className="text-center">
         <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-          Compose & Schedule
+          Compose &amp; Schedule
         </h2>
         <p className="mt-2 text-lg text-gray-500 dark:text-gray-400">
           Create content, generate AI captions, and schedule posts.
@@ -717,7 +795,7 @@ const CaptionGenerator: React.FC = () => {
           </div>
         ) : (
           <div className="relative group w-full h-64 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden flex items-center justify-center">
-            {composeState.media.type === 'image' ? (
+            {composeState.media.type === "image" ? (
               <img
                 src={composeState.media.previewUrl}
                 alt="Preview"
@@ -740,7 +818,7 @@ const CaptionGenerator: React.FC = () => {
         )}
       </div>
 
-      {/* Goal & tone with dynamic options */}
+      {/* Goal + tone */}
       <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label
@@ -752,14 +830,18 @@ const CaptionGenerator: React.FC = () => {
           <select
             id="goal"
             value={composeState.postGoal}
-            onChange={e => setComposeState(prev => ({ ...prev, postGoal: e.target.value }))}
+            onChange={(e) =>
+              setComposeState((prev) => ({
+                ...prev,
+                postGoal: e.target.value,
+              }))
+            }
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
           >
-            {goalOptions.map(opt => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
+            <option value="engagement">Increase Engagement</option>
+            <option value="sales">Drive Sales</option>
+            <option value="awareness">Build Awareness</option>
+            <option value="followers">Increase Followers/Fans</option>
           </select>
         </div>
         <div>
@@ -772,14 +854,20 @@ const CaptionGenerator: React.FC = () => {
           <select
             id="tone"
             value={composeState.postTone}
-            onChange={e => setComposeState(prev => ({ ...prev, postTone: e.target.value }))}
+            onChange={(e) =>
+              setComposeState((prev) => ({
+                ...prev,
+                postTone: e.target.value,
+              }))
+            }
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
           >
-            {toneOptions.map(opt => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
+            <option value="friendly">Friendly</option>
+            <option value="witty">Witty</option>
+            <option value="inspirational">Inspirational</option>
+            <option value="professional">Professional</option>
+            <option value="sexy-bold">Sexy / Bold</option>
+            <option value="sexy-explicit">Sexy / Explicit</option>
           </select>
         </div>
       </div>
@@ -823,8 +911,9 @@ const CaptionGenerator: React.FC = () => {
         </div>
       )}
 
-      {/* Editor & AI suggestions */}
+      {/* Editor / suggestions / scheduling */}
       <div className="space-y-6">
+        {/* AI Suggestions */}
         {composeState.results.length > 0 && (
           <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md space-y-4">
             <div className="flex justify-between items-center">
@@ -846,12 +935,12 @@ const CaptionGenerator: React.FC = () => {
               >
                 <div
                   onClick={() =>
-                    setComposeState(prev => ({
+                    setComposeState((prev) => ({
                       ...prev,
                       captionText:
                         result.caption +
-                        '\n\n' +
-                        (result.hashtags || []).join(' ')
+                        "\n\n" +
+                        (result.hashtags || []).join(" "),
                     }))
                   }
                   className="cursor-pointer"
@@ -860,11 +949,11 @@ const CaptionGenerator: React.FC = () => {
                     {result.caption}
                   </p>
                   <p className="text-primary-600 dark:text-primary-400 mt-2 text-sm">
-                    {(result.hashtags || []).join(' ')}
+                    {(result.hashtags || []).join(" ")}
                   </p>
                 </div>
                 <button
-                  onClick={e => {
+                  onClick={(e) => {
                     e.stopPropagation();
                     openRemixModal(result.caption);
                   }}
@@ -878,6 +967,7 @@ const CaptionGenerator: React.FC = () => {
           </div>
         )}
 
+        {/* Main caption editor */}
         <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md space-y-4">
           <div>
             <label
@@ -891,10 +981,10 @@ const CaptionGenerator: React.FC = () => {
                 id="caption-input"
                 ref={textareaRef}
                 value={composeState.captionText}
-                onChange={e =>
-                  setComposeState(prev => ({
+                onChange={(e) =>
+                  setComposeState((prev) => ({
                     ...prev,
-                    captionText: e.target.value
+                    captionText: e.target.value,
                   }))
                 }
                 rows={6}
@@ -907,8 +997,8 @@ const CaptionGenerator: React.FC = () => {
                     onClick={handleMicClick}
                     className={`p-1.5 rounded-full transition-colors ${
                       isListening
-                        ? 'bg-red-500 text-white animate-pulse'
-                        : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600'
+                        ? "bg-red-500 text-white animate-pulse"
+                        : "text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600"
                     }`}
                   >
                     <VoiceIcon className="w-5 h-5" />
@@ -916,7 +1006,9 @@ const CaptionGenerator: React.FC = () => {
                 )}
                 <div className="relative">
                   <button
-                    onClick={() => setIsHashtagPopoverOpen(!isHashtagPopoverOpen)}
+                    onClick={() =>
+                      setIsHashtagPopoverOpen(!isHashtagPopoverOpen)
+                    }
                     className="p-1.5 rounded-full text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600"
                     title="Hashtag Manager"
                   >
@@ -928,7 +1020,7 @@ const CaptionGenerator: React.FC = () => {
                         Saved Hashtags
                       </h4>
                       <div className="space-y-2 mb-4 max-h-40 overflow-y-auto">
-                        {hashtagSets?.map(set => (
+                        {hashtagSets?.map((set) => (
                           <button
                             key={set.id}
                             onClick={() => handleInsertHashtags(set.tags)}
@@ -936,7 +1028,7 @@ const CaptionGenerator: React.FC = () => {
                           >
                             <span className="font-semibold">{set.name}</span>
                             <p className="text-gray-500 truncate">
-                              {set.tags.join(' ')}
+                              {set.tags.join(" ")}
                             </p>
                           </button>
                         ))}
@@ -950,14 +1042,18 @@ const CaptionGenerator: React.FC = () => {
                         <input
                           type="text"
                           value={newHashtagSetName}
-                          onChange={e => setNewHashtagSetName(e.target.value)}
+                          onChange={(e) =>
+                            setNewHashtagSetName(e.target.value)
+                          }
                           placeholder="Set Name (e.g. Tech)"
                           className="w-full text-xs p-1 border rounded mb-1 dark:bg-gray-900 dark:border-gray-600"
                         />
                         <input
                           type="text"
                           value={newHashtagSetTags}
-                          onChange={e => setNewHashtagSetTags(e.target.value)}
+                          onChange={(e) =>
+                            setNewHashtagSetTags(e.target.value)
+                          }
                           placeholder="#ai #tech"
                           className="w-full text-xs p-1 border rounded mb-2 dark:bg-gray-900 dark:border-gray-600"
                         />
@@ -981,14 +1077,14 @@ const CaptionGenerator: React.FC = () => {
               Publish to
             </label>
             <div className="mt-2 flex flex-wrap gap-3">
-              {(Object.keys(platformIcons) as Platform[]).map(platform => (
+              {(Object.keys(platformIcons) as Platform[]).map((platform) => (
                 <button
                   key={platform}
                   onClick={() => handlePlatformToggle(platform)}
                   className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition-colors ${
                     selectedPlatforms[platform]
-                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30'
-                      : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                      ? "border-primary-500 bg-primary-50 dark:bg-primary-900/30"
+                      : "border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700"
                   }`}
                 >
                   <span className="dark:text-white">
@@ -1014,13 +1110,13 @@ const CaptionGenerator: React.FC = () => {
 
               <div className="flex flex-col gap-3">
                 <label className="text-sm text-gray-600 dark:text-gray-400">
-                  Select Date & Time:
+                  Select Date &amp; Time:
                 </label>
                 <div className="flex flex-col sm:flex-row gap-3">
                   <input
                     type="datetime-local"
                     value={scheduleDate}
-                    onChange={e => setScheduleDate(e.target.value)}
+                    onChange={(e) => setScheduleDate(e.target.value)}
                     className="flex-grow p-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
                   />
                   <button
@@ -1028,25 +1124,26 @@ const CaptionGenerator: React.FC = () => {
                     disabled={!scheduleDate || isSaving}
                     className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 font-medium whitespace-nowrap flex items-center gap-2"
                   >
-                    {isSaving ? <RefreshIcon className="animate-spin" /> : null}
+                    {isSaving && <RefreshIcon className="animate-spin" />}
                     Confirm Schedule
                   </button>
                 </div>
               </div>
 
               <div className="flex items-center gap-4">
-                <div className="h-px bg-blue-200 dark:bg-blue-800 flex-grow"></div>
+                <div className="h-px bg-blue-200 dark:bg-blue-800 flex-grow" />
                 <span className="text-xs text-blue-500 uppercase font-bold">
                   OR
                 </span>
-                <div className="h-px bg-blue-200 dark:bg-blue-800 flex-grow"></div>
+                <div className="h-px bg-blue-200 dark:bg-blue-800 flex-grow" />
               </div>
 
               <button
                 onClick={handleSmartSchedule}
                 className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-purple-700 dark:text-purple-300 bg-gradient-to-r from-purple-100 to-blue-100 dark:from-purple-900/40 dark:to-blue-900/40 border border-purple-200 dark:border-purple-800 rounded-md hover:shadow-md transition-all"
               >
-                <SparklesIcon className="w-4 h-4" /> Schedule for Best Time (AI)
+                <SparklesIcon className="w-4 h-4" /> Schedule for Best Time
+                (AI)
               </button>
             </div>
           )}
@@ -1060,33 +1157,39 @@ const CaptionGenerator: React.FC = () => {
             >
               <MobileIcon className="w-5 h-5" /> Preview
             </button>
+
             <button
-              onClick={() => handleSaveToWorkflow('Draft')}
+              onClick={() => handleSaveToWorkflow("Draft")}
               disabled={!hasContent || isSaving}
               className="flex items-center gap-2 px-4 py-2 text-base font-medium text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
             >
-              {isSaving ? <RefreshIcon className="animate-spin" /> : null}
+              {isSaving && <RefreshIcon className="animate-spin" />}
               Save Draft
             </button>
+
             {isAgency && (
               <button
-                onClick={() => handleSaveToWorkflow('In Review')}
+                onClick={() => handleSaveToWorkflow("In Review")}
                 disabled={!hasContent || isSaving}
                 className="flex items-center gap-2 px-4 py-2 text-base font-medium text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-900/20 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors disabled:opacity-50"
               >
-                {isSaving ? <RefreshIcon className="animate-spin" /> : null}
+                {isSaving && <RefreshIcon className="animate-spin" />}
                 <ClipboardCheckIcon className="w-5 h-5" /> Submit for Review
               </button>
             )}
+
             <button
-              onClick={() => setIsScheduling(prev => !prev)}
+              onClick={() => setIsScheduling((prev) => !prev)}
               className={`flex items-center gap-2 px-6 py-2 text-base font-medium text-white rounded-md transition-colors ${
-                isScheduling ? 'bg-gray-500 hover:bg-gray-600' : 'bg-purple-600 hover:bg-purple-700'
+                isScheduling
+                  ? "bg-gray-500 hover:bg-gray-600"
+                  : "bg-purple-600 hover:bg-purple-700"
               }`}
             >
-              <CalendarIcon className="w-5 h-5" />{' '}
-              {isScheduling ? 'Cancel Schedule' : 'Schedule'}
+              <CalendarIcon className="w-5 h-5" />{" "}
+              {isScheduling ? "Cancel Schedule" : "Schedule"}
             </button>
+
             {!isScheduling && (
               <button
                 onClick={handlePublish}
@@ -1102,12 +1205,16 @@ const CaptionGenerator: React.FC = () => {
   );
 };
 
-type ComposeTab = 'captions' | 'image' | 'video';
+// ==============================
+// Compose wrapper (tabs)
+// ==============================
+
+type ComposeTab = "captions" | "image" | "video";
 
 const tabs: { id: ComposeTab; label: string; icon: React.ReactNode }[] = [
-  { id: 'captions', label: 'Captions', icon: <CaptionIcon /> },
-  { id: 'image', label: 'Image', icon: <ImageIcon /> },
-  { id: 'video', label: 'Video', icon: <VideoIcon /> }
+  { id: "captions", label: "Captions", icon: <CaptionIcon /> },
+  { id: "image", label: "Image", icon: <ImageIcon /> },
+  { id: "video", label: "Video", icon: <VideoIcon /> },
 ];
 
 export const Compose: React.FC = () => {
@@ -1117,20 +1224,33 @@ export const Compose: React.FC = () => {
     setActivePage,
     composeContext,
     clearComposeContext,
-    setComposeState
+    setComposeState,
   } = useAppContext();
-  const [activeTab, setActiveTab] = useState<ComposeTab>('captions');
-  const [initialPrompt, setInitialPrompt] = useState<string | undefined>(undefined);
+
+  const [activeTab, setActiveTab] = useState<ComposeTab>("captions");
+  const [initialPrompt, setInitialPrompt] = useState<string | undefined>(
+    undefined
+  );
+
+  if (!user) return null;
 
   useEffect(() => {
     if (composeContext) {
-      if (composeContext.type === 'Reel' || composeContext.type === 'video') {
-        setActiveTab('video');
-      } else if (composeContext.type === 'Story' || composeContext.type === 'image') {
-        setActiveTab('image');
+      if (composeContext.type === "Reel" || composeContext.type === "video") {
+        setActiveTab("video");
+      } else if (
+        composeContext.type === "Story" ||
+        composeContext.type === "image"
+      ) {
+        setActiveTab("image");
       } else {
-        setActiveTab('captions');
-        setComposeState(prev => ({ ...prev, captionText: composeContext.topic }));
+        setActiveTab("captions");
+        if (composeContext.topic) {
+          setComposeState((prev) => ({
+            ...prev,
+            captionText: composeContext.topic,
+          }));
+        }
       }
       setInitialPrompt(composeContext.topic);
       clearComposeContext();
@@ -1138,50 +1258,51 @@ export const Compose: React.FC = () => {
   }, [composeContext, clearComposeContext, setComposeState]);
 
   const handleGenerateCaptionsForImage = (base64Data: string) => {
+    // When using image generator → captions:
+    // we just treat that generated image as an uploaded media preview.
     setComposeState({
       media: {
-        data: base64Data,
-        mimeType: 'image/png',
+        data: "",
+        mimeType: "image/png",
         previewUrl: `data:image/png;base64,${base64Data}`,
-        type: 'image'
+        type: "image",
       },
       results: [],
-      captionText: '',
-      postGoal: 'engagement',
-      postTone: 'friendly'
+      captionText: "",
+      postGoal: "engagement",
+      postTone: "friendly",
     });
-    setActiveTab('captions');
+    setActiveTab("captions");
   };
 
   const handleImageGeneration = () => {
-    if (user)
+    if (user) {
       setUser({
         ...user,
-        monthlyImageGenerationsUsed: user.monthlyImageGenerationsUsed + 1
+        monthlyImageGenerationsUsed: user.monthlyImageGenerationsUsed + 1,
       });
+    }
   };
 
   const handleVideoGeneration = () => {
-    if (user)
+    if (user) {
       setUser({
         ...user,
-        monthlyVideoGenerationsUsed: user.monthlyVideoGenerationsUsed + 1
+        monthlyVideoGenerationsUsed: user.monthlyVideoGenerationsUsed + 1,
       });
+    }
   };
 
   const renderTabContent = () => {
-    const isAdmin = user?.role === 'Admin';
-    const isAgency = (user?.plan === 'Agency') || isAdmin;
-    const isElite = (user?.plan === 'Elite') || isAgency;
-    const isPro = (user?.plan === 'Pro') || isElite;
-
-    const monthlyImageUsed = user?.monthlyImageGenerationsUsed ?? 0;
-    const monthlyVideoUsed = user?.monthlyVideoGenerationsUsed ?? 0;
+    const isAdmin = user.role === "Admin";
+    const isAgency = user.plan === "Agency" || isAdmin;
+    const isElite = user.plan === "Elite" || isAgency;
+    const isPro = user.plan === "Pro" || isElite;
 
     switch (activeTab) {
-      case 'captions':
+      case "captions":
         return <CaptionGenerator />;
-      case 'image':
+      case "image":
         if (isAgency) {
           return (
             <ImageGenerator
@@ -1191,22 +1312,22 @@ export const Compose: React.FC = () => {
             />
           );
         }
-        if (isElite && monthlyImageUsed < 500) {
+        if (isElite && user.monthlyImageGenerationsUsed < 500) {
           return (
             <ImageGenerator
               onGenerate={handleImageGeneration}
               onGenerateCaptions={handleGenerateCaptionsForImage}
-              usageLeft={500 - monthlyImageUsed}
+              usageLeft={500 - user.monthlyImageGenerationsUsed}
               initialPrompt={initialPrompt}
             />
           );
         }
-        if (isPro && monthlyImageUsed < 50) {
+        if (isPro && user.monthlyImageGenerationsUsed < 50) {
           return (
             <ImageGenerator
               onGenerate={handleImageGeneration}
               onGenerateCaptions={handleGenerateCaptionsForImage}
-              usageLeft={50 - monthlyImageUsed}
+              usageLeft={50 - user.monthlyImageGenerationsUsed}
               initialPrompt={initialPrompt}
             />
           );
@@ -1214,38 +1335,39 @@ export const Compose: React.FC = () => {
         return (
           <UpgradePrompt
             featureName="AI Image Generation"
-            onUpgradeClick={() => setActivePage('pricing')}
+            onUpgradeClick={() => setActivePage("pricing")}
           />
         );
-      case 'video':
-        if (isElite && monthlyVideoUsed < 25) {
+      case "video":
+        // backend for video is still placeholder
+        if (isElite && user.monthlyVideoGenerationsUsed < 25) {
           return (
             <VideoGenerator
               onGenerate={handleVideoGeneration}
-              usageLeft={25 - monthlyVideoUsed}
+              usageLeft={25 - user.monthlyVideoGenerationsUsed}
             />
           );
         }
-        if (isAgency && monthlyVideoUsed < 50) {
+        if (isAgency && user.monthlyVideoGenerationsUsed < 50) {
           return (
             <VideoGenerator
               onGenerate={handleVideoGeneration}
-              usageLeft={50 - monthlyVideoUsed}
+              usageLeft={50 - user.monthlyVideoGenerationsUsed}
             />
           );
         }
-        if (isPro && monthlyVideoUsed < 1) {
+        if (isPro && user.monthlyVideoGenerationsUsed < 1) {
           return (
             <VideoGenerator
               onGenerate={handleVideoGeneration}
-              usageLeft={1 - monthlyVideoUsed}
+              usageLeft={1 - user.monthlyVideoGenerationsUsed}
             />
           );
         }
         return (
           <UpgradePrompt
             featureName="AI Video Generation"
-            onUpgradeClick={() => setActivePage('pricing')}
+            onUpgradeClick={() => setActivePage("pricing")}
           />
         );
       default:
@@ -1256,14 +1378,14 @@ export const Compose: React.FC = () => {
   return (
     <div className="max-w-7xl mx-auto">
       <div className="flex justify-center border-b border-gray-200 dark:border-gray-700 mb-8">
-        {tabs.map(tab => (
+        {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-3 px-4 py-3 font-semibold border-b-2 transition-colors ${
               activeTab === tab.id
-                ? 'border-primary-500 text-primary-600 dark:text-primary-400'
-                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                ? "border-primary-500 text-primary-600 dark:text-primary-400"
+                : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
             }`}
           >
             {tab.icon} {tab.label}

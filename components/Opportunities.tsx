@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { findTrends } from '../src/services/geminiService';
+import { findTrends } from "../src/services/geminiService"
 import { Opportunity, Platform } from '../types';
 import { SparklesIcon, TrendingIcon } from './icons/UIIcons';
 import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';

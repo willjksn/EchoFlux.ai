@@ -1,54 +1,63 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getModel, parseJSON } from "./_geminiShared.ts";
+import { verifyAuth } from "./verifyAuth.ts";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
+  const user = await verifyAuth(req);
+  if (!user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const { posts } = (req.body as any) || {};
+  if (!Array.isArray(posts) || posts.length === 0) {
+    return res.status(400).json({ error: "Expected 'posts' to be a non-empty array of strings" });
+  }
+
   try {
-    const { niche } = req.body || {};
-
-    if (!niche) {
-      return res.status(400).json({ error: "niche is required" });
-    }
-
-    if (!process.env.GEMINI_API_KEY) {
-      return res.status(500).json({ error: "Missing GEMINI_API_KEY" });
-    }
-
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = getModel();
 
     const prompt = `
-Give 10 current social content trends for the niche: "${niche}".
+You analyze social media performance.
 
-For each trend, return a JSON object:
+Here is a list of posts (content, captions, or summaries):
+
+${posts.map((p: string, idx: number) => `Post ${idx + 1}: ${p}`).join("\n")}
+
+Find 3–5 key trends or insights (topics, angles, hooks, formats) that seem to work best.
+Return ONLY JSON:
+
 {
-  "name": string,
-  "description": string,
-  "exampleHook": string
+  "trends": [
+    {
+      "title": "short, human-readable name",
+      "description": "what this trend is",
+      "examplePostIndexes": [1, 3]
+    }
+  ]
 }
-
-Return ONLY a JSON array of these objects, no extra text.
 `;
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text().trim();
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: {
+        responseMimeType: "application/json",
+      },
+    });
 
-    let trends;
-    try {
-      trends = JSON.parse(text);
-    } catch {
-      trends = [];
-    }
+    const raw = result.response.text();
+    const data = parseJSON(raw);
 
-    return res.status(200).json({ trends });
+    return res.status(200).json(data);
   } catch (err: any) {
     console.error("findTrends error:", err);
     return res.status(500).json({
       error: "Failed to find trends",
-      details: err?.message || String(err),
+      details: err?.message ?? String(err),
     });
   }
 }
+

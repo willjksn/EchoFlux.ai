@@ -1,46 +1,40 @@
-import React, { createContext, useState, useEffect, useContext, ReactNode } from "react";
-import {
-    onAuthStateChanged,
-    signOut,
-    getRedirectResult,
-    GoogleAuthProvider,
-    User as FirebaseUser,
-} from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
-import { auth, db } from "../../firebaseConfig";
-import { User, SocialStats, Platform } from "../../types";
-import { defaultSettings } from "../../constants";
+import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { auth, db } from '../../firebaseConfig';
+import { User, SocialStats, Platform } from '../../types';
+import { defaultSettings } from '../../constants';
 
 interface AuthContextType {
     user: User | null;
     isAuthenticated: boolean;
     isAuthLoading: boolean;
-    setUser: (user: User) => void;
+    setUser: (user: Partial<User> | null) => Promise<void>;
     handleLogout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Generate fake follower stats for new users
+// Utility — NEVER allow undefined to be written to Firestore
+const removeUndefined = (obj: any): any => {
+    if (!obj || typeof obj !== "object") return obj;
+    const clean: any = {};
+    for (const key in obj) {
+        const value = obj[key];
+        if (value !== undefined) clean[key] = removeUndefined(value);
+    }
+    return clean;
+};
+
 const generateMockSocialStats = (): Record<Platform, SocialStats> => {
     const stats: any = {};
-    const platforms: Platform[] = [
-        "Instagram",
-        "TikTok",
-        "X",
-        "Threads",
-        "YouTube",
-        "LinkedIn",
-        "Facebook",
-    ];
-
-    platforms.forEach((p) => {
+    const platforms: Platform[] = ['Instagram','TikTok','X','Threads','YouTube','LinkedIn','Facebook'];
+    platforms.forEach(p => {
         stats[p] = {
-            followers: Math.floor(Math.random() * 15000) + 100,
-            following: Math.floor(Math.random() * 1000) + 10,
+            followers: Math.floor(Math.random() * 15000) + 50,
+            following: Math.floor(Math.random() * 1000) + 5,
         };
     });
-
     return stats;
 };
 
@@ -48,71 +42,44 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [user, setUserState] = useState<User | null>(null);
     const [isAuthLoading, setIsAuthLoading] = useState(true);
 
-    // 🔥 Handle Google Redirect BEFORE onAuthStateChanged runs
     useEffect(() => {
-        const handleRedirect = async () => {
-            try {
-                const result = await getRedirectResult(auth);
+        const unsub = onAuthStateChanged(auth, async (fbUser) => {
+            setIsAuthLoading(true);
 
-                if (result?.user) {
-                    console.log("Google redirect login successful:", result.user);
-
-                    await result.user.getIdToken(true); // refresh token
-
-                    // Firestore creation happens inside onAuthStateChanged below
-                }
-            } catch (error) {
-                console.error("Google redirect error:", error);
-            }
-        };
-
-        handleRedirect();
-    }, []);
-
-    // 🔥 Master authentication listener
-    useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-            if (!firebaseUser) {
-                setUserState(null);
-                setIsAuthLoading(false);
-                return;
-            }
-
-            try {
-                const userDocRef = doc(db, "users", firebaseUser.uid);
-                const snap = await getDoc(userDocRef);
+            if (fbUser) {
+                const ref = doc(db, 'users', fbUser.uid);
+                const snap = await getDoc(ref);
 
                 if (snap.exists()) {
-                    const userData = snap.data() as User;
+                    const loaded = snap.data() as User;
 
-                    // merge settings and defaults
-                    userData.settings = {
-                        ...defaultSettings,
-                        ...(userData.settings || {}),
-                        tone: {
-                            ...defaultSettings.tone,
-                            ...(userData.settings?.tone || {}),
+                    // Merge defaults safely
+                    const mergedUser: User = {
+                        ...loaded,
+                        settings: {
+                            ...defaultSettings,
+                            ...(loaded.settings || {}),
+                            tone: {
+                                ...defaultSettings.tone,
+                                ...(loaded.settings?.tone || {})
+                            },
+                            connectedAccounts: {
+                                ...defaultSettings.connectedAccounts,
+                                ...(loaded.settings?.connectedAccounts || {})
+                            }
                         },
-                        connectedAccounts: {
-                            ...defaultSettings.connectedAccounts,
-                            ...(userData.settings?.connectedAccounts || {}),
-                        },
+                        socialStats: loaded.socialStats || generateMockSocialStats(),
                     };
 
-                    if (!userData.socialStats) {
-                        userData.socialStats = generateMockSocialStats();
-                    }
+                    setUserState(mergedUser);
 
-                    setUserState(userData);
                 } else {
-                    // Create new Firestore user entry
+                    // NEW user document
                     const newUser: User = {
-                        id: firebaseUser.uid,
-                        name: firebaseUser.displayName || "New User",
-                        email: firebaseUser.email || "",
-                        avatar:
-                            firebaseUser.photoURL ||
-                            `https://picsum.photos/seed/${firebaseUser.uid}/100/100`,
+                        id: fbUser.uid,
+                        name: fbUser.displayName || "New User",
+                        email: fbUser.email || "",
+                        avatar: fbUser.photoURL || `https://picsum.photos/seed/${fbUser.uid}/100/100`,
                         bio: "Welcome to EngageSuite.ai!",
                         plan: "Free",
                         role: "User",
@@ -133,27 +100,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         socialStats: generateMockSocialStats(),
                     };
 
-                    await setDoc(userDocRef, newUser);
+                    await setDoc(ref, newUser);
                     setUserState(newUser);
                 }
-            } catch (err) {
-                console.error("Error loading auth user:", err);
+            } else {
                 setUserState(null);
             }
 
             setIsAuthLoading(false);
         });
 
-        return () => unsubscribe();
+        return () => unsub();
     }, []);
 
-    const setUser = (updatedUser: User) => {
-        if (updatedUser?.id) {
-            setDoc(doc(db, "users", updatedUser.id), updatedUser, { merge: true }).catch((err) =>
-                console.error("Failed to update Firestore user:", err)
-            );
+    // SAFE updater — strips undefined before writing
+    const setUser = async (update: Partial<User> | null) => {
+        if (!update) {
+            setUserState(null);
+            return;
         }
-        setUserState(updatedUser);
+        if (!update.id) {
+            console.warn("setUser called without user.id — ignoring");
+            return;
+        }
+
+        const clean = removeUndefined(update);
+
+        // Update local
+        setUserState(prev => prev ? { ...prev, ...clean } : prev);
+
+        // Update Firestore
+        try {
+            await setDoc(doc(db, 'users', update.id), clean, { merge: true });
+        } catch (err) {
+            console.error("Firestore update failed:", err);
+        }
     };
 
     const handleLogout = async () => {
@@ -169,8 +150,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 isAuthLoading,
                 setUser,
                 handleLogout,
-            }}
-        >
+            }}>
             {children}
         </AuthContext.Provider>
     );
@@ -178,6 +158,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 export const useAuth = () => {
     const ctx = useContext(AuthContext);
-    if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+    if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
     return ctx;
 };
+
+

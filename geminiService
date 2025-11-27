@@ -1,0 +1,93 @@
+// src/services/geminiService.ts
+
+export interface ApiResponse<T> {
+  data?: T;
+  error?: string;
+  details?: string;
+}
+
+async function callApi<T>(
+  endpoint: string,
+  body: any
+): Promise<T> {
+  try {
+    const res = await fetch(`/api/${endpoint}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body || {}),
+    });
+
+    const text = await res.text();
+
+    let json: any;
+    try {
+      json = text ? JSON.parse(text) : {};
+    } catch {
+      throw new Error(`Invalid JSON returned from API: ${text}`);
+    }
+
+    if (!res.ok) {
+      throw new Error(
+        `API ${endpoint} failed: ${res.status} - ${text}`
+      );
+    }
+
+    return json as T;
+  } catch (err: any) {
+    console.error(`callApi() → ${endpoint} error:`, err);
+    throw err;
+  }
+}
+
+/* ----------------------------------------------------
+   1. Autopilot Suggestions
+---------------------------------------------------- */
+export async function generateAutopilotSuggestions(
+  niche: string,
+  audience: string,
+  userType: string
+): Promise<{ ideas: string[] }> {
+  return await callApi<{ ideas: string[] }>(
+    "generateAutopilotSuggestions",
+    { niche, audience, userType }
+  );
+}
+
+/* ----------------------------------------------------
+   2. Brand Suggestions
+---------------------------------------------------- */
+export async function generateBrandSuggestions(payload: {
+  name: string;
+  niche: string;
+  audience: string;
+  personality: string;
+}): Promise<{
+  tagline: string;
+  identity: string[];
+  doDont: { do: string[]; dont: string[] };
+}> {
+  return await callApi("generateBrandSuggestions", payload);
+}
+
+/* ----------------------------------------------------
+   3. Content Strategy
+---------------------------------------------------- */
+export async function generateContentStrategy(payload: {
+  niche: string;
+  audience: string;
+  goals: string;
+  channels: string[];
+}): Promise<any> {
+  return await callApi("generateContentStrategy", payload);
+}
+
+/* ----------------------------------------------------
+   4. Analytics Report
+---------------------------------------------------- */
+export async function generateAnalyticsReport(
+  analytics: any
+): Promise<any> {
+  return await callApi("generateAnalyticsReport", { analytics });
+}

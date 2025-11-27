@@ -1,39 +1,76 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { verifyAuth } from "./verifyAuth.ts";
+
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
+  // Auth required
+  const user = await verifyAuth(req);
+  if (!user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
   try {
-    const data = req.body || {};
+    const { analytics } = req.body || {};
+
+    if (!analytics) {
+      return res.status(400).json({ error: "Missing analytics data" });
+    }
 
     if (!process.env.GEMINI_API_KEY) {
       return res.status(500).json({ error: "Missing GEMINI_API_KEY" });
     }
 
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = ai.getGenerativeModel({ model: "gemini-2.0-flash" });
+
 
     const prompt = `
-You are an analytics expert.
+You are an expert social media analyst.
 
-Here is the user's social analytics data (JSON):
-${JSON.stringify(data, null, 2)}
+Generate an analytics report based on the following JSON metrics:
 
-Write a concise, CMO-level report including:
-- Key wins
-- Weak spots
-- Recommended actions for next 30 days
-- Any notable patterns by platform or content type
+${JSON.stringify(analytics, null, 2)}
 
-Use markdown headings and bullet lists.`;
+Return ONLY valid JSON:
 
-    const result = await model.generateContent(prompt);
-    const report = result.response.text().trim();
+{
+  "summary": "string",
+  "growthInsights": ["string", "string"],
+  "recommendedActions": ["string", "string", "string"],
+  "riskFactors": ["string"]
+}
+`;
 
-    return res.status(200).json({ report });
+    const result = await model.generateContent({
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: prompt }],
+        },
+      ],
+    });
+
+    const output = result.response.text().trim();
+
+    let parsed;
+    try {
+      parsed = JSON.parse(output);
+    } catch (err) {
+      console.warn("JSON parse failed, returning raw text fallback");
+      parsed = {
+        summary: output,
+        growthInsights: [],
+        recommendedActions: [],
+        riskFactors: [],
+      };
+    }
+
+    return res.status(200).json(parsed);
   } catch (err: any) {
     console.error("generateAnalyticsReport error:", err);
     return res.status(500).json({
@@ -42,4 +79,3 @@ Use markdown headings and bullet lists.`;
     });
   }
 }
-

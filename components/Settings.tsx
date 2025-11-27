@@ -5,8 +5,8 @@ import { useAppContext } from './AppContext';
 import { UpgradePrompt } from './UpgradePrompt';
 import { UploadIcon, TrashIcon, SettingsIcon, LinkIcon, SparklesIcon, CreditCardIcon } from './icons/UIIcons';
 import { db, storage } from '../firebaseConfig';
-// FIX: Use namespace import for firebase/storage to resolve module resolution issues.
-import * as storageApi from 'firebase/storage';
+// @ts-ignore
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 
 interface SettingsProps {}
@@ -107,19 +107,18 @@ const AccountConnection: React.FC<{
 
 type SettingsTab = 'general' | 'connections' | 'ai-training' | 'billing';
 
-export const Settings: React.FC<SettingsProps> = () => {
-    const { user, settings, setSettings, setActivePage, selectedClient, userCustomVoices, setUserCustomVoices, showToast } = useAppContext();
+export const Settings: React.FC = () => {
+    const { user, setUser, settings, setSettings, setActivePage, selectedClient, userCustomVoices, setUserCustomVoices, showToast } = useAppContext();
     const [activeTab, setActiveTab] = useState<SettingsTab>('general');
     const [fileName, setFileName] = useState<string | null>(null);
     const [isUploadingVoice, setIsUploadingVoice] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const voiceFileInputRef = useRef<HTMLInputElement>(null);
     
-    if (!user) return null; // Should not happen
-
-    const isPremiumFeatureUnlocked = ['Elite', 'Agency'].includes(user.plan) || user.role === 'Admin';
+    const isPremiumFeatureUnlocked = ['Elite', 'Agency'].includes(user?.plan || 'Free') || user?.role === 'Admin';
 
     const voiceLimit = useMemo(() => {
+        if (!user) return 0;
         if (user.role === 'Admin') return Infinity;
         switch(user.plan) {
             case 'Pro': return 1;
@@ -127,11 +126,12 @@ export const Settings: React.FC<SettingsProps> = () => {
             case 'Agency': return Infinity;
             default: return 0;
         }
-    }, [user.plan, user.role]);
+    }, [user?.plan, user?.role]);
 
     const isVoiceFeatureUnlocked = voiceLimit > 0;
 
     const handleVoiceFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        if (!user) return;
         if (userCustomVoices.length >= voiceLimit) {
             showToast('Voice limit reached for your plan. Upgrade or remove a voice.', 'error');
             return;
@@ -140,10 +140,9 @@ export const Settings: React.FC<SettingsProps> = () => {
         if (file) {
             setIsUploadingVoice(true);
             try {
-                // 1. Upload to Storage
-                const sRef = storageApi.ref(storage, `users/${user.id}/voices/${Date.now()}_${file.name}`);
-                await storageApi.uploadBytes(sRef, file);
-                const url = await storageApi.getDownloadURL(sRef);
+                const sRef = ref(storage, `users/${user.id}/voices/${Date.now()}_${file.name}`);
+                await uploadBytes(sRef, file);
+                const url = await getDownloadURL(sRef);
 
                 const { data, mimeType } = await fileToBase64(file);
                 
@@ -169,12 +168,13 @@ export const Settings: React.FC<SettingsProps> = () => {
     };
 
     const handleDeleteVoice = async (id: string) => {
+        if (!user) return;
         try {
              const voiceToDelete = userCustomVoices.find(v => v.id === id);
              if (voiceToDelete && voiceToDelete.url) {
                  try {
-                     const sRef = storageApi.ref(storage, voiceToDelete.url);
-                     await storageApi.deleteObject(sRef);
+                     const sRef = ref(storage, voiceToDelete.url);
+                     await deleteObject(sRef);
                  } catch(e) {
                      console.warn("Storage file might not exist", e);
                  }
@@ -204,6 +204,15 @@ export const Settings: React.FC<SettingsProps> = () => {
         setSettings(prev => ({ ...prev, connectedAccounts: { ...prev.connectedAccounts, [platform]: !prev.connectedAccounts[platform] } }));
     };
 
+    const handleRestartOnboarding = async () => {
+        if(user) {
+            showToast("Resetting account setup...", "success");
+            // Async update to ensure persistence before reload
+            await setUser({ ...user, hasCompletedOnboarding: false, userType: undefined });
+            setTimeout(() => window.location.reload(), 500);
+        }
+    }
+
     const accountName = selectedClient ? selectedClient.name : 'Main Account';
 
     const tabs: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
@@ -213,13 +222,14 @@ export const Settings: React.FC<SettingsProps> = () => {
         { id: 'billing', label: 'Billing', icon: <CreditCardIcon /> },
     ];
 
+    if (!user) return null;
+
     return (
         <div className="max-w-4xl mx-auto space-y-8">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Settings for {accountName}</h2>
             </div>
 
-            {/* Tabs */}
             <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg overflow-x-auto">
                 {tabs.map(tab => (
                     <button
@@ -237,7 +247,6 @@ export const Settings: React.FC<SettingsProps> = () => {
                 ))}
             </div>
 
-            {/* Tab Content */}
             <div className="space-y-8">
                 {activeTab === 'connections' && (
                     <SettingsSection title="Connected Accounts">
@@ -271,6 +280,12 @@ export const Settings: React.FC<SettingsProps> = () => {
                             <ToggleSwitch label="Enable Voice Mode" enabled={settings.voiceMode} onChange={(val) => updateSetting('voiceMode', val)} />
                             <p className="text-sm text-gray-500 dark:text-gray-400">Enable the floating AI Voice Assistant button for hands-free control.</p>
                         </SettingsSection>
+                        <SettingsSection title="Advanced">
+                            <button onClick={handleRestartOnboarding} className="px-4 py-2 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded-md hover:bg-red-200 transition-colors text-sm font-medium">
+                                Restart Onboarding
+                            </button>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">This will reset your workspace settings and allow you to choose between Creator or Business mode again.</p>
+                        </SettingsSection>
                     </>
                 )}
                 
@@ -283,6 +298,18 @@ export const Settings: React.FC<SettingsProps> = () => {
                             <ToneSlider label="Formality" value={settings.tone.formality} onChange={(val) => updateToneSetting('formality', val)} description="Low for casual & slang, high for formal & professional."/>
                             <ToneSlider label="Humor" value={settings.tone.humor} onChange={(val) => updateToneSetting('humor', val)} description="Low for serious, high for witty & funny replies."/>
                             <ToneSlider label="Empathy" value={settings.tone.empathy} onChange={(val) => updateToneSetting('empathy', val)} description="Low for direct, high for supportive & understanding."/>
+                            
+                            {(user.userType === 'Creator' || user.role === 'Admin') && (
+                                <>
+                                    <hr className="border-gray-200 dark:border-gray-700 my-4" />
+                                    <ToneSlider 
+                                        label="Spiciness 🌶️" 
+                                        value={settings.tone.spiciness || 0} 
+                                        onChange={(val) => updateToneSetting('spiciness', val)} 
+                                        description="Control the level of bold/explicit language. (Creator & Admin accounts only)."
+                                    />
+                                </>
+                            )}
                         </SettingsSection>
 
                         <SettingsSection title="Train AI on Your Exact Voice" id="tour-step-voice-training">
@@ -298,48 +325,6 @@ export const Settings: React.FC<SettingsProps> = () => {
                                     </div>
                                 </>
                             )}
-                        </SettingsSection>
-
-                         <SettingsSection title="Custom Voices">
-                            {!isVoiceFeatureUnlocked ? (
-                                <UpgradePrompt featureName="Custom Voice Cloning" onUpgradeClick={() => setActivePage('pricing')} />
-                            ) : (
-                                <>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400">Upload an audio sample to create a clone of your voice for use in video voice-overs. By uploading, you affirm you have the rights to use this voice.</p>
-                                    <div className="flex items-center space-x-4">
-                                        <input type="file" ref={voiceFileInputRef} onChange={handleVoiceFileChange} className="hidden" accept="audio/*"/>
-                                        <button onClick={() => voiceFileInputRef.current?.click()} disabled={isUploadingVoice} className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors disabled:opacity-50">
-                                            <UploadIcon/> {isUploadingVoice ? 'Uploading...' : 'Upload Sample'}
-                                        </button>
-                                    </div>
-                                    {userCustomVoices.length > 0 && (
-                                        <div className="mt-4 space-y-2">
-                                            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Your Voices ({userCustomVoices.length}/{voiceLimit === Infinity ? '∞' : voiceLimit})</h4>
-                                            <ul className="space-y-2">
-                                                {userCustomVoices.map(voice => (
-                                                    <li key={voice.id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                                        <span className="font-medium text-gray-800 dark:text-gray-200 truncate pr-4">{voice.name}</span>
-                                                        <button onClick={() => handleDeleteVoice(voice.id)} className="p-1.5 rounded-full text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-red-500 transition-colors">
-                                                            <TrashIcon />
-                                                        </button>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                    )}
-                                </>
-                            )}
-                        </SettingsSection>
-
-                        <SettingsSection title="Keywords & Filtering">
-                             <div>
-                                <label htmlFor="prioritized" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Prioritize Keywords (comma-separated)</label>
-                                <input type="text" id="prioritized" value={settings.prioritizedKeywords} onChange={(e) => updateSetting('prioritizedKeywords', e.target.value)} className="w-full p-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"/>
-                            </div>
-                            <div>
-                                <label htmlFor="ignored" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ignore Keywords (comma-separated)</label>
-                                <input type="text" id="ignored" value={settings.ignoredKeywords} onChange={(e) => updateSetting('ignoredKeywords', e.target.value)} className="w-full p-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"/>
-                            </div>
                         </SettingsSection>
                     </>
                 )}

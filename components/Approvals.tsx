@@ -6,7 +6,7 @@ import { CheckCircleIcon, MobileIcon, SendIcon, TrashIcon, EditIcon, ChatIcon, U
 import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
 import { MobilePreviewModal } from './MobilePreviewModal';
 import { UpgradePrompt } from './UpgradePrompt';
-import { generateCritique } from '../src/services/geminiService';
+import { generateCritique } from "../src/services/geminiService";
 import { db } from '../firebaseConfig';
 import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 

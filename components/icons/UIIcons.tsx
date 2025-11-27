@@ -202,91 +202,80 @@ export const CreditCardIcon: React.FC = () => (
     </svg>
 );
 
-export const DollarSignIcon: React.FC = () => (
-    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 1L12 23M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H7" /></svg>
-);
-
-export const UserPlusIcon: React.FC = () => (
-    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg>
-);
-
-export const ArrowUpCircleIcon: React.FC<{ className?: string }> = ({ className }) => (
-    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 11l3-3m0 0l3 3m-3-3v8m0-13a9 9 0 110 18 9 9 0 010-18z" /></svg>
-);
-
-export const EmojiIcon: React.FC<{ className?: string }> = ({ className }) => (
-    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-);
-
-export const FaceSmileIcon: React.FC<{className?: string}> = ({ className }) => (
-    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-      <line x1="9" y1="9" x2="9.01" y2="9" />
-      <line x1="15" y1="9" x2="15.01" y2="9" />
-    </svg>
-);
-
-export const CatIcon: React.FC<{className?: string}> = ({ className }) => (
-    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-        <path d="M20 12v4a4 4 0 01-4 4H8a4 4 0 01-4-4v-4m16 0V8a4 4 0 00-4-4H8a4 4 0 00-4 4v4m16 0h-4M4 12H8" />
-    </svg>
-);
-
-export const PizzaIcon: React.FC<{className?: string}> = ({ className }) => (
-    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 22s8-4 8-10V4l-8-2-8 2v8c0 6 8 10 8 10zM12 2v20" />
-    </svg>
-);
-
-export const SoccerBallIcon: React.FC<{className?: string}> = ({ className }) => (
-    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <path d="M12 2l.34 2.04L14.5 5.5l1.46-1.46L18 6.5l.5 2.5L21 10l-1 2-1 2 .5 2.5-2.04.5-1.46 1.46-1.46-1.46L14.5 18.5l-.34 2.04-2.16-1-2.16 1L9.5 18.5 8.04 17.04 6.58 18.5 6 16l-.5-2.5-1-2 1-2 1-2 .5-2.5L6 6.5l1.46 1.46L9.5 5.5l.34-2.04L12 2z"/>
-    </svg>
-);
-
-export const CarIcon: React.FC<{className?: string}> = ({ className }) => (
-     <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-        <path d="M19 17h2v-5h-2M5 17H3v-5h2m-2-5h18v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/>
-        <circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>
-    </svg>
-);
-
-export const HeartIcon: React.FC<{className?: string}> = ({ className }) => (
-    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-        <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
-    </svg>
-);
-
-export const TrashIcon: React.FC<{ className?: string }> = ({ className }) => (
-    <svg className={className || "w-5 h-5"} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-    </svg>
-);
-
-export const PlayIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
-    <svg className={className} fill="currentColor" viewBox="0 0 20 20">
-        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-    </svg>
-);
-
 export const CalendarIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
 );
 
-export const LinkIcon: React.FC = () => (
-    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+export const KanbanIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" /></svg>
 );
 
-export const RefreshIcon: React.FC<{ className?: string }> = ({ className }) => (
-    <svg className={className || "w-4 h-4"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+export const GlobeIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2h10a2 2 0 002-2v-1a2 2 0 012-2h1.945M7.707 4.293l.293-.293a1 1 0 011.414 0l.293.293m-2 15.414l.293.293a1 1 0 001.414 0l.293-.293m-12.728-4.293l-.293.293a1 1 0 000 1.414l.293.293m12.728-4.293l-.293.293a1 1 0 000 1.414l.293.293M12 21a9 9 0 100-18 9 9 0 000 18z" /></svg>
+);
+
+export const TargetIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.536 8.464a5 5 0 000 7.072m2.828-9.9a9 9 0 000 12.728M12 21a9 9 0 100-18 9 9 0 000 18z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 12a2 2 0 100-4 2 2 0 000 4z" /></svg>
+);
+
+export const ArrowUpCircleIcon: React.FC = () => (
+    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 11l3-3m0 0l3 3m-3-3v8m0-13a9 9 0 110 18 9 9 0 010-18z" /></svg>
+);
+
+export const TrashIcon: React.FC<{ className?: string }> = ({ className = "w-5 h-5" }) => (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+);
+
+export const LinkIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+);
+
+export const EmojiIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+);
+
+export const FaceSmileIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+);
+
+export const CatIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className || "w-6 h-6"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4c-3.31 0-6 2.69-6 6 0 1.74.74 3.32 1.91 4.42-1.07 1.34-1.91 2.91-1.91 4.58 0 2.21 1.79 4 4 4h8c2.21 0 4-1.79 4-4 0-1.67-.84-3.24-1.91-4.58C20.26 13.32 21 11.74 21 10c0-3.31-2.69-6-6-6zm-4 7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm8 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-4 4c-1.1 0-2 .9-2 2h4c0-1.1-.9-2-2-2z"/></svg>
+);
+
+export const PizzaIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className || "w-6 h-6"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 12h10l8-10z" /><path d="M12 15a3 3 0 013 3H9a3 3 0 013-3z" /></svg>
+);
+
+export const SoccerBallIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 21a9 9 0 100-18 9 9 0 000 18z" /><path d="M12 21l-3-3-3 3M12 3l3 3 3-3M3 12l3 3-3 3M21 12l-3-3 3-3" /></svg>
+);
+
+export const CarIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 12H5m14 0a2 2 0 01-2 2H7a2 2 0 01-2-2m14 0a2 2 0 00-2-2H7a2 2 0 00-2 2m0 0V8a2 2 0 012-2h10a2 2 0 012 2v4M8 16h8" /></svg>
+);
+
+export const HeartIcon: React.FC<{ className?: string }> = ({ className = "w-5 h-5" }) => (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 016.364 0L12 7.636l1.318-1.318a4.5 4.5 0 116.364 6.364L12 21.657l-7.682-7.682a4.5 4.5 0 010-6.364z" /></svg>
 );
 
 export const ListeningIcon: React.FC = () => (
-    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
+    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.536 8.464a5 5 0 000 7.072m2.828-9.9a9 9 0 000 12.728m0 0l-2.828-2.828m2.828 2.828L8.364 12" /></svg>
+);
+
+export const RefreshIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className || "w-5 h-5"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h5m-5 2a9 9 0 0115.55-5.55M20 20v-5h-5m5-2a9 9 0 01-15.55 5.55" /></svg>
+);
+
+export const FilmIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 4h16a1 1 0 011 1v14a1 1 0 01-1 1H4a1 1 0 01-1-1V5a1 1 0 011-1z" /></svg>
+);
+
+export const MicrophoneWaveIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18.5v.5m-4.243-4.243l-.353.353m8.486 0l-.353-.353M5 12H4m16 0h-1" /></svg>
+);
+
+export const UserPlusIcon: React.FC = () => (
+    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v6m-3-3h6" /></svg>
 );
 
 export const HashtagIcon: React.FC = () => (
@@ -294,23 +283,7 @@ export const HashtagIcon: React.FC = () => (
 );
 
 export const PlusIcon: React.FC<{ className?: string }> = ({ className }) => (
-    <svg className={className || "w-4 h-4"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-);
-
-export const TagIcon: React.FC<{ className?: string }> = ({ className }) => (
-    <svg className={className || "w-5 h-5"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
-);
-
-export const NoteIcon: React.FC<{ className?: string }> = ({ className }) => (
-    <svg className={className || "w-5 h-5"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-);
-
-export const XMarkIcon: React.FC<{ className?: string }> = ({ className }) => (
-    <svg className={className || "w-5 h-5"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-);
-
-export const ClockIcon: React.FC<{ className?: string }> = ({ className }) => (
-    <svg className={className || "w-5 h-5"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
 );
 
 export const MobileIcon: React.FC<{ className?: string }> = ({ className }) => (
@@ -318,29 +291,33 @@ export const MobileIcon: React.FC<{ className?: string }> = ({ className }) => (
 );
 
 export const ClipboardCheckIcon: React.FC<{ className?: string }> = ({ className }) => (
-    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
 );
 
-export const KanbanIcon: React.FC<{ className?: string }> = ({ className }) => (
-    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 00-2-2h-2a2 2 0 00-2 2" /></svg>
+export const PlayIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className || "w-6 h-6"} fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
 );
 
-export const GlobeIcon: React.FC<{ className?: string }> = ({ className }) => (
-    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+export const DollarSignIcon: React.FC = () => (
+    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c1.104 0 2.05-.28 2.89-.785a.75.75 0 01.89.89c-.505.84-1.785 2.89-1.785 2.89s1.28.205 1.785.785a.75.75 0 01-.89.89c-.84-.505-1.785-1.785-1.785-1.785-1.104 0-2.05.28-2.89.785a.75.75 0 01-.89-.89c.505-.84 1.785-2.89 1.785-2.89s-1.28-.205-1.785-.785a.75.75 0 01.89-.89c.84.505 1.785 1.785 1.785 1.785zM12 6v12" /></svg>
 );
 
-export const TargetIcon: React.FC<{ className?: string }> = ({ className }) => (
-    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+export const XMarkIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
 );
 
-export const FilmIcon: React.FC<{ className?: string }> = ({ className }) => (
-    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" /></svg>
+export const TagIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M16.707 3.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-9 9a1 1 0 01-.707.293H3a1 1 0 01-1-1v-4.293a1 1 0 01.293-.707l9-9z" /></svg>
 );
 
-export const MicrophoneWaveIcon: React.FC<{ className?: string }> = ({ className }) => (
-    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
+export const NoteIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+);
+
+export const ClockIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
 );
 
 export const StopCircleIcon: React.FC<{ className?: string }> = ({ className }) => (
-    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" /></svg>
+    <svg className={className || "w-6 h-6"} fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z" /></svg>
 );

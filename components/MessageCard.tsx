@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useLayoutEffect } from 'react';
 import { Message, Settings, TeamMember } from '../types';
-import { generateReply } from '../src/services/geminiService';
+import { generateReply } from "../src/services/geminiService"
 import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
 import { EditIcon, RedoIcon, CheckCircleIcon, VoiceIcon, FlagIcon, UserIcon, EmojiIcon, FaceSmileIcon, CatIcon, PizzaIcon, SoccerBallIcon, CarIcon, LightbulbIcon, HeartIcon, StarIcon, TrashIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';

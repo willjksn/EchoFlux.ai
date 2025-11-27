@@ -1,51 +1,55 @@
+// api/generateBrandSuggestions.ts
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { verifyAuth } from "./verifyAuth.ts";
+import { getModel, parseJSON } from "./_geminiShared.ts";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
+  const user = await verifyAuth(req);
+  if (!user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  // 🔥 Support both {data:{...}} and direct body
+  const body = req.body?.data || req.body || {};
+  const { niche, audience, userType } = body;
+
+  if (!niche || !audience || !userType) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+
   try {
-    const { niche } = req.body || {};
-
-    if (!niche) {
-      return res.status(400).json({ error: "niche is required" });
-    }
-
-    if (!process.env.GEMINI_API_KEY) {
-      return res.status(500).json({ error: "Missing GEMINI_API_KEY" });
-    }
-
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = getModel("gemini-2.0-flash");
 
     const prompt = `
-Suggest 10 brand names, positions, and taglines for a creator or business in this niche:
-"${niche}"
+You are an expert brand strategist.
 
-Return JSON:
-[
-  {
-    "name": string,
-    "positioning": string,
-    "tagline": string
-  }
-]
+Generate 5 tailored brand-building suggestions for:
+- User Type: ${userType}
+- Niche: ${niche}
+- Audience: ${audience}
 
-Return ONLY JSON.`;
+Return ONLY JSON: an array of suggestion strings.
+`;
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text().trim();
+    const response = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { responseMimeType: "application/json" },
+    });
 
-    let brands;
+    const raw = response.response.text().trim();
+    let suggestions;
+
     try {
-      brands = JSON.parse(text);
+      suggestions = parseJSON(raw);
     } catch {
-      brands = [];
+      suggestions = [raw];
     }
 
-    return res.status(200).json({ brands });
+    return res.status(200).json({ suggestions });
   } catch (err: any) {
     console.error("generateBrandSuggestions error:", err);
     return res.status(500).json({
@@ -54,3 +58,4 @@ Return ONLY JSON.`;
     });
   }
 }
+

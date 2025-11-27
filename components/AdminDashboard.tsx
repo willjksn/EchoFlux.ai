@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, Activity } from '../types';
 import { UserManagementModal } from './UserManagementModal';
@@ -42,9 +43,18 @@ const planColorMap: Record<User['plan'], string> = {
     Pro: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200',
     Elite: 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-200',
     Agency: 'bg-primary-100 text-primary-800 dark:bg-primary-900/50 dark:text-primary-200',
+    Growth: 'bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200',
+    Starter: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-200',
 };
 
-const planPrices: Record<User['plan'], number> = { 'Free': 0, 'Pro': 49, 'Elite': 199, 'Agency': 599 };
+const planPrices: Record<User['plan'], number> = { 
+    'Free': 0, 
+    'Pro': 49, 
+    'Elite': 199, 
+    'Agency': 599, 
+    'Growth': 249, 
+    'Starter': 99 
+};
 
 export const AdminDashboard: React.FC = () => {
     const { user: currentUser } = useAppContext();
@@ -91,7 +101,7 @@ export const AdminDashboard: React.FC = () => {
                     email: i === 0 ? (currentUser?.email || 'admin@example.com') : `user${i + 1}@example.com`,
                     avatar: `https://picsum.photos/seed/${i + 123}/100/100`,
                     bio: 'Demo user',
-                    plan: i === 0 ? 'Agency' : (['Free', 'Pro', 'Elite', 'Agency'][Math.floor(Math.random() * 4)] as any),
+                    plan: i === 0 ? 'Agency' : (['Free', 'Pro', 'Elite', 'Agency', 'Growth', 'Starter'][Math.floor(Math.random() * 6)] as any),
                     role: i === 0 ? 'Admin' : 'User',
                     signupDate: new Date(Date.now() - Math.floor(Math.random() * 30 * 24 * 60 * 60 * 1000)).toISOString(),
                     hasCompletedOnboarding: true,
@@ -153,7 +163,7 @@ export const AdminDashboard: React.FC = () => {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-        const distribution: Record<User['plan'], number> = { Free: 0, Pro: 0, Elite: 0, Agency: 0 };
+        const distribution: Record<User['plan'], number> = { Free: 0, Pro: 0, Elite: 0, Agency: 0, Growth: 0, Starter: 0 };
         
         users.forEach(user => {
             if (user.plan in distribution) {

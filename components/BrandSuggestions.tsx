@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { SparklesIcon, BriefcaseIcon } from './icons/UIIcons';
-import { generateBrandSuggestions } from '../src/services/geminiService';
+import { generateBrandSuggestions } from "../src/services/geminiService"
 import { useAppContext } from './AppContext';
 
 export const BrandSuggestions: React.FC = () => {

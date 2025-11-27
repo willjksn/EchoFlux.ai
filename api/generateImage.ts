@@ -1,48 +1,48 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getModel } from "./_geminiShared.ts";
+import { verifyAuth } from "./verifyAuth.ts";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
+  const user = await verifyAuth(req);
+  if (!user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const { prompt } = (req.body as any) || {};
+
   try {
-    const { prompt, baseImage } = req.body || {};
+    const model = getModel();
 
-    if (!prompt) {
-      return res.status(400).json({ error: "prompt is required" });
-    }
+    const systemPrompt = `
+You help generate detailed prompts for image generation models.
+Given a short idea, expand it into a rich, specific, but concise image prompt.
+`;
 
-    if (!process.env.GEMINI_API_KEY) {
-      return res.status(500).json({ error: "Missing GEMINI_API_KEY" });
-    }
+    const result = await model.generateContent({
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: `${systemPrompt}\nUser idea: ${prompt || "abstract background"}` }],
+        },
+      ],
+    });
 
-    // For now, we just enhance the prompt text.
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const suggestedPrompt = result.response.text().trim();
 
-    const fullPrompt = `
-Improve this text-to-image prompt for a social media asset:
-
-Base prompt: "${prompt}"
-
-Base image present: ${baseImage ? "yes" : "no"}
-
-Return only the improved prompt.`;
-
-    const result = await model.generateContent(fullPrompt);
-    const improvedPrompt = result.response.text().trim();
-
-    // TODO: hook up real image generation (Imagen, etc.)
+    // TODO: hook into an actual image-generation provider and return real image URLs.
     return res.status(200).json({
-      imageData: null,      // no actual image yet
-      improvedPrompt,
+      prompt: suggestedPrompt,
+      note: "This route currently returns only a textual image prompt. Connect it to an image API to get real images.",
     });
   } catch (err: any) {
     console.error("generateImage error:", err);
     return res.status(500).json({
-      error: "Failed to generate image (stub)",
-      details: err?.message || String(err),
+      error: "Failed to generate image prompt",
+      details: err?.message ?? String(err),
     });
   }
 }

@@ -1,48 +1,54 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getModel } from "./_geminiShared.ts";
+import { verifyAuth } from "./verifyAuth.ts";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
+  const user = await verifyAuth(req);
+  if (!user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const { interactions } = (req.body as any) || {};
+
+  if (!Array.isArray(interactions) || interactions.length === 0) {
+    return res.status(400).json({
+      error: "Expected 'interactions' to be a non-empty array of messages/notes",
+    });
+  }
+
   try {
-    const { history } = req.body || {};
-
-    if (!Array.isArray(history)) {
-      return res.status(400).json({ error: "history (array) is required" });
-    }
-
-    if (!process.env.GEMINI_API_KEY) {
-      return res.status(500).json({ error: "Missing GEMINI_API_KEY" });
-    }
-
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = getModel();
 
     const prompt = `
-You are an AI CRM assistant.
+You summarize CRM-style interactions and suggest next actions.
 
-Here is a chronological interaction history with a contact:
-${JSON.stringify(history, null, 2)}
+Here are the interactions:
+${interactions.map((it: any, i: number) => `#${i + 1}: ${JSON.stringify(it)}`).join("\n")}
 
-Return a short summary that includes:
-- Who they are
-- What they've shown interest in
-- Current relationship stage
-- Recommended next action
+Write:
+- A short summary paragraph
+- 3 bullet points for key themes
+- 3 suggested next actions (in bullet form)
+Return markdown.
+`;
 
-Use brief paragraphs and bullet points.`;
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+    });
 
-    const result = await model.generateContent(prompt);
     const summary = result.response.text().trim();
 
     return res.status(200).json({ summary });
   } catch (err: any) {
     console.error("generateCRMSummary error:", err);
     return res.status(500).json({
-      error: "Failed to generate CRM summary",
-      details: err?.message || String(err),
+      error: "Failed to summarize CRM interactions",
+      details: err?.message ?? String(err),
     });
   }
 }
+

@@ -1,6 +1,7 @@
-import app, { auth } from "../../firebaseConfig";
+import { auth } from "../../firebaseConfig";
+import type { UserType } from "../../types"; // <-- ensure this exists
 
-
+// Generic API caller for Vercel Serverless Functions
 async function callFunction(path: string, data: any) {
   const token = auth.currentUser
     ? await auth.currentUser.getIdToken(true)
@@ -23,27 +24,14 @@ async function callFunction(path: string, data: any) {
   return res.json();
 }
 
-// ----------------------------------------------------
-// Types
-// ----------------------------------------------------
-export type MessageCategory = "Lead" | "Support" | "Opportunity" | "General";
-
-// This now matches your new backend
-export type CaptionOptions = {
-  mediaUrl?: string | null;
-  goal?: string | null;
-  tone?: string | null;
-  promptText?: string | null;
-};
-
-// ----------------------------------------------------
-// 1) Reply
-// ----------------------------------------------------
+/* ----------------------------------------------------
+   1) Reply
+---------------------------------------------------- */
 export async function generateReply(
   messageContent: string,
-  messageType?: string,
-  platform?: string,
-  settings?: any
+  messageType: string,
+  platform: string,
+  settings: any
 ): Promise<string> {
   const res = await callFunction("generateReply", {
     messageContent,
@@ -51,82 +39,107 @@ export async function generateReply(
     platform,
     settings,
   });
-
   return res.reply;
 }
 
-// ----------------------------------------------------
-// 2) Captions (updated)
-// ----------------------------------------------------
-export async function generateCaptions(options: CaptionOptions) {
+/* ----------------------------------------------------
+   2) Captions (image-aware, via mediaUrl)
+---------------------------------------------------- */
+export async function generateCaptions(opts: {
+  mediaUrl?: string | null;
+  goal?: string | null;
+  tone?: string | null;
+  promptText?: string | null;
+}) {
+  const { mediaUrl, goal, tone, promptText } = opts;
   return await callFunction("generateCaptions", {
-    mediaUrl: options.mediaUrl || null,
-    goal: options.goal || null,
-    tone: options.tone || null,
-    promptText: options.promptText || null,
+    mediaUrl: mediaUrl || null,
+    goal: goal || null,
+    tone: tone || null,
+    promptText: promptText || null,
   });
 }
 
-// ----------------------------------------------------
-// 3) Image Generation (stub)
-// ----------------------------------------------------
+/* ----------------------------------------------------
+   3) Image Generation
+---------------------------------------------------- */
 export async function generateImage(
   prompt: string,
   baseImage?: { data: string; mimeType: string }
-): Promise<string | null> {
-  const res = await callFunction("generateImage", {
+): Promise<string> {
+  const res = await callFunction("generateImage", { prompt, baseImage });
+  return res.imageData;
+}
+
+/* ----------------------------------------------------
+   4) Video Generation
+---------------------------------------------------- */
+export async function generateVideo(
+  prompt: string,
+  baseImage?: { data: string; mimeType: string },
+  aspectRatio?: "16:9" | "9:16"
+): Promise<any> {
+  return await callFunction("generateVideo", {
     prompt,
-    baseImage: baseImage || null,
+    baseImage,
+    aspectRatio,
   });
-
-  return res.imageData || null;
 }
 
-// ----------------------------------------------------
-// 4) Trends
-// ----------------------------------------------------
-export async function findTrends(niche: string) {
+export async function getVideoStatus(operation: any): Promise<any> {
+  return await callFunction("getVideoStatus", { operation });
+}
+
+/* ----------------------------------------------------
+   5) Trends
+---------------------------------------------------- */
+export async function findTrends(niche: string): Promise<any[]> {
   const res = await callFunction("findTrends", { niche });
-  return res.trends || [];
+  return res.trends || res.opportunities || [];
 }
 
-// ----------------------------------------------------
-// 5) Speech (stub)
-// ----------------------------------------------------
-export async function generateSpeech(script: string, voice: string) {
-  const res = await callFunction("generateSpeech", { script, voice });
-  return res.audioData || null;
-}
-
-// ----------------------------------------------------
-// 6) Categorize Message
-// ----------------------------------------------------
+/* ----------------------------------------------------
+   6) Categorize Message
+---------------------------------------------------- */
 export async function categorizeMessage(
   messageContent: string
-): Promise<MessageCategory> {
+): Promise<string> {
   const res = await callFunction("categorizeMessage", { messageContent });
-  return (res.category as MessageCategory) || "General";
+  return res.category;
 }
 
-// ----------------------------------------------------
-// 7) Chatbot
-// ----------------------------------------------------
+/* ----------------------------------------------------
+   7) Chatbot
+---------------------------------------------------- */
 export async function askChatbot(question: string): Promise<string> {
   const res = await callFunction("askChatbot", { question });
   return res.answer;
 }
 
-// ----------------------------------------------------
-// 8) Critique
-// ----------------------------------------------------
-export async function generateCritique(postContent: string): Promise<string> {
+/* ----------------------------------------------------
+   8) Critique
+---------------------------------------------------- */
+export async function generateCritique(
+  postContent: string
+): Promise<string> {
   const res = await callFunction("generateCritique", { postContent });
   return res.critique;
 }
 
-// ----------------------------------------------------
-// 9) Content Strategy
-// ----------------------------------------------------
+/* ----------------------------------------------------
+   9) Speech / TTS
+---------------------------------------------------- */
+export async function generateSpeech(
+  script: string,
+  voice: string
+): Promise<string> {
+  const res = await callFunction("generateSpeech", { script, voice });
+  return res.audioData;
+}
+
+/* ----------------------------------------------------
+   10) Content Strategy
+---------------------------------------------------- */
 export async function generateContentStrategy(
   niche: string,
   audience: string,
@@ -134,7 +147,7 @@ export async function generateContentStrategy(
   duration: string,
   tone: string,
   platformFocus: string
-) {
+): Promise<any> {
   const res = await callFunction("generateContentStrategy", {
     niche,
     audience,
@@ -143,38 +156,54 @@ export async function generateContentStrategy(
     tone,
     platformFocus,
   });
-
-  return res.plan;
+  return res.plan || res;
 }
 
-// ----------------------------------------------------
-// 10) Storyboard
-// ----------------------------------------------------
-export async function generateStoryboard(concept: string) {
+/* ----------------------------------------------------
+   11) Storyboard
+---------------------------------------------------- */
+export async function generateStoryboard(concept: string): Promise<any> {
   const res = await callFunction("generateStoryboard", { concept });
   return res.storyboard || res;
 }
 
-// ----------------------------------------------------
-// 11) Brand Suggestions
-// ----------------------------------------------------
-export async function generateBrandSuggestions(niche: string) {
+/* ----------------------------------------------------
+   12) Brand Suggestions
+---------------------------------------------------- */
+export async function generateBrandSuggestions(
+  niche: string
+): Promise<any[]> {
   const res = await callFunction("generateBrandSuggestions", { niche });
-  return res.brands || [];
+  return res.brands || res;
 }
 
-// ----------------------------------------------------
-// 12) Analytics Report
-// ----------------------------------------------------
+/* ----------------------------------------------------
+   13) Analytics Report
+---------------------------------------------------- */
 export async function generateAnalyticsReport(data: any) {
-  const res = await callFunction("generateAnalyticsReport", data);
-  return res.report;
+  return await callFunction("generateAnalyticsReport", { data });
 }
 
-// ----------------------------------------------------
-// 13) CRM Summary
-// ----------------------------------------------------
-export async function generateCRMSummary(history: any[]) {
+/* ----------------------------------------------------
+   14) CRM Summary
+---------------------------------------------------- */
+export async function generateCRMSummary(history: any[]): Promise<any> {
   const res = await callFunction("generateCRMSummary", { history });
   return res.summary || res;
 }
+
+/* ----------------------------------------------------
+   15) Autopilot Suggestions (NEW)
+---------------------------------------------------- */
+export async function generateAutopilotSuggestions(
+  niche: string,
+  audience: string,
+  userType: UserType
+): Promise<{ suggestions: string[] }> {
+  return await callFunction("generateAutopilotSuggestions", {
+    niche,
+    audience,
+    userType,
+  });
+}
+

@@ -78,8 +78,8 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
   };
 
   const ClientSwitcher: React.FC = () => {
-    // Show for Elite, Agency, or Admin regardless of client count
-    if (!['Elite', 'Agency'].includes(user.plan) && user.role !== 'Admin') {
+    // STRICT CHECK: Only show for Agency Plan or Admin
+    if (user.plan !== 'Agency' && user.role !== 'Admin') {
       return null;
     }
 

@@ -1,27 +1,44 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { getModel } from "./_geminiShared.ts";
+import { verifyAuth } from "./verifyAuth.ts";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
+  const user = await verifyAuth(req);
+  if (!user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const { topic, durationSeconds, style } = (req.body as any) || {};
+
   try {
-    const { script, voice } = req.body || {};
+    const model = getModel();
 
-    if (!script) {
-      return res.status(400).json({ error: "script is required" });
-    }
+    const prompt = `
+You write spoken scripts for short-form content.
 
-    // Stub: no real TTS yet — front-end already expects possible null
-    return res.status(200).json({
-      audioData: null,
-      note: "Text-to-speech not implemented yet. Script received.",
+Topic: ${topic || "generic topic"}
+Target duration: ${durationSeconds || 60} seconds
+Style: ${style || "conversational, high-retention"}
+
+Write a script with line breaks that could be read aloud. Include hooks early, keep it concise.
+`;
+
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
     });
+
+    const script = result.response.text().trim();
+
+    return res.status(200).json({ script });
   } catch (err: any) {
     console.error("generateSpeech error:", err);
     return res.status(500).json({
-      error: "Failed to generate speech (stub)",
-      details: err?.message || String(err),
+      error: "Failed to generate speech script",
+      details: err?.message ?? String(err),
     });
   }
 }
