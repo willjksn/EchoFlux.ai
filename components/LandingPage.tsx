@@ -60,27 +60,138 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNaviga
       {/* Hero Section */}
       <main>
         <div className="relative">
-             <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gray-100 dark:bg-gray-800" />
-             <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                <div className="relative shadow-xl sm:rounded-2xl sm:overflow-hidden">
-                    <div className="absolute inset-0">
-                        <img className="h-full w-full object-cover" src="https://images.unsplash.com/photo-1531297484001-80022131f5a1?q=80&w=2920&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" alt="Abstract visualization of a hand interacting with a glowing digital network" />
-                        <div className="absolute inset-0 bg-gray-900/60" />
+          <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gray-100 dark:bg-gray-800" />
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="relative overflow-hidden rounded-2xl bg-gray-900 shadow-2xl">
+              {/* Background image + gradient overlay */}
+              <div className="absolute inset-0">
+                <img
+                  className="h-full w-full object-cover opacity-70"
+                  src="https://images.unsplash.com/photo-1531297484001-80022131f5a1?q=80&w=2920&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+                  alt="Abstract visualization of a hand interacting with a glowing digital network"
+                />
+                <div className="absolute inset-0 bg-gradient-to-br from-primary-600/80 via-gray-900/90 to-gray-900" />
+              </div>
+
+              <div className="relative px-6 py-16 sm:px-10 sm:py-20 lg:px-16 lg:py-24">
+                <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
+                  {/* Left: Copy + CTAs */}
+                  <div>
+                    <div className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-primary-100 ring-1 ring-inset ring-white/20 backdrop-blur">
+                      <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Live AI operating system for social & marketing teams
                     </div>
-                    <div className="relative px-4 py-16 sm:px-6 sm:py-24 lg:py-32 lg:px-8">
-                        <h1 className="text-center text-4xl font-extrabold tracking-tight sm:text-5xl lg:text-6xl">
-                            <span className="block text-white">The First AI</span>
-                            <span className="block text-primary-200">Social & Marketing Operating System</span>
-                        </h1>
-                        <p className="mt-6 max-w-lg mx-auto text-center text-xl text-primary-100 sm:max-w-3xl">
-                           More than just tools. A complete Command Center to Strategize, Create, Manage, and Convert your audience from one intelligent dashboard.
-                        </p>
-                        <div className="mt-10 max-w-sm mx-auto sm:max-w-none sm:flex sm:justify-center">
-                            <button onClick={onLoginClick} className="flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-primary-700 bg-white hover:bg-primary-50 sm:px-8">Get started for free</button>
+
+                    <h1 className="mt-6 text-4xl font-extrabold tracking-tight text-white sm:text-5xl lg:text-6xl">
+                      <span className="block">The First AI</span>
+                      <span className="block text-primary-200">
+                        Social &amp; Marketing Operating System
+                      </span>
+                    </h1>
+
+                    <p className="mt-6 max-w-xl text-lg text-primary-100 sm:text-xl">
+                      Replace your maze of tools with one intelligent command center to
+                      strategize, create, schedule, and convert—without adding headcount.
+                    </p>
+
+                    <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+                      <button
+                        onClick={onLoginClick}
+                        className="inline-flex items-center justify-center rounded-md bg-white px-8 py-3 text-base font-semibold text-primary-700 shadow-sm transition hover:bg-primary-50"
+                      >
+                        Get started for free
+                      </button>
+                      <button
+                        onClick={() => handleScroll('features')}
+                        className="inline-flex items-center justify-center rounded-md border border-white/30 bg-white/5 px-8 py-3 text-base font-medium text-white backdrop-blur transition hover:bg-white/10"
+                      >
+                        Explore features
+                      </button>
+                    </div>
+
+                    <div className="mt-6 flex flex-col gap-3 text-sm text-primary-100 sm:flex-row sm:items-center sm:gap-6">
+                      <div className="flex items-center">
+                        <span className="mr-2 text-lg">★ ★ ★ ★ ★</span>
+                        <span>Trusted by creators &amp; teams scaling their social presence</span>
+                      </div>
+                      <div className="flex items-center space-x-3 text-xs text-primary-100/90">
+                        <span className="inline-flex h-6 items-center rounded-full bg-black/40 px-3">
+                          No credit card required
+                        </span>
+                        <span className="inline-flex h-6 items-center rounded-full bg-black/40 px-3">
+                          Cancel anytime
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right: Product preview card */}
+                  <div className="relative">
+                    <div className="pointer-events-none absolute -inset-8 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-primary-500/10 to-transparent blur-3xl" />
+                    <div className="relative rounded-2xl bg-gray-900/70 p-4 shadow-xl ring-1 ring-white/15 backdrop-blur">
+                      <div className="flex items-center justify-between border-b border-white/10 px-3 py-2 text-xs text-gray-300">
+                        <span className="inline-flex items-center gap-2">
+                          <span className="flex h-2 w-2 items-center justify-center">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                          </span>
+                          Autopilot Campaign · Active
+                        </span>
+                        <span>Next 14 days</span>
+                      </div>
+
+                      <div className="space-y-4 p-4">
+                        <div className="grid grid-cols-3 gap-4 text-center text-xs text-gray-200">
+                          <div className="rounded-xl bg-white/5 p-3">
+                            <p className="text-[0.7rem] uppercase tracking-wide text-primary-200/80">
+                              Scheduled
+                            </p>
+                            <p className="mt-1 text-2xl font-bold text-white">32</p>
+                            <p className="mt-1 text-[0.7rem] text-gray-300">posts</p>
+                          </div>
+                          <div className="rounded-xl bg-white/5 p-3">
+                            <p className="text-[0.7rem] uppercase tracking-wide text-primary-200/80">
+                              Engagement
+                            </p>
+                            <p className="mt-1 text-2xl font-bold text-white">+184%</p>
+                            <p className="mt-1 text-[0.7rem] text-gray-300">last 30 days</p>
+                          </div>
+                          <div className="rounded-xl bg-white/5 p-3">
+                            <p className="text-[0.7rem] uppercase tracking-wide text-primary-200/80">
+                              Leads
+                            </p>
+                            <p className="mt-1 text-2xl font-bold text-white">241</p>
+                            <p className="mt-1 text-[0.7rem] text-gray-300">captured</p>
+                          </div>
                         </div>
+
+                        <div className="rounded-xl bg-white/5 p-3 text-xs text-gray-200">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">This week&apos;s focus</span>
+                            <span className="text-[0.7rem] text-primary-100">Autopilot · Creator</span>
+                          </div>
+                          <ul className="mt-2 space-y-1 text-[0.7rem] text-gray-300">
+                            <li>• 5 TikToks, 4 Reels, 3 LinkedIn posts auto-drafted</li>
+                            <li>• Link-in-bio updated with latest offer</li>
+                            <li>• Warm leads tagged in Social CRM</li>
+                          </ul>
+                        </div>
+
+                        <div className="flex items-center justify-between border-t border-white/10 pt-3 text-[0.7rem] text-gray-300">
+                          <span>Connect your channels</span>
+                          <div className="flex items-center space-x-2 text-white/80">
+                            <InstagramIcon className="h-4 w-4" />
+                            <TikTokIcon className="h-4 w-4" />
+                            <XIcon className="h-4 w-4" />
+                            <FacebookIcon className="h-4 w-4" />
+                          </div>
+                        </div>
+                      </div>
                     </div>
+                  </div>
                 </div>
+              </div>
             </div>
+          </div>
         </div>
 
         {/* Who We Serve Section */}
