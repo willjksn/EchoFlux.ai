@@ -150,8 +150,21 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
 
   if (!user) return null;
 
+  const isBusiness = user.userType === 'Business';
+  const isAgencyPlan = user.plan === 'Agency';
+  // Director Mode: Available to Creators and Agency plan (can create content for clients)
+  // Other Business plans (Starter, Growth) only get Simple Mode
+  const showDirectorMode = !isBusiness || isAgencyPlan;
+
+  // Ensure Business users (non-Agency) are always in Simple mode
+  useEffect(() => {
+    if (isBusiness && !isAgencyPlan && mode === 'Director') {
+      setMode('Simple');
+    }
+  }, [isBusiness, isAgencyPlan, mode]);
+
   const showComingSoon = () =>
-    showToast('Video generation coming soon!', 'info');
+    showToast('Video generation coming soon!', 'error');
 
   const handleMicClick = () => {
     if (!isSpeechRecognitionSupported || !recognitionRef.current) return;
@@ -213,35 +226,39 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
           AI Video Studio (Veo)
         </h2>
         <p className="mt-2 text-lg text-gray-500 dark:text-gray-400">
-          Create single clips or direct multi-scene videos.
+          {showDirectorMode
+            ? 'Create single clips or direct multi-scene videos.'
+            : 'Create single video clips for your ads and content.'}
         </p>
       </div>
 
-      {/* Mode toggle */}
-      <div className="flex justify-center">
-        <div className="bg-gray-100 dark:bg-gray-700 p-1 rounded-lg inline-flex">
-          <button
-            onClick={() => setMode('Simple')}
-            className={`px-4 py-2 rounded-md text-sm font-medium ${
-              mode === 'Simple'
-                ? 'bg-white dark:bg-gray-600 shadow'
-                : 'text-gray-500 dark:text-gray-400'
-            }`}
-          >
-            Single Clip
-          </button>
-          <button
-            onClick={() => setMode('Director')}
-            className={`px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 ${
-              mode === 'Director'
-                ? 'bg-white dark:bg-gray-600 shadow'
-                : 'text-gray-500 dark:text-gray-400'
-            }`}
-          >
-            <FilmIcon className="w-4 h-4" /> Director Mode
-          </button>
+      {/* Mode toggle - Only show for Creators or Agency plan users */}
+      {showDirectorMode && (
+        <div className="flex justify-center">
+          <div className="bg-gray-100 dark:bg-gray-700 p-1 rounded-lg inline-flex">
+            <button
+              onClick={() => setMode('Simple')}
+              className={`px-4 py-2 rounded-md text-sm font-medium ${
+                mode === 'Simple'
+                  ? 'bg-white dark:bg-gray-600 shadow'
+                  : 'text-gray-500 dark:text-gray-400'
+              }`}
+            >
+              Single Clip
+            </button>
+            <button
+              onClick={() => setMode('Director')}
+              className={`px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 ${
+                mode === 'Director'
+                  ? 'bg-white dark:bg-gray-600 shadow'
+                  : 'text-gray-500 dark:text-gray-400'
+              }`}
+            >
+              <FilmIcon className="w-4 h-4" /> Director Mode
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Director Mode */}
       {mode === 'Director' ? (

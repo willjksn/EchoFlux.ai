@@ -230,22 +230,51 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, usag
         handleSchedule(isoDate);
     };
 
-    const handlePost = () => {
+    const handlePost = async () => {
         const platformsToPost = (Object.keys(selectedPlatforms) as Platform[]).filter(p => selectedPlatforms[p]);
         if (platformsToPost.length === 0) {
             showToast('Please select at least one platform to post to.', 'error');
             return;
         }
+        if (!generatedImage) return;
 
-        platformsToPost.forEach(platform => {
-            showToast(`Your post has been successfully published to ${platform}!`, 'success');
-        });
+        setIsSaving(true);
+        try {
+            const imageUrl = await uploadImageToStorage(generatedImage);
+            const postId = Date.now().toString();
+            const publishDate = new Date();
 
-        setGeneratedImage(null);
-        setCaption('');
-        setPrompt('');
-        handleClearImage();
-        setSelectedPlatforms({ Instagram: false, TikTok: false, X: false, Threads: false, YouTube: false, LinkedIn: false, Facebook: false });
+            const title = caption ? caption.substring(0, 30) + '...' : 'Published Image';
+
+            // Create calendar event for each platform
+            for (const platform of platformsToPost) {
+                const newEvent: CalendarEvent = {
+                    id: `cal-${postId}-${platform}`,
+                    title: title,
+                    date: publishDate.toISOString(),
+                    type: 'Post',
+                    platform: platform,
+                    status: 'Published',
+                    thumbnail: imageUrl,
+                };
+                await addCalendarEvent(newEvent);
+            }
+
+            platformsToPost.forEach(platform => {
+                showToast(`Your post has been successfully published to ${platform}!`, 'success');
+            });
+
+            setGeneratedImage(null);
+            setCaption('');
+            setPrompt('');
+            handleClearImage();
+            setSelectedPlatforms({ Instagram: false, TikTok: false, X: false, Threads: false, YouTube: false, LinkedIn: false, Facebook: false });
+        } catch (e) {
+            console.error("Publish error:", e);
+            showToast("Failed to publish image.", 'error');
+        } finally {
+            setIsSaving(false);
+        }
     };
     
     return (

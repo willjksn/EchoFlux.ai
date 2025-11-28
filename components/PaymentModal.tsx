@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAppContext } from './AppContext';
 import { CreditCardIcon, VisaIcon, MastercardIcon, CheckCircleIcon } from './icons/UIIcons';
 import { PaymentPlan, User } from '../types';
@@ -7,59 +7,103 @@ export const PaymentModal: React.FC = () => {
     const { paymentPlan, closePaymentModal, user, setUser, selectedClient, setClients, showToast } = useAppContext();
     const [isLoading, setIsLoading] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
+    const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Cleanup timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (closeTimeoutRef.current) {
+                clearTimeout(closeTimeoutRef.current);
+            }
+        };
+    }, []);
 
     if (!paymentPlan) return null;
 
-    const handleSuccess = () => {
-        if (paymentPlan.name === 'Autopilot Add-on') {
-            if (user) {
-                setUser({ ...user, hasAutopilot: true });
+    const handleSuccess = async () => {
+        try {
+            if (paymentPlan.name === 'Autopilot Add-on') {
+                if (user) {
+                    await setUser({ ...user, hasAutopilot: true });
+                }
+                showToast('Autopilot has been activated!', 'success');
+            } else if (selectedClient) {
+                setClients(prevClients => 
+                    prevClients.map(client => 
+                        client.id === selectedClient.id
+                            ? {
+                                ...client,
+                                plan: paymentPlan.name as User['plan'],
+                                monthlyCaptionGenerationsUsed: 0,
+                                monthlyImageGenerationsUsed: 0,
+                                monthlyVideoGenerationsUsed: 0,
+                            }
+                            : client
+                    )
+                );
+                showToast(`Client successfully switched to the ${paymentPlan.name} plan!`, 'success');
+            } else if (user) {
+                // Map plan name to ensure it matches exactly with the Plan type
+                const planName = paymentPlan.name as User['plan'];
+                
+                // Update user plan and reset usage counters
+                await setUser({
+                    id: user.id,
+                    plan: planName,
+                    monthlyCaptionGenerationsUsed: 0,
+                    monthlyImageGenerationsUsed: 0,
+                    monthlyVideoGenerationsUsed: 0,
+                });
+                
+                console.log('Plan updated successfully:', planName);
+                showToast(`Successfully switched to the ${paymentPlan.name} plan!`, 'success');
             }
-            showToast('Autopilot has been activated!', 'success');
-        } else if (selectedClient) {
-            setClients(prevClients => 
-                prevClients.map(client => 
-                    client.id === selectedClient.id
-                        ? {
-                            ...client,
-                            plan: paymentPlan.name as User['plan'],
-                            monthlyCaptionGenerationsUsed: 0,
-                            monthlyImageGenerationsUsed: 0,
-                            monthlyVideoGenerationsUsed: 0,
-                        }
-                        : client
-                )
-            );
-             showToast(`Client successfully switched to the ${paymentPlan.name} plan!`, 'success');
-        } else if (user) {
-            setUser({
-                ...user,
-                plan: paymentPlan.name as User['plan'],
-                monthlyCaptionGenerationsUsed: 0,
-                monthlyImageGenerationsUsed: 0,
-                monthlyVideoGenerationsUsed: 0,
-            });
-            showToast(`Successfully switched to the ${paymentPlan.name} plan!`, 'success');
-        }
 
-        setIsLoading(false);
-        setIsSuccess(true);
-        setTimeout(() => {
-            closePaymentModal();
-        }, 1500);
+            setIsLoading(false);
+            setIsSuccess(true);
+            
+            // Clear any existing timeout
+            if (closeTimeoutRef.current) {
+                clearTimeout(closeTimeoutRef.current);
+            }
+            
+            // Set new timeout to close modal after success
+            closeTimeoutRef.current = setTimeout(() => {
+                closePaymentModal();
+                setIsSuccess(false);
+            }, 2000);
+        } catch (error) {
+            console.error('Failed to update plan:', error);
+            showToast('Failed to update plan. Please try again.', 'error');
+            setIsLoading(false);
+        }
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
         // Simulate API call
-        setTimeout(handleSuccess, 2000);
+        setTimeout(() => {
+            handleSuccess();
+        }, 2000);
     };
 
-    const handleFreePlanConfirm = () => {
+    const handleFreePlanConfirm = async () => {
         setIsLoading(true);
-        setTimeout(handleSuccess, 1000);
+        setTimeout(() => {
+            handleSuccess();
+        }, 1000);
     }
+
+    const handleClose = () => {
+        // Clear timeout if closing manually
+        if (closeTimeoutRef.current) {
+            clearTimeout(closeTimeoutRef.current);
+            closeTimeoutRef.current = null;
+        }
+        setIsSuccess(false);
+        closePaymentModal();
+    };
 
     const renderContent = () => {
         if (isSuccess) {
@@ -68,6 +112,7 @@ export const PaymentModal: React.FC = () => {
                     <CheckCircleIcon className="w-16 h-16 text-green-500 mx-auto animate-pulse" />
                     <h2 className="mt-4 text-2xl font-bold text-gray-900 dark:text-white">Purchase Complete!</h2>
                     <p className="mt-2 text-gray-500 dark:text-gray-400">Welcome to {paymentPlan.name}.</p>
+                    <p className="mt-2 text-sm text-gray-400 dark:text-gray-500">Redirecting...</p>
                 </div>
             )
         }
@@ -80,7 +125,7 @@ export const PaymentModal: React.FC = () => {
                         You will lose access to premium features like Autopilot, Custom Voice Training, and extended generation limits. Are you sure you want to continue?
                     </p>
                     <div className="mt-8 flex justify-center space-x-4">
-                        <button onClick={closePaymentModal} className="px-6 py-2 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500">Cancel</button>
+                        <button onClick={handleClose} className="px-6 py-2 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500">Cancel</button>
                         <button onClick={handleFreePlanConfirm} disabled={isLoading} className="px-6 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50">
                             {isLoading ? 'Switching...' : 'Confirm'}
                         </button>
@@ -140,9 +185,12 @@ export const PaymentModal: React.FC = () => {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60" aria-labelledby="payment-modal-title" role="dialog" aria-modal="true">
             <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full m-4 transition-all duration-300 ease-in-out transform scale-100">
-                <button onClick={closePaymentModal} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 z-10">
-                   <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
+                {/* Only show close button if not in success state */}
+                {!isSuccess && (
+                    <button onClick={handleClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 z-10">
+                       <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                )}
                 {renderContent()}
             </div>
         </div>

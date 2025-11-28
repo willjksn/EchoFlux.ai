@@ -6,9 +6,21 @@ interface UpgradePromptProps {
     onUpgradeClick: () => void;
     secondaryActionText?: string;
     onSecondaryActionClick?: () => void;
+    userType?: 'Creator' | 'Business';
 }
 
-export const UpgradePrompt: React.FC<UpgradePromptProps> = ({ featureName, onUpgradeClick, secondaryActionText, onSecondaryActionClick }) => {
+export const UpgradePrompt: React.FC<UpgradePromptProps> = ({ featureName, onUpgradeClick, secondaryActionText, onSecondaryActionClick, userType }) => {
+    // Determine the appropriate message based on user type and feature
+    const getUpgradeMessage = () => {
+        // Explicitly check for Business type
+        if (userType === 'Business') {
+            // For Business users, mention Growth and Agency plans
+            return 'This premium feature is available on our Growth and Agency plans.';
+        }
+        // For Creator users or if userType is undefined, mention Pro, Elite, and Agency plans
+        return 'This premium feature is available on our Pro, Elite, and Agency plans.';
+    };
+
     return (
         <div className="max-w-4xl mx-auto text-center bg-white dark:bg-gray-800 p-8 rounded-xl shadow-md">
             <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-primary-100 dark:bg-primary-900/50 text-primary-600 dark:text-primary-400">
@@ -16,7 +28,7 @@ export const UpgradePrompt: React.FC<UpgradePromptProps> = ({ featureName, onUpg
             </div>
             <h2 className="mt-4 text-2xl font-bold text-gray-900 dark:text-white">Upgrade to Unlock {featureName}</h2>
             <p className="mt-2 text-gray-600 dark:text-gray-400">
-                {`This premium feature is available on our Pro, Elite, and Agency plans.`}
+                {getUpgradeMessage()}
             </p>
             <div className="mt-6 flex flex-col sm:flex-row justify-center items-center gap-4">
                 <button 

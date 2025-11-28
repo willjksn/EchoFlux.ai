@@ -1,5 +1,6 @@
 import React from 'react';
 import { AnalyticsData } from '../../types';
+import { useAppContext } from '../AppContext';
 
 const StatCard: React.FC<{ title: string; value: string | number; change?: number }> = ({ title, value, change }) => (
     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
@@ -18,11 +19,18 @@ interface StatCardGridProps {
 }
 
 export const StatCardGrid: React.FC<StatCardGridProps> = ({ data }) => {
+    const { user } = useAppContext();
+    const isBusiness = user?.userType === 'Business';
+
+    // Business users see lead/customer metrics, Creators see follower metrics
+    const secondMetricTitle = isBusiness ? 'New Leads' : 'New Followers';
+    const thirdMetricTitle = isBusiness ? 'Lead Conversion' : 'Engagement';
+
     return (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <StatCard title="Total AI Replies" value={data.totalReplies} />
-            <StatCard title="New Followers" value={data.newFollowers} />
-            <StatCard title="Engagement" value={`${data.engagementIncrease.toFixed(1)}%`} change={data.engagementIncrease} />
+            <StatCard title={secondMetricTitle} value={data.newFollowers} />
+            <StatCard title={thirdMetricTitle} value={`${data.engagementIncrease.toFixed(1)}%`} change={data.engagementIncrease} />
         </div>
     );
 };

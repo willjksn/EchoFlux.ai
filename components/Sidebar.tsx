@@ -66,17 +66,31 @@ export const Sidebar: React.FC = () => {
       }
       switch (item.page) {
           case 'analytics':
-          case 'opportunities':
           case 'automation':
           case 'calendar':
           case 'bio':
           case 'strategy':
-          case 'autopilot':
               return user.plan !== 'Free';
+          case 'opportunities':
+              // Opportunities/Trends: Creator-only feature (not for Business users)
+              if (user.userType === 'Business') {
+                  return false;
+              }
+              // Creator users: Pro, Elite, Agency plans
+              return ['Pro', 'Elite', 'Agency'].includes(user.plan);
+          case 'autopilot':
+              // Marketing Manager for Business: All Business plans (Starter, Growth, Agency)
+              // AI Autopilot for Creators: Pro and Elite plans
+              if (user.userType === 'Business') {
+                  return ['Starter', 'Growth', 'Agency'].includes(user.plan);
+              }
+              // Creator users: Pro, Elite (and Agency for creators if they have it)
+              return ['Pro', 'Elite', 'Agency'].includes(user.plan);
           case 'approvals':
               return ['Elite', 'Agency'].includes(user.plan);
           case 'team':
-              return user.plan === 'Agency' || user.plan === 'Growth'; // Allow Growth plan for team
+              // STRICT CHECK: Only Agency Plan for Business users
+              return user.plan === 'Agency' && user.userType === 'Business';
           case 'clients':
               // STRICT CHECK: Only Agency Plan
               return user.plan === 'Agency';

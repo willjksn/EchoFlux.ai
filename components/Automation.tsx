@@ -36,6 +36,11 @@ const WorkflowModal: React.FC<{
     onSave: (workflow: Omit<AutomationWorkflow, 'id' | 'lastRun' | 'nextRun'>) => void;
 }> = ({ isOpen, onClose, onSave }) => {
     const { user, userBaseImage, userCustomVoices, setUserCustomVoices, showToast, settings } = useAppContext();
+    
+    // Filter options for Business Starter/Growth plans
+    const isBusiness = user?.userType === 'Business';
+    const isAgencyPlan = user?.plan === 'Agency';
+    const showAdvancedOptions = !isBusiness || isAgencyPlan; // Hide for Business Starter/Growth, show for Agency and all Creators
     const [type, setType] = useState<AutomationWorkflow['type']>('Image');
     const [prompt, setPrompt] = useState('');
     const [frequencyType, setFrequencyType] = useState<AutomationWorkflow['frequency']['type']>('Daily');
@@ -187,7 +192,7 @@ const WorkflowModal: React.FC<{
                                     <option value="engagement">Increase Engagement</option>
                                     <option value="sales">Drive Sales</option>
                                     <option value="awareness">Build Awareness</option>
-                                    <option value="followers">Increase Followers/Fans</option>
+                                    {showAdvancedOptions && <option value="followers">Increase Followers/Fans</option>}
                                 </select>
                             </div>
                             <div>
@@ -197,8 +202,12 @@ const WorkflowModal: React.FC<{
                                     <option value="witty">Witty</option>
                                     <option value="inspirational">Inspirational</option>
                                     <option value="professional">Professional</option>
-                                    <option value="sexy-bold">Sexy / Bold</option>
-                                    <option value="sexy-explicit">Sexy / Explicit</option>
+                                    {showAdvancedOptions && (
+                                        <>
+                                            <option value="sexy-bold">Sexy / Bold</option>
+                                            <option value="sexy-explicit">Sexy / Explicit</option>
+                                        </>
+                                    )}
                                 </select>
                             </div>
                         </div>

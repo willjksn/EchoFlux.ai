@@ -55,11 +55,17 @@ interface AnalyticsChartsProps {
 }
 
 export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ data }) => {
+    const { user } = useAppContext();
+    const isBusiness = user?.userType === 'Business';
+
+    // Business users see lead growth, Creators see follower growth
+    const growthChartTitle = isBusiness ? 'Lead Generation Growth' : 'Follower Growth';
+
     return (
         <>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <SimpleBarChart data={data.responseRate} title="Response Rate" unit="%" />
-                <SimpleBarChart data={data.followerGrowth} title="Follower Growth" unit="" />
+                <SimpleBarChart data={data.followerGrowth} title={growthChartTitle} unit="" />
             </div>
             <SentimentBar data={data.sentiment} />
         </>

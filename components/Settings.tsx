@@ -213,8 +213,6 @@ export const Settings: React.FC = () => {
         }
     }
 
-    const accountName = selectedClient ? selectedClient.name : 'Main Account';
-
     const tabs: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
         { id: 'general', label: 'General', icon: <SettingsIcon /> },
         { id: 'connections', label: 'Connections', icon: <LinkIcon /> },
@@ -227,7 +225,7 @@ export const Settings: React.FC = () => {
     return (
         <div className="max-w-4xl mx-auto space-y-8">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Settings for {accountName}</h2>
+                <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Settings</h2>
             </div>
 
             <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg overflow-x-auto">

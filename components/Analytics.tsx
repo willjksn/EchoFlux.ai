@@ -95,13 +95,49 @@ export const Analytics: React.FC = () => {
 
     const renderTabContent = () => {
         if (activeTab === 'Listening') {
-             if (user?.plan === 'Free' || user?.plan === 'Pro')
- return <UpgradePrompt featureName="Social Listening" onUpgradeClick={() => setActivePage('pricing')} />;
-             return <SocialListening />;
+            // For Business users: Only Growth and Agency plans
+            // For Creator users: Pro, Elite, Agency plans
+            const hasAccess = (() => {
+                if (user?.role === 'Admin') return true;
+                if (user?.userType === 'Business') {
+                    return ['Growth', 'Agency'].includes(user.plan || '');
+                }
+                // Creator users
+                return ['Pro', 'Elite', 'Agency'].includes(user?.plan || '');
+            })();
+            
+            if (!hasAccess) {
+                return (
+                    <UpgradePrompt 
+                        featureName="Social Listening" 
+                        onUpgradeClick={() => setActivePage('pricing')}
+                        userType={user?.userType === 'Business' ? 'Business' : 'Creator'}
+                    />
+                );
+            }
+            return <SocialListening />;
         }
         if (activeTab === 'Competitors') {
-            if (user?.plan === 'Free' || user?.plan === 'Pro')
- return <UpgradePrompt featureName="Competitor Analysis" onUpgradeClick={() => setActivePage('pricing')} />;
+            // For Business users: Only Growth and Agency plans
+            // For Creator users: Pro, Elite, Agency plans
+            const hasAccess = (() => {
+                if (user?.role === 'Admin') return true;
+                if (user?.userType === 'Business') {
+                    return ['Growth', 'Agency'].includes(user.plan || '');
+                }
+                // Creator users
+                return ['Pro', 'Elite', 'Agency'].includes(user?.plan || '');
+            })();
+            
+            if (!hasAccess) {
+                return (
+                    <UpgradePrompt 
+                        featureName="Competitor Analysis" 
+                        onUpgradeClick={() => setActivePage('pricing')}
+                        userType={user?.userType === 'Business' ? 'Business' : 'Creator'}
+                    />
+                );
+            }
             return <CompetitorAnalysis />;
         }
 
@@ -126,7 +162,7 @@ export const Analytics: React.FC = () => {
              <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="flex-1">
                     <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-                        Analytics for: {selectedClient?.name || 'Main Account'}
+                        {selectedClient ? `Analytics for: ${selectedClient.name}` : 'Analytics'}
                     </h2>
                 </div>
                 <div className="flex items-center gap-4">

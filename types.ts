@@ -15,7 +15,9 @@ declare global {
 export type Platform = 'Instagram' | 'TikTok' | 'X' | 'Threads' | 'YouTube' | 'LinkedIn' | 'Facebook';
 
 export type MessageType = 'DM' | 'Comment';
-export type MessageCategory = 'Lead' | 'Support' | 'Opportunity' | 'General';
+// Business categories: Lead, Support, Opportunity, General
+// Creator categories: Fan Message, Question, Collab Request, Feedback, General
+export type MessageCategory = 'Lead' | 'Support' | 'Opportunity' | 'General' | 'Fan Message' | 'Question' | 'Collab Request' | 'Feedback';
 
 export interface Message {
   id: string; 

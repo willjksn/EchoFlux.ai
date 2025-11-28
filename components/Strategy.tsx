@@ -22,14 +22,21 @@ export const Strategy: React.FC = () => {
     const [niche, setNiche] = useState('');
     const [audience, setAudience] = useState('');
     const [goal, setGoal] = useState('Brand Awareness');
+    
+    // Filter options for Business Starter/Growth plans
+    const isBusiness = user?.userType === 'Business';
+    const isAgencyPlan = user?.plan === 'Agency';
+    const showAdvancedOptions = !isBusiness || isAgencyPlan; // Hide for Business Starter/Growth, show for Agency and all Creators
     const [duration, setDuration] = useState('4 Weeks');
     const [tone, setTone] = useState('Professional');
     const [platformFocus, setPlatformFocus] = useState('Mixed / All');
     const [isLoading, setIsLoading] = useState(false);
     const [plan, setPlan] = useState<StrategyPlan | null>(null);
 
-    const isFeatureUnlocked = ['Pro', 'Elite', 'Agency'].includes(user?.plan || "") || user?.role === 'Admin'
-;
+    // AI Content Strategist is a $99/month add-on feature
+    // Available to Creator Pro/Elite plans, but NOT Agency (requires add-on purchase)
+    const isFeatureUnlocked = user?.role === 'Admin' || 
+                               (['Pro', 'Elite'].includes(user?.plan || '') && user?.plan !== 'Agency');
 
     if (!isFeatureUnlocked) {
          return <UpgradePrompt featureName="AI Content Strategist" onUpgradeClick={() => setActivePage('pricing')} />;
@@ -127,7 +134,7 @@ export const Strategy: React.FC = () => {
                             className="w-full p-3 border rounded-lg bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-primary-500 dark:text-white"
                         >
                             <option>Brand Awareness</option>
-                            <option>Increase Followers/Fans</option>
+                            {showAdvancedOptions && <option>Increase Followers/Fans</option>}
                             <option>Lead Generation</option>
                             <option>Community Engagement</option>
                             <option>Sales Conversion</option>
@@ -157,8 +164,12 @@ export const Strategy: React.FC = () => {
                             <option>Edgy & Bold</option>
                             <option>Educational</option>
                             <option>Inspirational</option>
-                            <option>Sexy / Bold</option>
-                            <option>Sexy / Explicit</option>
+                            {showAdvancedOptions && (
+                                <>
+                                    <option>Sexy / Bold</option>
+                                    <option>Sexy / Explicit</option>
+                                </>
+                            )}
                         </select>
                     </div>
                      <div>

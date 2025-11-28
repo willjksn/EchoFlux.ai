@@ -6,6 +6,7 @@ import {
   generateAutopilotSuggestions,
   generateAutopilotPlan,
 } from "../src/services/geminiService";
+import { UpgradePrompt } from "./UpgradePrompt";
 
 const Autopilot: React.FC = () => {
   const {
@@ -13,6 +14,7 @@ const Autopilot: React.FC = () => {
     autopilotCampaigns,
     addAutopilotCampaign,
     showToast,
+    setActivePage,
   } = useAppContext();
 
   const [selectedIdea, setSelectedIdea] = useState("");
@@ -27,24 +29,45 @@ const Autopilot: React.FC = () => {
   const nicheOrIndustry = isBusiness ? user.businessType : user.niche;
   const audience = user.audience || "their target audience";
 
+  // Check if user has access to Autopilot/Marketing Manager
+  const hasAccess = (() => {
+    if (user.role === 'Admin') return true;
+    if (isBusiness) {
+      // Marketing Manager: All Business plans (Starter, Growth, Agency)
+      return ['Starter', 'Growth', 'Agency'].includes(user.plan);
+    }
+    // AI Autopilot for Creators: Pro, Elite, Agency plans
+    return ['Pro', 'Elite', 'Agency'].includes(user.plan);
+  })();
+
+  // Show upgrade prompt if user doesn't have access
+  if (!hasAccess) {
+    return (
+      <UpgradePrompt
+        featureName={isBusiness ? "AI Marketing Manager" : "AI Autopilot"}
+        onUpgradeClick={() => setActivePage('pricing')}
+        userType={isBusiness ? 'Business' : 'Creator'}
+      />
+    );
+  }
+
   // ---------------------------
   // FETCH AI IDEAS
   // ---------------------------
   const fetchSuggestions = async () => {
     setIsFetchingIdeas(true);
     try {
-      // 🔧 FIX: destructure `suggestions`, not `ideas`
-      const { suggestions } = await generateAutopilotSuggestions(
+      const { ideas } = await generateAutopilotSuggestions(
         nicheOrIndustry || "general",
         audience,
         user.userType || "Creator"
       );
 
-      if (!Array.isArray(suggestions)) {
+      if (!Array.isArray(ideas)) {
         throw new Error("Invalid AI response");
       }
 
-      setSuggestedIdeas(suggestions);
+      setSuggestedIdeas(ideas);
     } catch (err) {
       console.error("Failed to fetch suggestions:", err);
       showToast("Couldn't generate fresh ideas right now.", "error");

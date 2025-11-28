@@ -112,7 +112,7 @@ export const Dashboard: React.FC = () => {
              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Quick Actions</h3>
              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   <QuickAction label="Create Post" icon={<SparklesIcon className="w-6 h-6" />} color="bg-gradient-to-br from-purple-500 to-indigo-600" onClick={() => setActivePage('compose')} />
-                  <QuickAction label={isBusiness ? 'Marketing Plan' : 'Generate Strategy'} icon={<TrendingIcon className="w-6 h-6" />} color="bg-gradient-to-br from-blue-500 to-cyan-500" onClick={() => setActivePage('strategy')} />
+                  <QuickAction label={isBusiness ? 'Marketing Plan' : 'Content Strategy'} icon={<TrendingIcon className="w-6 h-6" />} color="bg-gradient-to-br from-blue-500 to-cyan-500" onClick={() => setActivePage('strategy')} />
                   <QuickAction label="View Calendar" icon={<CalendarIcon className="w-6 h-6" />} color="bg-gradient-to-br from-orange-400 to-red-500" onClick={() => setActivePage('calendar')} />
                   <QuickAction label={isBusiness ? 'Business Insights' : 'Check Analytics'} icon={<CheckCircleIcon className="w-6 h-6" />} color="bg-gradient-to-br from-emerald-400 to-green-600" onClick={() => setActivePage('analytics')} />
               </div>
@@ -228,7 +228,20 @@ export const Dashboard: React.FC = () => {
         </div>
         
         {/* ... Filters ... */}
-        <div className="flex border-b border-gray-200 dark:border-gray-700">{(['All', 'Lead', 'Support', 'Opportunity', 'General'] as const).map(cat => (<button key={cat} onClick={() => handleFilterChange('category', cat)} className={`px-4 py-2 text-sm font-medium ${filters.category === cat ? 'border-b-2 border-primary-500 text-primary-600' : 'text-gray-500 hover:text-gray-700'}`}>{cat}</button>))}</div>
+        <div className="flex border-b border-gray-200 dark:border-gray-700">
+          {(isBusiness 
+            ? (['All', 'Lead', 'Support', 'Opportunity', 'General'] as const)
+            : (['All', 'Fan Message', 'Question', 'Collab Request', 'Feedback', 'General'] as const)
+          ).map(cat => (
+            <button 
+              key={cat} 
+              onClick={() => handleFilterChange('category', cat as any)} 
+              className={`px-4 py-2 text-sm font-medium ${filters.category === cat ? 'border-b-2 border-primary-500 text-primary-600' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
 
         <div className="flex flex-wrap items-center gap-2">
              {/* ... (Platform, Type, Status Filters - Keep existing code) ... */}
