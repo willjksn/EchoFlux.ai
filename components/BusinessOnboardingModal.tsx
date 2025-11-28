@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useAppContext } from './AppContext';
 
@@ -33,8 +32,8 @@ export const BusinessOnboardingModal: React.FC<BusinessOnboardingModalProps> = (
             case 1:
                 return (
                     <div className="animate-fade-in">
-                        <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-white">Welcome! Let's set up your Business Workspace.</h2>
-                        <p className="mt-2 text-center text-gray-500 dark:text-gray-400">First, tell us about your business.</p>
+                        <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-white">Setup your Business Workspace</h2>
+                        <p className="mt-2 text-center text-gray-500 dark:text-gray-400">Tell us about your company.</p>
                         <div className="mt-6 space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Business Name</label>
@@ -47,12 +46,12 @@ export const BusinessOnboardingModal: React.FC<BusinessOnboardingModalProps> = (
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Business Type / Industry</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Industry / Type</label>
                                 <input
                                     type="text"
                                     value={businessType}
                                     onChange={(e) => setBusinessType(e.target.value)}
-                                    placeholder="e.g., Restaurant, E-commerce, Real Estate"
+                                    placeholder="e.g., Restaurant, SaaS, Real Estate"
                                     className="mt-1 w-full p-3 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-primary-500"
                                 />
                             </div>
@@ -62,8 +61,8 @@ export const BusinessOnboardingModal: React.FC<BusinessOnboardingModalProps> = (
             case 2:
                 return (
                      <div className="animate-fade-in">
-                        <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-white">What is your primary marketing goal?</h2>
-                        <p className="mt-2 text-center text-gray-500 dark:text-gray-400">This will help the AI tailor its strategies and content for you.</p>
+                        <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-white">What is your primary goal?</h2>
+                        <p className="mt-2 text-center text-gray-500 dark:text-gray-400">This helps the AI prioritize metrics and strategies.</p>
                         <div className="mt-6 space-y-3">
                             {['Drive Website Sales', 'Increase Foot Traffic', 'Generate Leads', 'Build Brand Awareness'].map(goal => (
                                 <button
@@ -80,8 +79,8 @@ export const BusinessOnboardingModal: React.FC<BusinessOnboardingModalProps> = (
             default:
                 return (
                      <div className="text-center animate-fade-in">
-                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">You're Ready to Go!</h2>
-                        <p className="mt-2 text-gray-500 dark:text-gray-400">Click below to start a quick tour of your new Business Command Center.</p>
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">You're Ready!</h2>
+                        <p className="mt-2 text-gray-500 dark:text-gray-400">Click below to enter your Business Command Center.</p>
                     </div>
                 );
         }

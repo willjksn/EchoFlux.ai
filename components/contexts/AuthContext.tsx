@@ -13,6 +13,23 @@ interface AuthContextType {
     handleLogout: () => void;
 }
 
+// inside the "else" where userDocSnap does NOT exist
+const pendingPlan = (typeof window !== 'undefined'
+  ? (localStorage.getItem('pendingPlan') as Plan | null)
+  : null);
+
+const newUser: User = {
+  // ...
+  plan: pendingPlan || 'Free',
+  // ...
+};
+
+// after successful setDoc:
+try {
+  localStorage.removeItem('pendingPlan');
+} catch {}
+
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Utility — NEVER allow undefined to be written to Firestore

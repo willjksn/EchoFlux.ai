@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { useAppContext } from "./AppContext";
 import { AutopilotStatus } from "../types";
+import { RocketIcon, BriefcaseIcon, RefreshIcon } from "./icons/UIIcons";
 import {
-  RocketIcon,
-  BriefcaseIcon,
-  RefreshIcon,
-} from "./icons/UIIcons";
-import { generateAutopilotSuggestions } from "../src/services/geminiService";
+  generateAutopilotSuggestions,
+  generateAutopilotPlan,
+} from "../src/services/geminiService";
 
 const Autopilot: React.FC = () => {
   const {
@@ -34,19 +33,23 @@ const Autopilot: React.FC = () => {
   const fetchSuggestions = async () => {
     setIsFetchingIdeas(true);
     try {
-      const { ideas } = await generateAutopilotSuggestions(
+      // 🔧 FIX: destructure `suggestions`, not `ideas`
+      const { suggestions } = await generateAutopilotSuggestions(
         nicheOrIndustry || "general",
         audience,
         user.userType || "Creator"
       );
 
-      if (!Array.isArray(ideas)) throw new Error("Invalid AI response");
+      if (!Array.isArray(suggestions)) {
+        throw new Error("Invalid AI response");
+      }
 
-      setSuggestedIdeas(ideas);
+      setSuggestedIdeas(suggestions);
     } catch (err) {
       console.error("Failed to fetch suggestions:", err);
       showToast("Couldn't generate fresh ideas right now.", "error");
 
+      // Safe fallback ideas so UI still works
       setSuggestedIdeas(
         isBusiness
           ? ["Promote a Weekly Special", "Highlight a 5-Star Review"]
@@ -59,6 +62,7 @@ const Autopilot: React.FC = () => {
 
   useEffect(() => {
     fetchSuggestions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.userType]);
 
   // ---------------------------
@@ -74,12 +78,42 @@ const Autopilot: React.FC = () => {
 
     setIsLoading(true);
     try {
+      // 1) Create campaign record as before
       await addAutopilotCampaign({
         goal,
         niche: nicheOrIndustry || "General",
-        audience: audience,
+        audience,
         status: "Strategizing",
       });
+
+      // 2) Kick off AI campaign plan generation in the background (non-blocking)
+      try {
+        const connected = (user.settings as any)?.connectedAccounts || {};
+        const channels = Object.entries(connected)
+          .filter(([, isOn]) => !!isOn)
+          .map(([platformKey]) => platformKey);
+
+        // 🔧 FIX: pass a single object that matches geminiService signature
+        generateAutopilotPlan({
+          goal,
+          niche: nicheOrIndustry || "General",
+          audience,
+          channels,
+          durationWeeks: 4,
+        })
+          .then((plan) => {
+            console.log("Autopilot plan generated:", plan);
+            // Later: save this into Firestore or UI state
+          })
+          .catch((err) => {
+            console.error("Autopilot plan generation failed (non-blocking):", err);
+          });
+      } catch (innerErr) {
+        console.error(
+          "Error starting autopilot plan generation (non-blocking):",
+          innerErr
+        );
+      }
 
       setSelectedIdea("");
       setCustomGoal("");
@@ -96,7 +130,9 @@ const Autopilot: React.FC = () => {
   // ---------------------------
   // STATUS DISPLAY
   // ---------------------------
-  const getStatusInfo = (status: AutopilotStatus) => {
+  const getStatusInfo = (
+    status: AutopilotStatus
+  ): { color: string; text: string } => {
     switch (status) {
       case "Strategizing":
         return {
@@ -159,17 +195,17 @@ const Autopilot: React.FC = () => {
             }}
             placeholder="e.g., Run a 2-week hype campaign for my new sneaker drop"
             rows={2}
-            className="w-full p-3 border rounded-lg bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-primary-500 dark:text-white"
+            className="w-full p-3 border rounded-lg bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-primary-500 dark:text-white dark:placeholder-gray-400"
           />
         </div>
 
         {/* OR Divider */}
         <div className="flex items-center gap-4 my-6">
-          <div className="flex-grow h-px bg-gray-200 dark:bg-gray-700"></div>
+          <div className="flex-grow h-px bg-gray-200 dark:bg-gray-700" />
           <span className="text-sm font-semibold text-gray-500 dark:text-gray-400">
             OR
           </span>
-          <div className="flex-grow h-px bg-gray-200 dark:bg-gray-700"></div>
+          <div className="flex-grow h-px bg-gray-200 dark:bg-gray-700" />
         </div>
 
         {/* AI Suggestions */}
@@ -184,12 +220,15 @@ const Autopilot: React.FC = () => {
               disabled={isFetchingIdeas}
               className="text-xs text-primary-600 hover:underline flex items-center gap-1 disabled:opacity-50"
             >
-              <RefreshIcon className={`w-3 h-3 ${isFetchingIdeas ? "animate-spin" : ""}`} />
+              <RefreshIcon
+                className={`w-3 h-3 ${
+                  isFetchingIdeas ? "animate-spin" : ""
+                }`}
+              />
               Refresh Ideas
             </button>
           </div>
 
-          {/* SAFE: always array */}
           {isFetchingIdeas ? (
             <div className="text-center py-8 text-gray-500 dark:text-gray-400">
               Generating fresh ideas...
@@ -223,7 +262,9 @@ const Autopilot: React.FC = () => {
             disabled={isLoading || (!selectedIdea && !customGoal.trim())}
             className="px-8 py-3 bg-gradient-to-r from-primary-600 to-primary-500 text-white font-bold rounded-full shadow-lg hover:shadow-xl transform transition hover:-translate-y-1 disabled:opacity-50 flex items-center gap-2"
           >
-            {isLoading ? "Launching..." : (
+            {isLoading ? (
+              "Launching..."
+            ) : (
               <>
                 <RocketIcon /> Launch Campaign
               </>
@@ -253,7 +294,8 @@ const Autopilot: React.FC = () => {
                   </p>
 
                   <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-                    Generated {campaign.generatedPosts} / {campaign.totalPosts} posts
+                    Generated {campaign.generatedPosts} /{" "}
+                    {campaign.totalPosts} posts
                   </span>
                 </div>
 
@@ -262,7 +304,7 @@ const Autopilot: React.FC = () => {
                     <div
                       className={`${statusInfo.color} h-2.5 rounded-full transition-all duration-500`}
                       style={{ width: `${campaign.progress}%` }}
-                    ></div>
+                    />
                   </div>
 
                   <p className="text-xs text-center mt-2 font-semibold text-gray-600 dark:text-gray-300 animate-pulse">

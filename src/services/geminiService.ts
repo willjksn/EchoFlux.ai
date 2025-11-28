@@ -1,7 +1,11 @@
-import { auth } from "../../firebaseConfig";
-import type { UserType } from "../../types"; // <-- ensure this exists
+// src/services/geminiService.ts
 
+import { auth } from "../../firebaseConfig";
+import type { UserType } from "../../types";
+
+// ----------------------------------------------------
 // Generic API caller for Vercel Serverless Functions
+// ----------------------------------------------------
 async function callFunction(path: string, data: any) {
   const token = auth.currentUser
     ? await auth.currentUser.getIdToken(true)
@@ -43,17 +47,20 @@ export async function generateReply(
 }
 
 /* ----------------------------------------------------
-   2) Captions (image-aware, via mediaUrl)
+   2) Captions (image-aware, via mediaUrl or mediaData)
 ---------------------------------------------------- */
 export async function generateCaptions(opts: {
   mediaUrl?: string | null;
+  mediaData?: { data: string; mimeType: string } | null;
   goal?: string | null;
   tone?: string | null;
   promptText?: string | null;
 }) {
-  const { mediaUrl, goal, tone, promptText } = opts;
+  const { mediaUrl, mediaData, goal, tone, promptText } = opts;
+
   return await callFunction("generateCaptions", {
     mediaUrl: mediaUrl || null,
+    mediaData: mediaData || null,
     goal: goal || null,
     tone: tone || null,
     promptText: promptText || null,
@@ -180,8 +187,11 @@ export async function generateBrandSuggestions(
 /* ----------------------------------------------------
    13) Analytics Report
 ---------------------------------------------------- */
-export async function generateAnalyticsReport(data: any) {
-  return await callFunction("generateAnalyticsReport", { data });
+export async function generateAnalyticsReport(
+  data: any
+): Promise<string> {
+  const res = await callFunction("generateAnalyticsReport", { data });
+  return res.report;
 }
 
 /* ----------------------------------------------------
@@ -193,17 +203,61 @@ export async function generateCRMSummary(history: any[]): Promise<any> {
 }
 
 /* ----------------------------------------------------
-   15) Autopilot Suggestions (NEW)
+   15) Autopilot Suggestions
+        (normalize to always return { ideas: string[] })
 ---------------------------------------------------- */
 export async function generateAutopilotSuggestions(
   niche: string,
   audience: string,
   userType: UserType
-): Promise<{ suggestions: string[] }> {
-  return await callFunction("generateAutopilotSuggestions", {
+): Promise<{ ideas: string[] }> {
+  const res = await callFunction("generateAutopilotSuggestions", {
     niche,
     audience,
     userType,
   });
+
+  // API may send { ideas }, { suggestions }, or a bare array.
+  const raw =
+    (res && (res.ideas || res.suggestions)) ||
+    (Array.isArray(res) ? res : []);
+
+  const ideas = Array.isArray(raw) ? raw : [];
+  return { ideas };
 }
 
+/* ----------------------------------------------------
+   16) Autopilot Plan
+        NO new API route – reuse generateContentStrategy
+---------------------------------------------------- */
+export async function generateAutopilotPlan(args: {
+  goal: string;
+  niche: string;
+  audience: string;
+  channels?: string[];
+  durationWeeks?: number;
+}): Promise<any> {
+  const {
+    goal,
+    niche,
+    audience,
+    channels = [],
+    durationWeeks = 4,
+  } = args;
+
+  const platformFocus =
+    channels.length > 0 ? channels.join(", ") : "Mixed social channels";
+
+  const durationLabel =
+    durationWeeks === 4 ? "4 weeks" : `${durationWeeks} weeks`;
+
+  // Reuse the existing content strategy API
+  return generateContentStrategy(
+    niche,
+    audience,
+    goal,
+    durationLabel,
+    "friendly",
+    platformFocus
+  );
+}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from './AppContext';
 import { XMarkIcon } from './icons/UIIcons';
 import { auth } from '../firebaseConfig';
@@ -8,6 +8,9 @@ import {
   updateProfile,
   sendPasswordResetEmail,
 } from 'firebase/auth';
+import type { Plan } from '../types';
+
+/* ---------- Terms & Privacy content (unchanged) ---------- */
 
 const Terms: React.FC = () => (
   <div className="space-y-4 text-sm text-gray-700 dark:text-gray-300">
@@ -51,15 +54,25 @@ const PrivacyPolicy: React.FC = () => (
   </div>
 );
 
+/* ---------- Props: now supports initialView + selectedPlan ---------- */
+
 interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialView?: 'login' | 'signup';
+  selectedPlan?: Plan; // optional; used only on sign-up
 }
 
-export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
+export const LoginModal: React.FC<LoginModalProps> = ({
+  isOpen,
+  onClose,
+  initialView = 'login',
+  selectedPlan,
+}) => {
   const { showToast } = useAppContext();
 
-  const [isLogin, setIsLogin] = useState(true);
+  // derive initial mode from initialView
+  const [isLogin, setIsLogin] = useState(initialView === 'login');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -69,7 +82,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
 
   const [showPassword, setShowPassword] = useState(false);
 
+  // keep internal state in sync if parent changes initialView
+  useEffect(() => {
+    setIsLogin(initialView === 'login');
+  }, [initialView]);
+
   if (!isOpen) return null;
+
+  /* ---------- AUTH HANDLERS ---------- */
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,11 +105,25 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
         // Sign up
         if (password !== confirmPassword) {
           showToast('Passwords do not match.', 'error');
+          setIsLoading(false);
           return;
         }
+
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        await updateProfile(userCredential.user, { displayName: fullName || 'New User' });
-        showToast('Account created!', 'success');
+
+        // Store pending plan selection for user creation (handled in AuthContext / backend)
+        const planToStore: Plan = selectedPlan || ('Free' as Plan);
+        try {
+          localStorage.setItem('pendingPlan', planToStore);
+        } catch {
+          // non-fatal if localStorage isn't available
+        }
+
+        await updateProfile(userCredential.user, {
+          displayName: fullName || 'New User',
+        });
+
+        showToast('Account created! Please complete onboarding.', 'success');
         onClose();
       }
     } catch (error: any) {
@@ -133,7 +167,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
           <XMarkIcon className="w-5 h-5" />
         </button>
 
-        {/* Switch between Login/Signup */}
+        {/* Header + Login/Signup toggle */}
         <div className="px-6 pt-6 pb-4 border-b border-gray-200 dark:border-gray-800">
           <div className="flex items-center justify-center mb-2">
             <span className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-primary-100 dark:bg-primary-900 text-primary-600 dark:text-primary-300 font-bold text-xl">
@@ -144,7 +178,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
             {isLogin ? 'Welcome back' : 'Create your account'}
           </h2>
           <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-1">
-            {isLogin ? 'Sign in to access your content workspace.' : 'Start using EngageSuite to grow your audience.'}
+            {isLogin
+              ? 'Sign in to access your content workspace.'
+              : 'Start using EngageSuite to grow your audience.'}
           </p>
 
           <div className="mt-4 flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
@@ -171,6 +207,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
               Sign Up
             </button>
           </div>
+
+          {/* Optional: show selected plan badge when signing up via pricing */}
+          {!isLogin && selectedPlan && (
+            <p className="mt-2 text-xs text-center text-primary-600 dark:text-primary-300">
+              You&apos;re signing up for the <span className="font-semibold">{selectedPlan}</span>{' '}
+              plan.
+            </p>
+          )}
         </div>
 
         {/* Body */}
@@ -283,7 +327,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full mt-2 inline-flex items-center justify-center px-4 py-2.5 border border-transparent text-sm font-semibold rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                className="w-full mt-2 inline-flex items-center justify-center px-4 py-2.5 border border-transparent text-sm font-semibold rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-60"
               >
                 {isLoading ? 'Please wait...' : isLogin ? 'Log In' : 'Sign Up'}
               </button>

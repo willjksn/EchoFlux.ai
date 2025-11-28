@@ -36,32 +36,32 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                             <LogoIcon /> <span className="text-2xl font-bold ml-2">EngageSuite.ai</span>
                         </div>
                         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Welcome, Creator!</h2>
-                        <p className="mt-2 text-gray-500 dark:text-gray-400">Let's get your creative workspace set up in just a moment.</p>
+                        <p className="mt-2 text-gray-500 dark:text-gray-400">Let's set up your creative command center.</p>
                     </div>
                 );
             case 2:
                 return (
                     <div className="animate-fade-in">
                         <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-white">Tell us about your content</h2>
-                        <p className="mt-2 text-center text-gray-500 dark:text-gray-400">This helps our AI understand your brand and generate better ideas.</p>
+                        <p className="mt-2 text-center text-gray-500 dark:text-gray-400">This trains the AI to match your brand voice.</p>
                         <div className="mt-6 space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">What is your primary content niche?</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Primary Niche</label>
                                 <input
                                     type="text"
                                     value={niche}
                                     onChange={(e) => setNiche(e.target.value)}
-                                    placeholder="e.g., Gaming, Fashion, Tech Reviews"
+                                    placeholder="e.g., Gaming, Lifestyle, Tech Reviews"
                                     className="mt-1 w-full p-3 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-primary-500"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Who is your target audience?</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Target Audience</label>
                                 <input
                                     type="text"
                                     value={audience}
                                     onChange={(e) => setAudience(e.target.value)}
-                                    placeholder="e.g., College students, Young professionals"
+                                    placeholder="e.g., Gen Z Gamers, Young Professionals"
                                     className="mt-1 w-full p-3 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-primary-500"
                                 />
                             </div>
@@ -72,7 +72,7 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                 return (
                      <div className="text-center animate-fade-in">
                         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">You're All Set!</h2>
-                        <p className="mt-2 text-gray-500 dark:text-gray-400">Click below to start a quick tour of your new Creator dashboard.</p>
+                        <p className="mt-2 text-gray-500 dark:text-gray-400">Click below to start a tour of your new Creator Dashboard.</p>
                     </div>
                 );
         }
