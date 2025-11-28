@@ -13,7 +13,7 @@ interface SettingsProps {}
 
 const fileToBase64 = (file: File): Promise<{ data: string; mimeType: string }> => {
     return new Promise((resolve, reject) => {
-        const reader = new FileReader();
+        const reader = new FileReader();   
         reader.readAsDataURL(file);
         reader.onload = () => {
             const result = reader.result as string;
