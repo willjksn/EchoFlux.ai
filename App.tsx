@@ -100,7 +100,7 @@ const MainContent: React.FC = () => {
 }
 
 const AppContent: React.FC = () => {
-    const { isAuthenticated, isAuthLoading, user, setUser, activePage, setActivePage, startTour, isTourActive, toast, isCRMOpen } = useAppContext();
+    const { isAuthenticated, isAuthLoading, user, setUser, activePage, setActivePage, startTour, isTourActive, toast, isCRMOpen, setPricingView } = useAppContext();
     
     const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
     const [onboardingStep, setOnboardingStep] = useState<'selector' | 'creator' | 'business' | 'none'>('none');
@@ -129,6 +129,16 @@ const AppContent: React.FC = () => {
         if (user) {
             await setUser({ ...user, userType: type });
         }
+        
+        // Check if there's a pending pricing view from plan upgrade/downgrade
+        const pendingPricingView = localStorage.getItem('pendingPricingView') as 'Creator' | 'Business' | null;
+        if (pendingPricingView && pendingPricingView === type) {
+            // Navigate to pricing with the stored view
+            localStorage.removeItem('pendingPricingView');
+            setPricingView(pendingPricingView);
+            setActivePage('pricing');
+        }
+        
         setOnboardingStep(type === 'Business' ? 'business' : 'creator');
     };
 

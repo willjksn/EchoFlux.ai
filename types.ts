@@ -372,7 +372,7 @@ export interface CRMProfile {
     aiSummary?: string;
 }
 
-export type ApprovalStatus = 'Draft' | 'In Review' | 'Approved' | 'Rejected' | 'Scheduled';
+export type ApprovalStatus = 'Draft' | 'In Review' | 'Approved' | 'Rejected' | 'Scheduled' | 'Published';
 
 export interface PostComment {
     id: string;
@@ -492,4 +492,6 @@ export interface AppContextType {
   addCRMTag: (profileId: string, tag: string) => void;
   removeCRMTag: (profileId: string, tag: string) => void;
   updateCRMProfile: (profileId: string, data: Partial<CRMProfile>) => void;
+  pricingView: 'Creator' | 'Business' | null;
+  setPricingView: (view: 'Creator' | 'Business' | null) => void;
 }

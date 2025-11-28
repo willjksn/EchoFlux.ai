@@ -25,8 +25,14 @@ export const Opportunities: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const isFeatureUnlocked = ['Pro', 'Elite', 'Agency'].includes(user?.plan || "") || user?.role === 'Admin'
-;
+    // Opportunities: Creator-only feature, available on Pro, Elite, and Agency plans
+    const isFeatureUnlocked = (() => {
+        if (user?.role === 'Admin') return true;
+        // Only available for Creator users
+        if (user?.userType !== 'Creator') return false;
+        // Available on Pro, Elite, and Agency plans
+        return ['Pro', 'Elite', 'Agency'].includes(user?.plan || '');
+    })();
 
     const handleFindTrends = async () => {
         if (!niche.trim()) return;
@@ -44,7 +50,13 @@ export const Opportunities: React.FC = () => {
     };
 
     if (!isFeatureUnlocked) {
-        return <UpgradePrompt featureName="Trend Detection" onUpgradeClick={() => setActivePage('pricing')} />;
+        return (
+            <UpgradePrompt 
+                featureName="Trend Detection" 
+                onUpgradeClick={() => setActivePage('pricing')}
+                userType={user?.userType === 'Business' ? 'Business' : 'Creator'}
+            />
+        );
     }
 
     return (

@@ -2,9 +2,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAppContext } from './AppContext';
 import { CreditCardIcon, VisaIcon, MastercardIcon, CheckCircleIcon } from './icons/UIIcons';
 import { PaymentPlan, User } from '../types';
+import { doc, setDoc, deleteField } from 'firebase/firestore';
+import { db } from '../firebaseConfig';
 
 export const PaymentModal: React.FC = () => {
-    const { paymentPlan, closePaymentModal, user, setUser, selectedClient, setClients, showToast } = useAppContext();
+    const { paymentPlan, closePaymentModal, user, setUser, selectedClient, setClients, showToast, setPricingView, setActivePage } = useAppContext();
     const [isLoading, setIsLoading] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
     const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -46,32 +48,91 @@ export const PaymentModal: React.FC = () => {
                 // Map plan name to ensure it matches exactly with the Plan type
                 const planName = paymentPlan.name as User['plan'];
                 
-                // Update user plan and reset usage counters
+                // Determine which userType the new plan belongs to
+                const creatorPlans: User['plan'][] = ['Free', 'Pro', 'Elite'];
+                const businessPlans: User['plan'][] = ['Starter', 'Growth'];
+                const isNewPlanCreator = creatorPlans.includes(planName);
+                const isNewPlanBusiness = businessPlans.includes(planName);
+                const currentIsCreator = user.userType === 'Creator';
+                const currentIsBusiness = user.userType === 'Business';
+                
+                // Check if switching between Creator and Business plan types
+                const needsUserTypeChange = (isNewPlanCreator && currentIsBusiness) || 
+                                           (isNewPlanBusiness && currentIsCreator);
+                
+                // If switching between Creator/Business, reset onboarding to show selector first
+                if (needsUserTypeChange) {
+                    // Determine which userType the new plan requires
+                    const newUserType = isNewPlanCreator ? 'Creator' : 'Business';
+                    
+                    // Don't change the plan yet - let them confirm userType first
+                    // Clear userType and reset onboarding to trigger selector
+                    try {
+                        // Store the desired pricing view and plan in localStorage before reload
+                        localStorage.setItem('pendingPricingView', newUserType);
+                        localStorage.setItem('pendingPlanSelection', planName);
+                        
+                        // Update Firestore directly to delete userType field
+                        await setDoc(
+                            doc(db, 'users', user.id),
+                            {
+                                userType: deleteField(),
+                                hasCompletedOnboarding: false,
+                            },
+                            { merge: true }
+                        );
+                        
+                        // Reload page to fetch fresh user data (without userType)
+                        // This will trigger the selector in App.tsx
+                        showToast(`Please choose your account type and select a plan.`, 'success');
+                        closePaymentModal();
+                        setIsLoading(false);
+                        setTimeout(() => window.location.reload(), 500);
+                        return;
+                    } catch (error) {
+                        console.error('Failed to clear userType:', error);
+                        showToast('Failed to reset account type. Please try again.', 'error');
+                        setIsLoading(false);
+                        return;
+                    }
+                }
+                
+                // Determine new userType for non-switching cases
+                let newUserType = user.userType;
+                if (isNewPlanCreator) {
+                    newUserType = 'Creator';
+                } else if (isNewPlanBusiness) {
+                    newUserType = 'Business';
+                }
+                // Agency plan keeps current userType
+                
+                // Update user plan, userType (if needed), and reset usage counters
                 await setUser({
                     id: user.id,
                     plan: planName,
+                    userType: newUserType,
                     monthlyCaptionGenerationsUsed: 0,
                     monthlyImageGenerationsUsed: 0,
                     monthlyVideoGenerationsUsed: 0,
                 });
                 
                 console.log('Plan updated successfully:', planName);
+                
                 showToast(`Successfully switched to the ${paymentPlan.name} plan!`, 'success');
+                setIsLoading(false);
+                setIsSuccess(true);
+                
+                // Clear any existing timeout
+                if (closeTimeoutRef.current) {
+                    clearTimeout(closeTimeoutRef.current);
+                }
+                
+                // Set new timeout to close modal after success
+                closeTimeoutRef.current = setTimeout(() => {
+                    closePaymentModal();
+                    setIsSuccess(false);
+                }, 2000);
             }
-
-            setIsLoading(false);
-            setIsSuccess(true);
-            
-            // Clear any existing timeout
-            if (closeTimeoutRef.current) {
-                clearTimeout(closeTimeoutRef.current);
-            }
-            
-            // Set new timeout to close modal after success
-            closeTimeoutRef.current = setTimeout(() => {
-                closePaymentModal();
-                setIsSuccess(false);
-            }, 2000);
         } catch (error) {
             console.error('Failed to update plan:', error);
             showToast('Failed to update plan. Please try again.', 'error');

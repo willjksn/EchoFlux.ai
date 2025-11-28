@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CheckIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 import { Page } from '../types';
@@ -22,9 +22,23 @@ const businessTiers = [
 
 
 export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateRequest }) => {
-    const { user, openPaymentModal, setActivePage, isAuthenticated } = useAppContext();
+    const { user, openPaymentModal, setActivePage, isAuthenticated, pricingView, setPricingView } = useAppContext();
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'annually'>('monthly');
-    const [view, setView] = useState<'Creator' | 'Business'>('Creator');
+    // Initialize view from context or userType, default to Creator
+    const initialView = pricingView || (user?.userType === 'Business' ? 'Business' : 'Creator');
+    const [view, setView] = useState<'Creator' | 'Business'>(initialView);
+    
+    // Update view when pricingView changes (e.g., from Settings)
+    useEffect(() => {
+        if (pricingView) {
+            setView(pricingView);
+            // Clear pricingView after using it
+            setPricingView(null);
+        } else if (user?.userType) {
+            // Fallback to userType if no pricingView is set
+            setView(user.userType === 'Business' ? 'Business' : 'Creator');
+        }
+    }, [pricingView, user?.userType, setPricingView]);
     
     const currentPlan = user?.plan;
     const pricingTiers = view === 'Creator' ? creatorTiers : businessTiers;

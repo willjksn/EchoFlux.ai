@@ -31,7 +31,9 @@ export const Dashboard: React.FC = () => {
   
   if (!user) return null;
 
-  const isBusiness = user.userType === 'Business';
+  // For Creator users: Show "Content Strategy", "Check Analytics", "Audience Stats", "Followers"
+  // For Business users: Show "Marketing Plan", "Business Insights", "Business Metrics", "Potential Reach"
+  const isBusiness = user?.userType === 'Business';
   
   const [viewMode, setViewMode] = useState<'Overview' | 'Inbox'>('Overview');
   const [isLoading, setIsLoading] = useState(false);

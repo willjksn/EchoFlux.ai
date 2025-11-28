@@ -41,6 +41,10 @@ interface UIContextType {
     // Feedback
     toast: Toast | null;
     showToast: (message: string, type: 'success' | 'error') => void;
+    
+    // Pricing
+    pricingView: 'Creator' | 'Business' | null;
+    setPricingView: (view: 'Creator' | 'Business' | null) => void;
 }
 
 const UIContext = createContext<UIContextType | undefined>(undefined);
@@ -73,6 +77,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     
     const [isCRMOpen, setIsCRMOpen] = useState(false);
     const [activeCRMProfileId, setActiveCRMProfileId] = useState<string | null>(null);
+    const [pricingView, setPricingView] = useState<'Creator' | 'Business' | null>(null);
 
     useEffect(() => {
         // Ensure the class is present on mount based on state
@@ -159,6 +164,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         isPaymentModalOpen, paymentPlan, openPaymentModal, closePaymentModal,
         isCRMOpen, activeCRMProfileId, openCRM, closeCRM,
         toast, showToast,
+        pricingView, setPricingView,
     };
 
     return <UIContext.Provider value={value}>{children}</UIContext.Provider>;

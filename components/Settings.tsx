@@ -108,7 +108,7 @@ const AccountConnection: React.FC<{
 type SettingsTab = 'general' | 'connections' | 'ai-training' | 'billing';
 
 export const Settings: React.FC = () => {
-    const { user, setUser, settings, setSettings, setActivePage, selectedClient, userCustomVoices, setUserCustomVoices, showToast } = useAppContext();
+    const { user, setUser, settings, setSettings, setActivePage, selectedClient, userCustomVoices, setUserCustomVoices, showToast, setPricingView } = useAppContext();
     const [activeTab, setActiveTab] = useState<SettingsTab>('general');
     const [fileName, setFileName] = useState<string | null>(null);
     const [isUploadingVoice, setIsUploadingVoice] = useState(false);
@@ -213,6 +213,34 @@ export const Settings: React.FC = () => {
         }
     }
 
+    const handleSwitchToCreator = async () => {
+        if(user && user.userType === 'Business') {
+            try {
+                // Update userType, reset onboarding, set pricing view, and navigate
+                await setUser({ ...user, userType: 'Creator', hasCompletedOnboarding: false });
+                setPricingView('Creator');
+                setActivePage('pricing');
+                showToast("Redirecting to Creator plans...", "success");
+            } catch (error) {
+                showToast("Failed to switch to Creator mode.", "error");
+            }
+        }
+    }
+
+    const handleSwitchToBusiness = async () => {
+        if(user && user.userType === 'Creator') {
+            try {
+                // Update userType, reset onboarding, set pricing view, and navigate
+                await setUser({ ...user, userType: 'Business', hasCompletedOnboarding: false });
+                setPricingView('Business');
+                setActivePage('pricing');
+                showToast("Redirecting to Business plans...", "success");
+            } catch (error) {
+                showToast("Failed to switch to Business mode.", "error");
+            }
+        }
+    }
+
     const tabs: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
         { id: 'general', label: 'General', icon: <SettingsIcon /> },
         { id: 'connections', label: 'Connections', icon: <LinkIcon /> },
@@ -278,6 +306,35 @@ export const Settings: React.FC = () => {
                             <ToggleSwitch label="Enable Voice Mode" enabled={settings.voiceMode} onChange={(val) => updateSetting('voiceMode', val)} />
                             <p className="text-sm text-gray-500 dark:text-gray-400">Enable the floating AI Voice Assistant button for hands-free control.</p>
                         </SettingsSection>
+                        <SettingsSection title="Account Type">
+                            <div className="space-y-3">
+                                <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Current Account Type</p>
+                                    <p className="text-lg font-bold text-primary-600 dark:text-primary-400">
+                                        {user.userType === 'Business' ? 'Business' : user.userType === 'Creator' ? 'Creator' : 'Not Set'}
+                                    </p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        Your plan: <span className="font-semibold">{user.plan}</span>
+                                    </p>
+                                </div>
+                                {user.userType === 'Business' && (
+                                    <button 
+                                        onClick={handleSwitchToCreator} 
+                                        className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
+                                    >
+                                        Switch to Creator Mode
+                                    </button>
+                                )}
+                                {user.userType === 'Creator' && (
+                                    <button 
+                                        onClick={handleSwitchToBusiness} 
+                                        className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
+                                    >
+                                        Switch to Business Mode
+                                    </button>
+                                )}
+                            </div>
+                        </SettingsSection>
                         <SettingsSection title="Advanced">
                             <button onClick={handleRestartOnboarding} className="px-4 py-2 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded-md hover:bg-red-200 transition-colors text-sm font-medium">
                                 Restart Onboarding
@@ -297,14 +354,14 @@ export const Settings: React.FC = () => {
                             <ToneSlider label="Humor" value={settings.tone.humor} onChange={(val) => updateToneSetting('humor', val)} description="Low for serious, high for witty & funny replies."/>
                             <ToneSlider label="Empathy" value={settings.tone.empathy} onChange={(val) => updateToneSetting('empathy', val)} description="Low for direct, high for supportive & understanding."/>
                             
-                            {(user.userType === 'Creator' || user.role === 'Admin') && (
+                            {(user.userType === 'Creator' || user.plan === 'Agency' || user.role === 'Admin') && (
                                 <>
                                     <hr className="border-gray-200 dark:border-gray-700 my-4" />
                                     <ToneSlider 
                                         label="Spiciness 🌶️" 
                                         value={settings.tone.spiciness || 0} 
                                         onChange={(val) => updateToneSetting('spiciness', val)} 
-                                        description="Control the level of bold/explicit language. (Creator & Admin accounts only)."
+                                        description="Control the level of bold/explicit language. (Creator, Agency & Admin accounts only)."
                                     />
                                 </>
                             )}
