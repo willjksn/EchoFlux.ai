@@ -109,18 +109,22 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNaviga
                       </button>
                     </div>
 
-                    <div className="mt-6 flex flex-col gap-3 text-sm text-primary-100 sm:flex-row sm:items-center sm:gap-6">
-                      <div className="flex items-center">
-                        <span className="mr-2 text-lg">★ ★ ★ ★ ★</span>
-                        <span>Trusted by creators &amp; teams scaling their social presence</span>
+                    <div className="mt-6 flex flex-col gap-3">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
+                        <div className="flex items-center">
+                          <span className="mr-2 text-lg whitespace-nowrap">★ ★ ★ ★ ★</span>
+                        </div>
+                        <div className="flex items-center space-x-3 text-xs text-primary-100/90">
+                          <span className="inline-flex items-center rounded-full bg-white/25 backdrop-blur-sm border border-white/30 px-3 py-1.5 whitespace-nowrap font-medium text-white shadow-lg">
+                            No credit card required
+                          </span>
+                          <span className="inline-flex items-center rounded-full bg-white/25 backdrop-blur-sm border border-white/30 px-3 py-1.5 whitespace-nowrap font-medium text-white shadow-lg">
+                            Cancel anytime
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center space-x-3 text-xs text-primary-100/90">
-                        <span className="inline-flex h-6 items-center rounded-full bg-black/40 px-3">
-                          No credit card required
-                        </span>
-                        <span className="inline-flex h-6 items-center rounded-full bg-black/40 px-3">
-                          Cancel anytime
-                        </span>
+                      <div className="text-sm text-primary-100">
+                        <span>Trusted by creators &amp; teams scaling their social presence</span>
                       </div>
                     </div>
                   </div>
