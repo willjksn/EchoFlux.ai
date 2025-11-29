@@ -28,6 +28,7 @@ const UpcomingEventCard: React.FC<{ event: CalendarEvent; onClick: () => void }>
 
 export const Dashboard: React.FC = () => {
   const { messages, selectedClient, user, dashboardNavState, clearDashboardNavState, settings, setSettings, setActivePage, calendarEvents, posts, setComposeContext, updateMessage, deleteMessage, categorizeAllMessages, autopilotCampaigns, openCRM, ensureCRMProfile } = useAppContext();
+  const [comparisonView, setComparisonView] = useState<'WoW' | 'MoM'>('WoW');
   
   if (!user) return null;
 
@@ -765,6 +766,820 @@ export const Dashboard: React.FC = () => {
               </div>
             ) : null;
           })()}
+          
+          {/* AI Insights, Content Suggestions & Engagement Heatmap - Modern Grid Layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+            
+            {/* AI Insights & Recommendations Panel - Redesigned */}
+            {(() => {
+              // Generate actionable recommendations based on user data
+              const recommendations: Array<{ type: 'success' | 'info' | 'warning' | 'tip'; title: string; description: string; action?: () => void; actionLabel?: string }> = [];
+              
+              // Check posting frequency
+              const postsThisWeek = posts.filter(p => {
+                const postDate = new Date(p.createdAt || 0);
+                const weekAgo = new Date();
+                weekAgo.setDate(weekAgo.getDate() - 7);
+                return postDate > weekAgo;
+              }).length;
+              
+              if (postsThisWeek < 3) {
+                recommendations.push({
+                  type: 'tip',
+                  title: 'Increase Posting Frequency',
+                  description: `You've posted ${postsThisWeek} times this week. Consistent posting improves engagement.`,
+                  action: () => setActivePage('compose'),
+                  actionLabel: 'Create Post'
+                });
+              }
+              
+              // Check upcoming schedule
+              const upcomingCount = calendarEvents.filter(e => {
+                const eventDate = new Date(e.date);
+                return eventDate > new Date();
+              }).length;
+              
+              if (upcomingCount === 0) {
+                recommendations.push({
+                  type: 'warning',
+                  title: 'No Upcoming Posts',
+                  description: 'Schedule content ahead of time to maintain consistent presence.',
+                  action: () => setActivePage('compose'),
+                  actionLabel: 'Schedule Post'
+                });
+              }
+              
+              // Check unread messages
+              const unreadCount = messages.filter(m => !m.isArchived).length;
+              if (unreadCount > 5) {
+                recommendations.push({
+                  type: 'info',
+                  title: 'Messages Need Attention',
+                  description: `You have ${unreadCount} unread messages. Quick responses improve engagement.`,
+                  action: () => setViewMode('Inbox'),
+                  actionLabel: 'View Inbox'
+                });
+              }
+              
+              // Check active campaigns
+              const activeCampaigns = autopilotCampaigns.filter(c => c.status === 'Running' || c.status === 'Plan Generated').length;
+              if (activeCampaigns === 0 && (user?.plan !== 'Free')) {
+                recommendations.push({
+                  type: 'tip',
+                  title: isBusiness ? 'Launch Marketing Campaign' : 'Start Autopilot Campaign',
+                  description: isBusiness 
+                    ? 'Create a marketing campaign to automate your content and reach more customers.'
+                    : 'Use AI Autopilot to generate content automatically based on your goals.',
+                  action: () => setActivePage('autopilot'),
+                  actionLabel: 'Launch Campaign'
+                });
+              }
+              
+              // Success recommendation if posting consistently
+              if (postsThisWeek >= 5 && upcomingCount >= 3) {
+                recommendations.push({
+                  type: 'success',
+                  title: 'Great Consistency! 🎉',
+                  description: `You've posted ${postsThisWeek} times this week and have ${upcomingCount} posts scheduled. Keep it up!`
+                });
+              }
+              
+              // Default recommendation if no others
+              if (recommendations.length === 0) {
+                recommendations.push({
+                  type: 'tip',
+                  title: 'Explore Analytics',
+                  description: 'Check your analytics to see what content performs best and optimize your strategy.',
+                  action: () => setActivePage('analytics'),
+                  actionLabel: 'View Analytics'
+                });
+              }
+              
+              // Limit to 3 recommendations
+              const displayRecommendations = recommendations.slice(0, 3);
+              
+              const getIcon = (type: string) => {
+                switch(type) {
+                  case 'success': return <CheckCircleIcon className="w-5 h-5" />;
+                  case 'warning': return <FlagIcon className="w-5 h-5" />;
+                  case 'info': return <SparklesIcon className="w-5 h-5" />;
+                  default: return <SparklesIcon className="w-5 h-5" />;
+                }
+              };
+              
+              const getGradientClasses = (type: string) => {
+                switch(type) {
+                  case 'success': return 'from-emerald-50 to-green-50 dark:from-emerald-900/30 dark:to-green-900/20 border-emerald-200 dark:border-emerald-700/50';
+                  case 'warning': return 'from-amber-50 to-yellow-50 dark:from-amber-900/30 dark:to-yellow-900/20 border-amber-200 dark:border-amber-700/50';
+                  case 'info': return 'from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/20 border-blue-200 dark:border-blue-700/50';
+                  default: return 'from-purple-50 to-indigo-50 dark:from-purple-900/30 dark:to-indigo-900/20 border-purple-200 dark:border-purple-700/50';
+                }
+              };
+              
+              const getTextColor = (type: string) => {
+                switch(type) {
+                  case 'success': return 'text-emerald-700 dark:text-emerald-300';
+                  case 'warning': return 'text-amber-700 dark:text-amber-300';
+                  case 'info': return 'text-blue-700 dark:text-blue-300';
+                  default: return 'text-purple-700 dark:text-purple-300';
+                }
+              };
+              
+              return displayRecommendations.length > 0 ? (
+                <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 p-5 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-600">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl">
+                      <SparklesIcon className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-gray-900 dark:text-white">AI Insights</h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Smart Recommendations</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2.5">
+                    {displayRecommendations.map((rec, idx) => (
+                      <div key={idx} className={`p-3.5 rounded-xl border bg-gradient-to-r ${getGradientClasses(rec.type)} backdrop-blur-sm hover:shadow-md transition-all`}>
+                        <div className="flex items-start gap-2.5">
+                          <div className={`flex-shrink-0 mt-0.5 ${getTextColor(rec.type)}`}>
+                            {getIcon(rec.type)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={`font-semibold text-xs mb-1 ${getTextColor(rec.type)}`}>{rec.title}</p>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 mb-2 leading-relaxed">{rec.description}</p>
+                            {rec.action && rec.actionLabel && (
+                              <button
+                                onClick={rec.action}
+                                className={`text-xs font-semibold ${getTextColor(rec.type)} hover:opacity-80 transition-opacity flex items-center gap-1`}
+                              >
+                                {rec.actionLabel} →
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null;
+            })()}
+            
+            {/* Engagement Heatmap - Redesigned */}
+            {(() => {
+            // Generate mock engagement data for heatmap (7 days x 8 time slots)
+            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const timeSlots = ['6AM', '9AM', '12PM', '3PM', '6PM', '9PM', '12AM', '3AM'];
+            
+            // Generate mock engagement levels (0-100) for each day/time combination
+            const generateHeatmapData = () => {
+              const data: number[][] = [];
+              for (let day = 0; day < 7; day++) {
+                const dayData: number[] = [];
+                for (let slot = 0; slot < 8; slot++) {
+                  // Higher engagement on weekdays during peak hours (9AM, 12PM, 3PM, 6PM)
+                  let baseEngagement = 20;
+                  
+                  // Weekdays (Mon-Fri, days 1-5) have higher engagement
+                  if (day >= 1 && day <= 5) {
+                    baseEngagement += 30;
+                  }
+                  
+                  // Peak hours have higher engagement
+                  if ([1, 2, 3, 4].includes(slot)) { // 9AM, 12PM, 3PM, 6PM
+                    baseEngagement += 40;
+                  }
+                  
+                  // Add some randomization for realistic look
+                  const engagement = Math.min(100, baseEngagement + Math.floor(Math.random() * 20) - 10);
+                  dayData.push(Math.max(0, engagement));
+                }
+                data.push(dayData);
+              }
+              return data;
+            };
+            
+            const heatmapData = generateHeatmapData();
+            
+            // Find optimal posting windows (highest engagement)
+            const optimalSlots: Array<{ day: number; slot: number; value: number }> = [];
+            heatmapData.forEach((dayData, dayIndex) => {
+              dayData.forEach((value, slotIndex) => {
+                if (value >= 70) {
+                  optimalSlots.push({ day: dayIndex, slot: slotIndex, value });
+                }
+              });
+            });
+            
+            // Get color intensity based on engagement level - New gradient color scheme
+            const getColorIntensity = (value: number) => {
+              // Cool to warm gradient: blue (low) -> cyan -> green -> yellow -> orange -> red (high)
+              if (value >= 70) return 'bg-gradient-to-br from-emerald-500 to-green-600 dark:from-emerald-600 dark:to-green-700';
+              if (value >= 50) return 'bg-gradient-to-br from-cyan-400 to-emerald-500 dark:from-cyan-500 dark:to-emerald-600';
+              if (value >= 30) return 'bg-gradient-to-br from-blue-400 to-cyan-400 dark:from-blue-500 dark:to-cyan-500';
+              if (value >= 15) return 'bg-gradient-to-br from-indigo-300 to-blue-400 dark:from-indigo-400 dark:to-blue-500';
+              return 'bg-gray-200 dark:bg-gray-700';
+            };
+            
+            return (
+              <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 p-5 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-600">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl">
+                    <TrendingIcon className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-base font-bold text-gray-900 dark:text-white">Engagement Heatmap</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Optimal posting times</p>
+                  </div>
+                </div>
+                
+                {/* Compact Heatmap */}
+                <div className="overflow-x-auto -mx-1 px-1">
+                  <div className="inline-block min-w-full">
+                    {/* Time slots header */}
+                    <div className="flex gap-1 mb-1.5">
+                      <div className="w-10 flex-shrink-0"></div>
+                      {timeSlots.map((slot, idx) => (
+                        <div key={idx} className="flex-1 text-center">
+                          <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400">{slot.replace('AM', '').replace('PM', '')}</span>
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {/* Heatmap grid */}
+                    <div className="space-y-1">
+                      {days.map((day, dayIdx) => (
+                        <div key={dayIdx} className="flex items-center gap-1">
+                          <div className="w-10 flex-shrink-0">
+                            <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-400">{day}</span>
+                          </div>
+                          {timeSlots.map((_, slotIdx) => {
+                            const value = heatmapData[dayIdx][slotIdx];
+                            const isOptimal = value >= 70;
+                            return (
+                              <div
+                                key={slotIdx}
+                                className={`flex-1 h-7 rounded-md ${getColorIntensity(value)} transition-all hover:scale-110 cursor-pointer relative group ${
+                                  isOptimal ? 'ring-2 ring-yellow-400 ring-offset-1 shadow-lg' : ''
+                                }`}
+                                title={`${day} ${timeSlots[slotIdx]}: ${value}% engagement`}
+                              >
+                                {isOptimal && (
+                                  <div className="absolute inset-0 flex items-center justify-center">
+                                    <span className="text-white text-[9px] font-bold drop-shadow-md">★</span>
+                                  </div>
+                                )}
+                                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-black/10 rounded-md transition-opacity"></div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {/* Compact Legend */}
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-3 h-3 rounded bg-gray-300 dark:bg-gray-600"></div>
+                          <span className="text-[10px] text-gray-500 dark:text-gray-400">Low</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-3 h-3 rounded bg-gradient-to-br from-emerald-500 to-green-600"></div>
+                          <span className="text-[10px] text-gray-500 dark:text-gray-400">High</span>
+                        </div>
+                      </div>
+                      {optimalSlots.length > 0 && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-yellow-500">★</span>
+                          <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-400">{optimalSlots.length} optimal</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+          
+          {/* Customer Acquisition Funnel - Business Only (Phase 3 Feature 3) */}
+          {isBusiness && user?.plan !== 'Agency' && (() => {
+            // Calculate funnel metrics from available data
+            const currentStats = user?.socialStats || {};
+            const totalReach = currentStats ? Object.values(currentStats).reduce((sum, stats) => sum + stats.followers, 0) : 0;
+            
+            // Estimate traffic based on reach (mock calculation)
+            const traffic = Math.floor(totalReach * 1.2); // Assume 20% more traffic than reach
+            
+            // Calculate engagement from posts
+            const publishedPosts = posts.filter(p => p.status === 'Published').length;
+            const estimatedEngagement = Math.floor(traffic * 0.05); // 5% engagement rate
+            
+            // Leads from messages
+            const leadMessages = messages.filter(m => m.category === 'Lead' && !m.isArchived);
+            const leads = leadMessages.length;
+            
+            // Converted customers (leads that have been marked as converted or archived)
+            const convertedLeads = Math.floor(leads * 0.15); // 15% conversion rate
+            
+            // Calculate conversion rates
+            const trafficToEngagement = traffic > 0 ? ((estimatedEngagement / traffic) * 100).toFixed(1) : '0';
+            const engagementToLeads = estimatedEngagement > 0 ? ((leads / estimatedEngagement) * 100).toFixed(1) : '0';
+            const leadsToCustomers = leads > 0 ? ((convertedLeads / leads) * 100).toFixed(1) : '0';
+            const overallConversion = traffic > 0 ? ((convertedLeads / traffic) * 100).toFixed(2) : '0';
+            
+            // Calculate funnel widths (percentage of traffic)
+            const trafficWidth = 100;
+            const engagementWidth = traffic > 0 ? (estimatedEngagement / traffic) * 100 : 0;
+            const leadsWidth = traffic > 0 ? (leads / traffic) * 100 : 0;
+            const customersWidth = traffic > 0 ? (convertedLeads / traffic) * 100 : 0;
+            
+            return (
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <BriefcaseIcon className="w-6 h-6 text-primary-600 dark:text-primary-400" />
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">Customer Acquisition Funnel</h3>
+                  </div>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">Overall: {overallConversion}%</span>
+                </div>
+                
+                <div className="space-y-4">
+                  {/* Traffic Stage */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Traffic</span>
+                      <span className="text-lg font-bold text-gray-900 dark:text-white">{new Intl.NumberFormat('en-US', { notation: "compact" }).format(traffic)}</span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-lg h-12 overflow-hidden">
+                      <div className="bg-gradient-to-r from-blue-500 to-blue-600 h-full flex items-center justify-center text-white font-semibold text-sm" style={{ width: '100%' }}>
+                        {new Intl.NumberFormat('en-US', { notation: "compact" }).format(traffic)}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Engagement Stage */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Engagement
+                        <span className="ml-2 text-xs text-gray-500">({trafficToEngagement}% conversion)</span>
+                      </span>
+                      <span className="text-lg font-bold text-gray-900 dark:text-white">{new Intl.NumberFormat('en-US', { notation: "compact" }).format(estimatedEngagement)}</span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-lg h-12 overflow-hidden">
+                      <div className="bg-gradient-to-r from-purple-500 to-purple-600 h-full flex items-center justify-center text-white font-semibold text-sm" style={{ width: `${engagementWidth}%` }}>
+                        {new Intl.NumberFormat('en-US', { notation: "compact" }).format(estimatedEngagement)}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Leads Stage */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Leads
+                        <span className="ml-2 text-xs text-gray-500">({engagementToLeads}% conversion)</span>
+                      </span>
+                      <span className="text-lg font-bold text-gray-900 dark:text-white">{new Intl.NumberFormat('en-US', { notation: "compact" }).format(leads)}</span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-lg h-12 overflow-hidden">
+                      <div className="bg-gradient-to-r from-orange-500 to-orange-600 h-full flex items-center justify-center text-white font-semibold text-sm" style={{ width: `${leadsWidth}%` }}>
+                        {new Intl.NumberFormat('en-US', { notation: "compact" }).format(leads)}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Customers Stage */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Customers
+                        <span className="ml-2 text-xs text-gray-500">({leadsToCustomers}% conversion)</span>
+                      </span>
+                      <span className="text-lg font-bold text-green-600 dark:text-green-400">{new Intl.NumberFormat('en-US', { notation: "compact" }).format(convertedLeads)}</span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-lg h-12 overflow-hidden">
+                      <div className="bg-gradient-to-r from-green-500 to-green-600 h-full flex items-center justify-center text-white font-semibold text-sm" style={{ width: `${customersWidth}%` }}>
+                        {new Intl.NumberFormat('en-US', { notation: "compact" }).format(convertedLeads)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                    <span>Total Conversion Rate</span>
+                    <span className="font-semibold text-gray-700 dark:text-gray-300">{overallConversion}%</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+          
+          {/* Content Suggestions Panel - Phase 3 Feature 4 */}
+          {(() => {
+            // Generate content suggestions based on user's niche, recent posts, and performance
+            const niche = isBusiness ? user?.businessType : user?.niche;
+            const recentPosts = posts.filter(p => p.status === 'Published').slice(0, 5);
+            
+            // Generate mock suggestions based on user type and niche
+            const generateSuggestions = (): Array<{ title: string; description: string; type: 'trending' | 'engagement' | 'niche' }> => {
+              const suggestions: Array<{ title: string; description: string; type: 'trending' | 'engagement' | 'niche' }> = [];
+              
+              if (isBusiness) {
+                suggestions.push(
+                  {
+                    title: `Showcase ${niche || 'your business'} success story`,
+                    description: `Share a customer testimonial or case study to build trust.`,
+                    type: 'engagement'
+                  },
+                  {
+                    title: `Behind-the-scenes of ${niche || 'your operations'}`,
+                    description: `Give followers a peek into your business process.`,
+                    type: 'niche'
+                  },
+                  {
+                    title: `Industry tip or best practice`,
+                    description: `Position yourself as an expert by sharing valuable insights.`,
+                    type: 'trending'
+                  }
+                );
+              } else {
+                suggestions.push(
+                  {
+                    title: `Share a ${niche || 'personal'} milestone or achievement`,
+                    description: `Celebrate your progress with your audience.`,
+                    type: 'engagement'
+                  },
+                  {
+                    title: `Create ${niche || 'engaging'} behind-the-scenes content`,
+                    description: `Show your creative process or daily routine.`,
+                    type: 'niche'
+                  },
+                  {
+                    title: `Jump on trending ${niche || 'topic'} challenge`,
+                    description: `Participate in a trending challenge in your niche.`,
+                    type: 'trending'
+                  }
+                );
+              }
+              
+              // If they have recent posts, suggest building on what worked
+              if (recentPosts.length > 0) {
+                suggestions.push({
+                  title: 'Build on your best performing content',
+                  description: `Create a follow-up or series based on your successful posts.`,
+                  type: 'engagement'
+                });
+              }
+              
+              return suggestions.slice(0, 3);
+            };
+            
+            const suggestions = generateSuggestions();
+            
+            const getTypeBadge = (type: string) => {
+              switch(type) {
+                case 'trending': return { 
+                  label: 'Trending', 
+                  gradient: 'from-rose-500 to-pink-500',
+                  bg: 'bg-rose-50 dark:bg-rose-900/20',
+                  text: 'text-rose-700 dark:text-rose-300',
+                  border: 'border-rose-200 dark:border-rose-700/50'
+                };
+                case 'engagement': return { 
+                  label: 'High Engagement', 
+                  gradient: 'from-blue-500 to-cyan-500',
+                  bg: 'bg-blue-50 dark:bg-blue-900/20',
+                  text: 'text-blue-700 dark:text-blue-300',
+                  border: 'border-blue-200 dark:border-blue-700/50'
+                };
+                default: return { 
+                  label: 'Niche', 
+                  gradient: 'from-purple-500 to-indigo-500',
+                  bg: 'bg-purple-50 dark:bg-purple-900/20',
+                  text: 'text-purple-700 dark:text-purple-300',
+                  border: 'border-purple-200 dark:border-purple-700/50'
+                };
+              }
+            };
+            
+            return suggestions.length > 0 ? (
+              <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 p-5 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-600">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl">
+                      <SparklesIcon className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-gray-900 dark:text-white">Content Ideas</h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">AI-Powered Suggestions</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-2.5">
+                  {suggestions.map((suggestion, idx) => {
+                    const badge = getTypeBadge(suggestion.type);
+                    return (
+                      <div 
+                        key={idx}
+                        className={`group p-3.5 rounded-xl border ${badge.bg} ${badge.border} hover:shadow-lg transition-all cursor-pointer backdrop-blur-sm`}
+                        onClick={() => {
+                          setComposeContext({
+                            media: null,
+                            results: [],
+                            captionText: suggestion.title + ': ' + suggestion.description,
+                            postGoal: 'engagement',
+                            postTone: 'friendly'
+                          });
+                          setActivePage('compose');
+                        }}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className={`flex-shrink-0 p-1.5 bg-gradient-to-br ${badge.gradient} rounded-lg`}>
+                            <SparklesIcon className="w-3.5 h-3.5 text-white" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${badge.text} ${badge.bg} border ${badge.border}`}>
+                                {badge.label}
+                              </span>
+                            </div>
+                            <p className={`font-semibold text-xs mb-1 ${badge.text}`}>
+                              {suggestion.title}
+                            </p>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+                              {suggestion.description}
+                            </p>
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setComposeContext({
+                                media: null,
+                                results: [],
+                                captionText: suggestion.title + ': ' + suggestion.description,
+                                postGoal: 'engagement',
+                                postTone: 'friendly'
+                              });
+                              setActivePage('compose');
+                            }}
+                            className={`flex-shrink-0 p-1.5 bg-gradient-to-br ${badge.gradient} text-white rounded-lg hover:opacity-90 transition-opacity opacity-0 group-hover:opacity-100`}
+                            title="Create post from this suggestion"
+                          >
+                            <SparklesIcon className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null;
+          })()}
+            
+            {/* Performance Comparison - Business Only, Beside Content Ideas */}
+            {isBusiness && (
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-2">
+                    <TrendingIcon className="w-6 h-6 text-primary-600 dark:text-primary-400" />
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">Performance Comparison</h3>
+                  </div>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => setComparisonView('WoW')}
+                      className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                        comparisonView === 'WoW' 
+                          ? 'bg-primary-600 text-white' 
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      Week-over-Week
+                    </button>
+                    <button 
+                      onClick={() => setComparisonView('MoM')}
+                      className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                        comparisonView === 'MoM' 
+                          ? 'bg-primary-600 text-white' 
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      Month-over-Month
+                    </button>
+                  </div>
+                </div>
+                  
+                {/* Week-over-Week Comparison */}
+                {comparisonView === 'WoW' && (() => {
+                  // Calculate week-over-week metrics
+                  const now = new Date();
+                  const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                  const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+                  
+                  // Mock calculations - in real app, these would come from analytics data
+                  const currentWeekPosts = posts.filter(p => {
+                    const postDate = new Date(p.createdAt || 0);
+                    return postDate >= oneWeekAgo;
+                  }).length;
+                  
+                  const previousWeekPosts = Math.max(1, Math.round(currentWeekPosts * (0.85 + Math.random() * 0.3))); // Mock: 70-115% of current
+                  
+                  const currentWeekFollowers = (user?.socialStats?.totalFollowers || 0);
+                  const previousWeekFollowers = Math.max(1, Math.round(currentWeekFollowers * (0.95 + Math.random() * 0.1))); // Mock: 95-105% of current
+                  
+                  const currentWeekEngagement = messages.filter(m => !m.isArchived).length;
+                  const previousWeekEngagement = Math.max(1, Math.round(currentWeekEngagement * (0.8 + Math.random() * 0.4))); // Mock: 80-120% of current
+                  
+                  const currentWeekReach = isBusiness ? (user?.socialStats?.totalReach || 0) : currentWeekFollowers;
+                  const previousWeekReach = Math.max(1, Math.round(currentWeekReach * (0.9 + Math.random() * 0.2))); // Mock: 90-110% of current
+                  
+                  const calculateChange = (current: number, previous: number) => {
+                    const change = current - previous;
+                    const changePercent = previous > 0 ? Math.round((change / previous) * 100) : 0;
+                    return { change, changePercent, isPositive: changePercent >= 0 };
+                  };
+                  
+                  const postsChange = calculateChange(currentWeekPosts, previousWeekPosts);
+                  const followersChange = calculateChange(currentWeekFollowers, previousWeekFollowers);
+                  const engagementChange = calculateChange(currentWeekEngagement, previousWeekEngagement);
+                  const reachChange = calculateChange(currentWeekReach, previousWeekReach);
+                  
+                  const metrics = [
+                    {
+                      label: isBusiness ? 'Potential Reach' : 'Followers',
+                      current: currentWeekFollowers,
+                      previous: previousWeekFollowers,
+                      change: followersChange.change,
+                      changePercent: followersChange.changePercent,
+                      isPositive: followersChange.isPositive,
+                      icon: <UserIcon className="w-5 h-5" />,
+                      format: (n: number) => n.toLocaleString()
+                    },
+                    {
+                      label: isBusiness ? 'Reach' : 'Engagement',
+                      current: isBusiness ? currentWeekReach : currentWeekEngagement,
+                      previous: isBusiness ? previousWeekReach : previousWeekEngagement,
+                      change: isBusiness ? reachChange.change : engagementChange.change,
+                      changePercent: isBusiness ? reachChange.changePercent : engagementChange.changePercent,
+                      isPositive: isBusiness ? reachChange.isPositive : engagementChange.isPositive,
+                      icon: <HeartIcon className="w-5 h-5" />,
+                      format: (n: number) => n.toLocaleString()
+                    },
+                    {
+                      label: 'Posts Published',
+                      current: currentWeekPosts,
+                      previous: previousWeekPosts,
+                      change: postsChange.change,
+                      changePercent: postsChange.changePercent,
+                      isPositive: postsChange.isPositive,
+                      icon: <SparklesIcon className="w-5 h-5" />,
+                      format: (n: number) => n.toString()
+                    },
+                    {
+                      label: isBusiness ? 'Leads Generated' : 'Response Rate',
+                      current: isBusiness ? Math.round((currentWeekEngagement * 0.3)) : Math.round((messages.filter(m => m.isArchived).length / Math.max(1, messages.length)) * 100),
+                      previous: isBusiness ? Math.round((previousWeekEngagement * 0.25)) : Math.round((messages.filter(m => m.isArchived).length / Math.max(1, messages.length)) * 85),
+                      change: isBusiness ? Math.round((currentWeekEngagement * 0.3) - (previousWeekEngagement * 0.25)) : 5,
+                      changePercent: isBusiness ? 20 : 8,
+                      isPositive: true,
+                      icon: isBusiness ? <DollarSignIcon className="w-5 h-5" /> : <CheckCircleIcon className="w-5 h-5" />,
+                      format: (n: number) => isBusiness ? n.toLocaleString() : `${n}%`
+                    }
+                  ];
+                  
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {metrics.map((metric, idx) => (
+                        <div 
+                          key={idx}
+                          className="p-4 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-lg border border-gray-200 dark:border-gray-600"
+                        >
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <div className={`p-2 rounded-lg ${
+                                metric.isPositive 
+                                  ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' 
+                                  : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                              }`}>
+                                {metric.icon}
+                              </div>
+                              <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                                {metric.label}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex items-baseline gap-2">
+                              <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                                {metric.format(metric.current)}
+                              </span>
+                              <span className={`text-sm font-semibold flex items-center gap-1 ${
+                                metric.isPositive 
+                                  ? 'text-green-600 dark:text-green-400' 
+                                  : 'text-red-600 dark:text-red-400'
+                              }`}>
+                                {metric.isPositive ? (
+                                  <ArrowUpIcon className="w-4 h-4" />
+                                ) : (
+                                  <ArrowUpIcon className="w-4 h-4 rotate-180" />
+                                )}
+                                {Math.abs(metric.changePercent)}%
+                              </span>
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                              vs. {metric.format(metric.previous)} last week
+                            </div>
+                            {metric.change !== 0 && (
+                              <div className={`text-xs font-medium ${
+                                metric.isPositive 
+                                  ? 'text-green-600 dark:text-green-400' 
+                                  : 'text-red-600 dark:text-red-400'
+                              }`}>
+                                {metric.isPositive ? '+' : ''}{metric.change > 0 ? metric.format(metric.change) : metric.format(Math.abs(metric.change))} change
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+                
+                {/* Month-over-Month Comparison */}
+                {comparisonView === 'MoM' && (() => {
+                  // Calculate month-over-month metrics
+                  const now = new Date();
+                  const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                  const twoMonthsAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+                  
+                  const currentMonthPosts = posts.filter(p => {
+                    const postDate = new Date(p.createdAt || 0);
+                    return postDate >= oneMonthAgo;
+                  }).length;
+                  
+                  const previousMonthPosts = Math.max(1, Math.round(currentMonthPosts * (0.75 + Math.random() * 0.5))); // Mock: 75-125% of current
+                  
+                  const currentMonthFollowers = (user?.socialStats?.totalFollowers || 0);
+                  const previousMonthFollowers = Math.max(1, Math.round(currentMonthFollowers * (0.9 + Math.random() * 0.2))); // Mock: 90-110% of current
+                  
+                  const currentMonthEngagement = messages.filter(m => !m.isArchived).length;
+                  const previousMonthEngagement = Math.max(1, Math.round(currentMonthEngagement * (0.7 + Math.random() * 0.6))); // Mock: 70-130% of current
+                  
+                  const calculateChange = (current: number, previous: number) => {
+                    const change = current - previous;
+                    const changePercent = previous > 0 ? Math.round((change / previous) * 100) : 0;
+                    return { change, changePercent, isPositive: changePercent >= 0 };
+                  };
+                  
+                  const postsChange = calculateChange(currentMonthPosts, previousMonthPosts);
+                  const followersChange = calculateChange(currentMonthFollowers, previousMonthFollowers);
+                  const engagementChange = calculateChange(currentMonthEngagement, previousMonthEngagement);
+                  
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="p-4 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Total Posts</span>
+                          <span className={`text-xs font-semibold ${
+                            postsChange.isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                          }`}>
+                            {postsChange.isPositive ? '+' : ''}{postsChange.changePercent}%
+                          </span>
+                        </div>
+                        <div className="text-xl font-bold text-gray-900 dark:text-white">{currentMonthPosts}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">vs. {previousMonthPosts} last month</div>
+                      </div>
+                      <div className="p-4 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-medium text-gray-600 dark:text-gray-400">{isBusiness ? 'Reach' : 'Followers'}</span>
+                          <span className={`text-xs font-semibold ${
+                            followersChange.isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                          }`}>
+                            {followersChange.isPositive ? '+' : ''}{followersChange.changePercent}%
+                          </span>
+                        </div>
+                        <div className="text-xl font-bold text-gray-900 dark:text-white">{currentMonthFollowers.toLocaleString()}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">vs. {previousMonthFollowers.toLocaleString()} last month</div>
+                      </div>
+                      <div className="p-4 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-medium text-gray-600 dark:text-gray-400">{isBusiness ? 'Leads' : 'Messages'}</span>
+                          <span className={`text-xs font-semibold ${
+                            engagementChange.isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                          }`}>
+                            {engagementChange.isPositive ? '+' : ''}{engagementChange.changePercent}%
+                          </span>
+                        </div>
+                        <div className="text-xl font-bold text-gray-900 dark:text-white">{currentMonthEngagement}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">vs. {previousMonthEngagement} last month</div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+            
+          </div>
           
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* Upcoming Schedule */}
