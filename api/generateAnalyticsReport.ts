@@ -25,8 +25,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: "Missing GEMINI_API_KEY" });
     }
 
-    const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = ai.getGenerativeModel({ model: "gemini-2.0-flash" });
+    // Use model router - analytics use thinking model for better insights
+    const { getModelForTask } = await import("./_modelRouter.ts");
+    const model = getModelForTask('analytics');
 
 
     const prompt = `

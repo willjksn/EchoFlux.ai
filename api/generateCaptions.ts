@@ -124,9 +124,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Choose model; you were using gemini-2.0-flash which hit quota.
-    // You can change this to "gemini-1.5-flash" or "gemini-2.0-flash-lite" if needed.
-    const model = getModel("gemini-2.0-flash");
+    // Use model router - captions use cheapest model for cost optimization
+    const { getModelForTask } = await import("./_modelRouter.ts");
+    const model = getModelForTask('caption');
 
     // Build prompt
     const prompt = `

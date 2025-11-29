@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getModel } from "./_geminiShared.ts";
+// Model routing handled by _modelRouter.ts
 import { verifyAuth } from "./verifyAuth.ts";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -18,7 +18,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const model = getModel("gemini-2.0-flash");
+    // Use model router - replies use cheapest model for cost optimization
+    const { getModelForTask } = await import("./_modelRouter.ts");
+    const model = getModelForTask('reply');
 
     const prompt = `
 You write replies to DMs/comments.
