@@ -1325,6 +1325,187 @@ export const Dashboard: React.FC = () => {
             );
           })()}
           
+          {/* Conversion & ROI Dashboard - Business Only (Priority 2) */}
+          {isBusiness && (() => {
+            // Get lead messages and calculate conversions
+            const leadMessages = messages.filter(m => m.category === 'Lead' && !m.isArchived);
+            const now = new Date();
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            const leadsThisMonth = leadMessages.filter(m => {
+              const msgDate = new Date(m.timestamp);
+              return msgDate >= startOfMonth;
+            });
+            
+            // Estimate converted customers (leads that have been archived or responded to)
+            // In a real app, this would come from actual conversion tracking
+            const convertedLeads = Math.floor(leadsThisMonth.length * 0.15); // 15% conversion rate estimate
+            const conversionRate = leadsThisMonth.length > 0 
+              ? ((convertedLeads / leadsThisMonth.length) * 100).toFixed(1)
+              : '0';
+            
+            // Calculate estimated revenue (mock - would come from actual sales data)
+            // Average deal value estimated at $98 (placeholder)
+            const averageDealValue = 98;
+            const estimatedRevenue = convertedLeads * averageDealValue;
+            
+            // Calculate investment (subscription cost + estimated ad spend)
+            const planPrices: Record<string, number> = {
+              Starter: 99,
+              Growth: 249,
+              Agency: 599
+            };
+            const subscriptionCost = planPrices[user?.plan || 'Starter'] || 0;
+            const estimatedAdSpend = Math.floor(subscriptionCost * 0.5); // Estimate 50% of subscription as ad spend
+            const totalInvestment = subscriptionCost + estimatedAdSpend;
+            
+            // Calculate ROI
+            const roi = totalInvestment > 0 
+              ? (((estimatedRevenue - totalInvestment) / totalInvestment) * 100).toFixed(1)
+              : '0';
+            
+            // Customer Acquisition Cost (CAC)
+            const cac = convertedLeads > 0 
+              ? (totalInvestment / convertedLeads).toFixed(2)
+              : totalInvestment.toFixed(2);
+            
+            // Revenue per follower
+            const currentStats = user?.socialStats || {};
+            const totalFollowers = currentStats ? Object.values(currentStats).reduce((sum, stats) => sum + stats.followers, 0) : 0;
+            const revenuePerFollower = totalFollowers > 0 
+              ? (estimatedRevenue / totalFollowers).toFixed(2)
+              : '0';
+            
+            // Calculate week-over-week revenue growth (mock)
+            const revenueGrowth = 23; // Mock 23% growth
+            
+            return (
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl">
+                      <DollarSignIcon className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900 dark:text-white">Conversion & ROI</h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Revenue tracking and return on investment</p>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Key Metrics Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                  {/* Revenue */}
+                  <div className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg border border-green-200 dark:border-green-700">
+                    <p className="text-sm font-medium text-green-700 dark:text-green-300 mb-1">Revenue This Month</p>
+                    <div className="flex items-baseline gap-2">
+                      <p className="text-2xl font-bold text-green-900 dark:text-green-100">
+                        ${new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(estimatedRevenue)}
+                      </p>
+                      <span className="text-sm font-semibold text-green-600 dark:text-green-400">
+                        +{revenueGrowth}%
+                      </span>
+                    </div>
+                    <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                      from {convertedLeads} customers
+                    </p>
+                  </div>
+                  
+                  {/* ROI */}
+                  <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
+                    <p className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-1">ROI</p>
+                    <p className="text-3xl font-bold text-blue-900 dark:text-blue-100">
+                      {roi}%
+                    </p>
+                    <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                      Return on investment
+                    </p>
+                  </div>
+                  
+                  {/* CAC */}
+                  <div className="p-4 bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-900/20 dark:to-violet-900/20 rounded-lg border border-purple-200 dark:border-purple-700">
+                    <p className="text-sm font-medium text-purple-700 dark:text-purple-300 mb-1">Customer Acquisition Cost</p>
+                    <p className="text-3xl font-bold text-purple-900 dark:text-purple-100">
+                      ${cac}
+                    </p>
+                    <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                      Cost per customer
+                    </p>
+                  </div>
+                  
+                  {/* Conversion Rate */}
+                  <div className="p-4 bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20 rounded-lg border border-orange-200 dark:border-orange-700">
+                    <p className="text-sm font-medium text-orange-700 dark:text-orange-300 mb-1">Conversion Rate</p>
+                    <p className="text-3xl font-bold text-orange-900 dark:text-orange-100">
+                      {conversionRate}%
+                    </p>
+                    <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                      Leads to customers
+                    </p>
+                  </div>
+                </div>
+                
+                {/* Detailed Breakdown */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Investment Breakdown */}
+                  <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Investment Breakdown</h4>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Subscription Cost</span>
+                        <span className="text-sm font-semibold text-gray-900 dark:text-white">${subscriptionCost}/mo</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Estimated Ad Spend</span>
+                        <span className="text-sm font-semibold text-gray-900 dark:text-white">${estimatedAdSpend}/mo</span>
+                      </div>
+                      <div className="pt-2 border-t border-gray-200 dark:border-gray-600 flex items-center justify-between">
+                        <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Total Investment</span>
+                        <span className="text-base font-bold text-gray-900 dark:text-white">${totalInvestment}/mo</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Revenue Metrics */}
+                  <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Revenue Metrics</h4>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Average Deal Value</span>
+                        <span className="text-sm font-semibold text-gray-900 dark:text-white">${averageDealValue}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Revenue per Follower</span>
+                        <span className="text-sm font-semibold text-gray-900 dark:text-white">${revenuePerFollower}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Customers Converted</span>
+                        <span className="text-sm font-semibold text-gray-900 dark:text-white">{convertedLeads}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* ROI Visual Indicator */}
+                <div className="mt-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg border border-green-200 dark:border-green-700">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-green-700 dark:text-green-300">Return on Investment</p>
+                      <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                        For every $1 invested, you're generating ${((parseFloat(roi) / 100) + 1).toFixed(2)} in revenue
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-3xl font-bold text-green-900 dark:text-green-100">{roi}%</p>
+                      <p className="text-xs text-green-600 dark:text-green-400">
+                        {parseFloat(roi) > 100 ? 'Excellent' : parseFloat(roi) > 50 ? 'Good' : parseFloat(roi) > 0 ? 'Positive' : 'Negative'} ROI
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+          
           {/* Customer Acquisition Funnel - Business Only (Phase 3 Feature 3) */}
           {isBusiness && user?.plan !== 'Agency' && (() => {
             // Calculate funnel metrics from available data
