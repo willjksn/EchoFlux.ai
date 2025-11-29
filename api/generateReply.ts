@@ -20,7 +20,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     // Use model router - replies use cheapest model for cost optimization
     const { getModelForTask } = await import("./_modelRouter.ts");
-    const model = getModelForTask('reply');
+    const model = await getModelForTask('reply', user.uid);
 
     const prompt = `
 You write replies to DMs/comments.

@@ -27,7 +27,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Use model router - analytics use thinking model for better insights
     const { getModelForTask } = await import("./_modelRouter.ts");
-    const model = getModelForTask('analytics');
+    const model = await getModelForTask('analytics', user.uid);
 
 
     const prompt = `

@@ -20,7 +20,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     // Use model router - trends analysis uses thinking model for better insights
     const { getModelForTask } = await import("./_modelRouter.ts");
-    const model = getModelForTask('trends');
+    const model = await getModelForTask('trends', user.uid);
 
     const prompt = `
 You analyze social media performance.

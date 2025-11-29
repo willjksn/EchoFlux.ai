@@ -126,7 +126,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Use model router - captions use cheapest model for cost optimization
     const { getModelForTask } = await import("./_modelRouter.ts");
-    const model = getModelForTask('caption');
+    const model = await getModelForTask('caption', authUser.uid);
 
     // Build prompt
     const prompt = `

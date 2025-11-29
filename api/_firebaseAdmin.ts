@@ -53,3 +53,5 @@ export async function verifyIdToken(authHeader?: string) {
 
   return app.auth().verifyIdToken(token);
 }
+
+export const adminDb = getAdminApp().firestore();

@@ -119,14 +119,35 @@ const FALLBACK_MODELS: Record<string, string[]> = {
 
 /**
  * Get the appropriate model for a task type
+ * Also tracks usage for analytics
  */
-export function getModelForTask(taskType: TaskType, fallback: boolean = false): any {
+export async function getModelForTask(
+  taskType: TaskType, 
+  userId?: string,
+  fallback: boolean = false
+): Promise<any> {
   if (!API_KEY) {
     throw new Error("GEMINI_API_KEY environment variable is missing.");
   }
 
   const config = MODEL_CONFIG[taskType] || MODEL_CONFIG['chatbot'];
   const modelName = config.model;
+  const costTier = config.costTier;
+  
+  // Track usage asynchronously (don't await - fire and forget)
+  if (userId) {
+    import('./trackModelUsage.ts').then(({ trackModelUsage }) => {
+      trackModelUsage({
+        userId,
+        taskType,
+        modelName,
+        costTier,
+        success: true,
+      }).catch(() => {
+        // Silently fail - tracking shouldn't break the app
+      });
+    });
+  }
   
   const genAI = new GoogleGenerativeAI(API_KEY);
   

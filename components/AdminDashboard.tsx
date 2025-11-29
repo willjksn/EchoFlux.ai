@@ -2,11 +2,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, Activity } from '../types';
 import { UserManagementModal } from './UserManagementModal';
-import { TeamIcon, DollarSignIcon, UserPlusIcon, ArrowUpCircleIcon, ImageIcon, VideoIcon, LockIcon } from './icons/UIIcons';
+import { TeamIcon, DollarSignIcon, UserPlusIcon, ArrowUpCircleIcon, ImageIcon, VideoIcon, LockIcon, TrendingIcon } from './icons/UIIcons';
 import { db } from '../firebaseConfig';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { useAppContext } from './AppContext';
 import { defaultSettings } from '../constants';
+import { getModelUsageAnalytics, type ModelUsageStats } from '../services/modelUsageService';
 
 const StatCard: React.FC<{ title: string; value: string | number; icon: React.ReactNode }> = ({ title, value, icon }) => (
     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md flex items-center space-x-4">
@@ -64,6 +65,29 @@ export const AdminDashboard: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [accessError, setAccessError] = useState<string | null>(null);
+    const [modelUsageStats, setModelUsageStats] = useState<ModelUsageStats | null>(null);
+    const [isLoadingModelStats, setIsLoadingModelStats] = useState(true);
+    const [modelStatsDays, setModelStatsDays] = useState<number>(30);
+
+    // Fetch model usage analytics
+    useEffect(() => {
+        const fetchModelStats = async () => {
+            if (currentUser?.role !== 'Admin') return;
+            
+            setIsLoadingModelStats(true);
+            try {
+                const stats = await getModelUsageAnalytics(modelStatsDays);
+                setModelUsageStats(stats);
+            } catch (error) {
+                console.error('Failed to fetch model usage stats:', error);
+                // Don't show error to user - just log it
+            } finally {
+                setIsLoadingModelStats(false);
+            }
+        };
+
+        fetchModelStats();
+    }, [currentUser?.role, modelStatsDays]);
 
     useEffect(() => {
         setIsLoading(true);
@@ -278,6 +302,182 @@ export const AdminDashboard: React.FC = () => {
                         )}
                     </ul>
                 </div>
+            </div>
+
+            {/* Model Usage Analytics */}
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                    <div>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">AI Model Usage Analytics</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Track model usage, costs, and performance</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <select
+                            value={modelStatsDays}
+                            onChange={(e) => setModelStatsDays(Number(e.target.value))}
+                            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                        >
+                            <option value={7}>Last 7 days</option>
+                            <option value={30}>Last 30 days</option>
+                            <option value={90}>Last 90 days</option>
+                        </select>
+                    </div>
+                </div>
+
+                {isLoadingModelStats ? (
+                    <div className="text-center py-12">
+                        <svg className="animate-spin h-8 w-8 text-primary-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">Loading model usage statistics...</p>
+                    </div>
+                ) : modelUsageStats ? (
+                    <div className="space-y-6">
+                        {/* Key Metrics */}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg border border-blue-200 dark:border-blue-700">
+                                <p className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-1">Total Requests</p>
+                                <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{modelUsageStats.totalRequests.toLocaleString()}</p>
+                            </div>
+                            <div className="p-4 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-lg border border-green-200 dark:border-green-700">
+                                <p className="text-xs font-medium text-green-700 dark:text-green-300 mb-1">Total Cost</p>
+                                <p className="text-2xl font-bold text-green-900 dark:text-green-100">${modelUsageStats.totalCost.toFixed(2)}</p>
+                            </div>
+                            <div className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-lg border border-purple-200 dark:border-purple-700">
+                                <p className="text-xs font-medium text-purple-700 dark:text-purple-300 mb-1">Avg Cost/Request</p>
+                                <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">${modelUsageStats.averageCostPerRequest.toFixed(4)}</p>
+                            </div>
+                            <div className="p-4 bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 rounded-lg border border-red-200 dark:border-red-700">
+                                <p className="text-xs font-medium text-red-700 dark:text-red-300 mb-1">Error Rate</p>
+                                <p className="text-2xl font-bold text-red-900 dark:text-red-100">{modelUsageStats.errorRate.toFixed(1)}%</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {/* Requests by Model */}
+                            <div>
+                                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Requests by Model</h4>
+                                <div className="space-y-2">
+                                    {Object.entries(modelUsageStats.requestsByModel)
+                                        .sort(([, a], [, b]) => b - a)
+                                        .map(([model, count]) => {
+                                            const percentage = modelUsageStats.totalRequests > 0 
+                                                ? (count / modelUsageStats.totalRequests * 100).toFixed(1) 
+                                                : '0';
+                                            return (
+                                                <div key={model}>
+                                                    <div className="flex justify-between text-xs mb-1">
+                                                        <span className="text-gray-600 dark:text-gray-400 font-mono">{model}</span>
+                                                        <span className="text-gray-900 dark:text-white font-semibold">{count} ({percentage}%)</span>
+                                                    </div>
+                                                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                                        <div className="bg-primary-600 h-2 rounded-full" style={{ width: `${percentage}%` }}></div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                </div>
+                            </div>
+
+                            {/* Requests by Task Type */}
+                            <div>
+                                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Requests by Task Type</h4>
+                                <div className="space-y-2">
+                                    {Object.entries(modelUsageStats.requestsByTask)
+                                        .sort(([, a], [, b]) => b - a)
+                                        .map(([task, count]) => {
+                                            const percentage = modelUsageStats.totalRequests > 0 
+                                                ? (count / modelUsageStats.totalRequests * 100).toFixed(1) 
+                                                : '0';
+                                            return (
+                                                <div key={task}>
+                                                    <div className="flex justify-between text-xs mb-1">
+                                                        <span className="text-gray-600 dark:text-gray-400 capitalize">{task.replace('-', ' ')}</span>
+                                                        <span className="text-gray-900 dark:text-white font-semibold">{count} ({percentage}%)</span>
+                                                    </div>
+                                                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                                        <div className="bg-emerald-600 h-2 rounded-full" style={{ width: `${percentage}%` }}></div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Cost Tier Breakdown */}
+                        <div>
+                            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Requests by Cost Tier</h4>
+                            <div className="grid grid-cols-3 gap-4">
+                                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Low Cost</p>
+                                    <p className="text-xl font-bold text-gray-900 dark:text-white">{modelUsageStats.requestsByCostTier.low.toLocaleString()}</p>
+                                </div>
+                                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Medium Cost</p>
+                                    <p className="text-xl font-bold text-gray-900 dark:text-white">{modelUsageStats.requestsByCostTier.medium.toLocaleString()}</p>
+                                </div>
+                                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">High Cost</p>
+                                    <p className="text-xl font-bold text-gray-900 dark:text-white">{modelUsageStats.requestsByCostTier.high.toLocaleString()}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Top Users */}
+                        {modelUsageStats.topUsers.length > 0 && (
+                            <div>
+                                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Top Users by Requests</h4>
+                                <div className="space-y-2">
+                                    {modelUsageStats.topUsers.map((user, idx) => (
+                                        <div key={user.userId} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-sm font-bold text-gray-400 dark:text-gray-500 w-6">#{idx + 1}</span>
+                                                <span className="text-sm font-medium text-gray-900 dark:text-white">{user.userName}</span>
+                                            </div>
+                                            <div className="flex items-center gap-4">
+                                                <span className="text-sm text-gray-600 dark:text-gray-400">{user.requests} requests</span>
+                                                <span className="text-sm font-semibold text-gray-900 dark:text-white">${user.cost.toFixed(2)}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Daily Usage Chart */}
+                        {modelUsageStats.requestsByDay.length > 0 && (
+                            <div>
+                                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Daily Usage Trend</h4>
+                                <div className="space-y-2">
+                                    {modelUsageStats.requestsByDay.slice(-14).map((day) => {
+                                        const maxCount = Math.max(...modelUsageStats.requestsByDay.map(d => d.count));
+                                        const percentage = maxCount > 0 ? (day.count / maxCount * 100) : 0;
+                                        return (
+                                            <div key={day.date} className="flex items-center gap-3">
+                                                <span className="text-xs text-gray-600 dark:text-gray-400 w-20">{new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                                                <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-4 relative">
+                                                    <div className="bg-gradient-to-r from-primary-500 to-primary-600 h-4 rounded-full" style={{ width: `${percentage}%` }}></div>
+                                                    <div className="absolute inset-0 flex items-center justify-between px-2 text-xs text-gray-700 dark:text-gray-300">
+                                                        <span>{day.count}</span>
+                                                        <span>${day.cost.toFixed(2)}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                        <TrendingIcon className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                        <p className="text-sm">No model usage data available</p>
+                        <p className="text-xs mt-1">Usage tracking will appear here once models are used</p>
+                    </div>
+                )}
             </div>
 
             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">

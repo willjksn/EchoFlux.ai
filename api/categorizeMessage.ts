@@ -26,7 +26,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Use model router - categorization uses cheapest model for cost optimization
     const { getModelForTask } = await import("./_modelRouter.ts");
-    const model = getModelForTask('categorize');
+    const model = await getModelForTask('categorize', user.uid);
 
     const prompt = `
 Classify the user's message into one of the following categories:
