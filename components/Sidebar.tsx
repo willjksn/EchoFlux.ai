@@ -1,6 +1,6 @@
 import React from 'react';
 import { Page } from '../types';
-import { DashboardIcon, AnalyticsIcon, SettingsIcon, LogoIcon, ComposeIcon, TrendingIcon, TeamIcon, RocketIcon, InfoIcon, MailIcon, BriefcaseIcon, QuestionIcon, AdminIcon, LockIcon, AutomationIcon, CalendarIcon, KanbanIcon, GlobeIcon, TargetIcon } from './icons/UIIcons';
+import { DashboardIcon, AnalyticsIcon, SettingsIcon, LogoIcon, ComposeIcon, TrendingIcon, TeamIcon, RocketIcon, BriefcaseIcon, AdminIcon, AutomationIcon, CalendarIcon, KanbanIcon, GlobeIcon, TargetIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 
 interface NavItemProps {
@@ -34,7 +34,7 @@ const NavItem: React.FC<NavItemProps> = ({ page, icon, label, tourId }) => {
 };
 
 export const Sidebar: React.FC = () => {
-  const { user, isSidebarOpen, setIsSidebarOpen } = useAppContext();
+  const { user, isSidebarOpen, setIsSidebarOpen, activePage, setActivePage } = useAppContext();
 
   if (!user) {
     return null;
@@ -102,12 +102,12 @@ export const Sidebar: React.FC = () => {
   }) as NavItemProps[];
 
 
-  const secondaryNavItems: NavItemProps[] = [
-      { page: 'about', icon: <InfoIcon />, label: 'About Us' },
-      { page: 'contact', icon: <MailIcon />, label: 'Contact Us' },
-      { page: 'faq', icon: <QuestionIcon />, label: 'FAQs' },
-      { page: 'terms', icon: <InfoIcon />, label: 'Terms of Service' },
-      { page: 'privacy', icon: <LockIcon />, label: 'Privacy Policy' },
+  const secondaryNavItems: Array<{ page: Page; label: string }> = [
+      { page: 'about', label: 'About Us' },
+      { page: 'contact', label: 'Contact Us' },
+      { page: 'faq', label: 'FAQs' },
+      { page: 'terms', label: 'Terms of Service' },
+      { page: 'privacy', label: 'Privacy Policy' },
   ];
 
   return (
@@ -125,10 +125,27 @@ export const Sidebar: React.FC = () => {
             {navItems.map(item => <NavItem key={item.page} {...item} />)}
           </ul>
         </nav>
-        <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
-            <ul>
-                {secondaryNavItems.map(item => <NavItem key={item.page} {...item} />)}
-            </ul>
+        <div className="p-2.5 border-t border-gray-200 dark:border-gray-700 flex-shrink-0 bg-gray-50 dark:bg-gray-900/50">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 justify-center text-[10px] text-gray-500 dark:text-gray-400">
+            {secondaryNavItems.map((item, idx) => (
+              <React.Fragment key={item.page}>
+                <button
+                  onClick={() => {
+                    setActivePage(item.page);
+                    setIsSidebarOpen(false);
+                  }}
+                  className={`hover:text-primary-600 dark:hover:text-primary-400 transition-colors ${
+                    activePage === item.page ? 'text-primary-600 dark:text-primary-400 font-semibold' : ''
+                  }`}
+                >
+                  {item.label}
+                </button>
+                {idx < secondaryNavItems.length - 1 && (
+                  <span className="text-gray-300 dark:text-gray-600 select-none">•</span>
+                )}
+              </React.Fragment>
+            ))}
+          </div>
         </div>
       </aside>
     </>

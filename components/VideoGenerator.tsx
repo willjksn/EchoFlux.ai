@@ -234,30 +234,30 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
 
       {/* Mode toggle - Only show for Creators or Agency plan users */}
       {showDirectorMode && (
-        <div className="flex justify-center">
-          <div className="bg-gray-100 dark:bg-gray-700 p-1 rounded-lg inline-flex">
-            <button
-              onClick={() => setMode('Simple')}
-              className={`px-4 py-2 rounded-md text-sm font-medium ${
-                mode === 'Simple'
-                  ? 'bg-white dark:bg-gray-600 shadow'
-                  : 'text-gray-500 dark:text-gray-400'
-              }`}
-            >
-              Single Clip
-            </button>
-            <button
-              onClick={() => setMode('Director')}
-              className={`px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 ${
-                mode === 'Director'
-                  ? 'bg-white dark:bg-gray-600 shadow'
-                  : 'text-gray-500 dark:text-gray-400'
-              }`}
-            >
-              <FilmIcon className="w-4 h-4" /> Director Mode
-            </button>
-          </div>
+      <div className="flex justify-center">
+        <div className="bg-gray-100 dark:bg-gray-700 p-1 rounded-lg inline-flex">
+          <button
+            onClick={() => setMode('Simple')}
+            className={`px-4 py-2 rounded-md text-sm font-medium ${
+              mode === 'Simple'
+                ? 'bg-white dark:bg-gray-600 shadow'
+                : 'text-gray-500 dark:text-gray-400'
+            }`}
+          >
+            Single Clip
+          </button>
+          <button
+            onClick={() => setMode('Director')}
+            className={`px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 ${
+              mode === 'Director'
+                ? 'bg-white dark:bg-gray-600 shadow'
+                : 'text-gray-500 dark:text-gray-400'
+            }`}
+          >
+            <FilmIcon className="w-4 h-4" /> Director Mode
+          </button>
         </div>
+      </div>
       )}
 
       {/* Director Mode */}

@@ -217,6 +217,7 @@ export interface User {
     monthlyLeadsGoal?: number; // Business-specific: target leads per month
   };
   bioPage?: BioPageConfig;
+  socialAccounts?: SocialAccount[]; // OAuth-connected social media accounts
 }
 
 export interface Notification {
@@ -433,6 +434,16 @@ export interface WeekPlan {
 
 export interface StrategyPlan {
     weeks: WeekPlan[];
+    metrics?: {
+        primaryKPI?: string;
+        targetValue?: number;
+        successCriteria?: string[];
+        milestones?: Array<{
+            week: number;
+            description: string;
+            targetMetric?: number;
+        }>;
+    };
 }
 
 export interface VideoScene {
@@ -519,4 +530,24 @@ export interface AppContextType {
   updateCRMProfile: (profileId: string, data: Partial<CRMProfile>) => void;
   pricingView: 'Creator' | 'Business' | null;
   setPricingView: (view: 'Creator' | 'Business' | null) => void;
+  socialAccounts: Record<Platform, SocialAccount | null>;
 }
+
+// ==========================================
+// Social Media OAuth & API Integration Types
+// ==========================================
+
+export interface SocialAccount {
+  platform: Platform;
+  connected: boolean;
+  accessToken?: string; // Stored securely, encrypted in Firestore
+  refreshToken?: string;
+  expiresAt?: string; // ISO timestamp
+  accountId?: string; // Platform-specific user/account ID
+  accountName?: string; // Display name from platform
+  accountUsername?: string; // Username/handle from platform
+  lastSyncedAt?: string; // Last time we fetched data from this platform
+}
+
+// Update User interface to include social accounts
+// This extends the User interface below

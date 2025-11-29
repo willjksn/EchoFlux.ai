@@ -1,9 +1,10 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { MessageCard } from './MessageCard';
 import { Platform, Message, DashboardFilters, MessageType, CalendarEvent, MessageCategory } from '../types';
 import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
 import { DashboardIcon, FlagIcon, SearchIcon, StarIcon, CalendarIcon, SparklesIcon, TrendingIcon, CheckCircleIcon, UserIcon, ArrowUpCircleIcon, KanbanIcon, BriefcaseIcon, LinkIcon, RocketIcon, ArrowUpIcon, ChatIcon, DollarSignIcon, HeartIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
+import { updateUserSocialStats } from '../src/services/socialStatsService';
 
 const platformFilterIcons: { [key in Platform]: React.ReactNode } = {
   Instagram: <InstagramIcon />,
@@ -27,8 +28,9 @@ const UpcomingEventCard: React.FC<{ event: CalendarEvent; onClick: () => void }>
 );
 
 export const Dashboard: React.FC = () => {
-  const { messages, selectedClient, user, dashboardNavState, clearDashboardNavState, settings, setSettings, setActivePage, calendarEvents, posts, setComposeContext, updateMessage, deleteMessage, categorizeAllMessages, autopilotCampaigns, openCRM, ensureCRMProfile } = useAppContext();
+  const { messages, selectedClient, user, dashboardNavState, clearDashboardNavState, settings, setSettings, setActivePage, calendarEvents, posts, setComposeContext, updateMessage, deleteMessage, categorizeAllMessages, autopilotCampaigns, openCRM, ensureCRMProfile, setUser, socialAccounts } = useAppContext();
   const [comparisonView, setComparisonView] = useState<'WoW' | 'MoM'>('WoW');
+  const [isUpdatingStats, setIsUpdatingStats] = useState(false);
   
   if (!user) return null;
 
@@ -114,6 +116,46 @@ export const Dashboard: React.FC = () => {
   const [filters, setFilters] = useState<DashboardFilters>({ platform: 'All', messageType: 'All', sentiment: 'All', status: 'All', category: 'All' });
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
+  
+  // Track if we've updated social stats this session to avoid repeated calls
+  const hasUpdatedStats = useRef(false);
+  
+  // Fetch and update social stats from backend (once per hour, cached in localStorage)
+  useEffect(() => {
+    if (!user || !user.id || hasUpdatedStats.current) return;
+    
+    const fetchAndUpdateStats = async () => {
+      // Check if we've updated in the last hour (use localStorage to persist across refreshes)
+      const lastUpdateKey = `socialStatsLastUpdate_${user.id}`;
+      const lastUpdate = localStorage.getItem(lastUpdateKey);
+      const now = Date.now();
+      const oneHour = 60 * 60 * 1000; // 1 hour in milliseconds
+      
+      if (lastUpdate && (now - parseInt(lastUpdate)) < oneHour) {
+        // Updated recently, skip
+        hasUpdatedStats.current = true;
+        return;
+      }
+      
+      setIsUpdatingStats(true);
+      try {
+        await updateUserSocialStats(user.id, setUser, user.socialStats, socialAccounts);
+        localStorage.setItem(lastUpdateKey, now.toString());
+        hasUpdatedStats.current = true;
+      } catch (error) {
+        // Silently fail - stats will use existing/cached values
+        // Only log in development to reduce console noise
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('Failed to update social stats (non-critical):', error);
+        }
+        // Don't show error to user - stats will just use existing/cached values
+      } finally {
+        setIsUpdatingStats(false);
+      }
+    };
+    
+    fetchAndUpdateStats();
+  }, [user?.id, setUser, user?.socialStats]);
   
   // ... (useEffect, filteredMessages, upcomingEvents, handlers remain unchanged) ...
   // Include all the existing useEffects and handlers here...
@@ -233,7 +275,7 @@ export const Dashboard: React.FC = () => {
                      <div key={platform} className="relative overflow-hidden p-4 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700/50 dark:to-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-600 hover:shadow-md transition-all">
                         <div className="flex items-start justify-between mb-2">
                           <div className="text-gray-600 dark:text-gray-300">
-                             {platformFilterIcons[platform as Platform]}
+                           {platformFilterIcons[platform as Platform]}
                           </div>
                           {trend.changePercent !== 0 ? (
                             <div className={`flex items-center text-xs font-semibold ${trend.isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
@@ -253,7 +295,7 @@ export const Dashboard: React.FC = () => {
                      const websiteClicksTrend = calculateTrend(1204);
                      const leadsTrend = calculateTrend(88);
                      return (
-                       <>
+                     <>
                         <div className="relative overflow-hidden p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 rounded-xl border border-blue-200 dark:border-blue-700 hover:shadow-md transition-all">
                             <div className="flex items-start justify-between mb-2">
                               <div className="text-blue-600 dark:text-blue-400"><LinkIcon className="w-5 h-5" /></div>
@@ -311,9 +353,9 @@ export const Dashboard: React.FC = () => {
                             <>
                               <span>•</span>
                               <span>{campaign.generatedPosts || 0}/{campaign.totalPosts} posts</span>
-                            </>
-                          )}
-                        </div>
+                     </>
+                  )}
+              </div>
                       </div>
                       <button 
                         onClick={() => setActivePage('autopilot')}

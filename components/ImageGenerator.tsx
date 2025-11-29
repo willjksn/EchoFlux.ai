@@ -258,17 +258,17 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, usag
                     thumbnail: imageUrl,
                 };
                 await addCalendarEvent(newEvent);
-            }
+        }
 
-            platformsToPost.forEach(platform => {
-                showToast(`Your post has been successfully published to ${platform}!`, 'success');
-            });
+        platformsToPost.forEach(platform => {
+            showToast(`Your post has been successfully published to ${platform}!`, 'success');
+        });
 
-            setGeneratedImage(null);
-            setCaption('');
-            setPrompt('');
-            handleClearImage();
-            setSelectedPlatforms({ Instagram: false, TikTok: false, X: false, Threads: false, YouTube: false, LinkedIn: false, Facebook: false });
+        setGeneratedImage(null);
+        setCaption('');
+        setPrompt('');
+        handleClearImage();
+        setSelectedPlatforms({ Instagram: false, TikTok: false, X: false, Threads: false, YouTube: false, LinkedIn: false, Facebook: false });
         } catch (e) {
             console.error("Publish error:", e);
             showToast("Failed to publish image.", 'error');

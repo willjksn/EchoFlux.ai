@@ -6,8 +6,8 @@ const SimpleBarChart: React.FC<{ data: { name: string, value: number }[], title:
     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
         <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">{title}</h3>
         <div className="flex justify-between items-end h-48 space-x-2">
-            {data.map((item, index) => {
-                const maxValue = Math.max(...data.map(d => d.value), 0);
+            {(data || []).map((item, index) => {
+                const maxValue = Math.max(...(data || []).map(d => d.value), 0);
                 const heightPercentage = maxValue > 0 ? (item.value / maxValue) * 100 : 0;
                 return (
                     <div key={index} className="flex-1 flex flex-col items-center justify-end group">
@@ -64,10 +64,10 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ data }) => {
     return (
         <>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <SimpleBarChart data={data.responseRate} title="Response Rate" unit="%" />
-                <SimpleBarChart data={data.followerGrowth} title={growthChartTitle} unit="" />
+                <SimpleBarChart data={data?.responseRate || []} title="Response Rate" unit="%" />
+                <SimpleBarChart data={data?.followerGrowth || []} title={growthChartTitle} unit="" />
             </div>
-            <SentimentBar data={data.sentiment} />
+            <SentimentBar data={data?.sentiment || []} />
         </>
     );
 };

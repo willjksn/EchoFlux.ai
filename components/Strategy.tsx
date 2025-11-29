@@ -29,12 +29,16 @@ export const Strategy: React.FC = () => {
     } = useAppContext();
     const [niche, setNiche] = useState('');
     const [audience, setAudience] = useState('');
-    const [goal, setGoal] = useState('Brand Awareness');
     
     // Filter options for Business Starter/Growth plans
     const isBusiness = user?.userType === 'Business';
     const isAgencyPlan = user?.plan === 'Agency';
     const showAdvancedOptions = !isBusiness || isAgencyPlan; // Hide for Business Starter/Growth, show for Agency and all Creators
+    
+    // Set default goal based on user type - use function initializer to avoid referencing undefined
+    const [goal, setGoal] = useState(() => {
+        return user?.userType === 'Business' ? 'Lead Generation' : 'Increase Followers/Fans';
+    });
     const [duration, setDuration] = useState('4 Weeks');
     const [tone, setTone] = useState('Professional');
     const [platformFocus, setPlatformFocus] = useState('Mixed / All');
@@ -129,17 +133,16 @@ export const Strategy: React.FC = () => {
     };
 
     return (
-        <div className="max-w-5xl mx-auto space-y-8 pb-12">
-            <div className="text-center">
-                <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-primary-100 dark:bg-primary-900/50 text-primary-600 dark:text-primary-400 mb-4">
-                    <TargetIcon className="w-8 h-8" />
+        <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full">
+            <div className="flex justify-between items-center mb-6">
+                <div>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">AI Content Strategist</h1>
+                    <p className="mt-2 text-gray-500 dark:text-gray-400">Stop guessing. Let AI build a data-driven roadmap for your growth.</p>
                 </div>
-                <h2 className="text-3xl font-bold text-gray-900 dark:text-white">AI Content Strategist</h2>
-                <p className="mt-2 text-lg text-gray-500 dark:text-gray-400">Stop guessing. Let AI build a data-driven roadmap for your growth.</p>
             </div>
 
             {/* Input Section */}
-            <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-white mb-2">Brand Niche</label>
@@ -171,11 +174,25 @@ export const Strategy: React.FC = () => {
                             onChange={e => setGoal(e.target.value)} 
                             className="w-full p-3 border rounded-lg bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-primary-500 dark:text-white"
                         >
-                            <option>Brand Awareness</option>
-                            {showAdvancedOptions && <option>Increase Followers/Fans</option>}
-                            <option>Lead Generation</option>
-                            <option>Community Engagement</option>
-                            <option>Sales Conversion</option>
+                            {isBusiness ? (
+                                // Business-focused goals
+                                <>
+                                    <option>Lead Generation</option>
+                                    <option>Sales Conversion</option>
+                                    <option>Brand Awareness</option>
+                                    <option>Customer Engagement</option>
+                                    {isAgencyPlan && <option>Increase Followers/Fans</option>}
+                                </>
+                            ) : (
+                                // Creator-focused goals
+                                <>
+                                    <option>Increase Followers/Fans</option>
+                                    <option>Brand Awareness</option>
+                                    <option>Community Engagement</option>
+                                    <option>Increase Engagement</option>
+                                    <option>Sales Conversion</option>
+                                </>
+                            )}
                         </select>
                     </div>
                      <div>
@@ -187,6 +204,7 @@ export const Strategy: React.FC = () => {
                         >
                             <option>1 Week</option>
                             <option>2 Weeks</option>
+                            <option>3 Weeks</option>
                             <option>4 Weeks</option>
                         </select>
                     </div>
@@ -249,9 +267,9 @@ export const Strategy: React.FC = () => {
 
             {/* Results Section */}
             {plan && (
-                <div className="space-y-8 animate-fade-in-up">
+                <div className="space-y-6 animate-fade-in-up">
                     <div className="flex justify-between items-center flex-wrap gap-4">
-                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Your Strategy Plan</h3>
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Your Strategy Plan</h2>
                         <div className="flex items-center gap-3">
                         <button 
                             onClick={handlePopulateCalendar}
@@ -271,11 +289,224 @@ export const Strategy: React.FC = () => {
                         </div>
                     </div>
 
+                    {/* Data Roadmap Section */}
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                        <div className="flex items-center gap-2 mb-4">
+                            <SparklesIcon className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Data Roadmap & Success Metrics</h3>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {/* Primary KPI */}
+                            <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                                <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-2">Primary KPI</h4>
+                                <p className="text-2xl font-bold text-blue-700 dark:text-blue-400 mb-1">
+                                    {goal === 'Brand Awareness' ? 'Reach' : 
+                                     goal === 'Lead Generation' ? 'Leads Generated' :
+                                     goal === 'Sales Conversion' ? 'Revenue' :
+                                     goal === 'Community Engagement' || goal === 'Customer Engagement' || goal === 'Increase Engagement' ? 'Engagement Rate' :
+                                     goal === 'Increase Followers/Fans' ? 'Follower Growth' :
+                                     'Engagement Rate'}
+                                </p>
+                                <p className="text-xs text-blue-600 dark:text-blue-400">Track this metric weekly to measure strategy success</p>
+                            </div>
+
+                            {/* Success Criteria */}
+                            <div className="p-4 bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-lg border border-emerald-100 dark:border-emerald-800">
+                                <h4 className="text-sm font-semibold text-emerald-900 dark:text-emerald-300 mb-2">Success Criteria</h4>
+                                <ul className="space-y-1">
+                                    {goal === 'Brand Awareness' && (
+                                        <>
+                                            <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
+                                                <CheckCircleIcon className="w-3 h-3" /> Reach 10K+ impressions per week
+                                            </li>
+                                            <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
+                                                <CheckCircleIcon className="w-3 h-3" /> 20%+ increase in profile visits
+                                            </li>
+                                        </>
+                                    )}
+                                    {goal === 'Lead Generation' && (
+                                        <>
+                                            <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
+                                                <CheckCircleIcon className="w-3 h-3" /> Generate 50+ qualified leads
+                                            </li>
+                                            <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
+                                                <CheckCircleIcon className="w-3 h-3" /> 5%+ conversion rate from traffic
+                                            </li>
+                                        </>
+                                    )}
+                                    {goal === 'Sales Conversion' && (
+                                        <>
+                                            <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
+                                                <CheckCircleIcon className="w-3 h-3" /> 15%+ increase in sales
+                                            </li>
+                                            <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
+                                                <CheckCircleIcon className="w-3 h-3" /> 10%+ improvement in ROI
+                                            </li>
+                                        </>
+                                    )}
+                                    {(goal === 'Community Engagement' || goal === 'Increase Engagement') && (
+                                        <>
+                                            <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
+                                                <CheckCircleIcon className="w-3 h-3" /> 25%+ increase in engagement rate
+                                            </li>
+                                            <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
+                                                <CheckCircleIcon className="w-3 h-3" /> 2x growth in comments/DMs
+                                            </li>
+                                        </>
+                                    )}
+                                    {goal === 'Customer Engagement' && (
+                                        <>
+                                            <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
+                                                <CheckCircleIcon className="w-3 h-3" /> 30%+ increase in customer interactions
+                                            </li>
+                                            <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
+                                                <CheckCircleIcon className="w-3 h-3" /> Higher customer satisfaction scores
+                                            </li>
+                                        </>
+                                    )}
+                                    {goal === 'Increase Followers/Fans' && (
+                                        <>
+                                            <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
+                                                <CheckCircleIcon className="w-3 h-3" /> 20%+ follower growth
+                                            </li>
+                                            <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
+                                                <CheckCircleIcon className="w-3 h-3" /> Improved follower quality (engagement ratio)
+                                            </li>
+                                        </>
+                                    )}
+                                </ul>
+                            </div>
+                        </div>
+
+                        {/* Milestones Timeline */}
+                        <div className="mt-6">
+                            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Milestones Timeline</h4>
+                            <div className="space-y-4">
+                                {plan.weeks.map((week, index) => (
+                                    <div key={index} className="flex items-start gap-4">
+                                        <div className="flex flex-col items-center">
+                                            <div className={`w-3 h-3 rounded-full ${index === 0 ? 'bg-primary-500' : 'bg-gray-300 dark:bg-gray-600'}`}></div>
+                                            {index < plan.weeks.length - 1 && (
+                                                <div className="w-0.5 h-12 bg-gray-200 dark:bg-gray-700 my-1"></div>
+                                            )}
+                                        </div>
+                                        <div className="flex-1 pb-4">
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className="text-sm font-semibold text-gray-900 dark:text-white">Week {week.weekNumber}</span>
+                                                <span className="text-xs text-gray-500 dark:text-gray-400">{week.content.length} posts scheduled</span>
+                                            </div>
+                                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{week.theme}</p>
+                                            <div className="flex flex-wrap gap-2">
+                                                {index === 0 && (
+                                                    <span className="text-xs px-2 py-1 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-full">
+                                                        Current Week
+                                                    </span>
+                                                )}
+                                                {index === Math.floor(plan.weeks.length / 2) && (
+                                                    <span className="text-xs px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-full">
+                                                        Mid-Point Check
+                                                    </span>
+                                                )}
+                                                {index === plan.weeks.length - 1 && (
+                                                    <span className="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full">
+                                                        Final Review
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Key Metrics to Track */}
+                        <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Key Metrics to Track</h4>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                {[
+                                    { label: 'Impressions', icon: '👁️' },
+                                    { label: 'Engagement', icon: '💬' },
+                                    { label: 'Click-Through', icon: '🔗' },
+                                    { label: 'Conversions', icon: '💰' }
+                                ].map((metric, idx) => (
+                                    <div key={idx} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-center">
+                                        <div className="text-2xl mb-1">{metric.icon}</div>
+                                        <div className="text-xs font-medium text-gray-600 dark:text-gray-400">{metric.label}</div>
+                                    </div>
+                                ))}
+                            </div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-4">
+                                💡 Monitor these metrics weekly in Analytics to track your roadmap progress
+                            </p>
+                        </div>
+
+                        {/* Expected Outcomes */}
+                        <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Expected Outcomes</h4>
+                            <div className="space-y-3">
+                                {plan.weeks.map((week, idx) => {
+                                    const weekOutcomes: Record<string, string> = {
+                                        'Brand Awareness': `Week ${week.weekNumber}: Expected ${(idx + 1) * 15}% increase in reach and impressions`,
+                                        'Lead Generation': `Week ${week.weekNumber}: Target ${(idx + 1) * 10} qualified leads from content`,
+                                        'Sales Conversion': `Week ${week.weekNumber}: Aim for ${(idx + 1) * 5}% increase in conversion rate`,
+                                        'Community Engagement': `Week ${week.weekNumber}: Target ${(idx + 1) * 20}% boost in engagement rate`,
+                                        'Increase Engagement': `Week ${week.weekNumber}: Target ${(idx + 1) * 20}% boost in engagement rate`,
+                                        'Customer Engagement': `Week ${week.weekNumber}: Target ${(idx + 1) * 25}% increase in customer interactions`,
+                                        'Increase Followers/Fans': `Week ${week.weekNumber}: Goal of ${(idx + 1) * 50} new followers`
+                                    };
+                                    return (
+                                        <div key={idx} className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
+                                            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 flex items-center justify-center text-xs font-bold">
+                                                {week.weekNumber}
+                                            </div>
+                                            <p className="text-sm text-gray-700 dark:text-gray-300">{weekOutcomes[goal] || `Week ${week.weekNumber}: Track progress towards ${goal.toLowerCase()}`}</p>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Analytics Integration */}
+                        <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                            <div className="flex items-center justify-between mb-4">
+                                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Analytics Integration</h4>
+                                <button 
+                                    onClick={() => setActivePage('analytics')}
+                                    className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium"
+                                >
+                                    View Analytics →
+                                </button>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-100 dark:border-purple-800">
+                                    <div className="text-purple-600 dark:text-purple-400 text-sm font-semibold mb-1">Weekly Reports</div>
+                                    <div className="text-xs text-purple-700 dark:text-purple-300">Auto-generated insights every Monday</div>
+                                </div>
+                                <div className="p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-100 dark:border-orange-800">
+                                    <div className="text-orange-600 dark:text-orange-400 text-sm font-semibold mb-1">Real-time Tracking</div>
+                                    <div className="text-xs text-orange-700 dark:text-orange-300">Monitor performance as you post</div>
+                                </div>
+                                <div className="p-3 bg-pink-50 dark:bg-pink-900/20 rounded-lg border border-pink-100 dark:border-pink-800">
+                                    <div className="text-pink-600 dark:text-pink-400 text-sm font-semibold mb-1">AI Insights</div>
+                                    <div className="text-xs text-pink-700 dark:text-pink-300">Get recommendations based on data</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     {plan.weeks.map((week, weekIndex) => (
-                        <div key={weekIndex} className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden border border-gray-200 dark:border-gray-700">
-                            <div className="bg-gray-50 dark:bg-gray-900/50 p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-                                <h4 className="font-bold text-lg text-gray-800 dark:text-gray-200">Week {week.weekNumber}: {week.theme}</h4>
-                                <span className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider">{week.content.length} Posts</span>
+                        <div key={weekIndex} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden border border-gray-100 dark:border-gray-700">
+                            <div className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900/50 dark:to-gray-800/50 p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                                <div>
+                                    <h4 className="font-bold text-lg text-gray-800 dark:text-gray-200">Week {week.weekNumber}: {week.theme}</h4>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        {week.content.filter(c => c.format === 'Post').length} Posts • 
+                                        {week.content.filter(c => c.format === 'Reel').length} Reels • 
+                                        {week.content.filter(c => c.format === 'Story').length} Stories
+                                    </p>
+                                </div>
+                                <span className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider bg-white dark:bg-gray-700 px-3 py-1 rounded-full">{week.content.length} Total</span>
                             </div>
                             <div className="divide-y divide-gray-100 dark:divide-gray-700">
                                 {week.content.map((day, dayIndex) => (

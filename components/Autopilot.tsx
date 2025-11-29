@@ -113,10 +113,12 @@ const Autopilot: React.FC = () => {
       }
 
       setSuggestedIdeas(ideas);
-    } catch (err) {
-      console.error("Failed to fetch suggestions:", err);
-      showToast("Couldn't generate fresh ideas right now.", "error");
-
+    } catch (err: any) {
+      // Silently handle errors - use fallback suggestions instead
+      if (process.env.NODE_ENV === 'development') {
+        console.warn("Failed to fetch AI suggestions (using fallback):", err?.message);
+      }
+      
       // Safe fallback ideas so UI still works
       setSuggestedIdeas(
         isBusiness

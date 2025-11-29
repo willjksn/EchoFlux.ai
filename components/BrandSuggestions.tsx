@@ -48,14 +48,14 @@ export const BrandSuggestions: React.FC = () => {
     };
 
     return (
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
             <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 bg-green-100 dark:bg-green-900/30 text-green-600 rounded-full">
+                <div className="p-2 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full">
                     <BriefcaseIcon className="w-5 h-5" />
                 </div>
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white">Brand Partnership Finder</h3>
             </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
                 Find brands that align with your content for potential sponsorships and collaborations.
             </p>
             
@@ -63,34 +63,54 @@ export const BrandSuggestions: React.FC = () => {
                 <input 
                     type="text" 
                     value={niche} 
-                    onChange={(e) => setNiche(e.target.value)} 
-                    placeholder="Enter your niche (e.g., 'Vegan Cooking', 'Tech Reviews')"
-                    className="flex-grow p-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-sm dark:text-white dark:placeholder-gray-400"
+                    onChange={(e) => setNiche(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && niche.trim() && handleGenerate()}
+                    placeholder="Enter your niche..."
+                    className="flex-grow p-3 border rounded-lg bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-sm dark:text-white dark:placeholder-gray-400 focus:ring-2 focus:ring-green-500"
                 />
                 <button 
                     onClick={handleGenerate} 
-                    disabled={isLoading || !niche}
-                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 text-sm font-medium flex items-center gap-2"
+                    disabled={isLoading || !niche.trim()}
+                    className="px-4 py-3 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-lg hover:from-green-700 hover:to-green-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold flex items-center gap-2 shadow-sm transition-all"
                 >
-                    {isLoading ? <SparklesIcon className="w-4 h-4 animate-spin" /> : <SparklesIcon className="w-4 h-4" />}
-                    Find Brands
+                    {isLoading ? (
+                        <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    ) : (
+                        <SparklesIcon className="w-4 h-4" />
+                    )}
+                    Find
                 </button>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar">
                 {suggestions.map((brand, idx) => (
-                    <div key={idx} className="p-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700/30">
-                        <div className="flex justify-between items-start">
-                            <h4 className="font-bold text-gray-900 dark:text-white">{brand.name}</h4>
-                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${brand.matchScore > 90 ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>
+                    <div key={idx} className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors">
+                        <div className="flex justify-between items-start mb-2">
+                            <h4 className="font-bold text-gray-900 dark:text-white text-sm">{brand.name}</h4>
+                            <span className={`text-xs font-bold px-2 py-1 rounded-full ${brand.matchScore > 90 ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200' : brand.matchScore > 70 ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200'}`}>
                                 {brand.matchScore}% Match
                             </span>
                         </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">{brand.reason}</p>
+                        <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">{brand.reason}</p>
                     </div>
                 ))}
                 {suggestions.length === 0 && !isLoading && (
-                    <p className="text-center text-sm text-gray-400 italic py-4">Enter your niche to see suggestions.</p>
+                    <div className="text-center py-8">
+                        <BriefcaseIcon className="w-8 h-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+                        <p className="text-sm text-gray-400 dark:text-gray-500 italic">Enter your niche to see brand suggestions.</p>
+                    </div>
+                )}
+                {isLoading && (
+                    <div className="text-center py-8">
+                        <svg className="animate-spin h-6 w-6 text-green-600 dark:text-green-400 mx-auto mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <p className="text-xs text-gray-400 dark:text-gray-500">Finding brands...</p>
+                    </div>
                 )}
             </div>
         </div>

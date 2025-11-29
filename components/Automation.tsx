@@ -387,17 +387,18 @@ export const Automation: React.FC = () => {
     };
 
     return (
-        <div className="max-w-7xl mx-auto space-y-8">
+        <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full">
             <WorkflowModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveWorkflow} />
-            <div className="flex justify-between items-center">
-                <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Content Automation</h2>
+            <div className="flex justify-between items-center mb-6">
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Content Automation</h1>
                 <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors">
                     <SparklesIcon />
                     Create Workflow
                 </button>
             </div>
             
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
+            <div className="space-y-6">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Your AI Avatar</h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Upload a base image of yourself. The AI can use this as a reference to generate new images and videos of you in different styles or scenarios.</p>
                 <div className="flex items-center gap-4">
@@ -417,7 +418,7 @@ export const Automation: React.FC = () => {
             </div>
 
             {/* Workflows Section */}
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Your Workflows</h3>
                 {workflows.length > 0 ? (
                     <div className="space-y-4">
@@ -477,7 +478,7 @@ export const Automation: React.FC = () => {
             </div>
 
             {/* Approval Queue Section */}
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Manual Approval Queue ({approvalQueue.length})</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {approvalQueue.length > 0 ? approvalQueue.map(item => (
@@ -499,6 +500,7 @@ export const Automation: React.FC = () => {
                         <p className="text-gray-500 dark:text-gray-400 md:col-span-3 text-center py-8">The approval queue is empty.</p>
                     )}
                 </div>
+            </div>
             </div>
         </div>
     );

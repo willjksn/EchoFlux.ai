@@ -24,27 +24,27 @@ export const PaymentModal: React.FC = () => {
 
     const handleSuccess = async () => {
         try {
-            if (paymentPlan.name === 'Autopilot Add-on') {
-                if (user) {
+        if (paymentPlan.name === 'Autopilot Add-on') {
+            if (user) {
                     await setUser({ ...user, hasAutopilot: true });
-                }
-                showToast('Autopilot has been activated!', 'success');
-            } else if (selectedClient) {
-                setClients(prevClients => 
-                    prevClients.map(client => 
-                        client.id === selectedClient.id
-                            ? {
-                                ...client,
-                                plan: paymentPlan.name as User['plan'],
-                                monthlyCaptionGenerationsUsed: 0,
-                                monthlyImageGenerationsUsed: 0,
-                                monthlyVideoGenerationsUsed: 0,
-                            }
-                            : client
-                    )
-                );
-                showToast(`Client successfully switched to the ${paymentPlan.name} plan!`, 'success');
-            } else if (user) {
+            }
+            showToast('Autopilot has been activated!', 'success');
+        } else if (selectedClient) {
+            setClients(prevClients => 
+                prevClients.map(client => 
+                    client.id === selectedClient.id
+                        ? {
+                            ...client,
+                            plan: paymentPlan.name as User['plan'],
+                            monthlyCaptionGenerationsUsed: 0,
+                            monthlyImageGenerationsUsed: 0,
+                            monthlyVideoGenerationsUsed: 0,
+                        }
+                        : client
+                )
+            );
+             showToast(`Client successfully switched to the ${paymentPlan.name} plan!`, 'success');
+        } else if (user) {
                 // Map plan name to ensure it matches exactly with the Plan type
                 const planName = paymentPlan.name as User['plan'];
                 
@@ -111,14 +111,14 @@ export const PaymentModal: React.FC = () => {
                     id: user.id,
                     plan: planName,
                     userType: newUserType,
-                    monthlyCaptionGenerationsUsed: 0,
-                    monthlyImageGenerationsUsed: 0,
-                    monthlyVideoGenerationsUsed: 0,
-                });
+                monthlyCaptionGenerationsUsed: 0,
+                monthlyImageGenerationsUsed: 0,
+                monthlyVideoGenerationsUsed: 0,
+            });
                 
                 console.log('Plan updated successfully:', planName);
                 
-                showToast(`Successfully switched to the ${paymentPlan.name} plan!`, 'success');
+            showToast(`Successfully switched to the ${paymentPlan.name} plan!`, 'success');
                 setIsLoading(false);
                 setIsSuccess(true);
                 
@@ -136,7 +136,7 @@ export const PaymentModal: React.FC = () => {
         } catch (error) {
             console.error('Failed to update plan:', error);
             showToast('Failed to update plan. Please try again.', 'error');
-            setIsLoading(false);
+        setIsLoading(false);
         }
     };
 
@@ -249,8 +249,8 @@ export const PaymentModal: React.FC = () => {
                 {/* Only show close button if not in success state */}
                 {!isSuccess && (
                     <button onClick={handleClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 z-10">
-                       <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
+                   <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
                 )}
                 {renderContent()}
             </div>

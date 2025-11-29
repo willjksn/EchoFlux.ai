@@ -6,17 +6,17 @@ import { TrashIcon, PlusIcon, UploadIcon, LinkIcon, CheckCircleIcon, MailIcon, C
 
 const BioPreview: React.FC<{ config: any }> = ({ config }) => {
     return (
-        <div className="bg-black p-3 rounded-[3rem] shadow-2xl border-[8px] border-gray-800 w-[320px] h-[650px] relative overflow-hidden flex-shrink-0">
-             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-black rounded-b-xl z-20"></div>
+        <div className="bg-black p-2.5 rounded-[2.5rem] shadow-2xl border-[6px] border-gray-800 w-[300px] h-[600px] relative overflow-hidden flex-shrink-0">
+             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-5 bg-black rounded-b-lg z-20"></div>
              <div 
-                className="w-full h-full bg-white overflow-y-auto rounded-[2.5rem] scrollbar-hide"
+                className="w-full h-full bg-white overflow-y-auto rounded-[2rem] scrollbar-hide"
                 style={{ backgroundColor: config.theme.backgroundColor }}
              >
-                 <div className="p-6 flex flex-col items-center min-h-full text-center pt-12">
+                 <div className="p-4 flex flex-col items-center min-h-full text-center pt-8">
                      <img 
                         src={config.avatar || 'https://via.placeholder.com/100'} 
                         alt="Profile" 
-                        className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-md mb-4"
+                        className="w-20 h-20 rounded-full object-cover border-2 border-white shadow-md mb-3"
                     />
                     <h3 className="text-xl font-bold mb-1" style={{ color: config.theme.textColor }}>{config.displayName}</h3>
                     <p className="text-sm mb-6 px-4 opacity-90" style={{ color: config.theme.textColor }}>{config.bio}</p>
@@ -136,7 +136,7 @@ export const BioPageBuilder: React.FC = () => {
     };
 
     return (
-        <div className="h-[calc(100vh-8rem)] flex flex-col lg:flex-row gap-8">
+        <div className="min-h-[calc(100vh-8rem)] flex flex-col lg:flex-row gap-6">
             {/* Left Editor */}
             <div className="flex-1 overflow-y-auto pr-2 space-y-6">
                 <div className="flex justify-between items-center">
@@ -320,7 +320,7 @@ export const BioPageBuilder: React.FC = () => {
             </div>
 
             {/* Right Preview */}
-            <div className="hidden lg:flex items-center justify-center p-8 bg-gray-100 dark:bg-gray-900 rounded-2xl">
+            <div className="hidden lg:flex items-start justify-center pt-4 px-6 pb-6 bg-gray-100 dark:bg-gray-900 rounded-2xl">
                  <BioPreview config={bioPage} />
             </div>
         </div>

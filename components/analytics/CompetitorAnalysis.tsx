@@ -95,3 +95,5 @@ export const CompetitorAnalysis: React.FC = () => {
         </div>
     );
 };
+
+export default CompetitorAnalysis;

@@ -111,3 +111,5 @@ export const SocialListening: React.FC = () => {
         </div>
     );
 };
+
+export default SocialListening;

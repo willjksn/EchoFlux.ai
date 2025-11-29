@@ -21,8 +21,30 @@ async function callFunction(path: string, data: any) {
   });
 
   if (!res.ok) {
-    const msg = await res.text();
-    throw new Error(`API ${path} failed: ${res.status} - ${msg}`);
+    let errorMsg = '';
+    try {
+      const text = await res.text();
+      errorMsg = text;
+      // Try to parse as JSON for structured error
+      try {
+        const json = JSON.parse(text);
+        errorMsg = json.error || json.details || text;
+      } catch {
+        // Not JSON, use text as-is
+      }
+    } catch {
+      errorMsg = `HTTP ${res.status}`;
+    }
+    // For non-critical endpoints, return empty data instead of throwing
+    // This prevents console spam for optional features
+    const nonCriticalEndpoints = ['getSocialStats', 'getAnalytics', 'generateAutopilotSuggestions'];
+    if (nonCriticalEndpoints.includes(path)) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(`API ${path} failed (non-critical):`, res.status, errorMsg);
+      }
+      return {} as any;
+    }
+    throw new Error(`API ${path} failed: ${res.status} - ${errorMsg}`);
   }
 
   return res.json();
@@ -230,6 +252,28 @@ export async function generateAutopilotSuggestions(
    16) Autopilot Plan
         Uses dedicated _generateAutopilotPlan API route
 ---------------------------------------------------- */
+
+/* ----------------------------------------------------
+   17) Get Analytics Data
+        Fetches real analytics data from Firestore
+---------------------------------------------------- */
+export async function getAnalytics(
+  dateRange: '7d' | '30d' | '90d' = '30d',
+  platform: string = 'All'
+): Promise<any> {
+  return await callFunction("getAnalytics", {
+    dateRange,
+    platform,
+  });
+}
+
+/* ----------------------------------------------------
+   18) Get Social Stats
+        Fetches aggregated social media stats from posts
+---------------------------------------------------- */
+export async function getSocialStats(): Promise<Record<string, { followers: number; following: number }>> {
+  return await callFunction("getSocialStats", {});
+}
 export async function generateAutopilotPlan(args: {
   goal: string;
   niche: string;

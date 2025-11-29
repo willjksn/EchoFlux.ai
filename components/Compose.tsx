@@ -674,20 +674,6 @@ const CaptionGenerator: React.FC = () => {
         </div>
       )}
 
-      <div className="text-center">
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-          Compose & Schedule
-        </h2>
-        <p className="mt-2 text-lg text-gray-500 dark:text-gray-400">
-          Create content, generate AI captions, and schedule posts.
-        </p>
-        {isFinite(limit) && (
-          <p className="mt-1 text-sm font-semibold text-primary-600 dark:text-primary-400">
-            {usageLeft} generations left this month.
-          </p>
-        )}
-      </div>
-
       {/* Media upload */}
       <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
         {!composeState.media?.previewUrl ? (
@@ -1253,23 +1239,59 @@ export const Compose: React.FC = () => {
     }
   };
 
+  const isBusiness = user?.userType === 'Business';
+  
+  // Calculate usage for header display
+  const captionLimits: Record<string, number> = {
+    Free: 50,
+    Pro: 500,
+    Elite: 1500,
+    Agency: Infinity,
+    Starter: 1000,
+    Growth: 2500
+  };
+  const planKey = (user?.plan as string) || 'Free';
+  const limit = captionLimits[planKey] ?? 50;
+  const usage = user?.monthlyCaptionGenerationsUsed || 0;
+  const usageLeft = limit === Infinity ? Infinity : (limit - usage);
+
   return (
-    <div className="max-w-7xl mx-auto">
-      <div className="flex justify-center border-b border-gray-200 dark:border-gray-700 mb-8">
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-3 px-4 py-3 font-semibold border-b-2 transition-colors ${
-              activeTab === tab.id
-                ? 'border-primary-500 text-primary-600 dark:text-primary-400'
-                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-            }`}
-          >
-            {tab.icon} {tab.label}
-          </button>
-        ))}
+    <div className="max-w-7xl mx-auto space-y-6">
+      {/* Header Banner */}
+      <div className="bg-gradient-to-r from-primary-500 to-primary-600 dark:from-primary-600 dark:to-primary-700 p-6 rounded-xl shadow-lg text-white">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Create Content</h1>
+            <p className="text-sm opacity-90 mt-1">Generate AI captions, images, and videos</p>
+          </div>
+          {isFinite(limit) && (
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg px-4 py-2">
+              <p className="text-xs opacity-90">Caption Generations</p>
+              <p className="text-lg font-bold">{usageLeft} left</p>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Tab Navigation */}
+      <div className="bg-white dark:bg-gray-800 p-2 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+        <div className="flex justify-center gap-2">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-6 py-3 font-semibold rounded-lg transition-all ${
+                activeTab === tab.id
+                  ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              {tab.icon} {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      
       {renderTabContent()}
     </div>
   );

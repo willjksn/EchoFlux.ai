@@ -1,13 +1,14 @@
-import React, { useState, useRef, useMemo } from 'react';
-import { Settings as AppSettings, Platform, CustomVoice } from '../types';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
+import { Settings as AppSettings, Platform, CustomVoice, SocialAccount } from '../types';
 import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
 import { useAppContext } from './AppContext';
 import { UpgradePrompt } from './UpgradePrompt';
-import { UploadIcon, TrashIcon, SettingsIcon, LinkIcon, SparklesIcon, CreditCardIcon } from './icons/UIIcons';
+import { UploadIcon, TrashIcon, SettingsIcon, LinkIcon, SparklesIcon, CreditCardIcon, CheckCircleIcon } from './icons/UIIcons';
 import { db, storage } from '../firebaseConfig';
 // @ts-ignore
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { connectSocialAccount, disconnectSocialAccount } from '../src/services/socialMediaService';
 
 interface SettingsProps {}
 
@@ -84,36 +85,66 @@ const platformIcons: Record<Platform, React.ReactNode> = {
 
 const AccountConnection: React.FC<{
     platform: Platform;
-    isConnected: boolean;
-    onToggle: (platform: Platform) => void;
-}> = ({ platform, isConnected, onToggle }) => (
-    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-        <div className="flex items-center space-x-3">
-            <span className="text-gray-600 dark:text-gray-300">{platformIcons[platform]}</span>
-            <span className="font-medium text-gray-800 dark:text-gray-200">{platform}</span>
+    account: SocialAccount | null;
+    isConnecting: boolean;
+    onConnect: (platform: Platform) => Promise<void>;
+    onDisconnect: (platform: Platform) => Promise<void>;
+}> = ({ platform, account, isConnecting, onConnect, onDisconnect }) => {
+    const isConnected = account?.connected || false;
+    const accountUsername = account?.accountUsername;
+
+    return (
+        <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+            <div className="flex items-center space-x-3 flex-1">
+                <span className="text-gray-600 dark:text-gray-300">{platformIcons[platform]}</span>
+                <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                        <span className="font-medium text-gray-800 dark:text-gray-200">{platform}</span>
+                        {isConnected && (
+                            <CheckCircleIcon className="w-4 h-4 text-green-500 dark:text-green-400" />
+                        )}
+                    </div>
+                    {accountUsername && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">@{accountUsername}</p>
+                    )}
+                </div>
+            </div>
+            <button
+                onClick={() => isConnected ? onDisconnect(platform) : onConnect(platform)}
+                disabled={isConnecting}
+                className={`px-4 py-1.5 text-sm font-semibold rounded-full transition-colors whitespace-nowrap ${
+                    isConnected
+                        ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-300 dark:hover:bg-red-900'
+                        : 'bg-primary-100 text-primary-700 hover:bg-primary-200 dark:bg-primary-900/50 dark:text-primary-300 dark:hover:bg-primary-900'
+                } ${isConnecting ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+                {isConnecting ? 'Connecting...' : isConnected ? 'Disconnect' : 'Connect'}
+            </button>
         </div>
-        <button
-            onClick={() => onToggle(platform)}
-            className={`px-4 py-1.5 text-sm font-semibold rounded-full transition-colors ${
-                isConnected
-                    ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-300 dark:hover:bg-red-900'
-                    : 'bg-primary-100 text-primary-700 hover:bg-primary-200 dark:bg-primary-900/50 dark:text-primary-300 dark:hover:bg-primary-900'
-            }`}
-        >
-            {isConnected ? 'Disconnect' : 'Connect'}
-        </button>
-    </div>
-);
+    );
+};
 
 type SettingsTab = 'general' | 'connections' | 'ai-training' | 'billing';
 
 export const Settings: React.FC = () => {
-    const { user, setUser, settings, setSettings, setActivePage, selectedClient, userCustomVoices, setUserCustomVoices, showToast, setPricingView } = useAppContext();
+    const { user, setUser, settings, setSettings, setActivePage, selectedClient, userCustomVoices, setUserCustomVoices, showToast, setPricingView, socialAccounts } = useAppContext();
     const [activeTab, setActiveTab] = useState<SettingsTab>('general');
     const [fileName, setFileName] = useState<string | null>(null);
     const [isUploadingVoice, setIsUploadingVoice] = useState(false);
+    const [connectingPlatform, setConnectingPlatform] = useState<Platform | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const voiceFileInputRef = useRef<HTMLInputElement>(null);
+
+    // Safe default for socialAccounts if undefined
+    const safeSocialAccounts: Record<Platform, SocialAccount | null> = socialAccounts || {
+        Instagram: null,
+        TikTok: null,
+        X: null,
+        Threads: null,
+        YouTube: null,
+        LinkedIn: null,
+        Facebook: null,
+    };
     
     const isPremiumFeatureUnlocked = ['Elite', 'Agency'].includes(user?.plan || 'Free') || user?.role === 'Admin';
 
@@ -129,6 +160,26 @@ export const Settings: React.FC = () => {
     }, [user?.plan, user?.role]);
 
     const isVoiceFeatureUnlocked = voiceLimit > 0;
+
+    // Handle OAuth callback from URL params
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const oauthSuccess = params.get('oauth_success');
+        const oauthError = params.get('error');
+        const platform = params.get('platform');
+
+        if (oauthSuccess) {
+            showToast(`${oauthSuccess.charAt(0).toUpperCase() + oauthSuccess.slice(1)} account connected successfully!`, 'success');
+            // Remove query params from URL
+            window.history.replaceState({}, '', window.location.pathname);
+            // Reload page to refresh social accounts
+            window.location.reload();
+        } else if (oauthError) {
+            showToast(`Failed to connect ${platform || 'account'}: ${oauthError}`, 'error');
+            // Remove query params from URL
+            window.history.replaceState({}, '', window.location.pathname);
+        }
+    }, [showToast]);
 
     const handleVoiceFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         if (!user) return;
@@ -200,8 +251,31 @@ export const Settings: React.FC = () => {
         setSettings(prev => ({ ...prev, tone: { ...prev.tone, [key]: value } }));
     };
 
-    const toggleAccountConnection = (platform: Platform) => {
-        setSettings(prev => ({ ...prev, connectedAccounts: { ...prev.connectedAccounts, [platform]: !prev.connectedAccounts[platform] } }));
+    const handleConnectAccount = async (platform: Platform) => {
+        setConnectingPlatform(platform);
+        try {
+            await connectSocialAccount(platform);
+            // OAuth flow will redirect, so we don't need to do anything else here
+            // The useEffect will handle the callback
+        } catch (error: any) {
+            console.error(`Failed to connect ${platform}:`, error);
+            showToast(`Failed to connect ${platform}. Please try again.`, 'error');
+            setConnectingPlatform(null);
+        }
+    };
+
+    const handleDisconnectAccount = async (platform: Platform) => {
+        setConnectingPlatform(platform);
+        try {
+            await disconnectSocialAccount(platform);
+            showToast(`${platform} account disconnected successfully.`, 'success');
+            // Reload page to refresh social accounts
+            window.location.reload();
+        } catch (error: any) {
+            console.error(`Failed to disconnect ${platform}:`, error);
+            showToast(`Failed to disconnect ${platform}. Please try again.`, 'error');
+            setConnectingPlatform(null);
+        }
     };
 
     const handleRestartOnboarding = async () => {
@@ -278,14 +352,24 @@ export const Settings: React.FC = () => {
                     <SettingsSection title="Connected Accounts">
                         <p className="text-sm text-gray-500 dark:text-gray-400">Connect your social media accounts to allow EngageSuite.ai to fetch incoming messages and post replies.</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {(Object.keys(settings.connectedAccounts) as Platform[]).map(platform => (
-                                <AccountConnection 
-                                    key={platform}
-                                    platform={platform}
-                                    isConnected={settings.connectedAccounts[platform]}
-                                    onToggle={toggleAccountConnection}
-                                />
-                            ))}
+                            {(Object.keys(settings.connectedAccounts || {}) as Platform[]).map(platform => {
+                                const account = safeSocialAccounts && safeSocialAccounts[platform] ? safeSocialAccounts[platform] : null;
+                                return (
+                                    <AccountConnection 
+                                        key={platform}
+                                        platform={platform}
+                                        account={account}
+                                        isConnecting={connectingPlatform === platform}
+                                        onConnect={handleConnectAccount}
+                                        onDisconnect={handleDisconnectAccount}
+                                    />
+                                );
+                            })}
+                        </div>
+                        <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                            <p className="text-sm text-blue-800 dark:text-blue-200">
+                                <strong>Note:</strong> Connecting accounts enables real-time stats and posting capabilities. You'll be redirected to authorize each platform.
+                            </p>
                         </div>
                     </SettingsSection>
                 )}

@@ -24,6 +24,8 @@ import {
   CalendarEvent,
   AutopilotCampaign,
   MessageCategory,
+  SocialAccount,
+  Platform,
 } from "../../types";
 
 import {
@@ -117,6 +119,8 @@ interface DataContextType {
     >
   ) => Promise<string>; // Returns campaign ID
   updateAutopilotCampaign: (campaignId: string, data: Partial<AutopilotCampaign>) => Promise<void>;
+
+  socialAccounts: Record<Platform, SocialAccount | null>;
 }
 
 /*--------------------------------------------------------------------
@@ -157,6 +161,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const [hashtagSets, setHashtagSets] = useState<HashtagSet[]>([]);
   const [bioPage, setBioPageState] = useState<BioPageConfig | null>(null);
+  const [socialAccounts, setSocialAccounts] = useState<Record<Platform, SocialAccount | null>>({
+    Instagram: null,
+    TikTok: null,
+    X: null,
+    Threads: null,
+    YouTube: null,
+    LinkedIn: null,
+    Facebook: null,
+  });
 
   /*--------------------------------------------------------------------
     SEEDING HELPERS
@@ -179,6 +192,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setCrmStore({});
       setUserCustomVoices([]);
       setAutopilotCampaigns([]);
+      setSocialAccounts({
+        Instagram: null,
+        TikTok: null,
+        X: null,
+        Threads: null,
+        YouTube: null,
+        LinkedIn: null,
+        Facebook: null,
+      });
       return;
     }
 
@@ -196,13 +218,33 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       },
       { name: "voices", setter: setUserCustomVoices },
       { name: "autopilot_campaigns", setter: setAutopilotCampaigns },
+      {
+        name: "social_accounts",
+        setter: (items: any[]) => {
+          const accounts: Record<Platform, SocialAccount | null> = {
+            Instagram: null,
+            TikTok: null,
+            X: null,
+            Threads: null,
+            YouTube: null,
+            LinkedIn: null,
+            Facebook: null,
+          };
+          items.forEach((item) => {
+            if (item.platform) {
+              accounts[item.platform as Platform] = item as SocialAccount;
+            }
+          });
+          setSocialAccounts(accounts);
+        },
+      },
     ];
 
     const unsubscribers = subcollections.map(({ name, setter, seed, seedIdField }) => {
       const collRef = collection(db, "users", user.id, name);
       
-      // CRM profiles don't have timestamp, so don't order by it
-      const q = name === "crm_profiles" 
+      // CRM profiles and social_accounts don't have timestamp, so don't order by it
+      const q = (name === "crm_profiles" || name === "social_accounts")
         ? query(collRef)
         : query(collRef, orderBy("timestamp", "desc"));
 
@@ -532,6 +574,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     autopilotCampaigns,
     addAutopilotCampaign,
     updateAutopilotCampaign,
+
+    socialAccounts,
   };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
