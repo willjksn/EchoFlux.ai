@@ -1395,10 +1395,10 @@ export const Dashboard: React.FC = () => {
                 {/* Key Metrics Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
                   {/* Revenue */}
-                  <div className="p-6 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl border border-green-200 dark:border-green-700">
-                    <p className="text-xs font-medium text-green-700 dark:text-green-300 mb-2 uppercase tracking-wide">Revenue This Month</p>
+                  <div className="p-6 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl border border-green-200 dark:border-green-700 min-h-[140px]">
+                    <p className="text-xs font-medium text-green-700 dark:text-green-300 mb-3 uppercase tracking-wide">Revenue This Month</p>
                     <div className="mb-3">
-                      <p className="text-3xl font-bold text-green-900 dark:text-green-100">
+                      <p className="text-xl font-bold text-green-900 dark:text-green-100">
                         ${new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(estimatedRevenue)}
                       </p>
                       <p className="text-xs font-semibold text-green-600 dark:text-green-400 mt-1">
@@ -1411,9 +1411,9 @@ export const Dashboard: React.FC = () => {
                   </div>
                   
                   {/* ROI */}
-                  <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200 dark:border-blue-700">
-                    <p className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-2 uppercase tracking-wide">ROI</p>
-                    <p className="text-3xl font-bold text-blue-900 dark:text-blue-100 mb-2">
+                  <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200 dark:border-blue-700 min-h-[140px]">
+                    <p className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-3 uppercase tracking-wide">ROI</p>
+                    <p className="text-xl font-bold text-blue-900 dark:text-blue-100 mb-3">
                       {roi}%
                     </p>
                     <p className="text-xs text-blue-600/80 dark:text-blue-400/80">
@@ -1422,9 +1422,9 @@ export const Dashboard: React.FC = () => {
                   </div>
                   
                   {/* CAC */}
-                  <div className="p-6 bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-900/20 dark:to-violet-900/20 rounded-xl border border-purple-200 dark:border-purple-700">
-                    <p className="text-xs font-medium text-purple-700 dark:text-purple-300 mb-2 uppercase tracking-wide">CAC</p>
-                    <p className="text-3xl font-bold text-purple-900 dark:text-purple-100 mb-2">
+                  <div className="p-6 bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-900/20 dark:to-violet-900/20 rounded-xl border border-purple-200 dark:border-purple-700 min-h-[140px]">
+                    <p className="text-xs font-medium text-purple-700 dark:text-purple-300 mb-3 uppercase tracking-wide">CAC</p>
+                    <p className="text-xl font-bold text-purple-900 dark:text-purple-100 mb-3">
                       ${cac}
                     </p>
                     <p className="text-xs text-purple-600/80 dark:text-purple-400/80">
@@ -1433,9 +1433,9 @@ export const Dashboard: React.FC = () => {
                   </div>
                   
                   {/* Conversion Rate */}
-                  <div className="p-6 bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20 rounded-xl border border-orange-200 dark:border-orange-700">
-                    <p className="text-xs font-medium text-orange-700 dark:text-orange-300 mb-2 uppercase tracking-wide">Conversion Rate</p>
-                    <p className="text-3xl font-bold text-orange-900 dark:text-orange-100 mb-2">
+                  <div className="p-6 bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20 rounded-xl border border-orange-200 dark:border-orange-700 min-h-[140px]">
+                    <p className="text-xs font-medium text-orange-700 dark:text-orange-300 mb-3 uppercase tracking-wide">Conversion Rate</p>
+                    <p className="text-xl font-bold text-orange-900 dark:text-orange-100 mb-3">
                       {conversionRate}%
                     </p>
                     <p className="text-xs text-orange-600/80 dark:text-orange-400/80">
@@ -1913,10 +1913,10 @@ export const Dashboard: React.FC = () => {
                             </span>
                           </div>
                           <div className="space-y-2">
-                            <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                            <p className="text-2xl font-bold text-gray-900 dark:text-white">
                               {metric.format(metric.current)}
                             </p>
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1 flex-wrap">
                               <span className={`text-xs font-semibold flex items-center gap-1 ${
                                 metric.isPositive 
                                   ? 'text-green-600 dark:text-green-400' 
@@ -1979,7 +1979,7 @@ export const Dashboard: React.FC = () => {
                             {postsChange.isPositive ? '+' : ''}{postsChange.changePercent}%
                           </span>
                         </div>
-                        <p className="text-3xl font-bold text-gray-900 dark:text-white mb-2">{currentMonthPosts}</p>
+                        <p className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{currentMonthPosts}</p>
                         <p className="text-xs text-gray-500 dark:text-gray-400">vs. {previousMonthPosts} last month</p>
                       </div>
                       <div className="p-6 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-xl border border-gray-200 dark:border-gray-600">
@@ -1991,7 +1991,7 @@ export const Dashboard: React.FC = () => {
                             {followersChange.isPositive ? '+' : ''}{followersChange.changePercent}%
                           </span>
                         </div>
-                        <p className="text-3xl font-bold text-gray-900 dark:text-white mb-2">{currentMonthFollowers.toLocaleString()}</p>
+                        <p className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{currentMonthFollowers.toLocaleString()}</p>
                         <p className="text-xs text-gray-500 dark:text-gray-400">vs. {previousMonthFollowers.toLocaleString()} last month</p>
                       </div>
                       <div className="p-6 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-xl border border-gray-200 dark:border-gray-600">
@@ -2003,7 +2003,7 @@ export const Dashboard: React.FC = () => {
                             {engagementChange.isPositive ? '+' : ''}{engagementChange.changePercent}%
                           </span>
                         </div>
-                        <p className="text-3xl font-bold text-gray-900 dark:text-white mb-2">{currentMonthEngagement}</p>
+                        <p className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{currentMonthEngagement}</p>
                         <p className="text-xs text-gray-500 dark:text-gray-400">vs. {previousMonthEngagement} last month</p>
                       </div>
                     </div>
