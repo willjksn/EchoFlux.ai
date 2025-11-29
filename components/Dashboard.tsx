@@ -1397,11 +1397,11 @@ export const Dashboard: React.FC = () => {
                   {/* Revenue */}
                   <div className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg border border-green-200 dark:border-green-700">
                     <p className="text-sm font-medium text-green-700 dark:text-green-300 mb-1">Revenue This Month</p>
-                    <div className="flex items-baseline gap-2">
-                      <p className="text-2xl font-bold text-green-900 dark:text-green-100">
+                    <div className="flex items-baseline gap-2 flex-wrap">
+                      <p className="text-xl font-bold text-green-900 dark:text-green-100 break-words">
                         ${new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(estimatedRevenue)}
                       </p>
-                      <span className="text-sm font-semibold text-green-600 dark:text-green-400">
+                      <span className="text-xs font-semibold text-green-600 dark:text-green-400 whitespace-nowrap">
                         +{revenueGrowth}%
                       </span>
                     </div>
@@ -1413,7 +1413,7 @@ export const Dashboard: React.FC = () => {
                   {/* ROI */}
                   <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
                     <p className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-1">ROI</p>
-                    <p className="text-3xl font-bold text-blue-900 dark:text-blue-100">
+                    <p className="text-2xl font-bold text-blue-900 dark:text-blue-100 break-words">
                       {roi}%
                     </p>
                     <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
@@ -1424,7 +1424,7 @@ export const Dashboard: React.FC = () => {
                   {/* CAC */}
                   <div className="p-4 bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-900/20 dark:to-violet-900/20 rounded-lg border border-purple-200 dark:border-purple-700">
                     <p className="text-sm font-medium text-purple-700 dark:text-purple-300 mb-1">Customer Acquisition Cost</p>
-                    <p className="text-3xl font-bold text-purple-900 dark:text-purple-100">
+                    <p className="text-2xl font-bold text-purple-900 dark:text-purple-100 break-words">
                       ${cac}
                     </p>
                     <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
@@ -1435,7 +1435,7 @@ export const Dashboard: React.FC = () => {
                   {/* Conversion Rate */}
                   <div className="p-4 bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20 rounded-lg border border-orange-200 dark:border-orange-700">
                     <p className="text-sm font-medium text-orange-700 dark:text-orange-300 mb-1">Conversion Rate</p>
-                    <p className="text-3xl font-bold text-orange-900 dark:text-orange-100">
+                    <p className="text-2xl font-bold text-orange-900 dark:text-orange-100 break-words">
                       {conversionRate}%
                     </p>
                     <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
@@ -1495,7 +1495,7 @@ export const Dashboard: React.FC = () => {
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-3xl font-bold text-green-900 dark:text-green-100">{roi}%</p>
+                      <p className="text-2xl font-bold text-green-900 dark:text-green-100 break-words">{roi}%</p>
                       <p className="text-xs text-green-600 dark:text-green-400">
                         {parseFloat(roi) > 100 ? 'Excellent' : parseFloat(roi) > 50 ? 'Good' : parseFloat(roi) > 0 ? 'Positive' : 'Negative'} ROI
                       </p>
