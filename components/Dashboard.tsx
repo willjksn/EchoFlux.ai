@@ -1393,52 +1393,52 @@ export const Dashboard: React.FC = () => {
                 </div>
                 
                 {/* Key Metrics Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
                   {/* Revenue */}
-                  <div className="p-5 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl border border-green-200 dark:border-green-700 min-w-0">
-                    <p className="text-xs font-medium text-green-700 dark:text-green-300 mb-3 uppercase tracking-wide">Revenue This Month</p>
-                    <div className="flex items-baseline gap-2 flex-wrap mb-3">
-                      <p className="text-2xl font-bold text-green-900 dark:text-green-100">
+                  <div className="p-6 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl border border-green-200 dark:border-green-700">
+                    <p className="text-xs font-medium text-green-700 dark:text-green-300 mb-2 uppercase tracking-wide">Revenue This Month</p>
+                    <div className="mb-3">
+                      <p className="text-3xl font-bold text-green-900 dark:text-green-100">
                         ${new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(estimatedRevenue)}
                       </p>
-                      <span className="text-xs font-semibold text-green-600 dark:text-green-400 whitespace-nowrap">
-                        +{revenueGrowth}%
-                      </span>
+                      <p className="text-xs font-semibold text-green-600 dark:text-green-400 mt-1">
+                        +{revenueGrowth}% growth
+                      </p>
                     </div>
-                    <p className="text-xs text-green-600/80 dark:text-green-400/80 leading-relaxed">
-                      from {convertedLeads} customers
+                    <p className="text-xs text-green-600/80 dark:text-green-400/80">
+                      From {convertedLeads} customers
                     </p>
                   </div>
                   
                   {/* ROI */}
-                  <div className="p-5 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200 dark:border-blue-700 min-w-0">
-                    <p className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-3 uppercase tracking-wide">ROI</p>
-                    <p className="text-2xl font-bold text-blue-900 dark:text-blue-100 mb-3">
+                  <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200 dark:border-blue-700">
+                    <p className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-2 uppercase tracking-wide">ROI</p>
+                    <p className="text-3xl font-bold text-blue-900 dark:text-blue-100 mb-2">
                       {roi}%
                     </p>
-                    <p className="text-xs text-blue-600/80 dark:text-blue-400/80 leading-relaxed">
+                    <p className="text-xs text-blue-600/80 dark:text-blue-400/80">
                       Return on investment
                     </p>
                   </div>
                   
                   {/* CAC */}
-                  <div className="p-5 bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-900/20 dark:to-violet-900/20 rounded-xl border border-purple-200 dark:border-purple-700 min-w-0">
-                    <p className="text-xs font-medium text-purple-700 dark:text-purple-300 mb-3 uppercase tracking-wide">CAC</p>
-                    <p className="text-2xl font-bold text-purple-900 dark:text-purple-100 mb-3">
+                  <div className="p-6 bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-900/20 dark:to-violet-900/20 rounded-xl border border-purple-200 dark:border-purple-700">
+                    <p className="text-xs font-medium text-purple-700 dark:text-purple-300 mb-2 uppercase tracking-wide">CAC</p>
+                    <p className="text-3xl font-bold text-purple-900 dark:text-purple-100 mb-2">
                       ${cac}
                     </p>
-                    <p className="text-xs text-purple-600/80 dark:text-purple-400/80 leading-relaxed">
+                    <p className="text-xs text-purple-600/80 dark:text-purple-400/80">
                       Cost per customer
                     </p>
                   </div>
                   
                   {/* Conversion Rate */}
-                  <div className="p-5 bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20 rounded-xl border border-orange-200 dark:border-orange-700 min-w-0">
-                    <p className="text-xs font-medium text-orange-700 dark:text-orange-300 mb-3 uppercase tracking-wide">Conversion Rate</p>
-                    <p className="text-2xl font-bold text-orange-900 dark:text-orange-100 mb-3">
+                  <div className="p-6 bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20 rounded-xl border border-orange-200 dark:border-orange-700">
+                    <p className="text-xs font-medium text-orange-700 dark:text-orange-300 mb-2 uppercase tracking-wide">Conversion Rate</p>
+                    <p className="text-3xl font-bold text-orange-900 dark:text-orange-100 mb-2">
                       {conversionRate}%
                     </p>
-                    <p className="text-xs text-orange-600/80 dark:text-orange-400/80 leading-relaxed">
+                    <p className="text-xs text-orange-600/80 dark:text-orange-400/80">
                       Leads to customers
                     </p>
                   </div>
@@ -1894,11 +1894,11 @@ export const Dashboard: React.FC = () => {
                   ];
                   
                   return (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                       {metrics.map((metric, idx) => (
                         <div 
                           key={idx}
-                          className="p-5 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 min-w-0"
+                          className="p-6 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-xl border border-gray-200 dark:border-gray-600"
                         >
                           <div className="flex items-center gap-2 mb-4">
                             <div className={`flex-shrink-0 p-2 rounded-lg ${
@@ -1908,16 +1908,16 @@ export const Dashboard: React.FC = () => {
                             }`}>
                               {metric.icon}
                             </div>
-                            <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide truncate">
+                            <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
                               {metric.label}
                             </span>
                           </div>
-                          <div className="space-y-3">
-                            <div className="flex items-baseline gap-2 flex-wrap">
-                              <span className="text-2xl font-bold text-gray-900 dark:text-white">
-                                {metric.format(metric.current)}
-                              </span>
-                              <span className={`text-xs font-semibold flex items-center gap-1 whitespace-nowrap ${
+                          <div className="space-y-2">
+                            <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                              {metric.format(metric.current)}
+                            </p>
+                            <div className="flex items-center gap-1">
+                              <span className={`text-xs font-semibold flex items-center gap-1 ${
                                 metric.isPositive 
                                   ? 'text-green-600 dark:text-green-400' 
                                   : 'text-red-600 dark:text-red-400'
@@ -1929,10 +1929,8 @@ export const Dashboard: React.FC = () => {
                                 )}
                                 {Math.abs(metric.changePercent)}%
                               </span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">vs. last week</span>
                             </div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-                              vs. {metric.format(metric.previous)} last week
-                            </p>
                           </div>
                         </div>
                       ))}
@@ -1971,42 +1969,42 @@ export const Dashboard: React.FC = () => {
                   const engagementChange = calculateChange(currentMonthEngagement, previousMonthEngagement);
                   
                   return (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <div className="p-5 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 min-w-0">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div className="p-6 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-xl border border-gray-200 dark:border-gray-600">
                         <div className="flex items-center justify-between mb-4">
-                          <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide truncate">Total Posts</span>
-                          <span className={`text-xs font-semibold flex-shrink-0 ml-2 ${
+                          <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">Total Posts</span>
+                          <span className={`text-xs font-semibold ${
                             postsChange.isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
                           }`}>
                             {postsChange.isPositive ? '+' : ''}{postsChange.changePercent}%
                           </span>
                         </div>
-                        <div className="text-2xl font-bold text-gray-900 dark:text-white mb-3">{currentMonthPosts}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">vs. {previousMonthPosts} last month</div>
+                        <p className="text-3xl font-bold text-gray-900 dark:text-white mb-2">{currentMonthPosts}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">vs. {previousMonthPosts} last month</p>
                       </div>
-                      <div className="p-5 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 min-w-0">
+                      <div className="p-6 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-xl border border-gray-200 dark:border-gray-600">
                         <div className="flex items-center justify-between mb-4">
-                          <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide truncate">{isBusiness ? 'Reach' : 'Followers'}</span>
-                          <span className={`text-xs font-semibold flex-shrink-0 ml-2 ${
+                          <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">{isBusiness ? 'Reach' : 'Followers'}</span>
+                          <span className={`text-xs font-semibold ${
                             followersChange.isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
                           }`}>
                             {followersChange.isPositive ? '+' : ''}{followersChange.changePercent}%
                           </span>
                         </div>
-                        <div className="text-2xl font-bold text-gray-900 dark:text-white mb-3">{currentMonthFollowers.toLocaleString()}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">vs. {previousMonthFollowers.toLocaleString()} last month</div>
+                        <p className="text-3xl font-bold text-gray-900 dark:text-white mb-2">{currentMonthFollowers.toLocaleString()}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">vs. {previousMonthFollowers.toLocaleString()} last month</p>
                       </div>
-                      <div className="p-5 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 min-w-0">
+                      <div className="p-6 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-xl border border-gray-200 dark:border-gray-600">
                         <div className="flex items-center justify-between mb-4">
-                          <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide truncate">{isBusiness ? 'Leads' : 'Messages'}</span>
-                          <span className={`text-xs font-semibold flex-shrink-0 ml-2 ${
+                          <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">{isBusiness ? 'Leads' : 'Messages'}</span>
+                          <span className={`text-xs font-semibold ${
                             engagementChange.isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
                           }`}>
                             {engagementChange.isPositive ? '+' : ''}{engagementChange.changePercent}%
                           </span>
                         </div>
-                        <div className="text-2xl font-bold text-gray-900 dark:text-white mb-3">{currentMonthEngagement}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">vs. {previousMonthEngagement} last month</div>
+                        <p className="text-3xl font-bold text-gray-900 dark:text-white mb-2">{currentMonthEngagement}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">vs. {previousMonthEngagement} last month</p>
                       </div>
                     </div>
                   );
