@@ -107,14 +107,19 @@ export const PaymentModal: React.FC = () => {
                 // Agency plan keeps current userType
                 
                 // Update user plan, userType (if needed), and reset usage counters
+                const now = new Date().toISOString();
                 await setUser({
                     id: user.id,
                     plan: planName,
                     userType: newUserType,
-                monthlyCaptionGenerationsUsed: 0,
-                monthlyImageGenerationsUsed: 0,
-                monthlyVideoGenerationsUsed: 0,
-            });
+                    monthlyCaptionGenerationsUsed: 0,
+                    monthlyImageGenerationsUsed: 0,
+                    monthlyVideoGenerationsUsed: 0,
+                    subscriptionStartDate: now, // Set subscription start date
+                    billingCycle: paymentPlan.cycle, // Set billing cycle
+                    cancelAtPeriodEnd: false, // Clear cancellation if resubscribing
+                    subscriptionEndDate: undefined, // Clear end date if resubscribing
+                });
                 
                 console.log('Plan updated successfully:', planName);
                 

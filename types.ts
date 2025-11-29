@@ -218,6 +218,10 @@ export interface User {
   };
   bioPage?: BioPageConfig;
   socialAccounts?: SocialAccount[]; // OAuth-connected social media accounts
+  subscriptionEndDate?: string; // ISO timestamp when subscription ends (if cancelled)
+  cancelAtPeriodEnd?: boolean; // Whether subscription is set to cancel at period end
+  subscriptionStartDate?: string; // ISO timestamp when current subscription started
+  billingCycle?: 'monthly' | 'annually'; // Billing cycle for current plan
 }
 
 export interface Notification {

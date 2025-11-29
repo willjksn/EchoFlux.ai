@@ -12,7 +12,7 @@ import { Analytics } from './components/Analytics';
 import { Settings } from './components/Settings';
 import { LandingPage } from './components/LandingPage';
 import { LoginModal } from './components/LoginModal';
-import { Compose } from './components/compose';
+import { Compose } from './components/Compose';
 import { Team } from './components/Team';
 import { Opportunities } from './components/Opportunities';
 import { Profile } from './components/Profile';

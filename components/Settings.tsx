@@ -3,7 +3,7 @@ import { Settings as AppSettings, Platform, CustomVoice, SocialAccount } from '.
 import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
 import { useAppContext } from './AppContext';
 import { UpgradePrompt } from './UpgradePrompt';
-import { UploadIcon, TrashIcon, SettingsIcon, LinkIcon, SparklesIcon, CreditCardIcon, CheckCircleIcon } from './icons/UIIcons';
+import { UploadIcon, TrashIcon, SettingsIcon, LinkIcon, SparklesIcon, CreditCardIcon, CheckCircleIcon, XMarkIcon, ClockIcon } from './icons/UIIcons';
 import { db, storage } from '../firebaseConfig';
 // @ts-ignore
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
@@ -43,7 +43,7 @@ const ToggleSwitch: React.FC<{ label: string; enabled: boolean; onChange: (enabl
 );
 
 const SettingsSection: React.FC<{ title: string; children: React.ReactNode, id?: string }> = ({ title, children, id }) => (
-    <div id={id} className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md animate-fade-in">
+    <div id={id} className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 animate-fade-in">
         <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">{title}</h3>
         <div className="space-y-4">{children}</div>
     </div>
@@ -132,6 +132,8 @@ export const Settings: React.FC = () => {
     const [fileName, setFileName] = useState<string | null>(null);
     const [isUploadingVoice, setIsUploadingVoice] = useState(false);
     const [connectingPlatform, setConnectingPlatform] = useState<Platform | null>(null);
+    const [showCancelModal, setShowCancelModal] = useState(false);
+    const [isCancelling, setIsCancelling] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const voiceFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -315,6 +317,106 @@ export const Settings: React.FC = () => {
         }
     }
 
+    // Subscription cancellation logic
+    const isPremiumPlan = user?.plan && user.plan !== 'Free';
+    const isSubscriptionCancelled = user?.cancelAtPeriodEnd === true;
+    const subscriptionEndDate = user?.subscriptionEndDate;
+    const billingCycle = user?.billingCycle || 'monthly';
+
+    // Calculate remaining access time
+    const getRemainingAccessTime = () => {
+        if (!subscriptionEndDate) return null;
+        const endDate = new Date(subscriptionEndDate);
+        const now = new Date();
+        const diffMs = endDate.getTime() - now.getTime();
+        
+        if (diffMs <= 0) return { expired: true, days: 0, hours: 0, minutes: 0 };
+        
+        const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+        
+        return { days, hours, minutes, expired: false };
+    };
+
+    const remainingTime = getRemainingAccessTime();
+
+    const handleCancelSubscription = async () => {
+        if (!user) return;
+        
+        setIsCancelling(true);
+        try {
+            // Calculate subscription end date (end of current billing period)
+            const now = new Date();
+            let endDate = new Date(now);
+            
+            // Calculate end date based on subscription start date and billing cycle
+            // If subscriptionStartDate is not set, use signupDate or current date as fallback
+            const startDate = user.subscriptionStartDate 
+                ? new Date(user.subscriptionStartDate) 
+                : (user.signupDate ? new Date(user.signupDate) : now);
+            
+            if (billingCycle === 'annually') {
+                endDate = new Date(startDate);
+                endDate.setFullYear(endDate.getFullYear() + 1);
+                // If we're past the annual renewal, add another year from now
+                while (endDate <= now) {
+                    endDate.setFullYear(endDate.getFullYear() + 1);
+                }
+            } else {
+                // Monthly billing
+                endDate = new Date(startDate);
+                endDate.setMonth(endDate.getMonth() + 1);
+                // If we're past the monthly renewal, add another month from now
+                while (endDate <= now) {
+                    endDate.setMonth(endDate.getMonth() + 1);
+                }
+            }
+            
+            // Ensure we set subscriptionStartDate if not already set
+            if (!user.subscriptionStartDate) {
+                user.subscriptionStartDate = startDate.toISOString();
+            }
+
+            // Set subscription to cancel at period end
+            await setUser({
+                ...user,
+                cancelAtPeriodEnd: true,
+                subscriptionEndDate: endDate.toISOString(),
+                billingCycle: billingCycle,
+                subscriptionStartDate: user.subscriptionStartDate || now.toISOString()
+            });
+
+            showToast('Subscription cancelled. You will retain access until the end of your billing period.', 'success');
+            setShowCancelModal(false);
+        } catch (error) {
+            console.error('Failed to cancel subscription:', error);
+            showToast('Failed to cancel subscription. Please try again.', 'error');
+        } finally {
+            setIsCancelling(false);
+        }
+    };
+
+    const handleReactivateSubscription = async () => {
+        if (!user) return;
+        
+        setIsCancelling(true);
+        try {
+            await setUser({
+                ...user,
+                cancelAtPeriodEnd: false,
+                subscriptionEndDate: undefined
+            });
+
+            showToast('Subscription reactivated successfully!', 'success');
+        } catch (error) {
+            console.error('Failed to reactivate subscription:', error);
+            showToast('Failed to reactivate subscription. Please try again.', 'error');
+        } finally {
+            setIsCancelling(false);
+        }
+    };
+
     const tabs: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
         { id: 'general', label: 'General', icon: <SettingsIcon /> },
         { id: 'connections', label: 'Connections', icon: <LinkIcon /> },
@@ -325,29 +427,31 @@ export const Settings: React.FC = () => {
     if (!user) return null;
 
     return (
-        <div className="max-w-4xl mx-auto space-y-8">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Settings</h2>
-            </div>
+        <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full">
+            <div className="max-w-4xl mx-auto space-y-6">
+                <div className="mb-6">
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Settings</h1>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Manage your account preferences and integrations.</p>
+                </div>
 
-            <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg overflow-x-auto">
-                {tabs.map(tab => (
-                    <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-md text-sm font-medium transition-all whitespace-nowrap flex-1 justify-center ${
-                            activeTab === tab.id
-                                ? 'bg-white dark:bg-gray-700 text-primary-600 dark:text-white shadow-sm'
-                                : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-700'
-                        }`}
-                    >
-                        <span className="w-4 h-4">{tab.icon}</span>
-                        {tab.label}
-                    </button>
-                ))}
-            </div>
+                <div className="flex space-x-1 bg-white dark:bg-gray-800 p-1 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-x-auto">
+                    {tabs.map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all whitespace-nowrap flex-1 justify-center ${
+                                activeTab === tab.id
+                                    ? 'bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-md'
+                                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700'
+                            }`}
+                        >
+                            <span className="w-4 h-4">{tab.icon}</span>
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
 
-            <div className="space-y-8">
+                <div className="space-y-6">
                 {activeTab === 'connections' && (
                     <SettingsSection title="Connected Accounts">
                         <p className="text-sm text-gray-500 dark:text-gray-400">Connect your social media accounts to allow EngageSuite.ai to fetch incoming messages and post replies.</p>
@@ -560,14 +664,71 @@ export const Settings: React.FC = () => {
                 )}
 
                 {activeTab === 'billing' && (
+                    <>
                      <SettingsSection title="Subscription">
                          <div className="flex items-center justify-between">
                              <div>
                                  <p className="text-gray-900 dark:text-white font-medium">Current Plan</p>
                                  <p className="text-2xl font-bold text-primary-600">{user.plan}</p>
+                                 {isSubscriptionCancelled && subscriptionEndDate && remainingTime && !remainingTime.expired && (
+                                     <div className="mt-2 flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+                                         <ClockIcon className="w-4 h-4" />
+                                         <span>
+                                             Access until {new Date(subscriptionEndDate).toLocaleDateString()} 
+                                             {remainingTime.days !== undefined && remainingTime.days > 0 && (
+                                                 ` (${remainingTime.days} ${remainingTime.days === 1 ? 'day' : 'days'} remaining)`
+                                             )}
+                                         </span>
+                                     </div>
+                                 )}
                              </div>
                              <button onClick={() => setActivePage('pricing')} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700">Manage Plan</button>
                          </div>
+                         
+                         {isSubscriptionCancelled && (
+                             <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                                 <div className="flex items-start gap-3">
+                                     <div className="flex-1">
+                                         <h4 className="font-semibold text-amber-900 dark:text-amber-100 mb-1">Subscription Cancelled</h4>
+                                         <p className="text-sm text-amber-700 dark:text-amber-300">
+                                             Your subscription is set to cancel at the end of your billing period. You'll continue to have full access until then.
+                                         </p>
+                                         {remainingTime && !remainingTime.expired && (
+                                             <p className="text-sm font-medium text-amber-800 dark:text-amber-200 mt-2">
+                                                 {remainingTime.days !== undefined && remainingTime.days > 0 ? (
+                                                     `${remainingTime.days} ${remainingTime.days === 1 ? 'day' : 'days'} remaining`
+                                                 ) : remainingTime.hours !== undefined && remainingTime.hours > 0 ? (
+                                                     `${remainingTime.hours} ${remainingTime.hours === 1 ? 'hour' : 'hours'} remaining`
+                                                 ) : remainingTime.minutes !== undefined && remainingTime.minutes > 0 ? (
+                                                     `${remainingTime.minutes} ${remainingTime.minutes === 1 ? 'minute' : 'minutes'} remaining`
+                                                 ) : (
+                                                     'Less than a minute remaining'
+                                                 )}
+                                             </p>
+                                         )}
+                                     </div>
+                                     <button
+                                         onClick={handleReactivateSubscription}
+                                         disabled={isCancelling}
+                                         className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 font-semibold whitespace-nowrap"
+                                     >
+                                         {isCancelling ? 'Reactivating...' : 'Reactivate'}
+                                     </button>
+                                 </div>
+                             </div>
+                         )}
+
+                         {isPremiumPlan && !isSubscriptionCancelled && (
+                             <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                 <button
+                                     onClick={() => setShowCancelModal(true)}
+                                     className="px-4 py-2 text-red-600 dark:text-red-400 border border-red-300 dark:border-red-700 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 font-medium"
+                                 >
+                                     Cancel Subscription
+                                 </button>
+                             </div>
+                         )}
+
                          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                              <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">Usage this month</p>
                              <div className="space-y-2">
@@ -582,7 +743,58 @@ export const Settings: React.FC = () => {
                              </div>
                          </div>
                      </SettingsSection>
+
+                     {/* Cancel Subscription Modal */}
+                     {showCancelModal && (
+                         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm">
+                             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full mx-4 p-6 animate-fade-in">
+                                 <div className="flex items-center justify-between mb-4">
+                                     <h3 className="text-xl font-bold text-gray-900 dark:text-white">Cancel Subscription</h3>
+                                     <button
+                                         onClick={() => setShowCancelModal(false)}
+                                         className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                                     >
+                                         <XMarkIcon className="w-6 h-6" />
+                                     </button>
+                                 </div>
+                                 
+                                 <div className="mb-6">
+                                     <p className="text-gray-600 dark:text-gray-300 mb-4">
+                                         Are you sure you want to cancel your subscription? You'll continue to have full access to all features until the end of your current billing period.
+                                     </p>
+                                     
+                                     <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                                         <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">What happens next:</p>
+                                         <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1 list-disc list-inside">
+                                             <li>Your subscription will remain active until {billingCycle === 'annually' ? 'the end of the year' : 'the end of the month'}</li>
+                                             <li>You'll retain full access to all premium features</li>
+                                             <li>Your account will automatically switch to Free plan after the period ends</li>
+                                             <li>You can reactivate anytime before the period ends</li>
+                                         </ul>
+                                     </div>
+                                 </div>
+
+                                 <div className="flex justify-end gap-3">
+                                     <button
+                                         onClick={() => setShowCancelModal(false)}
+                                         className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium"
+                                     >
+                                         Keep Subscription
+                                     </button>
+                                     <button
+                                         onClick={handleCancelSubscription}
+                                         disabled={isCancelling}
+                                         className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 font-semibold"
+                                     >
+                                         {isCancelling ? 'Cancelling...' : 'Cancel Subscription'}
+                                     </button>
+                                 </div>
+                             </div>
+                         </div>
+                     )}
+                    </>
                 )}
+            </div>
             </div>
         </div>
     );
