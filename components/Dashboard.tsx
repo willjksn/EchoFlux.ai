@@ -1102,6 +1102,229 @@ export const Dashboard: React.FC = () => {
             );
           })()}
           
+          {/* Lead Generation Dashboard - Business Only (Priority 1) */}
+          {isBusiness && (() => {
+            // Get all lead messages
+            const leadMessages = messages.filter(m => m.category === 'Lead' && !m.isArchived);
+            
+            // Calculate leads this month
+            const now = new Date();
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            const leadsThisMonth = leadMessages.filter(m => {
+              const msgDate = new Date(m.timestamp);
+              return msgDate >= startOfMonth;
+            });
+            
+            // Calculate leads last month for growth comparison
+            const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+            const leadsLastMonth = leadMessages.filter(m => {
+              const msgDate = new Date(m.timestamp);
+              return msgDate >= lastMonth && msgDate <= endOfLastMonth;
+            });
+            
+            // Calculate growth
+            const leadGrowth = leadsLastMonth.length > 0 
+              ? Math.round(((leadsThisMonth.length - leadsLastMonth.length) / leadsLastMonth.length) * 100)
+              : leadsThisMonth.length > 0 ? 100 : 0;
+            
+            // Leads by platform (source attribution)
+            const leadsByPlatform: Record<Platform, number> = {
+              Instagram: 0,
+              TikTok: 0,
+              X: 0,
+              Threads: 0,
+              YouTube: 0,
+              LinkedIn: 0,
+              Facebook: 0
+            };
+            
+            leadsThisMonth.forEach(lead => {
+              if (lead.platform && leadsByPlatform[lead.platform] !== undefined) {
+                leadsByPlatform[lead.platform]++;
+              }
+            });
+            
+            // Get top 3 platforms
+            const topPlatforms = Object.entries(leadsByPlatform)
+              .filter(([_, count]) => count > 0)
+              .sort(([, a], [, b]) => b - a)
+              .slice(0, 3)
+              .map(([platform]) => platform as Platform);
+            
+            // Recent leads (last 5)
+            const recentLeads = leadsThisMonth
+              .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+              .slice(0, 5);
+            
+            // Monthly goal
+            const goalLeads = user?.goals?.monthlyLeadsGoal || 50;
+            const goalProgress = goalLeads > 0 ? Math.min((leadsThisMonth.length / goalLeads) * 100, 100) : 0;
+            
+            return (
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-gradient-to-br from-emerald-500 to-green-600 rounded-xl">
+                      <ArrowUpCircleIcon className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900 dark:text-white">Lead Generation</h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Track your lead sources and performance</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setFilters(prev => ({ ...prev, category: 'Lead' }));
+                      setViewMode('Inbox');
+                    }}
+                    className="text-sm text-primary-600 dark:text-primary-400 hover:underline font-medium"
+                  >
+                    View All Leads →
+                  </button>
+                </div>
+                
+                {/* Key Metrics */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  {/* Total Leads This Month */}
+                  <div className="p-4 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 rounded-lg border border-emerald-200 dark:border-emerald-700">
+                    <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300 mb-1">Leads This Month</p>
+                    <div className="flex items-baseline gap-2">
+                      <p className="text-3xl font-bold text-emerald-900 dark:text-emerald-100">{leadsThisMonth.length}</p>
+                      {leadGrowth !== 0 && (
+                        <span className={`text-sm font-semibold ${leadGrowth >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                          {leadGrowth >= 0 ? '+' : ''}{leadGrowth}%
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
+                      {leadGrowth >= 0 ? 'vs last month' : 'vs last month'}
+                    </p>
+                  </div>
+                  
+                  {/* Goal Progress */}
+                  <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
+                    <p className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-1">Monthly Goal</p>
+                    <div className="flex items-baseline gap-2 mb-2">
+                      <p className="text-3xl font-bold text-blue-900 dark:text-blue-100">{leadsThisMonth.length}</p>
+                      <span className="text-sm text-blue-600 dark:text-blue-400">/ {goalLeads}</span>
+                    </div>
+                    <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2">
+                      <div 
+                        className="bg-gradient-to-r from-blue-500 to-indigo-600 h-full rounded-full transition-all duration-500"
+                        style={{ width: `${goalProgress}%` }}
+                      ></div>
+                    </div>
+                    <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                      {Math.round(goalProgress)}% complete
+                    </p>
+                  </div>
+                  
+                  {/* Top Platform */}
+                  {topPlatforms.length > 0 ? (
+                    <div className="p-4 bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-900/20 dark:to-violet-900/20 rounded-lg border border-purple-200 dark:border-purple-700">
+                      <p className="text-sm font-medium text-purple-700 dark:text-purple-300 mb-1">Top Source</p>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-gray-600 dark:text-gray-400 scale-125">
+                          {platformFilterIcons[topPlatforms[0]]}
+                        </span>
+                        <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">{topPlatforms[0]}</p>
+                      </div>
+                      <p className="text-xs text-purple-600 dark:text-purple-400">
+                        {leadsByPlatform[topPlatforms[0]]} leads ({Math.round((leadsByPlatform[topPlatforms[0]] / leadsThisMonth.length) * 100)}%)
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Top Source</p>
+                      <p className="text-lg font-semibold text-gray-500 dark:text-gray-400">No leads yet</p>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Leads by Platform */}
+                {topPlatforms.length > 0 && (
+                  <div className="mb-6">
+                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Leads by Platform</h4>
+                    <div className="space-y-2">
+                      {topPlatforms.map(platform => {
+                        const count = leadsByPlatform[platform];
+                        const percentage = leadsThisMonth.length > 0 ? (count / leadsThisMonth.length) * 100 : 0;
+                        return (
+                          <div key={platform} className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 w-24">
+                              <span className="text-gray-600 dark:text-gray-400">{platformFilterIcons[platform]}</span>
+                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{platform}</span>
+                            </div>
+                            <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+                              <div 
+                                className="bg-gradient-to-r from-primary-500 to-primary-600 h-full rounded-full transition-all duration-500"
+                                style={{ width: `${percentage}%` }}
+                              ></div>
+                            </div>
+                            <div className="w-20 text-right">
+                              <span className="text-sm font-semibold text-gray-900 dark:text-white">{count}</span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">({Math.round(percentage)}%)</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Recent Leads */}
+                {recentLeads.length > 0 ? (
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Recent Leads</h4>
+                    <div className="space-y-2">
+                      {recentLeads.map(lead => (
+                        <div
+                          key={lead.id}
+                          onClick={async () => {
+                            await ensureCRMProfile(lead.user);
+                            openCRM(lead.user);
+                          }}
+                          className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+                        >
+                          <div className="flex-shrink-0">
+                            <img 
+                              src={lead.user.avatar} 
+                              alt={lead.user.name}
+                              className="w-10 h-10 rounded-full object-cover"
+                            />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                                {lead.user.name}
+                              </p>
+                              <span className="text-gray-400">{platformFilterIcons[lead.platform]}</span>
+                            </div>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                              {lead.content.substring(0, 60)}...
+                            </p>
+                          </div>
+                          <div className="flex-shrink-0 text-right">
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {new Date(lead.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    <UserIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No leads yet this month</p>
+                    <p className="text-xs mt-1">Start engaging with potential customers to generate leads</p>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+          
           {/* Customer Acquisition Funnel - Business Only (Phase 3 Feature 3) */}
           {isBusiness && user?.plan !== 'Agency' && (() => {
             // Calculate funnel metrics from available data
