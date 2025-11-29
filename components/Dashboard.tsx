@@ -1898,18 +1898,18 @@ export const Dashboard: React.FC = () => {
                       {metrics.map((metric, idx) => (
                         <div 
                           key={idx}
-                          className="p-4 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden"
+                          className="p-4 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-lg border border-gray-200 dark:border-gray-600"
                         >
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                              <div className={`p-2 rounded-lg ${
+                          <div className="flex items-start justify-between mb-3 gap-2">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <div className={`flex-shrink-0 p-2 rounded-lg ${
                                 metric.isPositive 
                                   ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' 
                                   : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
                               }`}>
                                 {metric.icon}
                               </div>
-                              <span className="text-xs font-medium text-gray-600 dark:text-gray-400 truncate">
+                              <span className="text-xs font-medium text-gray-600 dark:text-gray-400 break-words">
                                 {metric.label}
                               </span>
                             </div>
@@ -1919,7 +1919,7 @@ export const Dashboard: React.FC = () => {
                               <span className="text-lg font-bold text-gray-900 dark:text-white break-words min-w-0">
                                 {metric.format(metric.current)}
                               </span>
-                              <span className={`text-xs font-semibold flex items-center gap-1 whitespace-nowrap ${
+                              <span className={`text-xs font-semibold flex items-center gap-1 whitespace-nowrap flex-shrink-0 ${
                                 metric.isPositive 
                                   ? 'text-green-600 dark:text-green-400' 
                                   : 'text-red-600 dark:text-red-400'
@@ -1932,11 +1932,11 @@ export const Dashboard: React.FC = () => {
                                 {Math.abs(metric.changePercent)}%
                               </span>
                             </div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                            <div className="text-xs text-gray-500 dark:text-gray-400 break-words">
                               vs. {metric.format(metric.previous)} last week
                             </div>
                             {metric.change !== 0 && (
-                              <div className={`text-xs font-medium truncate ${
+                              <div className={`text-xs font-medium break-words ${
                                 metric.isPositive 
                                   ? 'text-green-600 dark:text-green-400' 
                                   : 'text-red-600 dark:text-red-400'
@@ -1993,7 +1993,7 @@ export const Dashboard: React.FC = () => {
                           </span>
                         </div>
                         <div className="text-lg font-bold text-gray-900 dark:text-white break-words min-w-0">{currentMonthPosts}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 truncate">vs. {previousMonthPosts} last month</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 break-words">vs. {previousMonthPosts} last month</div>
                       </div>
                       <div className="p-4 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
                         <div className="flex items-center justify-between mb-2">
@@ -2005,7 +2005,7 @@ export const Dashboard: React.FC = () => {
                           </span>
                         </div>
                         <div className="text-lg font-bold text-gray-900 dark:text-white break-words min-w-0">{currentMonthFollowers.toLocaleString()}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 truncate">vs. {previousMonthFollowers.toLocaleString()} last month</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 break-words">vs. {previousMonthFollowers.toLocaleString()} last month</div>
                       </div>
                       <div className="p-4 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
                         <div className="flex items-center justify-between mb-2">
@@ -2017,7 +2017,7 @@ export const Dashboard: React.FC = () => {
                           </span>
                         </div>
                         <div className="text-lg font-bold text-gray-900 dark:text-white break-words min-w-0">{currentMonthEngagement}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 truncate">vs. {previousMonthEngagement} last month</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 break-words">vs. {previousMonthEngagement} last month</div>
                       </div>
                     </div>
                   );
