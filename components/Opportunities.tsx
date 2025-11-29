@@ -25,11 +25,13 @@ export const Opportunities: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Opportunities: Creator-only feature, available on Pro, Elite, and Agency plans
+    // Opportunities: Creator feature, available on Pro, Elite, and Agency plans
+    // Agency (Business) also gets access since they manage creators
     const isFeatureUnlocked = (() => {
         if (user?.role === 'Admin') return true;
-        // Only available for Creator users
-        if (user?.userType !== 'Creator') return false;
+        // Available for Creator users OR Agency plan (Business or Creator)
+        const isCreatorOrAgency = user?.userType === 'Creator' || user?.plan === 'Agency';
+        if (!isCreatorOrAgency) return false;
         // Available on Pro, Elite, and Agency plans
         return ['Pro', 'Elite', 'Agency'].includes(user?.plan || '');
     })();

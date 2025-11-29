@@ -41,7 +41,7 @@ const SpeechRecognition = (window as any).SpeechRecognition || (window as any).w
 const isSpeechRecognitionSupported = !!SpeechRecognition;
 
 export const MessageCard: React.FC<MessageCardProps> = ({ message, id, isSelected, onSelect, onToggleFlag, onToggleFavorite, onDelete }) => {
-  const { settings, teamMembers, showToast, openCRM } = useAppContext();
+  const { settings, teamMembers, showToast, openCRM, ensureCRMProfile, user } = useAppContext();
   const [reply, setReply] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSent, setIsSent] = useState(false);
@@ -219,7 +219,17 @@ export const MessageCard: React.FC<MessageCardProps> = ({ message, id, isSelecte
           
           {/* User Avatar & Name Trigger CRM */}
           <div 
-            onClick={() => openCRM(message.user)}
+            onClick={async (e) => {
+              e.stopPropagation();
+              try {
+                await ensureCRMProfile(message.user);
+                openCRM(message.user);
+              } catch (error) {
+                console.error('Error ensuring CRM profile:', error);
+                // Still open CRM even if ensure fails
+                openCRM(message.user);
+              }
+            }}
             className="flex items-start space-x-4 cursor-pointer hover:opacity-80 transition-opacity flex-1"
             title="View User CRM Profile"
           >
@@ -343,22 +353,24 @@ export const MessageCard: React.FC<MessageCardProps> = ({ message, id, isSelecte
                 )}
               </div>
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
-                    <div className="flex items-center">
-                        <label htmlFor={`assign-${message.id}`} className="text-sm font-medium mr-2 text-gray-600 dark:text-gray-400">Assign to:</label>
-                        <select
-                            id={`assign-${message.id}`}
-                            value={assignedTo || ''}
-                            onChange={e => handleAssignmentChange(e.target.value || undefined)}
-                            className="text-sm rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:text-white"
-                        >
-                            <option value="">Unassigned</option>
-                            {teamMembers.map(member => (
-                                <option key={member.id} value={member.id}>{member.name}</option>
-                            ))}
-                        </select>
-                        {assignedMember && <img src={assignedMember.avatar} alt={assignedMember.name} className="w-6 h-6 rounded-full ml-2" title={`Assigned to ${assignedMember.name}`} />}
-                    </div>
-                    <div className="flex items-center justify-end gap-2 flex-wrap">
+                    {user?.plan === 'Agency' && (
+                        <div className="flex items-center">
+                            <label htmlFor={`assign-${message.id}`} className="text-sm font-medium mr-2 text-gray-600 dark:text-gray-400">Assign to:</label>
+                            <select
+                                id={`assign-${message.id}`}
+                                value={assignedTo || ''}
+                                onChange={e => handleAssignmentChange(e.target.value || undefined)}
+                                className="text-sm rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:text-white"
+                            >
+                                <option value="">Unassigned</option>
+                                {teamMembers.map(member => (
+                                    <option key={member.id} value={member.id}>{member.name}</option>
+                                ))}
+                            </select>
+                            {assignedMember && <img src={assignedMember.avatar} alt={assignedMember.name} className="w-6 h-6 rounded-full ml-2" title={`Assigned to ${assignedMember.name}`} />}
+                        </div>
+                    )}
+                    <div className={`flex items-center justify-end gap-2 flex-wrap ${user?.plan === 'Agency' ? '' : 'ml-auto'}`}>
                         <button
                             onClick={handleGenerateReply}
                             disabled={isLoading}

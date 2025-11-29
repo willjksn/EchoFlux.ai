@@ -228,7 +228,7 @@ export async function generateAutopilotSuggestions(
 
 /* ----------------------------------------------------
    16) Autopilot Plan
-        NO new API route – reuse generateContentStrategy
+        Uses dedicated _generateAutopilotPlan API route
 ---------------------------------------------------- */
 export async function generateAutopilotPlan(args: {
   goal: string;
@@ -245,19 +245,15 @@ export async function generateAutopilotPlan(args: {
     durationWeeks = 4,
   } = args;
 
-  const platformFocus =
-    channels.length > 0 ? channels.join(", ") : "Mixed social channels";
-
-  const durationLabel =
-    durationWeeks === 4 ? "4 weeks" : `${durationWeeks} weeks`;
-
-  // Reuse the existing content strategy API
-  return generateContentStrategy(
+  // Call the dedicated autopilot plan API
+  const res = await callFunction("generateAutopilotPlan", {
+    goal,
     niche,
     audience,
-    goal,
-    durationLabel,
-    "friendly",
-    platformFocus
-  );
+    channels,
+    durationWeeks,
+  });
+  
+  // Return the plan structure (API returns { plan: {...} })
+  return res.plan || res;
 }

@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useAppContext } from './AppContext';
 import { StrategyPlan, Platform, WeekPlan } from '../types';
 import { generateContentStrategy } from "../src/services/geminiService"
-import { TargetIcon, SparklesIcon, CalendarIcon, CheckCircleIcon } from './icons/UIIcons';
+import { TargetIcon, SparklesIcon, CalendarIcon, CheckCircleIcon, RocketIcon } from './icons/UIIcons';
 import { InstagramIcon, TikTokIcon, XIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
 import { UpgradePrompt } from './UpgradePrompt';
 
@@ -18,7 +18,15 @@ const platformIcons: Record<Platform, React.ReactElement> = {
 };
 
 export const Strategy: React.FC = () => {
-    const { addCalendarEvent, showToast, setActivePage, user } = useAppContext();
+    const { 
+        addCalendarEvent, 
+        showToast, 
+        setActivePage, 
+        user, 
+        addAutopilotCampaign, 
+        updateAutopilotCampaign,
+        settings 
+    } = useAppContext();
     const [niche, setNiche] = useState('');
     const [audience, setAudience] = useState('');
     const [goal, setGoal] = useState('Brand Awareness');
@@ -88,6 +96,36 @@ export const Strategy: React.FC = () => {
 
         showToast(`Added ${eventsAdded} drafts to your calendar!`, 'success');
         setActivePage('calendar');
+    };
+
+    const handleRunWithAutopilot = async () => {
+        if (!plan || !user) return;
+
+        try {
+            // Calculate total posts from plan
+            const totalPosts = plan.weeks.reduce((total, week) => total + week.content.length, 0);
+
+            // Create Autopilot campaign with the strategy plan
+            const campaignId = await addAutopilotCampaign({
+                goal: goal || 'Execute Content Strategy',
+                niche: niche || 'General',
+                audience: audience || 'General Audience',
+                status: 'Generating Content',
+                plan: plan,
+            });
+
+            // Update campaign with total posts (set after creation)
+            await updateAutopilotCampaign(campaignId, {
+                totalPosts: totalPosts,
+                progress: 0,
+            });
+
+            showToast('Campaign created! Content generation has started.', 'success');
+            setActivePage('autopilot');
+        } catch (error) {
+            console.error('Failed to create Autopilot campaign:', error);
+            showToast('Failed to create Autopilot campaign. Please try again.', 'error');
+        }
     };
 
     return (
@@ -166,8 +204,8 @@ export const Strategy: React.FC = () => {
                             <option>Inspirational</option>
                             {showAdvancedOptions && (
                                 <>
-                                    <option>Sexy / Bold</option>
-                                    <option>Sexy / Explicit</option>
+                            <option>Sexy / Bold</option>
+                            <option>Sexy / Explicit</option>
                                 </>
                             )}
                         </select>
@@ -212,14 +250,25 @@ export const Strategy: React.FC = () => {
             {/* Results Section */}
             {plan && (
                 <div className="space-y-8 animate-fade-in-up">
-                    <div className="flex justify-between items-center">
+                    <div className="flex justify-between items-center flex-wrap gap-4">
                         <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Your Strategy Plan</h3>
+                        <div className="flex items-center gap-3">
                         <button 
                             onClick={handlePopulateCalendar}
                             className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm"
                         >
                             <CalendarIcon className="w-5 h-5" /> Populate Calendar
                         </button>
+                            {(user?.userType === 'Creator' && ['Pro', 'Elite', 'Agency'].includes(user?.plan || '')) ||
+                             (user?.userType === 'Business' && ['Starter', 'Growth', 'Agency'].includes(user?.plan || '')) ? (
+                                <button 
+                                    onClick={handleRunWithAutopilot}
+                                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-primary-600 to-purple-600 text-white rounded-lg hover:from-primary-700 hover:to-purple-700 transition-all shadow-lg font-medium"
+                                >
+                                    <div className="w-5 h-5"><RocketIcon /></div> Run with Autopilot
+                                </button>
+                            ) : null}
+                        </div>
                     </div>
 
                     {plan.weeks.map((week, weekIndex) => (

@@ -72,11 +72,11 @@ export const Sidebar: React.FC = () => {
           case 'strategy':
               return user.plan !== 'Free';
           case 'opportunities':
-              // Opportunities/Trends: Creator-only feature (not for Business users)
-              if (user.userType === 'Business') {
+              // Opportunities/Trends: Creator feature, also available to Agency (Business or Creator) since they manage creators
+              if (user.userType === 'Business' && user.plan !== 'Agency') {
                   return false;
               }
-              // Creator users: Pro, Elite, Agency plans
+              // Creator users OR Agency plan: Pro, Elite, Agency plans
               return ['Pro', 'Elite', 'Agency'].includes(user.plan);
           case 'autopilot':
               // Marketing Manager for Business: All Business plans (Starter, Growth, Agency)
@@ -120,7 +120,7 @@ export const Sidebar: React.FC = () => {
             <span className="ml-2 text-xl font-bold">EngageSuite.ai</span>
           </div>
         </div>
-        <nav className="p-4 flex-grow overflow-y-auto">
+        <nav className="p-4 flex-grow overflow-y-auto custom-scrollbar">
           <ul>
             {navItems.map(item => <NavItem key={item.page} {...item} />)}
           </ul>

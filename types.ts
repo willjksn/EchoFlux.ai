@@ -211,6 +211,11 @@ export interface User {
   settings: Settings;
   hashtagSets?: HashtagSet[];
   socialStats?: Record<Platform, SocialStats>;
+  goals?: {
+    followerGoal?: number; // For Creators: followers goal, For Business: reach goal
+    monthlyPostsGoal?: number;
+    monthlyLeadsGoal?: number; // Business-specific: target leads per month
+  };
   bioPage?: BioPageConfig;
 }
 
@@ -287,6 +292,24 @@ export interface AutomationWorkflow {
 
 export type AutopilotStatus = 'Idle' | 'Strategizing' | 'Generating Content' | 'Complete' | 'Failed';
 
+export interface CampaignPerformance {
+    totalEngagement: number;
+    totalViews: number;
+    totalLikes: number;
+    totalComments: number;
+    totalShares: number;
+    averageEngagementPerPost: number;
+    averageViewsPerPost: number;
+    engagementRate: number; // percentage
+    postsPublished: number;
+    postsScheduled: number;
+    postsDraft: number;
+    estimatedReach?: number;
+    estimatedROI?: number; // For business users
+    newFollowers?: number; // For creator users
+    newLeads?: number; // For business users
+}
+
 export interface AutopilotCampaign {
     id: string;
     goal: string;
@@ -299,6 +322,7 @@ export interface AutopilotCampaign {
     createdAt: string;
     plan?: StrategyPlan; 
     hasAutopilot?: boolean; 
+    performance?: CampaignPerformance;
 }
 
 
@@ -481,13 +505,14 @@ export interface AppContextType {
   saveBioPage: (config: BioPageConfig) => Promise<void>;
   setCalendarEvents: React.Dispatch<React.SetStateAction<CalendarEvent[]>>;
   addCalendarEvent: (event: CalendarEvent) => void;
-  addAutopilotCampaign: (campaign: Omit<AutopilotCampaign, 'id' | 'createdAt' | 'progress' | 'totalPosts' | 'generatedPosts'>) => Promise<void>;
+  addAutopilotCampaign: (campaign: Omit<AutopilotCampaign, 'id' | 'createdAt' | 'progress' | 'totalPosts' | 'generatedPosts'>) => Promise<string>;
   updateAutopilotCampaign: (campaignId: string, data: Partial<AutopilotCampaign>) => Promise<void>;
   updateMessage: (id: string, data: Partial<Message>) => void;
   deleteMessage: (id: string) => void;
   categorizeAllMessages: () => void;
   openCRM: (user: { name: string; avatar: string }) => void;
   closeCRM: () => void;
+  ensureCRMProfile: (user: { name: string; avatar: string }) => Promise<void>;
   addCRMNote: (profileId: string, note: string) => void;
   addCRMTag: (profileId: string, tag: string) => void;
   removeCRMTag: (profileId: string, tag: string) => void;

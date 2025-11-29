@@ -7,7 +7,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const user = await verifyAuth(req);
+  // Check for required environment variables early
+  if (!process.env.GEMINI_API_KEY && !process.env.GOOGLE_API_KEY) {
+    console.error("Missing GEMINI_API_KEY or GOOGLE_API_KEY environment variable");
+    return res.status(500).json({
+      error: "Server configuration error",
+      details: "GEMINI_API_KEY environment variable is missing"
+    });
+  }
+
+  let user;
+  try {
+    user = await verifyAuth(req);
+  } catch (authError: any) {
+    console.error("verifyAuth error:", authError);
+    return res.status(401).json({
+      error: "Authentication failed",
+      details: authError?.message || "Failed to verify authentication token"
+    });
+  }
+
   if (!user) {
     return res.status(401).json({ error: "Unauthorized" });
   }
@@ -50,9 +69,12 @@ Return ONLY JSON: ["Idea 1", "Idea 2", "Idea 3"]
     return res.status(200).json({ ideas });
   } catch (error: any) {
     console.error("generateAutopilotSuggestions error:", error);
+    console.error("Error stack:", error?.stack);
+    console.error("Error details:", JSON.stringify(error, null, 2));
     return res.status(500).json({
       error: "Failed to generate suggestions",
-      details: error?.message ?? String(error)
+      details: error?.message ?? String(error),
+      stack: process.env.NODE_ENV === 'development' ? error?.stack : undefined
     });
   }
 }

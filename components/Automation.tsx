@@ -204,8 +204,8 @@ const WorkflowModal: React.FC<{
                                     <option value="professional">Professional</option>
                                     {showAdvancedOptions && (
                                         <>
-                                            <option value="sexy-bold">Sexy / Bold</option>
-                                            <option value="sexy-explicit">Sexy / Explicit</option>
+                                    <option value="sexy-bold">Sexy / Bold</option>
+                                    <option value="sexy-explicit">Sexy / Explicit</option>
                                         </>
                                     )}
                                 </select>

@@ -27,15 +27,17 @@ const statusColors: Record<ApprovalStatus, string> = {
     'In Review': 'bg-yellow-50 border-yellow-200 text-yellow-800 dark:bg-yellow-900/20 dark:border-yellow-900/50 dark:text-yellow-200',
     Approved: 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-900/50 dark:text-green-200',
     Scheduled: 'bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-900/20 dark:border-blue-900/50 dark:text-blue-200',
+    Published: 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-900/20 dark:border-emerald-900/50 dark:text-emerald-200',
     Rejected: 'bg-red-50 border-red-200 text-red-800',
 };
 
 export const Approvals: React.FC = () => {
-    const { posts, user, setActivePage, showToast } = useAppContext();
+    const { posts, user, setActivePage, showToast, autopilotCampaigns } = useAppContext();
     const [activePost, setActivePost] = useState<Post | null>(null);
     const [comment, setComment] = useState('');
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [isGeneratingComment, setIsGeneratingComment] = useState(false);
+    const [sourceFilter, setSourceFilter] = useState<'all' | 'autopilot' | 'automation' | 'manual'>('all');
 
     if (!['Elite', 'Agency'].includes(user?.plan || "") && user?.role !== 'Admin')
  {
@@ -112,9 +114,31 @@ export const Approvals: React.FC = () => {
         }
     };
 
+    // Filter posts by source
+    const filteredPosts = posts.filter(post => {
+        if (sourceFilter === 'all') return true;
+        
+        // Check if post is from Autopilot
+        const isFromAutopilot = post.id.includes('autopilot') || 
+                               (post as any).campaignId ||
+                               autopilotCampaigns.some(c => post.id.includes(c.id));
+        
+        // Check if post is from Automation (workflowId indicates Automation)
+        const isFromAutomation = (post as any).workflowId && !isFromAutopilot;
+        
+        // Manual posts have no campaignId or workflowId
+        const isManual = !isFromAutopilot && !isFromAutomation;
+        
+        if (sourceFilter === 'autopilot') return isFromAutopilot;
+        if (sourceFilter === 'automation') return isFromAutomation;
+        if (sourceFilter === 'manual') return isManual;
+        
+        return true;
+    });
+
     const columns = statusColumns.map(status => ({
         title: status,
-        items: posts.filter(p => p.status === status)
+        items: filteredPosts.filter(p => p.status === status)
     }));
 
     return (
@@ -128,14 +152,59 @@ export const Approvals: React.FC = () => {
 
             />
 
-            <div className="flex justify-between items-center mb-6 px-2">
+            <div className="flex justify-between items-center mb-6 px-2 flex-wrap gap-4">
                  <div>
                     <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Approval Workflow</h2>
                     <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Manage content pipeline from draft to publication.</p>
                 </div>
-                <button onClick={() => setActivePage('compose')} className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700">
-                    + Create Post
-                </button>
+                <div className="flex items-center gap-3">
+                    {/* Source Filter */}
+                    <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+                        <button
+                            onClick={() => setSourceFilter('all')}
+                            className={`px-3 py-1.5 text-sm font-medium rounded transition-colors ${
+                                sourceFilter === 'all'
+                                    ? 'bg-white dark:bg-gray-700 text-primary-600 dark:text-primary-400 shadow-sm'
+                                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                            }`}
+                        >
+                            All
+                        </button>
+                        <button
+                            onClick={() => setSourceFilter('autopilot')}
+                            className={`px-3 py-1.5 text-sm font-medium rounded transition-colors ${
+                                sourceFilter === 'autopilot'
+                                    ? 'bg-white dark:bg-gray-700 text-primary-600 dark:text-primary-400 shadow-sm'
+                                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                            }`}
+                        >
+                            Autopilot
+                        </button>
+                        <button
+                            onClick={() => setSourceFilter('automation')}
+                            className={`px-3 py-1.5 text-sm font-medium rounded transition-colors ${
+                                sourceFilter === 'automation'
+                                    ? 'bg-white dark:bg-gray-700 text-primary-600 dark:text-primary-400 shadow-sm'
+                                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                            }`}
+                        >
+                            Automation
+                        </button>
+                        <button
+                            onClick={() => setSourceFilter('manual')}
+                            className={`px-3 py-1.5 text-sm font-medium rounded transition-colors ${
+                                sourceFilter === 'manual'
+                                    ? 'bg-white dark:bg-gray-700 text-primary-600 dark:text-primary-400 shadow-sm'
+                                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                            }`}
+                        >
+                            Manual
+                        </button>
+                    </div>
+                    <button onClick={() => setActivePage('compose')} className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700">
+                        + Create Post
+                    </button>
+                </div>
             </div>
 
             <div className="flex-1 overflow-x-auto overflow-y-hidden">
@@ -154,12 +223,35 @@ export const Approvals: React.FC = () => {
                                         className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 cursor-pointer hover:shadow-md transition-shadow"
                                     >
                                         <div className="flex items-center justify-between mb-2">
-                                            <div className="flex gap-1">
+                                            <div className="flex gap-1 items-center">
                                                 {post.platforms.map(p => (
                                                     <span key={p} className="text-gray-500 dark:text-gray-400 w-4 h-4">
                                                         {platformIcons[p] ? React.cloneElement(platformIcons[p], { className: "w-4 h-4" }) : null}
                                                     </span>
                                                 ))}
+                                                {/* Source Badge */}
+                                                {(() => {
+                                                    const isFromAutopilot = post.id.includes('autopilot') || 
+                                                                           (post as any).campaignId ||
+                                                                           autopilotCampaigns.some(c => post.id.includes(c.id));
+                                                    const isFromAutomation = (post as any).workflowId && !isFromAutopilot;
+                                                    
+                                                    if (isFromAutopilot) {
+                                                        return (
+                                                            <span className="ml-2 text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full font-medium">
+                                                                Autopilot
+                                                            </span>
+                                                        );
+                                                    }
+                                                    if (isFromAutomation) {
+                                                        return (
+                                                            <span className="ml-2 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">
+                                                                Automation
+                                                            </span>
+                                                        );
+                                                    }
+                                                    return null;
+                                                })()}
                                             </div>
                                             {post.mediaType && (
                                                 <span className="text-xs bg-gray-100 dark:bg-gray-700 px-1.5 rounded text-gray-500 capitalize">{post.mediaType}</span>

@@ -306,6 +306,97 @@ export const Settings: React.FC = () => {
                             <ToggleSwitch label="Enable Voice Mode" enabled={settings.voiceMode} onChange={(val) => updateSetting('voiceMode', val)} />
                             <p className="text-sm text-gray-500 dark:text-gray-400">Enable the floating AI Voice Assistant button for hands-free control.</p>
                         </SettingsSection>
+                        <SettingsSection title="Goals & Milestones">
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        {user.userType === 'Business' ? 'Total Reach Goal' : 'Total Followers Goal'}
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        value={user.goals?.followerGoal || ''}
+                                        onChange={(e) => {
+                                            const value = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                                            if (user) {
+                                                setUser({
+                                                    ...user,
+                                                    goals: {
+                                                        ...user.goals,
+                                                        followerGoal: value,
+                                                    }
+                                                });
+                                            }
+                                        }}
+                                        placeholder="Set your goal..."
+                                        className="w-full p-3 border rounded-lg bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:text-white"
+                                    />
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        Set your target {user.userType === 'Business' ? 'total reach' : 'total followers'} across all platforms.
+                                    </p>
+                                </div>
+                                <hr className="border-gray-200 dark:border-gray-700" />
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Monthly Posts Goal
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        value={user.goals?.monthlyPostsGoal || ''}
+                                        onChange={(e) => {
+                                            const value = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                                            if (user) {
+                                                setUser({
+                                                    ...user,
+                                                    goals: {
+                                                        ...user.goals,
+                                                        monthlyPostsGoal: value,
+                                                    }
+                                                });
+                                            }
+                                        }}
+                                        placeholder="Set your goal..."
+                                        className="w-full p-3 border rounded-lg bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:text-white"
+                                    />
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        Set your target number of posts to publish per month.
+                                    </p>
+                                </div>
+                                {user.userType === 'Business' && (
+                                    <>
+                                        <hr className="border-gray-200 dark:border-gray-700" />
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                Monthly Leads Goal
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                value={user.goals?.monthlyLeadsGoal || ''}
+                                                onChange={(e) => {
+                                                    const value = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                                                    if (user) {
+                                                        setUser({
+                                                            ...user,
+                                                            goals: {
+                                                                ...user.goals,
+                                                                monthlyLeadsGoal: value,
+                                                            }
+                                                        });
+                                                    }
+                                                }}
+                                                placeholder="Set your goal..."
+                                                className="w-full p-3 border rounded-lg bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:text-white"
+                                            />
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                Set your target number of leads to generate per month.
+                                            </p>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </SettingsSection>
                         <SettingsSection title="Account Type">
                             <div className="space-y-3">
                                 <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">

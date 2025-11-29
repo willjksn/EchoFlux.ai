@@ -23,6 +23,7 @@ import {
   EmailCaptureConfig,
   CalendarEvent,
   AutopilotCampaign,
+  MessageCategory,
 } from "../../types";
 
 import {
@@ -114,7 +115,7 @@ interface DataContextType {
       AutopilotCampaign,
       "id" | "createdAt" | "progress" | "totalPosts" | "generatedPosts"
     >
-  ) => Promise<void>;
+  ) => Promise<string>; // Returns campaign ID
   updateAutopilotCampaign: (campaignId: string, data: Partial<AutopilotCampaign>) => Promise<void>;
 }
 
@@ -199,7 +200,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const unsubscribers = subcollections.map(({ name, setter, seed, seedIdField }) => {
       const collRef = collection(db, "users", user.id, name);
-      const q = query(collRef, orderBy("timestamp", "desc"));
+      
+      // CRM profiles don't have timestamp, so don't order by it
+      const q = name === "crm_profiles" 
+        ? query(collRef)
+        : query(collRef, orderBy("timestamp", "desc"));
 
       return onSnapshot(
         q,
@@ -302,8 +307,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (!msg.category || msg.category === "General") {
         try {
           const category = await categorizeMessage(msg.content);
-          if (category && category !== msg.category) {
-            await updateMessage(msg.id, { category });
+          if (category && category !== msg.category && category in ['Lead', 'Support', 'Opportunity', 'General', 'Fan Message', 'Question', 'Collab Request', 'Feedback']) {
+            await updateMessage(msg.id, { category: category as MessageCategory });
             updated++;
           }
         } catch {}
@@ -373,7 +378,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         lifecycleStage: "Lead",
       };
 
+      // Optimistically update local state immediately
+      setCrmStore(prev => ({ ...prev, [id]: profile }));
+
+      // Then write to Firestore (the snapshot listener will sync it properly)
+      try {
       await setDoc(doc(db, "users", user.id, "crm_profiles", id), profile);
+      } catch (error) {
+        console.error('Error creating CRM profile:', error);
+        // Revert optimistic update on error
+        setCrmStore(prev => {
+          const updated = { ...prev };
+          delete updated[id];
+          return updated;
+        });
+        throw error;
+      }
     }
   };
 
@@ -422,8 +442,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       AutopilotCampaign,
       "id" | "createdAt" | "progress" | "totalPosts" | "generatedPosts"
     >
-  ) => {
-    if (!user) return;
+  ): Promise<string> => {
+    if (!user) throw new Error("User not found");
 
     const campaign: AutopilotCampaign = {
       id: `auto-${Date.now()}`,
@@ -438,6 +458,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       doc(db, "users", user.id, "autopilot_campaigns", campaign.id),
       campaign
     );
+    
+    return campaign.id; // Return the campaign ID
   };
 
   const updateAutopilotCampaign = async (

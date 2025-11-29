@@ -77,6 +77,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     
     const [isCRMOpen, setIsCRMOpen] = useState(false);
     const [activeCRMProfileId, setActiveCRMProfileId] = useState<string | null>(null);
+    const [pendingCRMUser, setPendingCRMUser] = useState<{ name: string; avatar: string } | null>(null);
     const [pricingView, setPricingView] = useState<'Creator' | 'Business' | null>(null);
 
     useEffect(() => {
@@ -148,12 +149,14 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
 
     const openCRM = (targetUser: { name: string; avatar: string }) => {
         setActiveCRMProfileId(targetUser.name); // Using name as ID for simplicity
+        setPendingCRMUser(targetUser); // Store user info for profile creation if needed
         setIsCRMOpen(true);
     };
 
     const closeCRM = () => {
         setIsCRMOpen(false);
         setActiveCRMProfileId(null);
+        setPendingCRMUser(null);
     };
     
     const value = {

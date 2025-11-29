@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from './AppContext';
 import { XMarkIcon, TagIcon, NoteIcon, ClockIcon, PlusIcon, TrashIcon, SparklesIcon } from './icons/UIIcons';
 import { Platform } from '../types';
@@ -18,15 +18,84 @@ const platformIcons: Record<Platform, React.ReactNode> = {
 };
 
 export const CRMSidebar: React.FC = () => {
-    const { isCRMOpen, activeCRMProfileId, crmStore, closeCRM, addCRMNote, addCRMTag, removeCRMTag, messages, updateCRMProfile, showToast } = useAppContext();
+    const { isCRMOpen, activeCRMProfileId, crmStore, closeCRM, addCRMNote, addCRMTag, removeCRMTag, messages, updateCRMProfile, showToast, ensureCRMProfile } = useAppContext();
     const [newTag, setNewTag] = useState('');
     const [newNote, setNewNote] = useState('');
     const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+    const [isEnsuringProfile, setIsEnsuringProfile] = useState(false);
+
+    // Ensure profile exists when sidebar opens - with timeout to prevent infinite loading
+    useEffect(() => {
+        if (isCRMOpen && activeCRMProfileId) {
+            const profile = crmStore[activeCRMProfileId];
+            if (!profile && !isEnsuringProfile) {
+                setIsEnsuringProfile(true);
+                // Find user from messages to get avatar
+                const userFromMessage = messages.find(m => m.user.name === activeCRMProfileId);
+                if (userFromMessage) {
+                    ensureCRMProfile(userFromMessage.user)
+                        .catch((error) => {
+                            console.error('Error ensuring CRM profile:', error);
+                        })
+                        .finally(() => {
+                            // Give React a moment to update state
+                            setTimeout(() => setIsEnsuringProfile(false), 100);
+                        });
+                } else {
+                    // Can't create profile without user info
+                    setIsEnsuringProfile(false);
+                }
+            }
+        }
+    }, [isCRMOpen, activeCRMProfileId, crmStore, messages, ensureCRMProfile, isEnsuringProfile]);
 
     if (!isCRMOpen || !activeCRMProfileId) return null;
 
     const profile = crmStore[activeCRMProfileId];
-    if (!profile) return null;
+    
+    // Show loading only if we're actively ensuring the profile and it's not in store yet
+    if (!profile && isEnsuringProfile) {
+        return (
+            <>
+                <div className="fixed inset-0 bg-black/50 z-40" onClick={closeCRM}></div>
+                <aside className="fixed top-0 right-0 z-50 w-96 h-full bg-white dark:bg-gray-800 shadow-2xl">
+                    <div className="flex items-center justify-center h-full">
+                        <div className="text-center">
+                            <svg className="animate-spin h-8 w-8 text-primary-600 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <p className="text-gray-900 dark:text-white font-medium">Loading profile...</p>
+                            <p className="text-gray-500 dark:text-gray-400 text-sm mt-2">Creating profile for {activeCRMProfileId}</p>
+                        </div>
+                    </div>
+                </aside>
+            </>
+        );
+    }
+    
+    // If no profile after ensuring, show error
+    if (!profile) {
+        return (
+            <>
+                <div className="fixed inset-0 bg-black/50 z-40" onClick={closeCRM}></div>
+                <aside className="fixed top-0 right-0 z-50 w-96 h-full bg-white dark:bg-gray-800 shadow-2xl">
+                    <div className="flex items-center justify-center h-full">
+                        <div className="text-center p-6">
+                            <p className="text-red-600 dark:text-red-400 font-medium">Unable to load profile</p>
+                            <p className="text-gray-500 dark:text-gray-400 text-sm mt-2">Please try again</p>
+                            <button 
+                                onClick={closeCRM}
+                                className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </aside>
+            </>
+        );
+    }
 
     const userHistory = messages.filter(m => m.user.name === profile.name).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
@@ -69,7 +138,7 @@ export const CRMSidebar: React.FC = () => {
     return (
         <>
             <div className="fixed inset-0 z-40 bg-black bg-opacity-20 transition-opacity" onClick={closeCRM}></div>
-            <aside className={`fixed top-0 right-0 z-50 w-96 h-full bg-white dark:bg-gray-800 shadow-2xl transform transition-transform duration-300 ease-in-out ${isCRMOpen ? 'translate-x-0' : 'translate-x-full'} overflow-y-auto`}>
+            <aside className={`fixed top-0 right-0 z-50 w-96 h-full bg-white dark:bg-gray-800 shadow-2xl transform transition-transform duration-300 ease-in-out ${isCRMOpen ? 'translate-x-0' : 'translate-x-full'} overflow-y-auto custom-scrollbar`}>
                 <div className="p-6">
                     {/* Header */}
                     <div className="flex justify-between items-start mb-6">
@@ -142,7 +211,7 @@ export const CRMSidebar: React.FC = () => {
                     {/* Notes */}
                     <div className="mb-6">
                         <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase flex items-center gap-1 mb-2"><NoteIcon className="w-3 h-3"/> Notes</label>
-                        <div className="space-y-3 mb-3 max-h-48 overflow-y-auto">
+                        <div className="space-y-3 mb-3 max-h-48 overflow-y-auto custom-scrollbar">
                             {profile.notes.map(note => (
                                 <div key={note.id} className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-md border border-yellow-100 dark:border-yellow-900/30">
                                     <p className="text-sm text-gray-800 dark:text-gray-200">{note.content}</p>
