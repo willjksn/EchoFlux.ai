@@ -1396,7 +1396,7 @@ export const Dashboard: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                   {/* Revenue */}
                   <div className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg border border-green-200 dark:border-green-700">
-                    <p className="text-sm font-medium text-green-700 dark:text-green-300 mb-1">Revenue This Month</p>
+                    <p className="text-xs font-medium text-green-700 dark:text-green-300 mb-1 leading-tight">Revenue This Month</p>
                     <div className="flex items-baseline gap-2 flex-wrap">
                       <p className="text-lg font-bold text-green-900 dark:text-green-100 break-words min-w-0">
                         ${new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(estimatedRevenue)}
@@ -1412,7 +1412,7 @@ export const Dashboard: React.FC = () => {
                   
                   {/* ROI */}
                   <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
-                    <p className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-1">ROI</p>
+                    <p className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-1 leading-tight">ROI</p>
                     <p className="text-lg font-bold text-blue-900 dark:text-blue-100 break-words min-w-0">
                       {roi}%
                     </p>
@@ -1423,7 +1423,7 @@ export const Dashboard: React.FC = () => {
                   
                   {/* CAC */}
                   <div className="p-4 bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-900/20 dark:to-violet-900/20 rounded-lg border border-purple-200 dark:border-purple-700">
-                    <p className="text-sm font-medium text-purple-700 dark:text-purple-300 mb-1">Customer Acquisition Cost</p>
+                    <p className="text-xs font-medium text-purple-700 dark:text-purple-300 mb-1 leading-tight">Customer Acquisition Cost</p>
                     <p className="text-lg font-bold text-purple-900 dark:text-purple-100 break-words min-w-0">
                       ${cac}
                     </p>
@@ -1434,7 +1434,7 @@ export const Dashboard: React.FC = () => {
                   
                   {/* Conversion Rate */}
                   <div className="p-4 bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20 rounded-lg border border-orange-200 dark:border-orange-700">
-                    <p className="text-sm font-medium text-orange-700 dark:text-orange-300 mb-1">Conversion Rate</p>
+                    <p className="text-xs font-medium text-orange-700 dark:text-orange-300 mb-1 leading-tight">Conversion Rate</p>
                     <p className="text-lg font-bold text-orange-900 dark:text-orange-100 break-words min-w-0">
                       {conversionRate}%
                     </p>
@@ -1901,7 +1901,7 @@ export const Dashboard: React.FC = () => {
                           className="p-4 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-lg border border-gray-200 dark:border-gray-600"
                         >
                           <div className="mb-3">
-                            <div className="flex items-center gap-2 mb-2">
+                            <div className="flex items-start gap-2">
                               <div className={`flex-shrink-0 p-2 rounded-lg ${
                                 metric.isPositive 
                                   ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' 
@@ -1909,7 +1909,7 @@ export const Dashboard: React.FC = () => {
                               }`}>
                                 {metric.icon}
                               </div>
-                              <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                              <span className="text-xs font-medium text-gray-600 dark:text-gray-400 leading-tight flex-1 min-w-0">
                                 {metric.label}
                               </span>
                             </div>
