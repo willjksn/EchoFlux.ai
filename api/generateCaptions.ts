@@ -218,9 +218,15 @@ Return ONLY valid JSON in this shape:
     return res.status(200).json(captions);
   } catch (err: any) {
     console.error("generateCaptions error (final catch):", err);
-    return res.status(500).json({
-      error: "Failed to generate captions",
-      details: err?.message || String(err),
-    });
+    console.error("Error stack:", err?.stack);
+    
+    // Return graceful error instead of 500 to prevent UI breakage
+    // Return empty captions array so frontend doesn't crash
+    return res.status(200).json([
+      {
+        caption: "Sorry, I couldn't generate captions at this time. Please try again.",
+        hashtags: [] as string[],
+      },
+    ]);
   }
 }

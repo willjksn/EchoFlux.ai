@@ -2,13 +2,8 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { verifyAuth } from "./verifyAuth.ts";
 import { getModelForTask } from "./_modelRouter.ts";
 
-// Dynamic import for OpenAI to handle missing package gracefully
-let OpenAI: any;
-try {
-  OpenAI = require("openai").default;
-} catch {
-  // OpenAI package not installed or not available
-}
+// Import OpenAI with ESM syntax
+import OpenAI from "openai";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
