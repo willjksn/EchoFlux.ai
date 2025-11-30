@@ -81,9 +81,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   } catch (error: any) {
     console.error('Twitter/X authorize error:', error);
-    return res.status(500).json({
-      error: 'Failed to generate authorization URL',
-      details: error?.message || String(error)
-    });
+    // Ensure we always return JSON, even on error
+    try {
+      return res.status(500).json({
+        error: 'Failed to generate authorization URL',
+        details: error?.message || String(error)
+      });
+    } catch (jsonError) {
+      // If JSON response fails, try plain text as last resort
+      return res.status(500).send(JSON.stringify({
+        error: 'Failed to generate authorization URL',
+        details: error?.message || String(error)
+      }));
+    }
   }
 }

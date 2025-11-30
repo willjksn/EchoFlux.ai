@@ -121,7 +121,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (error: any) {
     console.error('getSocialStats error:', error);
     console.error('Error stack:', error?.stack);
-    console.error('Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
     
     // Return empty stats structure so UI doesn't break
     const emptyStats: Record<string, { followers: number; following: number }> = {};
@@ -130,7 +129,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       emptyStats[platform] = { followers: 0, following: 0 };
     });
     
-    console.warn('Returning empty social stats due to error:', error?.message || String(error));
+    // Always return 200 with empty stats so UI doesn't break
+    // This endpoint is non-critical - if it fails, we just return zeros
     return res.status(200).json(emptyStats);
   }
 }

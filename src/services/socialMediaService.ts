@@ -31,8 +31,20 @@ export async function connectSocialAccount(platform: Platform): Promise<void> {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to initiate OAuth flow');
+      let errorMessage = 'Failed to initiate OAuth flow';
+      try {
+        const error = await response.json();
+        errorMessage = error.error || error.details || errorMessage;
+      } catch {
+        // If response is not JSON, try to get text
+        try {
+          const text = await response.text();
+          errorMessage = text || errorMessage;
+        } catch {
+          // Use default error message
+        }
+      }
+      throw new Error(errorMessage);
     }
 
     const { authUrl } = await response.json();
