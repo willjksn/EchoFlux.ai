@@ -3,6 +3,16 @@ import { verifyAuth } from './verifyAuth';
 import { getAdminApp } from './_firebaseAdmin';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Create empty stats structure for error fallback
+  const createEmptyStats = (): Record<string, { followers: number; following: number }> => {
+    const emptyStats: Record<string, { followers: number; following: number }> = {};
+    const platforms = ['Instagram', 'TikTok', 'X', 'Threads', 'YouTube', 'LinkedIn', 'Facebook'];
+    platforms.forEach(platform => {
+      emptyStats[platform] = { followers: 0, following: 0 };
+    });
+    return emptyStats;
+  };
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -123,16 +133,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.error('getSocialStats error:', error);
     console.error('Error stack:', error?.stack);
     
-    // Return empty stats structure so UI doesn't break
-    const emptyStats: Record<string, { followers: number; following: number }> = {};
-    const platforms = ['Instagram', 'TikTok', 'X', 'Threads', 'YouTube', 'LinkedIn', 'Facebook'];
-    platforms.forEach(platform => {
-      emptyStats[platform] = { followers: 0, following: 0 };
-    });
-    
     // Always return 200 with empty stats so UI doesn't break
     // This endpoint is non-critical - if it fails, we just return zeros
-    return res.status(200).json(emptyStats);
+    try {
+      return res.status(200).json(createEmptyStats());
+    } catch (responseError: any) {
+      // If response already sent or another error, just log
+      console.error('Failed to send error response in getSocialStats:', responseError);
+      // Try one more time with a simpler response
+      try {
+        res.status(200).json(createEmptyStats());
+      } catch {
+        // Give up - response may have already been sent
+      }
+    }
   }
 }
 

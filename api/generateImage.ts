@@ -1,7 +1,14 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { verifyAuth } from "./verifyAuth.ts";
 import { getModelForTask } from "./_modelRouter.ts";
-import OpenAI from "openai";
+
+// Dynamic import for OpenAI to handle missing package gracefully
+let OpenAI: any;
+try {
+  OpenAI = require("openai").default;
+} catch {
+  // OpenAI package not installed or not available
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
@@ -20,10 +27,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // Step 1: Use Gemini to enhance/expand the prompt for better image generation
-    const model = await getModelForTask('image-prompt', user.uid);
+    // Step 1: Check if OpenAI is available
+    const openaiApiKey = process.env.OPENAI_API_KEY;
     
-    const systemPrompt = `
+    if (!openaiApiKey || !OpenAI) {
+      // If OpenAI not configured, try to enhance prompt with Gemini and return that
+      let enhancedPrompt = prompt;
+      try {
+        const model = await getModelForTask('image-prompt', user.uid);
+        const systemPrompt = `
+You help generate detailed, high-quality prompts for image generation models.
+Given a user's idea or prompt, expand it into a rich, specific, and visually descriptive prompt that will produce excellent results.
+Keep it concise but descriptive. Return ONLY the enhanced prompt, nothing else.
+`;
+        const result = await model.generateContent({
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: `${systemPrompt}\n\nUser prompt: ${prompt}` }],
+            },
+          ],
+        });
+        enhancedPrompt = result.response.text().trim().replace(/^(prompt|enhanced prompt|suggested prompt):\s*/i, '').trim();
+      } catch (promptError) {
+        // Use original prompt if enhancement fails
+      }
+
+      return res.status(200).json({
+        imageData: null,
+        prompt: enhancedPrompt,
+        note: "OpenAI API key not configured. Please add OPENAI_API_KEY environment variable to enable image generation.",
+      });
+    }
+
+    // Step 2: Use Gemini to enhance/expand the prompt for better image generation
+    let enhancedPrompt = prompt;
+    try {
+      const model = await getModelForTask('image-prompt', user.uid);
+      const systemPrompt = `
 You help generate detailed, high-quality prompts for image generation models.
 Given a user's idea or prompt, expand it into a rich, specific, and visually descriptive prompt that will produce excellent results.
 Include details about:
@@ -35,9 +76,6 @@ Include details about:
 
 Keep it concise but descriptive. Return ONLY the enhanced prompt, nothing else.
 `;
-
-    let enhancedPrompt = prompt;
-    try {
       const result = await model.generateContent({
         contents: [
           {
@@ -54,18 +92,7 @@ Keep it concise but descriptive. Return ONLY the enhanced prompt, nothing else.
       // Continue with original prompt if enhancement fails
     }
 
-    // Step 2: Generate actual image using OpenAI DALL-E 3
-    const openaiApiKey = process.env.OPENAI_API_KEY;
-    
-    if (!openaiApiKey) {
-      // Fallback: Return enhanced prompt if OpenAI not configured
-      return res.status(200).json({
-        imageData: null,
-        prompt: enhancedPrompt,
-        note: "OpenAI API key not configured. Please add OPENAI_API_KEY environment variable.",
-      });
-    }
-
+    // Step 3: Generate actual image using OpenAI DALL-E 3
     const openai = new OpenAI({ apiKey: openaiApiKey });
 
     // Determine size based on baseImage presence (for image-to-image) or default
@@ -100,8 +127,8 @@ Keep it concise but descriptive. Return ONLY the enhanced prompt, nothing else.
   } catch (err: any) {
     console.error("generateImage error:", err);
     
-    // Handle OpenAI API errors specifically
-    if (err instanceof OpenAI.APIError) {
+    // Handle OpenAI API errors specifically (if OpenAI is available)
+    if (OpenAI && err instanceof OpenAI.APIError) {
       return res.status(err.status || 500).json({
         error: "Image generation failed",
         details: err.message,
