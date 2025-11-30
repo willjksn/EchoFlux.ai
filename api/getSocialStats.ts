@@ -24,17 +24,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const userId = authUser.uid;
 
     // Initialize Firebase Admin
-    let adminApp;
     let db;
     try {
-      adminApp = getAdminApp();
-      db = adminApp.firestore();
+      db = getAdminApp().firestore();
     } catch (firebaseError: any) {
       console.error('Firebase Admin initialization error:', firebaseError);
-      return res.status(500).json({
-        error: 'Firebase initialization failed',
-        details: firebaseError?.message || String(firebaseError)
+      // Return empty stats instead of error so UI doesn't break
+      const emptyStats: Record<string, { followers: number; following: number }> = {};
+      const platforms = ['Instagram', 'TikTok', 'X', 'Threads', 'YouTube', 'LinkedIn', 'Facebook'];
+      platforms.forEach(platform => {
+        emptyStats[platform] = { followers: 0, following: 0 };
       });
+      return res.status(200).json(emptyStats);
     }
 
     // Fetch posts to aggregate stats
