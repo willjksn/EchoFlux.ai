@@ -113,7 +113,18 @@ export async function generateImage(
   baseImage?: { data: string; mimeType: string }
 ): Promise<string> {
   const res = await callFunction("generateImage", { prompt, baseImage });
-  return res.imageData;
+  
+  // Handle different response formats
+  if (res.imageData) {
+    // New format: actual base64 image data
+    return res.imageData;
+  } else if (res.note) {
+    // Fallback: if API key not configured, throw error
+    throw new Error(res.note || "Image generation not configured");
+  } else {
+    // Legacy format or error
+    throw new Error("Failed to generate image: Invalid response format");
+  }
 }
 
 /* ----------------------------------------------------
