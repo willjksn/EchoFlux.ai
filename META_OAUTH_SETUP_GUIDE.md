@@ -21,11 +21,25 @@ EngageSuite.ai currently supports Instagram Basic Display API for connecting Ins
 1. Go to [Meta for Developers](https://developers.facebook.com/)
 2. Click **"My Apps"** in the top right
 3. Click **"Create App"** (or select an existing app)
-4. Choose **"Consumer"** as the app type
+
+   **⚠️ If you see a popup asking about "Meta Horizon Store" or "Link PC VR":**
+   - This popup is for VR apps - **close it or click "Cancel"**
+   - Look for **"Other"** or **"None of these"** option
+   - You need to create a **regular Meta App**, not a VR/Horizon app
+
+4. Choose **"Consumer"** as the app type (or "Business" if Consumer is not available)
+   - If you see options like "Meta Horizon Store" or "Link PC VR", look for **"Other"** or **"Consumer"**
+   - Avoid selecting "Meta Horizon Store" or "Link PC VR" options
+
 5. Fill in:
    - **App Name**: `EngageSuite.ai` (or your preferred name)
    - **App Contact Email**: Your email
 6. Click **"Create App"**
+
+**Alternative Method if you can't find the right app type:**
+- Go directly to: https://developers.facebook.com/apps/creation/
+- Look for "Consumer" or "Business" app type
+- Avoid VR/Horizon related options
 
 ### Step 2: Add Instagram Basic Display Product
 
