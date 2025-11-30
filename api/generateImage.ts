@@ -111,9 +111,11 @@ Keep it concise but descriptive. Return ONLY the enhanced prompt, nothing else.
     const imageData = imageResponse.data[0]?.b64_json;
 
     if (!imageData) {
-      return res.status(500).json({
-        error: "Failed to generate image",
-        details: "No image data returned from OpenAI",
+      return res.status(200).json({
+        imageData: null,
+        prompt: enhancedPrompt,
+        error: "No image data returned from OpenAI",
+        note: "The image generation completed but no image was returned. Please try again.",
       });
     }
 
@@ -129,16 +131,21 @@ Keep it concise but descriptive. Return ONLY the enhanced prompt, nothing else.
     
     // Handle OpenAI API errors specifically (if OpenAI is available)
     if (OpenAI && err instanceof OpenAI.APIError) {
-      return res.status(err.status || 500).json({
+      return res.status(200).json({
+        imageData: null,
+        prompt: prompt,
         error: "Image generation failed",
-        details: err.message,
+        note: err.message || "OpenAI API error. Please check your API key and try again.",
         code: err.code,
       });
     }
 
-    return res.status(500).json({
+    // Return graceful error instead of 500
+    return res.status(200).json({
+      imageData: null,
+      prompt: prompt,
       error: "Failed to generate image",
-      details: err?.message || String(err),
+      note: err?.message || "An unexpected error occurred. Please try again.",
     });
   }
 }
