@@ -39,12 +39,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { redirectUri } = req.body || {};
     const clientId = process.env.TWITTER_CLIENT_ID || process.env.X_CLIENT_ID;
-    const clientSecret = process.env.TWITTER_CLIENT_SECRET || process.env.X_CLIENT_SECRET;
 
-    if (!clientId || !clientSecret) {
+    // Note: We don't need clientSecret in the authorize step, only in callback
+    if (!clientId) {
       return res.status(500).json({
         error: 'Twitter/X OAuth not configured',
-        details: 'Missing TWITTER_CLIENT_ID/X_CLIENT_ID or TWITTER_CLIENT_SECRET/X_CLIENT_SECRET'
+        details: 'Missing TWITTER_CLIENT_ID or X_CLIENT_ID environment variable'
       });
     }
 
