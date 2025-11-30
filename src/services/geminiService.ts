@@ -11,43 +11,59 @@ async function callFunction(path: string, data: any) {
     ? await auth.currentUser.getIdToken(true)
     : null;
 
-  const res = await fetch(`/api/${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(data),
-  });
+  try {
+    const res = await fetch(`/api/${path}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(data),
+      signal: AbortSignal.timeout(30000), // 30 second timeout
+    });
 
-  if (!res.ok) {
-    let errorMsg = '';
-    try {
-      const text = await res.text();
-      errorMsg = text;
-      // Try to parse as JSON for structured error
+    if (!res.ok) {
+      let errorMsg = '';
       try {
-        const json = JSON.parse(text);
-        errorMsg = json.error || json.details || text;
+        const text = await res.text();
+        errorMsg = text;
+        // Try to parse as JSON for structured error
+        try {
+          const json = JSON.parse(text);
+          errorMsg = json.error || json.details || text;
+        } catch {
+          // Not JSON, use text as-is
+        }
       } catch {
-        // Not JSON, use text as-is
+        errorMsg = `HTTP ${res.status}`;
       }
-    } catch {
-      errorMsg = `HTTP ${res.status}`;
-    }
-    // For non-critical endpoints, return empty data instead of throwing
-    // This prevents console spam for optional features
-    const nonCriticalEndpoints = ['getSocialStats', 'getAnalytics', 'generateAutopilotSuggestions'];
-    if (nonCriticalEndpoints.includes(path)) {
-      if (process.env.NODE_ENV === 'development') {
-        console.warn(`API ${path} failed (non-critical):`, res.status, errorMsg);
+      // For non-critical endpoints, return empty data instead of throwing
+      // This prevents console spam for optional features
+      const nonCriticalEndpoints = ['getSocialStats', 'getAnalytics', 'generateAutopilotSuggestions', 'getModelUsageAnalytics'];
+      if (nonCriticalEndpoints.includes(path)) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(`API ${path} failed (non-critical):`, res.status, errorMsg);
+        }
+        return {} as any;
       }
-      return {} as any;
+      throw new Error(`API ${path} failed: ${res.status} - ${errorMsg}`);
     }
-    throw new Error(`API ${path} failed: ${res.status} - ${errorMsg}`);
-  }
 
-  return res.json();
+    return res.json();
+  } catch (error: any) {
+    // Handle network errors gracefully
+    if (error.name === 'AbortError' || (error.name === 'TypeError' && error.message.includes('Failed to fetch'))) {
+      // For non-critical endpoints, return empty data instead of throwing
+      const nonCriticalEndpoints = ['getSocialStats', 'getAnalytics', 'generateAutopilotSuggestions', 'getModelUsageAnalytics'];
+      if (nonCriticalEndpoints.includes(path)) {
+        console.warn(`API ${path} failed: Network error (non-critical)`);
+        return {} as any;
+      }
+      console.error(`API ${path} failed: Network error`);
+      throw new Error(`Network error: Unable to reach API. Please check your connection and try again.`);
+    }
+    throw error;
+  }
 }
 
 /* ----------------------------------------------------

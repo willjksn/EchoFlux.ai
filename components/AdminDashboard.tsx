@@ -77,10 +77,14 @@ export const AdminDashboard: React.FC = () => {
             setIsLoadingModelStats(true);
             try {
                 const stats = await getModelUsageAnalytics(modelStatsDays);
-                setModelUsageStats(stats);
+                // Only set stats if we got valid data (not empty object from error)
+                if (stats && stats.totalRequests !== undefined) {
+                    setModelUsageStats(stats);
+                }
             } catch (error) {
                 console.error('Failed to fetch model usage stats:', error);
                 // Don't show error to user - just log it
+                // setModelUsageStats will remain null, showing empty state
             } finally {
                 setIsLoadingModelStats(false);
             }

@@ -9,20 +9,31 @@ async function callFunction(path: string, params?: Record<string, any>) {
     : null;
 
   const queryString = params ? '?' + new URLSearchParams(params).toString() : '';
-  const res = await fetch(`/api/${path}${queryString}`, {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-  });
+  
+  try {
+    const res = await fetch(`/api/${path}${queryString}`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      signal: AbortSignal.timeout(30000), // 30 second timeout
+    });
 
-  if (!res.ok) {
-    const errorText = await res.text();
-    throw new Error(`API ${path} failed: ${res.status} - ${errorText}`);
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`API ${path} failed: ${res.status} - ${errorText}`);
+    }
+
+    return res.json();
+  } catch (error: any) {
+    // Handle network errors gracefully
+    if (error.name === 'AbortError' || error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+      console.warn(`API ${path} failed: Network error or timeout`);
+      throw new Error(`Network error: Unable to reach API. Please check your connection.`);
+    }
+    throw error;
   }
-
-  return res.json();
 }
 
 export interface ModelUsageStats {
