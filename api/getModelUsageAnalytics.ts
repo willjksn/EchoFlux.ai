@@ -42,7 +42,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     cutoffDate.setDate(cutoffDate.getDate() - daysNum);
 
     // Fetch usage logs
-    const logsSnapshot = await adminDb
+    const db = getAdminDb();
+    const logsSnapshot = await db
       .collection('model_usage_logs')
       .where('timestamp', '>=', cutoffDate.toISOString())
       .orderBy('timestamp', 'desc')
