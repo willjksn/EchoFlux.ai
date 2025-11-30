@@ -7,7 +7,7 @@ import { db } from '../firebaseConfig';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { useAppContext } from './AppContext';
 import { defaultSettings } from '../constants';
-import { getModelUsageAnalytics, type ModelUsageStats } from '../services/modelUsageService';
+import { getModelUsageAnalytics, type ModelUsageStats } from '../src/services/modelUsageService';
 
 const StatCard: React.FC<{ title: string; value: string | number; icon: React.ReactNode }> = ({ title, value, icon }) => (
     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md flex items-center space-x-4">
@@ -360,16 +360,17 @@ export const AdminDashboard: React.FC = () => {
                                 <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Requests by Model</h4>
                                 <div className="space-y-2">
                                     {Object.entries(modelUsageStats.requestsByModel)
-                                        .sort(([, a], [, b]) => b - a)
+                                        .sort(([, a], [, b]) => (b as number) - (a as number))
                                         .map(([model, count]) => {
+                                            const countNum = count as number;
                                             const percentage = modelUsageStats.totalRequests > 0 
-                                                ? (count / modelUsageStats.totalRequests * 100).toFixed(1) 
+                                                ? (countNum / modelUsageStats.totalRequests * 100).toFixed(1) 
                                                 : '0';
                                             return (
                                                 <div key={model}>
                                                     <div className="flex justify-between text-xs mb-1">
                                                         <span className="text-gray-600 dark:text-gray-400 font-mono">{model}</span>
-                                                        <span className="text-gray-900 dark:text-white font-semibold">{count} ({percentage}%)</span>
+                                                        <span className="text-gray-900 dark:text-white font-semibold">{countNum} ({percentage}%)</span>
                                                     </div>
                                                     <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                                                         <div className="bg-primary-600 h-2 rounded-full" style={{ width: `${percentage}%` }}></div>
@@ -385,16 +386,17 @@ export const AdminDashboard: React.FC = () => {
                                 <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Requests by Task Type</h4>
                                 <div className="space-y-2">
                                     {Object.entries(modelUsageStats.requestsByTask)
-                                        .sort(([, a], [, b]) => b - a)
+                                        .sort(([, a], [, b]) => (b as number) - (a as number))
                                         .map(([task, count]) => {
+                                            const countNum = count as number;
                                             const percentage = modelUsageStats.totalRequests > 0 
-                                                ? (count / modelUsageStats.totalRequests * 100).toFixed(1) 
+                                                ? (countNum / modelUsageStats.totalRequests * 100).toFixed(1) 
                                                 : '0';
                                             return (
                                                 <div key={task}>
                                                     <div className="flex justify-between text-xs mb-1">
                                                         <span className="text-gray-600 dark:text-gray-400 capitalize">{task.replace('-', ' ')}</span>
-                                                        <span className="text-gray-900 dark:text-white font-semibold">{count} ({percentage}%)</span>
+                                                        <span className="text-gray-900 dark:text-white font-semibold">{countNum} ({percentage}%)</span>
                                                     </div>
                                                     <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                                                         <div className="bg-emerald-600 h-2 rounded-full" style={{ width: `${percentage}%` }}></div>
@@ -430,7 +432,7 @@ export const AdminDashboard: React.FC = () => {
                             <div>
                                 <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Top Users by Requests</h4>
                                 <div className="space-y-2">
-                                    {modelUsageStats.topUsers.map((user, idx) => (
+                                    {modelUsageStats.topUsers.map((user: { userId: string; userName: string; requests: number; cost: number }, idx: number) => (
                                         <div key={user.userId} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
                                             <div className="flex items-center gap-3">
                                                 <span className="text-sm font-bold text-gray-400 dark:text-gray-500 w-6">#{idx + 1}</span>
@@ -451,8 +453,8 @@ export const AdminDashboard: React.FC = () => {
                             <div>
                                 <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Daily Usage Trend</h4>
                                 <div className="space-y-2">
-                                    {modelUsageStats.requestsByDay.slice(-14).map((day) => {
-                                        const maxCount = Math.max(...modelUsageStats.requestsByDay.map(d => d.count));
+                                    {modelUsageStats.requestsByDay.slice(-14).map((day: { date: string; count: number; cost: number }) => {
+                                        const maxCount = Math.max(...modelUsageStats.requestsByDay.map((d: { date: string; count: number; cost: number }) => d.count));
                                         const percentage = maxCount > 0 ? (day.count / maxCount * 100) : 0;
                                         return (
                                             <div key={day.date} className="flex items-center gap-3">
