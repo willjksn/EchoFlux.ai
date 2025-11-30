@@ -58,17 +58,16 @@ export function getAdminDb() {
   return getAdminApp().firestore();
 }
 
-// Lazy export for backward compatibility - initialized on first access
-let _adminDb: admin.firestore.Firestore | null = null;
-export const adminDb: admin.firestore.Firestore = new Proxy({} as admin.firestore.Firestore, {
-  get(_target, prop) {
-    if (!_adminDb) {
-      _adminDb = getAdminApp().firestore();
-    }
-    const value = (_adminDb as any)[prop];
-    if (typeof value === 'function') {
-      return value.bind(_adminDb);
-    }
-    return value;
-  }
-});
+// Lazy export for backward compatibility - use getAdminDb() instead
+// This Proxy export can cause issues in serverless environments
+// Use getAdminDb() function instead
+export const adminDb = {
+  collection: (path: string) => getAdminDb().collection(path),
+  doc: (path: string) => getAdminDb().doc(path),
+  batch: () => getAdminDb().batch(),
+  runTransaction: (updateFunction: any) => getAdminDb().runTransaction(updateFunction),
+  FieldPath: admin.firestore.FieldPath,
+  FieldValue: admin.firestore.FieldValue,
+  Timestamp: admin.firestore.Timestamp,
+  GeoPoint: admin.firestore.GeoPoint,
+} as admin.firestore.Firestore;

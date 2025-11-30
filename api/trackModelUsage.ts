@@ -1,7 +1,7 @@
 // api/trackModelUsage.ts
 // Track AI model usage for analytics and cost monitoring
 
-import { adminDb } from './_firebaseAdmin.ts';
+import { getAdminDb } from './_firebaseAdmin.ts';
 import type { TaskType } from './_modelRouter.ts';
 
 export interface ModelUsageLog {
@@ -28,7 +28,7 @@ export async function trackModelUsage(log: Omit<ModelUsageLog, 'id' | 'timestamp
       timestamp: new Date().toISOString(),
     };
 
-    await adminDb.collection('model_usage_logs').add(usageLog);
+    await getAdminDb().collection('model_usage_logs').add(usageLog);
   } catch (error) {
     // Don't throw - tracking failures shouldn't break the app
     console.error('Failed to track model usage:', error);

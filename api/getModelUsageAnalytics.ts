@@ -3,7 +3,7 @@
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { verifyAuth } from "./verifyAuth.ts";
-import { adminDb } from "./_firebaseAdmin.ts";
+import { getAdminDb } from "./_firebaseAdmin.ts";
 import type { TaskType } from "./_modelRouter.ts";
 import admin from "firebase-admin";
 
@@ -59,7 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (userIds.length > 0) {
       const userPromises = userIds.map(async (userId) => {
         try {
-          const userDoc = await adminDb.collection('users').doc(userId).get();
+          const userDoc = await getAdminDb().collection('users').doc(userId).get();
           if (userDoc.exists) {
             usersMap.set(userId, userDoc.data());
           }
