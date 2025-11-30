@@ -133,17 +133,42 @@ export async function generateImage(
 export async function generateVideo(
   prompt: string,
   baseImage?: { data: string; mimeType: string },
-  aspectRatio?: "16:9" | "9:16"
-): Promise<any> {
-  return await callFunction("generateVideo", {
+  aspectRatio?: "16:9" | "9:16" | string
+): Promise<{ videoUrl?: string; operationId?: string; status?: string }> {
+  const res = await callFunction("generateVideo", {
     prompt,
     baseImage,
     aspectRatio,
   });
+  
+  // Return operation ID and status - frontend will poll for completion
+  return {
+    operationId: res.operationId,
+    status: res.status,
+    videoUrl: res.videoUrl || undefined,
+  };
 }
 
-export async function getVideoStatus(operation: any): Promise<any> {
-  return await callFunction("getVideoStatus", { operation });
+export async function getVideoStatus(operationId: string): Promise<{ videoUrl?: string; status?: string; error?: string }> {
+  // Use GET request with query parameter for status check
+  const token = auth.currentUser
+    ? await auth.currentUser.getIdToken(true)
+    : null;
+
+  const res = await fetch(`/api/getVideoStatus?operationId=${encodeURIComponent(operationId)}`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`API getVideoStatus failed: ${res.status} - ${errorText}`);
+  }
+
+  return res.json();
 }
 
 /* ----------------------------------------------------

@@ -25,6 +25,16 @@ GEMINI_API_KEY=your_gemini_api_key_here
 # GOOGLE_API_KEY=your_google_api_key_here
 
 # ============================================
+# Image Generation (OpenAI DALL-E 3)
+# ============================================
+OPENAI_API_KEY=your_openai_api_key_here
+
+# ============================================
+# Video Generation (Replicate)
+# ============================================
+REPLICATE_API_TOKEN=your_replicate_api_token_here
+
+# ============================================
 # Firebase (Backend - Admin SDK)
 # ============================================
 # This should be your Firebase service account JSON converted to base64
