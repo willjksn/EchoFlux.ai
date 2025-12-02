@@ -283,19 +283,4 @@ Return ONLY valid JSON in this shape:
   return res.status(200).json(captions);
 }
 
-export default withErrorHandling(async (req: VercelRequest, res: VercelResponse) => {
-  try {
-    return await handler(req, res);
-  } catch (err: any) {
-    console.error("generateCaptions error:", err);
-    if (res.headersSent) {
-      return;
-    }
-    return res.status(200).json([
-      {
-        caption: err?.message || "Sorry, I couldn't generate captions at this time. Please try again.",
-        hashtags: [] as string[],
-      },
-    ]);
-  }
-});
+export default withErrorHandling(handler);
