@@ -627,6 +627,47 @@ export const Strategy: React.FC = () => {
                             </div>
                         </div>
 
+                        {/* Performance Tracking */}
+                        {selectedStrategy && (
+                            <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Performance Tracking</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-100 dark:border-green-800">
+                                        <div className="text-green-600 dark:text-green-400 text-sm font-semibold mb-1">Posts Created</div>
+                                        <div className="text-2xl font-bold text-green-700 dark:text-green-300">
+                                            {selectedStrategy.linkedPostIds?.length || 0}
+                                        </div>
+                                        <div className="text-xs text-green-600 dark:text-green-400 mt-1">
+                                            of {plan.weeks.reduce((total, week) => total + week.content.length, 0)} planned
+                                        </div>
+                                    </div>
+                                    <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                                        <div className="text-blue-600 dark:text-blue-400 text-sm font-semibold mb-1">Progress</div>
+                                        <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">
+                                            {plan.weeks.length > 0 ? Math.round(((selectedStrategy.linkedPostIds?.length || 0) / plan.weeks.reduce((total, week) => total + week.content.length, 0)) * 100) : 0}%
+                                        </div>
+                                        <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2 mt-2">
+                                            <div 
+                                                className="bg-blue-600 dark:bg-blue-400 h-2 rounded-full transition-all"
+                                                style={{ 
+                                                    width: `${Math.min(((selectedStrategy.linkedPostIds?.length || 0) / plan.weeks.reduce((total, week) => total + week.content.length, 0)) * 100, 100)}%` 
+                                                }}
+                                            ></div>
+                                        </div>
+                                    </div>
+                                    <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-100 dark:border-purple-800">
+                                        <div className="text-purple-600 dark:text-purple-400 text-sm font-semibold mb-1">Status</div>
+                                        <div className="text-lg font-bold text-purple-700 dark:text-purple-300 capitalize">
+                                            {selectedStrategy.status || 'Active'}
+                                        </div>
+                                        <div className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                                            {selectedStrategy.metrics?.lastUpdate ? `Updated ${new Date(selectedStrategy.metrics.lastUpdate).toLocaleDateString()}` : 'No metrics yet'}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Analytics Integration */}
                         <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
                             <div className="flex items-center justify-between mb-4">
@@ -692,7 +733,8 @@ export const Strategy: React.FC = () => {
                                 ))}
                             </div>
                         </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
 
