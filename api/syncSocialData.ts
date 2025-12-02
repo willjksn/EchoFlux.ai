@@ -192,7 +192,7 @@ async function syncTwitterDMs(
     const {
       fetchTwitterDMs,
       saveTwitterDM,
-    } = await import("./platforms/twitter.ts");
+    } = await import("./platforms/twitter.js");
 
     const dms = await fetchTwitterDMs(account, since);
     let saved = 0;
@@ -223,7 +223,7 @@ async function syncTwitterComments(
     const {
       fetchTwitterMentions,
       saveTwitterMention,
-    } = await import("./platforms/twitter.ts");
+    } = await import("./platforms/twitter.js");
 
     const mentions = await fetchTwitterMentions(account, since);
     let saved = 0;
@@ -254,7 +254,7 @@ async function syncTikTokDMs(
     const {
       fetchTikTokDMs,
       saveTikTokDM,
-    } = await import("./platforms/tiktok.ts");
+    } = await import("./platforms/tiktok.js");
 
     const messages = await fetchTikTokDMs(account, since);
     let saved = 0;
@@ -285,7 +285,7 @@ async function syncTikTokComments(
     const {
       fetchTikTokComments,
       saveTikTokComment,
-    } = await import("./platforms/tiktok.ts");
+    } = await import("./platforms/tiktok.js");
 
     const comments = await fetchTikTokComments(account, since);
     let saved = 0;
@@ -316,7 +316,7 @@ async function syncYouTubeComments(
     const {
       fetchYouTubeComments,
       saveYouTubeComment,
-    } = await import("./platforms/youtube.ts");
+    } = await import("./platforms/youtube.js");
 
     const comments = await fetchYouTubeComments(account, since);
     let saved = 0;
@@ -347,7 +347,7 @@ async function syncLinkedInMessages(
     const {
       fetchLinkedInMessages,
       saveLinkedInMessage,
-    } = await import("./platforms/linkedin.ts");
+    } = await import("./platforms/linkedin.js");
 
     const messages = await fetchLinkedInMessages(account, since);
     let saved = 0;
@@ -378,7 +378,7 @@ async function syncLinkedInComments(
     const {
       fetchLinkedInComments,
       saveLinkedInComment,
-    } = await import("./platforms/linkedin.ts");
+    } = await import("./platforms/linkedin.js");
 
     const comments = await fetchLinkedInComments(account, since);
     let saved = 0;
@@ -409,7 +409,7 @@ async function syncFacebookMessages(
     const {
       fetchFacebookMessages,
       saveFacebookMessage,
-    } = await import("./platforms/facebook.ts");
+    } = await import("./platforms/facebook.js");
 
     const messages = await fetchFacebookMessages(account, since);
     let saved = 0;
@@ -440,7 +440,7 @@ async function syncFacebookComments(
     const {
       fetchFacebookComments,
       saveFacebookComment,
-    } = await import("./platforms/facebook.ts");
+    } = await import("./platforms/facebook.js");
 
     const comments = await fetchFacebookComments(account, since);
     let saved = 0;
