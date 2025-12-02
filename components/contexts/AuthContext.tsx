@@ -118,6 +118,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         monthlyCaptionGenerationsUsed: 0,
                         monthlyImageGenerationsUsed: 0,
                         monthlyVideoGenerationsUsed: 0,
+                        monthlyRepliesUsed: 0,
                         storageUsed: 0,
                         storageLimit: 100,
                         mediaLibrary: [],

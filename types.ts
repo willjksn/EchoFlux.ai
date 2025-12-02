@@ -213,6 +213,7 @@ export interface User {
   monthlyVideoGenerationsUsed: number;
   monthlyAdGenerationsUsed?: number;
   monthlyVideoAdGenerationsUsed?: number;
+  monthlyRepliesUsed?: number; // Track AI reply usage for Free plan limit
   storageUsed: number; 
   storageLimit: number; 
   mediaLibrary: MediaItem[];

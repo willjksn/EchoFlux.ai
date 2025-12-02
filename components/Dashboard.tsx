@@ -261,10 +261,12 @@ export const Dashboard: React.FC = () => {
                 <p className="text-sm opacity-90 mb-1">Scheduled Posts</p>
                 <p className="text-3xl font-bold">{todaysHighlights.scheduledPosts}</p>
               </div>
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
-                <p className="text-sm opacity-90 mb-1">Response Rate</p>
-                <p className="text-3xl font-bold">{todaysHighlights.responseRate}%</p>
-              </div>
+              {user.plan !== 'Free' && (
+                <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                  <p className="text-sm opacity-90 mb-1">Response Rate</p>
+                  <p className="text-3xl font-bold">{todaysHighlights.responseRate}%</p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -631,7 +633,7 @@ export const Dashboard: React.FC = () => {
             })()}
             
             {/* Goals & Milestones Widget */}
-            {(() => {
+            {user.plan !== 'Free' && (() => {
               // Calculate goals progress using user-defined goals or defaults
               const currentFollowers = currentStats ? Object.values(currentStats).reduce((sum, stats) => sum + stats.followers, 0) : 0;
               const goalFollowers = user?.goals?.followerGoal || Math.ceil(currentFollowers * 1.5); // Use user goal or default to 50% more
@@ -751,6 +753,7 @@ export const Dashboard: React.FC = () => {
                 </div>
               );
             })()}
+            )}
           </div>
           
           {/* Fan Engagement Hub - Creator & Agency Only */}
@@ -831,7 +834,7 @@ export const Dashboard: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
             
             {/* AI Insights & Recommendations Panel - Redesigned */}
-            {(() => {
+            {user.plan !== 'Free' && (() => {
               // Generate actionable recommendations based on user data
               const recommendations: Array<{ type: 'success' | 'info' | 'warning' | 'tip'; title: string; description: string; action?: () => void; actionLabel?: string }> = [];
               
@@ -982,6 +985,7 @@ export const Dashboard: React.FC = () => {
                 </div>
               ) : null;
             })()}
+            )}
             
             {/* Engagement Heatmap - Redesigned */}
             {(() => {
@@ -1119,6 +1123,7 @@ export const Dashboard: React.FC = () => {
               </div>
             );
           })()}
+            )}
           
           {/* Lead Generation Dashboard - Business Only (Priority 1) */}
           {isBusiness && (() => {
@@ -1640,7 +1645,7 @@ export const Dashboard: React.FC = () => {
           })()}
           
           {/* Content Suggestions Panel - Phase 3 Feature 4 */}
-          {(() => {
+          {user.plan !== 'Free' && (() => {
             // Generate content suggestions based on user's niche, recent posts, and performance
             const niche = isBusiness ? user?.businessType : user?.niche;
             const recentPosts = posts.filter(p => p.status === 'Published').slice(0, 5);
@@ -1800,6 +1805,7 @@ export const Dashboard: React.FC = () => {
               </div>
             ) : null;
           })()}
+            )}
             
             {/* Performance Comparison - Business Only, Beside Content Ideas */}
             {isBusiness && (

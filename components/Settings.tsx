@@ -295,6 +295,15 @@ export const Settings: React.FC = () => {
     };
 
     const handleConnectAccount = async (platform: Platform) => {
+        // Check connection limit for Free plan (1 account max)
+        if (user.plan === 'Free') {
+            const connectedCount = Object.values(safeSocialAccounts).filter(acc => acc?.connected).length;
+            if (connectedCount >= 1) {
+                showToast('Free plan allows only 1 connected social media account. Upgrade to connect more accounts.', 'error');
+                return;
+            }
+        }
+        
         setConnectingPlatform(platform);
         try {
             await connectSocialAccount(platform);
@@ -535,6 +544,7 @@ export const Settings: React.FC = () => {
                             <ToggleSwitch label="Enable Voice Mode" enabled={settings.voiceMode} onChange={(val) => updateSetting('voiceMode', val)} />
                             <p className="text-sm text-gray-500 dark:text-gray-400">Enable the floating AI Voice Assistant button for hands-free control.</p>
                         </SettingsSection>
+                        {user.plan !== 'Free' && (
                         <SettingsSection title="Goals & Milestones">
                             <div className="space-y-4">
                                 <div>
@@ -626,6 +636,7 @@ export const Settings: React.FC = () => {
                                 )}
                             </div>
                         </SettingsSection>
+                        )}
                         <SettingsSection title="Account Type">
                             <div className="space-y-3">
                                 <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
