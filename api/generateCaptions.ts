@@ -89,15 +89,16 @@ async function fetchMediaFromUrl(mediaUrl: string): Promise<MediaData | null> {
   }
 }
 
-async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    res.status(405).json({ error: "Method not allowed" });
+    return;
   }
 
   // Check API key
   const apiKeyCheck = checkApiKeys();
   if (!apiKeyCheck.hasKey) {
-    return res.status(200).json([
+    res.status(200).json([
       {
         caption:
           apiKeyCheck.error ||
@@ -105,6 +106,7 @@ async function handler(req: VercelRequest, res: VercelResponse) {
         hashtags: [],
       },
     ]);
+    return;
   }
 
   // Verify Firebase Auth Token
@@ -114,16 +116,18 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     authUser = await verifyAuth(req);
   } catch (authError: any) {
     console.error("Auth error:", authError);
-    return res.status(200).json([
+    res.status(200).json([
       {
         caption: authError?.message || "Authentication failed.",
         hashtags: [],
       },
     ]);
+    return;
   }
 
   if (!authUser) {
-    return res.status(401).json({ error: "Unauthorized" });
+    res.status(401).json({ error: "Unauthorized" });
+    return;
   }
 
   const {
@@ -147,13 +151,14 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     model = await getModelForTask("caption", authUser.uid);
   } catch (err: any) {
     console.error("Model init error:", err);
-    return res.status(200).json([
+    res.status(200).json([
       {
         caption:
           err?.message || "AI model failed to initialize. Check configuration.",
         hashtags: [],
       },
     ]);
+    return;
   }
 
   // Build prompt
@@ -192,10 +197,11 @@ Return ONLY strict JSON like:
     // Check size - if too large, reject
     const dataSizeMB = (mediaData.data.length * 3) / 4 / 1024 / 1024;
     if (dataSizeMB > 4) {
-      return res.status(413).json({
+      res.status(413).json({
         error: "Image too large",
         note: "Please upload images smaller than 4MB or use a URL instead.",
       });
+      return;
     }
     finalMedia = mediaData;
   }
@@ -220,23 +226,25 @@ Return ONLY strict JSON like:
 
     if (!result?.response || typeof result.response.text !== "function") {
       console.error("Bad Gemini response:", result);
-      return res.status(200).json([
+      res.status(200).json([
         {
           caption: "AI returned malformed response. Try again.",
           hashtags: [],
         },
       ]);
+      return;
     }
 
     rawText = result.response.text().trim();
   } catch (err: any) {
     console.error("AI error:", err);
-    return res.status(200).json([
+    res.status(200).json([
       {
         caption: err?.message || "AI generation failed.",
         hashtags: [],
       },
     ]);
+    return;
   }
 
   // Parse JSON response
@@ -259,7 +267,7 @@ Return ONLY strict JSON like:
     captions = [{ caption: rawText, hashtags: [] }];
   }
 
-  return res.status(200).json(captions);
+  res.status(200).json(captions);
 }
 
 export default withErrorHandling(handler);
