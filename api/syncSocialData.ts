@@ -130,7 +130,7 @@ async function syncInstagramDMs(
     const {
       fetchInstagramDMs,
       saveInstagramMessage,
-    } = await import("./platforms/instagram.ts");
+    } = await import("./platforms/instagram.js");
 
     const messages = await fetchInstagramDMs(account, since);
     let saved = 0;
@@ -161,7 +161,7 @@ async function syncInstagramComments(
     const {
       fetchInstagramComments,
       saveInstagramComment,
-    } = await import("./platforms/instagram.ts");
+    } = await import("./platforms/instagram.js");
 
     const comments = await fetchInstagramComments(account, since);
     let saved = 0;
