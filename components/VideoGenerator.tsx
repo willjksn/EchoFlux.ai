@@ -176,6 +176,9 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
     }
   }, [isBusiness, isAgencyPlan, mode]);
 
+  const showComingSoon = () =>
+    showToast('Director Mode coming soon!', 'info');
+
 
   // Poll for video status
   useEffect(() => {
@@ -630,137 +633,34 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
       {/* Director Mode */}
       {mode === 'Director' ? (
         <div className="space-y-6">
-          {/* Storyboard Generation */}
           <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
             <div className="flex items-center gap-2 mb-4">
               <FilmIcon className="w-5 h-5 text-primary-600" />
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">
-                1. Generate Storyboard
+                Director Mode - Coming Soon
               </h3>
+            </div>
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+              <p className="text-sm text-blue-800 dark:text-blue-200">
+                Director Mode will allow you to create multi-scene videos with storyboards, scene-by-scene editing, and advanced video composition features.
+              </p>
             </div>
             <textarea
               value={storyboardConcept}
               onChange={(e) => setStoryboardConcept(e.target.value)}
-              placeholder="Describe your video concept. For example: 'A 30-second product showcase starting with a close-up, then panning out to show the full product, ending with a call-to-action.'"
+              placeholder="Enter video concept for storyboard generation..."
               className="w-full p-3 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
               rows={4}
+              disabled
             />
             <button
-              onClick={handleGenerateStoryboard}
-              disabled={isStoryboarding || !storyboardConcept.trim()}
-              className="mt-3 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              onClick={() => showToast('Director Mode coming soon!', 'info')}
+              disabled
+              className="mt-3 px-4 py-2 bg-gray-400 text-white rounded-md cursor-not-allowed opacity-60"
             >
-              {isStoryboarding ? (
-                <>
-                  <RefreshIcon className="animate-spin w-4 h-4" />
-                  Generating Storyboard...
-                </>
-              ) : (
-                <>
-                  <SparklesIcon className="w-4 h-4" />
-                  Generate Storyboard
-                </>
-              )}
+              Coming Soon
             </button>
           </div>
-
-          {/* Scenes List */}
-          {scenes.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">
-                  2. Scenes ({scenes.length})
-                </h3>
-                <button
-                  onClick={handleGenerateAllScenes}
-                  className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-sm font-medium"
-                >
-                  Generate All Scenes
-                </button>
-              </div>
-              <div className="space-y-3">
-                {scenes.map((scene) => (
-                  <div
-                    key={scene.id}
-                    className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-sm font-semibold text-primary-600">
-                            Scene {scene.order || scenes.indexOf(scene) + 1}
-                          </span>
-                          <span
-                            className={`text-xs px-2 py-1 rounded ${
-                              scene.status === 'completed'
-                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                                : scene.status === 'generating'
-                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
-                                : scene.status === 'failed'
-                                ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-                                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                            }`}
-                          >
-                            {scene.status}
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-700 dark:text-gray-300 mb-1">
-                          {scene.prompt}
-                        </p>
-                        {scene.onScreenText && (
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            On-screen text: {scene.onScreenText}
-                          </p>
-                        )}
-                        {scene.spokenLine && (
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            Voiceover: {scene.spokenLine}
-                          </p>
-                        )}
-                        {scene.videoUrl && (
-                          <div className="mt-2">
-                            <video
-                              src={scene.videoUrl}
-                              controls
-                              className="w-full max-w-md rounded"
-                              style={{ maxHeight: '200px' }}
-                            />
-                          </div>
-                        )}
-                      </div>
-                      <div className="ml-4">
-                        {scene.status === 'pending' && (
-                          <button
-                            onClick={() => handleGenerateSceneVideo(scene.id)}
-                            className="px-3 py-1.5 bg-primary-600 text-white rounded text-sm hover:bg-primary-700"
-                          >
-                            Generate
-                          </button>
-                        )}
-                        {scene.status === 'generating' && (
-                          <div className="flex items-center gap-2 text-sm text-blue-600">
-                            <RefreshIcon className="animate-spin w-4 h-4" />
-                            Generating...
-                          </div>
-                        )}
-                        {scene.status === 'completed' && (
-                          <CheckCircleIcon className="w-5 h-5 text-green-600" />
-                        )}
-                        {scene.status === 'failed' && (
-                          <button
-                            onClick={() => handleGenerateSceneVideo(scene.id)}
-                            className="px-3 py-1.5 bg-red-600 text-white rounded text-sm hover:bg-red-700"
-                          >
-                            Retry
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       ) : (
         // Simple Mode
