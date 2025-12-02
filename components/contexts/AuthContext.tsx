@@ -71,9 +71,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     const loaded = snap.data() as User;
 
                     // Admins default to Creator dashboard unless they have a userType set
-                    // If Admin has no userType, set it to Creator
+                    // If Admin has no userType, set it to Creator and persist to Firestore
                     if (loaded.role === 'Admin' && !loaded.userType) {
                         loaded.userType = 'Creator';
+                        // Persist to Firestore
+                        await setDoc(ref, { userType: 'Creator' }, { merge: true });
                     }
 
                     // Merge defaults safely
