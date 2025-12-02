@@ -48,7 +48,9 @@ export const Opportunities: React.FC = () => {
             const trends = await findTrends(niche);
             if (!trends || trends.length === 0) {
                 setError('No opportunities found. Try a different search term or check your API configuration.');
+                setResults([]);
             } else {
+                console.log('Found opportunities:', trends.length, trends);
                 setResults(trends);
             }
         } catch (err: any) {
