@@ -24,6 +24,9 @@ export const Opportunities: React.FC = () => {
     const [results, setResults] = useState<Opportunity[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [filterPlatform, setFilterPlatform] = useState<Platform | 'All'>('All');
+    const [filterType, setFilterType] = useState<string>('All');
+    const [sortBy, setSortBy] = useState<'relevance' | 'engagement' | 'trending'>('engagement');
 
     // Opportunities: Creator feature, available on Pro, Elite, and Agency plans
     // Agency (Business) also gets access since they manage creators
@@ -232,7 +235,13 @@ export const Opportunities: React.FC = () => {
                                      </div>
                                  </div>
                                  );
-                             })}
+                                     })
+                                 ) : (
+                                     <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 text-center">
+                                         <p className="text-gray-500 dark:text-gray-400">No opportunities match your filters. Try adjusting your filters.</p>
+                                     </div>
+                                 );
+                             })()}
                         </div>
                     )}
 
