@@ -205,8 +205,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     const subcollections = [
-      { name: "messages", setter: setMessages, seed: MOCK_MESSAGES, seedIdField: "id" },
-      { name: "posts", setter: setPosts, seed: MOCK_POSTS, seedIdField: "id" },
+      { name: "messages", setter: setMessages }, // No seed - users start with empty inbox
+      { name: "posts", setter: setPosts }, // No seed - users start with empty posts
       { name: "calendar_events", setter: setCalendarEvents },
       {
         name: "crm_profiles",
@@ -251,11 +251,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return onSnapshot(
         q,
         async (snapshot) => {
+          // IMPORTANT: Don't seed messages/posts automatically - each user should have their own isolated data
+          // Only seed if explicitly needed for demo/testing (you can add a flag like user.isDemoAccount)
           if (snapshot.empty && seed && seedIdField) {
-            for (const item of seed) {
-              const idValue = extractId(item, seedIdField);
-              await setDoc(doc(collRef, idValue), item as any);
-            }
+            // Skip seeding for production - users start with empty collections
+            // If you want demo data, check: if (user.isDemoAccount && seed && seedIdField) { ... }
+            setter([]);
           } else {
             const items = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
             setter(items as any);
