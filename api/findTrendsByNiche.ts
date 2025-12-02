@@ -3,14 +3,52 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
+  // Ultra-defensive error handling - catch everything
   try {
+    if (req.method !== "POST") {
+      return res.status(405).json({ error: "Method not allowed" });
+    }
+
+    // Check for required environment variables early
+    if (!process.env.GEMINI_API_KEY && !process.env.GOOGLE_API_KEY) {
+      console.error("findTrendsByNiche: Missing GEMINI_API_KEY or GOOGLE_API_KEY");
+      return res.status(200).json({
+        success: false,
+        error: "AI not configured",
+        note: "GEMINI_API_KEY or GOOGLE_API_KEY is missing. Configure it in your environment to enable trend detection.",
+        opportunities: [],
+      });
+    }
+
     // Dynamic imports to prevent module initialization errors
-    const { verifyAuth } = await import("./verifyAuth.ts");
-    const user = await verifyAuth(req);
+    let verifyAuth: any;
+    try {
+      const verifyAuthModule = await import("./verifyAuth.ts");
+      verifyAuth = verifyAuthModule.verifyAuth;
+    } catch (importError: any) {
+      console.error("Failed to import verifyAuth:", importError);
+      return res.status(200).json({
+        success: false,
+        error: "Authentication module error",
+        note: "Failed to load authentication module. Please check server configuration.",
+        opportunities: [],
+        details: process.env.NODE_ENV === "development" ? importError?.stack : undefined,
+      });
+    }
+
+    let user;
+    try {
+      user = await verifyAuth(req);
+    } catch (authError: any) {
+      console.error("verifyAuth error:", authError);
+      return res.status(200).json({
+        success: false,
+        error: "Authentication error",
+        note: authError?.message || "Failed to verify authentication. Please try logging in again.",
+        opportunities: [],
+      });
+    }
+
     if (!user) {
       return res.status(401).json({ error: "Unauthorized" });
     }
@@ -21,14 +59,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({
         success: false,
         error: "Missing required field",
-        note: "niche is required and must be a non-empty string"
+        note: "niche is required and must be a non-empty string",
+        opportunities: [],
       });
     }
 
     try {
       // Use trends task type for better model routing
-      const { getModelForTask } = await import("./_modelRouter.ts");
-      const model = await getModelForTask("trends", user.uid);
+      let getModelForTask: any;
+      try {
+        const modelRouterModule = await import("./_modelRouter.ts");
+        getModelForTask = modelRouterModule.getModelForTask;
+      } catch (importError: any) {
+        console.error("Failed to import _modelRouter:", importError);
+        return res.status(200).json({
+          success: false,
+          error: "Model router error",
+          note: "Failed to load model router module. Please check server configuration.",
+          opportunities: [],
+          details: process.env.NODE_ENV === "development" ? importError?.stack : undefined,
+        });
+      }
+
+      let model;
+      try {
+        model = await getModelForTask("trends", user.uid);
+      } catch (modelError: any) {
+        console.error("Model initialization error:", modelError);
+        return res.status(200).json({
+          success: false,
+          error: "AI model error",
+          note: modelError?.message || "Unable to initialize AI model. Please check your GEMINI_API_KEY environment variable.",
+          opportunities: [],
+          details: process.env.NODE_ENV === "development" ? modelError?.stack : undefined,
+        });
+      }
 
       const prompt = `
 You are an expert social media trend analyst specializing in identifying engagement opportunities.
@@ -72,12 +137,34 @@ Requirements:
 - Include 2-3 related hashtags per opportunity when relevant
 `;
 
-      const result = await model.generateContent({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseMimeType: "application/json",
-        },
-      });
+      let result;
+      try {
+        result = await model.generateContent({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: {
+            responseMimeType: "application/json",
+          },
+        });
+      } catch (genError: any) {
+        console.error("AI generation error:", genError);
+        return res.status(200).json({
+          success: false,
+          error: "AI generation failed",
+          note: genError?.message || "Failed to generate opportunities. Please check your GEMINI_API_KEY and try again.",
+          opportunities: [],
+          details: process.env.NODE_ENV === "development" ? genError?.stack : undefined,
+        });
+      }
+
+      if (!result?.response || typeof result.response.text !== "function") {
+        console.error("Unexpected Gemini response shape:", result);
+        return res.status(200).json({
+          success: false,
+          error: "AI generation failed",
+          note: "Received an invalid response from the AI model.",
+          opportunities: [],
+        });
+      }
 
       const raw = result.response.text();
       let data;
@@ -88,9 +175,25 @@ Requirements:
         // Try to extract JSON from markdown code blocks
         const jsonMatch = raw.match(/```json\s*([\s\S]*?)\s*```/) || raw.match(/```\s*([\s\S]*?)\s*```/);
         if (jsonMatch) {
-          data = JSON.parse(jsonMatch[1]);
+          try {
+            data = JSON.parse(jsonMatch[1]);
+          } catch (nestedParseError) {
+            console.error("Failed to parse extracted JSON:", nestedParseError);
+            return res.status(200).json({
+              success: false,
+              error: "Failed to parse AI response",
+              note: "The AI model returned an invalid JSON response. Please try again.",
+              opportunities: [],
+            });
+          }
         } else {
-          throw new Error("Failed to parse JSON response");
+          console.error("Failed to parse JSON response. Raw output:", raw.substring(0, 200));
+          return res.status(200).json({
+            success: false,
+            error: "Failed to parse AI response",
+            note: "The AI model returned an invalid JSON response. Please try again.",
+            opportunities: [],
+          });
         }
       }
 
