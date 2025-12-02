@@ -1,13 +1,32 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getModel, parseJSON } from "./_geminiShared.ts";
-import { verifyAuth } from "./verifyAuth.ts";
+import { checkApiKeys, getVerifyAuth, getModelRouter, withErrorHandling } from "./_errorHandler.ts";
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const user = await verifyAuth(req);
+  const apiKeyCheck = checkApiKeys();
+  if (!apiKeyCheck.hasKey) {
+    return res.status(200).json({
+      success: false,
+      error: "AI not configured",
+      note: apiKeyCheck.error,
+    });
+  }
+
+  let user;
+  try {
+    const verifyAuth = await getVerifyAuth();
+    user = await verifyAuth(req);
+  } catch (authError: any) {
+    return res.status(200).json({
+      success: false,
+      error: "Authentication error",
+      note: authError?.message || "Failed to verify authentication.",
+    });
+  }
+
   if (!user) {
     return res.status(401).json({ error: "Unauthorized" });
   }
@@ -18,7 +37,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const model = getModel();
+    const getModelForTask = await getModelRouter();
+    const model = await getModelForTask('critique', user.uid);
 
     const prompt = `
 You critique social media content and give constructive feedback.
@@ -47,15 +67,35 @@ Return ONLY JSON:
     });
 
     const raw = result.response.text();
-    const data = parseJSON(raw);
+    
+    // Parse JSON with fallback
+    let data;
+    try {
+      const { parseJSON } = await import("./_geminiShared.ts");
+      data = parseJSON(raw);
+    } catch (parseError) {
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        return res.status(200).json({
+          success: false,
+          error: "Failed to parse AI response",
+          note: "The AI returned an invalid response. Please try again.",
+        });
+      }
+    }
 
     return res.status(200).json(data);
   } catch (err: any) {
     console.error("generateCritique error:", err);
-    return res.status(500).json({
+    return res.status(200).json({
+      success: false,
       error: "Failed to critique content",
-      details: err?.message ?? String(err),
+      note: err?.message || "An unexpected error occurred. Please try again.",
+      details: process.env.NODE_ENV === "development" ? err?.stack : undefined,
     });
   }
 }
+
+export default withErrorHandling(handler);
 
