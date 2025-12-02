@@ -46,10 +46,14 @@ export const Opportunities: React.FC = () => {
         setResults([]);
         try {
             const trends = await findTrends(niche);
-            setResults(trends);
-        } catch (err) {
+            if (!trends || trends.length === 0) {
+                setError('No opportunities found. Try a different search term or check your API configuration.');
+            } else {
+                setResults(trends);
+            }
+        } catch (err: any) {
             console.error('Error finding trends:', err);
-            setError('Failed to find trends. Please try again.');
+            setError(err?.message || 'Failed to find trends. Please try again.');
             setResults([]);
         } finally {
             setIsLoading(false);

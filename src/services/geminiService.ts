@@ -217,6 +217,12 @@ export async function getVideoStatus(operationId: string): Promise<{ videoUrl?: 
 export async function findTrends(niche: string): Promise<any[]> {
   // Use the new findTrendsByNiche endpoint that accepts a niche string
   const res = await callFunction("findTrendsByNiche", { niche });
+  
+  // Check if API returned an error (even with 200 status)
+  if (res.success === false && res.error) {
+    throw new Error(res.note || res.error || "Failed to find trends");
+  }
+  
   return res.opportunities || res.trends || [];
 }
 
