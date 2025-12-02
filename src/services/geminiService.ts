@@ -162,12 +162,17 @@ export async function generateVideo(
   prompt: string,
   baseImage?: { data: string; mimeType: string },
   aspectRatio?: "16:9" | "9:16" | string
-): Promise<{ videoUrl?: string; operationId?: string; status?: string }> {
+): Promise<{ videoUrl?: string; operationId?: string; status?: string; error?: string }> {
   const res = await callFunction("generateVideo", {
     prompt,
     baseImage,
     aspectRatio,
   });
+  
+  // Check for errors in response
+  if (!res.success && res.error) {
+    throw new Error(res.note || res.error || "Video generation failed");
+  }
   
   // Return operation ID and status - frontend will poll for completion
   return {
@@ -196,7 +201,14 @@ export async function getVideoStatus(operationId: string): Promise<{ videoUrl?: 
     throw new Error(`API getVideoStatus failed: ${res.status} - ${errorText}`);
   }
 
-  return res.json();
+  const data = await res.json();
+  
+  // Check for errors in response
+  if (!data.success && data.error) {
+    throw new Error(data.note || data.error || "Failed to get video status");
+  }
+
+  return data;
 }
 
 /* ----------------------------------------------------
