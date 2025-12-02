@@ -70,6 +70,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 if (snap.exists()) {
                     const loaded = snap.data() as User;
 
+                    // Admins default to Creator dashboard unless they have a userType set
+                    // If Admin has no userType, set it to Creator
+                    if (loaded.role === 'Admin' && !loaded.userType) {
+                        loaded.userType = 'Creator';
+                    }
+
                     // Merge defaults safely
                     const mergedUser: User = {
                         ...loaded,
