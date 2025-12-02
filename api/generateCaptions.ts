@@ -1,35 +1,15 @@
 // api/generateCaptions.ts
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-// Dynamic imports to prevent module initialization errors
-let getModel: any;
-let parseJSON: any;
-let verifyAuth: any;
+import { checkApiKeys, getVerifyAuth, getModelRouter, withErrorHandling } from "./_errorHandler.ts";
 
 async function getGeminiShared() {
-  if (!getModel || !parseJSON) {
-    try {
-      const module = await import("./_geminiShared.ts");
-      getModel = module.getModel;
-      parseJSON = module.parseJSON;
-    } catch (importError: any) {
-      console.error("Failed to import _geminiShared:", importError);
-      throw new Error(`Failed to load Gemini module: ${importError?.message || String(importError)}`);
-    }
+  try {
+    const module = await import("./_geminiShared.ts");
+    return { getModel: module.getModel, parseJSON: module.parseJSON };
+  } catch (importError: any) {
+    console.error("Failed to import _geminiShared:", importError);
+    throw new Error(`Failed to load Gemini module: ${importError?.message || String(importError)}`);
   }
-  return { getModel, parseJSON };
-}
-
-async function getVerifyAuth() {
-  if (!verifyAuth) {
-    try {
-      const module = await import("./verifyAuth.ts");
-      verifyAuth = module.verifyAuth;
-    } catch (importError: any) {
-      console.error("Failed to import verifyAuth:", importError);
-      throw new Error(`Failed to load authentication module: ${importError?.message || String(importError)}`);
-    }
-  }
-  return verifyAuth;
 }
 
 type MediaData = {
@@ -118,141 +98,68 @@ async function fetchMediaFromUrl(mediaUrl: string): Promise<MediaData | null> {
   }
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Ultra-defensive error handling - catch everything
+async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  // Check API keys early
+  const apiKeyCheck = checkApiKeys();
+  if (!apiKeyCheck.hasKey) {
+    return res.status(200).json([
+      {
+        caption: apiKeyCheck.error || "AI captioning is not available because the AI API key is not configured.",
+        hashtags: [] as string[],
+      },
+    ]);
+  }
+
+  // Dynamic import for auth
+  let authUser;
   try {
-    // Validate request and response objects
-    if (!req || !res) {
-      console.error("generateCaptions: Invalid request or response object");
-      if (res && !res.headersSent) {
-        return res.status(200).json([
-          {
-            caption: "Invalid request. Please try again.",
-            hashtags: [] as string[],
-          },
-        ]);
-      }
-      return;
-    }
+    const verifyAuth = await getVerifyAuth();
+    authUser = await verifyAuth(req);
+  } catch (authError: any) {
+    console.error("verifyAuth error:", authError);
+    return res.status(200).json([
+      {
+        caption: authError?.message || "Authentication failed. Please try logging in again.",
+        hashtags: [] as string[],
+      },
+    ]);
+  }
 
-    if (req.method !== "POST") {
-      return res.status(405).json({ error: "Method not allowed" });
-    }
+  if (!authUser) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  const {
+    mediaUrl,
+    mediaData,
+    goal,
+    tone,
+    promptText,
+  }: {
+    mediaUrl?: string;
+    mediaData?: MediaData;
+    goal?: string;
+    tone?: string;
+    promptText?: string;
+  } = (req.body as any) || {};
 
-    // 🔐 Auth
-    let authUser;
-    try {
-      let verifyAuthFn;
-      try {
-        verifyAuthFn = await getVerifyAuth();
-      } catch (importError: any) {
-        console.error("Failed to load verifyAuth module:", importError);
-        return res.status(200).json([
-          {
-            caption: "Authentication module error. Please check server configuration.",
-            hashtags: [] as string[],
-          },
-        ]);
-      }
-      
-      try {
-        authUser = await verifyAuthFn(req);
-      } catch (err: any) {
-        console.error("verifyAuth failed in generateCaptions:", err);
-        return res.status(200).json([
-          {
-            caption: "Authentication failed. Please try logging in again.",
-            hashtags: [] as string[],
-          },
-        ]);
-      }
-    } catch (unexpectedError: any) {
-      console.error("Unexpected error in auth section:", unexpectedError);
-      return res.status(200).json([
-        {
-          caption: "An unexpected error occurred during authentication.",
-          hashtags: [] as string[],
-        },
-      ]);
-    }
-
-    if (!authUser) {
-      return res.status(200).json([
-        {
-          caption: "Please log in to generate captions.",
-          hashtags: [] as string[],
-        },
-      ]);
-    }
-    const {
-      mediaUrl,
-      mediaData,
-      goal,
-      tone,
-      promptText,
-    }: {
-      mediaUrl?: string;
-      mediaData?: MediaData;
-      goal?: string;
-      tone?: string;
-      promptText?: string;
-    } = (req.body as any) || {};
-
-    // 🔑 Soft-fail if AI keys are not configured
-    if (!process.env.GEMINI_API_KEY && !process.env.GOOGLE_API_KEY) {
-      console.error(
-        "generateCaptions: Missing GEMINI_API_KEY or GOOGLE_API_KEY"
-      );
-      return res.status(200).json([
-        {
-          caption:
-            "AI captioning is not available because the AI API key is not configured.",
-          hashtags: [] as string[],
-        },
-      ]);
-    }
-
-    // Use model router - captions use cheapest model for cost optimization
-    let model: any;
-    try {
-      let getModelForTask;
-      try {
-        const modelRouterModule = await import("./_modelRouter.ts");
-        getModelForTask = modelRouterModule.getModelForTask;
-      } catch (importError: any) {
-        console.error("Failed to import _modelRouter:", importError);
-        return res.status(200).json([
-          {
-            caption: "Failed to load AI model router. Please check server configuration.",
-            hashtags: [] as string[],
-          },
-        ]);
-      }
-      
-      try {
-        model = await getModelForTask("caption", authUser.uid);
-      } catch (modelErr: any) {
-        console.error(
-          "generateCaptions: model initialization error:",
-          modelErr
-        );
-        return res.status(200).json([
-          {
-            caption:
-              "Sorry, I couldn't initialize the AI model to generate captions. Please check your AI configuration.",
-            hashtags: [] as string[],
-          },
-        ]);
-      }
-    } catch (unexpectedModelError: any) {
-      console.error("Unexpected error in model initialization:", unexpectedModelError);
-      return res.status(200).json([
-        {
-          caption: "An unexpected error occurred while initializing the AI model.",
-          hashtags: [] as string[],
-        },
-      ]);
-    }
+  // Use model router - captions use cheapest model for cost optimization
+  let model: any;
+  try {
+    const getModelForTask = await getModelRouter();
+    model = await getModelForTask("caption", authUser.uid);
+  } catch (modelErr: any) {
+    console.error("generateCaptions: model initialization error:", modelErr);
+    return res.status(200).json([
+      {
+        caption: modelErr?.message || "Sorry, I couldn't initialize the AI model to generate captions. Please check your AI configuration.",
+        hashtags: [] as string[],
+      },
+    ]);
+  }
 
     // Build prompt
     const prompt = `
@@ -372,47 +279,23 @@ Return ONLY valid JSON in this shape:
       ];
     }
 
-    // ✅ IMPORTANT: return a bare array so frontend can do results[0].caption
-    return res.status(200).json(captions);
-  } catch (err: any) {
-    console.error("generateCaptions error (final catch):", err);
-    console.error("Error stack:", err?.stack);
-    console.error("Error name:", err?.name);
-    console.error("Error message:", err?.message);
+  // ✅ IMPORTANT: return a bare array so frontend can do results[0].caption
+  return res.status(200).json(captions);
+}
 
-    // Check if response was already sent
+export default withErrorHandling(async (req: VercelRequest, res: VercelResponse) => {
+  try {
+    return await handler(req, res);
+  } catch (err: any) {
+    console.error("generateCaptions error:", err);
     if (res.headersSent) {
-      console.error("generateCaptions: Response already sent, cannot send error response");
       return;
     }
-
-    // Return graceful error instead of 500 to prevent UI breakage
-    // Return empty captions array so frontend doesn't crash
-    try {
-      return res.status(200).json([
-        {
-          caption:
-            err?.message ||
-            "Sorry, I couldn't generate captions at this time. Please try again.",
-          hashtags: [] as string[],
-        },
-      ]);
-    } catch (sendError: any) {
-      console.error("generateCaptions: Failed to send error response:", sendError);
-      // Last resort - try to send a simple error
-      try {
-        if (!res.headersSent) {
-          res.status(200).json([
-            {
-              caption: "An unexpected error occurred.",
-              hashtags: [] as string[],
-            },
-          ]);
-        }
-      } catch {
-        // Give up - response may have already been sent
-        console.error("generateCaptions: Completely failed to send error response");
-      }
-    }
+    return res.status(200).json([
+      {
+        caption: err?.message || "Sorry, I couldn't generate captions at this time. Please try again.",
+        hashtags: [] as string[],
+      },
+    ]);
   }
-}
+});
