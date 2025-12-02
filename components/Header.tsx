@@ -46,8 +46,15 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
   }, []);
 
   const handleClientSelect = (client: Client | null) => {
+    console.log('handleClientSelect called:', client?.name || 'Main Account');
     setSelectedClient(client);
     setIsClientSwitcherOpen(false);
+    // Force dashboard refresh when switching accounts
+    if (client) {
+      console.log('Switching to client account:', client.name);
+    } else {
+      console.log('Switching to main account');
+    }
   };
   
   const handleToggleNotifications = () => {

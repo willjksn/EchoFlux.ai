@@ -201,6 +201,14 @@ export const Dashboard: React.FC = () => {
 
   const accountName = selectedClient ? selectedClient.name : 'Main Account';
   const currentStats = selectedClient ? selectedClient.socialStats : user?.socialStats;
+  
+  // Debug logging for Admin account switching
+  useEffect(() => {
+    if (user?.role === 'Admin') {
+      console.log('Dashboard - selectedClient changed:', selectedClient?.name || 'Main Account');
+      console.log('Dashboard - isBusiness:', isBusiness);
+    }
+  }, [selectedClient, user?.role, isBusiness]);
 
   const handleSelectMessage = (id: string, isSelected: boolean) => { setSelectedMessageIds(prev => { const newSet = new Set(prev); if (isSelected) newSet.add(id); else newSet.delete(id); return newSet; }); };
   const handleBulkArchive = () => { selectedMessageIds.forEach(id => updateMessage(id, { isArchived: true })); setSelectedMessageIds(new Set()); };
