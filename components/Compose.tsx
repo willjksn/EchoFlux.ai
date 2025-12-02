@@ -366,6 +366,81 @@ const CaptionGenerator: React.FC = () => {
     }
   };
 
+  const handleScheduleForReview = async (date: string) => {
+    const platformsToPost = (Object.keys(selectedPlatforms) as Platform[]).filter(
+      p => selectedPlatforms[p]
+    );
+    if (!composeState.captionText.trim() && !composeState.media) {
+      showToast('Please add content to schedule for review.', 'error');
+      return;
+    }
+    if (platformsToPost.length === 0) {
+      showToast('Please select at least one platform.', 'error');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      let mediaUrl = composeState.media?.previewUrl;
+      if (
+        composeState.media &&
+        composeState.media.data &&
+        !composeState.media.previewUrl.startsWith('http')
+      ) {
+        mediaUrl = await uploadMedia();
+      }
+
+      const title = composeState.captionText.trim()
+        ? composeState.captionText.substring(0, 30) + '...'
+        : 'New Post';
+
+      const postId = Date.now().toString();
+
+      if (user) {
+        const newPost: Post = {
+          id: postId,
+          content: composeState.captionText,
+          mediaUrl: mediaUrl,
+          mediaType: composeState.media?.type,
+          platforms: platformsToPost,
+          status: 'In Review',
+          author: { name: user.name, avatar: user.avatar },
+          comments: [],
+          scheduledDate: new Date(date).toISOString(),
+          clientId: selectedClient?.id
+        };
+
+        const safePost = JSON.parse(JSON.stringify(newPost));
+        await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
+      }
+
+      const newEvent: CalendarEvent = {
+        id: `cal-${postId}`,
+        title: title,
+        date: new Date(date).toISOString(),
+        type: composeState.media?.type === 'video' ? 'Reel' : 'Post',
+        platform: platformsToPost[0],
+        status: 'In Review',
+        thumbnail: mediaUrl
+      };
+
+      await addCalendarEvent(newEvent);
+      showToast(
+        `Post scheduled for review on ${new Date(date).toLocaleString([], {
+          dateStyle: 'medium',
+          timeStyle: 'short'
+        })}`,
+        'success'
+      );
+      resetCompose();
+    } catch (e) {
+      console.error(e);
+      showToast("Failed to schedule post for review.", 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleSchedule = async (date: string) => {
     const platformsToPost = (Object.keys(selectedPlatforms) as Platform[]).filter(
       p => selectedPlatforms[p]
