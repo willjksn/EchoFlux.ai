@@ -4,6 +4,9 @@ import {
   generateSpeech,
   generateStoryboard,
   generateCaptions,
+  generateVideo,
+  getVideoStatus,
+  saveGeneratedContent,
 } from '../src/services/geminiService';
 
 import {
@@ -21,6 +24,7 @@ import {
   PlusIcon,
   CheckCircleIcon,
   CalendarIcon,
+  DownloadIcon,
 } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 import { CustomVoice, Platform, VideoScene, CalendarEvent } from '../types';
@@ -36,8 +40,7 @@ import {
 import { UpgradePrompt } from './UpgradePrompt';
 import { MobilePreviewModal } from './MobilePreviewModal';
 
-// --- Disable ALL video generation ---
-const VIDEO_DISABLED = true; // UI stays, but actions show “coming soon!”
+// Video generation is now enabled!
 
 const loadingMessages = [
   'Warming up the virtual cameras...',
@@ -102,9 +105,12 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
   const [mode, setMode] = useState<'Simple' | 'Director'>('Simple');
 
   const [prompt, setPrompt] = useState('');
-  const [isLoading] = useState(false);
-  const [generatedVideoUrl] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
+  const [operationId, setOperationId] = useState<string | null>(null);
+  const [videoStatus, setVideoStatus] = useState<string>('idle');
   const [loadingMessage, setLoadingMessage] = useState(loadingMessages[0]);
+  const [aspectRatio, setAspectRatio] = useState<'16:9' | '9:16' | '1:1'>('9:16');
 
   const [uploadedImage, setUploadedImage] = useState<{
     data: string;
@@ -163,8 +169,42 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
     }
   }, [isBusiness, isAgencyPlan, mode]);
 
-  const showComingSoon = () =>
-    showToast('Video generation coming soon!', 'error');
+  // Poll for video status
+  useEffect(() => {
+    if (!operationId || videoStatus === 'succeeded' || videoStatus === 'failed') return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const status = await getVideoStatus(operationId);
+        setVideoStatus(status.status || 'processing');
+
+        if (status.status === 'succeeded' && status.videoUrl) {
+          setGeneratedVideoUrl(status.videoUrl);
+          setIsLoading(false);
+          setLoadingMessage('Video ready!');
+          showToast('Video generated successfully!', 'success');
+          if (onGenerate) onGenerate();
+        } else if (status.status === 'failed') {
+          setIsLoading(false);
+          showToast(status.error || 'Video generation failed', 'error');
+        }
+      } catch (error: any) {
+        console.error('Error polling video status:', error);
+        // Continue polling on error
+      }
+    }, 3000); // Poll every 3 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [operationId, videoStatus, onGenerate, showToast]);
+
+  // Rotate loading messages while generating
+  useEffect(() => {
+    if (!isLoading) return;
+    const interval = setInterval(() => {
+      setLoadingMessage(loadingMessages[Math.floor(Math.random() * loadingMessages.length)]);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [isLoading]);
 
   const handleMicClick = () => {
     if (!isSpeechRecognitionSupported || !recognitionRef.current) return;
@@ -207,6 +247,86 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
       );
     } finally {
       setIsStoryboarding(false);
+    }
+  };
+
+  const handleGenerate = async () => {
+    if (!prompt.trim()) {
+      showToast('Please enter a video prompt', 'error');
+      return;
+    }
+
+    setIsLoading(true);
+    setGeneratedVideoUrl(null);
+    setVideoStatus('starting');
+    setLoadingMessage(loadingMessages[0]);
+
+    try {
+      const result = await generateVideo(
+        prompt,
+        uploadedImage || undefined,
+        aspectRatio
+      );
+
+      if (result.operationId) {
+        setOperationId(result.operationId);
+        setVideoStatus(result.status || 'processing');
+        showToast('Video generation started. This may take a few minutes...', 'info');
+      } else if (result.videoUrl) {
+        // Video already ready (unlikely but handle it)
+        setGeneratedVideoUrl(result.videoUrl);
+        setIsLoading(false);
+        showToast('Video generated successfully!', 'success');
+        if (onGenerate) onGenerate();
+      } else {
+        throw new Error('No operation ID or video URL returned');
+      }
+    } catch (error: any) {
+      console.error('Video generation error:', error);
+      setIsLoading(false);
+      setVideoStatus('failed');
+      showToast(error?.message || 'Failed to generate video. Please try again.', 'error');
+    }
+  };
+
+  const handleDownloadVideo = async () => {
+    if (!generatedVideoUrl) return;
+    try {
+      const response = await fetch(generatedVideoUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `video-${Date.now()}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      showToast('Video downloaded!', 'success');
+    } catch (error: any) {
+      console.error('Download error:', error);
+      showToast('Failed to download video', 'error');
+    }
+  };
+
+  const handleSaveVideo = async () => {
+    if (!generatedVideoUrl || !prompt) return;
+    try {
+      const result = await saveGeneratedContent('video', {
+        videoUrl: generatedVideoUrl,
+        prompt: prompt,
+        aspectRatio: aspectRatio,
+        caption: caption,
+        createdAt: new Date().toISOString(),
+      });
+      if (result.success) {
+        showToast('Video saved to profile!', 'success');
+      } else {
+        showToast(result.error || 'Failed to save video', 'error');
+      }
+    } catch (error: any) {
+      console.error('Save error:', error);
+      showToast('Failed to save video', 'error');
     }
   };
 
@@ -286,22 +406,145 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
         // Simple Mode
         <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md space-y-4">
           <div>
-            <label className="block text-sm mb-1">Prompt</label>
-            <input
-              type="text"
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Video Prompt
+            </label>
+            <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              className="w-full p-3 border rounded-md bg-gray-50 dark:bg-gray-700"
-              placeholder="Describe video..."
+              className="w-full p-3 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
+              placeholder="Describe the video you want to generate..."
+              rows={3}
             />
           </div>
 
+          {/* Aspect Ratio Selector */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Aspect Ratio
+            </label>
+            <div className="flex gap-2">
+              {(['9:16', '16:9', '1:1'] as const).map((ratio) => (
+                <button
+                  key={ratio}
+                  onClick={() => setAspectRatio(ratio)}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    aspectRatio === ratio
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  {ratio === '9:16' ? 'Vertical (9:16)' : ratio === '16:9' ? 'Horizontal (16:9)' : 'Square (1:1)'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Image Upload Option */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Base Image (Optional - for image-to-video)
+            </label>
+            <input
+              ref={imageFileRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageFileChange}
+              className="hidden"
+            />
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => imageFileRef.current?.click()}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
+              >
+                <UploadIcon className="w-4 h-4" /> Upload Image
+              </button>
+              {uploadedImage && (
+                <div className="flex items-center gap-2">
+                  <img
+                    src={uploadedImage.previewUrl}
+                    alt="Preview"
+                    className="w-16 h-16 object-cover rounded"
+                  />
+                  <button
+                    onClick={() => setUploadedImage(null)}
+                    className="p-1 text-red-600 hover:text-red-700"
+                  >
+                    <TrashIcon className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Generate Button */}
           <button
-            onClick={showComingSoon}
-            className="flex items-center justify-center px-6 py-3 text-base font-medium text-white bg-primary-600 rounded-md"
+            onClick={handleGenerate}
+            disabled={isLoading || !prompt.trim()}
+            className="flex items-center justify-center gap-2 px-6 py-3 text-base font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <SparklesIcon /> Generate (Coming Soon)
+            {isLoading ? (
+              <>
+                <RefreshIcon className="animate-spin w-5 h-5" />
+                Generating...
+              </>
+            ) : (
+              <>
+                <SparklesIcon className="w-5 h-5" /> Generate Video
+              </>
+            )}
           </button>
+
+          {/* Loading Status */}
+          {isLoading && (
+            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <p className="text-sm text-blue-800 dark:text-blue-200 font-medium">
+                {loadingMessage}
+              </p>
+              <p className="text-xs text-blue-600 dark:text-blue-300 mt-1">
+                Status: {videoStatus === 'starting' ? 'Starting generation...' : videoStatus === 'processing' ? 'Processing video...' : videoStatus}
+              </p>
+            </div>
+          )}
+
+          {/* Generated Video */}
+          {generatedVideoUrl && (
+            <div className="space-y-4">
+              <div className="relative bg-black rounded-lg overflow-hidden">
+                <video
+                  src={generatedVideoUrl}
+                  controls
+                  className="w-full h-auto"
+                  style={{ maxHeight: '600px' }}
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleDownloadVideo}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gray-700 dark:bg-gray-600 rounded-md hover:bg-gray-800 dark:hover:bg-gray-500"
+                >
+                  <DownloadIcon className="w-4 h-4" /> Download
+                </button>
+                <button
+                  onClick={handleSaveVideo}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700"
+                >
+                  <CheckCircleIcon className="w-4 h-4" /> Save to Profile
+                </button>
+                <button
+                  onClick={() => {
+                    setGeneratedVideoUrl(null);
+                    setPrompt('');
+                    setCaption('');
+                    setUploadedImage(null);
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
+                >
+                  <RedoIcon className="w-4 h-4" /> Generate Another
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Caption */}
           <div className="pt-2 border-t">

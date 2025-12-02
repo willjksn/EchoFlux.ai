@@ -1,6 +1,6 @@
 import React from 'react';
 import { Page } from '../types';
-import { DashboardIcon, AnalyticsIcon, SettingsIcon, LogoIcon, ComposeIcon, TrendingIcon, TeamIcon, RocketIcon, BriefcaseIcon, AdminIcon, AutomationIcon, CalendarIcon, KanbanIcon, GlobeIcon, TargetIcon } from './icons/UIIcons';
+import { DashboardIcon, AnalyticsIcon, SettingsIcon, LogoIcon, ComposeIcon, TrendingIcon, TeamIcon, RocketIcon, BriefcaseIcon, AdminIcon, AutomationIcon, CalendarIcon, KanbanIcon, GlobeIcon, TargetIcon, SparklesIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 
 interface NavItemProps {
@@ -49,6 +49,7 @@ export const Sidebar: React.FC = () => {
     { page: 'automation', icon: <AutomationIcon />, label: 'Automation' },
     { page: 'autopilot', icon: <RocketIcon />, label: autopilotLabel, tourId: 'tour-step-autopilot-nav' },
     { page: 'strategy', icon: <TargetIcon />, label: 'Strategy' },
+    { page: 'ads', icon: <SparklesIcon />, label: 'Ad Generator' },
     { page: 'opportunities', icon: <TrendingIcon />, label: 'Opportunities', tourId: 'tour-step-opportunities-nav' },
     { page: 'calendar', icon: <CalendarIcon />, label: 'Calendar' },
     { page: 'approvals', icon: <KanbanIcon />, label: 'Approvals' },
@@ -78,6 +79,10 @@ export const Sidebar: React.FC = () => {
               }
               // Creator users OR Agency plan: Pro, Elite, Agency plans
               return ['Pro', 'Elite', 'Agency'].includes(user.plan);
+          case 'ads':
+              // Available on Pro, Elite, Growth, Starter, and Agency plans
+              // Temporarily show for all users for testing
+              return true; // ['Pro', 'Elite', 'Growth', 'Starter', 'Agency'].includes(user.plan || '');
           case 'autopilot':
               // Marketing Manager for Business: All Business plans (Starter, Growth, Agency)
               // AI Autopilot for Creators: Pro and Elite plans

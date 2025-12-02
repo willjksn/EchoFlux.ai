@@ -130,6 +130,34 @@ export async function generateImage(
 /* ----------------------------------------------------
    4) Video Generation
 ---------------------------------------------------- */
+export async function generateAd(opts: {
+  adType: "text" | "video";
+  product?: string;
+  service?: string;
+  targetAudience?: string;
+  goal?: string;
+  platform?: string;
+  tone?: string;
+  callToAction?: string;
+  budget?: string;
+  duration?: number;
+  additionalContext?: string;
+}) {
+  return await callFunction("generateAd", {
+    adType: opts.adType,
+    product: opts.product || null,
+    service: opts.service || null,
+    targetAudience: opts.targetAudience || null,
+    goal: opts.goal || null,
+    platform: opts.platform || null,
+    tone: opts.tone || null,
+    callToAction: opts.callToAction || null,
+    budget: opts.budget || null,
+    duration: opts.duration || null,
+    additionalContext: opts.additionalContext || null,
+  });
+}
+
 export async function generateVideo(
   prompt: string,
   baseImage?: { data: string; mimeType: string },
@@ -352,4 +380,48 @@ export async function generateAutopilotPlan(args: {
   
   // Return the plan structure (API returns { plan: {...} })
   return res.plan || res;
+}
+
+/* ----------------------------------------------------
+   19) Save Generated Content
+        Saves captions, images, videos, or ads to Firestore
+---------------------------------------------------- */
+export async function saveGeneratedContent(
+  type: "caption" | "image" | "video" | "ad",
+  content: any
+): Promise<{ success: boolean; contentId?: string; error?: string }> {
+  return await callFunction("saveGeneratedContent", {
+    type,
+    content,
+  });
+}
+
+/* ----------------------------------------------------
+   20) Get Generated Content
+        Fetches saved captions, images, videos, or ads from Firestore
+---------------------------------------------------- */
+export async function getGeneratedContent(
+  type?: "caption" | "image" | "video" | "ad"
+): Promise<{ success: boolean; content: any[]; error?: string }> {
+  const token = auth.currentUser
+    ? await auth.currentUser.getIdToken(true)
+    : null;
+
+  const url = type
+    ? `/api/getGeneratedContent?type=${encodeURIComponent(type)}`
+    : "/api/getGeneratedContent";
+
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!res.ok) {
+    throw new Error(`API getGeneratedContent failed: ${res.status}`);
+  }
+
+  return res.json();
 }

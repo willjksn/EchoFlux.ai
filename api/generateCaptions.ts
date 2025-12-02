@@ -1,7 +1,36 @@
 // api/generateCaptions.ts
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getModel, parseJSON } from "./_geminiShared.ts";
-import { verifyAuth } from "./verifyAuth.ts";
+// Dynamic imports to prevent module initialization errors
+let getModel: any;
+let parseJSON: any;
+let verifyAuth: any;
+
+async function getGeminiShared() {
+  if (!getModel || !parseJSON) {
+    try {
+      const module = await import("./_geminiShared.ts");
+      getModel = module.getModel;
+      parseJSON = module.parseJSON;
+    } catch (importError: any) {
+      console.error("Failed to import _geminiShared:", importError);
+      throw new Error(`Failed to load Gemini module: ${importError?.message || String(importError)}`);
+    }
+  }
+  return { getModel, parseJSON };
+}
+
+async function getVerifyAuth() {
+  if (!verifyAuth) {
+    try {
+      const module = await import("./verifyAuth.ts");
+      verifyAuth = module.verifyAuth;
+    } catch (importError: any) {
+      console.error("Failed to import verifyAuth:", importError);
+      throw new Error(`Failed to load authentication module: ${importError?.message || String(importError)}`);
+    }
+  }
+  return verifyAuth;
+}
 
 type MediaData = {
   data: string;
@@ -70,7 +99,11 @@ async function fetchMediaFromUrl(mediaUrl: string): Promise<MediaData | null> {
   try {
     const mediaRes = await fetch(mediaUrl);
     if (!mediaRes.ok) {
-      console.error("Failed to fetch media from URL:", mediaUrl, mediaRes.status);
+      console.error(
+        "Failed to fetch media from URL:",
+        mediaUrl,
+        mediaRes.status
+      );
       return null;
     }
 
@@ -86,24 +119,71 @@ async function fetchMediaFromUrl(mediaUrl: string): Promise<MediaData | null> {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
-  // 🔐 Auth
-  let authUser;
+  // Ultra-defensive error handling - catch everything
   try {
-    authUser = await verifyAuth(req);
-  } catch (err: any) {
-    console.error("verifyAuth failed in generateCaptions:", err);
-    return res.status(401).json({ error: "Unauthorized" });
-  }
+    // Validate request and response objects
+    if (!req || !res) {
+      console.error("generateCaptions: Invalid request or response object");
+      if (res && !res.headersSent) {
+        return res.status(200).json([
+          {
+            caption: "Invalid request. Please try again.",
+            hashtags: [] as string[],
+          },
+        ]);
+      }
+      return;
+    }
 
-  if (!authUser) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
+    if (req.method !== "POST") {
+      return res.status(405).json({ error: "Method not allowed" });
+    }
 
-  try {
+    // 🔐 Auth
+    let authUser;
+    try {
+      let verifyAuthFn;
+      try {
+        verifyAuthFn = await getVerifyAuth();
+      } catch (importError: any) {
+        console.error("Failed to load verifyAuth module:", importError);
+        return res.status(200).json([
+          {
+            caption: "Authentication module error. Please check server configuration.",
+            hashtags: [] as string[],
+          },
+        ]);
+      }
+      
+      try {
+        authUser = await verifyAuthFn(req);
+      } catch (err: any) {
+        console.error("verifyAuth failed in generateCaptions:", err);
+        return res.status(200).json([
+          {
+            caption: "Authentication failed. Please try logging in again.",
+            hashtags: [] as string[],
+          },
+        ]);
+      }
+    } catch (unexpectedError: any) {
+      console.error("Unexpected error in auth section:", unexpectedError);
+      return res.status(200).json([
+        {
+          caption: "An unexpected error occurred during authentication.",
+          hashtags: [] as string[],
+        },
+      ]);
+    }
+
+    if (!authUser) {
+      return res.status(200).json([
+        {
+          caption: "Please log in to generate captions.",
+          hashtags: [] as string[],
+        },
+      ]);
+    }
     const {
       mediaUrl,
       mediaData,
@@ -118,15 +198,61 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       promptText?: string;
     } = (req.body as any) || {};
 
+    // 🔑 Soft-fail if AI keys are not configured
     if (!process.env.GEMINI_API_KEY && !process.env.GOOGLE_API_KEY) {
-      return res.status(500).json({
-        error: "Missing GEMINI_API_KEY or GOOGLE_API_KEY",
-      });
+      console.error(
+        "generateCaptions: Missing GEMINI_API_KEY or GOOGLE_API_KEY"
+      );
+      return res.status(200).json([
+        {
+          caption:
+            "AI captioning is not available because the AI API key is not configured.",
+          hashtags: [] as string[],
+        },
+      ]);
     }
 
     // Use model router - captions use cheapest model for cost optimization
-    const { getModelForTask } = await import("./_modelRouter.ts");
-    const model = await getModelForTask('caption', authUser.uid);
+    let model: any;
+    try {
+      let getModelForTask;
+      try {
+        const modelRouterModule = await import("./_modelRouter.ts");
+        getModelForTask = modelRouterModule.getModelForTask;
+      } catch (importError: any) {
+        console.error("Failed to import _modelRouter:", importError);
+        return res.status(200).json([
+          {
+            caption: "Failed to load AI model router. Please check server configuration.",
+            hashtags: [] as string[],
+          },
+        ]);
+      }
+      
+      try {
+        model = await getModelForTask("caption", authUser.uid);
+      } catch (modelErr: any) {
+        console.error(
+          "generateCaptions: model initialization error:",
+          modelErr
+        );
+        return res.status(200).json([
+          {
+            caption:
+              "Sorry, I couldn't initialize the AI model to generate captions. Please check your AI configuration.",
+            hashtags: [] as string[],
+          },
+        ]);
+      }
+    } catch (unexpectedModelError: any) {
+      console.error("Unexpected error in model initialization:", unexpectedModelError);
+      return res.status(200).json([
+        {
+          caption: "An unexpected error occurred while initializing the AI model.",
+          hashtags: [] as string[],
+        },
+      ]);
+    }
 
     // Build prompt
     const prompt = `
@@ -171,26 +297,58 @@ Return ONLY valid JSON in this shape:
     }
 
     // Call Gemini with retry on rate limits
-    const result = await generateWithRetry(model, {
-      contents: [
-        {
-          role: "user",
-          parts,
+    let rawText: string;
+    try {
+      const result = await generateWithRetry(model, {
+        contents: [
+          {
+            role: "user",
+            parts,
+          },
+        ],
+        // Ask Gemini to respond as JSON directly
+        generationConfig: {
+          responseMimeType: "application/json",
         },
-      ],
-      // Ask Gemini to respond as JSON directly
-      generationConfig: {
-        responseMimeType: "application/json",
-      },
-    });
+      });
 
-    const rawText = result.response.text().trim();
+      if (!result?.response || typeof result.response.text !== "function") {
+        console.error(
+          "generateCaptions: Unexpected Gemini response shape",
+          result
+        );
+        // Fallback to safe message
+        return res.status(200).json([
+          {
+            caption:
+              "Sorry, I couldn't generate captions from the AI response. Please try again.",
+            hashtags: [] as string[],
+          },
+        ]);
+      }
+
+      rawText = result.response.text().trim();
+    } catch (aiErr: any) {
+      console.error("generateCaptions AI error:", aiErr);
+      return res.status(200).json([
+        {
+          caption:
+            aiErr?.message ||
+            "Sorry, I couldn't generate captions at this time. Please try again.",
+          hashtags: [] as string[],
+        },
+      ]);
+    }
 
     let parsed: any;
     try {
-      parsed = parseJSON(rawText);
+      const { parseJSON: parseJSONFn } = await getGeminiShared();
+      parsed = parseJSONFn(rawText);
     } catch (err) {
-      console.warn("JSON parse failed in generateCaptions, using text fallback:", err);
+      console.warn(
+        "JSON parse failed in generateCaptions, using text fallback:",
+        err
+      );
       parsed = [
         {
           caption: rawText,
@@ -219,14 +377,42 @@ Return ONLY valid JSON in this shape:
   } catch (err: any) {
     console.error("generateCaptions error (final catch):", err);
     console.error("Error stack:", err?.stack);
-    
+    console.error("Error name:", err?.name);
+    console.error("Error message:", err?.message);
+
+    // Check if response was already sent
+    if (res.headersSent) {
+      console.error("generateCaptions: Response already sent, cannot send error response");
+      return;
+    }
+
     // Return graceful error instead of 500 to prevent UI breakage
     // Return empty captions array so frontend doesn't crash
-    return res.status(200).json([
-      {
-        caption: "Sorry, I couldn't generate captions at this time. Please try again.",
-        hashtags: [] as string[],
-      },
-    ]);
+    try {
+      return res.status(200).json([
+        {
+          caption:
+            err?.message ||
+            "Sorry, I couldn't generate captions at this time. Please try again.",
+          hashtags: [] as string[],
+        },
+      ]);
+    } catch (sendError: any) {
+      console.error("generateCaptions: Failed to send error response:", sendError);
+      // Last resort - try to send a simple error
+      try {
+        if (!res.headersSent) {
+          res.status(200).json([
+            {
+              caption: "An unexpected error occurred.",
+              hashtags: [] as string[],
+            },
+          ]);
+        }
+      } catch {
+        // Give up - response may have already been sent
+        console.error("generateCaptions: Completely failed to send error response");
+      }
+    }
   }
 }

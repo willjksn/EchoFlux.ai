@@ -54,7 +54,7 @@ export interface AnalyticsData {
   }[];
 }
 
-export type Page = 'dashboard' | 'analytics' | 'settings' | 'compose' | 'calendar' | 'team' | 'opportunities' | 'profile' | 'about' | 'contact' | 'pricing' | 'clients' | 'faq' | 'terms' | 'privacy' | 'admin' | 'automation' | 'approvals' | 'bio' | 'strategy' | 'autopilot';
+export type Page = 'dashboard' | 'analytics' | 'settings' | 'compose' | 'calendar' | 'team' | 'opportunities' | 'profile' | 'about' | 'contact' | 'pricing' | 'clients' | 'faq' | 'terms' | 'privacy' | 'admin' | 'automation' | 'approvals' | 'bio' | 'strategy' | 'autopilot' | 'ads';
 
 export interface Settings {
     autoReply: boolean;
@@ -205,6 +205,8 @@ export interface User {
   monthlyCaptionGenerationsUsed: number;
   monthlyImageGenerationsUsed: number;
   monthlyVideoGenerationsUsed: number;
+  monthlyAdGenerationsUsed?: number;
+  monthlyVideoAdGenerationsUsed?: number;
   storageUsed: number; 
   storageLimit: number; 
   mediaLibrary: MediaItem[];
@@ -365,6 +367,7 @@ export interface ComposeState {
         data: string;
         mimeType: string;
         type: 'image' | 'video';
+        isGenerated?: boolean; // true if generated via AI, false/undefined if uploaded
     } | null;
     results: CaptionResult[];
     captionText: string;

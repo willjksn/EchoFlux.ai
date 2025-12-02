@@ -24,9 +24,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const replicateApiToken = process.env.REPLICATE_API_TOKEN;
 
     if (!replicateApiToken) {
-      return res.status(500).json({
+      return res.status(200).json({
+        success: false,
         error: "Replicate API not configured",
-        details: "Please add REPLICATE_API_TOKEN environment variable.",
+        note: "REPLICATE_API_TOKEN environment variable is missing.",
       });
     }
 
@@ -37,6 +38,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Return status and video URL if completed
     const response: any = {
+      success: true,
       operationId: prediction.id,
       status: prediction.status,
     };
@@ -51,6 +53,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         response.videoUrl = prediction.output.url;
       }
     } else if (prediction.status === "failed") {
+      response.success = false;
       response.error = prediction.error || "Video generation failed";
     }
 
@@ -58,17 +61,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (err: any) {
     console.error("getVideoStatus error:", err);
 
-    // Handle Replicate API errors
-    if (err.response) {
-      return res.status(err.response.status || 500).json({
-        error: "Failed to get video status",
-        details: err.message || String(err),
-      });
-    }
-
-    return res.status(500).json({
+    // Return 200 with error details instead of 500 to prevent UI breakage
+    return res.status(200).json({
+      success: false,
       error: "Failed to get video status",
-      details: err?.message || String(err),
+      note: err?.message || String(err) || "An unexpected error occurred. Please try again.",
+      details: process.env.NODE_ENV === "development" ? err?.stack : undefined,
     });
   }
 }

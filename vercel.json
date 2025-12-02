@@ -17,6 +17,16 @@
       "memory": 1024,
       "maxDuration": 30
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/syncSocialData",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/scrapeTrendingTopics",
+      "schedule": "0 */4 * * *"
+    }
+  ]
 }
 

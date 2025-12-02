@@ -44,6 +44,7 @@ import { Pricing } from './components/Pricing';
 import { CRMSidebar } from './components/CRMSidebar';
 import { BioPageBuilder } from './components/BioPageBuilder';
 import { Strategy } from './components/Strategy';
+import { AdGenerator } from './components/AdGenerator';
 import { VoiceAssistant } from './components/VoiceAssistant';
 
 const pageTitles: Record<Page, string> = {
@@ -68,6 +69,7 @@ const pageTitles: Record<Page, string> = {
     autopilot: 'AI Autopilot',
     bio: 'Link in Bio Builder',
     strategy: 'AI Content Strategist',
+    ads: 'AI Ad Generator',
 };
 
 const MainContent: React.FC = () => {
@@ -95,6 +97,7 @@ const MainContent: React.FC = () => {
         case 'autopilot': return <Autopilot />;
         case 'bio': return <BioPageBuilder />;
         case 'strategy': return <Strategy />;
+        case 'ads': return <AdGenerator />;
         default: return <Dashboard />;
     }
 }

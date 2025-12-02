@@ -1,6 +1,23 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { verifyAuth } from './verifyAuth';
-import { getAdminApp } from './_firebaseAdmin';
+// Dynamic imports to prevent module initialization errors
+let verifyAuth: any;
+let getAdminApp: any;
+
+async function getVerifyAuth() {
+  if (!verifyAuth) {
+    const module = await import('./verifyAuth.ts');
+    verifyAuth = module.verifyAuth;
+  }
+  return verifyAuth;
+}
+
+async function getAdminAppFunction() {
+  if (!getAdminApp) {
+    const module = await import('./_firebaseAdmin.ts');
+    getAdminApp = module.getAdminApp;
+  }
+  return getAdminApp;
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Create empty stats structure for error fallback
@@ -21,14 +38,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Verify authentication
     let authUser;
     try {
-      authUser = await verifyAuth(req);
+      const verifyAuthFn = await getVerifyAuth();
+      authUser = await verifyAuthFn(req);
     } catch (authError: any) {
       console.error('Auth verification error:', authError);
-      return res.status(401).json({ error: 'Unauthorized', details: authError?.message });
+      // Return empty stats instead of 401 since this is non-critical
+      return res.status(200).json(createEmptyStats());
     }
 
     if (!authUser || !authUser.uid) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      // Return empty stats instead of 401 since this is non-critical
+      return res.status(200).json(createEmptyStats());
     }
 
     const userId = authUser.uid;
@@ -36,16 +56,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Initialize Firebase Admin
     let db;
     try {
-      db = getAdminApp().firestore();
+      const getAdminAppFn = await getAdminAppFunction();
+      db = getAdminAppFn().firestore();
     } catch (firebaseError: any) {
       console.error('Firebase Admin initialization error:', firebaseError);
       // Return empty stats instead of error so UI doesn't break
-      const emptyStats: Record<string, { followers: number; following: number }> = {};
-      const platforms = ['Instagram', 'TikTok', 'X', 'Threads', 'YouTube', 'LinkedIn', 'Facebook'];
-      platforms.forEach(platform => {
-        emptyStats[platform] = { followers: 0, following: 0 };
-      });
-      return res.status(200).json(emptyStats);
+      return res.status(200).json(createEmptyStats());
     }
 
     // Fetch posts to aggregate stats

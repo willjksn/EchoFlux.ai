@@ -1,6 +1,25 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getModel, parseJSON } from "./_geminiShared.ts";
-import { verifyAuth } from "./verifyAuth.ts";
+// Dynamic imports to prevent module initialization errors
+let getModel: any;
+let parseJSON: any;
+let verifyAuth: any;
+
+async function getGeminiShared() {
+  if (!getModel || !parseJSON) {
+    const module = await import("./_geminiShared.ts");
+    getModel = module.getModel;
+    parseJSON = module.parseJSON;
+  }
+  return { getModel, parseJSON };
+}
+
+async function getVerifyAuth() {
+  if (!verifyAuth) {
+    const module = await import("./verifyAuth.ts");
+    verifyAuth = module.verifyAuth;
+  }
+  return verifyAuth;
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
@@ -10,20 +29,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Check for required environment variables early
   if (!process.env.GEMINI_API_KEY && !process.env.GOOGLE_API_KEY) {
     console.error("Missing GEMINI_API_KEY or GOOGLE_API_KEY environment variable");
-    return res.status(500).json({
-      error: "Server configuration error",
-      details: "GEMINI_API_KEY environment variable is missing"
+    return res.status(200).json({
+      success: false,
+      error: "AI not configured",
+      note: "GEMINI_API_KEY or GOOGLE_API_KEY is missing. Configure it in your environment to enable autopilot suggestions.",
     });
   }
 
   let user;
   try {
-    user = await verifyAuth(req);
+    const verifyAuthFn = await getVerifyAuth();
+    user = await verifyAuthFn(req);
   } catch (authError: any) {
     console.error("verifyAuth error:", authError);
-    return res.status(401).json({
-      error: "Authentication failed",
-      details: authError?.message || "Failed to verify authentication token"
+    return res.status(200).json({
+      success: false,
+      error: "Authentication error",
+      note: authError?.message || "Failed to verify authentication. Please try logging in again.",
     });
   }
 
@@ -38,7 +60,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const model = getModel("gemini-2.0-flash");
+    const { getModel: getModelFn, parseJSON: parseJSONFn } = await getGeminiShared();
+    const model = getModelFn("gemini-2.0-flash");
 
     const prompt = `
 You are an autopilot social media strategist.
@@ -60,7 +83,8 @@ Return ONLY JSON: ["Idea 1", "Idea 2", "Idea 3"]
     let ideas: string[];
 
     try {
-      ideas = parseJSON(raw);
+      const { parseJSON: parseJSONFn } = await getGeminiShared();
+      ideas = parseJSONFn(raw);
       if (!Array.isArray(ideas)) throw new Error("AI returned non-array");
     } catch {
       ideas = ["Campaign Idea 1", "Campaign Idea 2", "Campaign Idea 3"];
@@ -71,10 +95,15 @@ Return ONLY JSON: ["Idea 1", "Idea 2", "Idea 3"]
     console.error("generateAutopilotSuggestions error:", error);
     console.error("Error stack:", error?.stack);
     console.error("Error details:", JSON.stringify(error, null, 2));
-    return res.status(500).json({
+    return res.status(200).json({
+      success: false,
       error: "Failed to generate suggestions",
-      details: error?.message ?? String(error),
-      stack: process.env.NODE_ENV === 'development' ? error?.stack : undefined
+      note: error?.message || "An unexpected error occurred. Please try again.",
+      details: process.env.NODE_ENV === 'development' ? {
+        message: error?.message,
+        stack: error?.stack,
+        name: error?.name,
+      } : undefined,
     });
   }
 }

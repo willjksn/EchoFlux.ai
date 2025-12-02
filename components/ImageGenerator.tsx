@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { generateImage, generateCaptions } from '../src/services/geminiService';
-import { SparklesIcon, ImageIcon, ComposeIcon as CaptionIcon, SendIcon, TrashIcon, RedoIcon, EditIcon, MobileIcon, CalendarIcon } from './icons/UIIcons';
+import { generateImage, generateCaptions, saveGeneratedContent } from '../src/services/geminiService';
+import { SparklesIcon, ImageIcon, ComposeIcon as CaptionIcon, SendIcon, TrashIcon, RedoIcon, EditIcon, MobileIcon, CalendarIcon, DownloadIcon, CheckCircleIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 import { Platform, CalendarEvent } from '../types';
 import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
@@ -296,7 +296,7 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, usag
             </div>
 
             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md space-y-4">
-                {clients.length > 0 && (
+                {clients.length > 0 && (user.plan === 'Agency' || user.role === 'Admin') && (
                     <div>
                         <label htmlFor="client-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Generate for Client (Optional)</label>
                         <select id="client-select" value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white text-gray-900">
@@ -359,13 +359,45 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, usag
                 ) : generatedImage ? (
                     <div className="w-full h-full flex flex-col items-center justify-center gap-4">
                          <img src={`data:image/png;base64,${generatedImage}`} alt="Generated" className="max-w-full max-h-full object-contain rounded-lg shadow-lg" />
-                         <div className="flex gap-2">
+                         <div className="flex gap-2 flex-wrap justify-center">
                              <button onClick={handleRegenerate} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-700 dark:text-primary-300 bg-primary-100 dark:bg-primary-900/50 rounded-md hover:bg-primary-200 dark:hover:bg-primary-900">
                                 <RedoIcon /> Regenerate
                              </button>
                              <button onClick={handleEdit} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600">
                                 <EditIcon /> Edit
                              </button>
+                             <button 
+                                onClick={() => {
+                                    const a = document.createElement('a');
+                                    a.href = `data:image/png;base64,${generatedImage}`;
+                                    a.download = `image-${Date.now()}.png`;
+                                    document.body.appendChild(a);
+                                    a.click();
+                                    document.body.removeChild(a);
+                                    showToast('Image downloaded!', 'success');
+                                }}
+                                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/50 rounded-md hover:bg-blue-200 dark:hover:bg-blue-900"
+                            >
+                                <DownloadIcon /> Download
+                            </button>
+                            <button 
+                                onClick={async () => {
+                                    try {
+                                        await saveGeneratedContent('image', {
+                                            imageData: generatedImage,
+                                            imageUrl: `data:image/png;base64,${generatedImage}`,
+                                            prompt: prompt,
+                                        });
+                                        showToast('Image saved to profile!', 'success');
+                                    } catch (err) {
+                                        console.error(err);
+                                        showToast('Failed to save image', 'error');
+                                    }
+                                }}
+                                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/50 rounded-md hover:bg-green-200 dark:hover:bg-green-900"
+                            >
+                                <CheckCircleIcon /> Save
+                            </button>
                          </div>
                     </div>
                 ) : (
