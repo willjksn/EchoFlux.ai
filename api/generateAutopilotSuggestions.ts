@@ -21,7 +21,7 @@ async function getVerifyAuth() {
   return verifyAuth;
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -105,5 +105,26 @@ Return ONLY JSON: ["Idea 1", "Idea 2", "Idea 3"]
         name: error?.name,
       } : undefined,
     });
+  }
+}
+
+export default async function wrappedHandler(req: VercelRequest, res: VercelResponse) {
+  try {
+    await handler(req, res);
+  } catch (err: any) {
+    console.error("generateAutopilotSuggestions top-level error:", err);
+    console.error("Error stack:", err?.stack);
+    if (!res.headersSent) {
+      return res.status(200).json({
+        success: false,
+        error: "Internal server error",
+        note: err?.message || "An unexpected error occurred. Please try again.",
+        details: process.env.NODE_ENV === "development" ? {
+          message: err?.message,
+          stack: err?.stack,
+          name: err?.name,
+        } : undefined,
+      });
+    }
   }
 }
