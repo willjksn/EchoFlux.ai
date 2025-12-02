@@ -43,12 +43,23 @@ interface SaveContentRequest {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
   try {
-    const user = await verifyAuth(req);
+    if (req.method !== "POST") {
+      return res.status(405).json({ error: "Method not allowed" });
+    }
+
+    let user;
+    try {
+      user = await verifyAuth(req);
+    } catch (authError: any) {
+      console.error("verifyAuth error:", authError);
+      return res.status(200).json({
+        success: false,
+        error: "Authentication error",
+        note: authError?.message || "Failed to verify authentication.",
+      });
+    }
+
     if (!user) {
       return res.status(401).json({ error: "Unauthorized" });
     }
