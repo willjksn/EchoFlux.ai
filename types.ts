@@ -90,11 +90,17 @@ export interface TeamMember {
 }
 
 export interface Opportunity {
-    id:string;
-    type: 'Trending Hashtag' | 'Viral Audio' | 'Popular Topic';
+    id: string;
+    type: 'Trending Hashtag' | 'Viral Audio' | 'Popular Topic' | 'Collaboration Opportunity' | 'Content Gap';
     title: string;
     description: string;
     platform: Platform;
+    engagementPotential?: number; // 1-10 scale
+    trendingVelocity?: 'Rising' | 'Peak' | 'Declining';
+    relatedHashtags?: string[];
+    bestPractices?: string;
+    saved?: boolean;
+    createdAt?: string;
 }
 
 export interface ChatMessage {
