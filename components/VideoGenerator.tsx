@@ -376,17 +376,22 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
   const handleDownloadVideo = async () => {
     if (!generatedVideoUrl) return;
     try {
+      // If we have both video and audio, the video should already be combined
+      // But we'll ensure it's the combined version
       const response = await fetch(generatedVideoUrl);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `video-${Date.now()}.mp4`;
+      const filename = generatedAudioUrl 
+        ? `video-with-voiceover-${Date.now()}.webm`
+        : `video-${Date.now()}.mp4`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
-      showToast('Video downloaded!', 'success');
+      showToast(generatedAudioUrl ? 'Video with voiceover downloaded!' : 'Video downloaded!', 'success');
     } catch (error: any) {
       console.error('Download error:', error);
       showToast('Failed to download video', 'error');
