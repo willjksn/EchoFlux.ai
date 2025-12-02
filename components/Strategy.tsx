@@ -131,6 +131,24 @@ export const Strategy: React.FC = () => {
         showToast('Strategy loaded!', 'success');
     };
 
+    // When a new strategy is generated, create a temporary selectedStrategy object
+    useEffect(() => {
+        if (plan && !selectedStrategy) {
+            // Create a temporary strategy object for newly generated strategies
+            setSelectedStrategy({
+                id: `temp_${Date.now()}`,
+                name: 'Current Strategy',
+                plan: plan,
+                goal: goal,
+                niche: niche,
+                audience: audience,
+                status: 'active',
+                linkedPostIds: [],
+                createdAt: new Date().toISOString()
+            });
+        }
+    }, [plan]);
+
     const handleArchiveStrategy = async (strategyId: string) => {
         try {
             await updateStrategyStatus(strategyId, 'archived');
@@ -628,14 +646,14 @@ export const Strategy: React.FC = () => {
                         </div>
 
                         {/* Performance Tracking */}
-                        {selectedStrategy && (
+                        {plan && (
                             <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
                                 <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Performance Tracking</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-100 dark:border-green-800">
                                         <div className="text-green-600 dark:text-green-400 text-sm font-semibold mb-1">Posts Created</div>
                                         <div className="text-2xl font-bold text-green-700 dark:text-green-300">
-                                            {selectedStrategy.linkedPostIds?.length || 0}
+                                            {selectedStrategy?.linkedPostIds?.length || 0}
                                         </div>
                                         <div className="text-xs text-green-600 dark:text-green-400 mt-1">
                                             of {plan.weeks.reduce((total, week) => total + week.content.length, 0)} planned
@@ -644,13 +662,13 @@ export const Strategy: React.FC = () => {
                                     <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
                                         <div className="text-blue-600 dark:text-blue-400 text-sm font-semibold mb-1">Progress</div>
                                         <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">
-                                            {plan.weeks.length > 0 ? Math.round(((selectedStrategy.linkedPostIds?.length || 0) / plan.weeks.reduce((total, week) => total + week.content.length, 0)) * 100) : 0}%
+                                            {plan.weeks.length > 0 ? Math.round(((selectedStrategy?.linkedPostIds?.length || 0) / plan.weeks.reduce((total, week) => total + week.content.length, 0)) * 100) : 0}%
                                         </div>
                                         <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2 mt-2">
                                             <div 
                                                 className="bg-blue-600 dark:bg-blue-400 h-2 rounded-full transition-all"
                                                 style={{ 
-                                                    width: `${Math.min(((selectedStrategy.linkedPostIds?.length || 0) / plan.weeks.reduce((total, week) => total + week.content.length, 0)) * 100, 100)}%` 
+                                                    width: `${Math.min(((selectedStrategy?.linkedPostIds?.length || 0) / plan.weeks.reduce((total, week) => total + week.content.length, 0)) * 100, 100)}%` 
                                                 }}
                                             ></div>
                                         </div>
@@ -658,10 +676,10 @@ export const Strategy: React.FC = () => {
                                     <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-100 dark:border-purple-800">
                                         <div className="text-purple-600 dark:text-purple-400 text-sm font-semibold mb-1">Status</div>
                                         <div className="text-lg font-bold text-purple-700 dark:text-purple-300 capitalize">
-                                            {selectedStrategy.status || 'Active'}
+                                            {selectedStrategy?.status || 'Active'}
                                         </div>
                                         <div className="text-xs text-purple-600 dark:text-purple-400 mt-1">
-                                            {selectedStrategy.metrics?.lastUpdate ? `Updated ${new Date(selectedStrategy.metrics.lastUpdate).toLocaleDateString()}` : 'No metrics yet'}
+                                            {selectedStrategy?.metrics?.lastUpdate ? `Updated ${new Date(selectedStrategy.metrics.lastUpdate).toLocaleDateString()}` : 'Ready to start'}
                                         </div>
                                     </div>
                                 </div>
@@ -707,29 +725,25 @@ export const Strategy: React.FC = () => {
                                 <div className="flex-1">
                                     <div className="flex items-center gap-3 mb-1">
                                         <h4 className="font-bold text-lg text-gray-800 dark:text-gray-200">Week {week.weekNumber}: {week.theme}</h4>
-                                        {selectedStrategy && (
-                                            <span className={`text-xs px-2 py-1 rounded-full ${
-                                                weekProgress === 100 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
-                                                weekProgress > 0 ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' :
-                                                'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
-                                            }`}>
-                                                {weekProgress}% Complete
-                                            </span>
-                                        )}
+                                        <span className={`text-xs px-2 py-1 rounded-full ${
+                                            weekProgress === 100 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
+                                            weekProgress > 0 ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' :
+                                            'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                                        }`}>
+                                            {weekProgress}% Complete
+                                        </span>
                                     </div>
                                     <p className="text-xs text-gray-500 dark:text-gray-400">
                                         {week.content.filter(c => c.format === 'Post').length} Posts • 
                                         {week.content.filter(c => c.format === 'Reel').length} Reels • 
                                         {week.content.filter(c => c.format === 'Story').length} Stories
                                     </p>
-                                    {selectedStrategy && weekProgress < 100 && (
-                                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-2">
-                                            <div 
-                                                className="bg-primary-600 dark:bg-primary-400 h-1.5 rounded-full transition-all"
-                                                style={{ width: `${weekProgress}%` }}
-                                            ></div>
-                                        </div>
-                                    )}
+                                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-2">
+                                        <div 
+                                            className="bg-primary-600 dark:bg-primary-400 h-1.5 rounded-full transition-all"
+                                            style={{ width: `${weekProgress}%` }}
+                                        ></div>
+                                    </div>
                                 </div>
                                 <span className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider bg-white dark:bg-gray-700 px-3 py-1 rounded-full ml-4">{week.content.length} Total</span>
                             </div>
