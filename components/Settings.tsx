@@ -161,7 +161,8 @@ export const Settings: React.FC = () => {
         }
     }, [user?.plan, user?.role]);
 
-    const isVoiceFeatureUnlocked = voiceLimit > 0;
+    // Explicitly ensure Admins have access to voice cloning
+    const isVoiceFeatureUnlocked = voiceLimit > 0 || user?.role === 'Admin';
 
     // Handle OAuth callback from URL params
     useEffect(() => {
