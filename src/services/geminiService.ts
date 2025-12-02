@@ -283,9 +283,9 @@ export async function generateContentStrategy(
 /* ----------------------------------------------------
    11) Storyboard
 ---------------------------------------------------- */
-export async function generateStoryboard(concept: string): Promise<any> {
-  const res = await callFunction("generateStoryboard", { concept });
-  return res.storyboard || res;
+export async function generateStoryboard(concept: string, platform?: string): Promise<{ frames: Array<{ order: number; description: string; onScreenText?: string; spokenLine?: string }> }> {
+  const res = await callFunction("generateStoryboard", { idea: concept, platform });
+  return res.frames ? res : { frames: [] };
 }
 
 /* ----------------------------------------------------

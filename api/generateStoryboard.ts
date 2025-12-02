@@ -52,9 +52,11 @@ Return ONLY JSON:
     return res.status(200).json(data);
   } catch (err: any) {
     console.error("generateStoryboard error:", err);
-    return res.status(500).json({
+    return res.status(200).json({
+      success: false,
       error: "Failed to generate storyboard",
-      details: err?.message ?? String(err),
+      note: err?.message || String(err) || "An unexpected error occurred. Please try again.",
+      frames: [],
     });
   }
 }

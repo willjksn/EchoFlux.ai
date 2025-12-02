@@ -236,20 +236,96 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
   };
 
   const handleGenerateStoryboard = async () => {
-    if (!storyboardConcept.trim()) return;
+    if (!storyboardConcept.trim()) {
+      showToast('Please enter a video concept', 'error');
+      return;
+    }
     setIsStoryboarding(true);
     try {
-      const storyboard = await generateStoryboard(storyboardConcept);
-      setScenes(
-        storyboard.prompts.map((txt: string, i: number) => ({
-          id: `scene-${Date.now()}-${i}`,
-          prompt: txt,
-          status: 'pending',
-          duration: 4,
-        }))
-      );
+      const storyboard = await generateStoryboard(storyboardConcept, 'TikTok/Reels/Shorts');
+      if (storyboard.frames && storyboard.frames.length > 0) {
+        setScenes(
+          storyboard.frames.map((frame: any, i: number) => ({
+            id: `scene-${Date.now()}-${i}`,
+            prompt: frame.description || frame.prompt || '',
+            status: 'pending' as const,
+            duration: 4,
+            order: frame.order || i + 1,
+            onScreenText: frame.onScreenText,
+            spokenLine: frame.spokenLine,
+          }))
+        );
+        showToast(`Storyboard generated with ${storyboard.frames.length} scenes!`, 'success');
+      } else {
+        showToast('Failed to generate storyboard. Please try again.', 'error');
+      }
+    } catch (error: any) {
+      console.error('Storyboard generation error:', error);
+      showToast(error?.message || 'Failed to generate storyboard', 'error');
     } finally {
       setIsStoryboarding(false);
+    }
+  };
+
+  const handleGenerateSceneVideo = async (sceneId: string) => {
+    const scene = scenes.find(s => s.id === sceneId);
+    if (!scene) return;
+
+    // Update scene status
+    setScenes(prev => prev.map(s => 
+      s.id === sceneId ? { ...s, status: 'generating' } : s
+    ));
+
+    try {
+      const result = await generateVideo(scene.prompt, undefined, aspectRatio);
+      
+      if (result.operationId) {
+        // Poll for this specific scene
+        const pollScene = async () => {
+          try {
+            const status = await getVideoStatus(result.operationId!);
+            if (status.status === 'succeeded' && status.videoUrl) {
+              setScenes(prev => prev.map(s => 
+                s.id === sceneId ? { ...s, status: 'completed', videoUrl: status.videoUrl } : s
+              ));
+              showToast(`Scene ${scene.order} generated!`, 'success');
+            } else if (status.status === 'failed') {
+              setScenes(prev => prev.map(s => 
+                s.id === sceneId ? { ...s, status: 'failed' } : s
+              ));
+              showToast(`Scene ${scene.order} generation failed`, 'error');
+            } else {
+              // Continue polling
+              setTimeout(pollScene, 3000);
+            }
+          } catch (error) {
+            setScenes(prev => prev.map(s => 
+              s.id === sceneId ? { ...s, status: 'failed' } : s
+            ));
+          }
+        };
+        pollScene();
+      }
+    } catch (error: any) {
+      console.error('Scene generation error:', error);
+      setScenes(prev => prev.map(s => 
+        s.id === sceneId ? { ...s, status: 'failed' } : s
+      ));
+      showToast(`Failed to generate scene ${scene.order}`, 'error');
+    }
+  };
+
+  const handleGenerateAllScenes = async () => {
+    const pendingScenes = scenes.filter(s => s.status === 'pending');
+    if (pendingScenes.length === 0) {
+      showToast('No scenes to generate', 'info');
+      return;
+    }
+    
+    for (const scene of pendingScenes) {
+      await handleGenerateSceneVideo(scene.id);
+      // Small delay between scene generations
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
   };
 
@@ -386,34 +462,137 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
       {/* Director Mode */}
       {mode === 'Director' ? (
         <div className="space-y-6">
+          {/* Storyboard Generation */}
           <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
             <div className="flex items-center gap-2 mb-4">
               <FilmIcon className="w-5 h-5 text-primary-600" />
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">
-                Director Mode - Coming Soon
+                1. Generate Storyboard
               </h3>
-            </div>
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
-              <p className="text-sm text-blue-800 dark:text-blue-200">
-                Director Mode will allow you to create multi-scene videos with storyboards, scene-by-scene editing, and advanced video composition features.
-              </p>
             </div>
             <textarea
               value={storyboardConcept}
               onChange={(e) => setStoryboardConcept(e.target.value)}
-              placeholder="Enter video concept for storyboard generation..."
+              placeholder="Describe your video concept. For example: 'A 30-second product showcase starting with a close-up, then panning out to show the full product, ending with a call-to-action.'"
               className="w-full p-3 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
               rows={4}
-              disabled
             />
             <button
-              onClick={showComingSoon}
-              disabled
-              className="mt-3 px-4 py-2 bg-gray-400 text-white rounded-md cursor-not-allowed opacity-60"
+              onClick={handleGenerateStoryboard}
+              disabled={isStoryboarding || !storyboardConcept.trim()}
+              className="mt-3 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              Coming Soon
+              {isStoryboarding ? (
+                <>
+                  <RefreshIcon className="animate-spin w-4 h-4" />
+                  Generating Storyboard...
+                </>
+              ) : (
+                <>
+                  <SparklesIcon className="w-4 h-4" />
+                  Generate Storyboard
+                </>
+              )}
             </button>
           </div>
+
+          {/* Scenes List */}
+          {scenes.length > 0 && (
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                  2. Scenes ({scenes.length})
+                </h3>
+                <button
+                  onClick={handleGenerateAllScenes}
+                  className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-sm font-medium"
+                >
+                  Generate All Scenes
+                </button>
+              </div>
+              <div className="space-y-3">
+                {scenes.map((scene) => (
+                  <div
+                    key={scene.id}
+                    className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-sm font-semibold text-primary-600">
+                            Scene {scene.order || scenes.indexOf(scene) + 1}
+                          </span>
+                          <span
+                            className={`text-xs px-2 py-1 rounded ${
+                              scene.status === 'completed'
+                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                : scene.status === 'generating'
+                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                                : scene.status === 'failed'
+                                ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                            }`}
+                          >
+                            {scene.status}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-700 dark:text-gray-300 mb-1">
+                          {scene.prompt}
+                        </p>
+                        {scene.onScreenText && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            On-screen text: {scene.onScreenText}
+                          </p>
+                        )}
+                        {scene.spokenLine && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Voiceover: {scene.spokenLine}
+                          </p>
+                        )}
+                        {scene.videoUrl && (
+                          <div className="mt-2">
+                            <video
+                              src={scene.videoUrl}
+                              controls
+                              className="w-full max-w-md rounded"
+                              style={{ maxHeight: '200px' }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                      <div className="ml-4">
+                        {scene.status === 'pending' && (
+                          <button
+                            onClick={() => handleGenerateSceneVideo(scene.id)}
+                            className="px-3 py-1.5 bg-primary-600 text-white rounded text-sm hover:bg-primary-700"
+                          >
+                            Generate
+                          </button>
+                        )}
+                        {scene.status === 'generating' && (
+                          <div className="flex items-center gap-2 text-sm text-blue-600">
+                            <RefreshIcon className="animate-spin w-4 h-4" />
+                            Generating...
+                          </div>
+                        )}
+                        {scene.status === 'completed' && (
+                          <CheckCircleIcon className="w-5 h-5 text-green-600" />
+                        )}
+                        {scene.status === 'failed' && (
+                          <button
+                            onClick={() => handleGenerateSceneVideo(scene.id)}
+                            className="px-3 py-1.5 bg-red-600 text-white rounded text-sm hover:bg-red-700"
+                          >
+                            Retry
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         // Simple Mode
