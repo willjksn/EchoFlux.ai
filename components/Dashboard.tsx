@@ -37,9 +37,16 @@ export const Dashboard: React.FC = () => {
   // For Creator users: Show "Content Strategy", "Check Analytics", "Audience Stats", "Followers"
   // For Business users: Show "Marketing Plan", "Business Insights", "Business Metrics", "Potential Reach"
   // Admins default to Creator dashboard, but when switching to a client account, show Business dashboard
-  const isBusiness = selectedClient 
-    ? true  // When viewing a client account, show Business dashboard
-    : (user?.userType === 'Business' && user?.role !== 'Admin');  // Admins default to Creator unless viewing client
+  const isBusiness = useMemo(() => {
+    if (selectedClient) {
+      return true;  // When viewing a client account, show Business dashboard
+    }
+    // Admins default to Creator unless viewing client
+    if (user?.role === 'Admin') {
+      return false;  // Admin's own dashboard is Creator view
+    }
+    return user?.userType === 'Business';
+  }, [selectedClient, user?.role, user?.userType]);
   
   // Calculate today's highlights
   const todaysHighlights = useMemo(() => {
