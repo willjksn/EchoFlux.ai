@@ -1,13 +1,35 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-// Model routing handled by _modelRouter.ts
-import { verifyAuth } from "./verifyAuth.ts";
+import { checkApiKeys, getVerifyAuth, getModelRouter, withErrorHandling } from "./_errorHandler.ts";
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const user = await verifyAuth(req);
+  // Check API keys early
+  const apiKeyCheck = checkApiKeys();
+  if (!apiKeyCheck.hasKey) {
+    return res.status(200).json({
+      success: false,
+      error: "AI not configured",
+      note: apiKeyCheck.error,
+    });
+  }
+
+  // Dynamic import for auth
+  let user;
+  try {
+    const verifyAuth = await getVerifyAuth();
+    user = await verifyAuth(req);
+  } catch (authError: any) {
+    console.error("verifyAuth error:", authError);
+    return res.status(200).json({
+      success: false,
+      error: "Authentication error",
+      note: authError?.message || "Failed to verify authentication. Please try logging in again.",
+    });
+  }
+
   if (!user) {
     return res.status(401).json({ error: "Unauthorized" });
   }
@@ -19,7 +41,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     // Use model router - replies use cheapest model for cost optimization
-    const { getModelForTask } = await import("./_modelRouter.ts");
+    const getModelForTask = await getModelRouter();
     const model = await getModelForTask('reply', user.uid);
 
     const prompt = `
@@ -43,9 +65,13 @@ Write a short reply that feels human, not robotic. Do NOT add greetings if user 
     return res.status(200).json({ reply });
   } catch (err: any) {
     console.error("generateReply error:", err);
-    return res.status(500).json({
+    return res.status(200).json({
+      success: false,
       error: "Failed to generate reply",
-      details: err?.message ?? String(err),
+      note: err?.message || "An unexpected error occurred. Please try again.",
+      details: process.env.NODE_ENV === "development" ? err?.stack : undefined,
     });
   }
 }
+
+export default withErrorHandling(handler);
