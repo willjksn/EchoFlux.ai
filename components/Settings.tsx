@@ -674,7 +674,7 @@ export const Settings: React.FC = () => {
                             <ToneSlider label="Humor" value={settings.tone.humor} onChange={(val) => updateToneSetting('humor', val)} description="Low for serious, high for witty & funny replies."/>
                             <ToneSlider label="Empathy" value={settings.tone.empathy} onChange={(val) => updateToneSetting('empathy', val)} description="Low for direct, high for supportive & understanding."/>
                             
-                            {(user.plan === 'Free' || user.plan === 'Pro' || user.plan === 'Elite' || user.plan === 'Agency' || user.role === 'Admin') && (
+                            {user && (user.plan === 'Free' || user.plan === 'Pro' || user.plan === 'Elite' || user.plan === 'Agency' || user.role === 'Admin' || !user.plan) && (
                                 <>
                                     <hr className="border-gray-200 dark:border-gray-700 my-4" />
                                     <ToneSlider 
