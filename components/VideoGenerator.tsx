@@ -385,21 +385,31 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
 
       {/* Director Mode */}
       {mode === 'Director' ? (
-        <div className="space-y-6 opacity-50 pointer-events-none">
+        <div className="space-y-6">
           <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
-              1. Storyboard
-            </h3>
+            <div className="flex items-center gap-2 mb-4">
+              <FilmIcon className="w-5 h-5 text-primary-600" />
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                Director Mode - Coming Soon
+              </h3>
+            </div>
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+              <p className="text-sm text-blue-800 dark:text-blue-200">
+                Director Mode will allow you to create multi-scene videos with storyboards, scene-by-scene editing, and advanced video composition features.
+              </p>
+            </div>
             <textarea
               value={storyboardConcept}
               onChange={(e) => setStoryboardConcept(e.target.value)}
-              placeholder="Enter video concept..."
-              className="w-full p-3 border rounded-md bg-gray-50 dark:bg-gray-700"
-              rows={2}
+              placeholder="Enter video concept for storyboard generation..."
+              className="w-full p-3 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
+              rows={4}
+              disabled
             />
             <button
               onClick={showComingSoon}
-              className="mt-3 px-4 py-2 bg-primary-600 text-white rounded-md"
+              disabled
+              className="mt-3 px-4 py-2 bg-gray-400 text-white rounded-md cursor-not-allowed opacity-60"
             >
               Coming Soon
             </button>
