@@ -275,13 +275,17 @@ export const Dashboard: React.FC = () => {
              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Quick Actions</h3>
              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4">
                   <QuickAction label="Create Post" icon={<SparklesIcon className="w-6 h-6" />} color="bg-gradient-to-br from-purple-500 to-indigo-600" onClick={() => setActivePage('compose')} />
-                  <QuickAction label={isBusiness ? 'Marketing Plan' : 'Content Strategy'} icon={<TrendingIcon className="w-6 h-6" />} color="bg-gradient-to-br from-blue-500 to-cyan-500" onClick={() => setActivePage('strategy')} />
-                  <QuickAction label="View Calendar" icon={<CalendarIcon className="w-6 h-6" />} color="bg-gradient-to-br from-orange-400 to-red-500" onClick={() => setActivePage('calendar')} />
-                  <QuickAction label={isBusiness ? 'Business Insights' : 'Check Analytics'} icon={<CheckCircleIcon className="w-6 h-6" />} color="bg-gradient-to-br from-emerald-400 to-green-600" onClick={() => setActivePage('analytics')} />
-                  {(!isBusiness || user?.plan === 'Agency') && (
-                    <QuickAction label="Opportunities" icon={<TrendingIcon className="w-6 h-6" />} color="bg-gradient-to-br from-pink-500 to-rose-500" onClick={() => setActivePage('opportunities')} />
+                  {user?.plan !== 'Free' && (
+                    <>
+                      <QuickAction label={isBusiness ? 'Marketing Plan' : 'Content Strategy'} icon={<TrendingIcon className="w-6 h-6" />} color="bg-gradient-to-br from-blue-500 to-cyan-500" onClick={() => setActivePage('strategy')} />
+                      <QuickAction label="View Calendar" icon={<CalendarIcon className="w-6 h-6" />} color="bg-gradient-to-br from-orange-400 to-red-500" onClick={() => setActivePage('calendar')} />
+                      <QuickAction label={isBusiness ? 'Business Insights' : 'Check Analytics'} icon={<CheckCircleIcon className="w-6 h-6" />} color="bg-gradient-to-br from-emerald-400 to-green-600" onClick={() => setActivePage('analytics')} />
+                      {(!isBusiness || user?.plan === 'Agency') && (
+                        <QuickAction label="Opportunities" icon={<TrendingIcon className="w-6 h-6" />} color="bg-gradient-to-br from-pink-500 to-rose-500" onClick={() => setActivePage('opportunities')} />
+                      )}
+                      <QuickAction label={isBusiness ? 'AI Marketing Manager' : 'AI Autopilot'} icon={<RocketIcon />} color="bg-gradient-to-br from-amber-500 to-orange-500" onClick={() => setActivePage('autopilot')} />
+                    </>
                   )}
-                  <QuickAction label={isBusiness ? 'AI Marketing Manager' : 'AI Autopilot'} icon={<RocketIcon />} color="bg-gradient-to-br from-amber-500 to-orange-500" onClick={() => setActivePage('autopilot')} />
               </div>
           </div>
 
@@ -289,7 +293,16 @@ export const Dashboard: React.FC = () => {
           <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">{isBusiness ? 'Business Metrics' : 'Audience Stats'}</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                  {currentStats && Object.entries(currentStats).map(([platform, stats]) => {
+                  {currentStats && Object.entries(currentStats)
+                    // For Free plan, only show the first connected social account
+                    .filter(([platform, stats], index) => {
+                      if (user?.plan === 'Free') {
+                        // Only show the first connected account
+                        return index === 0;
+                      }
+                      return true;
+                    })
+                    .map(([platform, stats]) => {
                     const trend = calculateTrend(stats.followers, platform);
                     return (
                      <div key={platform} className="relative overflow-hidden p-4 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700/50 dark:to-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-600 hover:shadow-md transition-all">
