@@ -38,10 +38,32 @@ export const BrandSuggestions: React.FC = () => {
         if (!niche.trim()) return;
         setIsLoading(true);
         try {
-            const results = await generateBrandSuggestions(niche);
-            setSuggestions(results);
-        } catch (e) {
-            console.error(e);
+            const profile = selectedClient || user;
+            const results = await generateBrandSuggestions({
+                niche: niche.trim(),
+                audience: profile?.name || 'General Audience',
+                userType: user?.userType || 'Creator'
+            });
+            // Handle both array format and object format
+            if (Array.isArray(results)) {
+                setSuggestions(results);
+            } else if (results.suggestions && Array.isArray(results.suggestions)) {
+                setSuggestions(results.suggestions);
+            } else if (results.brands && Array.isArray(results.brands)) {
+                setSuggestions(results.brands);
+            } else {
+                // If API returns strings, convert to expected format
+                const suggestionsArray = Array.isArray(results) ? results : [results];
+                setSuggestions(suggestionsArray.map((s: any, idx: number) => {
+                    if (typeof s === 'string') {
+                        return { name: `Brand ${idx + 1}`, reason: s, matchScore: 85 };
+                    }
+                    return s;
+                }));
+            }
+        } catch (e: any) {
+            console.error('Brand suggestions error:', e);
+            setSuggestions([]);
         } finally {
             setIsLoading(false);
         }

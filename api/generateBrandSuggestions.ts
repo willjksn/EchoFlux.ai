@@ -45,14 +45,26 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     const model = await getModelForTask('brand', user.uid);
 
     const prompt = `
-You are an expert brand strategist.
+You are an expert brand strategist specializing in brand partnerships and collaborations.
 
-Generate 5 tailored brand-building suggestions for:
+Generate 5 brand partnership suggestions for:
 - User Type: ${userType}
 - Niche: ${niche}
-- Audience: ${audience}
+- Target Audience: ${audience}
 
-Return ONLY JSON: an array of suggestion strings.
+Return ONLY valid JSON array with this exact structure:
+[
+  {
+    "name": "Brand Name",
+    "reason": "Why this brand is a good match (2-3 sentences)",
+    "matchScore": 85
+  }
+]
+
+Each brand should:
+- Be relevant to the niche and audience
+- Have a matchScore between 70-100
+- Include a clear reason for the partnership potential
 `;
 
     const response = await model.generateContent({
@@ -70,9 +82,22 @@ Return ONLY JSON: an array of suggestion strings.
       try {
         suggestions = JSON.parse(raw);
       } catch {
-        suggestions = [raw];
+        // Fallback: create suggestions from raw text
+        suggestions = [{ name: "Brand Partnership", reason: raw, matchScore: 80 }];
       }
     }
+
+    // Ensure suggestions is an array
+    if (!Array.isArray(suggestions)) {
+      suggestions = [suggestions];
+    }
+
+    // Ensure each suggestion has the required fields
+    suggestions = suggestions.map((s: any, idx: number) => ({
+      name: s.name || `Brand ${idx + 1}`,
+      reason: s.reason || s.description || s || "Potential brand partnership opportunity",
+      matchScore: typeof s.matchScore === 'number' ? s.matchScore : (s.score || 80)
+    }));
 
     return res.status(200).json({ suggestions });
   } catch (err: any) {
@@ -87,4 +112,5 @@ Return ONLY JSON: an array of suggestion strings.
 }
 
 export default withErrorHandling(handler);
+
 

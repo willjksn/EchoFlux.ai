@@ -111,12 +111,37 @@ export const Analytics: React.FC = () => {
         if (!data) return;
         setIsGeneratingReport(true);
         setIsReportModalOpen(true);
+        setReportContent(""); // Clear previous report
         try {
             const report = await generateAnalyticsReport(data);
-            setReportContent(report);
-        } catch (error) {
-            setReportContent("Sorry, there was an error generating the report. Please try again.");
-            console.error(error);
+            // Handle both string and object formats
+            if (typeof report === 'string') {
+                setReportContent(report);
+            } else if (report && typeof report === 'object') {
+                // Format the report object into a readable string
+                let formattedReport = '';
+                if (report.summary) {
+                    formattedReport += `## Summary\n\n${report.summary}\n\n`;
+                }
+                if (report.growthInsights && Array.isArray(report.growthInsights) && report.growthInsights.length > 0) {
+                    formattedReport += `## Growth Insights\n\n${report.growthInsights.map((insight: string, idx: number) => `${idx + 1}. ${insight}`).join('\n')}\n\n`;
+                }
+                if (report.recommendedActions && Array.isArray(report.recommendedActions) && report.recommendedActions.length > 0) {
+                    formattedReport += `## Recommended Actions\n\n${report.recommendedActions.map((action: string, idx: number) => `${idx + 1}. ${action}`).join('\n')}\n\n`;
+                }
+                if (report.riskFactors && Array.isArray(report.riskFactors) && report.riskFactors.length > 0) {
+                    formattedReport += `## Risk Factors\n\n${report.riskFactors.map((risk: string, idx: number) => `${idx + 1}. ${risk}`).join('\n')}\n\n`;
+                }
+                if (report.error || report.note) {
+                    formattedReport = `Error: ${report.error || report.note}`;
+                }
+                setReportContent(formattedReport || JSON.stringify(report, null, 2));
+            } else {
+                setReportContent("Sorry, there was an error generating the report. Please try again.");
+            }
+        } catch (error: any) {
+            setReportContent(`Sorry, there was an error generating the report: ${error?.message || 'Unknown error'}. Please try again.`);
+            console.error('Analytics report error:', error);
         } finally {
             setIsGeneratingReport(false);
         }

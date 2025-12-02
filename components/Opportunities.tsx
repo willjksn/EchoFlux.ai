@@ -43,20 +43,22 @@ export const Opportunities: React.FC = () => {
         if (!niche.trim()) return;
         setIsLoading(true);
         setError(null);
-        setResults([]);
+        // Don't clear results - keep previous results until new ones arrive
         try {
             const trends = await findTrends(niche);
             if (!trends || trends.length === 0) {
                 setError('No opportunities found. Try a different search term or check your API configuration.');
+                // Only clear if no results found
                 setResults([]);
             } else {
                 console.log('Found opportunities:', trends.length, trends);
+                // Update results with new scan - this replaces previous results
                 setResults(trends);
             }
         } catch (err: any) {
             console.error('Error finding trends:', err);
             setError(err?.message || 'Failed to find trends. Please try again.');
-            setResults([]);
+            // Don't clear results on error - keep previous results visible
         } finally {
             setIsLoading(false);
         }

@@ -172,7 +172,7 @@ export const Strategy: React.FC = () => {
         showToast('Strategy exported!', 'success');
     };
 
-    const handlePopulateCalendar = () => {
+    const handlePopulateCalendar = async () => {
         if (!plan) return;
 
         const today = new Date();
@@ -182,22 +182,29 @@ export const Strategy: React.FC = () => {
 
         let eventsAdded = 0;
 
+        // Create all calendar events and await them
+        const eventPromises = [];
         plan.weeks.forEach((week, wIndex) => {
             week.content.forEach((dayPlan) => {
                 const eventDate = new Date(startDate);
                 eventDate.setDate(startDate.getDate() + (wIndex * 7) + dayPlan.dayOffset);
 
-                addCalendarEvent({
-                    id: `strat-${Date.now()}-${wIndex}-${dayPlan.dayOffset}`,
-                    title: dayPlan.topic,
-                    date: eventDate.toISOString(),
-                    type: dayPlan.format,
-                    platform: dayPlan.platform,
-                    status: 'Draft'
-                });
+                eventPromises.push(
+                    addCalendarEvent({
+                        id: `strat-${Date.now()}-${wIndex}-${dayPlan.dayOffset}-${eventsAdded}`,
+                        title: dayPlan.topic,
+                        date: eventDate.toISOString(),
+                        type: dayPlan.format,
+                        platform: dayPlan.platform,
+                        status: 'Draft'
+                    })
+                );
                 eventsAdded++;
             });
         });
+
+        // Wait for all events to be saved
+        await Promise.all(eventPromises);
 
         showToast(`Added ${eventsAdded} drafts to your calendar!`, 'success');
         setActivePage('calendar');

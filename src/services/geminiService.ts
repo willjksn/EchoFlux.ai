@@ -420,10 +420,10 @@ export async function generateStoryboard(concept: string, platform?: string): Pr
    12) Brand Suggestions
 ---------------------------------------------------- */
 export async function generateBrandSuggestions(
-  niche: string
+  payload: { niche: string; audience?: string; userType?: string }
 ): Promise<any[]> {
-  const res = await callFunction("generateBrandSuggestions", { niche });
-  return res.brands || res;
+  const res = await callFunction("generateBrandSuggestions", payload);
+  return res.suggestions || res.brands || res;
 }
 
 /* ----------------------------------------------------
@@ -431,9 +431,10 @@ export async function generateBrandSuggestions(
 ---------------------------------------------------- */
 export async function generateAnalyticsReport(
   data: any
-): Promise<string> {
-  const res = await callFunction("generateAnalyticsReport", { data });
-  return res.report;
+): Promise<any> {
+  const res = await callFunction("generateAnalyticsReport", { analytics: data });
+  // API returns the parsed report object directly, not wrapped in { report: ... }
+  return res;
 }
 
 /* ----------------------------------------------------
