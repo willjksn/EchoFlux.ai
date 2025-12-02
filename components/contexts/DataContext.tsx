@@ -243,10 +243,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const unsubscribers = subcollections.map(({ name, setter, seed, seedIdField }) => {
       const collRef = collection(db, "users", user.id, name);
       
-      // CRM profiles and social_accounts don't have timestamp, so don't order by it
-      const q = (name === "crm_profiles" || name === "social_accounts")
-        ? query(collRef)
-        : query(collRef, orderBy("timestamp", "desc"));
+      // Different collections have different timestamp/date fields
+      let q;
+      if (name === "crm_profiles" || name === "social_accounts") {
+        // These don't have timestamp fields
+        q = query(collRef);
+      } else if (name === "calendar_events") {
+        // Calendar events use "date" field, not "timestamp"
+        q = query(collRef, orderBy("date", "asc"));
+      } else {
+        // Messages, posts, etc. use "timestamp"
+        q = query(collRef, orderBy("timestamp", "desc"));
+      }
 
       return onSnapshot(
         q,
@@ -263,7 +271,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
         },
         (err) => {
-          if (err.code !== "permission-denied") console.error(err);
+          console.error(`Error fetching ${name}:`, err);
+          // Don't show permission-denied errors to users, but log other errors
+          if (err.code !== "permission-denied" && err.code !== "failed-precondition") {
+            console.error(`Failed to fetch ${name}:`, err.message);
+          }
         }
       );
     });

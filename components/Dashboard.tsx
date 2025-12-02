@@ -205,14 +205,24 @@ export const Dashboard: React.FC = () => {
       return calendarEvents
         .filter(e => {
           if (!e.date) return false;
-          const eventDate = new Date(e.date);
-          // Only show events that are in the future (not past)
-          return eventDate.getTime() > now.getTime();
+          try {
+            const eventDate = new Date(e.date);
+            // Only show events that are scheduled for now or in the future
+            // Use >= to include events scheduled for the current moment
+            return eventDate.getTime() >= now.getTime();
+          } catch (error) {
+            console.error('Error parsing event date:', e.date, error);
+            return false;
+          }
         })
         .sort((a, b) => {
-          const dateA = new Date(a.date).getTime();
-          const dateB = new Date(b.date).getTime();
-          return dateA - dateB;
+          try {
+            const dateA = new Date(a.date).getTime();
+            const dateB = new Date(b.date).getTime();
+            return dateA - dateB;
+          } catch (error) {
+            return 0;
+          }
         })
         .slice(0, 3);
   }, [calendarEvents]);
