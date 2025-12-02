@@ -349,9 +349,12 @@ export interface ApprovalItem {
 export interface CustomVoice {
   id: string;
   name: string;
-  data: string; 
+  data?: string; // Base64 audio data (optional, may not be stored)
   mimeType: string;
-  url?: string;
+  url?: string; // Firebase Storage URL
+  elevenLabsVoiceId?: string; // ElevenLabs voice ID for cloned voices
+  createdAt?: string;
+  isCloned?: boolean; // Whether this is a cloned voice or uploaded sample
 }
 
 export interface ComposeContextData {

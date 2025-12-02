@@ -259,6 +259,77 @@ export async function generateSpeech(
 }
 
 /* ----------------------------------------------------
+   13) Voice Cloning
+----------------------------------------------------- */
+export async function cloneVoice(
+  audioData: string,
+  audioMimeType: string,
+  voiceName: string
+): Promise<{ success: boolean; voiceId?: string; voiceName?: string; error?: string }> {
+  const token = auth.currentUser
+    ? await auth.currentUser.getIdToken(true)
+    : null;
+
+  const res = await fetch('/api/cloneVoice', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
+      audioData,
+      audioMimeType,
+      voiceName,
+    }),
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`API cloneVoice failed: ${res.status} - ${errorText}`);
+  }
+
+  return res.json();
+}
+
+export async function generateSpeechWithVoice(
+  text: string,
+  voiceId: string,
+  stability?: number,
+  similarityBoost?: number
+): Promise<{ success: boolean; audioData?: string; mimeType?: string; error?: string }> {
+  const token = auth.currentUser
+    ? await auth.currentUser.getIdToken(true)
+    : null;
+
+  const res = await fetch('/api/generateSpeechWithVoice', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
+      text,
+      voiceId,
+      stability,
+      similarityBoost,
+    }),
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`API generateSpeechWithVoice failed: ${res.status} - ${errorText}`);
+  }
+
+  const data = await res.json();
+  
+  if (!data.success && data.error) {
+    throw new Error(data.note || data.error || "Speech generation failed");
+  }
+
+  return data;
+}
+
+/* ----------------------------------------------------
    10) Content Strategy
 ---------------------------------------------------- */
 export async function generateContentStrategy(

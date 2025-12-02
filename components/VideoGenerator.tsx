@@ -7,6 +7,7 @@ import {
   generateVideo,
   getVideoStatus,
   saveGeneratedContent,
+  generateSpeechWithVoice,
 } from '../src/services/geminiService';
 
 import {
@@ -123,11 +124,17 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
 
   const [generateVoiceOver, setGenerateVoiceOver] = useState(false);
   const [voiceOverScript, setVoiceOverScript] = useState('');
-  const [selectedVoice, setSelectedVoice] = useState('Zephyr');
+  const [selectedVoice, setSelectedVoice] = useState<string>('default');
+  const [selectedClonedVoiceId, setSelectedClonedVoiceId] = useState<string | null>(null);
   const [generatedAudioUrl, setGeneratedAudioUrl] = useState<string | null>(
     null
   );
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+
+  // Get cloned voices (voices with elevenLabsVoiceId)
+  const clonedVoices = useMemo(() => {
+    return userCustomVoices.filter(voice => voice.elevenLabsVoiceId && voice.isCloned);
+  }, [userCustomVoices]);
 
   const [selectedPlatforms, setSelectedPlatforms] = useState<
     Record<Platform, boolean>
@@ -404,6 +411,59 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
     } catch (error: any) {
       console.error('Save error:', error);
       showToast('Failed to save video', 'error');
+    }
+  };
+
+  const handleGenerateVoiceover = async () => {
+    if (!voiceOverScript.trim()) {
+      showToast('Please enter a script for the voiceover', 'error');
+      return;
+    }
+
+    if (selectedVoice === 'cloned' && !selectedClonedVoiceId) {
+      showToast('Please select a cloned voice', 'error');
+      return;
+    }
+
+    setIsGeneratingAudio(true);
+    try {
+      let audioData: string;
+      
+      if (selectedVoice === 'cloned' && selectedClonedVoiceId) {
+        // Use cloned voice
+        const result = await generateSpeechWithVoice(
+          voiceOverScript,
+          selectedClonedVoiceId,
+          0.5, // stability
+          0.75 // similarity boost
+        );
+        
+        if (result.success && result.audioData) {
+          audioData = result.audioData;
+          const audioBlob = new Blob([
+            Uint8Array.from(atob(result.audioData), c => c.charCodeAt(0))
+          ], { type: result.mimeType || 'audio/mpeg' });
+          const audioUrl = URL.createObjectURL(audioBlob);
+          setGeneratedAudioUrl(audioUrl);
+          showToast('Voiceover generated with your cloned voice!', 'success');
+        } else {
+          throw new Error(result.error || 'Failed to generate voiceover');
+        }
+      } else {
+        // Use default voice (existing implementation)
+        audioData = await generateSpeech(voiceOverScript, selectedVoice);
+        const audioBlob = new Blob([
+          Uint8Array.from(atob(audioData), c => c.charCodeAt(0))
+        ], { type: 'audio/mpeg' });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        setGeneratedAudioUrl(audioUrl);
+        showToast('Voiceover generated!', 'success');
+      }
+    } catch (error: any) {
+      console.error('Voiceover generation error:', error);
+      showToast(error?.message || 'Failed to generate voiceover', 'error');
+    } finally {
+      setIsGeneratingAudio(false);
     }
   };
 

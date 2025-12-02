@@ -193,26 +193,57 @@ export const Settings: React.FC = () => {
         if (file) {
             setIsUploadingVoice(true);
             try {
+                // Upload to Firebase Storage
                 const sRef = ref(storage, `users/${user.id}/voices/${Date.now()}_${file.name}`);
                 await uploadBytes(sRef, file);
                 const url = await getDownloadURL(sRef);
 
                 const { data, mimeType } = await fileToBase64(file);
                 
-                const newVoice: CustomVoice = { 
-                    id: Date.now().toString(), 
-                    name: file.name, 
-                    data, 
-                    mimeType,
-                    url 
-                };
-
-                await setDoc(doc(db, 'users', user.id, 'voices', newVoice.id), newVoice);
+                // Clone voice using ElevenLabs API
+                const { cloneVoice } = await import('../src/services/geminiService');
+                const voiceName = file.name.replace(/\.[^/.]+$/, ''); // Remove file extension
                 
-                showToast('Custom voice uploaded successfully!', 'success');
-            } catch (error) {
+                try {
+                    const cloneResult = await cloneVoice(data, mimeType, voiceName);
+                    
+                    if (cloneResult.success && cloneResult.voiceId) {
+                        const newVoice: CustomVoice = { 
+                            id: cloneResult.voiceId, 
+                            name: voiceName, 
+                            data, 
+                            mimeType,
+                            url,
+                            elevenLabsVoiceId: cloneResult.voiceId,
+                            createdAt: new Date().toISOString(),
+                            isCloned: true,
+                        };
+
+                        await setDoc(doc(db, 'users', user.id, 'voices', newVoice.id), newVoice);
+                        setUserCustomVoices(prev => [...prev, newVoice]);
+                        
+                        showToast('Voice cloned successfully! You can now use it in video generation.', 'success');
+                    } else {
+                        throw new Error(cloneResult.error || 'Voice cloning failed');
+                    }
+                } catch (cloneError: any) {
+                    console.error("Voice cloning error:", cloneError);
+                    // Still save the voice file even if cloning fails
+                    const newVoice: CustomVoice = { 
+                        id: Date.now().toString(), 
+                        name: voiceName, 
+                        data, 
+                        mimeType,
+                        url,
+                        isCloned: false,
+                    };
+                    await setDoc(doc(db, 'users', user.id, 'voices', newVoice.id), newVoice);
+                    setUserCustomVoices(prev => [...prev, newVoice]);
+                    showToast('Voice uploaded but cloning failed. You can still use the audio file.', 'error');
+                }
+            } catch (error: any) {
                 console.error("Voice upload error:", error);
-                showToast('Failed to upload voice file.', 'error');
+                showToast(error?.message || 'Failed to upload voice file.', 'error');
             } finally {
                 setIsUploadingVoice(false);
                 if(voiceFileInputRef.current) voiceFileInputRef.current.value = "";
