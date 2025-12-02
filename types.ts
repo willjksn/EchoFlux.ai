@@ -390,7 +390,7 @@ export interface CalendarEvent {
     date: string; 
     type: 'Post' | 'Story' | 'Reel';
     platform: Platform;
-    status: 'Scheduled' | 'Draft' | 'Published';
+    status: 'Scheduled' | 'Draft' | 'Published' | 'In Review';
     thumbnail?: string;
 }
 
