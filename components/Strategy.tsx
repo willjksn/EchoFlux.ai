@@ -696,18 +696,42 @@ export const Strategy: React.FC = () => {
                         </div>
                     </div>
 
-                    {plan.weeks.map((week, weekIndex) => (
+                    {plan.weeks.map((week, weekIndex) => {
+                        const weekProgress = selectedStrategy?.linkedPostIds 
+                            ? Math.round((week.content.filter((_, idx) => selectedStrategy.linkedPostIds?.includes(`week-${weekIndex}-day-${idx}`)).length / week.content.length) * 100)
+                            : 0;
+                        
+                        return (
                         <div key={weekIndex} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden border border-gray-100 dark:border-gray-700">
                             <div className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900/50 dark:to-gray-800/50 p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-                                <div>
-                                    <h4 className="font-bold text-lg text-gray-800 dark:text-gray-200">Week {week.weekNumber}: {week.theme}</h4>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-3 mb-1">
+                                        <h4 className="font-bold text-lg text-gray-800 dark:text-gray-200">Week {week.weekNumber}: {week.theme}</h4>
+                                        {selectedStrategy && (
+                                            <span className={`text-xs px-2 py-1 rounded-full ${
+                                                weekProgress === 100 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
+                                                weekProgress > 0 ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' :
+                                                'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                                            }`}>
+                                                {weekProgress}% Complete
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">
                                         {week.content.filter(c => c.format === 'Post').length} Posts • 
                                         {week.content.filter(c => c.format === 'Reel').length} Reels • 
                                         {week.content.filter(c => c.format === 'Story').length} Stories
                                     </p>
+                                    {selectedStrategy && weekProgress < 100 && (
+                                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-2">
+                                            <div 
+                                                className="bg-primary-600 dark:bg-primary-400 h-1.5 rounded-full transition-all"
+                                                style={{ width: `${weekProgress}%` }}
+                                            ></div>
+                                        </div>
+                                    )}
                                 </div>
-                                <span className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider bg-white dark:bg-gray-700 px-3 py-1 rounded-full">{week.content.length} Total</span>
+                                <span className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider bg-white dark:bg-gray-700 px-3 py-1 rounded-full ml-4">{week.content.length} Total</span>
                             </div>
                             <div className="divide-y divide-gray-100 dark:divide-gray-700">
                                 {week.content.map((day, dayIndex) => (
