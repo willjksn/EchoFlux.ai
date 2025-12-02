@@ -547,69 +547,6 @@ const CaptionGenerator: React.FC = () => {
     showToast('Caption downloaded!', 'success');
   };
 
-  // Download image
-  const handleDownloadImage = () => {
-    if (!composeState.media?.previewUrl) return;
-    const a = document.createElement('a');
-    a.href = composeState.media.previewUrl;
-    a.download = `image-${Date.now()}.${composeState.media.type === 'image' ? 'png' : 'mp4'}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    showToast('Media downloaded!', 'success');
-  };
-
-  // Save caption to profile
-  const handleSaveCaption = async (caption: string, hashtags: string[] = []) => {
-    if (!user) return;
-    try {
-      await saveGeneratedContent('caption', {
-        caption,
-        hashtags,
-        prompt: composeState.media ? 'Image-based caption' : 'Text-based caption',
-        goal: composeState.postGoal,
-        tone: composeState.postTone,
-      });
-      showToast('Caption saved to profile!', 'success');
-    } catch (err) {
-      console.error(err);
-      showToast('Failed to save caption', 'error');
-    }
-  };
-
-  // Save image to profile
-  const handleSaveImage = async () => {
-    if (!user || !composeState.media) return;
-    try {
-      await saveGeneratedContent('image', {
-        imageData: composeState.media.data,
-        imageUrl: composeState.media.previewUrl,
-        prompt: 'User uploaded image',
-        goal: composeState.postGoal,
-        tone: composeState.postTone,
-      });
-      showToast('Image saved to profile!', 'success');
-    } catch (err) {
-      console.error(err);
-      showToast('Failed to save image', 'error');
-    }
-  };
-
-  // Download caption as text file
-  const handleDownloadCaption = (caption: string, hashtags: string[] = []) => {
-    const content = caption + '\n\n' + hashtags.join(' ');
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `caption-${Date.now()}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showToast('Caption downloaded!', 'success');
-  };
-
   // Download image/video
   const handleDownloadImage = () => {
     if (!composeState.media?.previewUrl) return;
