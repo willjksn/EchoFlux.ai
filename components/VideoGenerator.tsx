@@ -796,16 +796,128 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
             </div>
           )}
 
+          {/* Voiceover Section */}
+          <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between mb-3">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Add Voiceover (Optional)
+              </label>
+              <button
+                onClick={() => setGenerateVoiceOver(!generateVoiceOver)}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  generateVoiceOver
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                }`}
+              >
+                {generateVoiceOver ? 'Enabled' : 'Enable'}
+              </button>
+            </div>
+
+            {generateVoiceOver && (
+              <div className="space-y-3 mt-3">
+                {/* Voice Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Select Voice
+                  </label>
+                  <select
+                    value={selectedVoice}
+                    onChange={(e) => {
+                      setSelectedVoice(e.target.value);
+                      if (e.target.value !== 'cloned') {
+                        setSelectedClonedVoiceId(null);
+                      }
+                    }}
+                    className="w-full p-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
+                  >
+                    <option value="default">Default Voice</option>
+                    {clonedVoices.length > 0 && (
+                      <option value="cloned">My Cloned Voice</option>
+                    )}
+                  </select>
+                </div>
+
+                {/* Cloned Voice Selection */}
+                {selectedVoice === 'cloned' && clonedVoices.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Select Cloned Voice
+                    </label>
+                    <select
+                      value={selectedClonedVoiceId || ''}
+                      onChange={(e) => setSelectedClonedVoiceId(e.target.value || null)}
+                      className="w-full p-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
+                    >
+                      <option value="">Select a voice...</option>
+                      {clonedVoices.map((voice) => (
+                        <option key={voice.id} value={voice.elevenLabsVoiceId}>
+                          {voice.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Script Input */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Voiceover Script
+                  </label>
+                  <textarea
+                    value={voiceOverScript}
+                    onChange={(e) => setVoiceOverScript(e.target.value)}
+                    placeholder="Enter the text you want to be spoken in the video..."
+                    className="w-full p-3 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
+                    rows={3}
+                  />
+                </div>
+
+                {/* Generate Voiceover Button */}
+                <button
+                  onClick={handleGenerateVoiceover}
+                  disabled={isGeneratingAudio || !voiceOverScript.trim() || (selectedVoice === 'cloned' && !selectedClonedVoiceId)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isGeneratingAudio ? (
+                    <>
+                      <RefreshIcon className="animate-spin w-4 h-4" />
+                      Generating Voiceover...
+                    </>
+                  ) : (
+                    <>
+                      <VoiceIcon className="w-4 h-4" />
+                      Generate Voiceover
+                    </>
+                  )}
+                </button>
+
+                {/* Generated Audio Preview */}
+                {generatedAudioUrl && (
+                  <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Generated Voiceover:
+                    </p>
+                    <audio src={generatedAudioUrl} controls className="w-full" />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                      You can download this audio and combine it with your video using video editing software.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Caption */}
-          <div className="pt-2 border-t">
+          <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
             <div className="flex justify-between items-center mb-2">
-              <label className="text-sm font-medium">Caption</label>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Caption</label>
               <button
                 onClick={handleGenerateCaption}
                 disabled={isCaptionLoading}
-                className="flex items-center px-3 py-1.5 text-sm font-medium text-primary-700 bg-primary-100 rounded-md"
+                className="flex items-center px-3 py-1.5 text-sm font-medium text-primary-700 dark:text-primary-300 bg-primary-100 dark:bg-primary-900/50 rounded-md hover:bg-primary-200 dark:hover:bg-primary-900 disabled:opacity-50"
               >
-                <SparklesIcon />
+                <SparklesIcon className="w-4 h-4" />
                 {isCaptionLoading ? 'Generating...' : 'Generate with AI'}
               </button>
             </div>
@@ -813,8 +925,8 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
               rows={5}
-              className="w-full p-2 border rounded-md bg-gray-50 dark:bg-gray-700"
-              placeholder="Caption..."
+              className="w-full p-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
+              placeholder="Caption for your video..."
             />
           </div>
         </div>
