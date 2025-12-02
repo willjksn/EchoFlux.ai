@@ -215,8 +215,9 @@ export async function getVideoStatus(operationId: string): Promise<{ videoUrl?: 
    5) Trends
 ---------------------------------------------------- */
 export async function findTrends(niche: string): Promise<any[]> {
-  const res = await callFunction("findTrends", { niche });
-  return res.trends || res.opportunities || [];
+  // Use the new findTrendsByNiche endpoint that accepts a niche string
+  const res = await callFunction("findTrendsByNiche", { niche });
+  return res.opportunities || res.trends || [];
 }
 
 /* ----------------------------------------------------
