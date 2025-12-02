@@ -82,7 +82,8 @@ export const Sidebar: React.FC = () => {
           case 'ads':
               // Available on Pro, Elite, Growth, Starter, and Agency plans
               // NOT available on Free plan
-              return ['Pro', 'Elite', 'Growth', 'Starter', 'Agency'].includes(user.plan || '');
+              const userPlan = user.plan || 'Free';
+              return userPlan !== 'Free' && ['Pro', 'Elite', 'Growth', 'Starter', 'Agency'].includes(userPlan);
           case 'autopilot':
               // Marketing Manager for Business: All Business plans (Starter, Growth, Agency)
               // AI Autopilot for Creators: Pro and Elite plans
