@@ -172,12 +172,19 @@ const Autopilot: React.FC = () => {
       }
 
       // Execute the campaign to generate all posts
+      console.log('Executing autopilot campaign:', campaignId);
       const { posts: generatedPosts, approvalItems, calendarEvents } = await executeAutopilotCampaign(
         campaign,
         { ...settings, userType: user.userType },
         updateProgress,
         analyticsData
       );
+
+      console.log('Campaign execution complete:', {
+        approvalItems: approvalItems.length,
+        calendarEvents: calendarEvents.length,
+        generatedPosts: generatedPosts.length
+      });
 
       // Create Post entries for approval queue
       const newPosts: Post[] = [];
@@ -193,17 +200,29 @@ const Autopilot: React.FC = () => {
           author: { name: user.name, avatar: user.avatar },
           comments: [],
           scheduledDate: (approvalItem as any).scheduledDate,
+          createdAt: new Date().toISOString(), // Add timestamp for sorting
         };
         newPosts.push(post);
 
         // Save to Firestore
-        const postsCollectionRef = collection(db, 'users', user.id, 'posts');
-        const safePost = JSON.parse(JSON.stringify(post));
-        await setDoc(doc(postsCollectionRef, post.id), safePost);
+        try {
+          const postsCollectionRef = collection(db, 'users', user.id, 'posts');
+          const safePost = JSON.parse(JSON.stringify(post));
+          await setDoc(doc(postsCollectionRef, post.id), safePost);
+          console.log('Saved post to Firestore:', postId);
+        } catch (error) {
+          console.error('Failed to save post to Firestore:', postId, error);
+          showToast(`Failed to save post ${postId}. Please check console.`, 'error');
+        }
       }
 
       // Add to local state
-      setPosts(prev => [...prev, ...newPosts]);
+      if (newPosts.length > 0) {
+        setPosts(prev => [...prev, ...newPosts]);
+        console.log(`Added ${newPosts.length} posts to local state`);
+      } else {
+        console.warn('No posts were created from approval items');
+      }
 
       // Add calendar events
       for (const event of calendarEvents) {
