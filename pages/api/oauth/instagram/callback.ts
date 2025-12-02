@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getAdminApp } from '../../_firebaseAdmin';
+import { getAdminApp } from '../../_firebaseAdmin.js';
 
 /**
  * Handle Instagram OAuth callback

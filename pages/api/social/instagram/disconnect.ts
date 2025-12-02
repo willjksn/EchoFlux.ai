@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { verifyAuth } from '../../verifyAuth';
-import { getAdminApp } from '../../_firebaseAdmin';
+import { verifyAuth } from '../../verifyAuth.js';
+import { getAdminApp } from '../../_firebaseAdmin.js';
 
 /**
  * Disconnect Instagram account (remove tokens)

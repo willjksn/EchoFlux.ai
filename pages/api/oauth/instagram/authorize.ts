@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { verifyAuth } from '../../verifyAuth';
+import { verifyAuth } from '../../verifyAuth.js';
 
 /**
  * Start Instagram OAuth flow

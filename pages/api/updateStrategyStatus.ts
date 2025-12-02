@@ -41,7 +41,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-      const db = getAdminDbFunction();
+      const db = await getAdminDbFunction();
       const updateData: any = {};
 
       if (status) {
