@@ -19,7 +19,7 @@ async function getAdminAppFunction() {
   return getAdminApp;
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   // Create empty stats structure for error fallback
   const createEmptyStats = (): Record<string, { followers: number; following: number }> => {
     const emptyStats: Record<string, { followers: number; following: number }> = {};
@@ -162,6 +162,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } catch {
         // Give up - response may have already been sent
       }
+    }
+  }
+}
+
+export default async function wrappedHandler(req: VercelRequest, res: VercelResponse) {
+  try {
+    await handler(req, res);
+  } catch (err: any) {
+    console.error("getSocialStats top-level error:", err);
+    console.error("Error stack:", err?.stack);
+    if (!res.headersSent) {
+      const createEmptyStats = (): Record<string, { followers: number; following: number }> => {
+        const emptyStats: Record<string, { followers: number; following: number }> = {};
+        const platforms = ['Instagram', 'TikTok', 'X', 'Threads', 'YouTube', 'LinkedIn', 'Facebook'];
+        platforms.forEach(platform => {
+          emptyStats[platform] = { followers: 0, following: 0 };
+        });
+        return emptyStats;
+      };
+      return res.status(200).json(createEmptyStats());
     }
   }
 }

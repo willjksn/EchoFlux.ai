@@ -29,8 +29,8 @@ function sleep(ms: number) {
 
 // Exponential backoff wrapper around generateContent
 async function generateWithRetry(
-  model: ReturnType<typeof getModel>,
-  request: Parameters<ReturnType<typeof getModel>["generateContent"]>[0],
+  model: any,
+  request: any,
   maxRetries = 3,
   baseDelayMs = 2000
 ) {
