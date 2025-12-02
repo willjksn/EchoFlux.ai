@@ -1,8 +1,6 @@
 // api/findTrendsByNiche.ts
 // Find trending opportunities by niche/topic
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { verifyAuth } from "./verifyAuth.ts";
-import { getModelForTask } from "./_modelRouter.ts";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
@@ -10,6 +8,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    // Dynamic imports to prevent module initialization errors
+    const { verifyAuth } = await import("./verifyAuth.ts");
     const user = await verifyAuth(req);
     if (!user) {
       return res.status(401).json({ error: "Unauthorized" });
@@ -27,6 +27,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     try {
       // Use trends task type for better model routing
+      const { getModelForTask } = await import("./_modelRouter.ts");
       const model = await getModelForTask("trends", user.uid);
 
       const prompt = `
