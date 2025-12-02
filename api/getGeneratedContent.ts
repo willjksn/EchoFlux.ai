@@ -2,8 +2,8 @@
 // Fetch generated content (captions, images, videos, ads) from Firestore
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { verifyAuth } from "./verifyAuth.ts";
-import { getAdminDb } from "./_firebaseAdmin.ts";
+import { verifyAuth } from "./verifyAuth.js";
+import { getAdminDb } from "./_firebaseAdmin.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") {

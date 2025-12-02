@@ -1,7 +1,7 @@
 // api/updateStrategyStatus.ts
 // Update strategy status (active, completed, archived) or link to posts
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { verifyAuth } from "./verifyAuth.ts";
+import { verifyAuth } from "./verifyAuth.js";
 
 // Dynamic import to prevent initialization errors
 let getAdminDb: any;
@@ -9,7 +9,7 @@ let getAdminDb: any;
 async function getAdminDbFunction() {
   if (!getAdminDb) {
     try {
-      const module = await import("./_firebaseAdmin.ts");
+      const module = await import("./_firebaseAdmin.js");
       getAdminDb = module.getAdminDb;
     } catch (importError: any) {
       console.error("Failed to import _firebaseAdmin:", importError);

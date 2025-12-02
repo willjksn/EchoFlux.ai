@@ -12,7 +12,7 @@ let getAdminDb: any;
 async function getVerifyAuth() {
   if (!verifyAuth) {
     try {
-      const module = await import("./verifyAuth.ts");
+      const module = await import("./verifyAuth.js");
       verifyAuth = module.verifyAuth;
     } catch (importError: any) {
       console.error("Failed to import verifyAuth:", importError);
@@ -25,7 +25,7 @@ async function getVerifyAuth() {
 async function getAdminDbFunction() {
   if (!getAdminDb) {
     try {
-      const module = await import("./_firebaseAdmin.ts");
+      const module = await import("./_firebaseAdmin.js");
       getAdminDb = module.getAdminDb;
     } catch (importError: any) {
       console.error("Failed to import _firebaseAdmin:", importError);
@@ -231,7 +231,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 🧠 Use model router - ad generation uses balanced model for quality
     let model;
     try {
-      const { getModelForTask } = await import("./_modelRouter.ts");
+      const { getModelForTask } = await import("./_modelRouter.js");
       model = await getModelForTask("strategy", user.uid);
     } catch (modelError: any) {
       console.error("Model initialization error:", modelError);
@@ -402,7 +402,7 @@ Make it engaging, visually compelling, and optimized for ${seconds}-second short
 
     // 📊 Track model usage (non-blocking)
     try {
-      const { trackModelUsage } = await import("./trackModelUsage.ts");
+      const { trackModelUsage } = await import("./trackModelUsage.js");
       await trackModelUsage({
         userId: user.uid,
         taskType: "strategy",

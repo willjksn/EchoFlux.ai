@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { checkApiKeys, getVerifyAuth, withErrorHandling } from "./_errorHandler.ts";
-import { APP_KNOWLEDGE } from "./appKnowledge.ts";
+import { checkApiKeys, getVerifyAuth, withErrorHandling } from "./_errorHandler.js";
+import { APP_KNOWLEDGE } from "./appKnowledge.js";
 
 async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {

@@ -1,10 +1,10 @@
 // api/generateCaptions.ts
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { checkApiKeys, getVerifyAuth, getModelRouter, withErrorHandling } from "./_errorHandler.ts";
+import { checkApiKeys, getVerifyAuth, getModelRouter, withErrorHandling } from "./_errorHandler.js";
 
 async function getGeminiShared() {
   try {
-    const module = await import("./_geminiShared.ts");
+    const module = await import("./_geminiShared.js");
     return { getModel: module.getModel, parseJSON: module.parseJSON };
   } catch (importError: any) {
     console.error("Failed to import _geminiShared:", importError);

@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { verifyAuth } from "./verifyAuth.ts";
-import { getModelForTask } from "./_modelRouter.ts";
+import { verifyAuth } from "./verifyAuth.js";
+import { getModelForTask } from "./_modelRouter.js";
 
 // Import OpenAI with ESM syntax
 import OpenAI from "openai";

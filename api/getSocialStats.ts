@@ -5,7 +5,7 @@ let getAdminApp: any;
 
 async function getVerifyAuth() {
   if (!verifyAuth) {
-    const module = await import('./verifyAuth.ts');
+    const module = await import('./verifyAuth.js');
     verifyAuth = module.verifyAuth;
   }
   return verifyAuth;
@@ -13,7 +13,7 @@ async function getVerifyAuth() {
 
 async function getAdminAppFunction() {
   if (!getAdminApp) {
-    const module = await import('./_firebaseAdmin.ts');
+    const module = await import('./_firebaseAdmin.js');
     getAdminApp = module.getAdminApp;
   }
   return getAdminApp;

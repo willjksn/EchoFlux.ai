@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { verifyAuth } from "./verifyAuth.ts";
+import { verifyAuth } from "./verifyAuth.js";
 
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -26,7 +26,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Use model router - analytics use thinking model for better insights
-    const { getModelForTask } = await import("./_modelRouter.ts");
+    const { getModelForTask } = await import("./_modelRouter.js");
     const model = await getModelForTask('analytics', user.uid);
 
 

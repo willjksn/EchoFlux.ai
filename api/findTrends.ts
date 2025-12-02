@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getModel, parseJSON } from "./_geminiShared.ts";
-import { verifyAuth } from "./verifyAuth.ts";
+import { getModel, parseJSON } from "./_geminiShared.js";
+import { verifyAuth } from "./verifyAuth.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
@@ -19,7 +19,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     // Use model router - trends analysis uses thinking model for better insights
-    const { getModelForTask } = await import("./_modelRouter.ts");
+    const { getModelForTask } = await import("./_modelRouter.js");
     const model = await getModelForTask('trends', user.uid);
 
     const prompt = `

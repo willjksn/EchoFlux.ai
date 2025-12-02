@@ -23,7 +23,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Dynamic imports to prevent module initialization errors
     let verifyAuth: any;
     try {
-      const verifyAuthModule = await import("./verifyAuth.ts");
+      const verifyAuthModule = await import("./verifyAuth.js");
       verifyAuth = verifyAuthModule.verifyAuth;
     } catch (importError: any) {
       console.error("Failed to import verifyAuth:", importError);
@@ -68,7 +68,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Use trends task type for better model routing
       let getModelForTask: any;
       try {
-        const modelRouterModule = await import("./_modelRouter.ts");
+        const modelRouterModule = await import("./_modelRouter.js");
         getModelForTask = modelRouterModule.getModelForTask;
       } catch (importError: any) {
         console.error("Failed to import _modelRouter:", importError);

@@ -1,7 +1,7 @@
 // api/generateAutopilotPlan.ts
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getModel, parseJSON } from "./_geminiShared.ts";
-import { verifyAuth } from "./verifyAuth.ts";
+import { getModel, parseJSON } from "./_geminiShared.js";
+import { verifyAuth } from "./verifyAuth.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {

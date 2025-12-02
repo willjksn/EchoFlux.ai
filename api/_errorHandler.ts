@@ -55,7 +55,7 @@ export function checkApiKeys(): { hasKey: boolean; error?: string } {
  */
 export async function getVerifyAuth() {
   try {
-    const module = await import("./verifyAuth.ts");
+    const module = await import("./verifyAuth.js");
     return module.verifyAuth;
   } catch (importError: any) {
     console.error("Failed to import verifyAuth:", importError);
@@ -68,7 +68,7 @@ export async function getVerifyAuth() {
  */
 export async function getModelRouter() {
   try {
-    const module = await import("./_modelRouter.ts");
+    const module = await import("./_modelRouter.js");
     return module.getModelForTask;
   } catch (importError: any) {
     console.error("Failed to import _modelRouter:", importError);

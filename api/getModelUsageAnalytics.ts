@@ -2,9 +2,9 @@
 // Fetch model usage analytics for admin dashboard
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { verifyAuth } from "./verifyAuth.ts";
-import { getAdminDb } from "./_firebaseAdmin.ts";
-import type { TaskType } from "./_modelRouter.ts";
+import { verifyAuth } from "./verifyAuth.js";
+import { getAdminDb } from "./_firebaseAdmin.js";
+import type { TaskType } from "./_modelRouter.js";
 import admin from "firebase-admin";
 
 interface ModelUsageStats {

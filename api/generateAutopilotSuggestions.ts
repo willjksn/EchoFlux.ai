@@ -6,7 +6,7 @@ let verifyAuth: any;
 
 async function getGeminiShared() {
   if (!getModel || !parseJSON) {
-    const module = await import("./_geminiShared.ts");
+    const module = await import("./_geminiShared.js");
     getModel = module.getModel;
     parseJSON = module.parseJSON;
   }
@@ -15,7 +15,7 @@ async function getGeminiShared() {
 
 async function getVerifyAuth() {
   if (!verifyAuth) {
-    const module = await import("./verifyAuth.ts");
+    const module = await import("./verifyAuth.js");
     verifyAuth = module.verifyAuth;
   }
   return verifyAuth;

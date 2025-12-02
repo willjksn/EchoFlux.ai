@@ -2,7 +2,7 @@
 // Facebook webhook handler for real-time messages and comments
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getAdminDb } from "../_firebaseAdmin.ts";
+import { getAdminDb } from "../_firebaseAdmin.js";
 import crypto from "crypto";
 
 /**

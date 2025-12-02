@@ -1,6 +1,6 @@
 // api/generateVideo.ts
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { verifyAuth } from "./verifyAuth.ts";
+import { verifyAuth } from "./verifyAuth.js";
 import Replicate from "replicate";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

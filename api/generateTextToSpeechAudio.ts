@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { verifyAuth } from "./verifyAuth.ts";
+import { verifyAuth } from "./verifyAuth.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const user = await verifyAuth(req);

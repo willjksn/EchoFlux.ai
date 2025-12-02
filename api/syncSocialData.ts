@@ -3,8 +3,8 @@
 // Runs via Vercel Cron every 5-10 minutes
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getAdminDb } from "./_firebaseAdmin.ts";
-import { verifyAuth } from "./verifyAuth.ts";
+import { getAdminDb } from "./_firebaseAdmin.js";
+import { verifyAuth } from "./verifyAuth.js";
 
 interface SyncResult {
   platform: string;

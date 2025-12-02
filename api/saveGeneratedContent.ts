@@ -2,8 +2,8 @@
 // Save generated content (captions, images, videos, ads) to Firestore
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { verifyAuth } from "./verifyAuth.ts";
-import { getAdminDb } from "./_firebaseAdmin.ts";
+import { verifyAuth } from "./verifyAuth.js";
+import { getAdminDb } from "./_firebaseAdmin.js";
 
 interface SaveContentRequest {
   type: "caption" | "image" | "video" | "ad";

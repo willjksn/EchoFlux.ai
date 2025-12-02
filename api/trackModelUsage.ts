@@ -1,8 +1,8 @@
 // api/trackModelUsage.ts
 // Track AI model usage for analytics and cost monitoring
 
-import { getAdminDb } from './_firebaseAdmin.ts';
-import type { TaskType } from './_modelRouter.ts';
+import { getAdminDb } from './_firebaseAdmin.js';
+import type { TaskType } from './_modelRouter.js';
 
 export interface ModelUsageLog {
   id?: string;

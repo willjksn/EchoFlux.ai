@@ -1,6 +1,6 @@
 // api/verifyAuth.ts
 import type { VercelRequest } from "@vercel/node";
-import { verifyIdToken } from "./_firebaseAdmin.ts";
+import { verifyIdToken } from "./_firebaseAdmin.js";
 
 export async function verifyAuth(req: VercelRequest) {
   const header = req.headers.authorization as string | undefined;
