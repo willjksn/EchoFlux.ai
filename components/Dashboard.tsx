@@ -753,7 +753,6 @@ export const Dashboard: React.FC = () => {
                 </div>
               );
             })()}
-            )}
           </div>
           
           {/* Fan Engagement Hub - Creator & Agency Only */}
@@ -985,10 +984,9 @@ export const Dashboard: React.FC = () => {
                 </div>
               ) : null;
             })()}
-            )}
             
             {/* Engagement Heatmap - Redesigned */}
-            {(() => {
+            {user.plan !== 'Free' && (() => {
             // Generate mock engagement data for heatmap (7 days x 8 time slots)
             const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
             const timeSlots = ['6AM', '9AM', '12PM', '3PM', '6PM', '9PM', '12AM', '3AM'];
@@ -1123,7 +1121,6 @@ export const Dashboard: React.FC = () => {
               </div>
             );
           })()}
-            )}
           
           {/* Lead Generation Dashboard - Business Only (Priority 1) */}
           {isBusiness && (() => {
@@ -1805,7 +1802,6 @@ export const Dashboard: React.FC = () => {
               </div>
             ) : null;
           })()}
-            )}
             
             {/* Performance Comparison - Business Only, Beside Content Ideas */}
             {isBusiness && (

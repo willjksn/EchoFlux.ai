@@ -180,13 +180,24 @@ Return ONLY strict JSON like:
   const parts: any[] = [{ text: prompt }];
 
   // Attach image/video if provided
+  // Prefer mediaUrl over mediaData to avoid payload size limits
   let finalMedia: MediaData | undefined;
 
-  if (mediaData?.data && mediaData?.mimeType) {
-    finalMedia = mediaData;
-  } else if (mediaUrl) {
+  if (mediaUrl) {
+    // Always use URL if available (avoids payload size issues)
     const fetched = await fetchMediaFromUrl(mediaUrl);
     if (fetched) finalMedia = fetched;
+  } else if (mediaData?.data && mediaData?.mimeType) {
+    // Only use mediaData if no URL provided (for backwards compatibility)
+    // Check size - if too large, reject
+    const dataSizeMB = (mediaData.data.length * 3) / 4 / 1024 / 1024;
+    if (dataSizeMB > 4) {
+      return res.status(413).json({
+        error: "Image too large",
+        note: "Please upload images smaller than 4MB or use a URL instead.",
+      });
+    }
+    finalMedia = mediaData;
   }
 
   if (finalMedia) {

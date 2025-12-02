@@ -174,17 +174,33 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, usag
     };
     
     const handleGenerateCaption = async () => {
-        if (!generatedImage) return;
+        if (!generatedImage || !user) return;
         setIsCaptionLoading(true);
         try {
+            // Always upload to Firebase Storage to avoid Vercel payload size limits
+            const timestamp = Date.now();
+            const storagePath = `users/${user.id}/uploads/${timestamp}.png`;
+            const storageRef = storageApi.ref(storage, storagePath);
+            
+            const bytes = base64ToBytes(generatedImage);
+            await storageApi.uploadBytes(storageRef, bytes, {
+                contentType: 'image/png'
+            });
+            
+            const mediaUrl = await storageApi.getDownloadURL(storageRef);
+            
             const captionResults = await generateCaptions({
-                mediaData: { data: generatedImage, mimeType: 'image/png' }
+                mediaUrl,
+                goal: undefined,
+                tone: undefined,
+                promptText: undefined
             });
             if (captionResults.length > 0) {
                 setCaption(captionResults[0].caption + '\n\n' + captionResults[0].hashtags.join(' '));
             }
-        } catch (err) {
-            showToast('Failed to generate caption.', 'error');
+        } catch (err: any) {
+            console.error('Caption generation error:', err);
+            showToast(err?.message || 'Failed to generate caption.', 'error');
         } finally {
             setIsCaptionLoading(false);
         }
