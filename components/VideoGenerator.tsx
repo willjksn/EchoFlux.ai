@@ -428,9 +428,10 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
     setIsGeneratingAudio(true);
     try {
       let audioData: string;
+      let audioMimeType: string = 'audio/mpeg';
       
       if (selectedVoice === 'cloned' && selectedClonedVoiceId) {
-        // Use cloned voice
+        // Use cloned voice - this will mimic YOUR voice speaking the text!
         const result = await generateSpeechWithVoice(
           voiceOverScript,
           selectedClonedVoiceId,
@@ -440,12 +441,18 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
         
         if (result.success && result.audioData) {
           audioData = result.audioData;
+          audioMimeType = result.mimeType || 'audio/mpeg';
           const audioBlob = new Blob([
             Uint8Array.from(atob(result.audioData), c => c.charCodeAt(0))
-          ], { type: result.mimeType || 'audio/mpeg' });
+          ], { type: audioMimeType });
           const audioUrl = URL.createObjectURL(audioBlob);
           setGeneratedAudioUrl(audioUrl);
           showToast('Voiceover generated with your cloned voice!', 'success');
+          
+          // If video is already generated, automatically combine them
+          if (generatedVideoUrl) {
+            await handleCombineVideoAudio(generatedVideoUrl, audioData, audioMimeType);
+          }
         } else {
           throw new Error(result.error || 'Failed to generate voiceover');
         }
@@ -458,12 +465,110 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
         const audioUrl = URL.createObjectURL(audioBlob);
         setGeneratedAudioUrl(audioUrl);
         showToast('Voiceover generated!', 'success');
+        
+        // If video is already generated, automatically combine them
+        if (generatedVideoUrl) {
+          await handleCombineVideoAudio(generatedVideoUrl, audioData, audioMimeType);
+        }
       }
     } catch (error: any) {
       console.error('Voiceover generation error:', error);
       showToast(error?.message || 'Failed to generate voiceover', 'error');
     } finally {
       setIsGeneratingAudio(false);
+    }
+  };
+
+  const handleCombineVideoAudio = async (videoUrl: string, audioData: string, audioMimeType: string) => {
+    try {
+      showToast('Combining video with voiceover...', 'info');
+      
+      // Fetch video as blob
+      const videoResponse = await fetch(videoUrl);
+      const videoBlob = await videoResponse.blob();
+      
+      // Create audio blob
+      const audioBlob = new Blob([
+        Uint8Array.from(atob(audioData), c => c.charCodeAt(0))
+      ], { type: audioMimeType });
+      
+      // Use Web APIs to combine video and audio client-side
+      const video = document.createElement('video');
+      video.src = URL.createObjectURL(videoBlob);
+      video.muted = false;
+      
+      await new Promise((resolve) => {
+        video.onloadedmetadata = () => {
+          video.currentTime = 0;
+          resolve(undefined);
+        };
+      });
+      
+      // Create audio element
+      const audio = new Audio(URL.createObjectURL(audioBlob));
+      
+      await new Promise((resolve) => {
+        audio.onloadedmetadata = () => {
+          resolve(undefined);
+        };
+      });
+      
+      // Create canvas to combine video and audio
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d')!;
+      
+      // Use MediaRecorder to combine
+      const stream = canvas.captureStream(30); // 30 fps
+      const audioTrack = (audio as any).captureStream().getAudioTracks()[0];
+      if (audioTrack) {
+        stream.addTrack(audioTrack);
+      }
+      
+      const recorder = new MediaRecorder(stream, {
+        mimeType: 'video/webm;codecs=vp9,opus'
+      });
+      
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+      
+      recorder.onstop = () => {
+        const combinedBlob = new Blob(chunks, { type: 'video/webm' });
+        const combinedUrl = URL.createObjectURL(combinedBlob);
+        setGeneratedVideoUrl(combinedUrl);
+        showToast('Video and voiceover combined successfully!', 'success');
+      };
+      
+      // Draw video frames and record
+      recorder.start();
+      video.play();
+      audio.play();
+      
+      const drawFrame = () => {
+        if (video.ended || video.paused) {
+          recorder.stop();
+          return;
+        }
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        requestAnimationFrame(drawFrame);
+      };
+      
+      video.onplay = () => {
+        drawFrame();
+      };
+      
+      // Stop when audio ends
+      audio.onended = () => {
+        video.pause();
+        recorder.stop();
+      };
+      
+    } catch (error: any) {
+      console.error('Video combination error:', error);
+      showToast('Failed to combine video and audio automatically. You can download both files separately.', 'error');
     }
   };
 
@@ -767,6 +872,11 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
                   className="w-full h-auto"
                   style={{ maxHeight: '600px' }}
                 />
+                {generatedAudioUrl && (
+                  <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded">
+                    ✓ With Voiceover
+                  </div>
+                )}
               </div>
               <div className="flex gap-3">
                 <button
@@ -899,9 +1009,15 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
                       Generated Voiceover:
                     </p>
                     <audio src={generatedAudioUrl} controls className="w-full" />
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                      You can download this audio and combine it with your video using video editing software.
-                    </p>
+                    {generatedVideoUrl ? (
+                      <p className="text-xs text-green-600 dark:text-green-400 mt-2">
+                        ✓ Video and voiceover will be automatically combined when you download!
+                      </p>
+                    ) : (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                        Generate a video first, then the voiceover will be automatically added to it.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
