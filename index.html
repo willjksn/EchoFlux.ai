@@ -10,7 +10,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EngageSuite.ai</title>
 
-    <!-- Tailwind via CDN (ok with Vite, since components use utility classes) -->
+    <!-- Tailwind via CDN (development only - should use PostCSS in production) -->
+    <!-- TODO: Replace with PostCSS/Tailwind CLI build process for production -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {

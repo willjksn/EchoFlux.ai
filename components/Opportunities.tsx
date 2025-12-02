@@ -210,97 +210,96 @@ export const Opportunities: React.FC = () => {
                                  });
                                  
                                  return filtered.length > 0 ? filtered.map((result) => {
-                                 const typeColors: Record<string, string> = {
-                                     'Trending Hashtag': 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200',
-                                     'Viral Audio': 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-200',
-                                     'Popular Topic': 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200',
-                                     'Collaboration Opportunity': 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-200',
-                                     'Content Gap': 'bg-pink-100 text-pink-800 dark:bg-pink-900/50 dark:text-pink-200',
-                                 };
-                                 
-                                 const velocityColors: Record<string, string> = {
-                                     'Rising': 'text-green-600 dark:text-green-400',
-                                     'Peak': 'text-red-600 dark:text-red-400',
-                                     'Declining': 'text-yellow-600 dark:text-yellow-400',
-                                 };
+                                     const typeColors: Record<string, string> = {
+                                         'Trending Hashtag': 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200',
+                                         'Viral Audio': 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-200',
+                                         'Popular Topic': 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200',
+                                         'Collaboration Opportunity': 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-200',
+                                         'Content Gap': 'bg-pink-100 text-pink-800 dark:bg-pink-900/50 dark:text-pink-200',
+                                     };
+                                     
+                                     const velocityColors: Record<string, string> = {
+                                         'Rising': 'text-green-600 dark:text-green-400',
+                                         'Peak': 'text-red-600 dark:text-red-400',
+                                         'Declining': 'text-yellow-600 dark:text-yellow-400',
+                                     };
 
-                                 return (
-                                 <div key={result.id} className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-shadow">
-                                     <div className="flex items-start justify-between mb-3">
-                                         <div className="flex items-center gap-3 flex-wrap">
-                                             <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${typeColors[result.type] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'}`}>
-                                              {result.type}
-                                            </span>
-                                            <div className="text-gray-400 dark:text-gray-500">{platformIcons[result.platform]}</div>
-                                            {result.trendingVelocity && (
-                                                <span className={`text-xs font-medium ${velocityColors[result.trendingVelocity] || ''}`}>
-                                                    {result.trendingVelocity === 'Rising' && '📈'} 
-                                                    {result.trendingVelocity === 'Peak' && '🔥'} 
-                                                    {result.trendingVelocity === 'Declining' && '📉'} 
-                                                    {result.trendingVelocity}
+                                     return (
+                                     <div key={result.id} className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-shadow">
+                                         <div className="flex items-start justify-between mb-3">
+                                             <div className="flex items-center gap-3 flex-wrap">
+                                                 <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${typeColors[result.type] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'}`}>
+                                                  {result.type}
                                                 </span>
-                                            )}
-                                            {result.engagementPotential && (
-                                                <div className="flex items-center gap-1">
-                                                    <span className="text-xs text-gray-500 dark:text-gray-400">Potential:</span>
-                                                    <div className="flex gap-0.5">
-                                                        {[...Array(10)].map((_, i) => (
-                                                            <div
-                                                                key={i}
-                                                                className={`w-1.5 h-1.5 rounded-full ${
-                                                                    i < result.engagementPotential! 
-                                                                        ? 'bg-primary-600 dark:bg-primary-400' 
-                                                                        : 'bg-gray-200 dark:bg-gray-700'
-                                                                }`}
-                                                            />
-                                                        ))}
-                                                    </div>
-                                                    <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 ml-1">
-                                                        {result.engagementPotential}/10
+                                                <div className="text-gray-400 dark:text-gray-500">{platformIcons[result.platform]}</div>
+                                                {result.trendingVelocity && (
+                                                    <span className={`text-xs font-medium ${velocityColors[result.trendingVelocity] || ''}`}>
+                                                        {result.trendingVelocity === 'Rising' && '📈'} 
+                                                        {result.trendingVelocity === 'Peak' && '🔥'} 
+                                                        {result.trendingVelocity === 'Declining' && '📉'} 
+                                                        {result.trendingVelocity}
                                                     </span>
-                                                </div>
-                                            )}
+                                                )}
+                                                {result.engagementPotential && (
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-xs text-gray-500 dark:text-gray-400">Potential:</span>
+                                                        <div className="flex gap-0.5">
+                                                            {[...Array(10)].map((_, i) => (
+                                                                <div
+                                                                    key={i}
+                                                                    className={`w-1.5 h-1.5 rounded-full ${
+                                                                        i < result.engagementPotential! 
+                                                                            ? 'bg-primary-600 dark:bg-primary-400' 
+                                                                            : 'bg-gray-200 dark:bg-gray-700'
+                                                                    }`}
+                                                                />
+                                                            ))}
+                                                        </div>
+                                                        <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 ml-1">
+                                                            {result.engagementPotential}/10
+                                                        </span>
+                                                    </div>
+                                                )}
+                                             </div>
+                                         </div>
+                                         <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-2">{result.title}</h4>
+                                         <p className="text-gray-600 dark:text-gray-300 text-sm mb-3">{result.description}</p>
+                                         
+                                         {result.relatedHashtags && result.relatedHashtags.length > 0 && (
+                                             <div className="flex flex-wrap gap-2 mb-3">
+                                                 {result.relatedHashtags.map((tag: string, idx: number) => (
+                                                     <span key={idx} className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full">
+                                                         {tag}
+                                                     </span>
+                                                 ))}
+                                             </div>
+                                         )}
+                                         
+                                         {result.bestPractices && (
+                                             <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-lg">
+                                                 <p className="text-xs font-semibold text-blue-900 dark:text-blue-300 mb-1">💡 Best Practice</p>
+                                                 <p className="text-xs text-blue-700 dark:text-blue-400">{result.bestPractices}</p>
+                                             </div>
+                                         )}
+                                         
+                                         <div className="flex gap-2">
+                                             <button
+                                                 onClick={() => {
+                                                     setComposeContext({ 
+                                                         topic: result.title, 
+                                                         platform: result.platform,
+                                                         hashtags: result.relatedHashtags?.join(' ') || ''
+                                                     });
+                                                     setActivePage('compose');
+                                                 }}
+                                                 className="flex-1 px-4 py-2 bg-gradient-to-r from-primary-600 to-primary-500 text-white rounded-lg hover:from-primary-700 hover:to-primary-600 text-sm font-semibold shadow-sm transition-all"
+                                             >
+                                                 Create Content →
+                                             </button>
                                          </div>
                                      </div>
-                                     <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-2">{result.title}</h4>
-                                     <p className="text-gray-600 dark:text-gray-300 text-sm mb-3">{result.description}</p>
-                                     
-                                     {result.relatedHashtags && result.relatedHashtags.length > 0 && (
-                                         <div className="flex flex-wrap gap-2 mb-3">
-                                             {result.relatedHashtags.map((tag: string, idx: number) => (
-                                                 <span key={idx} className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full">
-                                                     {tag}
-                                                 </span>
-                                             ))}
-                                         </div>
-                                     )}
-                                     
-                                     {result.bestPractices && (
-                                         <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-lg">
-                                             <p className="text-xs font-semibold text-blue-900 dark:text-blue-300 mb-1">💡 Best Practice</p>
-                                             <p className="text-xs text-blue-700 dark:text-blue-400">{result.bestPractices}</p>
-                                         </div>
-                                     )}
-                                     
-                                     <div className="flex gap-2">
-                                         <button
-                                             onClick={() => {
-                                                 setComposeContext({ 
-                                                     topic: result.title, 
-                                                     platform: result.platform,
-                                                     hashtags: result.relatedHashtags?.join(' ') || ''
-                                                 });
-                                                 setActivePage('compose');
-                                             }}
-                                             className="flex-1 px-4 py-2 bg-gradient-to-r from-primary-600 to-primary-500 text-white rounded-lg hover:from-primary-700 hover:to-primary-600 text-sm font-semibold shadow-sm transition-all"
-                                         >
-                                             Create Content →
-                                         </button>
-                                     </div>
-                                 </div>
-                                 );
-                                     })
-                                 ) : (
+                                     );
+                                 }) : (
                                      <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 text-center">
                                          <p className="text-gray-500 dark:text-gray-400">No opportunities match your filters. Try adjusting your filters.</p>
                                      </div>
