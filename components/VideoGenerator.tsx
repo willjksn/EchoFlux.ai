@@ -169,6 +169,9 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
     }
   }, [isBusiness, isAgencyPlan, mode]);
 
+  const showComingSoon = () =>
+    showToast('Director Mode coming soon!', 'info');
+
   // Poll for video status
   useEffect(() => {
     if (!operationId || videoStatus === 'succeeded' || videoStatus === 'failed') return;
