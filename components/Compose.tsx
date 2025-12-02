@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { generateCaptions, generateReply } from "../src/services/geminiService";
+import { generateCaptions, generateReply, saveGeneratedContent } from "../src/services/geminiService";
 import { CaptionResult, Platform, MediaItem, Client, User, HashtagSet, Post, CalendarEvent } from '../types';
 import {
   SparklesIcon,
@@ -17,7 +17,8 @@ import {
   PlusIcon,
   MobileIcon,
   ClipboardCheckIcon,
-  CalendarIcon
+  CalendarIcon,
+  DownloadIcon
 } from './icons/UIIcons';
 import {
   InstagramIcon,
@@ -77,6 +78,7 @@ const CaptionGenerator: React.FC = () => {
     showToast,
     settings,
     selectedClient,
+    clients,
     composeState,
     setComposeState,
     hashtagSets,
@@ -126,6 +128,7 @@ const CaptionGenerator: React.FC = () => {
   const isAgency = user?.plan === 'Agency' || user?.plan === 'Elite';
   const isBusiness = user?.userType === 'Business';
   const isAgencyPlan = user?.plan === 'Agency';
+  const isAdminOrAgency = user?.role === 'Admin' || user?.plan === 'Agency';
 
   // Caption limits including new plans, with safe default
   const captionLimits = useMemo(
@@ -151,17 +154,21 @@ const CaptionGenerator: React.FC = () => {
   const usageLeft = limit - usage;
 
   // Dynamic goal/tone options
+  const userPlan = user?.plan || 'Free';
+  const isStarterOrGrowth = userPlan === 'Starter' || userPlan === 'Growth';
+  const showAdvancedOptions = !isBusiness || isAgencyPlan; // Hide for Business Starter/Growth, show for Agency and all Creators
+  
   const goalOptions = useMemo(
     () => [
       { value: 'engagement', label: 'Increase Engagement' },
       { value: 'sales', label: 'Drive Sales' },
       { value: 'awareness', label: 'Build Awareness' },
-      // Followers only if NOT business or if Agency plan
-      ...((!isBusiness || isAgencyPlan)
+      // Followers option: Hide for Business Starter/Growth, show for Agency and all Creators
+      ...(showAdvancedOptions
         ? [{ value: 'followers', label: 'Increase Followers/Fans' }]
         : [])
     ],
-    [isBusiness, isAgencyPlan]
+    [showAdvancedOptions]
   );
 
   const toneOptions = useMemo(
@@ -170,15 +177,15 @@ const CaptionGenerator: React.FC = () => {
       { value: 'witty', label: 'Witty' },
       { value: 'inspirational', label: 'Inspirational' },
       { value: 'professional', label: 'Professional' },
-      // Sexy tones only if NOT business or if Agency plan
-      ...((!isBusiness || isAgencyPlan)
+      // Sexy tones: Hide for Business Starter/Growth, show for Agency and all Creators
+      ...(showAdvancedOptions
         ? [
             { value: 'sexy-bold', label: 'Sexy / Bold' },
             { value: 'sexy-explicit', label: 'Sexy / Explicit' }
           ]
         : [])
     ],
-    [isBusiness, isAgencyPlan]
+    [showAdvancedOptions]
   );
 
   useEffect(() => {
@@ -279,7 +286,7 @@ const CaptionGenerator: React.FC = () => {
     }
   };
 
-  const handlePublish = () => {
+  const handlePublish = async () => {
     const platformsToPost = (Object.keys(selectedPlatforms) as Platform[]).filter(
       p => selectedPlatforms[p]
     );
@@ -292,15 +299,71 @@ const CaptionGenerator: React.FC = () => {
       return;
     }
 
-    platformsToPost.forEach(platform => {
-      showToast(`Caption published to ${platform}!`, 'success');
-    });
+    setIsSaving(true);
+    try {
+      let mediaUrl = composeState.media?.previewUrl;
+      if (
+        composeState.media &&
+        composeState.media.data &&
+        !composeState.media.previewUrl.startsWith('http')
+      ) {
+        mediaUrl = await uploadMedia();
+      }
 
-    setIsPublished(true);
-    setTimeout(() => {
-      setIsPublished(false);
-      resetCompose();
-    }, 2000);
+      const title = composeState.captionText.trim()
+        ? composeState.captionText.substring(0, 30) + '...'
+        : 'New Post';
+
+      const postId = Date.now().toString();
+      const publishDate = new Date();
+
+      if (user) {
+        const newPost: Post = {
+          id: postId,
+          content: composeState.captionText,
+          mediaUrl: mediaUrl,
+          mediaType: composeState.media?.type,
+          platforms: platformsToPost,
+          status: 'Published',
+          author: { name: user.name, avatar: user.avatar },
+          comments: [],
+          scheduledDate: publishDate.toISOString(),
+          clientId: selectedClient?.id
+        };
+
+        const safePost = JSON.parse(JSON.stringify(newPost));
+        await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
+      }
+
+      // Create calendar event for each platform
+      for (const platform of platformsToPost) {
+        const newEvent: CalendarEvent = {
+          id: `cal-${postId}-${platform}`,
+          title: title,
+          date: publishDate.toISOString(),
+          type: composeState.media?.type === 'video' ? 'Reel' : 'Post',
+          platform: platform,
+          status: 'Published',
+          thumbnail: mediaUrl
+        };
+        await addCalendarEvent(newEvent);
+      }
+
+      platformsToPost.forEach(platform => {
+        showToast(`Caption published to ${platform}!`, 'success');
+      });
+
+      setIsPublished(true);
+      setTimeout(() => {
+        setIsPublished(false);
+        resetCompose();
+      }, 2000);
+    } catch (e) {
+      console.error(e);
+      showToast('Failed to publish post.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleSchedule = async (date: string) => {
@@ -394,6 +457,135 @@ const CaptionGenerator: React.FC = () => {
     handleSchedule(isoDate);
   };
 
+  // Download caption as text file
+  const handleDownloadCaption = (caption: string, hashtags: string[] = []) => {
+    const content = caption + '\n\n' + hashtags.join(' ');
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `caption-${Date.now()}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Caption downloaded!', 'success');
+  };
+
+  // Download image
+  const handleDownloadImage = () => {
+    if (!composeState.media?.previewUrl) return;
+    const a = document.createElement('a');
+    a.href = composeState.media.previewUrl;
+    a.download = `image-${Date.now()}.${composeState.media.type === 'image' ? 'png' : 'mp4'}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    showToast('Media downloaded!', 'success');
+  };
+
+  // Save caption to profile
+  const handleSaveCaption = async (caption: string, hashtags: string[] = []) => {
+    if (!user) return;
+    try {
+      await saveGeneratedContent('caption', {
+        caption,
+        hashtags,
+        prompt: composeState.media ? 'Image-based caption' : 'Text-based caption',
+        goal: composeState.postGoal,
+        tone: composeState.postTone,
+      });
+      showToast('Caption saved to profile!', 'success');
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to save caption', 'error');
+    }
+  };
+
+  // Save image to profile
+  const handleSaveImage = async () => {
+    if (!user || !composeState.media) return;
+    try {
+      await saveGeneratedContent('image', {
+        imageData: composeState.media.data,
+        imageUrl: composeState.media.previewUrl,
+        prompt: 'User uploaded image',
+        goal: composeState.postGoal,
+        tone: composeState.postTone,
+      });
+      showToast('Image saved to profile!', 'success');
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to save image', 'error');
+    }
+  };
+
+  // Download caption as text file
+  const handleDownloadCaption = (caption: string, hashtags: string[] = []) => {
+    const content = caption + '\n\n' + hashtags.join(' ');
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `caption-${Date.now()}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Caption downloaded!', 'success');
+  };
+
+  // Download image/video
+  const handleDownloadImage = () => {
+    if (!composeState.media?.previewUrl) return;
+    const a = document.createElement('a');
+    a.href = composeState.media.previewUrl;
+    const extension = composeState.media.type === 'image' ? 'png' : 'mp4';
+    a.download = `${composeState.media.type}-${Date.now()}.${extension}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    showToast('Media downloaded!', 'success');
+  };
+
+  // Save caption to profile
+  const handleSaveCaption = async (caption: string, hashtags: string[] = []) => {
+    if (!user) return;
+    try {
+      await saveGeneratedContent('caption', {
+        caption,
+        hashtags,
+        prompt: composeState.media ? 'Image-based caption' : 'Text-based caption',
+        goal: composeState.postGoal,
+        tone: composeState.postTone,
+      });
+      showToast('Caption saved to profile!', 'success');
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to save caption', 'error');
+    }
+  };
+
+  // Save image/video to profile
+  const handleSaveImage = async () => {
+    if (!user || !composeState.media) return;
+    try {
+      const contentType = composeState.media.type === 'image' ? 'image' : 'video';
+      await saveGeneratedContent(contentType, {
+        imageData: composeState.media.data,
+        imageUrl: composeState.media.previewUrl,
+        videoUrl: composeState.media.type === 'video' ? composeState.media.previewUrl : undefined,
+        prompt: 'User uploaded media',
+        goal: composeState.postGoal,
+        tone: composeState.postTone,
+      });
+      showToast(`${composeState.media.type === 'image' ? 'Image' : 'Video'} saved to profile!`, 'success');
+    } catch (err) {
+      console.error(err);
+      showToast(`Failed to save ${composeState.media.type}`, 'error');
+    }
+  };
+
   const handleSaveToWorkflow = async (status: 'Draft' | 'In Review') => {
     if (!user) return;
     const platformsToPost = (Object.keys(selectedPlatforms) as Platform[]).filter(
@@ -416,8 +608,17 @@ const CaptionGenerator: React.FC = () => {
         mediaUrl = await uploadMedia();
       }
 
+      const title = composeState.captionText.trim()
+        ? composeState.captionText.substring(0, 30) + '...'
+        : 'New Post';
+
+      const postId = Date.now().toString();
+      const draftDate = new Date();
+      // Set draft time to current time, but user can move it later
+      draftDate.setHours(12, 0, 0, 0); // Default to noon for drafts
+
       const newPost: Post = {
-        id: Date.now().toString(),
+        id: postId,
         content: composeState.captionText,
         mediaUrl: mediaUrl,
         mediaType: composeState.media?.type,
@@ -425,12 +626,31 @@ const CaptionGenerator: React.FC = () => {
         status: status,
         author: { name: user?.name || 'User', avatar: user?.avatar || '' },
         comments: [],
+        scheduledDate: status === 'Draft' ? draftDate.toISOString() : undefined,
         clientId: selectedClient?.id
       };
 
       const postsCollectionRef = collection(db, 'users', user.id, 'posts');
       const safePost = JSON.parse(JSON.stringify(newPost));
       await setDoc(doc(postsCollectionRef, newPost.id), safePost);
+
+      // Create calendar event for drafts (In Review posts will be handled by approvals workflow)
+      if (status === 'Draft') {
+        const platformsForCalendar: Platform[] = platformsToPost.length > 0 ? platformsToPost : ['Instagram' as Platform];
+        for (const platform of platformsForCalendar) {
+          const newEvent: CalendarEvent = {
+            id: `cal-${postId}-${platform}`,
+            title: title,
+            date: draftDate.toISOString(),
+            type: composeState.media?.type === 'video' ? 'Reel' : 'Post',
+            platform: platform,
+            status: 'Draft',
+            thumbnail: mediaUrl
+          };
+          await addCalendarEvent(newEvent);
+        }
+      }
+
       showToast(
         status === 'Draft' ? 'Saved to Drafts!' : 'Submitted for Review!',
         'success'
@@ -525,7 +745,13 @@ const CaptionGenerator: React.FC = () => {
 
       setComposeState(prev => ({
         ...prev,
-        media: { data: base64, mimeType: file.type, previewUrl: dataUrl, type: fileType },
+        media: { 
+          data: base64, 
+          mimeType: file.type, 
+          previewUrl: dataUrl, 
+          type: fileType,
+          isGenerated: false // Uploaded file, not generated
+        },
         results: [],
         captionText: ''
       }));
@@ -674,6 +900,20 @@ const CaptionGenerator: React.FC = () => {
         </div>
       )}
 
+      <div className="text-center">
+        <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
+          Compose & Schedule
+        </h2>
+        <p className="mt-2 text-lg text-gray-500 dark:text-gray-400">
+          Create content, generate AI captions, and schedule posts.
+        </p>
+        {isFinite(limit) && (
+          <p className="mt-1 text-sm font-semibold text-primary-600 dark:text-primary-400">
+            {usageLeft} generations left this month.
+          </p>
+        )}
+      </div>
+
       {/* Media upload */}
       <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
         {!composeState.media?.previewUrl ? (
@@ -716,12 +956,34 @@ const CaptionGenerator: React.FC = () => {
                 className="h-full w-full object-contain"
               />
             )}
-            <button
-              onClick={handleClearMedia}
-              className="absolute top-3 right-3 p-2 bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-            >
-              <TrashIcon />
-            </button>
+            <div className="absolute top-3 right-3 flex gap-2">
+              {/* Only show download/save buttons if media was generated via AI (not just uploaded) */}
+              {composeState.media?.isGenerated && (
+                <>
+                  <button
+                    onClick={handleDownloadImage}
+                    className="p-2 bg-black/70 hover:bg-black/90 text-white rounded-full transition-colors shadow-lg"
+                    title="Download"
+                  >
+                    <DownloadIcon className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={handleSaveImage}
+                    className="p-2 bg-black/70 hover:bg-black/90 text-white rounded-full transition-colors shadow-lg"
+                    title="Save to profile"
+                  >
+                    <CheckCircleIcon className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+              <button
+                onClick={handleClearMedia}
+                className="p-2 bg-black/70 hover:bg-black/90 text-white rounded-full transition-colors shadow-lg"
+                title="Remove"
+              >
+                <TrashIcon />
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -849,16 +1111,38 @@ const CaptionGenerator: React.FC = () => {
                     {(result.hashtags || []).join(' ')}
                   </p>
                 </div>
-                <button
-                  onClick={e => {
-                    e.stopPropagation();
-                    openRemixModal(result.caption);
-                  }}
-                  className="absolute top-2 right-2 p-2 bg-white dark:bg-gray-600 rounded-full shadow opacity-0 group-hover:opacity-100 transition-opacity text-primary-600 dark:text-primary-300"
-                  title="Remix for another platform"
-                >
-                  <RefreshIcon />
-                </button>
+                <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={e => {
+                      e.stopPropagation();
+                      handleDownloadCaption(result.caption, result.hashtags);
+                    }}
+                    className="p-2 bg-white dark:bg-gray-600 rounded-full shadow text-primary-600 dark:text-primary-300"
+                    title="Download caption"
+                  >
+                    <DownloadIcon />
+                  </button>
+                  <button
+                    onClick={e => {
+                      e.stopPropagation();
+                      handleSaveCaption(result.caption, result.hashtags);
+                    }}
+                    className="p-2 bg-white dark:bg-gray-600 rounded-full shadow text-green-600 dark:text-green-300"
+                    title="Save to profile"
+                  >
+                    <CheckCircleIcon className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={e => {
+                      e.stopPropagation();
+                      openRemixModal(result.caption);
+                    }}
+                    className="p-2 bg-white dark:bg-gray-600 rounded-full shadow text-primary-600 dark:text-primary-300"
+                    title="Remix for another platform"
+                  >
+                    <RefreshIcon />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -1054,7 +1338,7 @@ const CaptionGenerator: React.FC = () => {
               {isSaving ? <RefreshIcon className="animate-spin" /> : null}
               Save Draft
             </button>
-            {isAgency && (
+            {isAdminOrAgency && (
               <button
                 onClick={() => handleSaveToWorkflow('In Review')}
                 disabled={!hasContent || isSaving}
@@ -1062,6 +1346,22 @@ const CaptionGenerator: React.FC = () => {
               >
                 {isSaving ? <RefreshIcon className="animate-spin" /> : null}
                 <ClipboardCheckIcon className="w-5 h-5" /> Submit for Review
+              </button>
+            )}
+            {isAdminOrAgency && isScheduling && (
+              <button
+                onClick={() => {
+                  if (!scheduleDate) {
+                    showToast('Please select a date and time to schedule for review.', 'error');
+                    return;
+                  }
+                  handleScheduleForReview(scheduleDate);
+                }}
+                disabled={!hasContent || !scheduleDate || isSaving}
+                className="flex items-center gap-2 px-4 py-2 text-base font-medium text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-900 bg-purple-50 dark:bg-purple-900/20 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors disabled:opacity-50"
+              >
+                {isSaving ? <RefreshIcon className="animate-spin" /> : null}
+                <CalendarIcon className="w-5 h-5" /> Schedule for Review
               </button>
             )}
             <button
@@ -1129,7 +1429,8 @@ export const Compose: React.FC = () => {
         data: base64Data,
         mimeType: 'image/png',
         previewUrl: `data:image/png;base64,${base64Data}`,
-        type: 'image'
+        type: 'image',
+        isGenerated: true // Mark as generated
       },
       results: [],
       captionText: '',
@@ -1157,9 +1458,14 @@ export const Compose: React.FC = () => {
 
   const renderTabContent = () => {
     const isAdmin = user?.role === 'Admin';
-    const isAgency = (user?.plan === 'Agency') || isAdmin;
-    const isElite = (user?.plan === 'Elite') || isAgency;
-    const isPro = (user?.plan === 'Pro') || isElite;
+    const isBusiness = user?.userType === 'Business';
+    // Get actual userType from context - use explicit check to ensure Business users get correct messages
+    const userType: 'Creator' | 'Business' = isBusiness ? 'Business' : 'Creator';
+    const userPlan = user?.plan || 'Free';
+    const isAgency = (userPlan === 'Agency') || isAdmin;
+    const isElite = (userPlan === 'Elite') || isAgency;
+    const isPro = (userPlan === 'Pro') || isElite;
+    const isGrowth = (userPlan === 'Growth') || isAgency;
 
     const monthlyImageUsed = user?.monthlyImageGenerationsUsed ?? 0;
     const monthlyVideoUsed = user?.monthlyVideoGenerationsUsed ?? 0;
@@ -1168,6 +1474,40 @@ export const Compose: React.FC = () => {
       case 'captions':
         return <CaptionGenerator />;
       case 'image':
+        // Business users: Only Growth and Agency plans
+        if (isBusiness) {
+          if (isAgency) {
+            return (
+              <ImageGenerator
+                onGenerate={handleImageGeneration}
+                onGenerateCaptions={handleGenerateCaptionsForImage}
+                initialPrompt={initialPrompt}
+              />
+            );
+          }
+          if (isGrowth) {
+            // Growth plan gets limited image generations (same as Pro for now)
+            if (monthlyImageUsed < 50) {
+              return (
+                <ImageGenerator
+                  onGenerate={handleImageGeneration}
+                  onGenerateCaptions={handleGenerateCaptionsForImage}
+                  usageLeft={50 - monthlyImageUsed}
+                  initialPrompt={initialPrompt}
+                />
+              );
+            }
+          }
+          // Business Starter users see upgrade prompt - we're already in isBusiness block
+          return (
+            <UpgradePrompt
+              featureName="AI Image Generation"
+              onUpgradeClick={() => setActivePage('pricing')}
+              userType="Business"
+            />
+          );
+        }
+        // Creator users: Pro, Elite, Agency plans
         if (isAgency) {
           return (
             <ImageGenerator
@@ -1197,13 +1537,43 @@ export const Compose: React.FC = () => {
             />
           );
         }
+        // Creator users who don't have access
         return (
           <UpgradePrompt
             featureName="AI Image Generation"
             onUpgradeClick={() => setActivePage('pricing')}
+            userType={userType}
           />
         );
       case 'video':
+        // Business users: Only Growth and Agency plans
+        if (isBusiness) {
+          if (isAgency && monthlyVideoUsed < 50) {
+            return (
+              <VideoGenerator
+                onGenerate={handleVideoGeneration}
+                usageLeft={50 - monthlyVideoUsed}
+              />
+            );
+          }
+          if (isGrowth && monthlyVideoUsed < 1) {
+            return (
+              <VideoGenerator
+                onGenerate={handleVideoGeneration}
+                usageLeft={1 - monthlyVideoUsed}
+              />
+            );
+          }
+          // Business Starter users see upgrade prompt - we're already in isBusiness block
+          return (
+            <UpgradePrompt
+              featureName="AI Video Generation"
+              onUpgradeClick={() => setActivePage('pricing')}
+              userType="Business"
+            />
+          );
+        }
+        // Creator users: Pro, Elite, Agency plans
         if (isElite && monthlyVideoUsed < 25) {
           return (
             <VideoGenerator
@@ -1228,10 +1598,12 @@ export const Compose: React.FC = () => {
             />
           );
         }
+        // Creator users who don't have access
         return (
           <UpgradePrompt
             featureName="AI Video Generation"
             onUpgradeClick={() => setActivePage('pricing')}
+            userType={userType}
           />
         );
       default:
@@ -1239,59 +1611,23 @@ export const Compose: React.FC = () => {
     }
   };
 
-  const isBusiness = user?.userType === 'Business';
-  
-  // Calculate usage for header display
-  const captionLimits: Record<string, number> = {
-    Free: 50,
-    Pro: 500,
-    Elite: 1500,
-    Agency: Infinity,
-    Starter: 1000,
-    Growth: 2500
-  };
-  const planKey = (user?.plan as string) || 'Free';
-  const limit = captionLimits[planKey] ?? 50;
-  const usage = user?.monthlyCaptionGenerationsUsed || 0;
-  const usageLeft = limit === Infinity ? Infinity : (limit - usage);
-
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
-      {/* Header Banner */}
-      <div className="bg-gradient-to-r from-primary-500 to-primary-600 dark:from-primary-600 dark:to-primary-700 p-6 rounded-xl shadow-lg text-white">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Create Content</h1>
-            <p className="text-sm opacity-90 mt-1">Generate AI captions, images, and videos</p>
-          </div>
-          {isFinite(limit) && (
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg px-4 py-2">
-              <p className="text-xs opacity-90">Caption Generations</p>
-              <p className="text-lg font-bold">{usageLeft} left</p>
-            </div>
-          )}
-        </div>
+    <div className="max-w-7xl mx-auto">
+      <div className="flex justify-center border-b border-gray-200 dark:border-gray-700 mb-8">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-3 px-4 py-3 font-semibold border-b-2 transition-colors ${
+              activeTab === tab.id
+                ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+            }`}
+          >
+            {tab.icon} {tab.label}
+          </button>
+        ))}
       </div>
-
-      {/* Tab Navigation */}
-      <div className="bg-white dark:bg-gray-800 p-2 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-        <div className="flex justify-center gap-2">
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-6 py-3 font-semibold rounded-lg transition-all ${
-                activeTab === tab.id
-                  ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
-            >
-              {tab.icon} {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      
       {renderTabContent()}
     </div>
   );
