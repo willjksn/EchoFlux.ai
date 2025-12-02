@@ -1,9 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from './AppContext';
 import { StrategyPlan, Platform, WeekPlan } from '../types';
-import { generateContentStrategy } from "../src/services/geminiService"
-import { TargetIcon, SparklesIcon, CalendarIcon, CheckCircleIcon, RocketIcon } from './icons/UIIcons';
+import { generateContentStrategy, saveStrategy, getStrategies, updateStrategyStatus } from "../src/services/geminiService"
+import { TargetIcon, SparklesIcon, CalendarIcon, CheckCircleIcon, RocketIcon, DownloadIcon, TrashIcon, ClockIcon } from './icons/UIIcons';
 import { InstagramIcon, TikTokIcon, XIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
 import { UpgradePrompt } from './UpgradePrompt';
 
@@ -44,11 +44,33 @@ export const Strategy: React.FC = () => {
     const [platformFocus, setPlatformFocus] = useState('Mixed / All');
     const [isLoading, setIsLoading] = useState(false);
     const [plan, setPlan] = useState<StrategyPlan | null>(null);
+    const [savedStrategies, setSavedStrategies] = useState<any[]>([]);
+    const [showHistory, setShowHistory] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [strategyName, setStrategyName] = useState('');
+    const [showSaveModal, setShowSaveModal] = useState(false);
+    const [selectedStrategy, setSelectedStrategy] = useState<any | null>(null);
 
     // AI Content Strategist is a $99/month add-on feature
     // Available to Creator Pro/Elite plans, but NOT Agency (requires add-on purchase)
     const isFeatureUnlocked = user?.role === 'Admin' || 
                                (['Pro', 'Elite'].includes(user?.plan || '') && user?.plan !== 'Agency');
+
+    // Load saved strategies on mount
+    useEffect(() => {
+        loadStrategies();
+    }, []);
+
+    const loadStrategies = async () => {
+        try {
+            const result = await getStrategies();
+            if (result.success && result.strategies) {
+                setSavedStrategies(result.strategies);
+            }
+        } catch (error) {
+            console.error("Failed to load strategies:", error);
+        }
+    };
 
     if (!isFeatureUnlocked) {
          return <UpgradePrompt featureName="AI Content Strategist" onUpgradeClick={() => setActivePage('pricing')} />;
@@ -62,13 +84,74 @@ export const Strategy: React.FC = () => {
         setIsLoading(true);
         try {
             const result = await generateContentStrategy(niche, audience, goal, duration, tone, platformFocus);
-            setPlan(result);
-            showToast('Strategy generated!', 'success');
-        } catch (error) {
-            showToast('Failed to generate strategy. Please try again.', 'error');
+            if (result && result.weeks) {
+                setPlan(result);
+                showToast('Strategy generated!', 'success');
+            } else {
+                throw new Error('Invalid strategy response');
+            }
+        } catch (error: any) {
+            console.error("Strategy generation error:", error);
+            showToast(error?.note || error?.message || 'Failed to generate strategy. Please try again.', 'error');
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const handleSaveStrategy = async () => {
+        if (!plan || !strategyName.trim()) {
+            showToast('Please enter a name for your strategy.', 'error');
+            return;
+        }
+        setIsSaving(true);
+        try {
+            const result = await saveStrategy(plan, strategyName, goal, niche, audience);
+            if (result.success) {
+                showToast('Strategy saved successfully!', 'success');
+                setShowSaveModal(false);
+                setStrategyName('');
+                await loadStrategies();
+            } else {
+                throw new Error(result.error || 'Failed to save strategy');
+            }
+        } catch (error: any) {
+            showToast(error?.message || 'Failed to save strategy. Please try again.', 'error');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleLoadStrategy = (strategy: any) => {
+        setPlan(strategy.plan);
+        setNiche(strategy.niche || '');
+        setAudience(strategy.audience || '');
+        setGoal(strategy.goal || goal);
+        setSelectedStrategy(strategy);
+        setShowHistory(false);
+        showToast('Strategy loaded!', 'success');
+    };
+
+    const handleArchiveStrategy = async (strategyId: string) => {
+        try {
+            await updateStrategyStatus(strategyId, 'archived');
+            showToast('Strategy archived.', 'success');
+            await loadStrategies();
+        } catch (error: any) {
+            showToast('Failed to archive strategy.', 'error');
+        }
+    };
+
+    const handleExportStrategy = () => {
+        if (!plan) return;
+        const dataStr = JSON.stringify(plan, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(dataBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `strategy-${Date.now()}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+        showToast('Strategy exported!', 'success');
     };
 
     const handlePopulateCalendar = () => {
@@ -139,7 +222,72 @@ export const Strategy: React.FC = () => {
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white">AI Content Strategist</h1>
                     <p className="mt-2 text-gray-500 dark:text-gray-400">Stop guessing. Let AI build a data-driven roadmap for your growth.</p>
                 </div>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setShowHistory(!showHistory)}
+                        className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
+                    >
+                        <ClockIcon className="w-4 h-4" />
+                        {showHistory ? 'Hide' : 'View'} History ({savedStrategies.length})
+                    </button>
+                </div>
             </div>
+
+            {/* Strategy History View */}
+            {showHistory && (
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Saved Strategies</h2>
+                    {savedStrategies.length === 0 ? (
+                        <p className="text-gray-500 dark:text-gray-400 text-center py-8">No saved strategies yet. Generate and save your first strategy!</p>
+                    ) : (
+                        <div className="space-y-3">
+                            {savedStrategies.map((strategy) => (
+                                <div
+                                    key={strategy.id}
+                                    className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                                >
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-3 mb-2">
+                                                <h3 className="font-semibold text-gray-900 dark:text-white">{strategy.name}</h3>
+                                                <span className={`text-xs px-2 py-1 rounded-full ${
+                                                    strategy.status === 'active' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
+                                                    strategy.status === 'completed' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
+                                                    'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                                                }`}>
+                                                    {strategy.status || 'active'}
+                                                </span>
+                                            </div>
+                                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                                                Goal: {strategy.goal} • Niche: {strategy.niche} • Audience: {strategy.audience}
+                                            </p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                Created: {new Date(strategy.createdAt).toLocaleDateString()}
+                                                {strategy.plan?.weeks && ` • ${strategy.plan.weeks.length} weeks`}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-2 ml-4">
+                                            <button
+                                                onClick={() => handleLoadStrategy(strategy)}
+                                                className="px-3 py-1.5 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+                                            >
+                                                Load
+                                            </button>
+                                            <button
+                                                onClick={() => handleArchiveStrategy(strategy.id)}
+                                                className="p-1.5 text-gray-500 hover:text-red-600 transition-colors"
+                                                title="Archive"
+                                            >
+                                                <TrashIcon className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Input Section */}
             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
@@ -271,6 +419,18 @@ export const Strategy: React.FC = () => {
                     <div className="flex justify-between items-center flex-wrap gap-4">
                         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Your Strategy Plan</h2>
                         <div className="flex items-center gap-3">
+                        <button 
+                            onClick={() => setShowSaveModal(true)}
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                        >
+                            <CheckCircleIcon className="w-5 h-5" /> Save Strategy
+                        </button>
+                        <button 
+                            onClick={handleExportStrategy}
+                            className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors shadow-sm"
+                        >
+                            <DownloadIcon className="w-5 h-5" /> Export
+                        </button>
                         <button 
                             onClick={handlePopulateCalendar}
                             className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm"
@@ -533,6 +693,46 @@ export const Strategy: React.FC = () => {
                             </div>
                         </div>
                     ))}
+                </div>
+            )}
+
+            {/* Save Strategy Modal */}
+            {showSaveModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-xl max-w-md w-full mx-4">
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Save Strategy</h3>
+                        <div className="mb-4">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Strategy Name
+                            </label>
+                            <input
+                                type="text"
+                                value={strategyName}
+                                onChange={(e) => setStrategyName(e.target.value)}
+                                placeholder="e.g., Q1 Content Strategy"
+                                className="w-full p-3 border rounded-lg bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-primary-500 dark:text-white"
+                                autoFocus
+                            />
+                        </div>
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={() => {
+                                    setShowSaveModal(false);
+                                    setStrategyName('');
+                                }}
+                                className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSaveStrategy}
+                                disabled={isSaving || !strategyName.trim()}
+                                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                {isSaving ? 'Saving...' : 'Save'}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

@@ -348,7 +348,57 @@ export async function generateContentStrategy(
     tone,
     platformFocus,
   });
+  // Return the plan directly (API now returns { plan: StrategyPlan })
   return res.plan || res;
+}
+
+/* ----------------------------------------------------
+   15) Strategy Management
+---------------------------------------------------- */
+export async function saveStrategy(
+  strategy: any,
+  name: string,
+  goal: string,
+  niche: string,
+  audience: string
+): Promise<{ success: boolean; strategyId?: string; error?: string }> {
+  return await callFunction("saveStrategy", {
+    strategy,
+    name,
+    goal,
+    niche,
+    audience,
+  });
+}
+
+export async function getStrategies(): Promise<{ success: boolean; strategies?: any[]; error?: string }> {
+  const res = await fetch("/api/getStrategies", {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    throw new Error(`API getStrategies failed: ${res.status}`);
+  }
+
+  return await res.json();
+}
+
+export async function updateStrategyStatus(
+  strategyId: string,
+  status?: string,
+  linkedPostIds?: string[],
+  metrics?: any
+): Promise<{ success: boolean; error?: string }> {
+  return await callFunction("updateStrategyStatus", {
+    strategyId,
+    status,
+    linkedPostIds,
+    metrics,
+  });
 }
 
 /* ----------------------------------------------------
