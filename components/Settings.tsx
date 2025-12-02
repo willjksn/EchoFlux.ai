@@ -674,14 +674,14 @@ export const Settings: React.FC = () => {
                             <ToneSlider label="Humor" value={settings.tone.humor} onChange={(val) => updateToneSetting('humor', val)} description="Low for serious, high for witty & funny replies."/>
                             <ToneSlider label="Empathy" value={settings.tone.empathy} onChange={(val) => updateToneSetting('empathy', val)} description="Low for direct, high for supportive & understanding."/>
                             
-                            {(user.userType === 'Creator' || user.plan === 'Agency' || user.role === 'Admin') && (
+                            {(user.plan === 'Free' || user.plan === 'Pro' || user.plan === 'Elite' || user.plan === 'Agency' || user.role === 'Admin') && (
                                 <>
                                     <hr className="border-gray-200 dark:border-gray-700 my-4" />
                                     <ToneSlider 
                                         label="Spiciness 🌶️" 
                                         value={settings.tone.spiciness || 0} 
                                         onChange={(val) => updateToneSetting('spiciness', val)} 
-                                        description="Control the level of bold/explicit language. (Creator, Agency & Admin accounts only)."
+                                        description="Control the level of bold/explicit language."
                                     />
                                 </>
                             )}
