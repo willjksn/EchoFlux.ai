@@ -458,7 +458,10 @@ export interface VideoScene {
     prompt: string;
     status: 'pending' | 'generating' | 'completed' | 'failed';
     videoUrl?: string;
-    duration: number; 
+    duration: number;
+    order?: number;
+    onScreenText?: string;
+    spokenLine?: string;
 }
 
 export interface AppContextType {
