@@ -152,6 +152,7 @@ export const Settings: React.FC = () => {
 
     const voiceLimit = useMemo(() => {
         if (!user) return 0;
+        // Admins should have access to everything
         if (user.role === 'Admin') return Infinity;
         switch(user.plan) {
             case 'Pro': return 1;
@@ -161,7 +162,8 @@ export const Settings: React.FC = () => {
         }
     }, [user?.plan, user?.role]);
 
-    const isVoiceFeatureUnlocked = voiceLimit > 0;
+    // Admins should have access to everything, including voice cloning
+    const isVoiceFeatureUnlocked = voiceLimit > 0 || user?.role === 'Admin';
 
     // Handle OAuth callback from URL params
     useEffect(() => {

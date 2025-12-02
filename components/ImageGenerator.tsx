@@ -296,7 +296,7 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, usag
             </div>
 
             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md space-y-4">
-                {clients.length > 0 && user.plan === 'Agency' && (
+                {clients.length > 0 && (user.plan === 'Agency' || user.role === 'Admin') && (
                     <div>
                         <label htmlFor="client-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Generate for Client (Optional)</label>
                         <select id="client-select" value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white text-gray-900">
