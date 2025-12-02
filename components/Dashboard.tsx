@@ -115,7 +115,8 @@ export const Dashboard: React.FC = () => {
     return autopilotCampaigns.filter(c => 
       c.status === 'Generating Content' || 
       c.status === 'Strategizing' ||
-      c.status === 'Plan Generated'
+      c.status === 'Plan Generated' ||
+      c.status === 'Complete' // Show completed campaigns that have generated content
     ).slice(0, 3);
   }, [autopilotCampaigns]);
   

@@ -212,13 +212,23 @@ const Autopilot: React.FC = () => {
 
       // Update campaign status - use approvalItems count (one per platform)
       const totalGenerated = approvalItems.length;
-      await updateAutopilotCampaign(campaignId, {
-        status: 'Complete' as AutopilotStatus,
-        generatedPosts: totalGenerated,
-        progress: 100,
-      });
+      
+      // Only mark as Complete if we actually generated content
+      if (totalGenerated > 0) {
+        await updateAutopilotCampaign(campaignId, {
+          status: 'Complete' as AutopilotStatus,
+          generatedPosts: totalGenerated,
+          progress: 100,
+        });
 
-      showToast(`Campaign complete! ${totalGenerated} posts generated and added to approval queue.`, "success");
+        showToast(`Campaign complete! ${totalGenerated} posts generated and added to approval queue.`, "success");
+      } else {
+        // If no content was generated, mark as failed
+        await updateAutopilotCampaign(campaignId, {
+          status: 'Failed' as AutopilotStatus,
+        });
+        showToast("Campaign completed but no posts were generated. Please check your campaign plan.", "error");
+      }
       
     } catch (error) {
       console.error("Content generation failed:", error);
@@ -234,16 +244,21 @@ const Autopilot: React.FC = () => {
 
   // Auto-start content generation when campaign status changes to "Generating Content"
   useEffect(() => {
-    for (const campaign of autopilotCampaigns) {
-      if (
-        campaign.status === 'Generating Content' && 
-        !generatingCampaignId && 
-        campaign.plan &&
-        campaign.id !== generatingCampaignId // Prevent duplicate runs
-      ) {
-        generateContentForCampaign(campaign.id, campaign);
-        break; // Only process one campaign at a time
-      }
+    // Find campaigns that need content generation
+    const campaignsToGenerate = autopilotCampaigns.filter(c => 
+      c.status === 'Generating Content' && 
+      c.plan &&
+      c.id !== generatingCampaignId
+    );
+    
+    // Only process one campaign at a time
+    if (campaignsToGenerate.length > 0 && !generatingCampaignId) {
+      const campaign = campaignsToGenerate[0];
+      console.log('Starting content generation for campaign:', campaign.id, campaign.goal);
+      generateContentForCampaign(campaign.id, campaign).catch(error => {
+        console.error('Error in generateContentForCampaign:', error);
+        showToast('Failed to generate content. Please try again.', 'error');
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autopilotCampaigns, generatingCampaignId]);
