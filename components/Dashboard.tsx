@@ -200,9 +200,20 @@ export const Dashboard: React.FC = () => {
   
   const upcomingEvents = useMemo(() => {
       const now = new Date();
+      // Filter events that are scheduled for future dates/times
+      // Compare dates properly, accounting for timezone issues
       return calendarEvents
-        .filter(e => new Date(e.date) >= now)
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        .filter(e => {
+          if (!e.date) return false;
+          const eventDate = new Date(e.date);
+          // Only show events that are in the future (not past)
+          return eventDate.getTime() > now.getTime();
+        })
+        .sort((a, b) => {
+          const dateA = new Date(a.date).getTime();
+          const dateB = new Date(b.date).getTime();
+          return dateA - dateB;
+        })
         .slice(0, 3);
   }, [calendarEvents]);
 
