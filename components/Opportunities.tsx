@@ -139,13 +139,77 @@ export const Opportunities: React.FC = () => {
                     
                     {results.length > 0 && (
                          <div className="space-y-4">
-                             <div className="flex justify-between items-center mb-4">
+                             <div className="flex justify-between items-center mb-4 flex-wrap gap-4">
                                 <div>
                                     <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Top Opportunities</h3>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Found {results.length} opportunities for "{niche}"</p>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                        Found {results.length} opportunities for "{niche}"
+                                        {filterPlatform !== 'All' && ` • Filtered by ${filterPlatform}`}
+                                    </p>
+                                </div>
+                                <div className="flex gap-2 flex-wrap">
+                                    {/* Platform Filter */}
+                                    <select
+                                        value={filterPlatform}
+                                        onChange={(e) => setFilterPlatform(e.target.value as Platform | 'All')}
+                                        className="px-3 py-2 text-sm border rounded-lg bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
+                                    >
+                                        <option value="All">All Platforms</option>
+                                        <option value="Instagram">Instagram</option>
+                                        <option value="TikTok">TikTok</option>
+                                        <option value="X">X (Twitter)</option>
+                                        <option value="LinkedIn">LinkedIn</option>
+                                        <option value="YouTube">YouTube</option>
+                                        <option value="Facebook">Facebook</option>
+                                        <option value="Threads">Threads</option>
+                                    </select>
+                                    {/* Type Filter */}
+                                    <select
+                                        value={filterType}
+                                        onChange={(e) => setFilterType(e.target.value)}
+                                        className="px-3 py-2 text-sm border rounded-lg bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
+                                    >
+                                        <option value="All">All Types</option>
+                                        <option value="Trending Hashtag">Hashtags</option>
+                                        <option value="Viral Audio">Viral Audio</option>
+                                        <option value="Popular Topic">Topics</option>
+                                        <option value="Collaboration Opportunity">Collaborations</option>
+                                        <option value="Content Gap">Content Gaps</option>
+                                    </select>
+                                    {/* Sort */}
+                                    <select
+                                        value={sortBy}
+                                        onChange={(e) => setSortBy(e.target.value as 'relevance' | 'engagement' | 'trending')}
+                                        className="px-3 py-2 text-sm border rounded-lg bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
+                                    >
+                                        <option value="engagement">Sort by Engagement</option>
+                                        <option value="trending">Sort by Trending</option>
+                                        <option value="relevance">Sort by Relevance</option>
+                                    </select>
                                 </div>
                              </div>
-                             {results.map((result) => {
+                             {(() => {
+                                 // Filter and sort results
+                                 let filtered = results.filter(opp => {
+                                     const platformMatch = filterPlatform === 'All' || opp.platform === filterPlatform;
+                                     const typeMatch = filterType === 'All' || opp.type === filterType;
+                                     return platformMatch && typeMatch;
+                                 });
+                                 
+                                 // Sort results
+                                 filtered.sort((a, b) => {
+                                     if (sortBy === 'engagement') {
+                                         return (b.engagementPotential || 0) - (a.engagementPotential || 0);
+                                     } else if (sortBy === 'trending') {
+                                         const velocityOrder: Record<string, number> = { 'Peak': 3, 'Rising': 2, 'Declining': 1 };
+                                         return (velocityOrder[b.trendingVelocity || 'Rising'] || 0) - (velocityOrder[a.trendingVelocity || 'Rising'] || 0);
+                                     } else {
+                                         // Relevance - keep original order
+                                         return 0;
+                                     }
+                                 });
+                                 
+                                 return filtered.length > 0 ? filtered.map((result) => {
                                  const typeColors: Record<string, string> = {
                                      'Trending Hashtag': 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200',
                                      'Viral Audio': 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-200',
