@@ -3,7 +3,7 @@ import { Settings as AppSettings, Platform, CustomVoice, SocialAccount } from '.
 import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
 import { useAppContext } from './AppContext';
 import { UpgradePrompt } from './UpgradePrompt';
-import { UploadIcon, TrashIcon, SettingsIcon, LinkIcon, SparklesIcon, CreditCardIcon, CheckCircleIcon, XMarkIcon, ClockIcon } from './icons/UIIcons';
+import { UploadIcon, TrashIcon, SettingsIcon, LinkIcon, SparklesIcon, CreditCardIcon, CheckCircleIcon, XMarkIcon, ClockIcon, VoiceIcon } from './icons/UIIcons';
 import { db, storage } from '../firebaseConfig';
 // @ts-ignore
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
@@ -687,6 +687,96 @@ export const Settings: React.FC = () => {
                                         <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".txt,.md"/>
                                         <button onClick={() => fileInputRef.current?.click()} className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors">Upload Document</button>
                                         {fileName && <span className="text-sm text-gray-600 dark:text-gray-400">{fileName}</span>}
+                                    </div>
+                                </>
+                            )}
+                        </SettingsSection>
+
+                        <SettingsSection title="Voice Clones" id="voice-clones">
+                            {!isVoiceFeatureUnlocked ? (
+                                <UpgradePrompt 
+                                    featureName="Voice Cloning" 
+                                    onUpgradeClick={() => setActivePage('pricing')}
+                                    description={`Upload audio samples to create AI clones of your voice for video voiceovers. Plan limits: Pro (1), Elite (3), Agency (Unlimited).`}
+                                />
+                            ) : (
+                                <>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                                                Upload an audio sample (MP3, WAV, etc.) to create a clone of your voice. This cloned voice can be used in AI-generated videos to speak any text you provide.
+                                            </p>
+                                            <div className="flex items-center gap-3">
+                                                <input
+                                                    type="file"
+                                                    ref={voiceFileInputRef}
+                                                    onChange={handleVoiceFileChange}
+                                                    className="hidden"
+                                                    accept="audio/*,.mp3,.wav,.m4a,.ogg"
+                                                />
+                                                <button
+                                                    onClick={() => voiceFileInputRef.current?.click()}
+                                                    disabled={isUploadingVoice || userCustomVoices.length >= voiceLimit}
+                                                    className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                                >
+                                                    <UploadIcon className="w-4 h-4" />
+                                                    {isUploadingVoice ? 'Uploading & Cloning...' : 'Upload Voice Sample'}
+                                                </button>
+                                                <span className="text-sm text-gray-500 dark:text-gray-400">
+                                                    {userCustomVoices.length} / {voiceLimit === Infinity ? '∞' : voiceLimit} voices
+                                                </span>
+                                            </div>
+                                            {isUploadingVoice && (
+                                                <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+                                                    ⏳ Uploading and cloning your voice... This may take a minute.
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        {userCustomVoices.length > 0 && (
+                                            <div className="mt-4">
+                                                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                                    Your Cloned Voices:
+                                                </h4>
+                                                <div className="space-y-2">
+                                                    {userCustomVoices.map((voice) => (
+                                                        <div
+                                                            key={voice.id}
+                                                            className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                <VoiceIcon className="w-5 h-5 text-primary-600" />
+                                                                <div>
+                                                                    <p className="text-sm font-medium text-gray-900 dark:text-white">
+                                                                        {voice.name}
+                                                                    </p>
+                                                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                                        {voice.isCloned ? (
+                                                                            <span className="text-green-600 dark:text-green-400">✓ Cloned & Ready</span>
+                                                                        ) : (
+                                                                            <span className="text-amber-600 dark:text-amber-400">⚠ Uploaded (cloning failed)</span>
+                                                                        )}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => handleDeleteVoice(voice.id)}
+                                                                className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                                                                title="Delete voice"
+                                                            >
+                                                                <TrashIcon className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                            <p className="text-xs text-blue-800 dark:text-blue-200">
+                                                <strong>Tip:</strong> For best results, upload a clear audio sample (at least 30 seconds) of you speaking naturally. The cloned voice will be used in video generation to speak any text you provide.
+                                            </p>
+                                        </div>
                                     </div>
                                 </>
                             )}
