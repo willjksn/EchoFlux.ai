@@ -1206,7 +1206,7 @@ const CaptionGenerator: React.FC<CaptionGeneratorProps> = ({
                   >
                     <CheckCircleIcon className="w-4 h-4" />
                   </button>
-                </>
+                </div>
               )}
               <button
                 onClick={handleClearMedia}
