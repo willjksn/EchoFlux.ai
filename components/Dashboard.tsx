@@ -87,53 +87,30 @@ export const Dashboard: React.FC = () => {
   
   // Content Ideas handler
   const handleGenerateIdeas = async (category: 'trending' | 'engagement' | 'niche') => {
-    console.log('handleGenerateIdeas called with category:', category);
     const niche = isBusiness ? user?.businessType : user?.niche;
     if (!niche) {
       showToast('Please set your niche in settings first.', 'error');
       return;
     }
-    
-    // Prevent multiple simultaneous requests
-    if (isGeneratingIdeas) {
-      console.log('Already generating ideas, skipping...');
-      return;
-    }
-    
-    console.log('Opening modal and starting generation...');
     setIsGeneratingIdeas(true);
     setSelectedCategory(category);
     setShowIdeasModal(true); // Show modal immediately with loading state
-    setGeneratedIdeas([]); // Clear previous ideas
-    
     try {
       const { generateContentIdeas } = await import("../src/services/geminiService");
       // Map 'engagement' to 'high-engagement' for API
       const apiCategory = category === 'engagement' ? 'high-engagement' : category;
-      console.log('Calling generateContentIdeas with:', { niche, apiCategory, userType: user?.userType });
       const result = await generateContentIdeas(niche, apiCategory as 'high-engagement' | 'niche' | 'trending', user?.userType);
-      console.log('generateContentIdeas result:', result);
-      
-      if (result.success && result.ideas && Array.isArray(result.ideas) && result.ideas.length > 0) {
-        console.log('Setting generated ideas:', result.ideas);
+      if (result.success && result.ideas) {
         setGeneratedIdeas(result.ideas);
       } else {
-        // Show error but keep modal open with error message
-        const errorMsg = result.error || result.note || 'Failed to generate ideas. Please try again.';
-        console.error('Generation failed:', errorMsg);
-        setGeneratedIdeas([]);
-        showToast(errorMsg, 'error');
-        // Don't close modal - let user see the error and try again
+        throw new Error(result.error || result.note || 'Failed to generate ideas');
       }
     } catch (err: any) {
       console.error('Error generating content ideas:', err);
-      const errorMsg = err?.note || err?.message || 'Failed to generate content ideas. Please try again.';
-      showToast(errorMsg, 'error');
-      setGeneratedIdeas([]);
-      // Keep modal open so user can see error and try again
+      showToast(err?.note || err?.message || 'Failed to generate content ideas. Please try again.', 'error');
+      setShowIdeasModal(false);
     } finally {
       setIsGeneratingIdeas(false);
-      console.log('Generation complete');
     }
   };
 
@@ -1934,14 +1911,15 @@ export const Dashboard: React.FC = () => {
           {/* Content Ideas Modal */}
           {showIdeasModal && (
             <div 
-              className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[9999]" 
+              className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" 
               onClick={() => {
                 if (!isGeneratingIdeas && generatedIdeas.length === 0) {
                   setShowIdeasModal(false);
                 }
               }}
+              style={{ zIndex: 9999 }}
             >
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col z-[10000]" onClick={(e) => e.stopPropagation()}>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
                 <div className="p-6 border-b border-gray-200 dark:border-gray-700">
                   <div className="flex items-center justify-between">
                     <div>
@@ -1981,7 +1959,7 @@ export const Dashboard: React.FC = () => {
                   ) : generatedIdeas.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {generatedIdeas.map((idea, idx) => (
-                        <div key={idea.id || `idea-${idx}`} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                        <div key={idea.id || idx} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
                           <div className="flex items-start justify-between mb-2">
                             <div className="flex items-center gap-2">
                               <span className="text-xs px-2 py-1 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-full">
@@ -1996,9 +1974,9 @@ export const Dashboard: React.FC = () => {
                               </div>
                             )}
                           </div>
-                          <h4 className="font-semibold text-gray-900 dark:text-white mb-1">{idea.title || `Content Idea ${idx + 1}`}</h4>
-                          <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">{idea.description || 'No description available.'}</p>
-                          {idea.hashtags && Array.isArray(idea.hashtags) && idea.hashtags.length > 0 && (
+                          <h4 className="font-semibold text-gray-900 dark:text-white mb-1">{idea.title}</h4>
+                          <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">{idea.description}</p>
+                          {idea.hashtags && idea.hashtags.length > 0 && (
                             <div className="flex flex-wrap gap-1 mb-3">
                               {idea.hashtags.map((tag: string, tagIdx: number) => (
                                 <span key={tagIdx} className="text-xs px-2 py-0.5 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-full">
@@ -2008,23 +1986,14 @@ export const Dashboard: React.FC = () => {
                             </div>
                           )}
                           <button
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              try {
-                                setComposeContext({
-                                  topic: `${idea.title || 'Content Idea'}: ${idea.description || ''}${idea.hashtags && Array.isArray(idea.hashtags) && idea.hashtags.length > 0 ? ' ' + idea.hashtags.join(' ') : ''}`,
-                                  platform: idea.platform || 'Instagram',
-                                  type: idea.format === 'Reel' ? 'video' : idea.format === 'Story' ? 'image' : 'Post'
-                                });
-                                setShowIdeasModal(false);
-                                setGeneratedIdeas([]);
-                                setSelectedCategory(null);
-                                setActivePage('compose');
-                              } catch (err) {
-                                console.error('Error navigating to compose:', err);
-                                showToast('Failed to navigate to compose page.', 'error');
-                              }
+                            onClick={() => {
+                              setComposeContext({
+                                topic: `${idea.title}: ${idea.description}${idea.hashtags && idea.hashtags.length > 0 ? ' ' + idea.hashtags.join(' ') : ''}`,
+                                platform: idea.platform || 'Instagram',
+                                type: idea.format === 'Reel' ? 'video' : idea.format === 'Story' ? 'image' : 'Post'
+                              });
+                              setShowIdeasModal(false);
+                              setActivePage('compose');
                             }}
                             className="w-full px-4 py-2 bg-gradient-to-r from-primary-600 to-primary-500 text-white rounded-lg hover:from-primary-700 hover:to-primary-600 text-sm font-semibold transition-all"
                           >
@@ -2033,31 +2002,11 @@ export const Dashboard: React.FC = () => {
                         </div>
                       ))}
                     </div>
-                  ) : !isGeneratingIdeas ? (
+                  ) : (
                     <div className="text-center py-12">
-                      <p className="text-gray-500 dark:text-gray-400 mb-4">No ideas generated yet.</p>
-                      <div className="flex flex-wrap justify-center gap-2">
-                        <button
-                          onClick={() => handleGenerateIdeas('trending')}
-                          className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-semibold"
-                        >
-                          Generate Trending Ideas
-                        </button>
-                        <button
-                          onClick={() => handleGenerateIdeas('engagement')}
-                          className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-semibold"
-                        >
-                          Generate High Engagement Ideas
-                        </button>
-                        <button
-                          onClick={() => handleGenerateIdeas('niche')}
-                          className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-semibold"
-                        >
-                          Generate Niche Ideas
-                        </button>
-                      </div>
+                      <p className="text-gray-500 dark:text-gray-400">No ideas generated yet. Click a badge above to generate ideas.</p>
                     </div>
-                  ) : null}
+                  )}
                 </div>
               </div>
             </div>

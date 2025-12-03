@@ -34,11 +34,14 @@ import { VideoGenerator } from './VideoGenerator';
 import { UpgradePrompt } from './UpgradePrompt';
 import { useAppContext } from './AppContext';
 import { MobilePreviewModal } from './MobilePreviewModal';
+import { MediaBox } from './MediaBox';
 import { db, storage } from '../firebaseConfig';
 import { collection, setDoc, doc } from 'firebase/firestore';
 // @ts-ignore
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { scheduleMultiplePosts } from '../src/services/smartSchedulingService';
+import { getAnalytics } from '../src/services/geminiService';
+import { MediaItemState } from '../types';
 
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -72,59 +75,7 @@ const SpeechRecognition =
   (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 const isSpeechRecognitionSupported = !!SpeechRecognition;
 
-interface CaptionGeneratorProps {
-  batchItems: Array<{
-    id: string;
-    file: File;
-    media: { data: string; mimeType: string; previewUrl: string; type: 'image' | 'video' };
-    caption: string;
-    captionResults: CaptionResult[];
-    isLoading: boolean;
-    isScheduled: boolean;
-    scheduledDate?: string;
-    platforms: Platform[];
-  }>;
-  setBatchItems: React.Dispatch<React.SetStateAction<Array<{
-    id: string;
-    file: File;
-    media: { data: string; mimeType: string; previewUrl: string; type: 'image' | 'video' };
-    caption: string;
-    captionResults: CaptionResult[];
-    isLoading: boolean;
-    isScheduled: boolean;
-    scheduledDate?: string;
-    platforms: Platform[];
-  }>>>;
-  isBatchMode: boolean;
-  setIsBatchMode: React.Dispatch<React.SetStateAction<boolean>>;
-  autoPost: boolean;
-  setAutoPost: React.Dispatch<React.SetStateAction<boolean>>;
-  autoGenerateCaptions: boolean;
-  setAutoGenerateCaptions: React.Dispatch<React.SetStateAction<boolean>>;
-  generateCaptionForBatchItem: (itemId: string) => Promise<void>;
-  handleScheduleBatchItem: (itemId: string, date: string) => Promise<void>;
-  handlePostBatchItem: (itemId: string) => Promise<void>;
-  handlePostAllBatchItems: () => Promise<void>;
-  handleScheduleAllBatchItems: () => Promise<void>;
-  handleRemoveBatchItem: (itemId: string) => void;
-}
-
-const CaptionGenerator: React.FC<CaptionGeneratorProps> = ({ 
-  batchItems, 
-  setBatchItems, 
-  isBatchMode, 
-  setIsBatchMode,
-  autoPost,
-  setAutoPost,
-  autoGenerateCaptions,
-  setAutoGenerateCaptions,
-  generateCaptionForBatchItem,
-  handleScheduleBatchItem,
-  handlePostBatchItem,
-  handlePostAllBatchItems,
-  handleScheduleAllBatchItems,
-  handleRemoveBatchItem
-}) => {
+const CaptionGenerator: React.FC = () => {
   const {
     user,
     setUser,
@@ -143,6 +94,7 @@ const CaptionGenerator: React.FC<CaptionGeneratorProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [autoGenerateCaptions, setAutoGenerateCaptions] = useState(true); // Toggle for auto-generating captions
   const [selectedPlatforms, setSelectedPlatforms] = useState<Record<Platform, boolean>>({
     Instagram: false,
     TikTok: false,
@@ -298,6 +250,7 @@ const CaptionGenerator: React.FC<CaptionGeneratorProps> = ({
     handleClearMedia();
     setIsScheduling(false);
     setScheduleDate('');
+    setComposeState(prev => ({ ...prev, mediaItems: [] }));
     setSelectedPlatforms({
       Instagram: false,
       TikTok: false,
@@ -307,6 +260,197 @@ const CaptionGenerator: React.FC<CaptionGeneratorProps> = ({
       LinkedIn: false,
       Facebook: false
     });
+  };
+
+  // Batch upload handlers
+  const handleAddMediaBox = () => {
+    const newMediaItem: MediaItemState = {
+      id: Date.now().toString(),
+      previewUrl: '',
+      data: '',
+      mimeType: '',
+      type: 'image',
+      results: [],
+      captionText: '',
+    };
+    setComposeState(prev => ({
+      ...prev,
+      mediaItems: [...prev.mediaItems, newMediaItem],
+    }));
+  };
+
+  const handleUpdateMediaItem = (index: number, updates: Partial<MediaItemState>) => {
+    setComposeState(prev => ({
+      ...prev,
+      mediaItems: prev.mediaItems.map((item, i) =>
+        i === index ? { ...item, ...updates } : item
+      ),
+    }));
+  };
+
+  const handleRemoveMediaItem = (index: number) => {
+    setComposeState(prev => ({
+      ...prev,
+      mediaItems: prev.mediaItems.filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleGenerateBestTimes = async () => {
+    if (composeState.mediaItems.length === 0) {
+      showToast('Please add at least one media item first.', 'error');
+      return;
+    }
+
+    const platformsToPost = (Object.keys(selectedPlatforms) as Platform[]).filter(
+      p => selectedPlatforms[p]
+    );
+    if (platformsToPost.length === 0) {
+      showToast('Please select at least one platform.', 'error');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // Fetch analytics data
+      const analytics = await getAnalytics('30d', 'All');
+      
+      // Generate optimal times for all posts
+      const scheduledDates = scheduleMultiplePosts(
+        composeState.mediaItems.length,
+        1, // Start from week 1
+        analytics,
+        platformsToPost[0], // Use first selected platform
+        {
+          avoidClumping: true,
+          minHoursBetween: 2,
+          preferBusinessHours: true,
+        }
+      );
+
+      // Update each media item with its scheduled date
+      setComposeState(prev => ({
+        ...prev,
+        mediaItems: prev.mediaItems.map((item, index) => ({
+          ...item,
+          scheduledDate: scheduledDates[index] || new Date().toISOString(),
+        })),
+      }));
+
+      showToast(`Generated optimal times for ${composeState.mediaItems.length} posts!`, 'success');
+    } catch (error) {
+      console.error('Failed to generate best times:', error);
+      showToast('Failed to generate optimal times. Using default schedule.', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleBulkSchedule = async () => {
+    const platformsToPost = (Object.keys(selectedPlatforms) as Platform[]).filter(
+      p => selectedPlatforms[p]
+    );
+    if (platformsToPost.length === 0) {
+      showToast('Please select at least one platform.', 'error');
+      return;
+    }
+
+    const itemsToSchedule = composeState.mediaItems.filter(
+      item => item.previewUrl && item.captionText.trim()
+    );
+
+    if (itemsToSchedule.length === 0) {
+      showToast('Please add media and captions to schedule.', 'error');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      for (let i = 0; i < itemsToSchedule.length; i++) {
+        const item = itemsToSchedule[i];
+        const mediaUrl = item.previewUrl.startsWith('http')
+          ? item.previewUrl
+          : await uploadMediaItem(item);
+
+        if (!mediaUrl) continue;
+
+        const title = item.captionText.trim()
+          ? item.captionText.substring(0, 30) + '...'
+          : 'New Post';
+
+        const postId = `${Date.now()}-${i}`;
+        const scheduledDate = item.scheduledDate || new Date().toISOString();
+
+        if (user) {
+          const newPost: Post = {
+            id: postId,
+            content: item.captionText,
+            mediaUrl: mediaUrl,
+            mediaType: item.type,
+            platforms: platformsToPost,
+            status: 'Scheduled',
+            author: { name: user.name, avatar: user.avatar },
+            comments: [],
+            scheduledDate: scheduledDate,
+            clientId: selectedClient?.id,
+          };
+
+          const safePost = JSON.parse(JSON.stringify(newPost));
+          await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
+        }
+
+        // Create calendar event
+        const newEvent: CalendarEvent = {
+          id: `cal-${postId}`,
+          title: title,
+          date: scheduledDate,
+          type: item.type === 'video' ? 'Reel' : 'Post',
+          platform: platformsToPost[0],
+          status: 'Scheduled',
+          thumbnail: mediaUrl,
+        };
+
+        await addCalendarEvent(newEvent);
+      }
+
+      showToast(`Scheduled ${itemsToSchedule.length} posts!`, 'success');
+      resetCompose();
+    } catch (e) {
+      console.error(e);
+      showToast('Failed to schedule posts.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const uploadMediaItem = async (item: MediaItemState): Promise<string | undefined> => {
+    if (!item.data || !user) return undefined;
+
+    try {
+      const timestamp = Date.now();
+      const extension = item.mimeType.split('/')[1] || 'bin';
+      const storagePath = `users/${user.id}/uploads/${timestamp}.${extension}`;
+      const storageRef = ref(storage, storagePath);
+
+      const bytes = base64ToBytes(item.data);
+      await uploadBytes(storageRef, bytes, {
+        contentType: item.mimeType,
+      });
+
+      return await getDownloadURL(storageRef);
+    } catch (e) {
+      console.error('Upload failed:', e);
+      return undefined;
+    }
+  };
+
+  const handleCaptionGenerationComplete = () => {
+    if (user) {
+      setUser({
+        ...user,
+        monthlyCaptionGenerationsUsed:
+          (user.monthlyCaptionGenerationsUsed || 0) + 1,
+      });
+    }
   };
 
   const uploadMedia = async (): Promise<string | undefined> => {
@@ -535,7 +679,6 @@ const CaptionGenerator: React.FC<CaptionGeneratorProps> = ({
           author: { name: user.name, avatar: user.avatar },
           comments: [],
           scheduledDate: new Date(date).toISOString(),
-          autoPost: autoPost,
           clientId: selectedClient?.id
         };
 
@@ -844,104 +987,38 @@ const CaptionGenerator: React.FC<CaptionGeneratorProps> = ({
   }, [composeState.media, autoGenerateCaptions]);
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
+    const file = event.target.files?.[0];
+    if (!file) return;
 
-    // If single file AND batch mode is OFF, use normal workflow
-    if (files.length === 1 && !isBatchMode) {
-      const file = files[0];
-      const fileType = file.type.startsWith('image') ? 'image' : 'video';
-      
-      try {
-        const base64 = await fileToBase64(file);
-        const dataUrl = `data:${file.type};base64,${base64}`;
-        
-        setComposeState(prev => ({
-          ...prev,
-          media: { 
-            data: base64, 
-            mimeType: file.type, 
-            previewUrl: dataUrl, 
-            type: fileType,
-            isGenerated: false
-          },
-          results: [],
-          // Preserve existing caption text if auto-generate is disabled or if caption exists
-          captionText: (!autoGenerateCaptions || prev.captionText.trim()) ? prev.captionText : ''
-        }));
-      } catch (error) {
-        showToast('Failed to process file.', 'error');
-        console.error(error);
-      }
-      
-      // Clear the input
-      if (event.target) {
-        event.target.value = '';
-      }
-      return;
-    }
+    const fileType = file.type.startsWith('image') ? 'image' : 'video';
 
-    // Batch mode: process files (multiple files OR batch mode enabled)
-    const newItems: typeof batchItems = [];
-    const baseTimestamp = Date.now();
-    
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const fileType = file.type.startsWith('image') ? 'image' : 'video';
-      
-      try {
-        const base64 = await fileToBase64(file);
-        // Create proper data URL for preview
-        const dataUrl = `data:${file.type};base64,${base64}`;
-        
-        // Use unique ID with timestamp and index, plus random to ensure uniqueness
-        const itemId = `batch_${baseTimestamp}_${i}_${Math.random().toString(36).substr(2, 9)}`;
-        newItems.push({
-          id: itemId,
-          file,
-          media: {
-            data: base64,
-            mimeType: file.type,
-            previewUrl: dataUrl, // This should be a valid data URL
-            type: fileType
-          },
-          caption: '',
-          captionResults: [],
-          isLoading: true,
-          isScheduled: false,
-          platforms: [],
-          postGoal: composeState.postGoal || 'engagement',
-          postTone: composeState.postTone || 'friendly'
-        });
-      } catch (error) {
-        console.error(`Failed to process file ${file.name}:`, error);
-        showToast(`Failed to process ${file.name}`, 'error');
-      }
-    }
-    
-    if (newItems.length > 0) {
-      setIsBatchMode(true); // Enable batch mode when items are added
-      setBatchItems(prev => [...prev, ...newItems]);
-      showToast(`Added ${newItems.length} file${newItems.length > 1 ? 's' : ''} to batch`, 'success');
-      
-      // Generate captions for each item (process after state update)
-      setTimeout(() => {
-        newItems.forEach(item => {
-          generateCaptionForBatchItem(item.id);
-        });
-      }, 100);
-    }
-    
-    // Clear the input so the same files can be selected again if needed
-    if (event.target) {
-      event.target.value = '';
+    try {
+      const base64 = await fileToBase64(file);
+      const dataUrl = `data:${file.type};base64,${base64}`;
+
+      setComposeState(prev => ({
+        ...prev,
+        media: { 
+          data: base64, 
+          mimeType: file.type, 
+          previewUrl: dataUrl, 
+          type: fileType,
+          isGenerated: false // Uploaded file, not generated
+        },
+        results: [],
+        // Preserve existing caption text if auto-generate is disabled or if caption exists
+        captionText: (!autoGenerateCaptions || prev.captionText.trim()) ? prev.captionText : ''
+      }));
+    } catch (error) {
+      showToast('Failed to process file.', 'error');
+      console.error(error);
     }
   };
-
 
   const handleClearMedia = () => {
     setComposeState({
       media: null,
+      mediaItems: [],
       results: [],
       captionText: '',
       postGoal: 'engagement',
@@ -1078,144 +1155,86 @@ const CaptionGenerator: React.FC<CaptionGeneratorProps> = ({
         </div>
       )}
 
-      {/* Toggles for auto-generating captions and batch mode - MOVED TO TOP */}
-      <div className="mb-6 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md border-2 border-primary-200 dark:border-primary-800">
-        <div className="flex items-center gap-6 flex-wrap justify-center">
+      <div className="text-center">
+        <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
+          Compose & Schedule
+        </h2>
+        <p className="mt-2 text-lg text-gray-500 dark:text-gray-400">
+          Create content, generate AI captions, and schedule posts.
+        </p>
+        {isFinite(limit) && (
+          <p className="mt-1 text-sm font-semibold text-primary-600 dark:text-primary-400">
+            {usageLeft} generations left this month.
+          </p>
+        )}
+        {/* Toggle for auto-generating captions */}
+        <div className="mt-3 flex items-center gap-2">
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
               checked={autoGenerateCaptions}
               onChange={(e) => setAutoGenerateCaptions(e.target.checked)}
-              className="w-5 h-5 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 dark:focus:ring-primary-400 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+              className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 dark:focus:ring-primary-400 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
             />
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <span className="text-sm text-gray-700 dark:text-gray-300">
               Auto-generate captions when uploading images
             </span>
           </label>
         </div>
       </div>
 
-      {/* Hide main compose area when showing individual boxes */}
-      {activeTab !== 'captions' && (
-        <div>
-          <div className="text-center">
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-              Compose & Schedule
-            </h2>
-            <p className="mt-2 text-lg text-gray-500 dark:text-gray-400">
-              Create content, generate AI captions, and schedule posts.
-            </p>
-            {isFinite(limit) && (
-              <p className="mt-1 text-sm font-semibold text-primary-600 dark:text-primary-400">
-                {usageLeft} generations left this month.
-              </p>
-            )}
-          </div>
+      {/* Batch Media Upload */}
+      <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Batch Upload
+          </h3>
+          {composeState.mediaItems.length > 0 && (
+            <button
+              onClick={handleGenerateBestTimes}
+              disabled={isLoading}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-50"
+            >
+              <SparklesIcon className="w-4 h-4" />
+              {isLoading ? 'Generating...' : 'Generate Best Times (AI)'}
+            </button>
+          )}
+        </div>
 
-          {/* Media upload */}
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
-        {!composeState.media?.previewUrl ? (
+        {composeState.mediaItems.length === 0 ? (
           <div
-            onClick={() => fileInputRef.current?.click()}
-            onDragOver={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              e.currentTarget.classList.add('border-primary-500', 'bg-primary-50', 'dark:bg-primary-900/20');
-            }}
-            onDragLeave={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              e.currentTarget.classList.remove('border-primary-500', 'bg-primary-50', 'dark:bg-primary-900/20');
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              e.currentTarget.classList.remove('border-primary-500', 'bg-primary-50', 'dark:bg-primary-900/20');
-              
-              const files = Array.from(e.dataTransfer.files).filter(
-                file => file.type.startsWith('image/') || file.type.startsWith('video/')
-              );
-              
-              if (files.length > 0) {
-                // Create a synthetic event to reuse handleFileChange logic
-                const syntheticEvent = {
-                  target: { files: files as any, value: '' }
-                } as React.ChangeEvent<HTMLInputElement>;
-                handleFileChange(syntheticEvent);
-              } else {
-                showToast('Please drop image or video files', 'error');
-              }
-            }}
-            className="flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 dark:border-gray-600 border-dashed rounded-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+            onClick={handleAddMediaBox}
+            className="flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 dark:border-gray-600 border-dashed rounded-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
           >
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              className="hidden"
-              accept="image/*,video/*"
-              multiple
-            />
             <div className="space-y-1 text-center">
               <UploadIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-primary-500" />
-              <div className="flex flex-col items-center gap-2">
-                <div className="flex text-sm text-gray-600 dark:text-gray-400">
-                  <span className="relative font-medium text-primary-600 dark:text-primary-400">
-                    {isBatchMode ? 'Upload images/videos for batch' : 'Upload an image or video'}
-                  </span>
-                  <p className="pl-1">or drag and drop</p>
-                </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {isBatchMode 
-                    ? 'Select multiple files - AI will generate captions for each'
-                    : 'Images: PNG, JPG, GIF | Videos: MP4, MOV (AI will analyze and generate captions)'}
-                </p>
+              <div className="flex text-sm text-gray-600 dark:text-gray-400">
+                <span className="relative font-medium text-primary-600 dark:text-primary-400">
+                  Upload an image or video
+                </span>
               </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Images: PNG, JPG, GIF | Videos: MP4, MOV
+              </p>
             </div>
           </div>
         ) : (
-          <div className="relative group w-full h-64 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden flex items-center justify-center">
-            {composeState.media.type === 'image' ? (
-              <img
-                src={composeState.media.previewUrl}
-                alt="Preview"
-                className="h-full w-full object-contain"
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {composeState.mediaItems.map((item, index) => (
+              <MediaBox
+                key={item.id}
+                mediaItem={item}
+                index={index}
+                onUpdate={handleUpdateMediaItem}
+                onRemove={handleRemoveMediaItem}
+                onAddNext={handleAddMediaBox}
+                isLast={index === composeState.mediaItems.length - 1}
+                postGoal={composeState.postGoal}
+                postTone={composeState.postTone}
+                canGenerate={canGenerate}
+                onGenerateComplete={handleCaptionGenerationComplete}
               />
-            ) : (
-              <video
-                src={composeState.media.previewUrl}
-                controls
-                className="h-full w-full object-contain"
-              />
-            )}
-            <div className="absolute top-3 right-3 flex gap-2">
-              {/* Only show download/save buttons if media was generated via AI (not just uploaded) */}
-              {composeState.media?.isGenerated && (
-        <div>
-                  <button
-                    onClick={handleDownloadImage}
-                    className="p-2 bg-black/70 hover:bg-black/90 text-white rounded-full transition-colors shadow-lg"
-                    title="Download"
-                  >
-                    <DownloadIcon className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={handleSaveImage}
-                    className="p-2 bg-black/70 hover:bg-black/90 text-white rounded-full transition-colors shadow-lg"
-                    title="Save to profile"
-                  >
-                    <CheckCircleIcon className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-              <button
-                onClick={handleClearMedia}
-                className="p-2 bg-black/70 hover:bg-black/90 text-white rounded-full transition-colors shadow-lg"
-                title="Remove"
-              >
-                <TrashIcon />
-              </button>
-            </div>
+            ))}
           </div>
         )}
       </div>
@@ -1523,7 +1542,6 @@ const CaptionGenerator: React.FC<CaptionGeneratorProps> = ({
                     type="datetime-local"
                     value={scheduleDate}
                     onChange={e => setScheduleDate(e.target.value)}
-                    min={new Date().toISOString().slice(0, 16)}
                     className="flex-grow p-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
                   />
                   <button
@@ -1534,22 +1552,6 @@ const CaptionGenerator: React.FC<CaptionGeneratorProps> = ({
                     {isSaving ? <RefreshIcon className="animate-spin" /> : null}
                     Confirm Schedule
                   </button>
-                </div>
-                <div className="flex items-center gap-2 pt-2">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={autoPost}
-                      onChange={(e) => setAutoPost(e.target.checked)}
-                      className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 dark:focus:ring-primary-400 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
-                    />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">
-                      Auto-post at scheduled time
-                    </span>
-                  </label>
-                  <span className="text-xs text-gray-500 dark:text-gray-400" title="When enabled, the post will automatically be published to selected platforms at the scheduled time">
-                    ℹ️
-                  </span>
                 </div>
               </div>
 
@@ -1572,77 +1574,122 @@ const CaptionGenerator: React.FC<CaptionGeneratorProps> = ({
 
           {/* Footer actions */}
           <div className="flex flex-wrap justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <button
-              onClick={() => setIsPreviewOpen(true)}
-              disabled={!hasContent}
-              className="flex items-center gap-2 px-4 py-2 text-base font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
-            >
-              <MobileIcon className="w-5 h-5" /> Preview
-            </button>
-            <button
-              onClick={() => handleSaveToWorkflow('Draft')}
-              disabled={!hasContent || isSaving}
-              className="flex items-center gap-2 px-4 py-2 text-base font-medium text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
-            >
-              {isSaving ? <RefreshIcon className="animate-spin" /> : null}
-              Save Draft
-            </button>
-            {isAdminOrAgency && (
-              <button
-                onClick={() => handleSaveToWorkflow('In Review')}
-                disabled={!hasContent || isSaving}
-                className="flex items-center gap-2 px-4 py-2 text-base font-medium text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-900/20 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors disabled:opacity-50"
-              >
-                {isSaving ? <RefreshIcon className="animate-spin" /> : null}
-                <ClipboardCheckIcon className="w-5 h-5" /> Submit for Review
-              </button>
-            )}
-            {isAdminOrAgency && isScheduling && (
-              <button
-                onClick={() => {
-                  if (!scheduleDate) {
-                    showToast('Please select a date and time to schedule for review.', 'error');
-                    return;
-                  }
-                  handleScheduleForReview(scheduleDate);
-                }}
-                disabled={!hasContent || !scheduleDate || isSaving}
-                className="flex items-center gap-2 px-4 py-2 text-base font-medium text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-900 bg-purple-50 dark:bg-purple-900/20 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors disabled:opacity-50"
-              >
-                {isSaving ? <RefreshIcon className="animate-spin" /> : null}
-                <CalendarIcon className="w-5 h-5" /> Schedule for Review
-              </button>
-            )}
-            <button
-              onClick={() => setIsScheduling(prev => !prev)}
-              className={`flex items-center gap-2 px-6 py-2 text-base font-medium text-white rounded-md transition-colors ${
-                isScheduling ? 'bg-gray-500 hover:bg-gray-600' : 'bg-purple-600 hover:bg-purple-700'
-              }`}
-            >
-              <CalendarIcon className="w-5 h-5" />{' '}
-              {isScheduling ? 'Cancel Schedule' : 'Schedule'}
-            </button>
-            {!isScheduling && (
-              <button
-                onClick={handlePublish}
-                className="flex items-center gap-2 px-6 py-2 text-base font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
-              >
-                <SendIcon className="w-5 h-5" /> Publish Now
-              </button>
+            {composeState.mediaItems.length > 0 ? (
+              <>
+                {/* Batch actions */}
+                <button
+                  onClick={() => setIsPreviewOpen(true)}
+                  disabled={composeState.mediaItems.length === 0}
+                  className="flex items-center gap-2 px-4 py-2 text-base font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
+                >
+                  <MobileIcon className="w-5 h-5" /> Preview
+                </button>
+                {isScheduling && (
+                  <button
+                    onClick={handleBulkSchedule}
+                    disabled={composeState.mediaItems.length === 0 || isSaving}
+                    className="flex items-center gap-2 px-6 py-2 text-base font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 transition-colors disabled:opacity-50"
+                  >
+                    {isSaving ? <RefreshIcon className="animate-spin" /> : null}
+                    <CalendarIcon className="w-5 h-5" /> Bulk Schedule ({composeState.mediaItems.length})
+                  </button>
+                )}
+                {!isScheduling && (
+                  <button
+                    onClick={handleBulkSchedule}
+                    disabled={composeState.mediaItems.length === 0 || isSaving}
+                    className="flex items-center gap-2 px-6 py-2 text-base font-medium text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50"
+                  >
+                    {isSaving ? <RefreshIcon className="animate-spin" /> : null}
+                    <SendIcon className="w-5 h-5" /> Publish All ({composeState.mediaItems.length})
+                  </button>
+                )}
+                <button
+                  onClick={() => setIsScheduling(prev => !prev)}
+                  className={`flex items-center gap-2 px-6 py-2 text-base font-medium text-white rounded-md transition-colors ${
+                    isScheduling ? 'bg-gray-500 hover:bg-gray-600' : 'bg-purple-600 hover:bg-purple-700'
+                  }`}
+                >
+                  <CalendarIcon className="w-5 h-5" />{' '}
+                  {isScheduling ? 'Cancel Schedule' : 'Schedule'}
+                </button>
+              </>
+            ) : (
+              <>
+                {/* Single post actions (legacy) */}
+                <button
+                  onClick={() => setIsPreviewOpen(true)}
+                  disabled={!hasContent}
+                  className="flex items-center gap-2 px-4 py-2 text-base font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
+                >
+                  <MobileIcon className="w-5 h-5" /> Preview
+                </button>
+                <button
+                  onClick={() => handleSaveToWorkflow('Draft')}
+                  disabled={!hasContent || isSaving}
+                  className="flex items-center gap-2 px-4 py-2 text-base font-medium text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+                >
+                  {isSaving ? <RefreshIcon className="animate-spin" /> : null}
+                  Save Draft
+                </button>
+                {isAdminOrAgency && (
+                  <button
+                    onClick={() => handleSaveToWorkflow('In Review')}
+                    disabled={!hasContent || isSaving}
+                    className="flex items-center gap-2 px-4 py-2 text-base font-medium text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-900/20 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors disabled:opacity-50"
+                  >
+                    {isSaving ? <RefreshIcon className="animate-spin" /> : null}
+                    <ClipboardCheckIcon className="w-5 h-5" /> Submit for Review
+                  </button>
+                )}
+                {isAdminOrAgency && isScheduling && (
+                  <button
+                    onClick={() => {
+                      if (!scheduleDate) {
+                        showToast('Please select a date and time to schedule for review.', 'error');
+                        return;
+                      }
+                      handleScheduleForReview(scheduleDate);
+                    }}
+                    disabled={!hasContent || !scheduleDate || isSaving}
+                    className="flex items-center gap-2 px-4 py-2 text-base font-medium text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-900 bg-purple-50 dark:bg-purple-900/20 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors disabled:opacity-50"
+                  >
+                    {isSaving ? <RefreshIcon className="animate-spin" /> : null}
+                    <CalendarIcon className="w-5 h-5" /> Schedule for Review
+                  </button>
+                )}
+                <button
+                  onClick={() => setIsScheduling(prev => !prev)}
+                  className={`flex items-center gap-2 px-6 py-2 text-base font-medium text-white rounded-md transition-colors ${
+                    isScheduling ? 'bg-gray-500 hover:bg-gray-600' : 'bg-purple-600 hover:bg-purple-700'
+                  }`}
+                >
+                  <CalendarIcon className="w-5 h-5" />{' '}
+                  {isScheduling ? 'Cancel Schedule' : 'Schedule'}
+                </button>
+                {!isScheduling && (
+                  <button
+                    onClick={handlePublish}
+                    className="flex items-center gap-2 px-6 py-2 text-base font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
+                  >
+                    <SendIcon className="w-5 h-5" /> Publish Now
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>
       </div>
     </div>
-      )}
-    </div>
   );
+};
+
 type ComposeTab = 'captions' | 'image' | 'video';
 
 const tabs: { id: ComposeTab; label: string; icon: React.ReactNode }[] = [
   { id: 'captions', label: 'Captions', icon: <CaptionIcon /> },
-  { id: 'image', label: 'Image (Coming Soon)', icon: <ImageIcon /> },
-  { id: 'video', label: 'Video (Coming Soon)', icon: <VideoIcon /> }
+  { id: 'image', label: 'Image', icon: <ImageIcon /> },
+  { id: 'video', label: 'Video', icon: <VideoIcon /> }
 ];
 
 export const Compose: React.FC = () => {
@@ -1652,513 +1699,10 @@ export const Compose: React.FC = () => {
     setActivePage,
     composeContext,
     clearComposeContext,
-    setComposeState,
-    showToast,
-    selectedClient,
-    addCalendarEvent,
-    composeState
+    setComposeState
   } = useAppContext();
   const [activeTab, setActiveTab] = useState<ComposeTab>('captions');
   const [initialPrompt, setInitialPrompt] = useState<string | undefined>(undefined);
-  
-  // Batch upload state - moved to top level so it can be accessed by batch items UI
-  const [batchItems, setBatchItems] = useState<Array<{
-    id: string;
-    file: File;
-    media: { data: string; mimeType: string; previewUrl: string; type: 'image' | 'video' };
-    caption: string;
-    captionResults: CaptionResult[];
-    isLoading: boolean;
-    isScheduled: boolean;
-    scheduledDate?: string;
-    platforms: Platform[];
-    postGoal: string;
-    postTone: string;
-    isSaving?: boolean;
-    isPreviewOpen?: boolean;
-    scheduleDate?: string;
-    isScheduling?: boolean;
-  }>>([{
-    id: 'initial',
-    file: null as any,
-    media: { data: '', mimeType: '', previewUrl: '', type: 'image' },
-    caption: '',
-    captionResults: [],
-    isLoading: false,
-    isScheduled: false,
-    platforms: [],
-    postGoal: 'engagement',
-    postTone: 'friendly',
-    isSaving: false,
-    isPreviewOpen: false,
-    scheduleDate: '',
-    isScheduling: false
-  }]);
-  const [autoPost, setAutoPost] = useState(true);
-  const [isSavingBatch, setIsSavingBatch] = useState(false);
-  const [autoGenerateCaptions, setAutoGenerateCaptions] = useState(true);
-
-  // Batch upload functions - moved to top level
-  const generateCaptionForBatchItem = async (itemId: string) => {
-    const item = batchItems.find(i => i.id === itemId);
-    if (!item || !user) {
-      // Try again after a short delay if item not found yet
-      setTimeout(() => {
-        const retryItem = batchItems.find(i => i.id === itemId);
-        if (retryItem && user) {
-          generateCaptionForBatchItem(itemId);
-        }
-      }, 200);
-      return;
-    }
-
-    try {
-      // Upload to Firebase Storage
-      const timestamp = Date.now();
-      const extension = item.media.mimeType.split('/')[1] || 'png';
-      const storagePath = `users/${user.id}/uploads/${timestamp}_${itemId}.${extension}`;
-      const storageRef = ref(storage, storagePath);
-      
-      const bytes = base64ToBytes(item.media.data);
-      await uploadBytes(storageRef, bytes, {
-        contentType: item.media.mimeType
-      });
-      
-      const mediaUrl = await getDownloadURL(storageRef);
-
-      // Generate captions using item's specific goal and tone
-      const { generateCaptions } = await import("../src/services/geminiService");
-      const res = await generateCaptions({
-        mediaUrl,
-        goal: item.postGoal || composeState.postGoal || 'engagement',
-        tone: item.postTone || composeState.postTone || 'friendly',
-        promptText: undefined
-      });
-
-      let generatedResults: CaptionResult[] = [];
-      if (Array.isArray(res)) {
-        generatedResults = res as CaptionResult[];
-      } else if (Array.isArray(res?.captions)) {
-        generatedResults = res.captions as CaptionResult[];
-      } else if (res?.caption) {
-        generatedResults = [{
-          caption: res.caption,
-          hashtags: res.hashtags || []
-        }];
-      }
-
-      const firstCaptionText = generatedResults.length > 0
-        ? generatedResults[0].caption + '\n\n' + (generatedResults[0].hashtags || []).join(' ')
-        : '';
-
-      setBatchItems(prev => prev.map(i => 
-        i.id === itemId 
-          ? { ...i, caption: firstCaptionText, captionResults: generatedResults, isLoading: false }
-          : i
-      ));
-    } catch (err) {
-      console.error(`Failed to generate caption for ${itemId}:`, err);
-      setBatchItems(prev => prev.map(i => 
-        i.id === itemId 
-          ? { ...i, isLoading: false }
-          : i
-      ));
-    }
-  };
-
-  const handleScheduleBatchItem = async (itemId: string, date: string) => {
-    const item = batchItems.find(i => i.id === itemId);
-    if (!item || !user) return;
-    
-    if (!item.caption.trim()) {
-      showToast('Please wait for caption generation or add a caption.', 'error');
-      return;
-    }
-    
-    if (item.platforms.length === 0) {
-      showToast('Please select at least one platform.', 'error');
-      return;
-    }
-
-    setIsSavingBatch(true);
-    try {
-      // Upload media if not already uploaded
-      const timestamp = Date.now();
-      const extension = item.media.mimeType.split('/')[1] || 'png';
-      const storagePath = `users/${user.id}/uploads/${timestamp}_${itemId}.${extension}`;
-      const storageRef = ref(storage, storagePath);
-      
-      const bytes = base64ToBytes(item.media.data);
-      await uploadBytes(storageRef, bytes, {
-        contentType: item.media.mimeType
-      });
-      
-      const mediaUrl = await getDownloadURL(storageRef);
-
-      const title = item.caption.trim()
-        ? item.caption.substring(0, 30) + '...'
-        : 'New Post';
-
-      const postId = Date.now().toString() + '_' + itemId;
-
-      const newPost: Post = {
-        id: postId,
-        content: item.caption,
-        mediaUrl: mediaUrl,
-        mediaType: item.media.type,
-        platforms: item.platforms,
-        status: 'Scheduled',
-        author: { name: user.name, avatar: user.avatar },
-        comments: [],
-        scheduledDate: new Date(date).toISOString(),
-        autoPost: autoPost,
-        clientId: selectedClient?.id
-      };
-
-      const safePost = JSON.parse(JSON.stringify(newPost));
-      await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
-
-      // Create calendar event for each platform
-      for (const platform of item.platforms) {
-        const newEvent: CalendarEvent = {
-          id: `cal-${postId}-${platform}`,
-          title: title,
-          date: new Date(date).toISOString(),
-          type: item.media.type === 'video' ? 'Reel' : 'Post',
-          platform: platform,
-          status: 'Scheduled',
-          thumbnail: mediaUrl
-        };
-        await addCalendarEvent(newEvent);
-      }
-
-      setBatchItems(prev => prev.map(i => 
-        i.id === itemId 
-          ? { ...i, isScheduled: true, scheduledDate: date }
-          : i
-      ));
-
-      showToast(
-        `Post scheduled for ${new Date(date).toLocaleString([], {
-          dateStyle: 'medium',
-          timeStyle: 'short'
-        })}`,
-        'success'
-      );
-    } catch (e) {
-      console.error(e);
-      showToast("Failed to schedule post.", 'error');
-    } finally {
-      setIsSavingBatch(false);
-    }
-  };
-
-  const handlePostBatchItem = async (itemId: string) => {
-    const item = batchItems.find(i => i.id === itemId);
-    if (!item || !user) return;
-    
-    if (!item.caption.trim()) {
-      showToast('Please wait for caption generation or add a caption.', 'error');
-      return;
-    }
-    
-    if (item.platforms.length === 0) {
-      showToast('Please select at least one platform.', 'error');
-      return;
-    }
-
-    setIsSavingBatch(true);
-    try {
-      // Upload media if not already uploaded
-      const timestamp = Date.now();
-      const extension = item.media.mimeType.split('/')[1] || 'png';
-      const storagePath = `users/${user.id}/uploads/${timestamp}_${itemId}.${extension}`;
-      const storageRef = ref(storage, storagePath);
-      
-      const bytes = base64ToBytes(item.media.data);
-      await uploadBytes(storageRef, bytes, {
-        contentType: item.media.mimeType
-      });
-      
-      const mediaUrl = await getDownloadURL(storageRef);
-
-      const title = item.caption.trim()
-        ? item.caption.substring(0, 30) + '...'
-        : 'New Post';
-
-      const postId = Date.now().toString() + '_' + itemId;
-
-      // Post to each selected platform
-      const token = await user.getIdToken();
-      for (const platform of item.platforms) {
-        try {
-          const response = await fetch('/api/postToSocial', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              userId: user.id,
-              platform: platform,
-              content: item.caption,
-              mediaUrl: mediaUrl,
-              mediaType: item.media.type
-            })
-          });
-
-          if (!response.ok) {
-            const error = await response.text();
-            console.error(`Failed to post to ${platform}:`, error);
-            showToast(`Failed to post to ${platform}`, 'error');
-          } else {
-            showToast(`Posted to ${platform}!`, 'success');
-          }
-        } catch (error) {
-          console.error(`Error posting to ${platform}:`, error);
-          showToast(`Error posting to ${platform}`, 'error');
-        }
-      }
-
-      // Save post record
-      const newPost: Post = {
-        id: postId,
-        content: item.caption,
-        mediaUrl: mediaUrl,
-        mediaType: item.media.type,
-        platforms: item.platforms,
-        status: 'Published',
-        author: { name: user.name, avatar: user.avatar },
-        comments: [],
-        publishedDate: new Date().toISOString(),
-        clientId: selectedClient?.id
-      };
-
-      const safePost = JSON.parse(JSON.stringify(newPost));
-      await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
-
-      // Create calendar event for each platform
-      for (const platform of item.platforms) {
-        const newEvent: CalendarEvent = {
-          id: `cal-${postId}-${platform}`,
-          title: title,
-          date: new Date().toISOString(),
-          type: item.media.type === 'video' ? 'Reel' : 'Post',
-          platform: platform,
-          status: 'Published',
-          thumbnail: mediaUrl
-        };
-        await addCalendarEvent(newEvent);
-      }
-
-      // Remove item from batch after posting
-      setBatchItems(prev => prev.filter(i => i.id !== itemId));
-      showToast(`Posted to ${item.platforms.length} platform${item.platforms.length > 1 ? 's' : ''}!`, 'success');
-    } catch (e) {
-      console.error(e);
-      showToast("Failed to post.", 'error');
-    } finally {
-      setIsSavingBatch(false);
-    }
-  };
-
-  const handlePostAllBatchItems = async () => {
-    const itemsToPost = batchItems.filter(item => 
-      item.caption.trim() && item.platforms.length > 0 && !item.isLoading
-    );
-
-    if (itemsToPost.length === 0) {
-      showToast('Please ensure all items have captions and at least one platform selected.', 'error');
-      return;
-    }
-
-    setIsSavingBatch(true);
-    try {
-      for (const item of itemsToPost) {
-        await handlePostBatchItem(item.id);
-      }
-      showToast(`Posted ${itemsToPost.length} item${itemsToPost.length > 1 ? 's' : ''} successfully!`, 'success');
-    } catch (e) {
-      console.error(e);
-      showToast('Failed to post some items.', 'error');
-    } finally {
-      setIsSavingBatch(false);
-    }
-  };
-
-  const handleScheduleAllBatchItems = async () => {
-    const itemsToSchedule = batchItems.filter(item => 
-      item.caption.trim() && item.platforms.length > 0 && !item.isLoading && !item.isScheduled
-    );
-
-    if (itemsToSchedule.length === 0) {
-      showToast('Please ensure all items have captions and at least one platform selected.', 'error');
-      return;
-    }
-
-    setIsSavingBatch(true);
-    try {
-      // Get analytics for smart scheduling
-      let analytics = null;
-      try {
-        const token = await user?.getIdToken();
-        if (token) {
-          const response = await fetch('/api/getAnalytics', {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-          if (response.ok) {
-            const data = await response.json();
-            analytics = data.analytics || null;
-          }
-        }
-      } catch (e) {
-        console.log('Could not fetch analytics for smart scheduling, using defaults');
-      }
-
-      // Get unique platforms from all items
-      const allPlatforms = Array.from(new Set(
-        itemsToSchedule.flatMap(item => item.platforms)
-      )) as Platform[];
-
-      // Schedule each item intelligently
-      const scheduledDates = scheduleMultiplePosts(
-        itemsToSchedule.length,
-        1, // Start from week 1
-        analytics,
-        allPlatforms[0], // Use first platform for scheduling logic
-        { avoidClumping: true, minHoursBetween: 2 }
-      );
-
-      for (let i = 0; i < itemsToSchedule.length; i++) {
-        const item = itemsToSchedule[i];
-        const scheduledDate = scheduledDates[i] || scheduledDates[0];
-        const dateString = new Date(scheduledDate).toISOString().slice(0, 16);
-        await handleScheduleBatchItem(item.id, dateString);
-      }
-
-      showToast(
-        `Scheduled ${itemsToSchedule.length} item${itemsToSchedule.length > 1 ? 's' : ''} at optimal times!`,
-        'success'
-      );
-    } catch (e) {
-      console.error(e);
-      showToast('Failed to schedule some items.', 'error');
-    } finally {
-      setIsSavingBatch(false);
-    }
-  };
-
-  const handleRemoveBatchItem = (itemId: string) => {
-    setBatchItems(prev => prev.filter(i => i.id !== itemId));
-  };
-
-  // Handler functions for individual box actions
-  const handleSaveDraftForItem = async (itemId: string) => {
-    const item = batchItems.find(i => i.id === itemId);
-    if (!item || !user) return;
-    
-    setIsSavingBatch(true);
-    try {
-      let mediaUrl = item.media.previewUrl;
-      if (item.media.data && !item.media.previewUrl.startsWith('http')) {
-        const timestamp = Date.now();
-        const extension = item.media.mimeType.split('/')[1] || 'png';
-        const storagePath = `users/${user.id}/uploads/${timestamp}_${itemId}.${extension}`;
-        const storageRef = ref(storage, storagePath);
-        const bytes = base64ToBytes(item.media.data);
-        await uploadBytes(storageRef, bytes, { contentType: item.media.mimeType });
-        mediaUrl = await getDownloadURL(storageRef);
-      }
-
-      const postId = Date.now().toString() + '_' + itemId;
-      const newPost: Post = {
-        id: postId,
-        content: item.caption,
-        mediaUrl: mediaUrl,
-        mediaType: item.media.type,
-        platforms: item.platforms,
-        status: 'Draft',
-        author: { name: user.name, avatar: user.avatar },
-        comments: [],
-        clientId: selectedClient?.id
-      };
-
-      await setDoc(doc(db, 'users', user.id, 'posts', postId), JSON.parse(JSON.stringify(newPost)));
-      showToast('Draft saved!', 'success');
-    } catch (e) {
-      console.error(e);
-      showToast('Failed to save draft.', 'error');
-    } finally {
-      setIsSavingBatch(false);
-    }
-  };
-
-  const handleSubmitForReviewForItem = async (itemId: string) => {
-    const item = batchItems.find(i => i.id === itemId);
-    if (!item || !user) return;
-    
-    setIsSavingBatch(true);
-    try {
-      let mediaUrl = item.media.previewUrl;
-      if (item.media.data && !item.media.previewUrl.startsWith('http')) {
-        const timestamp = Date.now();
-        const extension = item.media.mimeType.split('/')[1] || 'png';
-        const storagePath = `users/${user.id}/uploads/${timestamp}_${itemId}.${extension}`;
-        const storageRef = ref(storage, storagePath);
-        const bytes = base64ToBytes(item.media.data);
-        await uploadBytes(storageRef, bytes, { contentType: item.media.mimeType });
-        mediaUrl = await getDownloadURL(storageRef);
-      }
-
-      const postId = Date.now().toString() + '_' + itemId;
-      const newPost: Post = {
-        id: postId,
-        content: item.caption,
-        mediaUrl: mediaUrl,
-        mediaType: item.media.type,
-        platforms: item.platforms,
-        status: 'In Review',
-        author: { name: user.name, avatar: user.avatar },
-        comments: [],
-        clientId: selectedClient?.id
-      };
-
-      await setDoc(doc(db, 'users', user.id, 'posts', postId), JSON.parse(JSON.stringify(newPost)));
-      showToast('Submitted for review!', 'success');
-    } catch (e) {
-      console.error(e);
-      showToast('Failed to submit for review.', 'error');
-    } finally {
-      setIsSavingBatch(false);
-    }
-  };
-
-  const handleSaveHashtagsForItem = async (itemId: string) => {
-    const item = batchItems.find(i => i.id === itemId);
-    if (!item || !user || !item.caption.trim()) return;
-    
-    try {
-      // Extract hashtags from caption
-      const hashtags = item.caption.match(/#[\w]+/g) || [];
-      if (hashtags.length === 0) {
-        showToast('No hashtags found in caption.', 'info');
-        return;
-      }
-
-      const setName = `Set ${Date.now()}`;
-      await saveGeneratedContent('hashtag', {
-        caption: item.caption,
-        hashtags: hashtags.map(tag => tag.replace('#', '')),
-        prompt: 'Saved from compose',
-        goal: item.postGoal,
-        tone: item.postTone,
-      });
-      showToast(`Saved ${hashtags.length} hashtag${hashtags.length > 1 ? 's' : ''}!`, 'success');
-    } catch (e) {
-      console.error(e);
-      showToast('Failed to save hashtags.', 'error');
-    }
-  };
 
   useEffect(() => {
     if (composeContext) {
@@ -2181,6 +1725,7 @@ export const Compose: React.FC = () => {
       // Reset compose state to ensure clean slate for new users
       setComposeState({
         media: null,
+        mediaItems: [],
         results: [],
         captionText: "",
         postGoal: "engagement",
@@ -2206,6 +1751,7 @@ export const Compose: React.FC = () => {
       const downloadURL = await getDownloadURL(storageRef);
       
       setComposeState(prev => ({
+        ...prev,
         media: {
           data: base64Data, // Keep base64 for preview
           mimeType: 'image/png',
@@ -2223,7 +1769,8 @@ export const Compose: React.FC = () => {
     } catch (error) {
       console.error('Failed to upload image:', error);
       // Fallback to base64 preview if upload fails
-      setComposeState({
+      setComposeState(prev => ({
+        ...prev,
         media: {
           data: base64Data,
           mimeType: 'image/png',
@@ -2234,8 +1781,8 @@ export const Compose: React.FC = () => {
         results: [],
         captionText: '',
         postGoal: 'engagement',
-        postTone: 'friendly'
-      });
+        postTone: 'friendly',
+      }));
       setActiveTab('captions');
     }
   };
@@ -2272,8 +1819,7 @@ export const Compose: React.FC = () => {
 
     switch (activeTab) {
       case 'captions':
-        // Don't render CaptionGenerator - we show individual boxes instead
-        return null;
+        return <CaptionGenerator />;
       case 'image':
         // Business users: Only Growth and Agency plans
         if (isBusiness) {
@@ -2408,40 +1954,12 @@ export const Compose: React.FC = () => {
           />
         );
       default:
-        return <CaptionGenerator 
-          batchItems={batchItems}
-          setBatchItems={setBatchItems}
-          isBatchMode={isBatchMode}
-          setIsBatchMode={setIsBatchMode}
-          autoPost={autoPost}
-          setAutoPost={setAutoPost}
-          generateCaptionForBatchItem={generateCaptionForBatchItem}
-          handleScheduleBatchItem={handleScheduleBatchItem}
-          handleRemoveBatchItem={handleRemoveBatchItem}
-        />;
+        return <CaptionGenerator />;
     }
   };
 
   return (
     <div className="max-w-7xl mx-auto">
-      {/* Auto-generate toggle - ALWAYS VISIBLE AT TOP */}
-      {activeTab === 'captions' && (
-        <div className="mb-6 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-md border-2 border-primary-200 dark:border-primary-800">
-          <div className="flex items-center gap-6 flex-wrap justify-center">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={autoGenerateCaptions}
-                onChange={(e) => setAutoGenerateCaptions(e.target.checked)}
-                className="w-5 h-5 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 dark:focus:ring-primary-400 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
-              />
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Auto-generate captions when uploading images
-              </span>
-            </label>
-          </div>
-        </div>
-      )}
       <div className="flex justify-center border-b border-gray-200 dark:border-gray-700 mb-8">
         {tabs.map(tab => (
           <button
@@ -2458,298 +1976,6 @@ export const Compose: React.FC = () => {
         ))}
       </div>
       {renderTabContent()}
-
-      {/* Individual Compose Boxes - Always show, start with one */}
-      {activeTab === 'captions' && (
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md mt-6">
-          <div className="text-center mb-6">
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-              Compose & Schedule
-            </h2>
-            <p className="mt-2 text-lg text-gray-500 dark:text-gray-400">
-              Create content, generate AI captions, and schedule posts.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-4 items-start">
-            {batchItems.map((item, index) => (
-              <div key={item.id} className="flex items-start gap-2">
-                <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-900/50 w-80">
-                  {/* Media Preview or Upload Area */}
-                  {!item.media.previewUrl ? (
-                    <div
-                      onClick={() => {
-                        // Use the main file input ref
-                        if (fileInputRef.current) {
-                          fileInputRef.current.click();
-                        }
-                      }}
-                      className="relative w-full h-40 bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden mb-2 border-2 border-dashed border-gray-300 dark:border-gray-600 cursor-pointer hover:border-primary-500 flex items-center justify-center"
-                    >
-                      <div className="text-center">
-                        <UploadIcon className="w-8 h-8 mx-auto text-gray-400 dark:text-gray-500 mb-2" />
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to upload</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="relative w-full h-40 bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden mb-2">
-                      {item.isLoading ? (
-                        <div className="flex items-center justify-center h-full">
-                          <RefreshIcon className="w-6 h-6 animate-spin text-primary-600" />
-                        </div>
-                      ) : item.media.type === 'image' && item.media.previewUrl ? (
-                        <img
-                          src={item.media.previewUrl}
-                          alt="Preview"
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            console.error('Image failed to load:', item.media.previewUrl?.substring(0, 50));
-                            e.currentTarget.style.display = 'none';
-                            e.currentTarget.parentElement!.innerHTML = '<div class="flex items-center justify-center h-full text-gray-400 text-xs">Failed to load</div>';
-                          }}
-                        />
-                      ) : item.media.type === 'video' && item.media.previewUrl ? (
-                        <video
-                          src={item.media.previewUrl}
-                          className="w-full h-full object-cover"
-                          controls
-                        />
-                      ) : (
-                        <div className="flex items-center justify-center h-full text-gray-400 text-xs">
-                          No preview
-                        </div>
-                      )}
-                      <button
-                        onClick={() => handleRemoveBatchItem(item.id)}
-                        className="absolute top-1 right-1 p-1 bg-black/70 hover:bg-black/90 text-white rounded-full"
-                      >
-                        <TrashIcon className="w-3 h-3" />
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Goal and Tone */}
-                  <div className="mb-2 space-y-1">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-0.5">
-                        Goal
-                      </label>
-                      <select
-                        value={item.postGoal || 'engagement'}
-                        onChange={(e) =>
-                          setBatchItems(prev =>
-                            prev.map(i => i.id === item.id ? { ...i, postGoal: e.target.value } : i)
-                          )
-                        }
-                        className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                      >
-                        <option value="engagement">Increase Engagement</option>
-                        <option value="sales">Drive Sales</option>
-                        <option value="awareness">Build Awareness</option>
-                        {user?.plan === 'Agency' || user?.plan === 'Elite' || user?.role === 'Admin' ? (
-                          <option value="followers">Increase Followers/Fans</option>
-                        ) : null}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-0.5">
-                        Tone
-                      </label>
-                      <select
-                        value={item.postTone || 'friendly'}
-                        onChange={(e) =>
-                          setBatchItems(prev =>
-                            prev.map(i => i.id === item.id ? { ...i, postTone: e.target.value } : i)
-                          )
-                        }
-                        className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                      >
-                        <option value="friendly">Friendly</option>
-                        <option value="witty">Witty</option>
-                        <option value="inspirational">Inspirational</option>
-                        <option value="professional">Professional</option>
-                        {(user?.plan === 'Agency' || user?.plan === 'Elite' || user?.role === 'Admin' || user?.userType !== 'Business') ? (
-        <div>
-                            <option value="sexy-bold">Sexy / Bold</option>
-                            <option value="sexy-explicit">Sexy / Explicit</option>
-                          </>
-                        ) : null}
-                      </select>
-                    </div>
-                    <button
-                      onClick={() => generateCaptionForBatchItem(item.id)}
-                      disabled={item.isLoading}
-                      className="w-full px-2 py-1 text-xs bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
-                    >
-                      {item.isLoading ? (
-        <div>
-                          <RefreshIcon className="w-3 h-3 animate-spin" />
-                          Generating...
-                        </>
-                      ) : (
-        <div>
-                          <SparklesIcon className="w-3 h-3" />
-                          Generate Caption
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Caption */}
-                  <textarea
-                    value={item.caption}
-                    onChange={(e) =>
-                      setBatchItems(prev =>
-                        prev.map(i => i.id === item.id ? { ...i, caption: e.target.value } : i)
-                      )
-                    }
-                    placeholder={item.isLoading ? 'Generating caption...' : 'Edit caption...'}
-                    disabled={item.isLoading}
-                    className="w-full p-2 text-xs border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white mb-2 min-h-[60px] resize-y"
-                  />
-
-                  {/* Platform Selection */}
-                  <div className="mb-2">
-                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Platforms
-                    </label>
-                    <div className="flex flex-wrap gap-1">
-                      {(['Instagram', 'TikTok', 'X', 'Threads', 'YouTube', 'LinkedIn', 'Facebook'] as Platform[]).map((platform) => (
-                        <button
-                          key={platform}
-                          onClick={() =>
-                            setBatchItems(prev =>
-                              prev.map(i =>
-                                i.id === item.id
-                                  ? {
-                                      ...i,
-                                      platforms: i.platforms.includes(platform)
-                                        ? i.platforms.filter(p => p !== platform)
-                                        : [...i.platforms, platform]
-                                    }
-                                  : i
-                              )
-                            )
-                          }
-                          className={`px-1.5 py-0.5 text-xs rounded border ${
-                            item.platforms.includes(platform)
-                              ? 'bg-primary-100 dark:bg-primary-900/50 border-primary-500 text-primary-700 dark:text-primary-300'
-                              : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300'
-                          }`}
-                        >
-                          {platform}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="space-y-2">
-                    <div className="flex gap-1 flex-wrap">
-                      <button
-                        onClick={() => {
-                          // Preview - set compose state and open preview
-                          setComposeState({
-                            media: item.media.previewUrl ? {
-                              data: item.media.data,
-                              mimeType: item.media.mimeType,
-                              previewUrl: item.media.previewUrl,
-                              type: item.media.type,
-                              isGenerated: false
-                            } : null,
-                            captionText: item.caption,
-                            results: [],
-                            postGoal: item.postGoal,
-                            postTone: item.postTone
-                          });
-                          setIsPreviewOpen(true);
-                        }}
-                        disabled={!item.caption.trim() && !item.media.previewUrl}
-                        className="flex-1 px-2 py-1 text-xs bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
-                      >
-                        <MobileIcon className="w-3 h-3" />
-                        Preview
-                      </button>
-                      <button
-                        onClick={() => handleSaveDraftForItem(item.id)}
-                        disabled={!item.caption.trim() || item.isLoading || isSavingBatch}
-                        className="flex-1 px-2 py-1 text-xs bg-gray-500 text-white rounded-md hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Save Draft
-                      </button>
-                    </div>
-                    {(user?.role === 'Admin' || user?.plan === 'Agency') && (
-                      <button
-                        onClick={() => handleSubmitForReviewForItem(item.id)}
-                        disabled={!item.caption.trim() || item.isLoading || isSavingBatch}
-                        className="w-full px-2 py-1 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
-                      >
-                        <ClipboardCheckIcon className="w-3 h-3" />
-                        Submit for Review
-                      </button>
-                    )}
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => {
-                          const now = new Date();
-                          now.setHours(now.getHours() + 1);
-                          handleScheduleBatchItem(item.id, now.toISOString().slice(0, 16));
-                        }}
-                        disabled={item.isLoading || !item.caption.trim() || item.platforms.length === 0 || isSavingBatch}
-                        className="flex-1 px-2 py-1 text-xs bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
-                      >
-                        <CalendarIcon className="w-3 h-3" />
-                        Schedule
-                      </button>
-                      <button
-                        onClick={() => handlePostBatchItem(item.id)}
-                        disabled={item.isLoading || !item.caption.trim() || item.platforms.length === 0 || isSavingBatch}
-                        className="flex-1 px-2 py-1 text-xs bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
-                      >
-                        <SendIcon className="w-3 h-3" />
-                        Publish Now
-                      </button>
-                    </div>
-                    <button
-                      onClick={() => handleSaveHashtagsForItem(item.id)}
-                      disabled={!item.caption.trim() || item.isLoading}
-                      className="w-full px-2 py-1 text-xs bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
-                    >
-                      <HashtagIcon className="w-3 h-3" />
-                      Save Hashtags
-                    </button>
-                    {item.isScheduled && (
-                      <div className="text-xs text-green-600 dark:text-green-400 text-center">
-                        ✓ Scheduled for {item.scheduledDate ? new Date(item.scheduledDate).toLocaleString([], {
-                          dateStyle: 'short',
-                          timeStyle: 'short'
-                        }) : ''}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                {/* Plus button to add more */}
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="mt-2 w-10 h-10 flex items-center justify-center border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors flex-shrink-0"
-                  title="Add another image"
-                >
-                  <PlusIcon className="w-5 h-5 text-gray-400 dark:text-gray-500" />
-                </button>
-              </div>
-            ))}
-            {/* Show plus button if no items yet */}
-            {batchItems.length === 0 && (
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="w-64 h-32 flex items-center justify-center border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
-                title="Add image to batch"
-              >
-                <PlusIcon className="w-8 h-8 text-gray-400 dark:text-gray-500" />
-              </button>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

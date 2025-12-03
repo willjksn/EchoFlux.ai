@@ -371,6 +371,18 @@ export interface ComposeContextData {
     date?: string;
 }
 
+export interface MediaItemState {
+    id: string;
+    previewUrl: string;
+    data: string;
+    mimeType: string;
+    type: 'image' | 'video';
+    isGenerated?: boolean; // true if generated via AI, false/undefined if uploaded
+    results: CaptionResult[];
+    captionText: string;
+    scheduledDate?: string; // Individual schedule date for this item
+}
+
 export interface ComposeState {
     media: {
         previewUrl: string;
@@ -379,6 +391,7 @@ export interface ComposeState {
         type: 'image' | 'video';
         isGenerated?: boolean; // true if generated via AI, false/undefined if uploaded
     } | null;
+    mediaItems: MediaItemState[]; // Array of media items for batch upload
     results: CaptionResult[];
     captionText: string;
     postGoal: string;
@@ -432,8 +445,6 @@ export interface Post {
     status: ApprovalStatus;
     author: { name: string; avatar: string };
     scheduledDate?: string;
-    autoPost?: boolean; // If true, automatically post at scheduled time
-    publishedAt?: string; // Timestamp when post was published
     comments: PostComment[];
     clientId?: string; 
 }

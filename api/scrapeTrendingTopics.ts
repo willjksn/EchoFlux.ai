@@ -123,7 +123,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!isCronCall) {
     try {
       const user = await verifyAuth(req);
-      if (!user || user.role !== "Admin") {
+      if (!user) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      
+      // Check role from Firestore user document
+      const db = getAdminDb();
+      const userDoc = await db.collection("users").doc(user.uid).get();
+      const userData = userDoc.data();
+      if (!userData || userData.role !== "Admin") {
         return res.status(403).json({ error: "Admin access required" });
       }
     } catch (authError) {
@@ -131,8 +139,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  const db = getAdminDb();
   try {
-    const db = getAdminDb();
     const { platform } = req.query;
 
     const platforms = platform

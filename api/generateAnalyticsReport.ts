@@ -58,24 +58,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const prompt = `
 You are an expert social media analyst.
 
-Generate a comprehensive, professional analytics report based on the following metrics:
+Generate an analytics report based on the following JSON metrics:
 
 ${JSON.stringify(analytics, null, 2)}
 
-Return ONLY valid JSON with a well-formatted report:
+Return ONLY valid JSON:
 
 {
-  "summary": "A comprehensive 2-3 paragraph executive summary of the analytics data, highlighting key metrics, trends, and overall performance.",
-  "growthInsights": ["Insight 1: Detailed insight about growth patterns", "Insight 2: Another growth insight", "Insight 3: Additional growth observation"],
-  "recommendedActions": ["Action 1: Specific actionable recommendation", "Action 2: Another recommendation", "Action 3: Third recommendation"],
-  "riskFactors": ["Risk 1: Potential concern or risk identified", "Risk 2: Another risk factor"]
+  "summary": "string",
+  "growthInsights": ["string", "string"],
+  "recommendedActions": ["string", "string", "string"],
+  "riskFactors": ["string"]
 }
-
-Important:
-- Write in a professional, business-friendly tone
-- Use clear, concise language
-- Make insights actionable and specific
-- Format as a readable report, not raw data
 `;
 
     const result = await model.generateContent({

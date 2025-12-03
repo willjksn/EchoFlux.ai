@@ -128,51 +128,22 @@ export const Analytics: React.FC = () => {
             } else if (report && typeof report === 'object') {
                 // Format the report object into a readable string
                 let formattedReport = '';
-                
-                // Add header
-                formattedReport += `# Analytics Report\n\n`;
-                formattedReport += `Generated: ${new Date().toLocaleString()}\n\n`;
-                formattedReport += `---\n\n`;
-                
                 if (report.summary) {
-                    formattedReport += `## Executive Summary\n\n${report.summary}\n\n`;
+                    formattedReport += `## Summary\n\n${report.summary}\n\n`;
                 }
-                
                 if (report.growthInsights && Array.isArray(report.growthInsights) && report.growthInsights.length > 0) {
-                    formattedReport += `## Growth Insights\n\n`;
-                    report.growthInsights.forEach((insight: string, idx: number) => {
-                        formattedReport += `${idx + 1}. ${insight}\n`;
-                    });
-                    formattedReport += `\n`;
+                    formattedReport += `## Growth Insights\n\n${report.growthInsights.map((insight: string, idx: number) => `${idx + 1}. ${insight}`).join('\n')}\n\n`;
                 }
-                
                 if (report.recommendedActions && Array.isArray(report.recommendedActions) && report.recommendedActions.length > 0) {
-                    formattedReport += `## Recommended Actions\n\n`;
-                    report.recommendedActions.forEach((action: string, idx: number) => {
-                        formattedReport += `${idx + 1}. ${action}\n`;
-                    });
-                    formattedReport += `\n`;
+                    formattedReport += `## Recommended Actions\n\n${report.recommendedActions.map((action: string, idx: number) => `${idx + 1}. ${action}`).join('\n')}\n\n`;
                 }
-                
                 if (report.riskFactors && Array.isArray(report.riskFactors) && report.riskFactors.length > 0) {
-                    formattedReport += `## Risk Factors\n\n`;
-                    report.riskFactors.forEach((risk: string, idx: number) => {
-                        formattedReport += `${idx + 1}. ${risk}\n`;
-                    });
-                    formattedReport += `\n`;
+                    formattedReport += `## Risk Factors\n\n${report.riskFactors.map((risk: string, idx: number) => `${idx + 1}. ${risk}`).join('\n')}\n\n`;
                 }
-                
                 if (report.error || report.note) {
-                    formattedReport = `# Error Generating Report\n\n${report.error || report.note}\n\nPlease try again or contact support if the issue persists.`;
+                    formattedReport = `Error: ${report.error || report.note}`;
                 }
-                
-                // Fallback: if no content was formatted, create a basic report
-                if (!formattedReport || formattedReport.trim() === '# Analytics Report\n\n') {
-                    formattedReport = `# Analytics Report\n\nGenerated: ${new Date().toLocaleString()}\n\n`;
-                    formattedReport += `## Summary\n\nUnable to generate detailed insights from the provided data. Please ensure analytics data is properly loaded.\n\n`;
-                }
-                
-                setReportContent(formattedReport);
+                setReportContent(formattedReport || JSON.stringify(report, null, 2));
             } else {
                 setReportContent("Sorry, there was an error generating the report. Please try again.");
             }

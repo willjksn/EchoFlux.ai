@@ -154,6 +154,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const [composeState, setComposeState] = useState<ComposeState>({
     media: null,
+    mediaItems: [],
     results: [],
     captionText: "",
     postGoal: "engagement",
