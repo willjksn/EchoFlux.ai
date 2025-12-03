@@ -54,10 +54,13 @@ export const Opportunities: React.FC = () => {
                 console.log('Found opportunities:', trends.length, trends);
                 // Update results with new scan - this replaces previous results
                 setResults(trends);
+                setError(null); // Clear any previous errors on success
             }
         } catch (err: any) {
             console.error('Error finding trends:', err);
-            setError(err?.message || 'Failed to find trends. Please try again.');
+            // Extract error message from various possible formats
+            const errorMessage = err?.note || err?.message || err?.error || 'Failed to find trends. Please try again.';
+            setError(errorMessage);
             // Don't clear results on error - keep previous results visible
         } finally {
             setIsLoading(false);

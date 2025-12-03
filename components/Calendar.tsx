@@ -18,7 +18,7 @@ const platformIcons: Record<Platform, React.ReactNode> = {
 const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export const Calendar: React.FC = () => {
-    const { calendarEvents, setActivePage } = useAppContext();
+    const { calendarEvents, setActivePage, setComposeContext, posts } = useAppContext();
     const [currentDate, setCurrentDate] = useState(new Date());
 
     const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
@@ -134,11 +134,35 @@ export const Calendar: React.FC = () => {
                             };
                             const colors = statusColors[evt.status] || statusColors.Draft;
                             
+                            const handleEventClick = () => {
+                                // Try to find associated post by matching event ID or title
+                                const associatedPost = posts.find(p => {
+                                    // Check if post ID matches event ID pattern (e.g., cal-{postId})
+                                    if (evt.id.includes(p.id) || p.id.includes(evt.id.replace('cal-', '').replace('-calendar', ''))) {
+                                        return true;
+                                    }
+                                    // Check if post content matches event title
+                                    if (p.content && evt.title && p.content.includes(evt.title.substring(0, 30))) {
+                                        return true;
+                                    }
+                                    return false;
+                                });
+                                
+                                // Set compose context with event data and post content if found
+                                setComposeContext({
+                                    topic: associatedPost?.content || evt.title,
+                                    platform: evt.platform,
+                                    type: evt.type === 'Reel' ? 'video' : evt.type === 'Story' ? 'image' : 'Post',
+                                    date: evt.date
+                                });
+                                setActivePage('compose');
+                            };
+                            
                             return (
                                 <div 
                                     key={evt.id} 
                                     className={`flex flex-col p-2 rounded-lg text-xs shadow-sm cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all ${colors.bg} ${colors.border}`}
-                                    onClick={() => setActivePage('compose')}
+                                    onClick={handleEventClick}
                                     title={`${evt.title} - ${new Date(evt.date).toLocaleString()}`}
                                 >
                                     <div className="flex justify-between items-center mb-1.5 gap-1">

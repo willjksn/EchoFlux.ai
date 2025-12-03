@@ -143,6 +143,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [messages, setMessages] = useState<Message[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
+  const [lastUserId, setLastUserId] = useState<string | null>(null);
 
   const [crmStore, setCrmStore] = useState<Record<string, CRMProfile>>({});
   const [userCustomVoices, setUserCustomVoices] = useState<CustomVoice[]>([]);
@@ -185,24 +186,38 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     FIRESTORE LISTENERS
   --------------------------------------------------------------------*/
   useEffect(() => {
-    if (!user) {
-      setMessages([]);
-      setPosts([]);
-      setCalendarEvents([]);
-      setCrmStore({});
-      setUserCustomVoices([]);
-      setAutopilotCampaigns([]);
-      setSocialAccounts({
-        Instagram: null,
-        TikTok: null,
-        X: null,
-        Threads: null,
-        YouTube: null,
-        LinkedIn: null,
-        Facebook: null,
-      });
+    // Only clear data if user ID actually changed (user logged out or switched)
+    // Don't clear if user is just temporarily null during auth state check
+    if (!user || !user.id) {
+      // Only clear if we had a user before (actual logout), not if it's initial load
+      if (lastUserId) {
+        setMessages([]);
+        setPosts([]);
+        setCalendarEvents([]);
+        setCrmStore({});
+        setUserCustomVoices([]);
+        setAutopilotCampaigns([]);
+        setSocialAccounts({
+          Instagram: null,
+          TikTok: null,
+          X: null,
+          Threads: null,
+          YouTube: null,
+          LinkedIn: null,
+          Facebook: null,
+        });
+        setLastUserId(null);
+      }
       return;
     }
+
+    // If user ID hasn't changed, don't re-establish listeners (they're already active)
+    if (lastUserId === user.id) {
+      return;
+    }
+
+    // User ID changed - update and set up new listeners
+    setLastUserId(user.id);
 
     const subcollections = [
       { name: "messages", setter: setMessages }, // No seed - users start with empty inbox
@@ -250,7 +265,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         q = query(collRef);
       } else if (name === "calendar_events") {
         // Calendar events use "date" field, not "timestamp"
-        q = query(collRef, orderBy("date", "asc"));
+        // Try to order by date, but fallback to no ordering if index is missing
+        try {
+          q = query(collRef, orderBy("date", "asc"));
+        } catch (err) {
+          // If orderBy fails (e.g., missing index), use simple query without ordering
+          console.warn("Calendar events orderBy failed, using simple query:", err);
+          q = query(collRef);
+        }
       } else {
         // Messages, posts, etc. use "timestamp"
         q = query(collRef, orderBy("timestamp", "desc"));
@@ -267,14 +289,53 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setter([]);
           } else {
             const items = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+            // For calendar events, sort by date if not already sorted
+            if (name === "calendar_events") {
+              items.sort((a: any, b: any) => {
+                const dateA = a.date ? new Date(a.date).getTime() : 0;
+                const dateB = b.date ? new Date(b.date).getTime() : 0;
+                return dateA - dateB;
+              });
+            }
             setter(items as any);
           }
         },
         (err) => {
           console.error(`Error fetching ${name}:`, err);
+          
+          // For calendar_events, if orderBy fails due to missing index, establish fallback listener
+          if (name === "calendar_events" && (err.code === "failed-precondition" || err.message?.includes("index"))) {
+            console.warn("Calendar events query failed due to missing index, establishing fallback listener");
+            const fallbackQ = query(collRef);
+            // Establish fallback listener - this will be cleaned up when component unmounts
+            onSnapshot(
+              fallbackQ,
+              (snapshot) => {
+                const items = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+                // Sort manually by date
+                items.sort((a: any, b: any) => {
+                  const dateA = a.date ? new Date(a.date).getTime() : 0;
+                  const dateB = b.date ? new Date(b.date).getTime() : 0;
+                  return dateA - dateB;
+                });
+                setter(items as any);
+              },
+              (fallbackErr) => {
+                console.error(`Fallback query also failed for ${name}:`, fallbackErr);
+                // Set empty array on error to prevent stale data
+                setter([]);
+              }
+            );
+            return; // Don't proceed with error handling below
+          }
+          
           // Don't show permission-denied errors to users, but log other errors
           if (err.code !== "permission-denied" && err.code !== "failed-precondition") {
             console.error(`Failed to fetch ${name}:`, err.message);
+          }
+          // Set empty array on error to prevent stale data showing
+          if (err.code === "permission-denied") {
+            setter([]);
           }
         }
       );
@@ -282,8 +343,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     if (user.bioPage) setBioPageState(user.bioPage);
 
-    return () => unsubscribers.forEach((u) => u());
-  }, [user?.id]);
+    return () => {
+      // Clean up all listeners
+      unsubscribers.forEach((u) => {
+        try {
+          u();
+        } catch (err) {
+          console.warn("Error unsubscribing listener:", err);
+        }
+      });
+    };
+  }, [user?.id]); // Only re-run when user.id changes, not when user object reference changes
 
   /*--------------------------------------------------------------------
     SETTINGS

@@ -31,7 +31,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-      const db = getAdminDbFunction();
+      const getDb = await getAdminDbFunction();
+      const db = getDb();
       const strategiesSnapshot = await db
         .collection("users")
         .doc(user.uid)

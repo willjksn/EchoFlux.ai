@@ -138,8 +138,30 @@ export const Approvals: React.FC = () => {
 
     const columns = statusColumns.map(status => ({
         title: status,
-        items: filteredPosts.filter(p => p.status === status)
+        items: filteredPosts.filter(p => {
+            // Match exact status or handle variations
+            if (p.status === status) return true;
+            // Handle status variations
+            if (status === 'In Review' && (p.status === 'Pending Review' || p.status === 'Review')) return true;
+            if (status === 'Draft' && p.status === 'Draft') return true;
+            if (status === 'Approved' && p.status === 'Approved') return true;
+            if (status === 'Scheduled' && (p.status === 'Scheduled' || p.status === 'Published')) return true;
+            return false;
+        })
     }));
+    
+    // Debug: Log posts for troubleshooting
+    if (process.env.NODE_ENV === 'development') {
+        console.log('Approval Workflow Debug:', {
+            totalPosts: posts.length,
+            filteredPosts: filteredPosts.length,
+            postsByStatus: filteredPosts.reduce((acc, p) => {
+                acc[p.status] = (acc[p.status] || 0) + 1;
+                return acc;
+            }, {} as Record<string, number>),
+            columns: columns.map(c => ({ status: c.title, count: c.items.length }))
+        });
+    }
 
     return (
         <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full flex flex-col">

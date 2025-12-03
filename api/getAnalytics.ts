@@ -260,17 +260,56 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .map((m: any) => m.content?.substring(0, 60) + '...')
       .slice(0, 3);
 
-    // Generate engagement insights
+    // Generate engagement insights - always generate at least some insights
     const engagementInsights = [];
     if (filteredPosts.length > 0) {
       const avgEngagement = currentPeriodEngagement / filteredPosts.length;
-      if (avgEngagement > 100) {
+      
+      // High engagement insight
+      if (avgEngagement > 50) {
         engagementInsights.push({
           icon: 'idea' as const,
-          title: 'High Engagement Rate',
-          description: `Your posts are performing well with an average of ${Math.round(avgEngagement)} engagements per post.`
+          title: avgEngagement > 100 ? 'High Engagement Rate' : 'Good Engagement Rate',
+          description: `Your posts are performing ${avgEngagement > 100 ? 'very well' : 'well'} with an average of ${Math.round(avgEngagement)} engagements per post.`
         });
       }
+      
+      // Follower growth insight
+      if (newFollowers > 0) {
+        engagementInsights.push({
+          icon: 'topic' as const,
+          title: 'Growing Audience',
+          description: `You've gained ${newFollowers} new follower${newFollowers !== 1 ? 's' : ''} in this period. Keep creating great content!`
+        });
+      }
+      
+      // Response rate insight
+      if (totalReplies > 0 && filteredPosts.length > 0) {
+        const replyRate = Math.round((totalReplies / filteredPosts.length) * 100);
+        if (replyRate > 10) {
+          engagementInsights.push({
+            icon: 'question' as const,
+            title: 'Active Community',
+            description: `Your audience is highly engaged with ${totalReplies} replies across your posts. Consider responding to build stronger connections.`
+          });
+        }
+      }
+      
+      // Top topics insight
+      if (topTopics.length > 0) {
+        engagementInsights.push({
+          icon: 'topic' as const,
+          title: 'Trending Topics',
+          description: `Your top performing topics include: ${topTopics.slice(0, 3).join(', ')}. Consider creating more content around these themes.`
+        });
+      }
+    } else {
+      // No posts yet - provide helpful insight
+      engagementInsights.push({
+        icon: 'idea' as const,
+        title: 'Get Started',
+        description: 'Start creating and publishing content to see AI-powered insights about your performance and engagement.'
+      });
     }
 
     const analyticsData = {

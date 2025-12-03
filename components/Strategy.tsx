@@ -85,7 +85,21 @@ export const Strategy: React.FC = () => {
         try {
             const result = await generateContentStrategy(niche, audience, goal, duration, tone, platformFocus);
             if (result && result.weeks) {
+                // Set the plan first
                 setPlan(result);
+                // Create a new temporary strategy object for the newly generated roadmap
+                // This ensures the plan persists on the page until a new one is generated
+                setSelectedStrategy({
+                    id: `temp_${Date.now()}`,
+                    name: 'Current Strategy',
+                    plan: result,
+                    goal: goal,
+                    niche: niche,
+                    audience: audience,
+                    status: 'active',
+                    linkedPostIds: [],
+                    createdAt: new Date().toISOString()
+                });
                 showToast('Strategy generated!', 'success');
             } else {
                 throw new Error('Invalid strategy response');
@@ -131,7 +145,7 @@ export const Strategy: React.FC = () => {
         showToast('Strategy loaded!', 'success');
     };
 
-    // When a new strategy is generated, create a temporary selectedStrategy object
+    // When a plan exists but no selectedStrategy, create one to ensure plan persists
     useEffect(() => {
         if (plan && !selectedStrategy) {
             // Create a temporary strategy object for newly generated strategies

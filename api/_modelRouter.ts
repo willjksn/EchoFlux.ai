@@ -94,16 +94,16 @@ const MODEL_CONFIG: Record<TaskType, {
     costTier: 'medium',
   },
   
-  // High-cost tasks - use thinking models for complex reasoning
+  // High-cost tasks - use Flash for complex reasoning (thinking-exp model not available)
   'analytics': {
-    model: 'gemini-2.0-flash-thinking-exp',
-    description: 'Thinking model for analytics insights',
-    costTier: 'high',
+    model: 'gemini-2.0-flash',
+    description: 'Balanced model for analytics insights',
+    costTier: 'medium',
   },
   'trends': {
-    model: 'gemini-2.0-flash-thinking-exp',
-    description: 'Thinking model for trend analysis',
-    costTier: 'high',
+    model: 'gemini-2.0-flash',
+    description: 'Balanced model for trend analysis',
+    costTier: 'medium',
   },
 };
 
@@ -113,7 +113,6 @@ const MODEL_CONFIG: Record<TaskType, {
 const FALLBACK_MODELS: Record<string, string[]> = {
   'gemini-2.0-flash-lite': ['gemini-2.0-flash', 'gemini-1.5-flash'],
   'gemini-2.0-flash': ['gemini-1.5-flash', 'gemini-1.5-pro'],
-  'gemini-2.0-flash-thinking-exp': ['gemini-2.0-flash', 'gemini-1.5-pro'],
   'gemini-1.5-pro': ['gemini-2.0-flash', 'gemini-1.5-flash'],
 };
 

@@ -156,7 +156,7 @@ Requirements:
         });
       }
 
-      if (!result?.response || typeof result.response.text !== "function") {
+      if (!result?.response) {
         console.error("Unexpected Gemini response shape:", result);
         return res.status(200).json({
           success: false,
@@ -166,19 +166,41 @@ Requirements:
         });
       }
 
-      const raw = result.response.text();
-      let data;
-
+      let raw: string;
       try {
-        data = JSON.parse(raw);
+        raw = result.response.text();
+      } catch (textError: any) {
+        console.error("Error extracting text from response:", textError);
+        return res.status(200).json({
+          success: false,
+          error: "AI response parsing failed",
+          note: textError?.message || "Failed to extract text from AI response. Please try again.",
+          opportunities: [],
+        });
+      }
+
+      if (!raw || typeof raw !== 'string') {
+        console.error("Invalid raw response:", raw);
+        return res.status(200).json({
+          success: false,
+          error: "Invalid AI response",
+          note: "The AI model returned an invalid response format. Please try again.",
+          opportunities: [],
+        });
+      }
+
+      let data;
+      try {
+        data = JSON.parse(raw.trim());
       } catch (parseError) {
         // Try to extract JSON from markdown code blocks
         const jsonMatch = raw.match(/```json\s*([\s\S]*?)\s*```/) || raw.match(/```\s*([\s\S]*?)\s*```/);
         if (jsonMatch) {
           try {
-            data = JSON.parse(jsonMatch[1]);
+            data = JSON.parse(jsonMatch[1].trim());
           } catch (nestedParseError) {
             console.error("Failed to parse extracted JSON:", nestedParseError);
+            console.error("Raw output (first 500 chars):", raw.substring(0, 500));
             return res.status(200).json({
               success: false,
               error: "Failed to parse AI response",
@@ -187,7 +209,7 @@ Requirements:
             });
           }
         } else {
-          console.error("Failed to parse JSON response. Raw output:", raw.substring(0, 200));
+          console.error("Failed to parse JSON response. Raw output (first 500 chars):", raw.substring(0, 500));
           return res.status(200).json({
             success: false,
             error: "Failed to parse AI response",

@@ -41,7 +41,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-      const db = getAdminDbFunction();
+      const getDb = await getAdminDbFunction();
+      const db = getDb();
       const strategyId = `strategy_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
       const strategyData = {

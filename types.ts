@@ -432,6 +432,8 @@ export interface Post {
     status: ApprovalStatus;
     author: { name: string; avatar: string };
     scheduledDate?: string;
+    autoPost?: boolean; // If true, automatically post at scheduled time
+    publishedAt?: string; // Timestamp when post was published
     comments: PostComment[];
     clientId?: string; 
 }

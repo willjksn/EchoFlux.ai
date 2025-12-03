@@ -161,6 +161,34 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     return;
   }
 
+  // Attach image/video if provided
+  // Prefer mediaUrl over mediaData to avoid payload size limits
+  let finalMedia: MediaData | undefined;
+
+  if (mediaUrl) {
+    // Always use URL if available (avoids payload size issues)
+    const fetched = await fetchMediaFromUrl(mediaUrl);
+    if (fetched) finalMedia = fetched;
+  } else if (mediaData?.data && mediaData?.mimeType) {
+    // Only use mediaData if no URL provided (for backwards compatibility)
+    // Check size - videos can be larger, images have stricter limits
+    const dataSizeMB = (mediaData.data.length * 3) / 4 / 1024 / 1024;
+    const isVideoFile = mediaData.mimeType.startsWith('video/');
+    const maxSizeMB = isVideoFile ? 20 : 4; // Videos can be up to 20MB, images 4MB
+    
+    if (dataSizeMB > maxSizeMB) {
+      res.status(413).json({
+        error: isVideoFile ? "Video too large" : "Image too large",
+        note: `Please upload ${isVideoFile ? 'videos' : 'images'} smaller than ${maxSizeMB}MB or use a URL instead.`,
+      });
+      return;
+    }
+    finalMedia = mediaData;
+  }
+
+  // Detect if media is video or image (after finalMedia is determined)
+  const isVideo = finalMedia?.mimeType?.startsWith('video/') || false;
+
   // Build prompt
   const prompt = `
 You are a world-class social media copywriter.
@@ -170,7 +198,22 @@ Generate 3–5 captions based on:
 - Tone: ${tone || "friendly"}
 - Extra instructions: ${promptText || "none"}
 
-If an image/video is provided, use its visual context.
+${isVideo ? `
+IMPORTANT: You are analyzing a VIDEO file. Watch the entire video and analyze:
+- The complete narrative/story being told
+- Key scenes and transitions throughout the video
+- Actions, movements, and visual elements across all frames
+- The overall mood, pacing, and visual style
+- Any text, graphics, or on-screen elements
+- The beginning, middle, and end of the video
+- What happens throughout the entire video duration
+
+Create captions that capture the full video experience, not just a single frame.
+` : `
+If an image is provided, analyze the visual content:
+- Describe what you see, the mood, colors, composition, and key elements
+`}
+Use this visual context to create engaging, relevant captions.
 
 Return ONLY strict JSON like:
 
@@ -183,28 +226,6 @@ Return ONLY strict JSON like:
 `.trim();
 
   const parts: any[] = [{ text: prompt }];
-
-  // Attach image/video if provided
-  // Prefer mediaUrl over mediaData to avoid payload size limits
-  let finalMedia: MediaData | undefined;
-
-  if (mediaUrl) {
-    // Always use URL if available (avoids payload size issues)
-    const fetched = await fetchMediaFromUrl(mediaUrl);
-    if (fetched) finalMedia = fetched;
-  } else if (mediaData?.data && mediaData?.mimeType) {
-    // Only use mediaData if no URL provided (for backwards compatibility)
-    // Check size - if too large, reject
-    const dataSizeMB = (mediaData.data.length * 3) / 4 / 1024 / 1024;
-    if (dataSizeMB > 4) {
-      res.status(413).json({
-        error: "Image too large",
-        note: "Please upload images smaller than 4MB or use a URL instead.",
-      });
-      return;
-    }
-    finalMedia = mediaData;
-  }
 
   if (finalMedia) {
     parts.push({

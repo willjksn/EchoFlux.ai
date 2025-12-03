@@ -108,39 +108,83 @@ export const Analytics: React.FC = () => {
     }, [selectedClient, dateRange, platform]);
 
     const handleGenerateReport = async () => {
-        if (!data) return;
+        // Use fallback data if data is null
+        const analyticsData = data || EMPTY_ANALYTICS_DATA;
+        
+        // Validate that we have at least some meaningful data
+        if (!analyticsData || (typeof analyticsData === 'object' && Object.keys(analyticsData).length === 0)) {
+            showToast('No analytics data available. Please wait for data to load or try again.', 'error');
+            return;
+        }
+        
         setIsGeneratingReport(true);
         setIsReportModalOpen(true);
         setReportContent(""); // Clear previous report
         try {
-            const report = await generateAnalyticsReport(data);
+            const report = await generateAnalyticsReport(analyticsData);
             // Handle both string and object formats
             if (typeof report === 'string') {
                 setReportContent(report);
             } else if (report && typeof report === 'object') {
                 // Format the report object into a readable string
                 let formattedReport = '';
+                
+                // Add header
+                formattedReport += `# Analytics Report\n\n`;
+                formattedReport += `Generated: ${new Date().toLocaleString()}\n\n`;
+                formattedReport += `---\n\n`;
+                
                 if (report.summary) {
-                    formattedReport += `## Summary\n\n${report.summary}\n\n`;
+                    formattedReport += `## Executive Summary\n\n${report.summary}\n\n`;
                 }
+                
                 if (report.growthInsights && Array.isArray(report.growthInsights) && report.growthInsights.length > 0) {
-                    formattedReport += `## Growth Insights\n\n${report.growthInsights.map((insight: string, idx: number) => `${idx + 1}. ${insight}`).join('\n')}\n\n`;
+                    formattedReport += `## Growth Insights\n\n`;
+                    report.growthInsights.forEach((insight: string, idx: number) => {
+                        formattedReport += `${idx + 1}. ${insight}\n`;
+                    });
+                    formattedReport += `\n`;
                 }
+                
                 if (report.recommendedActions && Array.isArray(report.recommendedActions) && report.recommendedActions.length > 0) {
-                    formattedReport += `## Recommended Actions\n\n${report.recommendedActions.map((action: string, idx: number) => `${idx + 1}. ${action}`).join('\n')}\n\n`;
+                    formattedReport += `## Recommended Actions\n\n`;
+                    report.recommendedActions.forEach((action: string, idx: number) => {
+                        formattedReport += `${idx + 1}. ${action}\n`;
+                    });
+                    formattedReport += `\n`;
                 }
+                
                 if (report.riskFactors && Array.isArray(report.riskFactors) && report.riskFactors.length > 0) {
-                    formattedReport += `## Risk Factors\n\n${report.riskFactors.map((risk: string, idx: number) => `${idx + 1}. ${risk}`).join('\n')}\n\n`;
+                    formattedReport += `## Risk Factors\n\n`;
+                    report.riskFactors.forEach((risk: string, idx: number) => {
+                        formattedReport += `${idx + 1}. ${risk}\n`;
+                    });
+                    formattedReport += `\n`;
                 }
+                
                 if (report.error || report.note) {
-                    formattedReport = `Error: ${report.error || report.note}`;
+                    formattedReport = `# Error Generating Report\n\n${report.error || report.note}\n\nPlease try again or contact support if the issue persists.`;
                 }
-                setReportContent(formattedReport || JSON.stringify(report, null, 2));
+                
+                // Fallback: if no content was formatted, create a basic report
+                if (!formattedReport || formattedReport.trim() === '# Analytics Report\n\n') {
+                    formattedReport = `# Analytics Report\n\nGenerated: ${new Date().toLocaleString()}\n\n`;
+                    formattedReport += `## Summary\n\nUnable to generate detailed insights from the provided data. Please ensure analytics data is properly loaded.\n\n`;
+                }
+                
+                setReportContent(formattedReport);
             } else {
                 setReportContent("Sorry, there was an error generating the report. Please try again.");
             }
         } catch (error: any) {
-            setReportContent(`Sorry, there was an error generating the report: ${error?.message || 'Unknown error'}. Please try again.`);
+            const errorMessage = error?.message || 'Unknown error';
+            // Check if it's a 400 error about missing data
+            if (errorMessage.includes('Missing analytics data') || errorMessage.includes('Empty analytics data')) {
+                setReportContent(`Unable to generate report: No analytics data is available. Please wait for data to load or try refreshing the page.`);
+                showToast('No analytics data available. Please wait for data to load.', 'error');
+            } else {
+                setReportContent(`Sorry, there was an error generating the report: ${errorMessage}. Please try again.`);
+            }
             console.error('Analytics report error:', error);
         } finally {
             setIsGeneratingReport(false);

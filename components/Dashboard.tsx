@@ -28,9 +28,15 @@ const UpcomingEventCard: React.FC<{ event: CalendarEvent; onClick: () => void }>
 );
 
 export const Dashboard: React.FC = () => {
-  const { messages, selectedClient, user, dashboardNavState, clearDashboardNavState, settings, setSettings, setActivePage, calendarEvents, posts, setComposeContext, updateMessage, deleteMessage, categorizeAllMessages, autopilotCampaigns, openCRM, ensureCRMProfile, setUser, socialAccounts } = useAppContext();
+  const { messages, selectedClient, user, dashboardNavState, clearDashboardNavState, settings, setSettings, setActivePage, calendarEvents, posts, setComposeContext, updateMessage, deleteMessage, categorizeAllMessages, autopilotCampaigns, openCRM, ensureCRMProfile, setUser, socialAccounts, showToast } = useAppContext();
   const [comparisonView, setComparisonView] = useState<'WoW' | 'MoM'>('WoW');
   const [isUpdatingStats, setIsUpdatingStats] = useState(false);
+  
+  // Content Ideas state - moved to top level
+  const [isGeneratingIdeas, setIsGeneratingIdeas] = useState(false);
+  const [generatedIdeas, setGeneratedIdeas] = useState<any[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<'trending' | 'engagement' | 'niche' | null>(null);
+  const [showIdeasModal, setShowIdeasModal] = useState(false);
   
   if (!user) return null;
 
@@ -79,6 +85,58 @@ export const Dashboard: React.FC = () => {
     };
   }, [posts, messages, calendarEvents]);
   
+  // Content Ideas handler
+  const handleGenerateIdeas = async (category: 'trending' | 'engagement' | 'niche') => {
+    console.log('handleGenerateIdeas called with category:', category);
+    const niche = isBusiness ? user?.businessType : user?.niche;
+    if (!niche) {
+      showToast('Please set your niche in settings first.', 'error');
+      return;
+    }
+    
+    // Prevent multiple simultaneous requests
+    if (isGeneratingIdeas) {
+      console.log('Already generating ideas, skipping...');
+      return;
+    }
+    
+    console.log('Opening modal and starting generation...');
+    setIsGeneratingIdeas(true);
+    setSelectedCategory(category);
+    setShowIdeasModal(true); // Show modal immediately with loading state
+    setGeneratedIdeas([]); // Clear previous ideas
+    
+    try {
+      const { generateContentIdeas } = await import("../src/services/geminiService");
+      // Map 'engagement' to 'high-engagement' for API
+      const apiCategory = category === 'engagement' ? 'high-engagement' : category;
+      console.log('Calling generateContentIdeas with:', { niche, apiCategory, userType: user?.userType });
+      const result = await generateContentIdeas(niche, apiCategory as 'high-engagement' | 'niche' | 'trending', user?.userType);
+      console.log('generateContentIdeas result:', result);
+      
+      if (result.success && result.ideas && Array.isArray(result.ideas) && result.ideas.length > 0) {
+        console.log('Setting generated ideas:', result.ideas);
+        setGeneratedIdeas(result.ideas);
+      } else {
+        // Show error but keep modal open with error message
+        const errorMsg = result.error || result.note || 'Failed to generate ideas. Please try again.';
+        console.error('Generation failed:', errorMsg);
+        setGeneratedIdeas([]);
+        showToast(errorMsg, 'error');
+        // Don't close modal - let user see the error and try again
+      }
+    } catch (err: any) {
+      console.error('Error generating content ideas:', err);
+      const errorMsg = err?.note || err?.message || 'Failed to generate content ideas. Please try again.';
+      showToast(errorMsg, 'error');
+      setGeneratedIdeas([]);
+      // Keep modal open so user can see error and try again
+    } finally {
+      setIsGeneratingIdeas(false);
+      console.log('Generation complete');
+    }
+  };
+
   // Calculate trend data (mock - in real app, compare with historical data)
   // Using a stable seed based on value to avoid flickering
   const calculateTrend = useMemo(() => {
@@ -247,7 +305,28 @@ export const Dashboard: React.FC = () => {
   const handleToggleFlag = (id: string) => { const msg = messages.find(m => m.id === id); if (msg) updateMessage(id, { isFlagged: !msg.isFlagged }); };
   const handleToggleFavorite = (id: string) => { const msg = messages.find(m => m.id === id); if (msg) updateMessage(id, { isFavorite: !msg.isFavorite }); };
   const handleDeleteMessage = (id: string) => { if (window.confirm('Delete message?')) deleteMessage(id); };
-  const handleEventClick = (event: CalendarEvent) => { setComposeContext({ topic: event.title, platform: event.platform, type: event.type, date: event.date }); };
+  const handleEventClick = (event: CalendarEvent) => {
+    // Try to find associated post by matching event ID or title
+    const associatedPost = posts.find(p => {
+      // Check if post ID matches event ID pattern (e.g., cal-{postId})
+      if (event.id.includes(p.id) || p.id.includes(event.id.replace('cal-', '').replace('-calendar', ''))) {
+        return true;
+      }
+      // Check if post content matches event title
+      if (p.content && event.title && p.content.includes(event.title.substring(0, 30))) {
+        return true;
+      }
+      return false;
+    });
+    
+    // Set compose context with event data and post content if found
+    setComposeContext({
+      topic: associatedPost?.content || event.title,
+      platform: event.platform,
+      type: event.type === 'Reel' ? 'video' : event.type === 'Story' ? 'image' : 'Post',
+      date: event.date
+    });
+  };
 
   useEffect(() => {
     if (!highlightedMessageId || viewMode !== 'Inbox') return;
@@ -1681,6 +1760,8 @@ export const Dashboard: React.FC = () => {
             // Generate content suggestions based on user's niche, recent posts, and performance
             const niche = isBusiness ? user?.businessType : user?.niche;
             const recentPosts = posts.filter(p => p.status === 'Published').slice(0, 5);
+            // Note: State hooks (isGeneratingIdeas, generatedIdeas, selectedCategory, showIdeasModal) 
+            // and handleGenerateIdeas function are now at the top level of the Dashboard component
             
             // Generate mock suggestions based on user type and niche
             const generateSuggestions = (): Array<{ title: string; description: string; type: 'trending' | 'engagement' | 'niche' }> => {
@@ -1745,98 +1826,242 @@ export const Dashboard: React.FC = () => {
                   gradient: 'from-rose-500 to-pink-500',
                   bg: 'bg-rose-50 dark:bg-rose-900/20',
                   text: 'text-rose-700 dark:text-rose-300',
-                  border: 'border-rose-200 dark:border-rose-700/50'
+                  border: 'border-rose-200 dark:border-rose-700/50',
+                  category: 'trending' as const
                 };
                 case 'engagement': return { 
                   label: 'High Engagement', 
                   gradient: 'from-blue-500 to-cyan-500',
                   bg: 'bg-blue-50 dark:bg-blue-900/20',
                   text: 'text-blue-700 dark:text-blue-300',
-                  border: 'border-blue-200 dark:border-blue-700/50'
+                  border: 'border-blue-200 dark:border-blue-700/50',
+                  category: 'engagement' as const
                 };
                 default: return { 
                   label: 'Niche', 
                   gradient: 'from-purple-500 to-indigo-500',
                   bg: 'bg-purple-50 dark:bg-purple-900/20',
                   text: 'text-purple-700 dark:text-purple-300',
-                  border: 'border-purple-200 dark:border-purple-700/50'
+                  border: 'border-purple-200 dark:border-purple-700/50',
+                  category: 'niche' as const
                 };
               }
             };
             
             return suggestions.length > 0 ? (
-              <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 p-5 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-600">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl">
-                      <SparklesIcon className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-bold text-gray-900 dark:text-white">Content Ideas</h3>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">AI-Powered Suggestions</p>
+              <>
+                <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 p-5 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-600">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl">
+                        <SparklesIcon className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-bold text-gray-900 dark:text-white">Content Ideas</h3>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">AI-Powered Suggestions</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="space-y-2.5">
-                  {suggestions.map((suggestion, idx) => {
-                    const badge = getTypeBadge(suggestion.type);
-                    return (
-                      <div 
-                        key={idx}
-                        className={`group p-3.5 rounded-xl border ${badge.bg} ${badge.border} hover:shadow-lg transition-all cursor-pointer backdrop-blur-sm`}
-                        onClick={() => {
-                          setComposeContext({
-                            media: null,
-                            results: [],
-                            captionText: suggestion.title + ': ' + suggestion.description,
-                            postGoal: 'engagement',
-                            postTone: 'friendly'
-                          });
-                          setActivePage('compose');
-                        }}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className={`flex-shrink-0 p-1.5 bg-gradient-to-br ${badge.gradient} rounded-lg`}>
-                            <SparklesIcon className="w-3.5 h-3.5 text-white" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1.5">
-                              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${badge.text} ${badge.bg} border ${badge.border}`}>
-                                {badge.label}
-                              </span>
+                  <div className="space-y-2.5">
+                    {suggestions.map((suggestion, idx) => {
+                      const badge = getTypeBadge(suggestion.type);
+                      return (
+                        <div 
+                          key={idx}
+                          className={`group p-3.5 rounded-xl border ${badge.bg} ${badge.border} hover:shadow-lg transition-all cursor-pointer backdrop-blur-sm`}
+                          onClick={() => {
+                            setComposeContext({
+                              media: null,
+                              results: [],
+                              captionText: suggestion.title + ': ' + suggestion.description,
+                              postGoal: 'engagement',
+                              postTone: 'friendly'
+                            });
+                            setActivePage('compose');
+                          }}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className={`flex-shrink-0 p-1.5 bg-gradient-to-br ${badge.gradient} rounded-lg`}>
+                              <SparklesIcon className="w-3.5 h-3.5 text-white" />
                             </div>
-                            <p className={`font-semibold text-xs mb-1 ${badge.text}`}>
-                              {suggestion.title}
-                            </p>
-                            <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
-                              {suggestion.description}
-                            </p>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1.5">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleGenerateIdeas(badge.category);
+                                  }}
+                                  className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${badge.text} ${badge.bg} border ${badge.border} hover:opacity-80 transition-opacity cursor-pointer`}
+                                  disabled={isGeneratingIdeas}
+                                >
+                                  {badge.label}
+                                </button>
+                              </div>
+                              <p className={`font-semibold text-xs mb-1 ${badge.text}`}>
+                                {suggestion.title}
+                              </p>
+                              <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+                                {suggestion.description}
+                              </p>
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setComposeContext({
+                                  media: null,
+                                  results: [],
+                                  captionText: suggestion.title + ': ' + suggestion.description,
+                                  postGoal: 'engagement',
+                                  postTone: 'friendly'
+                                });
+                                setActivePage('compose');
+                              }}
+                              className={`flex-shrink-0 p-1.5 bg-gradient-to-br ${badge.gradient} text-white rounded-lg hover:opacity-90 transition-opacity opacity-0 group-hover:opacity-100`}
+                              title="Create post from this suggestion"
+                            >
+                              <SparklesIcon className="w-3.5 h-3.5" />
+                            </button>
                           </div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setComposeContext({
-                                media: null,
-                                results: [],
-                                captionText: suggestion.title + ': ' + suggestion.description,
-                                postGoal: 'engagement',
-                                postTone: 'friendly'
-                              });
-                              setActivePage('compose');
-                            }}
-                            className={`flex-shrink-0 p-1.5 bg-gradient-to-br ${badge.gradient} text-white rounded-lg hover:opacity-90 transition-opacity opacity-0 group-hover:opacity-100`}
-                            title="Create post from this suggestion"
-                          >
-                            <SparklesIcon className="w-3.5 h-3.5" />
-                          </button>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              </>
             ) : null;
           })()}
+          
+          {/* Content Ideas Modal */}
+          {showIdeasModal && (
+            <div 
+              className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[9999]" 
+              onClick={() => {
+                if (!isGeneratingIdeas && generatedIdeas.length === 0) {
+                  setShowIdeasModal(false);
+                }
+              }}
+            >
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col z-[10000]" onClick={(e) => e.stopPropagation()}>
+                <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                        {selectedCategory === 'trending' ? 'Trending' : selectedCategory === 'engagement' ? 'High Engagement' : 'Niche'} Content Ideas
+                      </h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        AI-generated ideas for {isBusiness ? user?.businessType : user?.niche || 'your niche'}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (!isGeneratingIdeas) {
+                          setShowIdeasModal(false);
+                          setGeneratedIdeas([]);
+                          setSelectedCategory(null);
+                        }
+                      }}
+                      className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                      disabled={isGeneratingIdeas}
+                    >
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto p-6">
+                  {isGeneratingIdeas ? (
+                    <div className="text-center py-12">
+                      <svg className="animate-spin h-8 w-8 text-primary-600 dark:text-primary-400 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <p className="text-gray-600 dark:text-gray-400">Generating content ideas...</p>
+                    </div>
+                  ) : generatedIdeas.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {generatedIdeas.map((idea, idx) => (
+                        <div key={idea.id || `idea-${idx}`} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs px-2 py-1 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-full">
+                                {idea.format || 'Post'}
+                              </span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">{idea.platform || 'Instagram'}</span>
+                            </div>
+                            {idea.engagementPotential && (
+                              <div className="flex items-center gap-1">
+                                <span className="text-xs text-gray-500 dark:text-gray-400">Potential:</span>
+                                <span className="text-xs font-semibold text-primary-600 dark:text-primary-400">{idea.engagementPotential}/10</span>
+                              </div>
+                            )}
+                          </div>
+                          <h4 className="font-semibold text-gray-900 dark:text-white mb-1">{idea.title || `Content Idea ${idx + 1}`}</h4>
+                          <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">{idea.description || 'No description available.'}</p>
+                          {idea.hashtags && Array.isArray(idea.hashtags) && idea.hashtags.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mb-3">
+                              {idea.hashtags.map((tag: string, tagIdx: number) => (
+                                <span key={tagIdx} className="text-xs px-2 py-0.5 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-full">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              try {
+                                setComposeContext({
+                                  topic: `${idea.title || 'Content Idea'}: ${idea.description || ''}${idea.hashtags && Array.isArray(idea.hashtags) && idea.hashtags.length > 0 ? ' ' + idea.hashtags.join(' ') : ''}`,
+                                  platform: idea.platform || 'Instagram',
+                                  type: idea.format === 'Reel' ? 'video' : idea.format === 'Story' ? 'image' : 'Post'
+                                });
+                                setShowIdeasModal(false);
+                                setGeneratedIdeas([]);
+                                setSelectedCategory(null);
+                                setActivePage('compose');
+                              } catch (err) {
+                                console.error('Error navigating to compose:', err);
+                                showToast('Failed to navigate to compose page.', 'error');
+                              }
+                            }}
+                            className="w-full px-4 py-2 bg-gradient-to-r from-primary-600 to-primary-500 text-white rounded-lg hover:from-primary-700 hover:to-primary-600 text-sm font-semibold transition-all"
+                          >
+                            Use This Idea
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : !isGeneratingIdeas ? (
+                    <div className="text-center py-12">
+                      <p className="text-gray-500 dark:text-gray-400 mb-4">No ideas generated yet.</p>
+                      <div className="flex flex-wrap justify-center gap-2">
+                        <button
+                          onClick={() => handleGenerateIdeas('trending')}
+                          className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-semibold"
+                        >
+                          Generate Trending Ideas
+                        </button>
+                        <button
+                          onClick={() => handleGenerateIdeas('engagement')}
+                          className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-semibold"
+                        >
+                          Generate High Engagement Ideas
+                        </button>
+                        <button
+                          onClick={() => handleGenerateIdeas('niche')}
+                          className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-semibold"
+                        >
+                          Generate Niche Ideas
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          )}
             
             {/* Performance Comparison - Business Only, Beside Content Ideas */}
             {isBusiness && (

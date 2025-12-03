@@ -41,7 +41,7 @@ const WorkflowModal: React.FC<{
     const isBusiness = user?.userType === 'Business';
     const isAgencyPlan = user?.plan === 'Agency';
     const showAdvancedOptions = !isBusiness || isAgencyPlan; // Hide for Business Starter/Growth, show for Agency and all Creators
-    const [type, setType] = useState<AutomationWorkflow['type']>('Image');
+    const [type, setType] = useState<AutomationWorkflow['type']>('Caption');
     const [prompt, setPrompt] = useState('');
     const [frequencyType, setFrequencyType] = useState<AutomationWorkflow['frequency']['type']>('Daily');
     const [frequencyCount, setFrequencyCount] = useState(1);
@@ -169,9 +169,15 @@ const WorkflowModal: React.FC<{
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Content Type</label>
                             <div className="mt-2 grid grid-cols-3 gap-2">
-                                {(['Caption', 'Image', 'Video'] as const).map(t => (
-                                    <button key={t} onClick={() => setType(t)} className={`p-3 rounded-lg border-2 ${type === t ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30' : 'border-gray-300 dark:border-gray-600'}`}>{t}</button>
-                                ))}
+                                <button onClick={() => setType('Caption')} className={`p-3 rounded-lg border-2 ${type === 'Caption' ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30' : 'border-gray-300 dark:border-gray-600'}`}>Caption</button>
+                                <button onClick={() => {}} disabled className={`p-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 opacity-50 cursor-not-allowed relative`} title="Coming Soon">
+                                    Image
+                                    <span className="absolute -top-1 -right-1 bg-yellow-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">Coming Soon</span>
+                                </button>
+                                <button onClick={() => {}} disabled className={`p-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 opacity-50 cursor-not-allowed relative`} title="Coming Soon">
+                                    Video
+                                    <span className="absolute -top-1 -right-1 bg-yellow-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">Coming Soon</span>
+                                </button>
                             </div>
                         </div>
                         <div>

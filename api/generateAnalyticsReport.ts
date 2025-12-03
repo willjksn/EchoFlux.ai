@@ -27,8 +27,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { analytics } = req.body || {};
 
-    if (!analytics) {
-      return res.status(400).json({ error: "Missing analytics data" });
+    // Validate analytics data - check if it exists and is an object
+    if (!analytics || typeof analytics !== 'object' || Array.isArray(analytics)) {
+      return res.status(400).json({ 
+        error: "Missing analytics data",
+        note: "Analytics data must be a valid object. Please ensure analytics data is loaded before generating a report."
+      });
+    }
+    
+    // Check if analytics object has any meaningful data
+    if (Object.keys(analytics).length === 0) {
+      return res.status(400).json({ 
+        error: "Empty analytics data",
+        note: "Analytics data is empty. Please wait for data to load or try again."
+      });
     }
 
     if (!process.env.GEMINI_API_KEY && !process.env.GOOGLE_API_KEY) {
@@ -46,18 +58,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const prompt = `
 You are an expert social media analyst.
 
-Generate an analytics report based on the following JSON metrics:
+Generate a comprehensive, professional analytics report based on the following metrics:
 
 ${JSON.stringify(analytics, null, 2)}
 
-Return ONLY valid JSON:
+Return ONLY valid JSON with a well-formatted report:
 
 {
-  "summary": "string",
-  "growthInsights": ["string", "string"],
-  "recommendedActions": ["string", "string", "string"],
-  "riskFactors": ["string"]
+  "summary": "A comprehensive 2-3 paragraph executive summary of the analytics data, highlighting key metrics, trends, and overall performance.",
+  "growthInsights": ["Insight 1: Detailed insight about growth patterns", "Insight 2: Another growth insight", "Insight 3: Additional growth observation"],
+  "recommendedActions": ["Action 1: Specific actionable recommendation", "Action 2: Another recommendation", "Action 3: Third recommendation"],
+  "riskFactors": ["Risk 1: Potential concern or risk identified", "Risk 2: Another risk factor"]
 }
+
+Important:
+- Write in a professional, business-friendly tone
+- Use clear, concise language
+- Make insights actionable and specific
+- Format as a readable report, not raw data
 `;
 
     const result = await model.generateContent({

@@ -379,16 +379,29 @@ export async function saveStrategy(
 }
 
 export async function getStrategies(): Promise<{ success: boolean; strategies?: any[]; error?: string }> {
+  const token = auth.currentUser
+    ? await auth.currentUser.getIdToken(true)
+    : null;
+
   const res = await fetch("/api/getStrategies", {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     credentials: "include",
   });
 
   if (!res.ok) {
-    throw new Error(`API getStrategies failed: ${res.status}`);
+    const errorText = await res.text();
+    let errorMsg = errorText;
+    try {
+      const errorJson = JSON.parse(errorText);
+      errorMsg = errorJson.error || errorJson.note || errorText;
+    } catch {
+      // Not JSON, use text as-is
+    }
+    throw new Error(`API getStrategies failed: ${res.status} - ${errorMsg}`);
   }
 
   return await res.json();
@@ -475,7 +488,28 @@ export async function generateAutopilotSuggestions(
 ---------------------------------------------------- */
 
 /* ----------------------------------------------------
-   17) Get Analytics Data
+   17) Content Ideas
+---------------------------------------------------- */
+export async function generateContentIdeas(
+  niche: string,
+  category: 'high-engagement' | 'niche' | 'trending',
+  userType?: string
+): Promise<{ success: boolean; ideas?: any[]; error?: string; note?: string }> {
+  const res = await callFunction("generateContentIdeas", {
+    niche,
+    category,
+    userType: userType || 'Creator',
+  });
+  
+  if (res.success === false && res.error) {
+    throw new Error(res.note || res.error || "Failed to generate content ideas");
+  }
+  
+  return res;
+}
+
+/* ----------------------------------------------------
+   18) Get Analytics Data
         Fetches real analytics data from Firestore
 ---------------------------------------------------- */
 export async function getAnalytics(
