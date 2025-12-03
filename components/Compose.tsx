@@ -272,6 +272,8 @@ const CaptionGenerator: React.FC = () => {
       type: 'image',
       results: [],
       captionText: '',
+      postGoal: composeState.postGoal,
+      postTone: composeState.postTone,
     };
     setComposeState(prev => ({
       ...prev,
@@ -345,7 +347,7 @@ const CaptionGenerator: React.FC = () => {
     }
   };
 
-  const handleBulkSchedule = async () => {
+  const handleBulkSchedule = async (publishNow: boolean = false) => {
     const platformsToPost = (Object.keys(selectedPlatforms) as Platform[]).filter(
       p => selectedPlatforms[p]
     );
@@ -354,19 +356,19 @@ const CaptionGenerator: React.FC = () => {
       return;
     }
 
-    const itemsToSchedule = composeState.mediaItems.filter(
+    const itemsToProcess = composeState.mediaItems.filter(
       item => item.previewUrl && item.captionText.trim()
     );
 
-    if (itemsToSchedule.length === 0) {
-      showToast('Please add media and captions to schedule.', 'error');
+    if (itemsToProcess.length === 0) {
+      showToast('Please add media and captions.', 'error');
       return;
     }
 
     setIsSaving(true);
     try {
-      for (let i = 0; i < itemsToSchedule.length; i++) {
-        const item = itemsToSchedule[i];
+      for (let i = 0; i < itemsToProcess.length; i++) {
+        const item = itemsToProcess[i];
         const mediaUrl = item.previewUrl.startsWith('http')
           ? item.previewUrl
           : await uploadMediaItem(item);
@@ -378,7 +380,8 @@ const CaptionGenerator: React.FC = () => {
           : 'New Post';
 
         const postId = `${Date.now()}-${i}`;
-        const scheduledDate = item.scheduledDate || new Date().toISOString();
+        const scheduledDate = publishNow ? new Date().toISOString() : (item.scheduledDate || new Date().toISOString());
+        const status = publishNow ? 'Published' : 'Scheduled';
 
         if (user) {
           const newPost: Post = {
@@ -387,7 +390,7 @@ const CaptionGenerator: React.FC = () => {
             mediaUrl: mediaUrl,
             mediaType: item.type,
             platforms: platformsToPost,
-            status: 'Scheduled',
+            status: status,
             author: { name: user.name, avatar: user.avatar },
             comments: [],
             scheduledDate: scheduledDate,
@@ -398,25 +401,32 @@ const CaptionGenerator: React.FC = () => {
           await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
         }
 
-        // Create calendar event
-        const newEvent: CalendarEvent = {
-          id: `cal-${postId}`,
-          title: title,
-          date: scheduledDate,
-          type: item.type === 'video' ? 'Reel' : 'Post',
-          platform: platformsToPost[0],
-          status: 'Scheduled',
-          thumbnail: mediaUrl,
-        };
+        // Create calendar event for each platform
+        for (const platform of platformsToPost) {
+          const newEvent: CalendarEvent = {
+            id: `cal-${postId}-${platform}`,
+            title: title,
+            date: scheduledDate,
+            type: item.type === 'video' ? 'Reel' : 'Post',
+            platform: platform,
+            status: status,
+            thumbnail: mediaUrl,
+          };
 
-        await addCalendarEvent(newEvent);
+          await addCalendarEvent(newEvent);
+        }
       }
 
-      showToast(`Scheduled ${itemsToSchedule.length} posts!`, 'success');
+      showToast(
+        publishNow 
+          ? `Published ${itemsToProcess.length} posts!` 
+          : `Scheduled ${itemsToProcess.length} posts!`,
+        'success'
+      );
       resetCompose();
     } catch (e) {
       console.error(e);
-      showToast('Failed to schedule posts.', 'error');
+      showToast(publishNow ? 'Failed to publish posts.' : 'Failed to schedule posts.', 'error');
     } finally {
       setIsSaving(false);
     }
@@ -1183,13 +1193,10 @@ const CaptionGenerator: React.FC = () => {
         </div>
       </div>
 
-      {/* Batch Media Upload */}
-      <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Batch Upload
-          </h3>
-          {composeState.mediaItems.length > 0 && (
+      {/* Media Upload Boxes */}
+      <div className="space-y-6">
+        {composeState.mediaItems.length > 0 && (
+          <div className="flex items-center justify-end">
             <button
               onClick={handleGenerateBestTimes}
               disabled={isLoading}
@@ -1198,24 +1205,26 @@ const CaptionGenerator: React.FC = () => {
               <SparklesIcon className="w-4 h-4" />
               {isLoading ? 'Generating...' : 'Generate Best Times (AI)'}
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {composeState.mediaItems.length === 0 ? (
           <div
             onClick={handleAddMediaBox}
-            className="flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 dark:border-gray-600 border-dashed rounded-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
+            className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-md border-2 border-dashed border-gray-300 dark:border-gray-600 cursor-pointer hover:border-primary-400 dark:hover:border-primary-600 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
           >
-            <div className="space-y-1 text-center">
-              <UploadIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-primary-500" />
-              <div className="flex text-sm text-gray-600 dark:text-gray-400">
-                <span className="relative font-medium text-primary-600 dark:text-primary-400">
-                  Upload an image or video
-                </span>
+            <div className="flex flex-col items-center justify-center space-y-3">
+              <div className="p-4 bg-primary-100 dark:bg-primary-900/30 rounded-full">
+                <UploadIcon className="w-8 h-8 text-primary-600 dark:text-primary-400" />
               </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Images: PNG, JPG, GIF | Videos: MP4, MOV
-              </p>
+              <div className="text-center">
+                <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Upload Image or Video
+                </p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  Click to add your first post
+                </p>
+              </div>
             </div>
           </div>
         ) : (
@@ -1229,59 +1238,62 @@ const CaptionGenerator: React.FC = () => {
                 onRemove={handleRemoveMediaItem}
                 onAddNext={handleAddMediaBox}
                 isLast={index === composeState.mediaItems.length - 1}
-                postGoal={composeState.postGoal}
-                postTone={composeState.postTone}
                 canGenerate={canGenerate}
                 onGenerateComplete={handleCaptionGenerationComplete}
+                goalOptions={goalOptions}
+                toneOptions={toneOptions}
+                autoGenerateCaptions={autoGenerateCaptions}
               />
             ))}
           </div>
         )}
       </div>
 
-      {/* Goal & tone with dynamic options */}
-      <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label
-            htmlFor="goal"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-          >
-            Goal of the post
-          </label>
-          <select
-            id="goal"
-            value={composeState.postGoal}
-            onChange={e => setComposeState(prev => ({ ...prev, postGoal: e.target.value }))}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
-          >
-            {goalOptions.map(opt => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+      {/* Goal & tone - only show for legacy single media mode */}
+      {composeState.mediaItems.length === 0 && composeState.media && (
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label
+              htmlFor="goal"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              Goal of the post
+            </label>
+            <select
+              id="goal"
+              value={composeState.postGoal}
+              onChange={e => setComposeState(prev => ({ ...prev, postGoal: e.target.value }))}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+            >
+              {goalOptions.map(opt => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label
+              htmlFor="tone"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              Tone of voice
+            </label>
+            <select
+              id="tone"
+              value={composeState.postTone}
+              onChange={e => setComposeState(prev => ({ ...prev, postTone: e.target.value }))}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+            >
+              {toneOptions.map(opt => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-        <div>
-          <label
-            htmlFor="tone"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-          >
-            Tone of voice
-          </label>
-          <select
-            id="tone"
-            value={composeState.postTone}
-            onChange={e => setComposeState(prev => ({ ...prev, postTone: e.target.value }))}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
-          >
-            {toneOptions.map(opt => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
+      )}
 
       {error && <p className="text-center text-red-500">{error}</p>}
 
@@ -1586,7 +1598,7 @@ const CaptionGenerator: React.FC = () => {
                 </button>
                 {isScheduling && (
                   <button
-                    onClick={handleBulkSchedule}
+                    onClick={() => handleBulkSchedule(false)}
                     disabled={composeState.mediaItems.length === 0 || isSaving}
                     className="flex items-center gap-2 px-6 py-2 text-base font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 transition-colors disabled:opacity-50"
                   >
@@ -1596,7 +1608,7 @@ const CaptionGenerator: React.FC = () => {
                 )}
                 {!isScheduling && (
                   <button
-                    onClick={handleBulkSchedule}
+                    onClick={() => handleBulkSchedule(true)}
                     disabled={composeState.mediaItems.length === 0 || isSaving}
                     className="flex items-center gap-2 px-6 py-2 text-base font-medium text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50"
                   >

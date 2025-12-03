@@ -381,6 +381,8 @@ export interface MediaItemState {
     results: CaptionResult[];
     captionText: string;
     scheduledDate?: string; // Individual schedule date for this item
+    postGoal: string; // Individual goal for this post
+    postTone: string; // Individual tone for this post
 }
 
 export interface ComposeState {
