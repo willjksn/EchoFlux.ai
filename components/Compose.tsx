@@ -94,7 +94,7 @@ const CaptionGenerator: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [autoGenerateCaptions, setAutoGenerateCaptions] = useState(true); // Toggle for auto-generating captions
+  const [autoGenerateCaptions, setAutoGenerateCaptions] = useState(false); // Toggle for auto-generating captions (unchecked by default)
   const [selectedPlatforms, setSelectedPlatforms] = useState<Record<Platform, boolean>>({
     Instagram: false,
     TikTok: false,
@@ -124,10 +124,14 @@ const CaptionGenerator: React.FC = () => {
 
   // Preview state
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [previewMediaIndex, setPreviewMediaIndex] = useState<number | null>(null);
 
   // Scheduling state
   const [isScheduling, setIsScheduling] = useState(false);
   const [scheduleDate, setScheduleDate] = useState('');
+
+  // Selected checkboxes for bulk actions
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
 
   // Plan + role logic
   const isAgency = user?.plan === 'Agency' || user?.plan === 'Elite';
@@ -262,6 +266,47 @@ const CaptionGenerator: React.FC = () => {
     });
   };
 
+  // Persist mediaItems to localStorage
+  useEffect(() => {
+    if (composeState.mediaItems.length > 0) {
+      const itemsToSave = composeState.mediaItems.map(item => ({
+        ...item,
+        // Don't persist base64 data (too large), only keep previewUrl
+        data: item.previewUrl.startsWith('http') ? '' : item.data,
+      }));
+      localStorage.setItem('compose_mediaItems', JSON.stringify(itemsToSave));
+    }
+  }, [composeState.mediaItems]);
+
+  // Load mediaItems from localStorage on mount
+  useEffect(() => {
+    if (user && composeState.mediaItems.length === 0) {
+      try {
+        const saved = localStorage.getItem('compose_mediaItems');
+        if (saved) {
+          const items = JSON.parse(saved) as MediaItemState[];
+          // Only load items that have previewUrls (media was uploaded)
+          const validItems = items.filter(item => item.previewUrl);
+          if (validItems.length > 0) {
+            setComposeState(prev => ({
+              ...prev,
+              mediaItems: validItems,
+            }));
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load saved media items:', e);
+      }
+    }
+  }, [user?.id]);
+
+  // Clear localStorage when all items are removed
+  useEffect(() => {
+    if (composeState.mediaItems.length === 0) {
+      localStorage.removeItem('compose_mediaItems');
+    }
+  }, [composeState.mediaItems.length]);
+
   // Batch upload handlers
   const handleAddMediaBox = () => {
     const newMediaItem: MediaItemState = {
@@ -295,6 +340,299 @@ const CaptionGenerator: React.FC = () => {
       ...prev,
       mediaItems: prev.mediaItems.filter((_, i) => i !== index),
     }));
+    setSelectedIndices(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(index);
+      // Adjust indices after removal
+      const adjusted = new Set<number>();
+      newSet.forEach(idx => {
+        if (idx > index) adjusted.add(idx - 1);
+        else adjusted.add(idx);
+      });
+      return adjusted;
+    });
+  };
+
+  const handleToggleSelect = (index: number) => {
+    setSelectedIndices(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(index)) {
+        newSet.delete(index);
+      } else {
+        newSet.add(index);
+      }
+      return newSet;
+    });
+  };
+
+  const handleScheduleAll = async () => {
+    const selectedItems = Array.from(selectedIndices)
+      .map(i => composeState.mediaItems[i])
+      .filter(item => item && item.previewUrl && item.captionText.trim());
+
+    if (selectedItems.length === 0) {
+      showToast('Please select at least one post with media and caption.', 'error');
+      return;
+    }
+
+    const platformsToPost = (Object.keys(selectedPlatforms) as Platform[]).filter(
+      p => selectedPlatforms[p]
+    );
+    if (platformsToPost.length === 0) {
+      showToast('Please select at least one platform.', 'error');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      for (let i = 0; i < selectedItems.length; i++) {
+        const item = selectedItems[i];
+        const originalIndex = composeState.mediaItems.findIndex(m => m.id === item.id);
+        const mediaUrl = item.previewUrl.startsWith('http')
+          ? item.previewUrl
+          : await uploadMediaItem(item);
+
+        if (!mediaUrl) continue;
+
+        const title = item.captionText.trim()
+          ? item.captionText.substring(0, 30) + '...'
+          : 'New Post';
+
+        const postId = `${Date.now()}-${i}`;
+        const scheduledDate = item.scheduledDate || new Date().toISOString();
+
+        if (user) {
+          const newPost: Post = {
+            id: postId,
+            content: item.captionText,
+            mediaUrl: mediaUrl,
+            mediaType: item.type,
+            platforms: platformsToPost,
+            status: 'Scheduled',
+            author: { name: user.name, avatar: user.avatar },
+            comments: [],
+            scheduledDate: scheduledDate,
+            clientId: selectedClient?.id,
+          };
+
+          const safePost = JSON.parse(JSON.stringify(newPost));
+          await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
+        }
+
+        // Create calendar event for each platform
+        for (const platform of platformsToPost) {
+          const newEvent: CalendarEvent = {
+            id: `cal-${postId}-${platform}`,
+            title: title,
+            date: scheduledDate,
+            type: item.type === 'video' ? 'Reel' : 'Post',
+            platform: platform,
+            status: 'Scheduled',
+            thumbnail: mediaUrl,
+          };
+
+          await addCalendarEvent(newEvent);
+        }
+
+        // Remove scheduled item from mediaItems
+        setComposeState(prev => ({
+          ...prev,
+          mediaItems: prev.mediaItems.filter((_, idx) => idx !== originalIndex),
+        }));
+      }
+
+      showToast(`Scheduled ${selectedItems.length} posts!`, 'success');
+      setSelectedIndices(new Set());
+    } catch (e) {
+      console.error(e);
+      showToast('Failed to schedule posts.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteAll = () => {
+    if (selectedIndices.size === 0) {
+      showToast('Please select at least one post to delete.', 'error');
+      return;
+    }
+
+    const indicesToDelete = Array.from(selectedIndices).sort((a, b) => b - a);
+    setComposeState(prev => ({
+      ...prev,
+      mediaItems: prev.mediaItems.filter((_, i) => !selectedIndices.has(i)),
+    }));
+    setSelectedIndices(new Set());
+    showToast(`Deleted ${indicesToDelete.length} post(s).`, 'success');
+  };
+
+  const handlePreviewMedia = (index: number) => {
+    setPreviewMediaIndex(index);
+    setIsPreviewOpen(true);
+  };
+
+  const handlePublishMedia = async (index: number) => {
+    const item = composeState.mediaItems[index];
+    if (!item.previewUrl || !item.captionText.trim()) {
+      showToast('Please add media and caption.', 'error');
+      return;
+    }
+
+    const platformsToPost = (Object.keys(selectedPlatforms) as Platform[]).filter(
+      p => selectedPlatforms[p]
+    );
+    if (platformsToPost.length === 0) {
+      showToast('Please select at least one platform.', 'error');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const mediaUrl = item.previewUrl.startsWith('http')
+        ? item.previewUrl
+        : await uploadMediaItem(item);
+
+      if (!mediaUrl) {
+        showToast('Failed to upload media.', 'error');
+        return;
+      }
+
+      const title = item.captionText.trim()
+        ? item.captionText.substring(0, 30) + '...'
+        : 'New Post';
+
+      const postId = Date.now().toString();
+      const publishDate = new Date().toISOString();
+
+      if (user) {
+        const newPost: Post = {
+          id: postId,
+          content: item.captionText,
+          mediaUrl: mediaUrl,
+          mediaType: item.type,
+          platforms: platformsToPost,
+          status: 'Published',
+          author: { name: user.name, avatar: user.avatar },
+          comments: [],
+          scheduledDate: publishDate,
+          clientId: selectedClient?.id,
+        };
+
+        const safePost = JSON.parse(JSON.stringify(newPost));
+        await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
+      }
+
+      // Create calendar event for each platform
+      for (const platform of platformsToPost) {
+        const newEvent: CalendarEvent = {
+          id: `cal-${postId}-${platform}`,
+          title: title,
+          date: publishDate,
+          type: item.type === 'video' ? 'Reel' : 'Post',
+          platform: platform,
+          status: 'Published',
+          thumbnail: mediaUrl,
+        };
+        await addCalendarEvent(newEvent);
+      }
+
+      // Remove published item
+      setComposeState(prev => ({
+        ...prev,
+        mediaItems: prev.mediaItems.filter((_, i) => i !== index),
+      }));
+
+      showToast(`Published to ${platformsToPost.join(', ')}!`, 'success');
+    } catch (e) {
+      console.error(e);
+      showToast('Failed to publish post.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleScheduleMedia = async (index: number) => {
+    const item = composeState.mediaItems[index];
+    if (!item.previewUrl || !item.captionText.trim()) {
+      showToast('Please add media and caption.', 'error');
+      return;
+    }
+
+    const platformsToPost = (Object.keys(selectedPlatforms) as Platform[]).filter(
+      p => selectedPlatforms[p]
+    );
+    if (platformsToPost.length === 0) {
+      showToast('Please select at least one platform.', 'error');
+      return;
+    }
+
+    if (!item.scheduledDate) {
+      showToast('Please generate best times or set a schedule date.', 'error');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const mediaUrl = item.previewUrl.startsWith('http')
+        ? item.previewUrl
+        : await uploadMediaItem(item);
+
+      if (!mediaUrl) {
+        showToast('Failed to upload media.', 'error');
+        return;
+      }
+
+      const title = item.captionText.trim()
+        ? item.captionText.substring(0, 30) + '...'
+        : 'New Post';
+
+      const postId = Date.now().toString();
+
+      if (user) {
+        const newPost: Post = {
+          id: postId,
+          content: item.captionText,
+          mediaUrl: mediaUrl,
+          mediaType: item.type,
+          platforms: platformsToPost,
+          status: 'Scheduled',
+          author: { name: user.name, avatar: user.avatar },
+          comments: [],
+          scheduledDate: item.scheduledDate,
+          clientId: selectedClient?.id,
+        };
+
+        const safePost = JSON.parse(JSON.stringify(newPost));
+        await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
+      }
+
+      // Create calendar event for each platform
+      for (const platform of platformsToPost) {
+        const newEvent: CalendarEvent = {
+          id: `cal-${postId}-${platform}`,
+          title: title,
+          date: item.scheduledDate,
+          type: item.type === 'video' ? 'Reel' : 'Post',
+          platform: platform,
+          status: 'Scheduled',
+          thumbnail: mediaUrl,
+        };
+        await addCalendarEvent(newEvent);
+      }
+
+      // Remove scheduled item
+      setComposeState(prev => ({
+        ...prev,
+        mediaItems: prev.mediaItems.filter((_, i) => i !== index),
+      }));
+
+      showToast(`Scheduled for ${new Date(item.scheduledDate).toLocaleString()}!`, 'success');
+    } catch (e) {
+      console.error(e);
+      showToast('Failed to schedule post.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleGenerateBestTimes = async () => {
@@ -423,7 +761,7 @@ const CaptionGenerator: React.FC = () => {
           : `Scheduled ${itemsToProcess.length} posts!`,
         'success'
       );
-      resetCompose();
+      // Don't reset - keep unscheduled items
     } catch (e) {
       console.error(e);
       showToast(publishNow ? 'Failed to publish posts.' : 'Failed to schedule posts.', 'error');
@@ -1091,11 +1429,19 @@ const CaptionGenerator: React.FC = () => {
     showToast('Hashtag set saved!', 'success');
   };
 
-  const handleInsertHashtags = (tags: string[]) => {
-    setComposeState(prev => ({
-      ...prev,
-      captionText: prev.captionText + '\n\n' + tags.join(' ')
-    }));
+  const handleInsertHashtags = (tags: string[], index?: number) => {
+    if (index !== undefined) {
+      // Insert into specific media box
+      handleUpdateMediaItem(index, {
+        captionText: composeState.mediaItems[index].captionText + '\n\n' + tags.join(' ')
+      });
+    } else {
+      // Legacy: insert into main caption (for single media mode)
+      setComposeState(prev => ({
+        ...prev,
+        captionText: prev.captionText + '\n\n' + tags.join(' ')
+      }));
+    }
     setIsHashtagPopoverOpen(false);
   };
 
@@ -1106,10 +1452,22 @@ const CaptionGenerator: React.FC = () => {
       {/* Preview Modal */}
       <MobilePreviewModal
         isOpen={isPreviewOpen}
-        onClose={() => setIsPreviewOpen(false)}
-        caption={composeState.captionText}
+        onClose={() => {
+          setIsPreviewOpen(false);
+          setPreviewMediaIndex(null);
+        }}
+        caption={
+          previewMediaIndex !== null && composeState.mediaItems[previewMediaIndex]
+            ? composeState.mediaItems[previewMediaIndex].captionText
+            : composeState.captionText
+        }
         media={
-          composeState.media
+          previewMediaIndex !== null && composeState.mediaItems[previewMediaIndex]
+            ? {
+                previewUrl: composeState.mediaItems[previewMediaIndex].previewUrl,
+                type: composeState.mediaItems[previewMediaIndex].type,
+              }
+            : composeState.media
             ? { previewUrl: composeState.media.previewUrl, type: composeState.media.type }
             : null
         }
@@ -1177,26 +1535,46 @@ const CaptionGenerator: React.FC = () => {
             {usageLeft} generations left this month.
           </p>
         )}
-        {/* Toggle for auto-generating captions */}
-        <div className="mt-3 flex items-center gap-2">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={autoGenerateCaptions}
-              onChange={(e) => setAutoGenerateCaptions(e.target.checked)}
-              className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 dark:focus:ring-primary-400 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
-            />
-            <span className="text-sm text-gray-700 dark:text-gray-300">
-              Auto-generate captions when uploading images
-            </span>
-          </label>
-        </div>
+        {/* Toggle for auto-generating captions - only for legacy single media mode */}
+        {composeState.mediaItems.length === 0 && (
+          <div className="mt-3 flex items-center gap-2">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={autoGenerateCaptions}
+                onChange={(e) => setAutoGenerateCaptions(e.target.checked)}
+                className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 dark:focus:ring-primary-400 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300">
+                Auto-generate captions when uploading images
+              </span>
+            </label>
+          </div>
+        )}
       </div>
 
       {/* Media Upload Boxes */}
       <div className="space-y-6">
         {composeState.mediaItems.length > 0 && (
-          <div className="flex items-center justify-end">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleScheduleAll}
+                disabled={selectedIndices.size === 0 || isSaving}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-50"
+              >
+                <CalendarIcon className="w-4 h-4" />
+                Schedule All ({selectedIndices.size})
+              </button>
+              <button
+                onClick={handleDeleteAll}
+                disabled={selectedIndices.size === 0}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors disabled:opacity-50"
+              >
+                <TrashIcon className="w-4 h-4" />
+                Delete All ({selectedIndices.size})
+              </button>
+            </div>
             <button
               onClick={handleGenerateBestTimes}
               disabled={isLoading}
@@ -1228,23 +1606,40 @@ const CaptionGenerator: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {composeState.mediaItems.map((item, index) => (
-              <MediaBox
-                key={item.id}
-                mediaItem={item}
-                index={index}
-                onUpdate={handleUpdateMediaItem}
-                onRemove={handleRemoveMediaItem}
-                onAddNext={handleAddMediaBox}
-                isLast={index === composeState.mediaItems.length - 1}
-                canGenerate={canGenerate}
-                onGenerateComplete={handleCaptionGenerationComplete}
-                goalOptions={goalOptions}
-                toneOptions={toneOptions}
-                autoGenerateCaptions={autoGenerateCaptions}
-              />
-            ))}
+          <div className="relative">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {composeState.mediaItems.map((item, index) => (
+                <MediaBox
+                  key={item.id}
+                  mediaItem={item}
+                  index={index}
+                  onUpdate={handleUpdateMediaItem}
+                  onRemove={handleRemoveMediaItem}
+                  canGenerate={canGenerate}
+                  onGenerateComplete={handleCaptionGenerationComplete}
+                  goalOptions={goalOptions}
+                  toneOptions={toneOptions}
+                  isSelected={selectedIndices.has(index)}
+                  onToggleSelect={handleToggleSelect}
+                  onPreview={handlePreviewMedia}
+                  onPublish={handlePublishMedia}
+                  onSchedule={handleScheduleMedia}
+                  selectedPlatforms={selectedPlatforms}
+                />
+              ))}
+              {/* Add Image/Video button beside boxes */}
+              {composeState.mediaItems.some(item => item.previewUrl) && (
+                <div className="flex items-center">
+                  <button
+                    onClick={handleAddMediaBox}
+                    className="w-full h-full min-h-[200px] flex flex-col items-center justify-center gap-3 px-4 py-6 text-sm font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/30 border-2 border-dashed border-primary-300 dark:border-primary-700 rounded-xl hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors"
+                  >
+                    <PlusIcon className="w-8 h-8" />
+                    <span>Add Image/Video</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -1411,104 +1806,103 @@ const CaptionGenerator: React.FC = () => {
           </div>
         )}
 
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md space-y-4">
-          <div>
-            <label
-              htmlFor="caption-input"
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+        {/* Hashtag Manager */}
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="text-primary-600 dark:text-primary-400">
+                <HashtagIcon />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Hashtag Manager
+              </h3>
+            </div>
+            <button
+              onClick={() => setIsHashtagPopoverOpen(!isHashtagPopoverOpen)}
+              className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
             >
-              Your Post Content
-            </label>
-            <div className="relative">
-              <textarea
-                id="caption-input"
-                ref={textareaRef}
-                value={composeState.captionText}
-                onChange={e =>
-                  setComposeState(prev => ({
-                    ...prev,
-                    captionText: e.target.value
-                  }))
-                }
-                rows={6}
-                className="w-full p-3 pr-12 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
-                placeholder="Write your caption here..."
-              />
-              <div className="absolute top-3 right-3 flex flex-col gap-2">
-                {isSpeechRecognitionSupported && (
-                  <button
-                    onClick={handleMicClick}
-                    className={`p-1.5 rounded-full transition-colors ${
-                      isListening
-                        ? 'bg-red-500 text-white animate-pulse'
-                        : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600'
-                    }`}
-                  >
-                    <VoiceIcon className="w-5 h-5" />
-                  </button>
-                )}
-                <div className="relative">
-                  <button
-                    onClick={() => setIsHashtagPopoverOpen(!isHashtagPopoverOpen)}
-                    className="p-1.5 rounded-full text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600"
-                    title="Hashtag Manager"
-                  >
-                    <HashtagIcon />
-                  </button>
-                  {isHashtagPopoverOpen && (
-                    <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 z-10 border border-gray-200 dark:border-gray-700">
-                      <h4 className="font-bold text-sm mb-2">
-                        Saved Hashtags
-                      </h4>
-                      <div className="space-y-2 mb-4 max-h-40 overflow-y-auto">
-                        {hashtagSets?.map(set => (
-                          <button
-                            key={set.id}
-                            onClick={() => handleInsertHashtags(set.tags)}
-                            className="block w-full text-left text-xs p-2 bg-gray-50 dark:bg-gray-700 rounded hover:bg-gray-100 dark:hover:bg-gray-600"
-                          >
-                            <span className="font-semibold">{set.name}</span>
-                            <p className="text-gray-500 truncate">
-                              {set.tags.join(' ')}
-                            </p>
-                          </button>
-                        ))}
-                        {(!hashtagSets || hashtagSets.length === 0) && (
-                          <p className="text-xs text-gray-400">
-                            No saved sets yet.
-                          </p>
-                        )}
+              {isHashtagPopoverOpen ? 'Hide' : 'Manage'}
+            </button>
+          </div>
+
+          {isHashtagPopoverOpen && (
+            <div className="space-y-4">
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {hashtagSets && hashtagSets.length > 0 ? (
+                  hashtagSets.map(set => (
+                    <div
+                      key={set.id}
+                      className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
+                    >
+                      <div className="flex-1">
+                        <span className="font-semibold text-sm text-gray-900 dark:text-white">
+                          {set.name}
+                        </span>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                          {set.tags.join(' ')}
+                        </p>
                       </div>
-                      <div className="border-t pt-2 dark:border-gray-700">
-                        <input
-                          type="text"
-                          value={newHashtagSetName}
-                          onChange={e => setNewHashtagSetName(e.target.value)}
-                          placeholder="Set Name (e.g. Tech)"
-                          className="w-full text-xs p-1 border rounded mb-1 dark:bg-gray-900 dark:border-gray-600"
-                        />
-                        <input
-                          type="text"
-                          value={newHashtagSetTags}
-                          onChange={e => setNewHashtagSetTags(e.target.value)}
-                          placeholder="#ai #tech"
-                          className="w-full text-xs p-1 border rounded mb-2 dark:bg-gray-900 dark:border-gray-600"
-                        />
-                        <button
-                          onClick={handleCreateHashtagSet}
-                          className="w-full flex justify-center items-center gap-1 bg-primary-100 text-primary-700 text-xs py-1 rounded hover:bg-primary-200"
-                        >
-                          <PlusIcon className="w-3 h-3" /> Save New Set
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => {
+                          // Insert into first media box with caption, or show toast
+                          const firstBoxWithCaption = composeState.mediaItems.findIndex(
+                            item => item.previewUrl && item.captionText.trim()
+                          );
+                          if (firstBoxWithCaption !== -1) {
+                            handleUpdateMediaItem(firstBoxWithCaption, {
+                              captionText: composeState.mediaItems[firstBoxWithCaption].captionText + '\n\n' + set.tags.join(' ')
+                            });
+                            showToast(`Added hashtags to Post ${firstBoxWithCaption + 1}`, 'success');
+                          } else {
+                            showToast('Add a caption to a post first to insert hashtags', 'error');
+                          }
+                        }}
+                        className="ml-3 px-3 py-1.5 text-xs font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/30 rounded-md hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors"
+                      >
+                        Use
+                      </button>
                     </div>
-                  )}
+                  ))
+                ) : (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                    No saved hashtag sets yet. Create one below.
+                  </p>
+                )}
+              </div>
+
+              <div className="border-t pt-4 dark:border-gray-700">
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
+                  Create New Hashtag Set
+                </h4>
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={newHashtagSetName}
+                    onChange={e => setNewHashtagSetName(e.target.value)}
+                    placeholder="Set Name (e.g. Tech, Fashion, Food)"
+                    className="w-full p-2 text-sm border rounded-md dark:bg-gray-900 dark:border-gray-600 dark:text-white"
+                  />
+                  <input
+                    type="text"
+                    value={newHashtagSetTags}
+                    onChange={e => setNewHashtagSetTags(e.target.value)}
+                    placeholder="#hashtag1 #hashtag2 #hashtag3"
+                    className="w-full p-2 text-sm border rounded-md dark:bg-gray-900 dark:border-gray-600 dark:text-white"
+                  />
+                  <button
+                    onClick={handleCreateHashtagSet}
+                    className="w-full flex justify-center items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 transition-colors"
+                  >
+                    <PlusIcon className="w-4 h-4" /> Save Hashtag Set
+                  </button>
                 </div>
               </div>
             </div>
-          </div>
+          )}
+        </div>
 
-          {/* Platforms */}
+        {/* Platforms */}
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
               Publish to

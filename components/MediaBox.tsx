@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { MediaItemState, CaptionResult } from '../types';
+import { MediaItemState, CaptionResult, Platform } from '../types';
 import { generateCaptions } from '../src/services/geminiService';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebaseConfig';
@@ -8,7 +8,8 @@ import {
   TrashIcon,
   RefreshIcon,
   CalendarIcon,
-  PlusIcon,
+  SendIcon,
+  MobileIcon,
 } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 
@@ -35,13 +36,16 @@ interface MediaBoxProps {
   index: number;
   onUpdate: (index: number, updates: Partial<MediaItemState>) => void;
   onRemove: (index: number) => void;
-  onAddNext: () => void;
-  isLast: boolean;
   canGenerate: boolean;
   onGenerateComplete: () => void;
   goalOptions: { value: string; label: string }[];
   toneOptions: { value: string; label: string }[];
-  autoGenerateCaptions: boolean;
+  isSelected: boolean;
+  onToggleSelect: (index: number) => void;
+  onPreview: (index: number) => void;
+  onPublish: (index: number) => void;
+  onSchedule: (index: number) => void;
+  selectedPlatforms: Record<Platform, boolean>;
 }
 
 export const MediaBox: React.FC<MediaBoxProps> = ({
@@ -49,13 +53,16 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   index,
   onUpdate,
   onRemove,
-  onAddNext,
-  isLast,
   canGenerate,
   onGenerateComplete,
   goalOptions,
   toneOptions,
-  autoGenerateCaptions,
+  isSelected,
+  onToggleSelect,
+  onPreview,
+  onPublish,
+  onSchedule,
+  selectedPlatforms,
 }) => {
   const { user, showToast } = useAppContext();
   const [isGenerating, setIsGenerating] = useState(false);
@@ -80,13 +87,6 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
         results: [],
         captionText: '',
       });
-
-      // Auto-generate captions if enabled
-      if (autoGenerateCaptions && canGenerate && user) {
-        setTimeout(() => {
-          generateCaptionsForMedia(base64, file.type);
-        }, 500);
-      }
     } catch (error) {
       showToast('Failed to process file.', 'error');
       console.error(error);
@@ -154,9 +154,11 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
     }
   };
 
-  const handleRegenerate = () => {
+  const handleGenerate = () => {
     if (mediaItem.data) {
       generateCaptionsForMedia(mediaItem.data, mediaItem.mimeType);
+    } else {
+      showToast('Please upload media first.', 'error');
     }
   };
 
@@ -166,13 +168,30 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
     onUpdate(index, { captionText });
   };
 
+  const hasContent = mediaItem.previewUrl && mediaItem.captionText.trim();
+  const platformsToPost = (Object.keys(selectedPlatforms) as Platform[]).filter(
+    p => selectedPlatforms[p]
+  );
+
   return (
-    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-700 transition-colors">
-      {/* Header with Remove button */}
+    <div className={`bg-white dark:bg-gray-800 p-4 rounded-xl border-2 transition-colors ${
+      isSelected 
+        ? 'border-primary-500 dark:border-primary-500' 
+        : 'border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-700'
+    }`}>
+      {/* Header with Checkbox and Remove button */}
       <div className="flex items-center justify-between mb-3">
-        <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-          Post {index + 1}
-        </span>
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => onToggleSelect(index)}
+            className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 dark:focus:ring-primary-400 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+          />
+          <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+            Post {index + 1}
+          </span>
+        </div>
         <button
           onClick={() => onRemove(index)}
           className="p-1.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
@@ -260,6 +279,18 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
         </div>
       </div>
 
+      {/* Generate Button */}
+      {mediaItem.previewUrl && !mediaItem.results.length && (
+        <button
+          onClick={handleGenerate}
+          disabled={!canGenerate || isGenerating}
+          className="w-full mb-3 flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/30 border border-primary-200 dark:border-primary-800 rounded-md hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors disabled:opacity-50"
+        >
+          <RefreshIcon className={`w-3 h-3 ${isGenerating ? 'animate-spin' : ''}`} />
+          {isGenerating ? 'Generating...' : '(Re)Generate Captions'}
+        </button>
+      )}
+
       {/* Caption Results */}
       {mediaItem.results.length > 0 && (
         <div className="mb-3 space-y-2">
@@ -268,11 +299,12 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
               AI Suggestions
             </span>
             <button
-              onClick={handleRegenerate}
+              onClick={handleGenerate}
               disabled={!canGenerate || isGenerating}
               className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 disabled:opacity-50 flex items-center gap-1"
             >
-              <RefreshIcon className="w-3 h-3" /> Regenerate
+              <RefreshIcon className={`w-3 h-3 ${isGenerating ? 'animate-spin' : ''}`} />
+              (Re)Generate
             </button>
           </div>
           <div className="space-y-1 max-h-28 overflow-y-auto">
@@ -323,15 +355,34 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
         </div>
       )}
 
-      {/* Add Next Button */}
-      {isLast && mediaItem.previewUrl && (
-        <button
-          onClick={onAddNext}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/30 border-2 border-dashed border-primary-300 dark:border-primary-700 rounded-md hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors"
-        >
-          <PlusIcon className="w-5 h-5" />
-          Add Image/Video
-        </button>
+      {/* Action Buttons */}
+      {hasContent && (
+        <div className="flex flex-col gap-2">
+          <button
+            onClick={() => onPreview(index)}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+          >
+            <MobileIcon className="w-3 h-3" /> Preview
+          </button>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => onSchedule(index)}
+              disabled={platformsToPost.length === 0}
+              className="flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-50"
+              title={platformsToPost.length === 0 ? 'Select at least one platform' : ''}
+            >
+              <CalendarIcon className="w-3 h-3" /> Schedule
+            </button>
+            <button
+              onClick={() => onPublish(index)}
+              disabled={platformsToPost.length === 0}
+              className="flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50"
+              title={platformsToPost.length === 0 ? 'Select at least one platform' : ''}
+            >
+              <SendIcon className="w-3 h-3" /> Publish
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
