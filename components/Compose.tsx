@@ -1097,7 +1097,7 @@ const CaptionGenerator: React.FC<CaptionGeneratorProps> = ({
 
       {/* Hide main compose area when showing individual boxes */}
       {activeTab !== 'captions' && (
-        <>
+        <div>
           <div className="text-center">
             <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
               Compose & Schedule
@@ -1191,7 +1191,7 @@ const CaptionGenerator: React.FC<CaptionGeneratorProps> = ({
             <div className="absolute top-3 right-3 flex gap-2">
               {/* Only show download/save buttons if media was generated via AI (not just uploaded) */}
               {composeState.media?.isGenerated && (
-                <>
+        <div>
                   <button
                     onClick={handleDownloadImage}
                     className="p-2 bg-black/70 hover:bg-black/90 text-white rounded-full transition-colors shadow-lg"
@@ -2568,7 +2568,7 @@ export const Compose: React.FC = () => {
                         <option value="inspirational">Inspirational</option>
                         <option value="professional">Professional</option>
                         {(user?.plan === 'Agency' || user?.plan === 'Elite' || user?.role === 'Admin' || user?.userType !== 'Business') ? (
-                          <>
+        <div>
                             <option value="sexy-bold">Sexy / Bold</option>
                             <option value="sexy-explicit">Sexy / Explicit</option>
                           </>
@@ -2581,12 +2581,12 @@ export const Compose: React.FC = () => {
                       className="w-full px-2 py-1 text-xs bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
                     >
                       {item.isLoading ? (
-                        <>
+        <div>
                           <RefreshIcon className="w-3 h-3 animate-spin" />
                           Generating...
                         </>
                       ) : (
-                        <>
+        <div>
                           <SparklesIcon className="w-3 h-3" />
                           Generate Caption
                         </>
