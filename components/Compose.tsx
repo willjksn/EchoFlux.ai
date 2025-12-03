@@ -1634,9 +1634,9 @@ const CaptionGenerator: React.FC<CaptionGeneratorProps> = ({
         </div>
       </div>
     </div>
+      )}
+    </div>
   );
-};
-
 type ComposeTab = 'captions' | 'image' | 'video';
 
 const tabs: { id: ComposeTab; label: string; icon: React.ReactNode }[] = [
