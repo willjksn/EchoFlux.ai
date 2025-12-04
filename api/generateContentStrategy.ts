@@ -50,7 +50,9 @@ Return ONLY valid JSON in this exact structure:
           "dayOffset": 0,
           "topic": "Specific content topic/idea (e.g., 'Behind the scenes of our process')",
           "format": "Post" | "Reel" | "Story",
-          "platform": "Instagram" | "TikTok" | "X" | "LinkedIn" | "Facebook" | "Threads" | "YouTube"
+          "platform": "Instagram" | "TikTok" | "X" | "LinkedIn" | "Facebook" | "Threads" | "YouTube",
+          "imageIdeas": ["Idea 1 for images", "Idea 2 for images", "Idea 3 for images"],
+          "videoIdeas": ["Idea 1 for videos", "Idea 2 for videos"]
         }
       ]
     }
@@ -81,6 +83,9 @@ Requirements:
 - Make topics specific and actionable
 - Ensure variety in formats and platforms
 - dayOffset should be 0-6 for week 1, 7-13 for week 2, etc.
+- For each content item, provide 2-3 creative imageIdeas (specific visual concepts that would work well as images)
+- For each content item, provide 1-2 creative videoIdeas (specific video concepts that would work well as short-form videos)
+- Image and video ideas should be specific, actionable, and aligned with the topic and format
 `;
 
     const response = await model.generateContent({
