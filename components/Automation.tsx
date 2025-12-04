@@ -1,10 +1,10 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Platform, Post, CalendarEvent } from '../types';
 import { useAppContext } from './AppContext';
 import { UploadIcon, SparklesIcon, CheckCircleIcon, RefreshIcon, CalendarIcon } from './icons/UIIcons';
 import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
 import { db, storage } from '../firebaseConfig';
-import { collection, setDoc, doc } from 'firebase/firestore';
+import { collection, setDoc, doc, getDocs, query, where, deleteDoc } from 'firebase/firestore';
 // @ts-ignore
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { scheduleMultiplePosts } from '../src/services/smartSchedulingService';
@@ -22,7 +22,8 @@ const platformIcons: Record<Platform, React.ReactElement<{ className?: string }>
 };
 
 interface ProcessedMedia {
-  file: File;
+  id?: string; // Firestore ID for persistence
+  file?: File; // Only present for new uploads
   previewUrl: string;
   caption: string;
   hashtags: string[];
@@ -32,6 +33,9 @@ interface ProcessedMedia {
   mediaUrl?: string;
   scheduledDate?: string;
   status: 'pending' | 'analyzing' | 'scheduled' | 'error';
+  fileName?: string;
+  fileSize?: number;
+  mimeType?: string;
 }
 
 const fileToBase64 = (file: File): Promise<{ data: string; mimeType: string }> => {
@@ -53,10 +57,119 @@ export const Automation: React.FC = () => {
   const [processingIndex, setProcessingIndex] = useState<number | null>(null);
   const [goal, setGoal] = useState('engagement');
   const [tone, setTone] = useState('friendly');
+  
+  // Filter options for Business Starter/Growth plans
+  const isBusiness = user?.userType === 'Business';
+  const isAgencyPlan = user?.plan === 'Agency';
+  const showAdvancedOptions = !isBusiness || isAgencyPlan; // Hide for Business Starter/Growth, show for Agency and all Creators
   const [showSummary, setShowSummary] = useState(false);
   const [scheduledPosts, setScheduledPosts] = useState<Array<{ media: ProcessedMedia; post: Post; event: CalendarEvent }>>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
+
+  // Load persisted automation files from Firestore
+  useEffect(() => {
+    if (!user) {
+      setIsLoading(false);
+      return;
+    }
+
+    const loadPersistedFiles = async () => {
+      try {
+        const automationRef = collection(db, 'users', user.id, 'automation_files');
+        const q = query(automationRef, where('status', 'in', ['pending', 'error']));
+        const snapshot = await getDocs(q);
+        
+        const persisted: ProcessedMedia[] = [];
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          persisted.push({
+            id: doc.id,
+            previewUrl: data.mediaUrl || data.previewUrl,
+            caption: data.caption || '',
+            hashtags: data.hashtags || [],
+            platforms: data.platforms || [],
+            goal: data.goal || 'engagement',
+            tone: data.tone || 'friendly',
+            mediaUrl: data.mediaUrl,
+            scheduledDate: data.scheduledDate,
+            status: data.status || 'pending',
+            fileName: data.fileName,
+            fileSize: data.fileSize,
+            mimeType: data.mimeType,
+          });
+        });
+        
+        setUploadedFiles(persisted);
+      } catch (error) {
+        console.error('Failed to load persisted files:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadPersistedFiles();
+  }, [user]);
+
+  // Save files to Firestore when they change
+  useEffect(() => {
+    if (!user || isLoading) return;
+
+    const saveFiles = async () => {
+      for (const file of uploadedFiles) {
+        // Only save files that aren't scheduled yet
+        if (file.status === 'pending' || file.status === 'error') {
+          try {
+            const fileData: any = {
+              previewUrl: file.previewUrl,
+              caption: file.caption,
+              hashtags: file.hashtags,
+              platforms: file.platforms,
+              goal: file.goal,
+              tone: file.tone,
+              status: file.status,
+              fileName: file.fileName,
+              fileSize: file.fileSize,
+              mimeType: file.mimeType,
+              updatedAt: new Date().toISOString(),
+            };
+
+            if (file.mediaUrl) {
+              fileData.mediaUrl = file.mediaUrl;
+            }
+
+            if (file.id) {
+              // Update existing
+              await setDoc(doc(db, 'users', user.id, 'automation_files', file.id), fileData);
+            } else {
+              // Create new
+              const newId = Date.now().toString();
+              await setDoc(doc(db, 'users', user.id, 'automation_files', newId), {
+                ...fileData,
+                createdAt: new Date().toISOString(),
+              });
+              // Update local state with ID
+              setUploadedFiles(prev => prev.map(f => 
+                f.previewUrl === file.previewUrl ? { ...f, id: newId } : f
+              ));
+            }
+          } catch (error) {
+            console.error('Failed to save file:', error);
+          }
+        } else if (file.id && file.status === 'scheduled') {
+          // Delete scheduled files from persistence
+          try {
+            await deleteDoc(doc(db, 'users', user.id, 'automation_files', file.id));
+          } catch (error) {
+            console.error('Failed to delete scheduled file:', error);
+          }
+        }
+      }
+    };
+
+    saveFiles();
+  }, [uploadedFiles, user, isLoading]);
 
   if (!user) return null;
 
@@ -72,6 +185,9 @@ export const Automation: React.FC = () => {
       goal: goal,
       tone: tone,
       status: 'pending',
+      fileName: file.name,
+      fileSize: file.size,
+      mimeType: file.type,
     }));
 
     setUploadedFiles(prev => [...prev, ...newFiles]);
@@ -90,14 +206,25 @@ export const Automation: React.FC = () => {
 
   const analyzeMedia = async (media: ProcessedMedia): Promise<Partial<ProcessedMedia>> => {
     try {
-      // Upload media to Firebase Storage first
-      const timestamp = Date.now();
-      const ext = media.file.type.split('/')[1] || 'jpg';
-      const storagePath = `users/${user.id}/automation/${timestamp}.${ext}`;
-      const storageRef = ref(storage, storagePath);
+      let mediaUrl = media.mediaUrl;
       
-      await uploadBytes(storageRef, media.file, { contentType: media.file.type });
-      const mediaUrl = await getDownloadURL(storageRef);
+      // If mediaUrl doesn't exist, upload the file
+      if (!mediaUrl && media.file) {
+        const timestamp = Date.now();
+        const ext = media.file.type.split('/')[1] || 'jpg';
+        const storagePath = `users/${user.id}/automation/${timestamp}.${ext}`;
+        const storageRef = ref(storage, storagePath);
+        
+        await uploadBytes(storageRef, media.file, { contentType: media.file.type });
+        mediaUrl = await getDownloadURL(storageRef);
+      } else if (!mediaUrl && media.previewUrl && media.previewUrl.startsWith('http')) {
+        // Already uploaded, use previewUrl
+        mediaUrl = media.previewUrl;
+      }
+      
+      if (!mediaUrl) {
+        throw new Error('No media URL available');
+      }
 
       // Call analyzeMediaForPost API
       const token = await auth.currentUser?.getIdToken(true);
@@ -307,6 +434,12 @@ export const Automation: React.FC = () => {
                 <option value="witty">Witty</option>
                 <option value="inspirational">Inspirational</option>
                 <option value="professional">Professional</option>
+                {showAdvancedOptions && (
+                  <>
+                    <option value="sexy-bold">Sexy / Bold</option>
+                    <option value="sexy-explicit">Sexy / Explicit</option>
+                  </>
+                )}
               </select>
             </div>
           </div>

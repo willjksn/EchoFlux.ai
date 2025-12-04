@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { generateCaptions, generateReply, saveGeneratedContent } from "../src/services/geminiService";
+import { generateCaptions, generateReply, saveGeneratedContent, analyzePostForPlatforms } from "../src/services/geminiService";
 import { CaptionResult, Platform, MediaItem, Client, User, HashtagSet, Post, CalendarEvent } from '../types';
 import {
   SparklesIcon,
@@ -39,7 +39,7 @@ import { db, storage } from '../firebaseConfig';
 import { collection, setDoc, doc } from 'firebase/firestore';
 // @ts-ignore
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { scheduleMultiplePosts } from '../src/services/smartSchedulingService';
+import { scheduleMultiplePosts, analyzeOptimalPostingTimes } from '../src/services/smartSchedulingService';
 import { getAnalytics } from '../src/services/geminiService';
 import { MediaItemState } from '../types';
 
@@ -91,6 +91,15 @@ const CaptionGenerator: React.FC = () => {
     addCalendarEvent
   } = useAppContext();
 
+  // Error boundary - prevent blank page
+  if (!user) {
+    return (
+      <div className="text-center p-8">
+        <p className="text-gray-600 dark:text-gray-400">Please sign in to use Compose.</p>
+      </div>
+    );
+  }
+
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -132,6 +141,17 @@ const CaptionGenerator: React.FC = () => {
 
   // Selected checkboxes for bulk actions
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+
+  // AI Auto-Schedule state
+  const [isAIAutoScheduleModalOpen, setIsAIAutoScheduleModalOpen] = useState(false);
+  const [aiRecommendations, setAIRecommendations] = useState<Array<{
+    index: number;
+    item: MediaItemState;
+    recommendedPlatforms: Array<{ platform: Platform; score: number; reason: string }>;
+    suggestedTime?: string;
+  }>>([]);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [autoConfirmEnabled, setAutoConfirmEnabled] = useState(false);
 
   // Plan + role logic
   const isAgency = user?.plan === 'Agency' || user?.plan === 'Elite';
@@ -271,7 +291,8 @@ const CaptionGenerator: React.FC = () => {
     if (composeState.mediaItems.length > 0) {
       const itemsToSave = composeState.mediaItems.map(item => ({
         ...item,
-        // Don't persist base64 data (too large), only keep previewUrl
+        // Keep data URLs for persistence (they're needed to restore images)
+        // Only remove if it's already uploaded to Firebase (has http URL)
         data: item.previewUrl.startsWith('http') ? '' : item.data,
       }));
       localStorage.setItem('compose_mediaItems', JSON.stringify(itemsToSave));
@@ -280,13 +301,25 @@ const CaptionGenerator: React.FC = () => {
 
   // Load mediaItems from localStorage on mount
   useEffect(() => {
-    if (user && composeState.mediaItems.length === 0) {
+    if (user) {
       try {
         const saved = localStorage.getItem('compose_mediaItems');
         if (saved) {
           const items = JSON.parse(saved) as MediaItemState[];
           // Only load items that have previewUrls (media was uploaded)
-          const validItems = items.filter(item => item.previewUrl);
+          const validItems = items.filter(item => item.previewUrl).map(item => ({
+            ...item,
+            // Ensure selectedPlatforms exists
+            selectedPlatforms: item.selectedPlatforms || {
+              Instagram: false,
+              TikTok: false,
+              X: false,
+              Threads: false,
+              YouTube: false,
+              LinkedIn: false,
+              Facebook: false,
+            },
+          }));
           if (validItems.length > 0) {
             setComposeState(prev => ({
               ...prev,
@@ -319,6 +352,15 @@ const CaptionGenerator: React.FC = () => {
       captionText: '',
       postGoal: composeState.postGoal,
       postTone: composeState.postTone,
+      selectedPlatforms: {
+        Instagram: false,
+        TikTok: false,
+        X: false,
+        Threads: false,
+        YouTube: false,
+        LinkedIn: false,
+        Facebook: false,
+      },
     };
     setComposeState(prev => ({
       ...prev,
@@ -375,11 +417,12 @@ const CaptionGenerator: React.FC = () => {
       return;
     }
 
-    const platformsToPost = (Object.keys(selectedPlatforms) as Platform[]).filter(
-      p => selectedPlatforms[p]
+    // Check each item has at least one platform selected
+    const itemsWithoutPlatforms = selectedItems.filter(
+      item => !Object.values(item.selectedPlatforms || {}).some(p => p)
     );
-    if (platformsToPost.length === 0) {
-      showToast('Please select at least one platform.', 'error');
+    if (itemsWithoutPlatforms.length > 0) {
+      showToast('Please select at least one platform for each post.', 'error');
       return;
     }
 
@@ -400,6 +443,11 @@ const CaptionGenerator: React.FC = () => {
 
         const postId = `${Date.now()}-${i}`;
         const scheduledDate = item.scheduledDate || new Date().toISOString();
+        
+        // Use each item's own platform selection
+        const itemPlatforms = (Object.keys(item.selectedPlatforms || {}) as Platform[]).filter(
+          p => item.selectedPlatforms?.[p]
+        );
 
         if (user) {
           const newPost: Post = {
@@ -407,7 +455,7 @@ const CaptionGenerator: React.FC = () => {
             content: item.captionText,
             mediaUrl: mediaUrl,
             mediaType: item.type,
-            platforms: platformsToPost,
+            platforms: itemPlatforms,
             status: 'Scheduled',
             author: { name: user.name, avatar: user.avatar },
             comments: [],
@@ -420,7 +468,7 @@ const CaptionGenerator: React.FC = () => {
         }
 
         // Create calendar event for each platform
-        for (const platform of platformsToPost) {
+        for (const platform of itemPlatforms) {
           const newEvent: CalendarEvent = {
             id: `cal-${postId}-${platform}`,
             title: title,
@@ -478,8 +526,8 @@ const CaptionGenerator: React.FC = () => {
       return;
     }
 
-    const platformsToPost = (Object.keys(selectedPlatforms) as Platform[]).filter(
-      p => selectedPlatforms[p]
+    const platformsToPost = (Object.keys(item.selectedPlatforms || {}) as Platform[]).filter(
+      p => item.selectedPlatforms?.[p]
     );
     if (platformsToPost.length === 0) {
       showToast('Please select at least one platform.', 'error');
@@ -558,8 +606,8 @@ const CaptionGenerator: React.FC = () => {
       return;
     }
 
-    const platformsToPost = (Object.keys(selectedPlatforms) as Platform[]).filter(
-      p => selectedPlatforms[p]
+    const platformsToPost = (Object.keys(item.selectedPlatforms || {}) as Platform[]).filter(
+      p => item.selectedPlatforms?.[p]
     );
     if (platformsToPost.length === 0) {
       showToast('Please select at least one platform.', 'error');
@@ -798,6 +846,298 @@ const CaptionGenerator: React.FC = () => {
         monthlyCaptionGenerationsUsed:
           (user.monthlyCaptionGenerationsUsed || 0) + 1,
       });
+    }
+  };
+
+  const handleAIAutoSchedule = async () => {
+    const selectedItems = Array.from(selectedIndices)
+      .map(i => composeState.mediaItems[i])
+      .filter(item => item && item.previewUrl && item.captionText.trim());
+
+    if (selectedItems.length === 0) {
+      showToast('Please select posts with media and captions.', 'error');
+      return;
+    }
+
+    setIsAnalyzing(true);
+    try {
+      const recommendations = await Promise.all(
+        selectedItems.map(async (item, idx) => {
+          const originalIndex = composeState.mediaItems.findIndex(m => m.id === item.id);
+          try {
+            // Extract hashtags from caption
+            const hashtags = item.captionText.match(/#\w+/g) || [];
+            
+            const analysis = await analyzePostForPlatforms({
+              caption: item.captionText,
+              hashtags,
+              mediaType: item.type,
+              goal: item.postGoal,
+              tone: item.postTone,
+            });
+
+            // Get optimal time for the top recommended platform
+            let suggestedTime: string | undefined;
+            if (analysis.recommendations.length > 0) {
+              const topPlatform = analysis.recommendations[0].platform as Platform;
+              // Use existing smart scheduling logic
+              try {
+                const analytics = await getAnalytics();
+                const optimalTimes = analyzeOptimalPostingTimes(analytics, {
+                  platform: topPlatform,
+                  avoidClumping: true,
+                  minHoursBetween: 2,
+                });
+                
+                if (optimalTimes.length > 0) {
+                  const optimal = optimalTimes[0];
+                  const now = new Date();
+                  const scheduledDate = new Date();
+                  scheduledDate.setDate(now.getDate() + (optimal.dayOfWeek - now.getDay() + 7) % 7);
+                  scheduledDate.setHours(optimal.hour, optimal.minute, 0, 0);
+                  suggestedTime = scheduledDate.toISOString();
+                }
+              } catch (err) {
+                console.error('Failed to get optimal time:', err);
+              }
+            }
+
+            return {
+              index: originalIndex,
+              item,
+              recommendedPlatforms: analysis.recommendations.map((rec: any) => ({
+                platform: rec.platform as Platform,
+                score: rec.score || 0,
+                reason: rec.reason || 'Good fit for this platform',
+              })),
+              suggestedTime,
+            };
+          } catch (err) {
+            console.error(`Failed to analyze post ${originalIndex}:`, err);
+            // Return default recommendations
+            return {
+              index: originalIndex,
+              item,
+              recommendedPlatforms: [
+                { platform: 'Instagram' as Platform, score: 80, reason: 'Default recommendation' },
+              ],
+            };
+          }
+        })
+      );
+
+      setAIRecommendations(recommendations);
+      setIsAIAutoScheduleModalOpen(true);
+    } catch (error) {
+      console.error('AI Auto-Schedule failed:', error);
+      showToast('Failed to analyze posts. Please try again.', 'error');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleApplyAISchedule = async () => {
+    if (aiRecommendations.length === 0) return;
+
+    setIsSaving(true);
+    try {
+      const scheduledItems: number[] = [];
+
+      for (const rec of aiRecommendations) {
+        const item = composeState.mediaItems[rec.index];
+        if (!item || !item.previewUrl || !item.captionText.trim()) continue;
+
+        // Auto-select recommended platforms (top 2-3)
+        const topPlatforms = rec.recommendedPlatforms
+          .slice(0, 3)
+          .map(p => p.platform);
+
+        const updatedPlatforms: Record<Platform, boolean> = {
+          Instagram: false,
+          TikTok: false,
+          X: false,
+          Threads: false,
+          YouTube: false,
+          LinkedIn: false,
+          Facebook: false,
+        };
+
+        topPlatforms.forEach(platform => {
+          updatedPlatforms[platform] = true;
+        });
+
+        // Update item with recommended platforms and scheduled date
+        handleUpdateMediaItem(rec.index, {
+          selectedPlatforms: updatedPlatforms,
+          scheduledDate: rec.suggestedTime || new Date().toISOString(),
+        });
+
+        // Wait a bit for state to update
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Get updated item
+        const updatedItem = composeState.mediaItems[rec.index];
+        if (!updatedItem) continue;
+
+        const platformsToPost = (Object.keys(updatedItem.selectedPlatforms || {}) as Platform[]).filter(
+          p => updatedItem.selectedPlatforms?.[p]
+        );
+
+        if (platformsToPost.length === 0) continue;
+
+        const scheduledDate = rec.suggestedTime || new Date().toISOString();
+
+        try {
+          const mediaUrl = updatedItem.previewUrl.startsWith('http')
+            ? updatedItem.previewUrl
+            : await uploadMediaItem(updatedItem);
+
+          if (!mediaUrl) continue;
+
+          const title = updatedItem.captionText.trim()
+            ? updatedItem.captionText.substring(0, 30) + '...'
+            : 'New Post';
+
+          const postId = `${Date.now()}-${rec.index}`;
+
+          if (user) {
+            const newPost: Post = {
+              id: postId,
+              content: updatedItem.captionText,
+              mediaUrl: mediaUrl,
+              mediaType: updatedItem.type,
+              platforms: platformsToPost,
+              status: 'Scheduled',
+              author: { name: user.name, avatar: user.avatar },
+              comments: [],
+              scheduledDate: scheduledDate,
+              clientId: selectedClient?.id,
+            };
+
+            const safePost = JSON.parse(JSON.stringify(newPost));
+            await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
+          }
+
+          // Create calendar event for each platform
+          for (const platform of platformsToPost) {
+            const newEvent: CalendarEvent = {
+              id: `cal-${postId}-${platform}`,
+              title: title,
+              date: scheduledDate,
+              type: updatedItem.type === 'video' ? 'Reel' : 'Post',
+              platform: platform,
+              status: 'Scheduled',
+              thumbnail: mediaUrl,
+            };
+
+            await addCalendarEvent(newEvent);
+          }
+
+          scheduledItems.push(rec.index);
+        } catch (err) {
+          console.error(`Failed to schedule post ${rec.index}:`, err);
+        }
+      }
+
+      // Remove scheduled items
+      setComposeState(prev => ({
+        ...prev,
+        mediaItems: prev.mediaItems.filter((_, idx) => !scheduledItems.includes(idx)),
+      }));
+
+      showToast(`AI scheduled ${scheduledItems.length} post(s)!`, 'success');
+      setIsAIAutoScheduleModalOpen(false);
+      setAIRecommendations([]);
+      setSelectedIndices(new Set());
+    } catch (error) {
+      console.error('Failed to apply AI schedule:', error);
+      showToast('Failed to schedule posts.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleBulkGenerateCaptions = async () => {
+    const selectedItems = Array.from(selectedIndices)
+      .map(i => composeState.mediaItems[i])
+      .filter(item => item && item.previewUrl && !item.results.length);
+
+    if (selectedItems.length === 0) {
+      showToast('Please select posts with media that need captions generated.', 'error');
+      return;
+    }
+
+    if (!canGenerate) {
+      showToast('You have reached your monthly caption generation limit.', 'error');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      for (const item of selectedItems) {
+        const index = composeState.mediaItems.findIndex(m => m.id === item.id);
+        if (index === -1 || !item.data) continue;
+
+        // Generate captions for this item
+        try {
+          const timestamp = Date.now();
+          const extension = item.mimeType.split('/')[1] || 'png';
+          const storagePath = `users/${user!.id}/uploads/${timestamp}.${extension}`;
+          const storageRef = ref(storage, storagePath);
+
+          const bytes = base64ToBytes(item.data);
+          await uploadBytes(storageRef, bytes, {
+            contentType: item.mimeType,
+          });
+
+          const mediaUrl = await getDownloadURL(storageRef);
+
+          const res = await generateCaptions({
+            mediaUrl,
+            goal: item.postGoal,
+            tone: item.postTone,
+            promptText: undefined,
+          });
+
+          let generatedResults: CaptionResult[] = [];
+
+          if (Array.isArray(res)) {
+            generatedResults = res as CaptionResult[];
+          } else if (Array.isArray(res?.captions)) {
+            generatedResults = res.captions as CaptionResult[];
+          } else if (res?.caption) {
+            generatedResults = [
+              {
+                caption: res.caption,
+                hashtags: res.hashtags || [],
+              },
+            ];
+          }
+
+          const firstCaptionText =
+            generatedResults.length > 0
+              ? generatedResults[0].caption +
+                '\n\n' +
+                (generatedResults[0].hashtags || []).join(' ')
+              : '';
+
+          handleUpdateMediaItem(index, {
+            results: generatedResults,
+            captionText: firstCaptionText,
+          });
+
+          handleCaptionGenerationComplete();
+        } catch (err) {
+          console.error(`Failed to generate captions for item ${index}:`, err);
+        }
+      }
+
+      showToast(`Generated captions for ${selectedItems.length} post(s)!`, 'success');
+    } catch (error) {
+      console.error('Bulk generate failed:', error);
+      showToast('Failed to generate some captions.', 'error');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -1474,6 +1814,190 @@ const CaptionGenerator: React.FC = () => {
         user={selectedClient || user}
       />
 
+      {/* AI Auto-Schedule Modal */}
+      {isAIAutoScheduleModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                AI Auto-Schedule Recommendations
+              </h3>
+              <button
+                onClick={() => {
+                  setIsAIAutoScheduleModalOpen(false);
+                  setAIRecommendations([]);
+                }}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-2xl"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mb-4 flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="auto-confirm"
+                  checked={autoConfirmEnabled}
+                  onChange={(e) => setAutoConfirmEnabled(e.target.checked)}
+                  className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500"
+                />
+                <label htmlFor="auto-confirm" className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+                  Auto-confirm recommendations
+                </label>
+              </div>
+              <button
+                onClick={handleApplyAISchedule}
+                disabled={isSaving}
+                className="px-6 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {isSaving ? (
+                  <>
+                    <RefreshIcon className="animate-spin w-4 h-4" />
+                    Scheduling...
+                  </>
+                ) : (
+                  <>
+                    <CalendarIcon className="w-4 h-4" />
+                    Confirm & Schedule All
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {aiRecommendations.map((rec) => {
+                const item = rec.item;
+                const topPlatforms = rec.recommendedPlatforms.slice(0, 3);
+                const currentPlatforms = item.selectedPlatforms || {};
+                
+                return (
+                  <div
+                    key={rec.index}
+                    className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-700/50"
+                  >
+                    <div className="flex gap-4">
+                      {/* Media Preview */}
+                      <div className="w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden bg-gray-200 dark:bg-gray-600">
+                        {item.previewUrl ? (
+                          item.type === 'image' ? (
+                            <img
+                              src={item.previewUrl}
+                              alt={`Post ${rec.index + 1}`}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <video
+                              src={item.previewUrl}
+                              className="w-full h-full object-cover"
+                            />
+                          )
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
+                            No Media
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Recommendations */}
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-semibold text-gray-900 dark:text-white">
+                            Post {rec.index + 1}
+                          </h4>
+                          {rec.suggestedTime && (
+                            <span className="text-xs text-gray-600 dark:text-gray-400">
+                              {new Date(rec.suggestedTime).toLocaleString([], {
+                                dateStyle: 'short',
+                                timeStyle: 'short',
+                              })}
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
+                          {item.captionText.substring(0, 100)}...
+                        </p>
+
+                        {/* Recommended Platforms */}
+                        <div className="mb-3">
+                          <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Recommended Platforms:
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {topPlatforms.map((platformRec) => {
+                              const isSelected = currentPlatforms[platformRec.platform];
+                              return (
+                                <div
+                                  key={platformRec.platform}
+                                  className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs border ${
+                                    isSelected
+                                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                                      : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300'
+                                  }`}
+                                >
+                                  <span>{platformIcons[platformRec.platform]}</span>
+                                  <span>{platformRec.platform}</span>
+                                  <span className="text-xs text-gray-500">
+                                    ({platformRec.score}%)
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Platform Reasons */}
+                        <div className="space-y-1 mb-2">
+                          {topPlatforms.map((platformRec) => (
+                            <p
+                              key={platformRec.platform}
+                              className="text-xs text-gray-600 dark:text-gray-400"
+                            >
+                              <span className="font-medium">{platformRec.platform}:</span>{' '}
+                              {platformRec.reason}
+                            </p>
+                          ))}
+                        </div>
+
+                        {/* Add More Platforms Button */}
+                        <button
+                          onClick={() => {
+                            // Toggle additional platforms - simple implementation
+                            const updatedPlatforms = { ...currentPlatforms };
+                            // Add Instagram if not already in top recommendations
+                            if (!topPlatforms.some(p => p.platform === 'Instagram') && !updatedPlatforms.Instagram) {
+                              updatedPlatforms.Instagram = true;
+                            } else if (!updatedPlatforms.Facebook) {
+                              updatedPlatforms.Facebook = true;
+                            }
+                            
+                            handleUpdateMediaItem(rec.index, {
+                              selectedPlatforms: updatedPlatforms,
+                            });
+                          }}
+                          className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                        >
+                          + Add another platform
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {autoConfirmEnabled && (
+              <div className="mt-6 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+                <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                  ⚠️ Auto-confirm is enabled. Clicking "Confirm & Schedule All" will automatically schedule all posts with AI recommendations.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Remix Modal */}
       {isRemixModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
@@ -1553,11 +2077,114 @@ const CaptionGenerator: React.FC = () => {
         )}
       </div>
 
+      {/* Hashtag Manager - Moved to top */}
+      <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div className="text-primary-600 dark:text-primary-400">
+              <HashtagIcon />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Hashtag Manager
+            </h3>
+          </div>
+          <button
+            onClick={() => setIsHashtagPopoverOpen(!isHashtagPopoverOpen)}
+            className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+          >
+            {isHashtagPopoverOpen ? 'Hide' : 'Manage'}
+          </button>
+        </div>
+
+        {isHashtagPopoverOpen && (
+          <div className="space-y-4">
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {hashtagSets && hashtagSets.length > 0 ? (
+                hashtagSets.map(set => (
+                  <div
+                    key={set.id}
+                    className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
+                  >
+                    <div className="flex-1">
+                      <span className="font-semibold text-sm text-gray-900 dark:text-white">
+                        {set.name}
+                      </span>
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                        {set.tags.join(' ')}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        // Insert into first media box with caption, or show toast
+                        const firstBoxWithCaption = composeState.mediaItems.findIndex(
+                          item => item.previewUrl && item.captionText.trim()
+                        );
+                        if (firstBoxWithCaption !== -1) {
+                          handleUpdateMediaItem(firstBoxWithCaption, {
+                            captionText: composeState.mediaItems[firstBoxWithCaption].captionText + '\n\n' + set.tags.join(' ')
+                          });
+                          showToast(`Added hashtags to Post ${firstBoxWithCaption + 1}`, 'success');
+                        } else {
+                          showToast('Add a caption to a post first to insert hashtags', 'error');
+                        }
+                      }}
+                      className="ml-3 px-3 py-1.5 text-xs font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/30 rounded-md hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors"
+                    >
+                      Use
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                  No saved hashtag sets yet. Create one below.
+                </p>
+              )}
+            </div>
+
+            <div className="border-t pt-4 dark:border-gray-700">
+              <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
+                Create New Hashtag Set
+              </h4>
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  value={newHashtagSetName}
+                  onChange={e => setNewHashtagSetName(e.target.value)}
+                  placeholder="Set Name (e.g. Tech, Fashion, Food)"
+                  className="w-full p-2 text-sm border rounded-md dark:bg-gray-900 dark:border-gray-600 dark:text-white"
+                />
+                <input
+                  type="text"
+                  value={newHashtagSetTags}
+                  onChange={e => setNewHashtagSetTags(e.target.value)}
+                  placeholder="#hashtag1 #hashtag2 #hashtag3"
+                  className="w-full p-2 text-sm border rounded-md dark:bg-gray-900 dark:border-gray-600 dark:text-white"
+                />
+                <button
+                  onClick={handleCreateHashtagSet}
+                  className="w-full flex justify-center items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 transition-colors"
+                >
+                  <PlusIcon className="w-4 h-4" /> Save Hashtag Set
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Media Upload Boxes */}
       <div className="space-y-6">
         {composeState.mediaItems.length > 0 && (
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-2">
+              <button
+                onClick={handleBulkGenerateCaptions}
+                disabled={selectedIndices.size === 0 || isLoading || !canGenerate}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors disabled:opacity-50"
+              >
+                <SparklesIcon className="w-4 h-4" />
+                Generate Captions ({selectedIndices.size})
+              </button>
               <button
                 onClick={handleScheduleAll}
                 disabled={selectedIndices.size === 0 || isSaving}
@@ -1575,14 +2202,24 @@ const CaptionGenerator: React.FC = () => {
                 Delete All ({selectedIndices.size})
               </button>
             </div>
-            <button
-              onClick={handleGenerateBestTimes}
-              disabled={isLoading}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-50"
-            >
-              <SparklesIcon className="w-4 h-4" />
-              {isLoading ? 'Generating...' : 'Generate Best Times (AI)'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleGenerateBestTimes}
+                disabled={isLoading}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-50"
+              >
+                <SparklesIcon className="w-4 h-4" />
+                {isLoading ? 'Generating...' : 'Generate Best Times (AI)'}
+              </button>
+              <button
+                onClick={handleAIAutoSchedule}
+                disabled={selectedIndices.size === 0 || isAnalyzing || isLoading}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors disabled:opacity-50"
+              >
+                <SparklesIcon className="w-4 h-4" />
+                {isAnalyzing ? 'Analyzing...' : `AI Auto-Schedule (${selectedIndices.size})`}
+              </button>
+            </div>
           </div>
         )}
 
@@ -1624,7 +2261,7 @@ const CaptionGenerator: React.FC = () => {
                   onPreview={handlePreviewMedia}
                   onPublish={handlePublishMedia}
                   onSchedule={handleScheduleMedia}
-                  selectedPlatforms={selectedPlatforms}
+                  platformIcons={platformIcons}
                 />
               ))}
               {/* Add Image/Video button beside boxes */}
@@ -1805,180 +2442,62 @@ const CaptionGenerator: React.FC = () => {
             ))}
           </div>
         )}
+      </div>
 
-        {/* Hashtag Manager */}
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="text-primary-600 dark:text-primary-400">
-                <HashtagIcon />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Hashtag Manager
-              </h3>
-            </div>
-            <button
-              onClick={() => setIsHashtagPopoverOpen(!isHashtagPopoverOpen)}
-              className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-            >
-              {isHashtagPopoverOpen ? 'Hide' : 'Manage'}
-            </button>
-          </div>
+      {/* Scheduling - Legacy single media mode only */}
+          {composeState.mediaItems.length === 0 && isScheduling && (
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md space-y-4">
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg space-y-4 animate-fade-in">
+                <div className="flex items-center gap-2">
+                  <CalendarIcon className="w-5 h-5 text-blue-600 dark:text-white" />
+                  <h4 className="font-semibold text-blue-800 dark:text-blue-200">
+                    Schedule Post
+                  </h4>
+                </div>
 
-          {isHashtagPopoverOpen && (
-            <div className="space-y-4">
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {hashtagSets && hashtagSets.length > 0 ? (
-                  hashtagSets.map(set => (
-                    <div
-                      key={set.id}
-                      className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
+                <div className="flex flex-col gap-3">
+                  <label className="text-sm text-gray-600 dark:text-gray-400">
+                    Select Date & Time:
+                  </label>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <input
+                      type="datetime-local"
+                      value={scheduleDate}
+                      onChange={e => setScheduleDate(e.target.value)}
+                      className="flex-grow p-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
+                    />
+                    <button
+                      onClick={() => handleSchedule(scheduleDate)}
+                      disabled={!scheduleDate || isSaving}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 font-medium whitespace-nowrap flex items-center gap-2"
                     >
-                      <div className="flex-1">
-                        <span className="font-semibold text-sm text-gray-900 dark:text-white">
-                          {set.name}
-                        </span>
-                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                          {set.tags.join(' ')}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          // Insert into first media box with caption, or show toast
-                          const firstBoxWithCaption = composeState.mediaItems.findIndex(
-                            item => item.previewUrl && item.captionText.trim()
-                          );
-                          if (firstBoxWithCaption !== -1) {
-                            handleUpdateMediaItem(firstBoxWithCaption, {
-                              captionText: composeState.mediaItems[firstBoxWithCaption].captionText + '\n\n' + set.tags.join(' ')
-                            });
-                            showToast(`Added hashtags to Post ${firstBoxWithCaption + 1}`, 'success');
-                          } else {
-                            showToast('Add a caption to a post first to insert hashtags', 'error');
-                          }
-                        }}
-                        className="ml-3 px-3 py-1.5 text-xs font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/30 rounded-md hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors"
-                      >
-                        Use
-                      </button>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                    No saved hashtag sets yet. Create one below.
-                  </p>
-                )}
-              </div>
-
-              <div className="border-t pt-4 dark:border-gray-700">
-                <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
-                  Create New Hashtag Set
-                </h4>
-                <div className="space-y-2">
-                  <input
-                    type="text"
-                    value={newHashtagSetName}
-                    onChange={e => setNewHashtagSetName(e.target.value)}
-                    placeholder="Set Name (e.g. Tech, Fashion, Food)"
-                    className="w-full p-2 text-sm border rounded-md dark:bg-gray-900 dark:border-gray-600 dark:text-white"
-                  />
-                  <input
-                    type="text"
-                    value={newHashtagSetTags}
-                    onChange={e => setNewHashtagSetTags(e.target.value)}
-                    placeholder="#hashtag1 #hashtag2 #hashtag3"
-                    className="w-full p-2 text-sm border rounded-md dark:bg-gray-900 dark:border-gray-600 dark:text-white"
-                  />
-                  <button
-                    onClick={handleCreateHashtagSet}
-                    className="w-full flex justify-center items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 transition-colors"
-                  >
-                    <PlusIcon className="w-4 h-4" /> Save Hashtag Set
-                  </button>
+                      {isSaving ? <RefreshIcon className="animate-spin" /> : null}
+                      Confirm Schedule
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </div>
-          )}
-        </div>
 
-        {/* Platforms */}
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Publish to
-            </label>
-            <div className="mt-2 flex flex-wrap gap-3">
-              {(Object.keys(platformIcons) as Platform[]).map(platform => (
+                <div className="flex items-center gap-4">
+                  <div className="h-px bg-blue-200 dark:bg-blue-800 flex-grow"></div>
+                  <span className="text-xs text-blue-500 uppercase font-bold">
+                    OR
+                  </span>
+                  <div className="h-px bg-blue-200 dark:bg-blue-800 flex-grow"></div>
+                </div>
+
                 <button
-                  key={platform}
-                  onClick={() => handlePlatformToggle(platform)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition-colors ${
-                    selectedPlatforms[platform]
-                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30'
-                      : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                  }`}
+                  onClick={handleSmartSchedule}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-purple-700 dark:text-purple-300 bg-gradient-to-r from-purple-100 to-blue-100 dark:from-purple-900/40 dark:to-blue-900/40 border border-purple-200 dark:border-purple-800 rounded-md hover:shadow-md transition-all"
                 >
-                  <span className="dark:text-white">
-                    {platformIcons[platform]}
-                  </span>
-                  <span className="font-medium text-gray-900 dark:text-white">
-                    {platform}
-                  </span>
+                  <SparklesIcon className="w-4 h-4" /> Schedule for Best Time (AI)
                 </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Scheduling */}
-          {isScheduling && (
-            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg space-y-4 animate-fade-in">
-              <div className="flex items-center gap-2">
-                <CalendarIcon className="w-5 h-5 text-blue-600 dark:text-white" />
-                <h4 className="font-semibold text-blue-800 dark:text-blue-200">
-                  Schedule Post
-                </h4>
               </div>
-
-              <div className="flex flex-col gap-3">
-                <label className="text-sm text-gray-600 dark:text-gray-400">
-                  Select Date & Time:
-                </label>
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <input
-                    type="datetime-local"
-                    value={scheduleDate}
-                    onChange={e => setScheduleDate(e.target.value)}
-                    className="flex-grow p-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
-                  />
-                  <button
-                    onClick={() => handleSchedule(scheduleDate)}
-                    disabled={!scheduleDate || isSaving}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 font-medium whitespace-nowrap flex items-center gap-2"
-                  >
-                    {isSaving ? <RefreshIcon className="animate-spin" /> : null}
-                    Confirm Schedule
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-4">
-                <div className="h-px bg-blue-200 dark:bg-blue-800 flex-grow"></div>
-                <span className="text-xs text-blue-500 uppercase font-bold">
-                  OR
-                </span>
-                <div className="h-px bg-blue-200 dark:bg-blue-800 flex-grow"></div>
-              </div>
-
-              <button
-                onClick={handleSmartSchedule}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-purple-700 dark:text-purple-300 bg-gradient-to-r from-purple-100 to-blue-100 dark:from-purple-900/40 dark:to-blue-900/40 border border-purple-200 dark:border-purple-800 rounded-md hover:shadow-md transition-all"
-              >
-                <SparklesIcon className="w-4 h-4" /> Schedule for Best Time (AI)
-              </button>
             </div>
           )}
 
-          {/* Footer actions */}
+      {/* Footer actions - Legacy single media mode only */}
+      {composeState.mediaItems.length === 0 && (
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
           <div className="flex flex-wrap justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
             {composeState.mediaItems.length > 0 ? (
               <>
@@ -2085,7 +2604,7 @@ const CaptionGenerator: React.FC = () => {
             )}
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
@@ -2227,137 +2746,30 @@ export const Compose: React.FC = () => {
       case 'captions':
         return <CaptionGenerator />;
       case 'image':
-        // Business users: Only Growth and Agency plans
-        if (isBusiness) {
-          if (isAgency) {
-            return (
-              <ImageGenerator
-                onGenerate={handleImageGeneration}
-                onGenerateCaptions={handleGenerateCaptionsForImage}
-                initialPrompt={initialPrompt}
-              />
-            );
-          }
-          if (isGrowth) {
-            // Growth plan gets limited image generations (same as Pro for now)
-            if (monthlyImageUsed < 50) {
-              return (
-                <ImageGenerator
-                  onGenerate={handleImageGeneration}
-                  onGenerateCaptions={handleGenerateCaptionsForImage}
-                  usageLeft={50 - monthlyImageUsed}
-                  initialPrompt={initialPrompt}
-                />
-              );
-            }
-          }
-          // Business Starter users see upgrade prompt - we're already in isBusiness block
-          return (
-            <UpgradePrompt
-              featureName="AI Image Generation"
-              onUpgradeClick={() => setActivePage('pricing')}
-              userType="Business"
-            />
-          );
-        }
-        // Creator users: Pro, Elite, Agency plans
-        if (isAgency) {
-          return (
-            <ImageGenerator
-              onGenerate={handleImageGeneration}
-              onGenerateCaptions={handleGenerateCaptionsForImage}
-              initialPrompt={initialPrompt}
-            />
-          );
-        }
-        if (isElite && monthlyImageUsed < 500) {
-          return (
-            <ImageGenerator
-              onGenerate={handleImageGeneration}
-              onGenerateCaptions={handleGenerateCaptionsForImage}
-              usageLeft={500 - monthlyImageUsed}
-              initialPrompt={initialPrompt}
-            />
-          );
-        }
-        if (isPro && monthlyImageUsed < 50) {
-          return (
-            <ImageGenerator
-              onGenerate={handleImageGeneration}
-              onGenerateCaptions={handleGenerateCaptionsForImage}
-              usageLeft={50 - monthlyImageUsed}
-              initialPrompt={initialPrompt}
-            />
-          );
-        }
-        // Creator users who don't have access
         return (
-          <UpgradePrompt
-            featureName="AI Image Generation"
-            onUpgradeClick={() => setActivePage('pricing')}
-            userType={userType}
-          />
+          <div className="text-center p-12 bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-100 dark:border-gray-700">
+            <ImageIcon className="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-500" />
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Coming Soon</h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              AI Image Generation is currently under development.
+            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-500">
+              Use the Captions tab to upload images and generate captions.
+            </p>
+          </div>
         );
       case 'video':
-        // Business users: Only Growth and Agency plans
-        if (isBusiness) {
-          if (isAgency && monthlyVideoUsed < 50) {
-            return (
-              <VideoGenerator
-                onGenerate={handleVideoGeneration}
-                usageLeft={50 - monthlyVideoUsed}
-              />
-            );
-          }
-          if (isGrowth && monthlyVideoUsed < 1) {
-            return (
-              <VideoGenerator
-                onGenerate={handleVideoGeneration}
-                usageLeft={1 - monthlyVideoUsed}
-              />
-            );
-          }
-          // Business Starter users see upgrade prompt - we're already in isBusiness block
-          return (
-            <UpgradePrompt
-              featureName="AI Video Generation"
-              onUpgradeClick={() => setActivePage('pricing')}
-              userType="Business"
-            />
-          );
-        }
-        // Creator users: Pro, Elite, Agency plans
-        if (isElite && monthlyVideoUsed < 25) {
-          return (
-            <VideoGenerator
-              onGenerate={handleVideoGeneration}
-              usageLeft={25 - monthlyVideoUsed}
-            />
-          );
-        }
-        if (isAgency && monthlyVideoUsed < 50) {
-          return (
-            <VideoGenerator
-              onGenerate={handleVideoGeneration}
-              usageLeft={50 - monthlyVideoUsed}
-            />
-          );
-        }
-        if (isPro && monthlyVideoUsed < 1) {
-          return (
-            <VideoGenerator
-              onGenerate={handleVideoGeneration}
-              usageLeft={1 - monthlyVideoUsed}
-            />
-          );
-        }
-        // Creator users who don't have access
         return (
-          <UpgradePrompt
-            featureName="AI Video Generation"
-            onUpgradeClick={() => setActivePage('pricing')}
-            userType={userType}
-          />
+          <div className="text-center p-12 bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-100 dark:border-gray-700">
+            <VideoIcon className="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-500" />
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Coming Soon</h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              AI Video Generation is currently under development.
+            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-500">
+              Use the Captions tab to upload videos and generate captions.
+            </p>
+          </div>
         );
       default:
         return <CaptionGenerator />;

@@ -1046,17 +1046,25 @@ export const Strategy: React.FC = () => {
                                                 <p className="font-medium text-gray-900 dark:text-white mb-1">{day.topic}</p>
                                                 {/* Show image/video ideas if available */}
                                                 {(day.imageIdeas && day.imageIdeas.length > 0) || (day.videoIdeas && day.videoIdeas.length > 0) ? (
-                                                    <div className="mt-2 space-y-1">
+                                                    <div className="mt-2 space-y-2">
                                                         {day.imageIdeas && day.imageIdeas.length > 0 && (
                                                             <div className="text-xs text-gray-600 dark:text-gray-400">
-                                                                <span className="font-medium">Image ideas:</span> {day.imageIdeas.slice(0, 2).join(', ')}
-                                                                {day.imageIdeas.length > 2 && ` +${day.imageIdeas.length - 2} more`}
+                                                                <span className="font-medium text-primary-600 dark:text-primary-400">📸 Image ideas:</span>
+                                                                <ul className="mt-1 ml-4 list-disc space-y-0.5">
+                                                                    {day.imageIdeas.map((idea, idx) => (
+                                                                        <li key={idx}>{idea}</li>
+                                                                    ))}
+                                                                </ul>
                                                             </div>
                                                         )}
                                                         {day.videoIdeas && day.videoIdeas.length > 0 && (
                                                             <div className="text-xs text-gray-600 dark:text-gray-400">
-                                                                <span className="font-medium">Video ideas:</span> {day.videoIdeas.slice(0, 2).join(', ')}
-                                                                {day.videoIdeas.length > 2 && ` +${day.videoIdeas.length - 2} more`}
+                                                                <span className="font-medium text-primary-600 dark:text-primary-400">🎥 Video ideas:</span>
+                                                                <ul className="mt-1 ml-4 list-disc space-y-0.5">
+                                                                    {day.videoIdeas.map((idea, idx) => (
+                                                                        <li key={idx}>{idea}</li>
+                                                                    ))}
+                                                                </ul>
                                                             </div>
                                                         )}
                                                     </div>

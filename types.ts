@@ -54,7 +54,7 @@ export interface AnalyticsData {
   }[];
 }
 
-export type Page = 'dashboard' | 'analytics' | 'settings' | 'compose' | 'calendar' | 'team' | 'opportunities' | 'profile' | 'about' | 'contact' | 'pricing' | 'clients' | 'faq' | 'terms' | 'privacy' | 'admin' | 'automation' | 'approvals' | 'bio' | 'strategy' | 'autopilot' | 'ads';
+export type Page = 'dashboard' | 'analytics' | 'settings' | 'compose' | 'calendar' | 'team' | 'opportunities' | 'profile' | 'about' | 'contact' | 'pricing' | 'clients' | 'faq' | 'terms' | 'privacy' | 'admin' | 'automation' | 'approvals' | 'bio' | 'strategy' | 'autopilot' | 'ads' | 'mediaLibrary';
 
 export interface Settings {
     autoReply: boolean;
@@ -176,6 +176,19 @@ export interface MediaItem {
   size: number; 
   type: 'image' | 'video';
   uploadedAt: string;
+}
+
+export interface MediaLibraryItem {
+  id: string;
+  userId: string;
+  url: string;
+  name: string;
+  type: 'image' | 'video';
+  mimeType: string;
+  size?: number;
+  uploadedAt: string;
+  usedInPosts?: string[]; // Array of post IDs where this media was used
+  tags?: string[];
 }
 
 export interface HashtagSet {

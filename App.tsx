@@ -26,6 +26,7 @@ import { AdminDashboard } from './components/AdminDashboard';
 import Automation from './components/Automation';
 import Autopilot from './components/Autopilot';
 import { Calendar } from './components/Calendar';
+import MediaLibrary from './components/MediaLibrary';
 import { Approvals } from './components/Approvals';
 /* OnboardingSelector was missing — provide a local fallback stub to avoid compile errors.
    Replace this stub with the real ./components/OnboardingSelector export when that file is added. */
@@ -70,6 +71,7 @@ const pageTitles: Record<Page, string> = {
     bio: 'Link in Bio Builder',
     strategy: 'AI Content Strategist',
     ads: 'AI Ad Generator',
+    mediaLibrary: 'Media Library',
 };
 
 const MainContent: React.FC = () => {
@@ -98,6 +100,7 @@ const MainContent: React.FC = () => {
         case 'bio': return <BioPageBuilder />;
         case 'strategy': return <Strategy />;
         case 'ads': return <AdGenerator />;
+        case 'mediaLibrary': return <MediaLibrary />;
         default: return <Dashboard />;
     }
 }

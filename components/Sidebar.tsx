@@ -1,6 +1,6 @@
 import React from 'react';
 import { Page } from '../types';
-import { DashboardIcon, AnalyticsIcon, SettingsIcon, LogoIcon, ComposeIcon, TrendingIcon, TeamIcon, RocketIcon, BriefcaseIcon, AdminIcon, AutomationIcon, CalendarIcon, KanbanIcon, GlobeIcon, TargetIcon, SparklesIcon } from './icons/UIIcons';
+import { DashboardIcon, AnalyticsIcon, SettingsIcon, LogoIcon, ComposeIcon, TrendingIcon, TeamIcon, RocketIcon, BriefcaseIcon, AdminIcon, AutomationIcon, CalendarIcon, KanbanIcon, GlobeIcon, TargetIcon, SparklesIcon, ImageIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 
 interface NavItemProps {
@@ -46,6 +46,7 @@ export const Sidebar: React.FC = () => {
   const allNavItems: (Omit<NavItemProps, 'page' | 'label'> & { page: Page | 'admin', label: string })[] = [
     { page: 'dashboard', icon: <DashboardIcon />, label: 'Dashboard' },
     { page: 'compose', icon: <ComposeIcon />, label: 'Compose', tourId: 'tour-step-3-compose-nav' },
+    { page: 'mediaLibrary', icon: <ImageIcon />, label: 'Media Library' },
     { page: 'automation', icon: <AutomationIcon />, label: 'Automation' },
     { page: 'autopilot', icon: <RocketIcon />, label: autopilotLabel, tourId: 'tour-step-autopilot-nav' },
     { page: 'strategy', icon: <TargetIcon />, label: 'Strategy' },

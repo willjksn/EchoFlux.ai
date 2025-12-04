@@ -11,7 +11,26 @@ import {
   SendIcon,
   MobileIcon,
 } from './icons/UIIcons';
+import {
+  InstagramIcon,
+  TikTokIcon,
+  XIcon,
+  ThreadsIcon,
+  YouTubeIcon,
+  LinkedInIcon,
+  FacebookIcon
+} from './icons/PlatformIcons';
 import { useAppContext } from './AppContext';
+
+const platformIcons: Record<Platform, React.ReactNode> = {
+  Instagram: <InstagramIcon />,
+  TikTok: <TikTokIcon />,
+  X: <XIcon />,
+  Threads: <ThreadsIcon />,
+  YouTube: <YouTubeIcon />,
+  LinkedIn: <LinkedInIcon />,
+  Facebook: <FacebookIcon />,
+};
 
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -45,7 +64,7 @@ interface MediaBoxProps {
   onPreview: (index: number) => void;
   onPublish: (index: number) => void;
   onSchedule: (index: number) => void;
-  selectedPlatforms: Record<Platform, boolean>;
+  platformIcons: Record<Platform, React.ReactNode>;
 }
 
 export const MediaBox: React.FC<MediaBoxProps> = ({
@@ -62,7 +81,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   onPreview,
   onPublish,
   onSchedule,
-  selectedPlatforms,
+  platformIcons,
 }) => {
   const { user, showToast } = useAppContext();
   const [isGenerating, setIsGenerating] = useState(false);
@@ -169,8 +188,8 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   };
 
   const hasContent = mediaItem.previewUrl && mediaItem.captionText.trim();
-  const platformsToPost = (Object.keys(selectedPlatforms) as Platform[]).filter(
-    p => selectedPlatforms[p]
+  const platformsToPost = (Object.keys(mediaItem.selectedPlatforms || {}) as Platform[]).filter(
+    p => mediaItem.selectedPlatforms?.[p]
   );
 
   return (
@@ -354,6 +373,37 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
           </span>
         </div>
       )}
+
+      {/* Platform Selection */}
+      <div className="mb-3">
+        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+          Publish to
+        </label>
+        <div className="flex flex-wrap gap-1.5">
+          {(Object.keys(platformIcons) as Platform[]).map(platform => (
+            <button
+              key={platform}
+              onClick={() => {
+                const currentPlatforms = mediaItem.selectedPlatforms || {};
+                onUpdate(index, {
+                  selectedPlatforms: {
+                    ...currentPlatforms,
+                    [platform]: !currentPlatforms[platform],
+                  },
+                });
+              }}
+              className={`flex items-center gap-1 px-2 py-1 rounded text-xs border transition-colors ${
+                mediaItem.selectedPlatforms?.[platform]
+                  ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                  : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+              }`}
+            >
+              <span className="w-3 h-3">{platformIcons[platform]}</span>
+              <span className="hidden sm:inline">{platform}</span>
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Action Buttons */}
       {hasContent && (
