@@ -383,6 +383,7 @@ export interface MediaItemState {
     scheduledDate?: string; // Individual schedule date for this item
     postGoal: string; // Individual goal for this post
     postTone: string; // Individual tone for this post
+    selectedPlatforms: Record<Platform, boolean>; // Individual platform selection per box
 }
 
 export interface ComposeState {
@@ -456,6 +457,12 @@ export interface DayPlan {
     topic: string;
     format: 'Post' | 'Story' | 'Reel';
     platform: Platform;
+    imageIdeas?: string[]; // AI-generated image ideas
+    videoIdeas?: string[]; // AI-generated video ideas
+    mediaUrl?: string; // Uploaded media URL
+    mediaType?: 'image' | 'video'; // Type of uploaded media
+    status?: 'draft' | 'ready' | 'scheduled' | 'posted'; // Status tracking
+    linkedPostId?: string; // Links to actual Post when created
 }
 
 export interface WeekPlan {

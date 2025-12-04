@@ -1,11 +1,15 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from './AppContext';
-import { StrategyPlan, Platform, WeekPlan } from '../types';
+import { StrategyPlan, Platform, WeekPlan, DayPlan } from '../types';
 import { generateContentStrategy, saveStrategy, getStrategies, updateStrategyStatus } from "../src/services/geminiService"
-import { TargetIcon, SparklesIcon, CalendarIcon, CheckCircleIcon, RocketIcon, DownloadIcon, TrashIcon, ClockIcon } from './icons/UIIcons';
+import { TargetIcon, SparklesIcon, CalendarIcon, CheckCircleIcon, RocketIcon, DownloadIcon, TrashIcon, ClockIcon, UploadIcon } from './icons/UIIcons';
 import { InstagramIcon, TikTokIcon, XIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
 import { UpgradePrompt } from './UpgradePrompt';
+import { storage } from '../firebaseConfig';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db } from '../firebaseConfig';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 
 const platformIcons: Record<Platform, React.ReactElement> = {
     Instagram: <InstagramIcon className="w-4 h-4" />,
@@ -50,16 +54,39 @@ export const Strategy: React.FC = () => {
     const [strategyName, setStrategyName] = useState('');
     const [showSaveModal, setShowSaveModal] = useState(false);
     const [selectedStrategy, setSelectedStrategy] = useState<any | null>(null);
+    const [uploadingMedia, setUploadingMedia] = useState<{ weekIndex: number; dayIndex: number } | null>(null);
+    const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
+
+    // Helper function to convert file to base64
+    const fileToBase64 = (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve((reader.result as string).split(',')[1]);
+            reader.onerror = error => reject(error);
+        });
+    };
+
+    // Helper function to convert base64 to bytes
+    function base64ToBytes(base64: string) {
+        const binaryString = atob(base64);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes;
+    }
 
     // AI Content Strategist is a $99/month add-on feature
     // Available to Creator Pro/Elite plans, but NOT Agency (requires add-on purchase)
     const isFeatureUnlocked = user?.role === 'Admin' || 
                                (['Pro', 'Elite'].includes(user?.plan || '') && user?.plan !== 'Agency');
 
-    // Load saved strategies on mount
+    // Load saved strategies and active roadmap on mount
     useEffect(() => {
         loadStrategies();
-    }, []);
+        loadActiveRoadmap();
+    }, [user?.id]);
 
     const loadStrategies = async () => {
         try {
@@ -69,6 +96,44 @@ export const Strategy: React.FC = () => {
             }
         } catch (error) {
             console.error("Failed to load strategies:", error);
+        }
+    };
+
+    const loadActiveRoadmap = async () => {
+        if (!user) return;
+        
+        try {
+            // Try to load the most recent active strategy
+            const strategiesSnapshot = await getStrategies();
+            if (strategiesSnapshot.success && strategiesSnapshot.strategies) {
+                const activeStrategy = strategiesSnapshot.strategies.find(
+                    (s: any) => s.status === 'active' && s.userId === user.id
+                );
+                
+                if (activeStrategy) {
+                    // Ensure all content items have status initialized
+                    const planWithStatus = activeStrategy.plan ? {
+                        ...activeStrategy.plan,
+                        weeks: activeStrategy.plan.weeks.map((week: WeekPlan) => ({
+                            ...week,
+                            content: week.content.map((day: DayPlan) => ({
+                                ...day,
+                                status: day.status || 'draft',
+                                imageIdeas: day.imageIdeas || [],
+                                videoIdeas: day.videoIdeas || []
+                            }))
+                        }))
+                    } : null;
+                    
+                    setPlan(planWithStatus);
+                    setSelectedStrategy(activeStrategy);
+                    setNiche(activeStrategy.niche || '');
+                    setAudience(activeStrategy.audience || '');
+                    setGoal(activeStrategy.goal || 'Increase Followers/Fans');
+                }
+            }
+        } catch (error) {
+            console.error("Failed to load active roadmap:", error);
         }
     };
 
@@ -85,21 +150,47 @@ export const Strategy: React.FC = () => {
         try {
             const result = await generateContentStrategy(niche, audience, goal, duration, tone, platformFocus);
             if (result && result.weeks) {
+                // Initialize status for all content items
+                const planWithStatus = {
+                    ...result,
+                    weeks: result.weeks.map(week => ({
+                        ...week,
+                        content: week.content.map(day => ({
+                            ...day,
+                            status: 'draft' as const,
+                            imageIdeas: [],
+                            videoIdeas: []
+                        }))
+                    }))
+                };
+                
                 // Set the plan first
-                setPlan(result);
+                setPlan(planWithStatus);
                 // Create a new temporary strategy object for the newly generated roadmap
                 // This ensures the plan persists on the page until a new one is generated
-                setSelectedStrategy({
-                    id: `temp_${Date.now()}`,
+                const strategyId = `temp_${Date.now()}`;
+                const strategyData = {
+                    id: strategyId,
                     name: 'Current Strategy',
-                    plan: result,
+                    plan: planWithStatus,
                     goal: goal,
                     niche: niche,
                     audience: audience,
                     status: 'active',
                     linkedPostIds: [],
-                    createdAt: new Date().toISOString()
-                });
+                    createdAt: new Date().toISOString(),
+                    userId: user?.id
+                };
+                setSelectedStrategy(strategyData);
+                
+                // Save to Firestore for persistence
+                if (user) {
+                    try {
+                        await setDoc(doc(db, 'users', user.id, 'strategies', strategyId), strategyData);
+                    } catch (err) {
+                        console.error('Failed to save strategy:', err);
+                    }
+                }
                 showToast('Strategy generated!', 'success');
             } else {
                 throw new Error('Invalid strategy response');
@@ -136,13 +227,96 @@ export const Strategy: React.FC = () => {
     };
 
     const handleLoadStrategy = (strategy: any) => {
-        setPlan(strategy.plan);
+        // Ensure all content items have status initialized
+        const planWithStatus = strategy.plan ? {
+            ...strategy.plan,
+            weeks: strategy.plan.weeks.map((week: WeekPlan) => ({
+                ...week,
+                content: week.content.map((day: DayPlan) => ({
+                    ...day,
+                    status: day.status || 'draft',
+                    imageIdeas: day.imageIdeas || [],
+                    videoIdeas: day.videoIdeas || []
+                }))
+            }))
+        } : null;
+        
+        setPlan(planWithStatus);
         setNiche(strategy.niche || '');
         setAudience(strategy.audience || '');
         setGoal(strategy.goal || goal);
         setSelectedStrategy(strategy);
         setShowHistory(false);
         showToast('Strategy loaded!', 'success');
+    };
+
+    const handleMediaUpload = async (weekIndex: number, dayIndex: number, file: File) => {
+        if (!user || !plan) return;
+
+        const fileType = file.type.startsWith('image') ? 'image' : 'video';
+        setUploadingMedia({ weekIndex, dayIndex });
+
+        try {
+            // Convert to base64 for preview
+            const base64 = await fileToBase64(file);
+            const dataUrl = `data:${file.type};base64,${base64}`;
+
+            // Upload to Firebase Storage
+            const timestamp = Date.now();
+            const extension = file.type.split('/')[1] || (fileType === 'image' ? 'png' : 'mp4');
+            const storagePath = `users/${user.id}/roadmap/${timestamp}.${extension}`;
+            const storageRef = ref(storage, storagePath);
+
+            const bytes = base64ToBytes(base64);
+            await uploadBytes(storageRef, bytes, {
+                contentType: file.type,
+            });
+
+            const mediaUrl = await getDownloadURL(storageRef);
+
+            // Update plan with media
+            const updatedPlan = {
+                ...plan,
+                weeks: plan.weeks.map((week, wIdx) => {
+                    if (wIdx !== weekIndex) return week;
+                    return {
+                        ...week,
+                        content: week.content.map((day, dIdx) => {
+                            if (dIdx !== dayIndex) return day;
+                            return {
+                                ...day,
+                                mediaUrl,
+                                mediaType: fileType,
+                                status: 'ready' as const
+                            };
+                        })
+                    };
+                })
+            };
+
+            setPlan(updatedPlan);
+
+            // Update selectedStrategy
+            if (selectedStrategy) {
+                const updatedStrategy = {
+                    ...selectedStrategy,
+                    plan: updatedPlan
+                };
+                setSelectedStrategy(updatedStrategy);
+
+                // Save to Firestore
+                if (user) {
+                    await setDoc(doc(db, 'users', user.id, 'strategies', selectedStrategy.id), updatedStrategy);
+                }
+            }
+
+            showToast('Media uploaded successfully!', 'success');
+        } catch (error) {
+            console.error('Failed to upload media:', error);
+            showToast('Failed to upload media. Please try again.', 'error');
+        } finally {
+            setUploadingMedia(null);
+        }
     };
 
     // When a plan exists but no selectedStrategy, create one to ensure plan persists
@@ -769,27 +943,95 @@ export const Strategy: React.FC = () => {
                                 <span className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider bg-white dark:bg-gray-700 px-3 py-1 rounded-full ml-4">{week.content.length} Total</span>
                             </div>
                             <div className="divide-y divide-gray-100 dark:divide-gray-700">
-                                {week.content.map((day, dayIndex) => (
-                                    <div key={dayIndex} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors flex flex-col sm:flex-row sm:items-center gap-4">
-                                        <div className="flex items-center gap-3 min-w-[120px]">
-                                            <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-500 dark:text-gray-300">
-                                                {platformIcons[day.platform]}
+                                {week.content.map((day, dayIndex) => {
+                                    const itemKey = `${weekIndex}-${dayIndex}`;
+                                    const isUploading = uploadingMedia?.weekIndex === weekIndex && uploadingMedia?.dayIndex === dayIndex;
+                                    const status = day.status || 'draft';
+                                    const statusColors = {
+                                        draft: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
+                                        ready: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+                                        scheduled: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+                                        posted: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
+                                    };
+
+                                    return (
+                                    <div key={dayIndex} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                                        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                                            <div className="flex items-center gap-3 min-w-[120px]">
+                                                <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-500 dark:text-gray-300">
+                                                    {platformIcons[day.platform]}
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Day {day.dayOffset + 1}</p>
+                                                    <p className="text-xs font-medium text-primary-600 dark:text-primary-400">{day.format}</p>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Day {day.dayOffset + 1}</p>
-                                                <p className="text-xs font-medium text-primary-600 dark:text-primary-400">{day.format}</p>
+                                            <div className="flex-grow">
+                                                <p className="font-medium text-gray-900 dark:text-white mb-1">{day.topic}</p>
+                                                {/* Show image/video ideas if available */}
+                                                {(day.imageIdeas && day.imageIdeas.length > 0) || (day.videoIdeas && day.videoIdeas.length > 0) ? (
+                                                    <div className="mt-2 space-y-1">
+                                                        {day.imageIdeas && day.imageIdeas.length > 0 && (
+                                                            <div className="text-xs text-gray-600 dark:text-gray-400">
+                                                                <span className="font-medium">Image ideas:</span> {day.imageIdeas.slice(0, 2).join(', ')}
+                                                                {day.imageIdeas.length > 2 && ` +${day.imageIdeas.length - 2} more`}
+                                                            </div>
+                                                        )}
+                                                        {day.videoIdeas && day.videoIdeas.length > 0 && (
+                                                            <div className="text-xs text-gray-600 dark:text-gray-400">
+                                                                <span className="font-medium">Video ideas:</span> {day.videoIdeas.slice(0, 2).join(', ')}
+                                                                {day.videoIdeas.length > 2 && ` +${day.videoIdeas.length - 2} more`}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : null}
                                             </div>
-                                        </div>
-                                        <div className="flex-grow">
-                                            <p className="font-medium text-gray-900 dark:text-white">{day.topic}</p>
-                                        </div>
-                                        <div className="flex-shrink-0">
-                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                                                Draft Ready
-                                            </span>
+                                            <div className="flex items-center gap-2 flex-shrink-0">
+                                                {/* Media Preview/Upload */}
+                                                {day.mediaUrl ? (
+                                                    <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-gray-200 dark:bg-gray-700">
+                                                        {day.mediaType === 'image' ? (
+                                                            <img src={day.mediaUrl} alt="Uploaded" className="w-full h-full object-cover" />
+                                                        ) : (
+                                                            <video src={day.mediaUrl} className="w-full h-full object-cover" />
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="relative">
+                                                        <input
+                                                            ref={el => fileInputRefs.current[itemKey] = el}
+                                                            type="file"
+                                                            accept="image/*,video/*"
+                                                            onChange={(e) => {
+                                                                const file = e.target.files?.[0];
+                                                                if (file) {
+                                                                    handleMediaUpload(weekIndex, dayIndex, file);
+                                                                }
+                                                            }}
+                                                            className="hidden"
+                                                        />
+                                                        <button
+                                                            onClick={() => fileInputRefs.current[itemKey]?.click()}
+                                                            disabled={isUploading}
+                                                            className="w-16 h-16 flex items-center justify-center border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg hover:border-primary-500 dark:hover:border-primary-400 transition-colors disabled:opacity-50"
+                                                            title="Upload media"
+                                                        >
+                                                            {isUploading ? (
+                                                                <div className="animate-spin w-5 h-5 border-2 border-primary-600 border-t-transparent rounded-full" />
+                                                            ) : (
+                                                                <UploadIcon className="w-5 h-5 text-gray-400" />
+                                                            )}
+                                                        </button>
+                                                    </div>
+                                                )}
+                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[status] || statusColors.draft}`}>
+                                                    {status === 'draft' ? 'Draft' : status === 'ready' ? 'Ready' : status === 'scheduled' ? 'Scheduled' : 'Posted'}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                         );
