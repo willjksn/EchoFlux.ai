@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from './AppContext';
-import { StrategyPlan, Platform, WeekPlan, DayPlan } from '../types';
+import { StrategyPlan, Platform, WeekPlan, DayPlan, Post, CalendarEvent } from '../types';
 import { generateContentStrategy, saveStrategy, getStrategies, updateStrategyStatus } from "../src/services/geminiService"
 import { TargetIcon, SparklesIcon, CalendarIcon, CheckCircleIcon, RocketIcon, DownloadIcon, TrashIcon, ClockIcon, UploadIcon } from './icons/UIIcons';
 import { InstagramIcon, TikTokIcon, XIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
@@ -294,23 +294,99 @@ export const Strategy: React.FC = () => {
                 })
             };
 
-            setPlan(updatedPlan);
+            // Calculate scheduled date based on roadmap
+            const today = new Date();
+            const scheduledDate = new Date(today);
+            scheduledDate.setDate(today.getDate() + (weekIndex * 7) + day.dayOffset);
+            scheduledDate.setHours(14, 0, 0, 0); // Default to 2 PM
 
-            // Update selectedStrategy
-            if (selectedStrategy) {
-                const updatedStrategy = {
-                    ...selectedStrategy,
-                    plan: updatedPlan
+            // Auto-schedule the post
+            const postId = `roadmap-${selectedStrategy?.id || 'temp'}-${weekIndex}-${dayIndex}-${Date.now()}`;
+            const postTitle = day.topic.substring(0, 30) + (day.topic.length > 30 ? '...' : '');
+
+            // Create Post in Firestore and schedule
+            if (user) {
+                const newPost: Post = {
+                    id: postId,
+                    content: day.topic, // Use topic as caption for now
+                    mediaUrl: mediaUrl,
+                    mediaType: fileType,
+                    platforms: [day.platform],
+                    status: 'Scheduled',
+                    author: { name: user.name, avatar: user.avatar },
+                    comments: [],
+                    scheduledDate: scheduledDate.toISOString(),
+                    clientId: user.userType === 'Business' ? user.id : undefined
                 };
-                setSelectedStrategy(updatedStrategy);
 
-                // Save to Firestore
-                if (user) {
+                const safePost = JSON.parse(JSON.stringify(newPost));
+                await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
+
+                // Create calendar event
+                const newEvent: CalendarEvent = {
+                    id: `cal-${postId}`,
+                    title: postTitle,
+                    date: scheduledDate.toISOString(),
+                    type: day.format === 'Reel' ? 'Reel' : 'Post',
+                    platform: day.platform,
+                    status: 'Scheduled',
+                    thumbnail: mediaUrl,
+                };
+
+                await addCalendarEvent(newEvent);
+
+                // Update roadmap item status to scheduled and link post
+                const updatedPlanWithSchedule = {
+                    ...updatedPlan,
+                    weeks: updatedPlan.weeks.map((week, wIdx) => {
+                        if (wIdx !== weekIndex) return week;
+                        return {
+                            ...week,
+                            content: week.content.map((d, dIdx) => {
+                                if (dIdx !== dayIndex) return d;
+                                return {
+                                    ...d,
+                                    status: 'scheduled' as const,
+                                    linkedPostId: postId
+                                };
+                            })
+                        };
+                    })
+                };
+
+                setPlan(updatedPlanWithSchedule);
+
+                // Update selectedStrategy
+                if (selectedStrategy) {
+                    const updatedStrategy = {
+                        ...selectedStrategy,
+                        plan: updatedPlanWithSchedule,
+                        linkedPostIds: [...(selectedStrategy.linkedPostIds || []), postId]
+                    };
+                    setSelectedStrategy(updatedStrategy);
+
+                    // Save to Firestore
                     await setDoc(doc(db, 'users', user.id, 'strategies', selectedStrategy.id), updatedStrategy);
+                }
+            } else {
+                setPlan(updatedPlan);
+                
+                // Update selectedStrategy without scheduling
+                if (selectedStrategy) {
+                    const updatedStrategy = {
+                        ...selectedStrategy,
+                        plan: updatedPlan
+                    };
+                    setSelectedStrategy(updatedStrategy);
+
+                    // Save to Firestore
+                    if (user) {
+                        await setDoc(doc(db, 'users', user.id, 'strategies', selectedStrategy.id), updatedStrategy);
+                    }
                 }
             }
 
-            showToast('Media uploaded successfully!', 'success');
+            showToast('Media uploaded and post scheduled!', 'success');
         } catch (error) {
             console.error('Failed to upload media:', error);
             showToast('Failed to upload media. Please try again.', 'error');

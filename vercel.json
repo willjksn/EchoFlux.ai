@@ -19,5 +19,12 @@
       "memory": 1024,
       "maxDuration": 30
     }
-  }
+  },
+
+  "crons": [
+    {
+      "path": "/api/autoPostScheduled",
+      "schedule": "*/15 * * * *"
+    }
+  ]
 }
