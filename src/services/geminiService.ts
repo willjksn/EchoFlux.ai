@@ -1,7 +1,7 @@
 // src/services/geminiService.ts
 
 import { auth } from "../../firebaseConfig";
-import type { UserType } from "../../types";
+import type { UserType, Platform } from "../../types";
 
 // ----------------------------------------------------
 // Generic API caller for Vercel Serverless Functions
@@ -245,7 +245,53 @@ export async function askChatbot(question: string): Promise<string> {
 }
 
 /* ----------------------------------------------------
-   8) Critique
+   8) Analyze Post for Platforms
+---------------------------------------------------- */
+export async function analyzePostForPlatforms(opts: {
+  caption: string;
+  hashtags?: string[];
+  mediaType?: 'image' | 'video';
+  goal?: string;
+  tone?: string;
+}) {
+  const { caption, hashtags, mediaType, goal, tone } = opts;
+  
+  return await callFunction("analyzePostForPlatforms", {
+    caption,
+    hashtags: hashtags || [],
+    mediaType: mediaType || 'image',
+    goal: goal || 'engagement',
+    tone: tone || 'friendly',
+  });
+}
+
+/* ----------------------------------------------------
+   10) Analyze Media for Post (Vision Analysis)
+---------------------------------------------------- */
+export async function analyzeMediaForPost(opts: {
+  mediaUrl?: string;
+  mediaData?: { data: string; mimeType: string };
+  goal?: string;
+  tone?: string;
+}): Promise<{
+  caption: string;
+  hashtags: string[];
+  platforms: Platform[];
+  goal: string;
+  tone: string;
+}> {
+  const { mediaUrl, mediaData, goal, tone } = opts;
+  
+  return await callFunction("analyzeMediaForPost", {
+    mediaUrl: mediaUrl || null,
+    mediaData: mediaData || null,
+    goal: goal || 'engagement',
+    tone: tone || 'friendly',
+  });
+}
+
+/* ----------------------------------------------------
+   9) Critique
 ---------------------------------------------------- */
 export async function generateCritique(
   postContent: string
