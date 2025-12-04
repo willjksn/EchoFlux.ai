@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { findTrends } from "../src/services/geminiService"
-import { Opportunity, Platform } from '../types';
+import { Opportunity, Platform, HashtagSet } from '../types';
 import { SparklesIcon, TrendingIcon } from './icons/UIIcons';
 import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
 import { useAppContext } from './AppContext';
@@ -19,7 +19,7 @@ const platformIcons: { [key in Platform]: React.ReactNode } = {
 };
 
 export const Opportunities: React.FC = () => {
-    const { user, setActivePage, setComposeContext } = useAppContext();
+    const { user, setActivePage, setComposeContext, hashtagSets, setHashtagSets, showToast } = useAppContext();
     const [niche, setNiche] = useState('');
     const [results, setResults] = useState<Opportunity[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -55,6 +55,9 @@ export const Opportunities: React.FC = () => {
                 // Update results with new scan - this replaces previous results
                 setResults(trends);
                 setError(null); // Clear any previous errors on success
+                
+                // Auto-save trending hashtags from opportunities
+                autoSaveTrendingHashtags(trends);
             }
         } catch (err: any) {
             console.error('Error finding trends:', err);
@@ -65,6 +68,73 @@ export const Opportunities: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const autoSaveTrendingHashtags = (opportunities: Opportunity[]) => {
+        if (!setHashtagSets || !showToast) return;
+        
+        // Collect all hashtags from trending hashtag opportunities
+        const hashtagMap = new Map<string, string[]>(); // platform -> hashtags
+        
+        opportunities.forEach(opp => {
+            if (opp.type === 'Trending Hashtag' && opp.relatedHashtags && opp.relatedHashtags.length > 0) {
+                const platform = opp.platform || 'All Platforms';
+                if (!hashtagMap.has(platform)) {
+                    hashtagMap.set(platform, []);
+                }
+                opp.relatedHashtags.forEach(tag => {
+                    if (!hashtagMap.get(platform)!.includes(tag)) {
+                        hashtagMap.get(platform)!.push(tag);
+                    }
+                });
+            }
+        });
+
+        // Create hashtag sets for each platform
+        hashtagMap.forEach((tags, platform) => {
+            if (tags.length > 0) {
+                const setName = `Trending: ${platform} - ${new Date().toLocaleDateString()}`;
+                
+                // Check if set already exists
+                const existingSet = hashtagSets?.find(set => set.name === setName);
+                if (!existingSet) {
+                    const newSet: HashtagSet = {
+                        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                        name: setName,
+                        tags: tags.filter(tag => tag.startsWith('#'))
+                    };
+                    
+                    setHashtagSets(prev => [...(prev || []), newSet]);
+                }
+            }
+        });
+
+        if (hashtagMap.size > 0) {
+            showToast(`Saved ${hashtagMap.size} trending hashtag set(s) to Hashtag Manager!`, 'success');
+        }
+    };
+
+    const handleSaveHashtags = (opportunity: Opportunity) => {
+        if (!setHashtagSets || !showToast || !opportunity.relatedHashtags || opportunity.relatedHashtags.length === 0) {
+            showToast?.('No hashtags to save.', 'error');
+            return;
+        }
+
+        const tags = opportunity.relatedHashtags.filter(tag => tag.startsWith('#'));
+        if (tags.length === 0) {
+            showToast('No valid hashtags found.', 'error');
+            return;
+        }
+
+        const setName = `${opportunity.type}: ${opportunity.title}`;
+        const newSet: HashtagSet = {
+            id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+            name: setName.length > 50 ? setName.substring(0, 50) : setName,
+            tags: tags
+        };
+
+        setHashtagSets(prev => [...(prev || []), newSet]);
+        showToast(`Saved "${setName}" to Hashtag Manager!`, 'success');
     };
 
     if (!isFeatureUnlocked) {
@@ -277,12 +347,25 @@ export const Opportunities: React.FC = () => {
                                          <p className="text-gray-600 dark:text-gray-300 text-sm mb-3">{result.description}</p>
                                          
                                          {result.relatedHashtags && result.relatedHashtags.length > 0 && (
-                                             <div className="flex flex-wrap gap-2 mb-3">
-                                                 {result.relatedHashtags.map((tag: string, idx: number) => (
-                                                     <span key={idx} className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full">
-                                                         {tag}
-                                                     </span>
-                                                 ))}
+                                             <div className="mb-3">
+                                                 <div className="flex items-center justify-between mb-2">
+                                                     <p className="text-xs font-medium text-gray-700 dark:text-gray-300">Hashtags:</p>
+                                                     <button
+                                                         onClick={() => handleSaveHashtags(result)}
+                                                         className="flex items-center gap-1 px-2 py-1 text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded transition-colors"
+                                                         title="Save to Hashtag Manager"
+                                                     >
+                                                         <HashtagIcon />
+                                                         Save
+                                                     </button>
+                                                 </div>
+                                                 <div className="flex flex-wrap gap-2">
+                                                     {result.relatedHashtags.map((tag: string, idx: number) => (
+                                                         <span key={idx} className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full">
+                                                             {tag}
+                                                         </span>
+                                                     ))}
+                                                 </div>
                                              </div>
                                          )}
                                          
