@@ -289,13 +289,27 @@ const CaptionGenerator: React.FC = () => {
   // Persist mediaItems to localStorage
   useEffect(() => {
     if (composeState.mediaItems.length > 0) {
-      const itemsToSave = composeState.mediaItems.map(item => ({
-        ...item,
-        // Keep data URLs for persistence (they're needed to restore images)
-        // Only remove if it's already uploaded to Firebase (has http URL)
-        data: item.previewUrl.startsWith('http') ? '' : item.data,
-      }));
-      localStorage.setItem('compose_mediaItems', JSON.stringify(itemsToSave));
+      // Only save items with valid Firebase URLs (not blob URLs)
+      const itemsToSave = composeState.mediaItems
+        .filter(item => {
+          // Don't save items with blob URLs - they won't work after reload
+          if (item.previewUrl && (item.previewUrl.startsWith('blob:') || item.previewUrl.startsWith('data:'))) {
+            return false;
+          }
+          return true;
+        })
+        .map(item => ({
+          ...item,
+          // Keep data URLs for persistence only if previewUrl is not a Firebase URL
+          // If previewUrl is a Firebase URL, we don't need the base64 data
+          data: item.previewUrl && item.previewUrl.startsWith('http') ? '' : item.data,
+        }));
+      
+      if (itemsToSave.length > 0) {
+        localStorage.setItem('compose_mediaItems', JSON.stringify(itemsToSave));
+      } else {
+        localStorage.removeItem('compose_mediaItems');
+      }
     }
   }, [composeState.mediaItems]);
 
@@ -306,20 +320,40 @@ const CaptionGenerator: React.FC = () => {
         const saved = localStorage.getItem('compose_mediaItems');
         if (saved) {
           const items = JSON.parse(saved) as MediaItemState[];
-          // Only load items that have previewUrls (media was uploaded)
-          const validItems = items.filter(item => item.previewUrl).map(item => ({
-            ...item,
-            // Ensure selectedPlatforms exists
-            selectedPlatforms: item.selectedPlatforms || {
-              Instagram: false,
-              TikTok: false,
-              X: false,
-              Threads: false,
-              YouTube: false,
-              LinkedIn: false,
-              Facebook: false,
-            },
-          }));
+          // Only load items that have valid Firebase URLs (not blob/data URLs)
+          const validItems = items
+            .filter(item => {
+              if (!item.previewUrl) return false;
+              // Filter out blob URLs and data URLs - they won't work after page reload
+              if (item.previewUrl.startsWith('blob:') || item.previewUrl.startsWith('data:')) {
+                return false;
+              }
+              // Only keep Firebase Storage URLs or Media Library URLs
+              return item.previewUrl.startsWith('http');
+            })
+            .map(item => ({
+              ...item,
+              // Ensure selectedPlatforms exists
+              selectedPlatforms: item.selectedPlatforms || {
+                Instagram: false,
+                TikTok: false,
+                X: false,
+                Threads: false,
+                YouTube: false,
+                LinkedIn: false,
+                Facebook: false,
+              },
+            }));
+          
+          // Clean up localStorage if we filtered out invalid items
+          if (validItems.length !== items.length) {
+            if (validItems.length > 0) {
+              localStorage.setItem('compose_mediaItems', JSON.stringify(validItems));
+            } else {
+              localStorage.removeItem('compose_mediaItems');
+            }
+          }
+          
           if (validItems.length > 0) {
             setComposeState(prev => ({
               ...prev,
@@ -329,6 +363,8 @@ const CaptionGenerator: React.FC = () => {
         }
       } catch (e) {
         console.error('Failed to load saved media items:', e);
+        // Clear corrupted localStorage data
+        localStorage.removeItem('compose_mediaItems');
       }
     }
   }, [user?.id]);
@@ -339,6 +375,45 @@ const CaptionGenerator: React.FC = () => {
       localStorage.removeItem('compose_mediaItems');
     }
   }, [composeState.mediaItems.length]);
+
+  // Check for pending media from Media Library
+  useEffect(() => {
+    const pendingMedia = localStorage.getItem('pendingMediaFromLibrary');
+    if (pendingMedia) {
+      try {
+        const mediaData = JSON.parse(pendingMedia);
+        const newMediaItem: MediaItemState = {
+          id: Date.now().toString(),
+          previewUrl: mediaData.url,
+          data: '', // Media Library items are already URLs, no base64 needed
+          mimeType: mediaData.mimeType,
+          type: mediaData.type,
+          results: [],
+          captionText: '',
+          postGoal: composeState.postGoal,
+          postTone: composeState.postTone,
+          selectedPlatforms: {
+            Instagram: false,
+            TikTok: false,
+            X: false,
+            Threads: false,
+            YouTube: false,
+            LinkedIn: false,
+            Facebook: false,
+          },
+        };
+        setComposeState(prev => ({
+          ...prev,
+          mediaItems: [...prev.mediaItems, newMediaItem],
+        }));
+        localStorage.removeItem('pendingMediaFromLibrary');
+        showToast(`Added ${mediaData.name} to compose`, 'success');
+      } catch (error) {
+        console.error('Failed to add media from library:', error);
+        localStorage.removeItem('pendingMediaFromLibrary');
+      }
+    }
+  }, [setComposeState, composeState.postGoal, composeState.postTone, showToast]);
 
   // Batch upload handlers
   const handleAddMediaBox = () => {
@@ -2059,22 +2134,6 @@ const CaptionGenerator: React.FC = () => {
             {usageLeft} generations left this month.
           </p>
         )}
-        {/* Toggle for auto-generating captions - only for legacy single media mode */}
-        {composeState.mediaItems.length === 0 && (
-          <div className="mt-3 flex items-center gap-2">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={autoGenerateCaptions}
-                onChange={(e) => setAutoGenerateCaptions(e.target.checked)}
-                className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 dark:focus:ring-primary-400 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
-              />
-              <span className="text-sm text-gray-700 dark:text-gray-300">
-                Auto-generate captions when uploading images
-              </span>
-            </label>
-          </div>
-        )}
       </div>
 
       {/* Hashtag Manager - Moved to top */}
@@ -2175,51 +2234,47 @@ const CaptionGenerator: React.FC = () => {
       {/* Media Upload Boxes */}
       <div className="space-y-6">
         {composeState.mediaItems.length > 0 && (
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleBulkGenerateCaptions}
-                disabled={selectedIndices.size === 0 || isLoading || !canGenerate}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors disabled:opacity-50"
-              >
-                <SparklesIcon className="w-4 h-4" />
-                Generate Captions ({selectedIndices.size})
-              </button>
-              <button
-                onClick={handleScheduleAll}
-                disabled={selectedIndices.size === 0 || isSaving}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-50"
-              >
-                <CalendarIcon className="w-4 h-4" />
-                Schedule All ({selectedIndices.size})
-              </button>
-              <button
-                onClick={handleDeleteAll}
-                disabled={selectedIndices.size === 0}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors disabled:opacity-50"
-              >
-                <TrashIcon className="w-4 h-4" />
-                Delete All ({selectedIndices.size})
-              </button>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleGenerateBestTimes}
-                disabled={isLoading}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-50"
-              >
-                <SparklesIcon className="w-4 h-4" />
-                {isLoading ? 'Generating...' : 'Generate Best Times (AI)'}
-              </button>
-              <button
-                onClick={handleAIAutoSchedule}
-                disabled={selectedIndices.size === 0 || isAnalyzing || isLoading}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors disabled:opacity-50"
-              >
-                <SparklesIcon className="w-4 h-4" />
-                {isAnalyzing ? 'Analyzing...' : `AI Auto-Schedule (${selectedIndices.size})`}
-              </button>
-            </div>
+          <div className="flex flex-wrap items-center gap-2 pb-2">
+            <button
+              onClick={handleBulkGenerateCaptions}
+              disabled={selectedIndices.size === 0 || isLoading || !canGenerate}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors disabled:opacity-50 whitespace-nowrap"
+            >
+              <SparklesIcon className="w-3.5 h-3.5" />
+              Generate Captions ({selectedIndices.size})
+            </button>
+            <button
+              onClick={handleScheduleAll}
+              disabled={selectedIndices.size === 0 || isSaving}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-50 whitespace-nowrap"
+            >
+              <CalendarIcon className="w-3.5 h-3.5" />
+              Schedule All ({selectedIndices.size})
+            </button>
+            <button
+              onClick={handleDeleteAll}
+              disabled={selectedIndices.size === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors disabled:opacity-50 whitespace-nowrap"
+            >
+              <TrashIcon className="w-3.5 h-3.5" />
+              Delete All ({selectedIndices.size})
+            </button>
+            <button
+              onClick={handleGenerateBestTimes}
+              disabled={isLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-50 whitespace-nowrap"
+            >
+              <SparklesIcon className="w-3.5 h-3.5" />
+              {isLoading ? 'Generating...' : 'Generate Best Times (AI)'}
+            </button>
+            <button
+              onClick={handleAIAutoSchedule}
+              disabled={selectedIndices.size === 0 || isAnalyzing || isLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors disabled:opacity-50 whitespace-nowrap"
+            >
+              <SparklesIcon className="w-3.5 h-3.5" />
+              {isAnalyzing ? 'Analyzing...' : `AI Auto-Schedule (${selectedIndices.size})`}
+            </button>
           </div>
         )}
 
@@ -2243,40 +2298,34 @@ const CaptionGenerator: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="relative">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {composeState.mediaItems.map((item, index) => (
-                <MediaBox
-                  key={item.id}
-                  mediaItem={item}
-                  index={index}
-                  onUpdate={handleUpdateMediaItem}
-                  onRemove={handleRemoveMediaItem}
-                  canGenerate={canGenerate}
-                  onGenerateComplete={handleCaptionGenerationComplete}
-                  goalOptions={goalOptions}
-                  toneOptions={toneOptions}
-                  isSelected={selectedIndices.has(index)}
-                  onToggleSelect={handleToggleSelect}
-                  onPreview={handlePreviewMedia}
-                  onPublish={handlePublishMedia}
-                  onSchedule={handleScheduleMedia}
-                  platformIcons={platformIcons}
-                />
-              ))}
-              {/* Add Image/Video button beside boxes */}
-              {composeState.mediaItems.some(item => item.previewUrl) && (
-                <div className="flex items-center">
-                  <button
-                    onClick={handleAddMediaBox}
-                    className="w-full h-full min-h-[200px] flex flex-col items-center justify-center gap-3 px-4 py-6 text-sm font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/30 border-2 border-dashed border-primary-300 dark:border-primary-700 rounded-xl hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors"
-                  >
-                    <PlusIcon className="w-8 h-8" />
-                    <span>Add Image/Video</span>
-                  </button>
-                </div>
-              )}
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {composeState.mediaItems.map((item, index) => (
+              <MediaBox
+                key={item.id}
+                mediaItem={item}
+                index={index}
+                onUpdate={handleUpdateMediaItem}
+                onRemove={handleRemoveMediaItem}
+                canGenerate={canGenerate}
+                onGenerateComplete={handleCaptionGenerationComplete}
+                goalOptions={goalOptions}
+                toneOptions={toneOptions}
+                isSelected={selectedIndices.has(index)}
+                onToggleSelect={handleToggleSelect}
+                onPreview={handlePreviewMedia}
+                onPublish={handlePublishMedia}
+                onSchedule={handleScheduleMedia}
+                platformIcons={platformIcons}
+              />
+            ))}
+            {/* Add Image/Video button - Always show compact plus sign */}
+            <button
+              onClick={handleAddMediaBox}
+              className="h-24 flex items-center justify-center text-primary-600 dark:text-primary-400 bg-white dark:bg-gray-800 border-2 border-dashed border-primary-300 dark:border-primary-700 rounded-xl hover:bg-primary-50 dark:hover:bg-primary-900/30 transition-colors shadow-sm"
+              title="Add Image/Video"
+            >
+              <PlusIcon className="w-8 h-8" />
+            </button>
           </div>
         )}
       </div>
@@ -2495,116 +2544,6 @@ const CaptionGenerator: React.FC = () => {
             </div>
           )}
 
-      {/* Footer actions - Legacy single media mode only */}
-      {composeState.mediaItems.length === 0 && (
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
-          <div className="flex flex-wrap justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-            {composeState.mediaItems.length > 0 ? (
-              <>
-                {/* Batch actions */}
-                <button
-                  onClick={() => setIsPreviewOpen(true)}
-                  disabled={composeState.mediaItems.length === 0}
-                  className="flex items-center gap-2 px-4 py-2 text-base font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
-                >
-                  <MobileIcon className="w-5 h-5" /> Preview
-                </button>
-                {isScheduling && (
-                  <button
-                    onClick={() => handleBulkSchedule(false)}
-                    disabled={composeState.mediaItems.length === 0 || isSaving}
-                    className="flex items-center gap-2 px-6 py-2 text-base font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 transition-colors disabled:opacity-50"
-                  >
-                    {isSaving ? <RefreshIcon className="animate-spin" /> : null}
-                    <CalendarIcon className="w-5 h-5" /> Bulk Schedule ({composeState.mediaItems.length})
-                  </button>
-                )}
-                {!isScheduling && (
-                  <button
-                    onClick={() => handleBulkSchedule(true)}
-                    disabled={composeState.mediaItems.length === 0 || isSaving}
-                    className="flex items-center gap-2 px-6 py-2 text-base font-medium text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50"
-                  >
-                    {isSaving ? <RefreshIcon className="animate-spin" /> : null}
-                    <SendIcon className="w-5 h-5" /> Publish All ({composeState.mediaItems.length})
-                  </button>
-                )}
-                <button
-                  onClick={() => setIsScheduling(prev => !prev)}
-                  className={`flex items-center gap-2 px-6 py-2 text-base font-medium text-white rounded-md transition-colors ${
-                    isScheduling ? 'bg-gray-500 hover:bg-gray-600' : 'bg-purple-600 hover:bg-purple-700'
-                  }`}
-                >
-                  <CalendarIcon className="w-5 h-5" />{' '}
-                  {isScheduling ? 'Cancel Schedule' : 'Schedule'}
-                </button>
-              </>
-            ) : (
-              <>
-                {/* Single post actions (legacy) */}
-                <button
-                  onClick={() => setIsPreviewOpen(true)}
-                  disabled={!hasContent}
-                  className="flex items-center gap-2 px-4 py-2 text-base font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
-                >
-                  <MobileIcon className="w-5 h-5" /> Preview
-                </button>
-                <button
-                  onClick={() => handleSaveToWorkflow('Draft')}
-                  disabled={!hasContent || isSaving}
-                  className="flex items-center gap-2 px-4 py-2 text-base font-medium text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
-                >
-                  {isSaving ? <RefreshIcon className="animate-spin" /> : null}
-                  Save Draft
-                </button>
-                {isAdminOrAgency && (
-                  <button
-                    onClick={() => handleSaveToWorkflow('In Review')}
-                    disabled={!hasContent || isSaving}
-                    className="flex items-center gap-2 px-4 py-2 text-base font-medium text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-900/20 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors disabled:opacity-50"
-                  >
-                    {isSaving ? <RefreshIcon className="animate-spin" /> : null}
-                    <ClipboardCheckIcon className="w-5 h-5" /> Submit for Review
-                  </button>
-                )}
-                {isAdminOrAgency && isScheduling && (
-                  <button
-                    onClick={() => {
-                      if (!scheduleDate) {
-                        showToast('Please select a date and time to schedule for review.', 'error');
-                        return;
-                      }
-                      handleScheduleForReview(scheduleDate);
-                    }}
-                    disabled={!hasContent || !scheduleDate || isSaving}
-                    className="flex items-center gap-2 px-4 py-2 text-base font-medium text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-900 bg-purple-50 dark:bg-purple-900/20 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors disabled:opacity-50"
-                  >
-                    {isSaving ? <RefreshIcon className="animate-spin" /> : null}
-                    <CalendarIcon className="w-5 h-5" /> Schedule for Review
-                  </button>
-                )}
-                <button
-                  onClick={() => setIsScheduling(prev => !prev)}
-                  className={`flex items-center gap-2 px-6 py-2 text-base font-medium text-white rounded-md transition-colors ${
-                    isScheduling ? 'bg-gray-500 hover:bg-gray-600' : 'bg-purple-600 hover:bg-purple-700'
-                  }`}
-                >
-                  <CalendarIcon className="w-5 h-5" />{' '}
-                  {isScheduling ? 'Cancel Schedule' : 'Schedule'}
-                </button>
-                {!isScheduling && (
-                  <button
-                    onClick={handlePublish}
-                    className="flex items-center gap-2 px-6 py-2 text-base font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
-                  >
-                    <SendIcon className="w-5 h-5" /> Publish Now
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

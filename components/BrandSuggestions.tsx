@@ -17,14 +17,17 @@ export const BrandSuggestions: React.FC = () => {
             // Attempt to derive a niche from bio or name, simple heuristic
             let potentialNiche = 'bio' in profile ? (profile as any).bio : profile.name;
             
-            // If we have posts, add some context from hashtags or content
+            // If we have posts, add some context from content (but NOT hashtags)
             if (posts.length > 0) {
-                 const recentTags = posts.slice(0, 5)
-                    .flatMap(p => p.content.match(/#\w+/g) || [])
-                    .slice(0, 3); // Take top 3 tags
+                 // Extract keywords from content without hashtags
+                 const recentContent = posts.slice(0, 5)
+                    .map(p => p.content.replace(/#\w+/g, '').trim())
+                    .filter(c => c.length > 0)
+                    .join(' ')
+                    .substring(0, 100);
                  
-                 if (recentTags.length > 0) {
-                     potentialNiche += ` ${recentTags.join(' ')}`;
+                 if (recentContent) {
+                     potentialNiche += ` ${recentContent}`;
                  }
             }
 

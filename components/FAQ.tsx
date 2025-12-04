@@ -6,24 +6,24 @@ const faqData = [
         answer: "Creator mode is tailored for personal brand building, focusing on metrics like follower growth and engagement. Business mode transforms the app into a marketing command center, focusing on ROI metrics like website clicks, leads, and sales. The AI tools, like the Autopilot/Marketing Manager, also adapt to offer you more relevant campaign ideas."
     },
     {
-        question: "What is the AI Marketing Manager for businesses?",
-        answer: "This is the business version of our Autopilot. Instead of generic content ideas, it provides strategic 'Campaign Ideas' like 'Promote a Weekly Special' or 'Highlight a Customer Review'. You can select an idea or type a custom goal, and the AI will generate a complete marketing campaign—from strategy to final posts—for your approval."
+        question: "What is Quick Post Automation?",
+        answer: "Quick Post Automation is our time-saving feature that lets you upload multiple images or videos at once. Simply select your platforms, set your goal and tone, and our AI will automatically analyze each piece of media, generate captions and hashtags, and schedule posts at optimal times. Perfect for busy creators and businesses who need to maintain a consistent social media presence."
     },
     {
         question: "How does the AI Content Strategist work?",
-        answer: "The Strategist takes your brand niche (for Creators) or business type (for Businesses) and your goals, and generates a comprehensive multi-week content plan. It suggests topics, formats (Reels, Posts), and themes for every day. You can then 'Populate Calendar' to turn this plan into draft posts in your schedule."
+        answer: "The AI Content Strategist takes your brand niche (for Creators) or business type (for Businesses) and your goals, then generates a comprehensive multi-week content roadmap. It suggests topics, formats (Reels, Posts), platforms, and provides specific image and video ideas for each post. You can upload media directly to roadmap items, and the AI will auto-generate captions and schedule posts to your calendar. The roadmap stays on the page until you create a new one or posts are used."
     },
     {
         question: "Can I replace Linktree with EngageSuite?",
         answer: "Yes! Our 'Smart Link-in-Bio' builder allows you to create a beautiful, branded mobile landing page. It also includes a built-in Email Capture form, letting you grow your newsletter list directly from Instagram or TikTok without needing a separate website."
     },
     {
-        question: "How does AI Image and Video generation work?",
-        answer: "You provide a text prompt describing what you want. For images, our AI generates unique visuals. For videos, we use the advanced Veo model to create high-quality clips. On premium plans, you can upload an 'AI Avatar' (a base image) so the AI generates new content featuring you or your product in a consistent style."
+        question: "What is the Media Library?",
+        answer: "The Media Library is your personal storage for images and videos. Upload media once and reuse it across multiple posts. When composing, you can select from your library instead of uploading new files each time. Media stays in your library until you delete it, making it easy to maintain a consistent brand aesthetic and save time."
     },
     {
-        question: "What is 'Bring Your Own Key' (BYOK)?",
-        answer: "For users on our highest tiers (Elite/Agency) who have very high generation needs, we offer a BYOK model. Once you consume your generous monthly AI credits, you can connect your own Google AI API key. All subsequent AI requests will be billed directly to your Google Cloud account at their standard rates, allowing for virtually unlimited generation at cost."
+        question: "How does the Calendar work?",
+        answer: "The Calendar shows all your scheduled posts in a beautiful monthly view. Click any scheduled post to see a preview with the image/video, caption, hashtags, and scheduled date/time. You can edit the date, time, and platforms directly from the preview, or delete posts if needed. Only posts that are fully ready (with media, captions, and scheduling details) appear on the calendar."
     },
     {
         question: "Is my data safe when connecting accounts?",

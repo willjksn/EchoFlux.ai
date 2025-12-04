@@ -7,6 +7,7 @@ import { auth, storage } from '../firebaseConfig';
 import * as storageFunctions from 'firebase/storage';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { getGeneratedContent } from '../src/services/geminiService';
+import { listAll, getMetadata, ref } from 'firebase/storage';
 
 const SettingsSection: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
@@ -16,7 +17,7 @@ const SettingsSection: React.FC<{ title: string; children: React.ReactNode }> = 
 );
 
 export const Profile: React.FC = () => {
-    const { user, setUser, setActivePage, selectedClient, clients, setClients, showToast } = useAppContext();
+    const { user, setUser, setActivePage, selectedClient, clients, setClients, showToast, openPaymentModal, setPricingView } = useAppContext();
     const [isEditing, setIsEditing] = useState(false);
     const [editableUser, setEditableUser] = useState<User | null>(user);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -54,14 +55,29 @@ export const Profile: React.FC = () => {
         setEditableUser(prev => prev ? ({ ...prev, [name]: value }) : null);
     };
 
-    const handleAvatarChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const handleAvatarChange = async (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                setEditableUser(prev => prev ? ({ ...prev, avatar: event.target?.result as string }) : null);
-            };
-            reader.readAsDataURL(file);
+        if (file && user) {
+            try {
+                // Upload to Firebase Storage
+                const timestamp = Date.now();
+                const extension = file.type.split('/')[1] || 'jpg';
+                const storagePath = `users/${user.id}/profile_avatar/${timestamp}.${extension}`;
+                const storageRef = ref(storage, storagePath);
+                
+                await storageFunctions.uploadBytes(storageRef, file, { contentType: file.type });
+                const downloadURL = await storageFunctions.getDownloadURL(storageRef);
+                
+                // Update user with Firebase URL (persists across sessions)
+                const updatedUser = { ...editableUser, avatar: downloadURL } as User;
+                setEditableUser(updatedUser);
+                setUser(updatedUser);
+                
+                showToast('Profile picture uploaded and saved!', 'success');
+            } catch (error) {
+                console.error('Failed to upload avatar:', error);
+                showToast('Failed to upload profile picture', 'error');
+            }
         }
     };
     
@@ -85,7 +101,63 @@ export const Profile: React.FC = () => {
         Starter: 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200',
     };
 
-    const storagePercentage = user.storageLimit > 0 ? (user.storageUsed / user.storageLimit) * 100 : 0;
+    const [storageUsage, setStorageUsage] = useState({ used: 0, total: Infinity });
+    const [isLoadingStorage, setIsLoadingStorage] = useState(true);
+
+    // Calculate actual storage usage from Firebase Storage
+    const calculateStorageUsage = async () => {
+        if (!user) return;
+        
+        setIsLoadingStorage(true);
+        try {
+            let totalBytes = 0;
+            
+            // Check all storage folders
+            const folders = ['uploads', 'media_library', 'automation', 'voices', 'profile_avatar', 'bio_avatar', 'roadmap'];
+            
+            for (const folder of folders) {
+                try {
+                    const folderRef = ref(storage, `users/${user.id}/${folder}`);
+                    const listResult = await listAll(folderRef);
+                    
+                    for (const itemRef of listResult.items) {
+                        try {
+                            const metadata = await getMetadata(itemRef);
+                            totalBytes += metadata.size || 0;
+                        } catch (err) {
+                            console.warn(`Failed to get metadata for ${itemRef.fullPath}:`, err);
+                        }
+                    }
+                } catch (err) {
+                    console.warn(`Failed to list ${folder}:`, err);
+                }
+            }
+            
+            const usedMB = totalBytes / (1024 * 1024); // Convert to MB
+            
+            // Determine storage limit based on plan
+            let limitMB = Infinity;
+            if (user.plan === 'Free') limitMB = 100;
+            else if (user.plan === 'Pro' || user.plan === 'Starter') limitMB = 1024; // 1 GB
+            else if (user.plan === 'Elite' || user.plan === 'Growth') limitMB = 10240; // 10 GB
+            else if (user.plan === 'Agency') limitMB = 51200; // 50 GB
+            
+            setStorageUsage({ used: usedMB, total: limitMB });
+        } catch (error) {
+            console.error('Failed to calculate storage usage:', error);
+            setStorageUsage({ used: 0, total: Infinity });
+        } finally {
+            setIsLoadingStorage(false);
+        }
+    };
+
+    useEffect(() => {
+        calculateStorageUsage();
+    }, [user?.id]);
+
+    const storagePercentage = storageUsage.total > 0 && storageUsage.total !== Infinity 
+        ? (storageUsage.used / storageUsage.total) * 100 
+        : 0;
 
     useEffect(() => {
         if (usageTab === 'ads' && canEdit) {
@@ -150,14 +222,15 @@ export const Profile: React.FC = () => {
                                         <span className={`px-3 py-1 text-xs font-semibold rounded-full ${planColorMap[user.plan]}`}>
                                             {user.plan}
                                         </span>
-                                        {user.plan !== 'Free' && (
-                                            <button 
-                                                onClick={() => setActivePage('pricing')}
-                                                className="text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 font-medium"
-                                            >
-                                                Manage
-                                            </button>
-                                        )}
+                                        <button 
+                                            onClick={() => {
+                                                setPricingView(user?.userType === 'Business' ? 'Business' : 'Creator');
+                                                setActivePage('pricing');
+                                            }}
+                                            className="text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 font-medium"
+                                        >
+                                            {user.plan === 'Free' ? 'Upgrade' : 'Manage Plan'}
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -180,19 +253,21 @@ export const Profile: React.FC = () => {
                                     <p className="text-sm text-gray-500 dark:text-gray-400">Storage</p>
                                     <div className="mt-1">
                                         <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
-                                            <span>{(user.storageUsed || 0).toFixed(1)}MB</span>
-                                            <span>{(user.storageLimit || 0)}MB</span>
+                                            <span>{isLoadingStorage ? 'Calculating...' : `${storageUsage.used.toFixed(2)} MB`}</span>
+                                            <span>{storageUsage.total === Infinity ? '∞' : `${storageUsage.total.toFixed(0)} MB`}</span>
                                         </div>
-                                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                                            <div 
-                                                className={`h-2 rounded-full transition-all ${
-                                                    storagePercentage > 90 ? 'bg-red-500' : 
-                                                    storagePercentage > 70 ? 'bg-amber-500' : 
-                                                    'bg-emerald-500'
-                                                }`}
-                                                style={{ width: `${Math.min(storagePercentage, 100)}%` }}
-                                            />
-                                        </div>
+                                        {!isLoadingStorage && storageUsage.total > 0 && storageUsage.total !== Infinity && (
+                                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                                <div 
+                                                    className={`h-2 rounded-full transition-all ${
+                                                        storagePercentage > 90 ? 'bg-red-500' : 
+                                                        storagePercentage > 70 ? 'bg-amber-500' : 
+                                                        'bg-emerald-500'
+                                                    }`}
+                                                    style={{ width: `${Math.min(storagePercentage, 100)}%` }}
+                                                />
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>

@@ -6,7 +6,7 @@ import { UpgradePrompt } from './UpgradePrompt';
 import { UploadIcon, TrashIcon, SettingsIcon, LinkIcon, SparklesIcon, CreditCardIcon, CheckCircleIcon, XMarkIcon, ClockIcon, VoiceIcon } from './icons/UIIcons';
 import { db, storage } from '../firebaseConfig';
 // @ts-ignore
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject, listAll, getMetadata } from 'firebase/storage';
 import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { connectSocialAccount, disconnectSocialAccount } from '../src/services/socialMediaService';
 
@@ -134,6 +134,8 @@ export const Settings: React.FC = () => {
     const [connectingPlatform, setConnectingPlatform] = useState<Platform | null>(null);
     const [showCancelModal, setShowCancelModal] = useState(false);
     const [isCancelling, setIsCancelling] = useState(false);
+    const [storageUsage, setStorageUsage] = useState<{ used: number; total: number }>({ used: 0, total: 100 });
+    const [isLoadingStorage, setIsLoadingStorage] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const voiceFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -352,6 +354,70 @@ export const Settings: React.FC = () => {
             }
         }
     }
+
+    // Calculate storage usage
+    useEffect(() => {
+        if (!user) return;
+        
+        const calculateStorageUsage = async () => {
+            setIsLoadingStorage(true);
+            try {
+                let totalSize = 0;
+                
+                // List all files in user's storage folders
+                const folders = ['uploads', 'media_library', 'automation', 'voices'];
+                
+                for (const folder of folders) {
+                    try {
+                        const folderRef = ref(storage, `users/${user.id}/${folder}`);
+                        const result = await listAll(folderRef);
+                        
+                        // Get metadata for each file to get size
+                        const metadataPromises = result.items.map(async (itemRef) => {
+                            try {
+                                const metadata = await getMetadata(itemRef);
+                                return metadata.size || 0;
+                            } catch (error) {
+                                console.warn(`Failed to get metadata for ${itemRef.fullPath}:`, error);
+                                return 0;
+                            }
+                        });
+                        
+                        const sizes = await Promise.all(metadataPromises);
+                        totalSize += sizes.reduce((sum, size) => sum + size, 0);
+                    } catch (error) {
+                        console.warn(`Failed to list files in ${folder}:`, error);
+                    }
+                }
+                
+                // Convert bytes to MB
+                const usedMB = totalSize / (1024 * 1024);
+                
+                // Set storage limits based on plan (in MB)
+                const storageLimits: Record<string, number> = {
+                    'Free': 100,
+                    'Pro': 1024, // 1 GB
+                    'Elite': 2048, // 2 GB
+                    'Starter': 1024, // 1 GB
+                    'Growth': 3072, // 3 GB
+                    'Agency': 5120, // 5 GB
+                };
+                
+                const totalMB = storageLimits[user.plan || 'Free'] || 100;
+                
+                setStorageUsage({
+                    used: usedMB,
+                    total: totalMB === Infinity ? usedMB * 2 : totalMB, // Show 2x used if unlimited
+                });
+            } catch (error) {
+                console.error('Failed to calculate storage usage:', error);
+            } finally {
+                setIsLoadingStorage(false);
+            }
+        };
+        
+        calculateStorageUsage();
+    }, [user?.id, user?.plan]);
 
     const handleSwitchToBusiness = async () => {
         if(user && user.userType === 'Creator') {
@@ -714,6 +780,11 @@ export const Settings: React.FC = () => {
                         </SettingsSection>
 
                         <SettingsSection title="Voice Clones" id="voice-clones">
+                            <div className="mb-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                                <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                                    ⏳ Coming Soon: Voice cloning feature is currently under development. Check back soon!
+                                </p>
+                            </div>
                             {!isVoiceFeatureUnlocked ? (
                                 <UpgradePrompt 
                                     featureName="Voice Cloning" 
@@ -881,6 +952,28 @@ export const Settings: React.FC = () => {
                                  <div className="flex justify-between text-sm text-gray-700 dark:text-gray-300">
                                      <span>Video Generations</span>
                                      <span className="font-mono">{user.monthlyVideoGenerationsUsed} used</span>
+                                 </div>
+                                 <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                                     <div className="flex justify-between text-sm text-gray-700 dark:text-gray-300 mb-2">
+                                         <span>Storage Usage</span>
+                                         <span className="font-mono">
+                                             {isLoadingStorage ? 'Calculating...' : `${storageUsage.used.toFixed(2)} MB / ${storageUsage.total === Infinity ? '∞' : `${storageUsage.total.toFixed(0)} MB`}`}
+                                         </span>
+                                     </div>
+                                     {!isLoadingStorage && storageUsage.total > 0 && (
+                                         <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                             <div 
+                                                 className={`h-2 rounded-full transition-all ${
+                                                     storageUsage.total === Infinity ? 'bg-primary-600' :
+                                                     (storageUsage.used / storageUsage.total) > 0.9 ? 'bg-red-500' :
+                                                     (storageUsage.used / storageUsage.total) > 0.7 ? 'bg-yellow-500' : 'bg-primary-600'
+                                                 }`}
+                                                 style={{ 
+                                                     width: `${storageUsage.total === Infinity ? 50 : Math.min((storageUsage.used / storageUsage.total) * 100, 100)}%` 
+                                                 }}
+                                             ></div>
+                                         </div>
+                                     )}
                                  </div>
                              </div>
                          </div>

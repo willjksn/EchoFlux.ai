@@ -57,6 +57,15 @@ export const Automation: React.FC = () => {
   const [processingIndex, setProcessingIndex] = useState<number | null>(null);
   const [goal, setGoal] = useState('engagement');
   const [tone, setTone] = useState('friendly');
+  const [selectedPlatforms, setSelectedPlatforms] = useState<Record<Platform, boolean>>({
+    Instagram: true,
+    TikTok: false,
+    X: false,
+    Threads: false,
+    YouTube: false,
+    LinkedIn: false,
+    Facebook: false,
+  });
   
   // Filter options for Business Starter/Growth plans
   const isBusiness = user?.userType === 'Business';
@@ -75,18 +84,29 @@ export const Automation: React.FC = () => {
       return;
     }
 
+    let mounted = true;
+
     const loadPersistedFiles = async () => {
       try {
         const automationRef = collection(db, 'users', user.id, 'automation_files');
         const q = query(automationRef, where('status', 'in', ['pending', 'error']));
         const snapshot = await getDocs(q);
         
+        if (!mounted) return;
+        
         const persisted: ProcessedMedia[] = [];
         snapshot.forEach((doc) => {
           const data = doc.data();
+          const previewUrl = data.mediaUrl || data.previewUrl;
+          
+          // Skip items with blob URLs - they're invalid and won't work after reload
+          if (previewUrl && (previewUrl.startsWith('blob:') || previewUrl.startsWith('data:'))) {
+            return; // Skip this item
+          }
+          
           persisted.push({
             id: doc.id,
-            previewUrl: data.mediaUrl || data.previewUrl,
+            previewUrl: previewUrl || '',
             caption: data.caption || '',
             hashtags: data.hashtags || [],
             platforms: data.platforms || [],
@@ -101,16 +121,27 @@ export const Automation: React.FC = () => {
           });
         });
         
-        setUploadedFiles(persisted);
+        if (mounted) {
+          setUploadedFiles(persisted);
+        }
       } catch (error) {
         console.error('Failed to load persisted files:', error);
+        if (mounted) {
+          showToast('Failed to load saved files', 'error');
+        }
       } finally {
-        setIsLoading(false);
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
     };
 
     loadPersistedFiles();
-  }, [user]);
+
+    return () => {
+      mounted = false;
+    };
+  }, [user?.id]);
 
   // Save files to Firestore when they change
   useEffect(() => {
@@ -173,25 +204,52 @@ export const Automation: React.FC = () => {
 
   if (!user) return null;
 
-  const handleFileSelect = (files: FileList | null) => {
-    if (!files || files.length === 0) return;
+  const handleFileSelect = useCallback(async (files: FileList | null) => {
+    if (!files || files.length === 0 || !user) return;
 
-    const newFiles: ProcessedMedia[] = Array.from(files).map(file => ({
-      file,
-      previewUrl: URL.createObjectURL(file),
-      caption: '',
-      hashtags: [],
-      platforms: [],
-      goal: goal,
-      tone: tone,
-      status: 'pending',
-      fileName: file.name,
-      fileSize: file.size,
-      mimeType: file.type,
-    }));
+    setIsProcessing(true);
+    try {
+      const uploadPromises = Array.from(files).map(async (file) => {
+        // Create temporary preview URL
+        const tempPreviewUrl = URL.createObjectURL(file);
+        
+        // Upload to Firebase Storage immediately
+        const timestamp = Date.now();
+        const extension = file.type.split('/')[1] || (file.type.startsWith('image') ? 'jpg' : 'mp4');
+        const storagePath = `users/${user.id}/automation/${timestamp}.${extension}`;
+        const storageRef = ref(storage, storagePath);
 
-    setUploadedFiles(prev => [...prev, ...newFiles]);
-  };
+        await uploadBytes(storageRef, file, { contentType: file.type });
+        const firebaseUrl = await getDownloadURL(storageRef);
+        
+        // Revoke temporary blob URL
+        URL.revokeObjectURL(tempPreviewUrl);
+
+        return {
+          file,
+          previewUrl: firebaseUrl, // Use Firebase URL instead of blob URL
+          caption: '',
+          hashtags: [],
+          platforms: [],
+          goal: goal,
+          tone: tone,
+          status: 'pending',
+          fileName: file.name,
+          fileSize: file.size,
+          mimeType: file.type,
+          mediaUrl: firebaseUrl, // Store Firebase URL for later use
+        } as ProcessedMedia;
+      });
+
+      const newFiles = await Promise.all(uploadPromises);
+      setUploadedFiles(prev => [...prev, ...newFiles]);
+    } catch (error) {
+      console.error('Failed to upload files:', error);
+      showToast('Failed to upload files. Please try again.', 'error');
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [user, goal, tone, showToast]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -202,7 +260,7 @@ export const Automation: React.FC = () => {
     e.preventDefault();
     e.stopPropagation();
     handleFileSelect(e.dataTransfer.files);
-  }, [goal, tone]);
+  }, [handleFileSelect]);
 
   const analyzeMedia = async (media: ProcessedMedia): Promise<Partial<ProcessedMedia>> => {
     try {
@@ -247,10 +305,15 @@ export const Automation: React.FC = () => {
 
       const analysis = await response.json();
       
+      // Use selected platforms if any are selected, otherwise use AI recommendations
+      const platformsToUse = Object.keys(selectedPlatforms).some(p => selectedPlatforms[p as Platform]) 
+        ? (Object.keys(selectedPlatforms).filter(p => selectedPlatforms[p as Platform]) as Platform[])
+        : (analysis.platforms || ['Instagram']) as Platform[];
+      
       return {
         caption: analysis.caption || '',
         hashtags: analysis.hashtags || [],
-        platforms: (analysis.platforms || ['Instagram']) as Platform[],
+        platforms: platformsToUse,
         goal: analysis.goal || media.goal,
         tone: analysis.tone || media.tone,
         mediaUrl,
@@ -443,6 +506,27 @@ export const Automation: React.FC = () => {
               </select>
             </div>
           </div>
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Platforms to Post To
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {(Object.keys(platformIcons) as Platform[]).map((platform) => (
+                <button
+                  key={platform}
+                  onClick={() => setSelectedPlatforms(prev => ({ ...prev, [platform]: !prev[platform] }))}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition-colors ${
+                    selectedPlatforms[platform]
+                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                      : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+                  }`}
+                >
+                  <span className="w-4 h-4">{platformIcons[platform]}</span>
+                  <span className="text-sm font-medium">{platform}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Upload Area */}
@@ -506,12 +590,15 @@ export const Automation: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {uploadedFiles.map((media, index) => (
+                {uploadedFiles.map((media, index) => {
+                  const isVideo = media.mimeType?.startsWith('video/') || (media.file && media.file.type.startsWith('video/'));
+                  const fileName = media.fileName || media.file?.name || `Media ${index + 1}`;
+                  return (
                   <div
-                    key={index}
+                    key={media.id || index}
                     className="relative border rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-700"
                   >
-                    {media.file.type.startsWith('video/') ? (
+                    {isVideo ? (
                       <video
                         src={media.previewUrl}
                         className="w-full h-32 object-cover"
@@ -527,7 +614,7 @@ export const Automation: React.FC = () => {
                     <div className="p-2">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">
-                          {media.file.name}
+                          {fileName}
                         </span>
                         {media.status === 'analyzing' && (
                           <RefreshIcon className="w-4 h-4 animate-spin text-primary-600" />
@@ -551,7 +638,8 @@ export const Automation: React.FC = () => {
                       )}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -579,14 +667,16 @@ export const Automation: React.FC = () => {
                 </p>
 
                 <div className="space-y-4">
-                  {scheduledPosts.map(({ media, post, event }, index) => (
+                  {scheduledPosts.map(({ media, post, event }, index) => {
+                    const isVideo = media.mimeType?.startsWith('video/') || (media.file && media.file.type.startsWith('video/'));
+                    return (
                     <div
                       key={index}
                       className="border rounded-lg p-4 bg-gray-50 dark:bg-gray-700"
                     >
                       <div className="flex gap-4">
                         <div className="w-24 h-24 flex-shrink-0">
-                          {media.file.type.startsWith('video/') ? (
+                          {isVideo ? (
                             <video
                               src={media.previewUrl}
                               className="w-full h-full object-cover rounded"
@@ -623,7 +713,8 @@ export const Automation: React.FC = () => {
                         </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <div className="mt-6 flex justify-end">

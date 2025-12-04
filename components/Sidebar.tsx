@@ -48,7 +48,6 @@ export const Sidebar: React.FC = () => {
     { page: 'compose', icon: <ComposeIcon />, label: 'Compose', tourId: 'tour-step-3-compose-nav' },
     { page: 'mediaLibrary', icon: <ImageIcon />, label: 'Media Library' },
     { page: 'automation', icon: <AutomationIcon />, label: 'Automation' },
-    { page: 'autopilot', icon: <RocketIcon />, label: autopilotLabel, tourId: 'tour-step-autopilot-nav' },
     { page: 'strategy', icon: <TargetIcon />, label: 'Strategy' },
     { page: 'ads', icon: <SparklesIcon />, label: 'Ad Generator' },
     { page: 'opportunities', icon: <TrendingIcon />, label: 'Opportunities', tourId: 'tour-step-opportunities-nav' },
@@ -85,14 +84,6 @@ export const Sidebar: React.FC = () => {
               // NOT available on Free plan
               const userPlan = user.plan || 'Free';
               return userPlan !== 'Free' && ['Pro', 'Elite', 'Growth', 'Starter', 'Agency'].includes(userPlan);
-          case 'autopilot':
-              // Marketing Manager for Business: All Business plans (Starter, Growth, Agency)
-              // AI Autopilot for Creators: Pro and Elite plans
-              if (user.userType === 'Business') {
-                  return ['Starter', 'Growth', 'Agency'].includes(user.plan);
-              }
-              // Creator users: Pro, Elite (and Agency for creators if they have it)
-              return ['Pro', 'Elite', 'Agency'].includes(user.plan);
           case 'approvals':
               return ['Elite', 'Agency'].includes(user.plan);
           case 'team':

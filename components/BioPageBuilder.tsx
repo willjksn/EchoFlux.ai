@@ -3,6 +3,8 @@ import React, { useState, useRef } from 'react';
 import { useAppContext } from './AppContext';
 import { BioLink } from '../types';
 import { TrashIcon, PlusIcon, UploadIcon, LinkIcon, CheckCircleIcon, MailIcon, CameraIcon, UserIcon } from './icons/UIIcons';
+import { storage } from '../firebaseConfig';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const BioPreview: React.FC<{ config: any }> = ({ config }) => {
     return (
@@ -96,16 +98,30 @@ export const BioPageBuilder: React.FC = () => {
         setBioPage({ ...bioPage, links: bioPage.links.filter(l => l.id !== id) });
     };
 
-    const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                if (event.target?.result) {
-                    setBioPage({ ...bioPage, avatar: event.target.result as string });
-                }
-            };
-            reader.readAsDataURL(file);
+        if (file && user) {
+            try {
+                // Upload to Firebase Storage
+                const timestamp = Date.now();
+                const extension = file.type.split('/')[1] || 'jpg';
+                const storagePath = `users/${user.id}/bio_avatar/${timestamp}.${extension}`;
+                const storageRef = ref(storage, storagePath);
+                
+                await uploadBytes(storageRef, file, { contentType: file.type });
+                const downloadURL = await getDownloadURL(storageRef);
+                
+                // Update bio page with Firebase URL (persists across sessions)
+                const updatedBioPage = { ...bioPage, avatar: downloadURL };
+                setBioPage(updatedBioPage);
+                
+                // Auto-save to Firestore
+                await saveBioPage(updatedBioPage);
+                showToast('Profile picture uploaded and saved!', 'success');
+            } catch (error) {
+                console.error('Failed to upload avatar:', error);
+                showToast('Failed to upload profile picture', 'error');
+            }
         }
     };
 

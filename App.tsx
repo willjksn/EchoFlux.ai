@@ -24,7 +24,6 @@ import { Terms } from './components/Terms';
 import { Privacy } from './components/Privacy';
 import { AdminDashboard } from './components/AdminDashboard';
 import Automation from './components/Automation';
-import Autopilot from './components/Autopilot';
 import { Calendar } from './components/Calendar';
 import MediaLibrary from './components/MediaLibrary';
 import { Approvals } from './components/Approvals';
@@ -47,6 +46,7 @@ import { BioPageBuilder } from './components/BioPageBuilder';
 import { Strategy } from './components/Strategy';
 import { AdGenerator } from './components/AdGenerator';
 import { VoiceAssistant } from './components/VoiceAssistant';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 const pageTitles: Record<Page, string> = {
     dashboard: 'Dashboard',
@@ -67,7 +67,6 @@ const pageTitles: Record<Page, string> = {
     privacy: 'Privacy Policy',
     admin: 'Admin Dashboard',
     automation: 'Automation',
-    autopilot: 'AI Autopilot',
     bio: 'Link in Bio Builder',
     strategy: 'AI Content Strategist',
     ads: 'AI Ad Generator',
@@ -75,37 +74,55 @@ const pageTitles: Record<Page, string> = {
 };
 
 const MainContent: React.FC = () => {
-    const { user, activePage } = useAppContext();
+    try {
+        const { user, activePage } = useAppContext();
 
-    switch (activePage) {
-        case 'dashboard': return <Dashboard />;
-        case 'analytics': return <Analytics />;
-        case 'settings': return <Settings />;
-        case 'compose': return <Compose />;
-        case 'calendar': return <Calendar />;
-        case 'approvals': return <Approvals />;
-        case 'team': return <Team />;
-        case 'opportunities': return <Opportunities />;
-        case 'profile': return <Profile />;
-        case 'about': return <About />;
-        case 'contact': return <Contact />;
-        case 'pricing': return <Pricing />;
-        case 'clients': return <Clients />;
-        case 'faq': return <FAQ />;
-        case 'terms': return <Terms />;
-        case 'privacy': return <Privacy />;
-        case 'admin': return user?.role === 'Admin' ? <AdminDashboard /> : <Dashboard />;
-        case 'automation': return <Automation />;
-        case 'autopilot': return <Autopilot />;
-        case 'bio': return <BioPageBuilder />;
-        case 'strategy': return <Strategy />;
-        case 'ads': return <AdGenerator />;
-        case 'mediaLibrary': return <MediaLibrary />;
-        default: return <Dashboard />;
+        switch (activePage) {
+            case 'dashboard': return <Dashboard />;
+            case 'analytics': return <Analytics />;
+            case 'settings': return <Settings />;
+            case 'compose': return <Compose />;
+            case 'calendar': return <Calendar />;
+            case 'approvals': return <Approvals />;
+            case 'team': return <Team />;
+            case 'opportunities': return <Opportunities />;
+            case 'profile': return <Profile />;
+            case 'about': return <About />;
+            case 'contact': return <Contact />;
+            case 'pricing': return <Pricing />;
+            case 'clients': return <Clients />;
+            case 'faq': return <FAQ />;
+            case 'terms': return <Terms />;
+            case 'privacy': return <Privacy />;
+            case 'admin': return user?.role === 'Admin' ? <AdminDashboard /> : <Dashboard />;
+            case 'automation': return <Automation />;
+            case 'bio': return <BioPageBuilder />;
+            case 'strategy': return <Strategy />;
+            case 'ads': return <AdGenerator />;
+            case 'mediaLibrary': return <MediaLibrary />;
+            default: return <Dashboard />;
+        }
+    } catch (error: any) {
+        console.error('Error rendering MainContent:', error);
+        return (
+            <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full flex items-center justify-center">
+                <div className="text-center">
+                    <p className="text-red-600 dark:text-red-400 mb-2">An error occurred loading the page.</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-2">{error?.message || 'Unknown error'}</p>
+                    <button 
+                        onClick={() => window.location.reload()} 
+                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+                    >
+                        Reload Page
+                    </button>
+                </div>
+            </div>
+        );
     }
 }
 
 const AppContent: React.FC = () => {
+    // Hooks must be called unconditionally at the top level
     const { isAuthenticated, isAuthLoading, user, setUser, activePage, setActivePage, startTour, isTourActive, toast, isCRMOpen, setPricingView } = useAppContext();
     
     const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
@@ -156,6 +173,11 @@ const AppContent: React.FC = () => {
         }
     }
 
+    // Debug logging
+    if (process.env.NODE_ENV === 'development') {
+        console.log('AppContent render:', { isAuthLoading, isAuthenticated, hasUser: !!user, activePage });
+    }
+
     if (isAuthLoading) {
         return <div className="h-screen w-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900"><p className="text-gray-500 dark:text-gray-400">Loading...</p></div>;
     }
@@ -171,6 +193,30 @@ const AppContent: React.FC = () => {
     
     const pageTitle = pageTitles[activePage] || 'Dashboard';
     
+    // Show loading state if user is not yet loaded (but authenticated)
+    if (!user && isAuthenticated) {
+        console.warn('User is authenticated but user object is null - waiting for user data...');
+        return <div className="h-screen w-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900"><p className="text-gray-500 dark:text-gray-400">Loading user data...</p></div>;
+    }
+
+    // Safety check - if user is still null after being authenticated, show error
+    if (!user) {
+        console.error('User is null but authenticated - this should not happen');
+        return (
+            <div className="h-screen w-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+                <div className="text-center">
+                    <p className="text-red-600 dark:text-red-400 mb-2">Failed to load user data.</p>
+                    <button 
+                        onClick={() => window.location.reload()} 
+                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+                    >
+                        Reload Page
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="flex h-screen bg-gray-100 dark:bg-gray-900 font-sans w-full overflow-x-hidden">
             {onboardingStep === 'selector' && <OnboardingSelector onSelect={handleUserTypeSelected} />}
@@ -196,13 +242,15 @@ const AppContent: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <AuthProvider>
-        <UIProvider>
-            <DataProvider>
-                <AppContent />
-            </DataProvider>
-        </UIProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+          <UIProvider>
+              <DataProvider>
+                  <AppContent />
+              </DataProvider>
+          </UIProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 };
 

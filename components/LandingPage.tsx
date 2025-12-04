@@ -1,5 +1,5 @@
 import React from 'react';
-import { LogoIcon, SparklesIcon, TeamIcon, AutomationIcon, ChatIcon, AnalyticsIcon, CalendarIcon, ListeningIcon, RefreshIcon, GlobeIcon, UserIcon, TargetIcon, DashboardIcon, FilmIcon, MicrophoneWaveIcon, RocketIcon, BriefcaseIcon } from './icons/UIIcons';
+import { LogoIcon, SparklesIcon, TeamIcon, AutomationIcon, ChatIcon, AnalyticsIcon, CalendarIcon, ListeningIcon, RefreshIcon, GlobeIcon, UserIcon, TargetIcon, DashboardIcon, FilmIcon, MicrophoneWaveIcon, RocketIcon, BriefcaseIcon, TrendingIcon, ImageIcon } from './icons/UIIcons';
 import { InstagramIcon, TikTokIcon, XIcon, FacebookIcon } from './icons/PlatformIcons';
 import { Pricing } from './Pricing';
 import { Page } from '../types';
@@ -138,7 +138,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNaviga
                           <span className="flex h-2 w-2 items-center justify-center">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
                           </span>
-                          Autopilot Campaign · Active
+                          Automation · Active
                         </span>
                         <span>Next 14 days</span>
                       </div>
@@ -171,12 +171,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNaviga
                         <div className="rounded-xl bg-white/5 p-3 text-xs text-gray-200">
                           <div className="flex items-center justify-between">
                             <span className="font-medium">This week&apos;s focus</span>
-                            <span className="text-[0.7rem] text-primary-100">Autopilot · Creator</span>
+                            <span className="text-[0.7rem] text-primary-100">Strategy · Creator</span>
                           </div>
                           <ul className="mt-2 space-y-1 text-[0.7rem] text-gray-300">
-                            <li>• 5 TikToks, 4 Reels, 3 LinkedIn posts auto-drafted</li>
-                            <li>• Link-in-bio updated with latest offer</li>
-                            <li>• Warm leads tagged in Social CRM</li>
+                            <li>• AI-generated content roadmap with image/video ideas</li>
+                            <li>• Quick Post Automation scheduled 12 posts</li>
+                            <li>• Media Library with reusable assets</li>
+                            <li>• Analytics insights driving content decisions</li>
                           </ul>
                         </div>
 
@@ -250,8 +251,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNaviga
                 </div>
                 <div className="mt-12">
                     <dl className="space-y-10 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-x-8 md:gap-y-10">
-                        <Feature icon={<RocketIcon />} title="AI Autopilot">
-                           Define a goal, and Autopilot will generate a full content strategy, create all posts, and queue them for your final approval.
+                        <Feature icon={<AutomationIcon />} title="Quick Post Automation">
+                           Upload multiple images or videos, select your platforms, and let AI automatically create captions, hashtags, and schedule posts at optimal times. Perfect for busy creators and businesses.
                         </Feature>
                         <Feature icon={<MicrophoneWaveIcon />} title="AI Voice Assistant">
                            Plan, guide, and run your social media hands-free. Talk to your AI strategist in real-time to discover trends and draft content instantly.
@@ -260,7 +261,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNaviga
                            Direct multi-scene short films. Our AI creates storyboards and generates sequential clips, maintaining character consistency with your Avatar.
                         </Feature>
                          <Feature icon={<TargetIcon />} title="AI Content Strategist">
-                           Generate multi-week content roadmaps tailored to your niche and goals, then sync them to your calendar instantly.
+                           Generate multi-week content roadmaps with image and video ideas tailored to your niche and goals. Upload media directly to roadmap items and auto-schedule posts to your calendar.
                         </Feature>
                         <Feature icon={<GlobeIcon />} title="Smart Link-in-Bio">
                            Build a beautiful bio page that captures emails and syncs with your latest content automatically.
@@ -272,7 +273,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNaviga
                            Generate images, stunning videos (Veo), and captions in seconds. Clone your voice for audio.
                         </Feature>
                         <Feature icon={<CalendarIcon />} title="Visual Content Calendar">
-                           Visualize your strategy. Drag-and-drop drafts and see scheduled automations in a monthly view.
+                           Visualize your strategy with a beautiful calendar view. Click any scheduled post to preview, edit date/time/platforms, or delete. See all your scheduled content in one place.
                         </Feature>
                         <Feature icon={<ListeningIcon />} title="Social Listening">
                            Track mentions of your brand or competitors across the web. Never miss a conversation.
@@ -283,8 +284,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNaviga
                         <Feature icon={<ChatIcon />} title="AI-Powered Inbox">
                            Manage every DM and comment in one smart feed. Our AI drafts replies in your unique voice.
                         </Feature>
-                        <Feature icon={<AutomationIcon />} title="Automated Workflows">
-                           Set it and forget it. Schedule recurring content generation and posting.
+                        <Feature icon={<AnalyticsIcon />} title="AI-Powered Analytics">
+                           Get insights on what's working, trending topics, competitor analysis, and social listening to optimize your strategy.
+                        </Feature>
+                        <Feature icon={<ImageIcon />} title="Media Library">
+                           Upload and organize images and videos in your personal media library. Reuse assets across posts, select from library when composing, and keep your content organized.
                         </Feature>
                     </dl>
                 </div>

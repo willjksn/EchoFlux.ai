@@ -122,10 +122,13 @@ export const Analytics: React.FC = () => {
         setReportContent(""); // Clear previous report
         try {
             const report = await generateAnalyticsReport(analyticsData);
-            // Handle both string and object formats
-            if (typeof report === 'string') {
-                setReportContent(report);
-            } else if (report && typeof report === 'object') {
+            
+            // Handle new format: { report: "formatted text" }
+            if (report && typeof report === 'object' && report.report && typeof report.report === 'string') {
+                setReportContent(report.report);
+            }
+            // Handle legacy JSON format (fallback)
+            else if (report && typeof report === 'object') {
                 // Format the report object into a readable string
                 let formattedReport = '';
                 if (report.summary) {
@@ -143,8 +146,13 @@ export const Analytics: React.FC = () => {
                 if (report.error || report.note) {
                     formattedReport = `Error: ${report.error || report.note}`;
                 }
-                setReportContent(formattedReport || JSON.stringify(report, null, 2));
-            } else {
+                setReportContent(formattedReport || "Sorry, there was an error generating the report. Please try again.");
+            } 
+            // Handle string format (legacy)
+            else if (typeof report === 'string') {
+                setReportContent(report);
+            } 
+            else {
                 setReportContent("Sorry, there was an error generating the report. Please try again.");
             }
         } catch (error: any) {

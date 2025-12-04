@@ -476,6 +476,8 @@ export interface DayPlan {
     mediaType?: 'image' | 'video'; // Type of uploaded media
     status?: 'draft' | 'ready' | 'scheduled' | 'posted'; // Status tracking
     linkedPostId?: string; // Links to actual Post when created
+    caption?: string; // Caption for the post
+    suggestedMediaType?: 'image' | 'video'; // Suggested type of media to upload
 }
 
 export interface WeekPlan {

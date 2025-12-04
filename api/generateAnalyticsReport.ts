@@ -58,18 +58,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const prompt = `
 You are an expert social media analyst.
 
-Generate an analytics report based on the following JSON metrics:
+Generate a comprehensive, well-formatted analytics report based on the following JSON metrics:
 
 ${JSON.stringify(analytics, null, 2)}
 
-Return ONLY valid JSON:
+Write a professional report in plain text format (NOT JSON). Structure it as follows:
 
-{
-  "summary": "string",
-  "growthInsights": ["string", "string"],
-  "recommendedActions": ["string", "string", "string"],
-  "riskFactors": ["string"]
-}
+1. **Executive Summary**
+   - Provide a 2-3 sentence overview of the key findings
+
+2. **Growth Insights**
+   - List 3-5 key insights about growth trends, engagement patterns, and performance metrics
+   - Use bullet points for clarity
+
+3. **Recommended Actions**
+   - Provide 3-5 actionable recommendations based on the data
+   - Be specific and practical
+
+4. **Risk Factors**
+   - Identify any concerning trends or potential issues
+   - If none, state that performance looks healthy
+
+Use clear headings, bullet points, and professional language. Do NOT return JSON - return formatted text that is ready to display to the user.
 `;
 
     const result = await model.generateContent({
@@ -83,20 +93,10 @@ Return ONLY valid JSON:
 
     const output = result.response.text().trim();
 
-    let parsed;
-    try {
-      parsed = JSON.parse(output);
-    } catch (err) {
-      console.warn("JSON parse failed, returning raw text fallback");
-      parsed = {
-        summary: output,
-        growthInsights: [],
-        recommendedActions: [],
-        riskFactors: [],
-      };
-    }
-
-    return res.status(200).json(parsed);
+    // Return the formatted text directly, not JSON
+    return res.status(200).json({
+      report: output,
+    });
   } catch (err: any) {
     console.error("generateAnalyticsReport error:", err);
     console.error("Error stack:", err?.stack);

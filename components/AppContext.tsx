@@ -11,6 +11,7 @@ import { useData } from './contexts/DataContext';
  * to use the monolithic useAppContext hook.
  */
 export const useAppContext = (): AppContextType => {
+    // Hooks must be called unconditionally - cannot wrap in try-catch
     const auth = useAuth();
     const ui = useUI();
     const data = useData();

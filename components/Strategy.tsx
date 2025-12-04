@@ -1,15 +1,17 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from './AppContext';
-import { StrategyPlan, Platform, WeekPlan, DayPlan, Post, CalendarEvent } from '../types';
-import { generateContentStrategy, saveStrategy, getStrategies, updateStrategyStatus } from "../src/services/geminiService"
-import { TargetIcon, SparklesIcon, CalendarIcon, CheckCircleIcon, RocketIcon, DownloadIcon, TrashIcon, ClockIcon, UploadIcon } from './icons/UIIcons';
+import { StrategyPlan, Platform, WeekPlan, DayPlan, Post, CalendarEvent, MediaLibraryItem } from '../types';
+import { generateContentStrategy, saveStrategy, getStrategies, updateStrategyStatus, analyzeMediaForPost, generateCaptions } from "../src/services/geminiService"
+import { getAnalytics } from "../src/services/geminiService"
+import { AnalyticsData } from '../types'
+import { TargetIcon, SparklesIcon, CalendarIcon, CheckCircleIcon, RocketIcon, DownloadIcon, TrashIcon, ClockIcon, UploadIcon, ImageIcon, XMarkIcon } from './icons/UIIcons';
 import { InstagramIcon, TikTokIcon, XIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
 import { UpgradePrompt } from './UpgradePrompt';
 import { storage } from '../firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db } from '../firebaseConfig';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
 
 const platformIcons: Record<Platform, React.ReactElement> = {
     Instagram: <InstagramIcon className="w-4 h-4" />,
@@ -27,8 +29,6 @@ export const Strategy: React.FC = () => {
         showToast, 
         setActivePage, 
         user, 
-        addAutopilotCampaign, 
-        updateAutopilotCampaign,
         settings 
     } = useAppContext();
     const [niche, setNiche] = useState('');
@@ -55,6 +55,10 @@ export const Strategy: React.FC = () => {
     const [showSaveModal, setShowSaveModal] = useState(false);
     const [selectedStrategy, setSelectedStrategy] = useState<any | null>(null);
     const [uploadingMedia, setUploadingMedia] = useState<{ weekIndex: number; dayIndex: number } | null>(null);
+    const [showMediaLibrary, setShowMediaLibrary] = useState<{ weekIndex: number; dayIndex: number } | null>(null);
+    const [mediaLibraryItems, setMediaLibraryItems] = useState<MediaLibraryItem[]>([]);
+    const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
+    const [generatingCaption, setGeneratingCaption] = useState<{ weekIndex: number; dayIndex: number } | null>(null);
     const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
 
     // Helper function to convert file to base64
@@ -86,7 +90,42 @@ export const Strategy: React.FC = () => {
     useEffect(() => {
         loadStrategies();
         loadActiveRoadmap();
+        loadMediaLibrary();
+        loadAnalytics();
     }, [user?.id]);
+
+    const loadAnalytics = async () => {
+        try {
+            const data = await getAnalytics('30d', 'All');
+            if (data && typeof data === 'object' && Array.isArray(data.responseRate)) {
+                setAnalyticsData(data as AnalyticsData);
+            }
+        } catch (error) {
+            console.error('Failed to load analytics:', error);
+            // Continue without analytics data
+        }
+    };
+
+    const loadMediaLibrary = async () => {
+        if (!user) return;
+        try {
+            const mediaRef = collection(db, 'users', user.id, 'media_library');
+            const q = query(mediaRef, orderBy('uploadedAt', 'desc'));
+            const snapshot = await getDocs(q);
+            
+            const items: MediaLibraryItem[] = [];
+            snapshot.forEach((doc) => {
+                items.push({
+                    id: doc.id,
+                    ...doc.data(),
+                } as MediaLibraryItem);
+            });
+            
+            setMediaLibraryItems(items);
+        } catch (error) {
+            console.error('Failed to load media library:', error);
+        }
+    };
 
     const loadStrategies = async () => {
         try {
@@ -148,7 +187,18 @@ export const Strategy: React.FC = () => {
         }
         setIsLoading(true);
         try {
-            const result = await generateContentStrategy(niche, audience, goal, duration, tone, platformFocus);
+            // Fetch analytics if not already loaded
+            let analytics = analyticsData;
+            if (!analytics) {
+                try {
+                    analytics = await getAnalytics('30d', 'All') as AnalyticsData | null;
+                    if (analytics) setAnalyticsData(analytics);
+                } catch (error) {
+                    console.error('Failed to fetch analytics for strategy:', error);
+                }
+            }
+            
+            const result = await generateContentStrategy(niche, audience, goal, duration, tone, platformFocus, analytics);
             if (result && result.weeks) {
                 // Initialize status for all content items
                 const planWithStatus = {
@@ -274,7 +324,38 @@ export const Strategy: React.FC = () => {
 
             const mediaUrl = await getDownloadURL(storageRef);
 
-            // Update plan with media
+            // Get the current day to use for analysis
+            const currentDay = plan.weeks[weekIndex].content[dayIndex];
+            
+            // Analyze media and generate caption using AI
+            let generatedCaption = currentDay.topic; // Default to topic
+            let suggestedMediaType: 'image' | 'video' | undefined = fileType;
+            
+            try {
+                const analysis = await analyzeMediaForPost({
+                    mediaUrl,
+                    goal: goal,
+                    tone: tone,
+                });
+                
+                generatedCaption = analysis.caption || currentDay.topic;
+                // Add hashtags to caption if provided
+                if (analysis.hashtags && analysis.hashtags.length > 0) {
+                    generatedCaption += '\n\n' + analysis.hashtags.join(' ');
+                }
+                
+                // Determine suggested media type based on analysis
+                // If videoIdeas exist and are more relevant, suggest video
+                if (currentDay.videoIdeas && currentDay.videoIdeas.length > 0 && fileType === 'image') {
+                    // Could suggest video based on content analysis
+                    suggestedMediaType = fileType; // Keep uploaded type for now
+                }
+            } catch (error) {
+                console.error('Failed to analyze media:', error);
+                // Continue with default caption if analysis fails
+            }
+
+            // Update plan with media and generated caption
             const updatedPlan = {
                 ...plan,
                 weeks: plan.weeks.map((week, wIdx) => {
@@ -285,33 +366,56 @@ export const Strategy: React.FC = () => {
                             if (dIdx !== dayIndex) return day;
                             return {
                                 ...day,
-                                mediaUrl,
+                                mediaUrl, // Use Firebase URL for storage
                                 mediaType: fileType,
+                                caption: generatedCaption, // Auto-populate caption
+                                suggestedMediaType: suggestedMediaType,
                                 status: 'ready' as const
                             };
                         })
                     };
                 })
             };
+            
+            setPlan(updatedPlan);
+            
+            // Update selectedStrategy if it exists
+            if (selectedStrategy) {
+                const updatedStrategy = {
+                    ...selectedStrategy,
+                    plan: updatedPlan
+                };
+                setSelectedStrategy(updatedStrategy);
+                
+                // Save updated strategy to Firestore
+                try {
+                    await setDoc(doc(db, 'users', user.id, 'strategies', selectedStrategy.id), updatedStrategy);
+                } catch (error) {
+                    console.error('Failed to save updated strategy:', error);
+                }
+            }
+
+            // Get the updated day for scheduling
+            const updatedDay = updatedPlan.weeks[weekIndex].content[dayIndex];
 
             // Calculate scheduled date based on roadmap
             const today = new Date();
             const scheduledDate = new Date(today);
-            scheduledDate.setDate(today.getDate() + (weekIndex * 7) + day.dayOffset);
+            scheduledDate.setDate(today.getDate() + (weekIndex * 7) + updatedDay.dayOffset);
             scheduledDate.setHours(14, 0, 0, 0); // Default to 2 PM
 
             // Auto-schedule the post
             const postId = `roadmap-${selectedStrategy?.id || 'temp'}-${weekIndex}-${dayIndex}-${Date.now()}`;
-            const postTitle = day.topic.substring(0, 30) + (day.topic.length > 30 ? '...' : '');
+            const postTitle = updatedDay.topic.substring(0, 30) + (updatedDay.topic.length > 30 ? '...' : '');
 
             // Create Post in Firestore and schedule
             if (user) {
                 const newPost: Post = {
                     id: postId,
-                    content: day.topic, // Use topic as caption for now
+                    content: updatedDay.caption || generatedCaption || updatedDay.topic, // Use generated caption
                     mediaUrl: mediaUrl,
                     mediaType: fileType,
-                    platforms: [day.platform],
+                    platforms: [updatedDay.platform],
                     status: 'Scheduled',
                     author: { name: user.name, avatar: user.avatar },
                     comments: [],
@@ -327,8 +431,8 @@ export const Strategy: React.FC = () => {
                     id: `cal-${postId}`,
                     title: postTitle,
                     date: scheduledDate.toISOString(),
-                    type: day.format === 'Reel' ? 'Reel' : 'Post',
-                    platform: day.platform,
+                    type: updatedDay.format === 'Reel' ? 'Reel' : 'Post',
+                    platform: updatedDay.platform,
                     status: 'Scheduled',
                     thumbnail: mediaUrl,
                 };
@@ -474,35 +578,6 @@ export const Strategy: React.FC = () => {
         setActivePage('calendar');
     };
 
-    const handleRunWithAutopilot = async () => {
-        if (!plan || !user) return;
-
-        try {
-            // Calculate total posts from plan
-            const totalPosts = plan.weeks.reduce((total, week) => total + week.content.length, 0);
-
-            // Create Autopilot campaign with the strategy plan
-            const campaignId = await addAutopilotCampaign({
-                goal: goal || 'Execute Content Strategy',
-                niche: niche || 'General',
-                audience: audience || 'General Audience',
-                status: 'Generating Content',
-                plan: plan,
-            });
-
-            // Update campaign with total posts (set after creation)
-            await updateAutopilotCampaign(campaignId, {
-                totalPosts: totalPosts,
-                progress: 0,
-            });
-
-            showToast('Campaign created! Content generation has started.', 'success');
-            setActivePage('autopilot');
-        } catch (error) {
-            console.error('Failed to create Autopilot campaign:', error);
-            showToast('Failed to create Autopilot campaign. Please try again.', 'error');
-        }
-    };
 
     return (
         <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full">
@@ -726,15 +801,6 @@ export const Strategy: React.FC = () => {
                         >
                             <CalendarIcon className="w-5 h-5" /> Populate Calendar
                         </button>
-                            {(user?.userType === 'Creator' && ['Pro', 'Elite', 'Agency'].includes(user?.plan || '')) ||
-                             (user?.userType === 'Business' && ['Starter', 'Growth', 'Agency'].includes(user?.plan || '')) ? (
-                                <button 
-                                    onClick={handleRunWithAutopilot}
-                                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-primary-600 to-purple-600 text-white rounded-lg hover:from-primary-700 hover:to-purple-700 transition-all shadow-lg font-medium"
-                                >
-                                    <div className="w-5 h-5"><RocketIcon /></div> Run with Autopilot
-                                </button>
-                            ) : null}
                         </div>
                     </div>
 
@@ -1040,48 +1106,176 @@ export const Strategy: React.FC = () => {
                                                 <div>
                                                     <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Day {day.dayOffset + 1}</p>
                                                     <p className="text-xs font-medium text-primary-600 dark:text-primary-400">{day.format}</p>
+                                                    {/* Calculate and display scheduled date/time */}
+                                                    {(() => {
+                                                        const today = new Date();
+                                                        const scheduledDate = new Date(today);
+                                                        scheduledDate.setDate(today.getDate() + (weekIndex * 7) + day.dayOffset);
+                                                        scheduledDate.setHours(14, 0, 0, 0); // Default to 2 PM
+                                                        return (
+                                                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                                                                {scheduledDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at {scheduledDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                                                            </p>
+                                                        );
+                                                    })()}
                                                 </div>
                                             </div>
                                             <div className="flex-grow">
-                                                <p className="font-medium text-gray-900 dark:text-white mb-1">{day.topic}</p>
-                                                {/* Show image/video ideas if available */}
-                                                {(day.imageIdeas && day.imageIdeas.length > 0) || (day.videoIdeas && day.videoIdeas.length > 0) ? (
-                                                    <div className="mt-2 space-y-2">
-                                                        {day.imageIdeas && day.imageIdeas.length > 0 && (
-                                                            <div className="text-xs text-gray-600 dark:text-gray-400">
-                                                                <span className="font-medium text-primary-600 dark:text-primary-400">📸 Image ideas:</span>
-                                                                <ul className="mt-1 ml-4 list-disc space-y-0.5">
-                                                                    {day.imageIdeas.map((idea, idx) => (
-                                                                        <li key={idx}>{idea}</li>
-                                                                    ))}
-                                                                </ul>
+                                                <div className="flex items-start gap-3">
+                                                    <div className="flex-1">
+                                                        <p className="font-medium text-gray-900 dark:text-white mb-1">{day.topic}</p>
+                                                        {/* Show suggested media type and current media type */}
+                                                        {day.mediaUrl && day.mediaType && (
+                                                            <div className="mb-2">
+                                                                <span className="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full font-medium">
+                                                                    {day.mediaType === 'image' ? '📸 Image' : '🎥 Video'} Uploaded
+                                                                </span>
+                                                                {day.suggestedMediaType && day.suggestedMediaType !== day.mediaType && (
+                                                                    <span className="ml-2 text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full font-medium">
+                                                                        💡 Consider: {day.suggestedMediaType === 'image' ? 'Image' : 'Video'}
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         )}
-                                                        {day.videoIdeas && day.videoIdeas.length > 0 && (
-                                                            <div className="text-xs text-gray-600 dark:text-gray-400">
-                                                                <span className="font-medium text-primary-600 dark:text-primary-400">🎥 Video ideas:</span>
-                                                                <ul className="mt-1 ml-4 list-disc space-y-0.5">
-                                                                    {day.videoIdeas.map((idea, idx) => (
-                                                                        <li key={idx}>{idea}</li>
-                                                                    ))}
-                                                                </ul>
+                                                        {!day.mediaUrl && day.suggestedMediaType && (
+                                                            <div className="mb-2">
+                                                                <span className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full font-medium">
+                                                                    Suggested: {day.suggestedMediaType === 'image' ? '📸 Image' : '🎥 Video'}
+                                                                </span>
                                                             </div>
                                                         )}
                                                     </div>
-                                                ) : null}
+                                                    {/* Show image/video suggestions beside the post line */}
+                                                    {((day.imageIdeas && day.imageIdeas.length > 0) || (day.videoIdeas && day.videoIdeas.length > 0)) && (
+                                                        <div className="flex-shrink-0 w-64 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                                                            <p className="text-xs font-semibold text-blue-900 dark:text-blue-200 mb-1.5">
+                                                                💡 Suggestions:
+                                                            </p>
+                                                            <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                                                                {day.imageIdeas && day.imageIdeas.length > 0 && (
+                                                                    <div className="text-xs text-blue-800 dark:text-blue-300">
+                                                                        <span className="font-medium">📸 Images:</span>
+                                                                        <ul className="mt-0.5 ml-3 list-disc space-y-0.5">
+                                                                            {day.imageIdeas.slice(0, 2).map((idea, idx) => (
+                                                                                <li key={idx} className="leading-tight">{idea}</li>
+                                                                            ))}
+                                                                        </ul>
+                                                                    </div>
+                                                                )}
+                                                                {day.videoIdeas && day.videoIdeas.length > 0 && (
+                                                                    <div className="text-xs text-blue-800 dark:text-blue-300">
+                                                                        <span className="font-medium">🎥 Videos:</span>
+                                                                        <ul className="mt-0.5 ml-3 list-disc space-y-0.5">
+                                                                            {day.videoIdeas.slice(0, 2).map((idea, idx) => (
+                                                                                <li key={idx} className="leading-tight">{idea}</li>
+                                                                            ))}
+                                                                        </ul>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                {/* Show uploaded media info */}
+                                                {day.mediaUrl && (
+                                                    <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                                                        <p className="text-xs font-semibold text-green-800 dark:text-green-200">
+                                                            ✅ Media uploaded • Caption generated • Scheduled to calendar
+                                                        </p>
+                                                    </div>
+                                                )}
+                                                {/* Caption input */}
+                                                <div className="mt-3">
+                                                    <textarea
+                                                        value={day.caption || ''}
+                                                        onChange={(e) => {
+                                                            const updatedPlan = {
+                                                                ...plan,
+                                                                weeks: plan.weeks.map((w, wIdx) => {
+                                                                    if (wIdx !== weekIndex) return w;
+                                                                    return {
+                                                                        ...w,
+                                                                        content: w.content.map((d, dIdx) => {
+                                                                            if (dIdx !== dayIndex) return d;
+                                                                            return { ...d, caption: e.target.value };
+                                                                        })
+                                                                    };
+                                                                })
+                                                            };
+                                                            setPlan(updatedPlan);
+                                                            if (selectedStrategy) {
+                                                                const updatedStrategy = {
+                                                                    ...selectedStrategy,
+                                                                    plan: updatedPlan
+                                                                };
+                                                                setSelectedStrategy(updatedStrategy);
+                                                                // Auto-save
+                                                                if (user) {
+                                                                    setDoc(doc(db, 'users', user.id, 'strategies', selectedStrategy.id), updatedStrategy).catch(console.error);
+                                                                }
+                                                            }
+                                                        }}
+                                                        placeholder="Add caption for this post..."
+                                                        className="w-full p-2 text-sm border rounded-lg bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-primary-500 dark:text-white dark:placeholder-gray-400 resize-none"
+                                                        rows={2}
+                                                    />
+                                                </div>
                                             </div>
+                                        </div>
                                             <div className="flex items-center gap-2 flex-shrink-0">
                                                 {/* Media Preview/Upload */}
                                                 {day.mediaUrl ? (
-                                                    <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-gray-200 dark:bg-gray-700">
-                                                        {day.mediaType === 'image' ? (
-                                                            <img src={day.mediaUrl} alt="Uploaded" className="w-full h-full object-cover" />
-                                                        ) : (
-                                                            <video src={day.mediaUrl} className="w-full h-full object-cover" />
-                                                        )}
+                                                    <div className="relative group">
+                                                        <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-200 dark:bg-gray-700">
+                                                            {day.mediaType === 'image' ? (
+                                                                <img src={day.mediaUrl} alt="Uploaded" className="w-full h-full object-cover" />
+                                                            ) : (
+                                                                <video src={day.mediaUrl} className="w-full h-full object-cover" />
+                                                            )}
+                                                        </div>
+                                                        {/* Delete/Replace button */}
+                                                        <button
+                                                            onClick={() => {
+                                                                const updatedPlan = {
+                                                                    ...plan,
+                                                                    weeks: plan.weeks.map((w, wIdx) => {
+                                                                        if (wIdx !== weekIndex) return w;
+                                                                        return {
+                                                                            ...w,
+                                                                            content: w.content.map((d, dIdx) => {
+                                                                                if (dIdx !== dayIndex) return d;
+                                                                                return {
+                                                                                    ...d,
+                                                                                    mediaUrl: undefined,
+                                                                                    mediaType: undefined,
+                                                                                    caption: undefined,
+                                                                                    suggestedMediaType: undefined,
+                                                                                    status: 'draft' as const
+                                                                                };
+                                                                            })
+                                                                        };
+                                                                    })
+                                                                };
+                                                                setPlan(updatedPlan);
+                                                                if (selectedStrategy) {
+                                                                    const updatedStrategy = {
+                                                                        ...selectedStrategy,
+                                                                        plan: updatedPlan
+                                                                    };
+                                                                    setSelectedStrategy(updatedStrategy);
+                                                                    if (user) {
+                                                                        setDoc(doc(db, 'users', user.id, 'strategies', selectedStrategy.id), updatedStrategy).catch(console.error);
+                                                                    }
+                                                                }
+                                                                showToast('Media removed. You can upload a new one.', 'success');
+                                                            }}
+                                                            className="absolute -top-2 -right-2 w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700 shadow-lg"
+                                                            title="Remove media"
+                                                        >
+                                                            <XMarkIcon className="w-4 h-4" />
+                                                        </button>
                                                     </div>
                                                 ) : (
-                                                    <div className="relative">
+                                                    <div className="relative flex gap-1">
                                                         <input
                                                             ref={el => fileInputRefs.current[itemKey] = el}
                                                             type="file"
@@ -1105,6 +1299,14 @@ export const Strategy: React.FC = () => {
                                                             ) : (
                                                                 <UploadIcon className="w-5 h-5 text-gray-400" />
                                                             )}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setShowMediaLibrary({ weekIndex, dayIndex })}
+                                                            disabled={isUploading}
+                                                            className="w-16 h-16 flex items-center justify-center border-2 border-dashed border-primary-300 dark:border-primary-600 rounded-lg hover:border-primary-500 dark:hover:border-primary-400 transition-colors disabled:opacity-50 bg-primary-50 dark:bg-primary-900/20"
+                                                            title="Select from Media Library"
+                                                        >
+                                                            <ImageIcon className="w-5 h-5 text-primary-600 dark:text-primary-400" />
                                                         </button>
                                                     </div>
                                                 )}
@@ -1159,6 +1361,60 @@ export const Strategy: React.FC = () => {
                                 {isSaving ? 'Saving...' : 'Save'}
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Media Library Modal */}
+            {showMediaLibrary && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-xl max-w-4xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Select from Media Library</h3>
+                            <button
+                                onClick={() => setShowMediaLibrary(null)}
+                                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                            >
+                                <XMarkIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+                        {mediaLibraryItems.length === 0 ? (
+                            <div className="text-center py-8">
+                                <ImageIcon className="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-500" />
+                                <p className="text-gray-600 dark:text-gray-400">No media in your library yet.</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                {mediaLibraryItems.map((item) => (
+                                    <div
+                                        key={item.id}
+                                        onClick={() => {
+                                            if (showMediaLibrary) {
+                                                handleSelectFromMediaLibrary(showMediaLibrary.weekIndex, showMediaLibrary.dayIndex, item);
+                                            }
+                                        }}
+                                        className="relative group cursor-pointer border-2 border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden hover:border-primary-500 dark:hover:border-primary-500 transition-colors"
+                                    >
+                                        {item.type === 'video' ? (
+                                            <video
+                                                src={item.url}
+                                                className="w-full h-32 object-cover"
+                                                controls={false}
+                                            />
+                                        ) : (
+                                            <img
+                                                src={item.url}
+                                                alt={item.name}
+                                                className="w-full h-32 object-cover"
+                                            />
+                                        )}
+                                        <div className="p-2">
+                                            <p className="text-xs font-medium text-gray-900 dark:text-white truncate">{item.name}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

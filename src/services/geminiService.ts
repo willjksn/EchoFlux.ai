@@ -391,7 +391,8 @@ export async function generateContentStrategy(
   goal: string,
   duration: string,
   tone: string,
-  platformFocus: string
+  platformFocus: string,
+  analyticsData?: any
 ): Promise<any> {
   const res = await callFunction("generateContentStrategy", {
     niche,
@@ -400,6 +401,7 @@ export async function generateContentStrategy(
     duration,
     tone,
     platformFocus,
+    analyticsData,
   });
   // Return the plan directly (API now returns { plan: StrategyPlan })
   return res.plan || res;

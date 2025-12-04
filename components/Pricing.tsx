@@ -9,15 +9,15 @@ interface PricingProps {
 }
 
 const creatorTiers = [
-    { name: 'Free', priceMonthly: 0, priceAnnually: 0, description: 'For individuals starting out.', features: ['1 Social Account', '50 AI Replies / month', 'Basic Link-in-Bio', '100 MB Storage'], isRecommended: false },
-    { name: 'Pro', priceMonthly: 49, priceAnnually: 39, description: 'For creators scaling their brand.', features: ['3 Social Accounts', '500 AI Replies', 'AI Content Strategist', '50 Image Generations', '1 Video Generation'], isRecommended: true },
-    { name: 'Elite', priceMonthly: 199, priceAnnually: 159, description: 'For professional creators.', features: ['5 Social Accounts', '1,500 AI Replies', 'Advanced CRM', '500 Image Generations', '25 Video Generations', 'Director Mode', '3 Voice Clones'], isRecommended: false },
+    { name: 'Free', priceMonthly: 0, priceAnnually: 0, description: 'For individuals starting out.', features: ['1 Social Account', '50 AI Replies / month', 'Basic Link-in-Bio', '100 MB Storage', 'Basic Analytics'], isRecommended: false },
+    { name: 'Pro', priceMonthly: 29, priceAnnually: 23, description: 'For creators scaling their brand.', features: ['3 Social Accounts', '250 AI Replies / month', 'AI Content Strategist', 'Quick Post Automation', 'Media Library', '1 GB Storage', 'Advanced Analytics'], isRecommended: true },
+    { name: 'Elite', priceMonthly: 149, priceAnnually: 119, description: 'For professional creators.', features: ['5 Social Accounts', '750 AI Replies / month', 'Advanced CRM', 'Quick Post Automation', 'Media Library', '2 GB Storage', 'Social Listening', 'Competitor Analysis'], isRecommended: false },
+    { name: 'Agency', priceMonthly: 0, priceAnnually: 0, description: 'For agencies managing clients.', features: ['Unlimited Accounts', '2,000 AI Replies / month', 'AI Content Strategist', 'Quick Post Automation', 'Media Library', '5 GB Storage', 'Client Workflows', 'Team Management', 'White-labeling', 'Advanced Analytics'], isRecommended: false },
 ];
 
 const businessTiers = [
-    { name: 'Starter', priceMonthly: 99, priceAnnually: 79, description: 'For small businesses & startups.', features: ['3 Social Accounts', '1,000 AI Replies / month', 'AI Marketing Manager', 'Business Analytics', 'Social CRM & Lead Gen'], isRecommended: false },
-    { name: 'Growth', priceMonthly: 249, priceAnnually: 199, description: 'For growing businesses.', features: ['5 Social Accounts', '2,500 AI Replies', 'Marketing Campaign Ideas', 'Competitor Analysis', 'Social Listening'], isRecommended: true },
-    { name: 'Agency', priceMonthly: 599, priceAnnually: 479, description: 'For agencies managing clients.', features: ['Unlimited Accounts', 'Unlimited AI Replies', 'Client Workflows', 'Team Management', 'White-labeling'], isRecommended: false },
+    { name: 'Starter', priceMonthly: 99, priceAnnually: 79, description: 'For small businesses & startups.', features: ['3 Social Accounts', '500 AI Replies / month', 'AI Content Strategist', 'Quick Post Automation', 'Media Library', '1 GB Storage', 'Business Analytics', 'Social CRM & Lead Gen'], isRecommended: false },
+    { name: 'Growth', priceMonthly: 199, priceAnnually: 159, description: 'For growing businesses.', features: ['5 Social Accounts', '1,500 AI Replies / month', 'AI Content Strategist', 'Quick Post Automation', 'Media Library', '3 GB Storage', 'Marketing Campaign Ideas', 'Competitor Analysis', 'Social Listening'], isRecommended: true },
 ];
 
 
@@ -128,8 +128,14 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
                                 <h3 className="text-xl font-bold text-gray-900 dark:text-white">{tier.name}</h3>
                                 <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 h-10">{tier.description}</p>
                                 <div className="mt-6">
-                                    <span className="text-4xl font-extrabold text-gray-900 dark:text-white">${price}</span>
-                                    <span className="text-base font-medium text-gray-500 dark:text-gray-400">/{billingCycle === 'monthly' ? 'mo' : 'yr'}</span>
+                                    {isAgency ? (
+                                        <span className="text-4xl font-extrabold text-gray-900 dark:text-white">Contact Sales</span>
+                                    ) : (
+                                        <>
+                                            <span className="text-4xl font-extrabold text-gray-900 dark:text-white">${price}</span>
+                                            <span className="text-base font-medium text-gray-500 dark:text-gray-400">/{billingCycle === 'monthly' ? 'mo' : 'yr'}</span>
+                                        </>
+                                    )}
                                 </div>
                                 <ul className="mt-6 space-y-4 flex-1">
                                     {tier.features.map((feature) => (

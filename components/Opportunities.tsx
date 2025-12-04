@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { findTrends } from "../src/services/geminiService"
 import { Opportunity, Platform, HashtagSet } from '../types';
 import { SparklesIcon, TrendingIcon } from './icons/UIIcons';
@@ -7,6 +7,8 @@ import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIco
 import { useAppContext } from './AppContext';
 import { UpgradePrompt } from './UpgradePrompt';
 import { BrandSuggestions } from './BrandSuggestions';
+import { db } from '../firebaseConfig';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 
 const platformIcons: { [key in Platform]: React.ReactNode } = {
   Instagram: <InstagramIcon />,
@@ -27,6 +29,9 @@ export const Opportunities: React.FC = () => {
     const [filterPlatform, setFilterPlatform] = useState<Platform | 'All'>('All');
     const [filterType, setFilterType] = useState<string>('All');
     const [sortBy, setSortBy] = useState<'relevance' | 'engagement' | 'trending'>('engagement');
+    const [autoScanEnabled, setAutoScanEnabled] = useState(true);
+    const [lastScanDate, setLastScanDate] = useState<string | null>(null);
+    const [isAutoScanning, setIsAutoScanning] = useState(false);
 
     // Opportunities: Creator feature, available on Pro, Elite, and Agency plans
     // Agency (Business) also gets access since they manage creators
@@ -39,7 +44,7 @@ export const Opportunities: React.FC = () => {
         return ['Pro', 'Elite', 'Agency'].includes(user?.plan || '');
     })();
 
-    const handleFindTrends = async () => {
+    const handleFindTrends = async (isAutoScan = false) => {
         if (!niche.trim()) return;
         setIsLoading(true);
         setError(null);
@@ -55,9 +60,14 @@ export const Opportunities: React.FC = () => {
                 // Update results with new scan - this replaces previous results
                 setResults(trends);
                 setError(null); // Clear any previous errors on success
+                setLastScanDate(new Date().toISOString());
                 
                 // Auto-save trending hashtags from opportunities
                 autoSaveTrendingHashtags(trends);
+                
+                if (!isAutoScan) {
+                    showToast(`Found ${trends.length} opportunities!`, 'success');
+                }
             }
         } catch (err: any) {
             console.error('Error finding trends:', err);
@@ -167,13 +177,36 @@ export const Opportunities: React.FC = () => {
                 {/* Left Column: Trend Finder */}
                 <div className="lg:col-span-2 space-y-6">
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                        <div className="flex items-center gap-3 mb-4">
-                            <div className="p-2 bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 rounded-full">
-                                <TrendingIcon className="w-5 h-5" />
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 rounded-full">
+                                    <TrendingIcon className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">Discover Trends</h3>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        {lastScanDate ? `Last scanned: ${new Date(lastScanDate).toLocaleDateString()}` : 'Not scanned yet'}
+                                        {isAutoScanning && <span className="ml-2 text-primary-600 dark:text-primary-400">⭐ Auto-scanning...</span>}
+                                    </p>
+                                </div>
                             </div>
-                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Discover Trends</h3>
+                            <div className="flex items-center gap-2">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={autoScanEnabled}
+                                        onChange={(e) => setAutoScanEnabled(e.target.checked)}
+                                        className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 dark:focus:ring-primary-400 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                                    />
+                                    <span className="text-sm text-gray-700 dark:text-gray-300 flex items-center gap-1">
+                                        <span className="text-yellow-500">⭐</span> Auto-scan weekly
+                                    </span>
+                                </label>
+                            </div>
                         </div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Enter a topic or niche to find relevant trends and opportunities.</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                            Enter a topic or niche to find relevant trends and opportunities. {autoScanEnabled && '⭐ Trends will auto-update weekly or scan on-demand.'}
+                        </p>
                         <div className="flex gap-2">
                             <input
                                 type="text"

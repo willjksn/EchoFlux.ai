@@ -5,30 +5,33 @@ export const Privacy: React.FC = () => {
         <div className="max-w-4xl mx-auto space-y-8">
             <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-md">
                 <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Privacy Policy</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Last updated: September 3, 2024</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Last updated: January 2025</p>
 
                 <div className="mt-6 prose prose-lg dark:prose-invert max-w-none text-gray-700 dark:text-gray-300">
                     <p>EngageSuite.ai ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how your personal information is collected, used, and disclosed by EngageSuite.ai.</p>
 
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">1. Information We Collect</h3>
                     <p>
-                        We may collect personal information from you, such as your name, email address, payment information, and social media profile information when you register for an account and connect your social media profiles.
+                        We may collect personal information from you, such as your name, email address, payment information, and social media profile information when you register for an account and connect your social media profiles. We also collect media files (images and videos) that you upload to our platform, including those stored in your Media Library, profile pictures, and link-in-bio images.
                     </p>
 
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">2. How We Use Your Information</h3>
                     <p>
-                        We use the information we collect to operate, maintain, and provide to you the features and functionality of the Service. This includes connecting to your social media accounts via their official APIs to retrieve messages and post replies on your behalf. We may use your email address to send you service-related notices.
+                        We use the information we collect to operate, maintain, and provide to you the features and functionality of the Service. This includes connecting to your social media accounts via their official APIs to retrieve messages and post replies on your behalf. We store your uploaded media files securely and use them to provide features such as Quick Post Automation, Media Library, content scheduling, and strategy roadmaps. We may use your email address to send you service-related notices.
                     </p>
                     
                      <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">3. Data Sent to AI Models & User Content</h3>
                      <h4>a. Data Sent to AI Models</h4>
                     <p>
-                        To provide our core service, message content (DMs, comments) and prompts you enter are sent to third-party AI models (like Google's Gemini) to generate replies, captions, and other content. We do not use this data to train our own models. Please refer to the privacy policies of these third-party providers for more information on how they handle data.
+                        To provide our core service, message content (DMs, comments), uploaded media files, and prompts you enter are sent to third-party AI models (like Google's Gemini) to generate replies, captions, hashtags, content strategies, and analyze media for optimal posting times. We do not use this data to train our own models. Please refer to the privacy policies of these third-party providers for more information on how they handle data.
                     </p>
                     
-                    <h4>b. User-Uploaded Content (AI Avatar & Voice Clones)</h4>
+                    <h4>b. User-Uploaded Media Content</h4>
                     <p>
-                        Features like AI Avatar and Custom Voice Cloning require you to upload your own content (an image or audio file, respectively). This content is stored securely on our servers. We are committed to protecting this data and will only use it for the explicit purpose of generating AI content for your account as you direct. We will not use your avatar image or voice clone data to train any AI models, nor will we share it with any third parties beyond what is necessary to provide the generation service.
+                        When you upload images or videos to our platform (including Media Library, profile pictures, link-in-bio images, and media for posts), this content is stored securely on our servers using Firebase Storage. We are committed to protecting this data and will only use it for the explicit purpose of providing our services to you, such as displaying media in your posts, calendar, and strategy roadmaps. We will not use your media to train any AI models, nor will we share it with any third parties beyond what is necessary to provide our services (e.g., displaying media in scheduled posts).
+                    </p>
+                    <p>
+                        You can delete your uploaded media at any time through the Media Library or other relevant features. Deleted media will be removed from our servers, though it may take up to 30 days for complete deletion from backup systems.
                     </p>
                     
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">4. Sharing Your Information</h3>

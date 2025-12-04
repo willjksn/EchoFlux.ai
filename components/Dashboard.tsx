@@ -28,7 +28,7 @@ const UpcomingEventCard: React.FC<{ event: CalendarEvent; onClick: () => void }>
 );
 
 export const Dashboard: React.FC = () => {
-  const { messages, selectedClient, user, dashboardNavState, clearDashboardNavState, settings, setSettings, setActivePage, calendarEvents, posts, setComposeContext, updateMessage, deleteMessage, categorizeAllMessages, autopilotCampaigns, openCRM, ensureCRMProfile, setUser, socialAccounts, showToast } = useAppContext();
+  const { messages, selectedClient, user, dashboardNavState, clearDashboardNavState, settings, setSettings, setActivePage, calendarEvents, posts, setComposeContext, updateMessage, deleteMessage, categorizeAllMessages, openCRM, ensureCRMProfile, setUser, socialAccounts, showToast } = useAppContext();
   const [comparisonView, setComparisonView] = useState<'WoW' | 'MoM'>('WoW');
   const [isUpdatingStats, setIsUpdatingStats] = useState(false);
   
@@ -38,7 +38,7 @@ export const Dashboard: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<'trending' | 'engagement' | 'niche' | null>(null);
   const [showIdeasModal, setShowIdeasModal] = useState(false);
   
-  if (!user) return null;
+  if (!user) return <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full flex items-center justify-center"><p className="text-gray-500 dark:text-gray-400">Loading...</p></div>;
 
   // For Creator users: Show "Content Strategy", "Check Analytics", "Audience Stats", "Followers"
   // For Business users: Show "Marketing Plan", "Business Insights", "Business Metrics", "Potential Reach"
@@ -54,6 +54,28 @@ export const Dashboard: React.FC = () => {
     return user?.userType === 'Business';
   }, [selectedClient, user?.role, user?.userType]);
   
+  // Filter calendar events: only show Scheduled posts with media, exclude Published (same as Calendar page)
+  const filteredCalendarEvents = useMemo(() => {
+    return calendarEvents.filter(evt => {
+      // Only show Scheduled events (not Published or Draft)
+      if (evt.status !== 'Scheduled') return false;
+      
+      // Find associated post
+      const associatedPost = posts.find(p => {
+        if (evt.id.includes(p.id) || p.id.includes(evt.id.replace('cal-', '').replace('-calendar', ''))) {
+          return true;
+        }
+        if (p.content && evt.title && p.content.includes(evt.title.substring(0, 30))) {
+          return true;
+        }
+        return false;
+      });
+      
+      // Only show if post has media
+      return associatedPost ? !!associatedPost.mediaUrl : !!evt.thumbnail;
+    });
+  }, [calendarEvents, posts]);
+  
   // Calculate today's highlights
   const todaysHighlights = useMemo(() => {
     const today = new Date();
@@ -66,7 +88,8 @@ export const Dashboard: React.FC = () => {
     });
     
     const unreadMessages = messages.filter(m => !m.isArchived).length;
-    const todaysEvents = calendarEvents.filter(e => {
+    // Use filtered calendar events (only Scheduled with media)
+    const todaysEvents = filteredCalendarEvents.filter(e => {
       const eventDate = new Date(e.date);
       eventDate.setHours(0, 0, 0, 0);
       return eventDate.getTime() === today.getTime();
@@ -83,7 +106,7 @@ export const Dashboard: React.FC = () => {
       scheduledPosts: todaysEvents,
       responseRate
     };
-  }, [posts, messages, calendarEvents]);
+  }, [posts, messages, filteredCalendarEvents]);
   
   // Content Ideas handler
   const handleGenerateIdeas = async (category: 'trending' | 'engagement' | 'niche') => {
@@ -144,16 +167,6 @@ export const Dashboard: React.FC = () => {
       return result;
     };
   }, []);
-  
-  // Filter active campaigns
-  const activeCampaigns = useMemo(() => {
-    return autopilotCampaigns.filter(c => 
-      c.status === 'Generating Content' || 
-      c.status === 'Strategizing' ||
-      c.status === 'Plan Generated' ||
-      c.status === 'Complete' // Show completed campaigns that have generated content
-    ).slice(0, 3);
-  }, [autopilotCampaigns]);
   
   const [viewMode, setViewMode] = useState<'Overview' | 'Inbox'>('Overview');
   const [isLoading, setIsLoading] = useState(false);
@@ -236,9 +249,9 @@ export const Dashboard: React.FC = () => {
   
   const upcomingEvents = useMemo(() => {
       const now = new Date();
+      // Use filtered calendar events (only Scheduled with media)
       // Filter events that are scheduled for future dates/times
-      // Compare dates properly, accounting for timezone issues
-      return calendarEvents
+      return filteredCalendarEvents
         .filter(e => {
           if (!e.date) return false;
           try {
@@ -261,7 +274,7 @@ export const Dashboard: React.FC = () => {
           }
         })
         .slice(0, 3);
-  }, [calendarEvents]);
+  }, [filteredCalendarEvents]);
 
   const accountName = selectedClient ? selectedClient.name : 'Main Account';
   const currentStats = selectedClient ? selectedClient.socialStats : user?.socialStats;
@@ -283,26 +296,10 @@ export const Dashboard: React.FC = () => {
   const handleToggleFavorite = (id: string) => { const msg = messages.find(m => m.id === id); if (msg) updateMessage(id, { isFavorite: !msg.isFavorite }); };
   const handleDeleteMessage = (id: string) => { if (window.confirm('Delete message?')) deleteMessage(id); };
   const handleEventClick = (event: CalendarEvent) => {
-    // Try to find associated post by matching event ID or title
-    const associatedPost = posts.find(p => {
-      // Check if post ID matches event ID pattern (e.g., cal-{postId})
-      if (event.id.includes(p.id) || p.id.includes(event.id.replace('cal-', '').replace('-calendar', ''))) {
-        return true;
-      }
-      // Check if post content matches event title
-      if (p.content && event.title && p.content.includes(event.title.substring(0, 30))) {
-        return true;
-      }
-      return false;
-    });
-    
-    // Set compose context with event data and post content if found
-    setComposeContext({
-      topic: associatedPost?.content || event.title,
-      platform: event.platform,
-      type: event.type === 'Reel' ? 'video' : event.type === 'Story' ? 'image' : 'Post',
-      date: event.date
-    });
+    // Store event ID in localStorage so Calendar can auto-select it
+    localStorage.setItem('calendarSelectedEventId', event.id);
+    // Navigate to calendar page
+    setActivePage('calendar');
   };
 
   useEffect(() => {
@@ -361,7 +358,7 @@ export const Dashboard: React.FC = () => {
                       {(!isBusiness || user?.plan === 'Agency') && (
                         <QuickAction label="Opportunities" icon={<TrendingIcon className="w-6 h-6" />} color="bg-gradient-to-br from-pink-500 to-rose-500" onClick={() => setActivePage('opportunities')} />
                       )}
-                      <QuickAction label={isBusiness ? 'AI Marketing Manager' : 'AI Autopilot'} icon={<RocketIcon />} color="bg-gradient-to-br from-amber-500 to-orange-500" onClick={() => setActivePage('autopilot')} />
+                      <QuickAction label="Automation" icon={<RocketIcon />} color="bg-gradient-to-br from-amber-500 to-orange-500" onClick={() => setActivePage('automation')} />
                     </>
                   )}
               </div>
@@ -443,43 +440,6 @@ export const Dashboard: React.FC = () => {
               </div>
           </div>
           
-          {/* Active Campaigns Widget */}
-          {activeCampaigns.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Active Campaigns</h3>
-                <button onClick={() => setActivePage('autopilot')} className="text-sm text-primary-600 hover:underline">View All</button>
-              </div>
-              <div className="space-y-3">
-                {activeCampaigns.map(campaign => (
-                  <div key={campaign.id} className="p-4 bg-gradient-to-r from-primary-50 to-primary-100 dark:from-primary-900/30 dark:to-primary-800/30 rounded-lg border border-primary-200 dark:border-primary-700">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-gray-900 dark:text-white mb-1">{campaign.goal}</h4>
-                        <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-                          <span>Status: <span className="font-medium capitalize">{campaign.status.replace(/([A-Z])/g, ' $1').trim()}</span></span>
-                          <span>•</span>
-                          <span>Progress: {campaign.progress || 0}%</span>
-                          {campaign.totalPosts && (
-                            <>
-                              <span>•</span>
-                              <span>{campaign.generatedPosts || 0}/{campaign.totalPosts} posts</span>
-                     </>
-                  )}
-              </div>
-                      </div>
-                      <button 
-                        onClick={() => setActivePage('autopilot')}
-                        className="px-3 py-1.5 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
-                      >
-                        View
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
           
           {/* Phase 2 Widgets Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -669,17 +629,6 @@ export const Dashboard: React.FC = () => {
                   message: `Published post on ${post.platforms[0] || 'social media'}`,
                   timestamp: new Date(post.createdAt || Date.now()),
                   icon: <SparklesIcon className="w-4 h-4" />
-                });
-              });
-              
-              // Campaign activities
-              activeCampaigns.slice(0, 2).forEach(campaign => {
-                activities.push({
-                  id: `campaign-${campaign.id}`,
-                  type: 'campaign',
-                  message: `Campaign "${campaign.goal}" is ${campaign.status.toLowerCase()}`,
-                  timestamp: new Date(campaign.createdAt || Date.now()),
-                  icon: <RocketIcon />
                 });
               });
               
@@ -974,17 +923,14 @@ export const Dashboard: React.FC = () => {
                 });
               }
               
-              // Check active campaigns
-              const activeCampaigns = autopilotCampaigns.filter(c => c.status === 'Running' || c.status === 'Plan Generated').length;
-              if (activeCampaigns === 0 && (user?.plan !== 'Free')) {
+              // Suggest automation for users who haven't used it
+              if (user?.plan !== 'Free') {
                 recommendations.push({
                   type: 'tip',
-                  title: isBusiness ? 'Launch Marketing Campaign' : 'Start Autopilot Campaign',
-                  description: isBusiness 
-                    ? 'Create a marketing campaign to automate your content and reach more customers.'
-                    : 'Use AI Autopilot to generate content automatically based on your goals.',
-                  action: () => setActivePage('autopilot'),
-                  actionLabel: 'Launch Campaign'
+                  title: 'Try Quick Post Automation',
+                  description: 'Upload images or videos and let AI automatically create captions, hashtags, and schedule posts at optimal times.',
+                  action: () => setActivePage('automation'),
+                  actionLabel: 'Try Automation'
                 });
               }
               

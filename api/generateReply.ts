@@ -34,19 +34,26 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  // Check monthly reply limit for Free plan (50 replies per month)
-  if (user.plan === 'Free') {
-    const monthlyRepliesUsed = user.monthlyRepliesUsed || 0;
-    const freePlanLimit = 50;
-    
-    if (monthlyRepliesUsed >= freePlanLimit) {
-      return res.status(200).json({
-        success: false,
-        error: "Monthly limit reached",
-        note: `You've reached your monthly limit of ${freePlanLimit} AI replies. Upgrade to Pro or Elite for unlimited replies.`,
-        upgradeUrl: "/pricing",
-      });
-    }
+  // Check monthly reply limit based on plan
+  const monthlyRepliesUsed = user.monthlyRepliesUsed || 0;
+  const replyLimits: Record<string, number> = {
+    'Free': 50,
+    'Pro': 250,
+    'Elite': 750,
+    'Starter': 500,
+    'Growth': 1500,
+    'Agency': 2000,
+  };
+  
+  const planLimit = replyLimits[user.plan] || 50;
+  
+  if (monthlyRepliesUsed >= planLimit) {
+    return res.status(200).json({
+      success: false,
+      error: "Monthly limit reached",
+      note: `You've reached your monthly limit of ${planLimit} AI replies. Upgrade your plan for more replies.`,
+      upgradeUrl: "/pricing",
+    });
   }
 
   const { incomingMessage, tone, context } = (req.body as any) || {};
@@ -77,25 +84,23 @@ Write a short reply that feels human, not robotic. Do NOT add greetings if user 
 
     const reply = result.response.text().trim();
 
-    // Increment monthly reply usage counter for Free plan (non-blocking)
-    if (user.plan === 'Free') {
-      try {
-        const { getAdminDb } = await import("./_firebaseAdmin.js");
-        const db = await getAdminDb();
-        const currentUsage = user.monthlyRepliesUsed || 0;
-        await db
-          .collection("users")
-          .doc(user.uid)
-          .set(
-            {
-              monthlyRepliesUsed: currentUsage + 1,
-            },
-            { merge: true }
-          );
-      } catch (updateError: any) {
-        console.error("Failed to update reply usage counter:", updateError);
-        // Don't fail the request if usage tracking fails
-      }
+    // Increment monthly reply usage counter (non-blocking)
+    try {
+      const { getAdminDb } = await import("./_firebaseAdmin.js");
+      const db = await getAdminDb();
+      const currentUsage = user.monthlyRepliesUsed || 0;
+      await db
+        .collection("users")
+        .doc(user.uid)
+        .set(
+          {
+            monthlyRepliesUsed: currentUsage + 1,
+          },
+          { merge: true }
+        );
+    } catch (updateError: any) {
+      console.error("Failed to update reply usage counter:", updateError);
+      // Don't fail the request if usage tracking fails
     }
 
     return res.status(200).json({ reply });

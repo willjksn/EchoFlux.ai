@@ -174,10 +174,19 @@ export const MediaLibrary: React.FC = () => {
   };
 
   const handleUseInCompose = (item: MediaLibraryItem) => {
-    // Navigate to compose page and pass media item
+    // Navigate to compose page
     setActivePage('compose');
-    // TODO: Pass media item to compose page via context or state
-    showToast('Navigate to Compose page to use this media', 'info');
+    
+    // Store the media item in localStorage so Compose can pick it up
+    const mediaToAdd = {
+      url: item.url,
+      type: item.type,
+      mimeType: item.mimeType || (item.type === 'image' ? 'image/jpeg' : 'video/mp4'),
+      name: item.name,
+    };
+    localStorage.setItem('pendingMediaFromLibrary', JSON.stringify(mediaToAdd));
+    
+    showToast('Media added to Compose page', 'success');
   };
 
   const filteredItems = filterType === 'all' 

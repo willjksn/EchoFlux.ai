@@ -1,9 +1,11 @@
 
-import React, { useState } from 'react';
-import { CalendarEvent, Platform } from '../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { CalendarEvent, Platform, Post } from '../types';
 import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
-import { PlusIcon, SparklesIcon } from './icons/UIIcons';
+import { PlusIcon, SparklesIcon, XMarkIcon, TrashIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
+import { db } from '../firebaseConfig';
+import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 
 const platformIcons: Record<Platform, React.ReactNode> = {
   Instagram: <InstagramIcon />,
@@ -18,8 +20,73 @@ const platformIcons: Record<Platform, React.ReactNode> = {
 const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export const Calendar: React.FC = () => {
-    const { calendarEvents, setActivePage, setComposeContext, posts } = useAppContext();
+    const { calendarEvents, setActivePage, posts, user, showToast, updatePost, addCalendarEvent, deletePost } = useAppContext();
     const [currentDate, setCurrentDate] = useState(new Date());
+    const [selectedEvent, setSelectedEvent] = useState<{ event: CalendarEvent; post: Post | null } | null>(null);
+    const [isEditing, setIsEditing] = useState(false);
+    const [editDate, setEditDate] = useState('');
+    const [editTime, setEditTime] = useState('');
+    const [editPlatforms, setEditPlatforms] = useState<Record<Platform, boolean>>({
+        Instagram: false,
+        TikTok: false,
+        X: false,
+        Threads: false,
+        YouTube: false,
+        LinkedIn: false,
+        Facebook: false,
+    });
+    const [isSaving, setIsSaving] = useState(false);
+
+    // Filter calendar events: only show Scheduled posts with media, exclude Published
+    const filteredEvents = useMemo(() => {
+        if (!calendarEvents || !Array.isArray(calendarEvents)) return [];
+        if (!posts || !Array.isArray(posts)) return [];
+        
+        return calendarEvents.filter(evt => {
+            // Only show Scheduled events (not Published or Draft)
+            if (evt.status !== 'Scheduled') return false;
+            
+            // Find associated post
+            const associatedPost = posts.find(p => {
+                if (evt.id.includes(p.id) || p.id.includes(evt.id.replace('cal-', '').replace('-calendar', ''))) {
+                    return true;
+                }
+                if (p.content && evt.title && p.content.includes(evt.title.substring(0, 30))) {
+                    return true;
+                }
+                return false;
+            });
+            
+            // Only show if post has media
+            return associatedPost ? !!associatedPost.mediaUrl : !!evt.thumbnail;
+        });
+    }, [calendarEvents, posts]);
+
+    // Auto-select event from dashboard navigation
+    useEffect(() => {
+        if (!filteredEvents || filteredEvents.length === 0) return;
+        
+        const selectedEventId = localStorage.getItem('calendarSelectedEventId');
+        if (selectedEventId) {
+            localStorage.removeItem('calendarSelectedEventId');
+            const eventToSelect = filteredEvents.find(evt => evt.id === selectedEventId);
+            if (eventToSelect) {
+                const associatedPost = posts?.find(p => {
+                    if (eventToSelect.id.includes(p.id) || p.id.includes(eventToSelect.id.replace('cal-', '').replace('-calendar', ''))) {
+                        return true;
+                    }
+                    if (p.content && eventToSelect.title && p.content.includes(eventToSelect.title.substring(0, 30))) {
+                        return true;
+                    }
+                    return false;
+                });
+                setSelectedEvent({ event: eventToSelect, post: associatedPost || null });
+                // Scroll to the event's date
+                const eventDate = new Date(eventToSelect.date);
+                setCurrentDate(new Date(eventDate.getFullYear(), eventDate.getMonth(), 1));
+            }
+        }
+    }, [filteredEvents, posts]);
 
     const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
     const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
@@ -70,7 +137,7 @@ export const Calendar: React.FC = () => {
             const dayOfWeek = dateObj.getDay();
             const isBestTime = dayOfWeek === 2 || dayOfWeek === 4;
 
-            const dayEvents = calendarEvents.filter(e => {
+            const dayEvents = filteredEvents.filter(e => {
                 const eventDate = new Date(e.date);
                 return (
                     eventDate.getDate() === currentDay &&
@@ -135,27 +202,47 @@ export const Calendar: React.FC = () => {
                             const colors = statusColors[evt.status] || statusColors.Draft;
                             
                             const handleEventClick = () => {
-                                // Try to find associated post by matching event ID or title
+                                // Find associated post
                                 const associatedPost = posts.find(p => {
-                                    // Check if post ID matches event ID pattern (e.g., cal-{postId})
                                     if (evt.id.includes(p.id) || p.id.includes(evt.id.replace('cal-', '').replace('-calendar', ''))) {
                                         return true;
                                     }
-                                    // Check if post content matches event title
                                     if (p.content && evt.title && p.content.includes(evt.title.substring(0, 30))) {
                                         return true;
                                     }
                                     return false;
                                 });
                                 
-                                // Set compose context with event data and post content if found
-                                setComposeContext({
-                                    topic: associatedPost?.content || evt.title,
-                                    platform: evt.platform,
-                                    type: evt.type === 'Reel' ? 'video' : evt.type === 'Story' ? 'image' : 'Post',
-                                    date: evt.date
-                                });
-                                setActivePage('compose');
+                                // Initialize edit state
+                                const eventDate = new Date(evt.date);
+                                const dateStr = eventDate.toISOString().split('T')[0];
+                                const timeStr = eventDate.toTimeString().slice(0, 5);
+                                
+                                const platforms: Record<Platform, boolean> = {
+                                    Instagram: false,
+                                    TikTok: false,
+                                    X: false,
+                                    Threads: false,
+                                    YouTube: false,
+                                    LinkedIn: false,
+                                    Facebook: false,
+                                };
+                                
+                                if (associatedPost?.platforms) {
+                                    associatedPost.platforms.forEach(p => {
+                                        platforms[p] = true;
+                                    });
+                                } else {
+                                    platforms[evt.platform] = true;
+                                }
+                                
+                                setEditDate(dateStr);
+                                setEditTime(timeStr);
+                                setEditPlatforms(platforms);
+                                setIsEditing(false);
+                                
+                                // Show preview modal instead of navigating
+                                setSelectedEvent({ event: evt, post: associatedPost || null });
                             };
                             
                             return (
@@ -209,8 +296,334 @@ export const Calendar: React.FC = () => {
         return grid;
     };
 
+    // Extract hashtags from post content
+    const extractHashtags = (content: string): string[] => {
+        const hashtagRegex = /#\w+/g;
+        return content.match(hashtagRegex) || [];
+    };
+
+    // Handle save edits
+    const handleSaveEdit = async () => {
+        if (!selectedEvent || !user) return;
+
+        const selectedPlatformsList = (Object.keys(editPlatforms) as Platform[]).filter(p => editPlatforms[p]);
+        if (selectedPlatformsList.length === 0) {
+            showToast('Please select at least one platform.', 'error');
+            return;
+        }
+
+        if (!editDate || !editTime) {
+            showToast('Please select both date and time.', 'error');
+            return;
+        }
+
+        setIsSaving(true);
+        try {
+            // Combine date and time
+            const newDateTime = new Date(`${editDate}T${editTime}`);
+            const newDateTimeISO = newDateTime.toISOString();
+
+            // Update Post if it exists
+            if (selectedEvent.post) {
+                const updatedPost: Post = {
+                    ...selectedEvent.post,
+                    scheduledDate: newDateTimeISO,
+                    platforms: selectedPlatformsList,
+                };
+                await updatePost(updatedPost);
+            }
+
+            // Update CalendarEvent
+            const updatedEvent: CalendarEvent = {
+                ...selectedEvent.event,
+                date: newDateTimeISO,
+                platform: selectedPlatformsList[0], // Primary platform for calendar display
+            };
+
+            await setDoc(doc(db, 'users', user.id, 'calendar_events', updatedEvent.id), updatedEvent);
+
+            // Update local state
+            setSelectedEvent({
+                event: updatedEvent,
+                post: selectedEvent.post ? {
+                    ...selectedEvent.post,
+                    scheduledDate: newDateTimeISO,
+                    platforms: selectedPlatformsList,
+                } : null,
+            });
+
+            setIsEditing(false);
+            showToast('Post updated successfully!', 'success');
+        } catch (error) {
+            console.error('Failed to update post:', error);
+            showToast('Failed to update post. Please try again.', 'error');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    // Handle delete post
+    const handleDeletePost = async () => {
+        if (!selectedEvent || !user) return;
+        
+        if (!window.confirm('Are you sure you want to delete this scheduled post?')) {
+            return;
+        }
+
+        try {
+            // Delete the post from Firestore
+            if (selectedEvent.post) {
+                await deletePost(selectedEvent.post.id);
+            }
+
+            // Delete the calendar event from Firestore
+            const eventDocRef = doc(db, 'users', user.id, 'calendar_events', selectedEvent.event.id);
+            await deleteDoc(eventDocRef);
+
+            setSelectedEvent(null);
+            showToast('Post deleted successfully!', 'success');
+        } catch (error) {
+            console.error('Failed to delete post:', error);
+            showToast('Failed to delete post. Please try again.', 'error');
+        }
+    };
+
+    // Reset edit state when modal closes
+    useEffect(() => {
+        if (!selectedEvent) {
+            setIsEditing(false);
+            setEditDate('');
+            setEditTime('');
+            setEditPlatforms({
+                Instagram: false,
+                TikTok: false,
+                X: false,
+                Threads: false,
+                YouTube: false,
+                LinkedIn: false,
+                Facebook: false,
+            });
+        }
+    }, [selectedEvent]);
+
     return (
         <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full">
+            {/* Calendar Event Preview Modal */}
+            {selectedEvent && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4" onClick={() => setSelectedEvent(null)}>
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                        <div className="p-6">
+                            {/* Header */}
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-primary-100 dark:bg-primary-900/30 rounded-lg">
+                                        {platformIcons[selectedEvent.event.platform]}
+                                    </div>
+                                    <div>
+                                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Scheduled Post Preview</h3>
+                                        <p className="text-sm text-gray-500 dark:text-gray-400">{selectedEvent.event.platform} • {selectedEvent.event.type}</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {!isEditing && (
+                                        <button
+                                            onClick={() => setIsEditing(true)}
+                                            className="px-4 py-2 text-sm font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/30 border border-primary-200 dark:border-primary-800 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors"
+                                        >
+                                            Edit
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={() => setSelectedEvent(null)}
+                                        className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                    >
+                                        <XMarkIcon className="w-5 h-5" />
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Date & Time - Editable */}
+                            <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                {isEditing ? (
+                                    <div className="space-y-3">
+                                        <label className="block text-sm font-semibold text-blue-700 dark:text-blue-300 mb-2">
+                                            Scheduled Date & Time:
+                                        </label>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Date</label>
+                                                <input
+                                                    type="date"
+                                                    value={editDate}
+                                                    onChange={(e) => setEditDate(e.target.value)}
+                                                    className="w-full p-2 border rounded-lg bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Time</label>
+                                                <input
+                                                    type="time"
+                                                    value={editTime}
+                                                    onChange={(e) => setEditTime(e.target.value)}
+                                                    className="w-full p-2 border rounded-lg bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm font-semibold text-blue-700 dark:text-blue-300">Scheduled for:</span>
+                                        <span className="text-sm text-blue-600 dark:text-blue-400">
+                                            {new Date(selectedEvent.event.date).toLocaleString([], {
+                                                weekday: 'long',
+                                                year: 'numeric',
+                                                month: 'long',
+                                                day: 'numeric',
+                                                hour: 'numeric',
+                                                minute: '2-digit',
+                                                hour12: true
+                                            })}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Media Preview */}
+                            {(selectedEvent.post?.mediaUrl || selectedEvent.event.thumbnail) && (
+                                <div className="mb-4 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+                                    {(selectedEvent.post?.mediaType === 'video' || selectedEvent.event.type === 'Reel') ? (
+                                        <video src={selectedEvent.post?.mediaUrl || selectedEvent.event.thumbnail} controls className="w-full max-h-96 object-contain bg-gray-100 dark:bg-gray-900" />
+                                    ) : (
+                                        <img src={selectedEvent.post?.mediaUrl || selectedEvent.event.thumbnail} alt="Post preview" className="w-full max-h-96 object-contain bg-gray-100 dark:bg-gray-900" />
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Caption */}
+                            {selectedEvent.post?.content && (
+                                <div className="mb-4">
+                                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Caption:</h4>
+                                    <p className="text-gray-900 dark:text-white whitespace-pre-wrap bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
+                                        {selectedEvent.post.content}
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Hashtags */}
+                            {selectedEvent.post?.content && extractHashtags(selectedEvent.post.content).length > 0 && (
+                                <div className="mb-4">
+                                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Hashtags:</h4>
+                                    <div className="flex flex-wrap gap-2">
+                                        {extractHashtags(selectedEvent.post.content).map((tag, idx) => (
+                                            <span key={idx} className="px-3 py-1 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-full text-sm">
+                                                {tag}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Platforms - Editable */}
+                            <div className="mb-4">
+                                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Platforms:</h4>
+                                {isEditing ? (
+                                    <div className="flex flex-wrap gap-2">
+                                        {(Object.keys(platformIcons) as Platform[]).map((platform) => (
+                                            <button
+                                                key={platform}
+                                                onClick={() => setEditPlatforms(prev => ({ ...prev, [platform]: !prev[platform] }))}
+                                                className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors ${
+                                                    editPlatforms[platform]
+                                                        ? 'bg-primary-100 dark:bg-primary-900/30 border-primary-500 dark:border-primary-600 text-primary-700 dark:text-primary-300'
+                                                        : 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                                }`}
+                                            >
+                                                <span className="w-4 h-4">{platformIcons[platform]}</span>
+                                                <span className="text-sm font-medium">{platform}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-wrap gap-2">
+                                        {(selectedEvent.post?.platforms || [selectedEvent.event.platform]).map((platform, idx) => (
+                                            <div key={idx} className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                                                <span className="w-4 h-4">{platformIcons[platform]}</span>
+                                                <span className="text-sm text-gray-700 dark:text-gray-300">{platform}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Edit Actions */}
+                            {isEditing && (
+                                <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
+                                    <button
+                                        onClick={handleDeletePost}
+                                        disabled={isSaving}
+                                        className="px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors disabled:opacity-50 flex items-center gap-2"
+                                    >
+                                        <TrashIcon className="w-4 h-4" />
+                                        Delete Post
+                                    </button>
+                                    <div className="flex items-center gap-3">
+                                        <button
+                                            onClick={() => {
+                                                setIsEditing(false);
+                                                // Reset to original values
+                                                const eventDate = new Date(selectedEvent.event.date);
+                                                const dateStr = eventDate.toISOString().split('T')[0];
+                                                const timeStr = eventDate.toTimeString().slice(0, 5);
+                                                setEditDate(dateStr);
+                                                setEditTime(timeStr);
+                                                const platforms: Record<Platform, boolean> = {
+                                                    Instagram: false,
+                                                    TikTok: false,
+                                                    X: false,
+                                                    Threads: false,
+                                                    YouTube: false,
+                                                    LinkedIn: false,
+                                                    Facebook: false,
+                                                };
+                                                if (selectedEvent.post?.platforms) {
+                                                    selectedEvent.post.platforms.forEach(p => {
+                                                        platforms[p] = true;
+                                                    });
+                                                } else {
+                                                    platforms[selectedEvent.event.platform] = true;
+                                                }
+                                                setEditPlatforms(platforms);
+                                            }}
+                                            disabled={isSaving}
+                                            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            onClick={handleSaveEdit}
+                                            disabled={isSaving}
+                                            className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                                        >
+                                            {isSaving ? (
+                                                <>
+                                                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                    </svg>
+                                                    Saving...
+                                                </>
+                                            ) : (
+                                                'Save Changes'
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
                 <div className="flex items-center gap-6">
                     <div>

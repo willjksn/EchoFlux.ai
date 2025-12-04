@@ -32,12 +32,12 @@ const statusColors: Record<ApprovalStatus, string> = {
 };
 
 export const Approvals: React.FC = () => {
-    const { posts, user, setActivePage, showToast, autopilotCampaigns } = useAppContext();
+    const { posts, user, setActivePage, showToast } = useAppContext();
     const [activePost, setActivePost] = useState<Post | null>(null);
     const [comment, setComment] = useState('');
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [isGeneratingComment, setIsGeneratingComment] = useState(false);
-    const [sourceFilter, setSourceFilter] = useState<'all' | 'autopilot' | 'automation' | 'manual'>('all');
+    const [sourceFilter, setSourceFilter] = useState<'all' | 'automation' | 'manual'>('all');
 
     if (!['Elite', 'Agency'].includes(user?.plan || "") && user?.role !== 'Admin')
  {
@@ -118,18 +118,12 @@ export const Approvals: React.FC = () => {
     const filteredPosts = posts.filter(post => {
         if (sourceFilter === 'all') return true;
         
-        // Check if post is from Autopilot
-        const isFromAutopilot = post.id.includes('autopilot') || 
-                               (post as any).campaignId ||
-                               autopilotCampaigns.some(c => post.id.includes(c.id));
-        
         // Check if post is from Automation (workflowId indicates Automation)
-        const isFromAutomation = (post as any).workflowId && !isFromAutopilot;
+        const isFromAutomation = !!(post as any).workflowId;
         
-        // Manual posts have no campaignId or workflowId
-        const isManual = !isFromAutopilot && !isFromAutomation;
+        // Manual posts have no workflowId
+        const isManual = !isFromAutomation;
         
-        if (sourceFilter === 'autopilot') return isFromAutopilot;
         if (sourceFilter === 'automation') return isFromAutomation;
         if (sourceFilter === 'manual') return isManual;
         
@@ -190,16 +184,6 @@ export const Approvals: React.FC = () => {
                             }`}
                         >
                             All
-                        </button>
-                        <button
-                            onClick={() => setSourceFilter('autopilot')}
-                            className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
-                                sourceFilter === 'autopilot'
-                                    ? 'bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-md'
-                                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
-                            }`}
-                        >
-                            Autopilot
                         </button>
                         <button
                             onClick={() => setSourceFilter('automation')}
@@ -265,18 +249,8 @@ export const Approvals: React.FC = () => {
                                                 ))}
                                                 {/* Source Badge */}
                                                 {(() => {
-                                                    const isFromAutopilot = post.id.includes('autopilot') || 
-                                                                           (post as any).campaignId ||
-                                                                           autopilotCampaigns.some(c => post.id.includes(c.id));
-                                                    const isFromAutomation = (post as any).workflowId && !isFromAutopilot;
+                                                    const isFromAutomation = !!(post as any).workflowId;
                                                     
-                                                    if (isFromAutopilot) {
-                                                        return (
-                                                            <span className="ml-2 text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full font-medium">
-                                                                Autopilot
-                                                            </span>
-                                                        );
-                                                    }
                                                     if (isFromAutomation) {
                                                         return (
                                                             <span className="ml-2 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">

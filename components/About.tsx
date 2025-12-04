@@ -23,17 +23,17 @@ export const About: React.FC = () => {
                     
                     <h4 className="text-lg font-bold text-gray-900 dark:text-white mt-6">The 8 Pillars of EngageSuite</h4>
                     <ul className="list-disc pl-5 space-y-2">
-                        <li><strong>AI Autopilot:</strong> The ultimate workflow. Set a high-level goal (e.g., "Promote new product"), and our AI will generate a multi-week strategy, create all the content (images and captions), and queue them up for your final approval.</li>
+                        <li><strong>Quick Post Automation:</strong> Upload multiple images or videos, select your platforms, and let AI automatically create captions, hashtags, and schedule posts at optimal times. Perfect for busy creators and businesses who need to maintain a consistent presence.</li>
                         <li><strong>Central Command:</strong> A unified dashboard that highlights what matters—your account health, upcoming schedule, and urgent tasks—so you never feel lost in the noise.</li>
-                        <li><strong>AI Strategy Engine:</strong> Stop guessing what to post. Our AI Strategist builds 4-week content roadmaps aligned with your niche and goals.</li>
-                        <li><strong>Generative Content Studio:</strong> Create images, videos (Veo), and captions instantly. Use our Remix engine to turn one post into content for every platform.</li>
+                        <li><strong>AI Strategy Engine:</strong> Stop guessing what to post. Our AI Content Strategist builds multi-week content roadmaps with image and video ideas tailored to your niche and goals. Upload media directly to roadmap items and auto-schedule posts to your calendar.</li>
+                        <li><strong>Media Library:</strong> Upload and organize images and videos in your personal media library. Reuse assets across posts, select from library when composing, and keep your content organized for maximum efficiency.</li>
                         <li><strong>Intelligent CRM:</strong> Turn interactions into relationships. Tag leads, keep internal notes, and track customer history instantly from your inbox.</li>
                         <li><strong>Strategic Listening:</strong> We listen to the web for you. Track brand mentions and competitor moves to stay ahead of the curve.</li>
-                        <li><strong>Visual Planning:</strong> A drag-and-drop calendar that bridges the gap between creation and scheduling, ensuring your content mix is perfect.</li>
+                        <li><strong>Visual Planning:</strong> A beautiful calendar view that lets you preview, edit, and manage all your scheduled content. Click any post to preview, edit date/time/platforms, or delete—all in one place.</li>
                         <li><strong>Conversion Engine:</strong> We close the loop with our "Smart Link-in-Bio" builder, turning engagement into owned assets like email lists.</li>
                     </ul>
 
-                    <p className="mt-6">Our mission is to replace your fragmented stack of 10 different tools with one cohesive, AI-powered platform. We handle the busy work so you can focus on the big picture.</p>
+                    <p className="mt-6">Our mission is to replace your fragmented stack of 10 different tools with one cohesive, AI-powered platform. We handle the busy work—from strategy to scheduling—so you can focus on the big picture and grow your brand authentically.</p>
                 </div>
             </div>
         </div>
