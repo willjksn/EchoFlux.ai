@@ -76,11 +76,25 @@ export async function generateReply(
   settings: any
 ): Promise<string> {
   const res = await callFunction("generateReply", {
-    messageContent,
+    incomingMessage: messageContent, // API expects 'incomingMessage'
+    messageContent: messageContent, // Also send as backup
     messageType,
     platform,
+    tone: settings?.tone,
+    context: settings?.prioritizedKeywords,
     settings,
   });
+  
+  // Check for API errors
+  if (res.success === false || res.error) {
+    const errorMessage = res.note || res.error || 'Failed to generate reply. Please check your API key and try again.';
+    throw new Error(errorMessage);
+  }
+  
+  if (!res.reply) {
+    throw new Error('No reply generated. Please check your API key and try again.');
+  }
+  
   return res.reply;
 }
 

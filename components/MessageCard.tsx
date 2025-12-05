@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef, useMemo, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useLayoutEffect, useCallback } from 'react';
 import { Message, Settings, TeamMember } from '../types';
 import { generateReply } from "../src/services/geminiService"
 import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
@@ -126,7 +126,13 @@ export const MessageCard: React.FC<MessageCardProps> = ({ message, id, isSelecte
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleGenerateReply = async () => {
+  const handleGenerateReply = useCallback(async () => {
+    // Only generate reply if auto-respond is enabled
+    if (!settings.autoReply && !settings.autoRespond) {
+      setError(null);
+      return;
+    }
+    
     setIsLoading(true);
     setError(null);
     setReply('');
@@ -138,19 +144,30 @@ export const MessageCard: React.FC<MessageCardProps> = ({ message, id, isSelecte
         setIsSent(true);
         showToast(`Auto-responded to ${message.user.name}`, 'success');
       }
-    } catch (err) {
-      setError('Failed to generate reply. Please check your API key and try again.');
+    } catch (err: any) {
+      // Only show error if auto-respond is enabled
+      if (settings.autoReply || settings.autoRespond) {
+        const errorMessage = err?.note || err?.message || 'Failed to generate reply. Please check your API key and try again.';
+        setError(errorMessage);
+      }
       console.error(err);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [message.content, message.type, message.platform, settings, message.user.name, showToast]);
   
   useEffect(() => {
-    if (settings.autoReply && !isSent) {
+    // Clear error if auto-respond is disabled
+    if (!settings.autoReply && !settings.autoRespond) {
+      setError(null);
+      return;
+    }
+    
+    // Only auto-generate reply if auto-respond is enabled
+    if ((settings.autoReply || settings.autoRespond) && !isSent) {
         handleGenerateReply();
     }
-  }, [message.id]);
+  }, [message.id, settings.autoReply, settings.autoRespond, isSent, handleGenerateReply]);
 
   useEffect(() => {
     if (!isSpeechRecognitionSupported) {
@@ -266,7 +283,14 @@ export const MessageCard: React.FC<MessageCardProps> = ({ message, id, isSelecte
           </div>
         </div>
 
-        {error && <p className="mt-4 text-sm text-red-500">{error}</p>}
+        {error && (settings.autoReply || settings.autoRespond) && (
+          <p className="mt-4 text-sm text-red-500">{error}</p>
+        )}
+        {!settings.autoReply && !settings.autoRespond && !isSent && (
+          <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
+            Auto-respond is disabled. Enable it in settings to automatically generate replies.
+          </p>
+        )}
         
         {!isSent ? (
             <div className="mt-4 pl-14">

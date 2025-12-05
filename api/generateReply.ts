@@ -56,10 +56,17 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  const { incomingMessage, tone, context } = (req.body as any) || {};
-  if (!incomingMessage) {
-    return res.status(400).json({ error: "Missing 'incomingMessage' in body" });
+  const { incomingMessage, messageContent, tone, context, settings } = (req.body as any) || {};
+  const message = incomingMessage || messageContent;
+  if (!message) {
+    return res.status(400).json({ error: "Missing 'incomingMessage' or 'messageContent' in body" });
   }
+  
+  // Extract tone and context from settings if provided
+  const finalTone = tone || settings?.tone?.formality !== undefined 
+    ? `${settings.tone.formality > 0.5 ? 'formal' : 'casual'}, ${settings.tone.humor > 0.5 ? 'humorous' : 'professional'}`
+    : "friendly, on-brand";
+  const finalContext = context || settings?.prioritizedKeywords || "none";
 
   try {
     // Use model router - replies use cheapest model for cost optimization
@@ -70,10 +77,10 @@ async function handler(req: VercelRequest, res: VercelResponse) {
 You write replies to DMs/comments.
 
 Incoming message:
-${incomingMessage}
+${message}
 
-Tone: ${tone || "friendly, on-brand"}
-Context: ${context || "none"}
+Tone: ${finalTone}
+Context: ${finalContext}
 
 Write a short reply that feels human, not robotic. Do NOT add greetings if user already greeted. One reply only.
 `;
