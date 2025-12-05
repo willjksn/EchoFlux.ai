@@ -2316,7 +2316,7 @@ const CaptionGenerator: React.FC = () => {
 
         {/* Always show media boxes - initialize with one empty box if none exist */}
         {composeState.mediaItems.length === 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 justify-items-center">
             <MediaBox
               key="initial"
               mediaItem={{
@@ -2364,7 +2364,7 @@ const CaptionGenerator: React.FC = () => {
             />
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4">
+          <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 ${composeState.mediaItems.length === 1 ? 'justify-items-center' : 'justify-items-start'}`}>
             {composeState.mediaItems.map((item, index) => (
               <MediaBox
                 key={item.id}
