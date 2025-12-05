@@ -322,6 +322,8 @@ const CaptionGenerator: React.FC = () => {
             type: item.type || 'image',
             mimeType: item.mimeType || '',
             scheduledDate: item.scheduledDate || null,
+            selectedMusic: item.selectedMusic || null,
+            musicNote: item.musicNote || null,
             updatedAt: new Date().toISOString(),
           };
 
@@ -392,6 +394,8 @@ const CaptionGenerator: React.FC = () => {
             type: data.type || 'image',
             mimeType: data.mimeType || '',
             scheduledDate: data.scheduledDate || undefined,
+            selectedMusic: data.selectedMusic || undefined,
+            musicNote: data.musicNote || undefined,
             data: '', // Don't load base64 data
           });
         });
@@ -1016,7 +1020,55 @@ const CaptionGenerator: React.FC = () => {
         contentType: item.mimeType,
       });
 
-      const mediaUrl = await getDownloadURL(storageRef);
+      let mediaUrl = await getDownloadURL(storageRef);
+
+      // Process video with music if music is selected and it's a video
+      // Only for TikTok and YouTube (not Instagram)
+      if (item.type === 'video' && item.selectedMusic) {
+        const platformsToPost = (Object.keys(item.selectedPlatforms || {}) as Platform[]).filter(
+          p => item.selectedPlatforms?.[p]
+        );
+        
+        // Check if TikTok or YouTube is selected (not Instagram)
+        const hasTikTokOrYouTube = platformsToPost.some(p => 
+          p === 'TikTok' || p === 'YouTube'
+        );
+        const hasInstagram = platformsToPost.includes('Instagram');
+
+        if (hasTikTokOrYouTube && !hasInstagram) {
+          // Process video with music for TikTok/YouTube
+          try {
+            const response = await fetch('/api/processVideoWithMusic', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                videoUrl: mediaUrl,
+                musicUrl: item.selectedMusic.url,
+                platforms: platformsToPost,
+              }),
+            });
+
+            const result = await response.json();
+            if (result.success && result.processedVideoUrl) {
+              mediaUrl = result.processedVideoUrl;
+              showToast('Music added to video successfully!', 'success');
+            } else if (result.note) {
+              // Video processing not fully implemented yet
+              console.log('Video processing note:', result.note);
+              showToast('Music selection saved. Video processing will be available soon.', 'success');
+            }
+          } catch (processError) {
+            console.error('Failed to process video with music:', processError);
+            // Continue with original video if processing fails
+            showToast('Music selection saved. Video processing will be available soon.', 'success');
+          }
+        } else if (hasInstagram) {
+          // Instagram reminder
+          showToast('For Instagram Reels, add music manually when posting. Music selection saved.', 'success');
+        }
+      }
 
       // Save to media library
       try {

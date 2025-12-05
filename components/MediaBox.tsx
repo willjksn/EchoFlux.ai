@@ -21,7 +21,9 @@ import {
   LightbulbIcon,
   HeartIcon,
 } from './icons/UIIcons';
+import { MusicTrack } from '../types';
 import { EMOJIS, EMOJI_CATEGORIES, Emoji } from './emojiData';
+import { getMusicTracks, searchMusicTracks, getMusicGenres, getMusicMoods } from '../src/services/musicService';
 import {
   InstagramIcon,
   TikTokIcon,
@@ -116,6 +118,9 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
   const [emojiSearchTerm, setEmojiSearchTerm] = useState('');
   const [activeEmojiCategory, setActiveEmojiCategory] = useState<Emoji['category']>(EMOJI_CATEGORIES[0].name);
+  const [showMusicModal, setShowMusicModal] = useState(false);
+  const [musicSearchQuery, setMusicSearchQuery] = useState('');
+  const [selectedMusicGenre, setSelectedMusicGenre] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const captionTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -601,6 +606,50 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
         )}
       </div>
 
+      {/* Music Selection for Videos */}
+      {mediaItem.type === 'video' && (
+        <div className="mb-3">
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
+              Music Track
+            </label>
+            <button
+              onClick={() => setShowMusicModal(true)}
+              className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-1"
+            >
+              {mediaItem.selectedMusic ? 'Change' : 'Select Music'}
+            </button>
+          </div>
+          {mediaItem.selectedMusic ? (
+            <div className="p-2 bg-gray-50 dark:bg-gray-700 rounded-md text-xs">
+              <div className="font-medium text-gray-800 dark:text-gray-200">{mediaItem.selectedMusic.name}</div>
+              <div className="text-gray-600 dark:text-gray-400">{mediaItem.selectedMusic.artist}</div>
+              {mediaItem.selectedMusic.genre && (
+                <div className="text-gray-500 dark:text-gray-500 mt-1">
+                  {mediaItem.selectedMusic.genre} • {mediaItem.selectedMusic.mood}
+                </div>
+              )}
+              <button
+                onClick={() => onUpdate(index, { selectedMusic: undefined })}
+                className="mt-1 text-xs text-red-600 dark:text-red-400 hover:text-red-700"
+              >
+                Remove
+              </button>
+            </div>
+          ) : (
+            <div className="p-2 bg-gray-50 dark:bg-gray-700 rounded-md text-xs text-gray-600 dark:text-gray-400">
+              No music selected. Click "Select Music" to add royalty-free music.
+            </div>
+          )}
+          {/* Instagram Reels Note */}
+          {mediaItem.selectedPlatforms?.Instagram && (
+            <div className="mt-2 p-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md text-xs text-yellow-800 dark:text-yellow-200">
+              <strong>Note:</strong> For Instagram Reels, you'll need to add music manually when posting. Instagram's music library is only available in the Instagram app. This selected music can be embedded into your video file.
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Schedule Date */}
       {mediaItem.scheduledDate && (
         <div className="mb-3 flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
@@ -751,6 +800,93 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Music Selection Modal */}
+      {showMusicModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white">Select Music Track</h3>
+              <button
+                onClick={() => {
+                  setShowMusicModal(false);
+                  setMusicSearchQuery('');
+                  setSelectedMusicGenre('');
+                }}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-2xl"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              {/* Search and Filter */}
+              <div className="mb-4 space-y-3">
+                <input
+                  type="text"
+                  placeholder="Search music..."
+                  value={musicSearchQuery}
+                  onChange={e => setMusicSearchQuery(e.target.value)}
+                  className="w-full p-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-sm"
+                />
+                <select
+                  value={selectedMusicGenre}
+                  onChange={e => setSelectedMusicGenre(e.target.value)}
+                  className="w-full p-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-sm"
+                >
+                  <option value="">All Genres</option>
+                  {getMusicGenres().map(genre => (
+                    <option key={genre} value={genre}>{genre}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Music Tracks List */}
+              <div className="space-y-2">
+                {(musicSearchQuery
+                  ? searchMusicTracks(musicSearchQuery)
+                  : getMusicTracks(selectedMusicGenre ? { genre: selectedMusicGenre } : undefined)
+                ).map(track => (
+                  <button
+                    key={track.id}
+                    onClick={() => {
+                      onUpdate(index, { selectedMusic: track });
+                      setShowMusicModal(false);
+                      setMusicSearchQuery('');
+                      setSelectedMusicGenre('');
+                      showToast(`Selected: ${track.name}`, 'success');
+                    }}
+                    className={`w-full p-3 text-left rounded-lg border transition-colors ${
+                      mediaItem.selectedMusic?.id === track.id
+                        ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30'
+                        : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900 dark:text-white">{track.name}</div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">{track.artist}</div>
+                        {track.genre && track.mood && (
+                          <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                            {track.genre} • {track.mood}
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-500">
+                        {Math.floor(track.duration)}s
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {/* Info Note */}
+              <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md text-xs text-blue-800 dark:text-blue-200">
+                <strong>Note:</strong> These are royalty-free tracks. For Instagram Reels, you may need to add music manually when posting, as Instagram's music library is only available in the Instagram app.
+              </div>
             </div>
           </div>
         </div>

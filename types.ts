@@ -384,6 +384,16 @@ export interface ComposeContextData {
     date?: string;
 }
 
+export interface MusicTrack {
+    id: string;
+    name: string;
+    artist: string;
+    url: string;
+    duration: number; // in seconds
+    genre?: string;
+    mood?: string;
+}
+
 export interface MediaItemState {
     id: string;
     previewUrl: string;
@@ -397,6 +407,8 @@ export interface MediaItemState {
     postGoal: string; // Individual goal for this post
     postTone: string; // Individual tone for this post
     selectedPlatforms: Record<Platform, boolean>; // Individual platform selection per box
+    selectedMusic?: MusicTrack; // Selected music track for Reels
+    musicNote?: string; // Reminder note for adding music manually
 }
 
 export interface ComposeState {
