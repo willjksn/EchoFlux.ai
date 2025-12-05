@@ -20,6 +20,7 @@ import {
   CarIcon,
   LightbulbIcon,
   HeartIcon,
+  PlayIcon,
 } from './icons/UIIcons';
 import { MusicTrack } from '../types';
 import { EMOJIS, EMOJI_CATEGORIES, Emoji } from './emojiData';
@@ -121,9 +122,29 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   const [showMusicModal, setShowMusicModal] = useState(false);
   const [musicSearchQuery, setMusicSearchQuery] = useState('');
   const [selectedMusicGenre, setSelectedMusicGenre] = useState<string>('');
+  const [playingMusicId, setPlayingMusicId] = useState<string | null>(null);
+  const musicAudioRef = useRef<HTMLAudioElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const captionTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Cleanup music playback on unmount or modal close
+  useEffect(() => {
+    return () => {
+      if (musicAudioRef.current) {
+        musicAudioRef.current.pause();
+        musicAudioRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!showMusicModal && musicAudioRef.current) {
+      musicAudioRef.current.pause();
+      musicAudioRef.current = null;
+      setPlayingMusicId(null);
+    }
+  }, [showMusicModal]);
 
   // Load media library items when modal opens
   React.useEffect(() => {
@@ -401,17 +422,68 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
             <img
               src={mediaItem.previewUrl}
               alt={`Post ${index + 1}`}
-              className="max-h-full max-w-full object-contain"
+              className="w-full h-full object-contain"
             />
           ) : (
-            <video
-              src={mediaItem.previewUrl}
-              controls
-              className="max-h-full max-w-full object-contain"
-            />
+            <>
+              <video
+                src={mediaItem.previewUrl}
+                className="w-full h-full object-contain"
+                preload="metadata"
+                ref={(videoRef) => {
+                  if (videoRef) {
+                    videoRef.addEventListener('play', () => {
+                      const playOverlay = videoRef.parentElement?.querySelector('.play-overlay');
+                      if (playOverlay) {
+                        (playOverlay as HTMLElement).style.display = 'none';
+                      }
+                    });
+                    videoRef.addEventListener('pause', () => {
+                      const playOverlay = videoRef.parentElement?.querySelector('.play-overlay');
+                      if (playOverlay) {
+                        (playOverlay as HTMLElement).style.display = 'flex';
+                      }
+                    });
+                  }
+                }}
+              />
+              <div 
+                className="play-overlay absolute inset-0 bg-black/30 flex items-center justify-center cursor-pointer hover:bg-black/40 transition-colors"
+                onClick={(e) => {
+                  const video = e.currentTarget.parentElement?.querySelector('video') as HTMLVideoElement;
+                  if (video) {
+                    if (video.paused) {
+                      video.play();
+                    } else {
+                      video.pause();
+                    }
+                  }
+                }}
+              >
+                <div className="bg-white/90 dark:bg-gray-800/90 rounded-full p-4 shadow-lg">
+                  <PlayIcon className="w-8 h-8 text-primary-600 dark:text-primary-400" />
+                </div>
+              </div>
+              <div className="absolute bottom-2 right-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const video = e.currentTarget.closest('.relative')?.querySelector('video') as HTMLVideoElement;
+                    if (video) {
+                      video.controls = !video.controls;
+                      video.requestFullscreen?.();
+                    }
+                  }}
+                  className="bg-black/60 text-white px-2 py-1 rounded text-xs hover:bg-black/80"
+                  title="Show controls"
+                >
+                  Controls
+                </button>
+              </div>
+            </>
           )}
           {isGenerating && (
-            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
               <RefreshIcon className="w-6 h-6 text-white animate-spin" />
             </div>
           )}
@@ -850,22 +922,15 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
                   ? searchMusicTracks(musicSearchQuery)
                   : getMusicTracks(selectedMusicGenre ? { genre: selectedMusicGenre } : undefined)
                 ).map(track => (
-                  <button
+                  <div
                     key={track.id}
-                    onClick={() => {
-                      onUpdate(index, { selectedMusic: track });
-                      setShowMusicModal(false);
-                      setMusicSearchQuery('');
-                      setSelectedMusicGenre('');
-                      showToast(`Selected: ${track.name}`, 'success');
-                    }}
-                    className={`w-full p-3 text-left rounded-lg border transition-colors ${
+                    className={`w-full p-3 rounded-lg border transition-colors ${
                       mediaItem.selectedMusic?.id === track.id
                         ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30'
                         : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-3">
                       <div className="flex-1">
                         <div className="font-medium text-gray-900 dark:text-white">{track.name}</div>
                         <div className="text-sm text-gray-600 dark:text-gray-400">{track.artist}</div>
@@ -875,11 +940,72 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
                           </div>
                         )}
                       </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-500">
-                        {Math.floor(track.duration)}s
+                      <div className="flex items-center gap-2">
+                        {/* Play/Pause Button */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (playingMusicId === track.id && musicAudioRef.current) {
+                              // Pause current track
+                              musicAudioRef.current.pause();
+                              musicAudioRef.current = null;
+                              setPlayingMusicId(null);
+                            } else {
+                              // Stop any currently playing track
+                              if (musicAudioRef.current) {
+                                musicAudioRef.current.pause();
+                                musicAudioRef.current = null;
+                              }
+                              // Play new track
+                              const audio = new Audio(track.url);
+                              audio.play().catch(err => {
+                                console.error('Failed to play audio:', err);
+                                showToast('Failed to preview music. Please check the audio URL.', 'error');
+                              });
+                              audio.addEventListener('ended', () => {
+                                setPlayingMusicId(null);
+                                musicAudioRef.current = null;
+                              });
+                              musicAudioRef.current = audio;
+                              setPlayingMusicId(track.id);
+                            }
+                          }}
+                          className="p-2 bg-primary-600 hover:bg-primary-700 text-white rounded-full transition-colors"
+                          title={playingMusicId === track.id ? 'Pause preview' : 'Preview'}
+                        >
+                          {playingMusicId === track.id ? (
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
+                            </svg>
+                          ) : (
+                            <PlayIcon className="w-4 h-4" />
+                          )}
+                        </button>
+                        {/* Select Button */}
+                        <button
+                          onClick={() => {
+                            // Stop any playing music
+                            if (musicAudioRef.current) {
+                              musicAudioRef.current.pause();
+                              musicAudioRef.current = null;
+                            }
+                            setPlayingMusicId(null);
+                            onUpdate(index, { selectedMusic: track });
+                            setShowMusicModal(false);
+                            setMusicSearchQuery('');
+                            setSelectedMusicGenre('');
+                            showToast(`Selected: ${track.name}`, 'success');
+                          }}
+                          className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs rounded-md transition-colors"
+                        >
+                          Select
+                        </button>
+                        <div className="text-xs text-gray-500 dark:text-gray-500">
+                          {Math.floor(track.duration)}s
+                        </div>
                       </div>
                     </div>
-                  </button>
+                  </div>
                 ))}
               </div>
 
