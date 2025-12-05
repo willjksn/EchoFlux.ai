@@ -45,6 +45,7 @@ export const MessageCard: React.FC<MessageCardProps> = ({ message, id, isSelecte
   const [reply, setReply] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSent, setIsSent] = useState(false);
+  const [isViewed, setIsViewed] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [assignedTo, setAssignedTo] = useState<string | undefined>(message.assigneeId);
@@ -228,11 +229,34 @@ export const MessageCard: React.FC<MessageCardProps> = ({ message, id, isSelecte
 
   const assignedMember = useMemo(() => teamMembers.find(m => m.id === assignedTo), [assignedTo, teamMembers]);
 
+  // Mark as viewed when card is clicked/interacted with
+  const handleCardInteraction = () => {
+    if (!isViewed) {
+      setIsViewed(true);
+    }
+  };
+
+  // Messages stay visible until viewed - auto-replied messages remain until user views them
+  // Only hide if explicitly deleted or archived, not just because they were auto-replied
+
   return (
-    <div id={id} className={`bg-white dark:bg-gray-800 rounded-xl shadow-md transition-all duration-300 ${isSent ? 'opacity-50 grayscale' : ''} ${message.isFlagged ? 'ring-2 ring-red-400' : ''} ${isSelected ? 'ring-2 ring-primary-500' : ''}`}>
+    <div 
+      id={id} 
+      onClick={handleCardInteraction}
+      className={`bg-white dark:bg-gray-800 rounded-xl shadow-md transition-all duration-300 ${isSent ? 'opacity-50 grayscale' : ''} ${message.isFlagged ? 'ring-2 ring-red-400' : ''} ${isSelected ? 'ring-2 ring-primary-500' : ''}`}
+    >
       <div className="p-6">
         <div className="flex items-start space-x-4">
-          <input type="checkbox" checked={isSelected} onChange={(e) => onSelect(message.id, e.target.checked)} className="mt-1 h-5 w-5 text-primary-600 border-gray-300 rounded focus:ring-primary-500" />
+          <input 
+            type="checkbox" 
+            checked={isSelected} 
+            onChange={(e) => {
+              e.stopPropagation(); // Prevent card click when clicking checkbox
+              onSelect(message.id, e.target.checked);
+            }} 
+            onClick={(e) => e.stopPropagation()} // Prevent card click when clicking checkbox
+            className="mt-1 h-5 w-5 text-primary-600 border-gray-300 rounded focus:ring-primary-500 cursor-pointer z-10" 
+          />
           
           {/* User Avatar & Name Trigger CRM */}
           <div 

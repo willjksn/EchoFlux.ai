@@ -2435,7 +2435,21 @@ export const Dashboard: React.FC = () => {
       )}
 
       {selectedMessageIds.size > 0 && (
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-auto bg-white dark:bg-gray-800 shadow-2xl rounded-full p-3 flex items-center gap-4"><span className="font-semibold px-2">{selectedMessageIds.size} selected</span><button className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-full hover:bg-primary-700">Approve All</button><button onClick={handleBulkArchive} className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-200 dark:bg-gray-600 rounded-full hover:bg-gray-300 dark:hover:bg-gray-500">Archive All</button><button onClick={handleBulkDelete} className="px-4 py-2 text-sm font-medium text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/50 rounded-full hover:bg-red-200 dark:hover:bg-red-900">Delete All</button></div>
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-auto bg-white dark:bg-gray-800 shadow-2xl rounded-full p-3 flex items-center gap-4 border-2 border-primary-500">
+            <span className="font-semibold px-2 text-gray-900 dark:text-white">{selectedMessageIds.size} selected</span>
+            <button 
+              onClick={handleBulkArchive} 
+              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-200 dark:bg-gray-600 rounded-full hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
+            >
+              Archive Selected
+            </button>
+            <button 
+              onClick={handleBulkDelete} 
+              className="px-4 py-2 text-sm font-medium text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/50 rounded-full hover:bg-red-200 dark:hover:bg-red-900 transition-colors"
+            >
+              Delete Selected
+            </button>
+          </div>
       )}
     </div>
   );

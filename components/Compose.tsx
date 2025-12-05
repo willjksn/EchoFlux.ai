@@ -2362,6 +2362,8 @@ const CaptionGenerator: React.FC = () => {
               onPublish={handlePublishMedia}
               onSchedule={handleScheduleMedia}
               platformIcons={platformIcons}
+              onAddNewBox={handleAddMediaBox}
+              isLastBox={true}
             />
             </div>
           </div>
@@ -2385,16 +2387,10 @@ const CaptionGenerator: React.FC = () => {
                   onPublish={handlePublishMedia}
                   onSchedule={handleScheduleMedia}
                   platformIcons={platformIcons}
+                  onAddNewBox={handleAddMediaBox}
+                  isLastBox={true}
                 />
               ))}
-              {/* Add Image/Video button - Always show compact plus sign */}
-              <button
-                onClick={handleAddMediaBox}
-                className="mt-4 h-24 w-full flex items-center justify-center text-primary-600 dark:text-primary-400 bg-white dark:bg-gray-800 border-2 border-dashed border-primary-300 dark:border-primary-700 rounded-xl hover:bg-primary-50 dark:hover:bg-primary-900/30 transition-colors shadow-sm"
-                title="Add Image/Video"
-              >
-                <PlusIcon className="w-8 h-8" />
-              </button>
             </div>
           </div>
         ) : (
@@ -2416,16 +2412,10 @@ const CaptionGenerator: React.FC = () => {
                 onPublish={handlePublishMedia}
                 onSchedule={handleScheduleMedia}
                 platformIcons={platformIcons}
+                onAddNewBox={handleAddMediaBox}
+                isLastBox={index === composeState.mediaItems.length - 1}
               />
             ))}
-            {/* Add Image/Video button - Always show compact plus sign */}
-            <button
-              onClick={handleAddMediaBox}
-              className="h-24 flex items-center justify-center text-primary-600 dark:text-primary-400 bg-white dark:bg-gray-800 border-2 border-dashed border-primary-300 dark:border-primary-700 rounded-xl hover:bg-primary-50 dark:hover:bg-primary-900/30 transition-colors shadow-sm"
-              title="Add Image/Video"
-            >
-              <PlusIcon className="w-8 h-8" />
-            </button>
           </div>
         )}
       </div>

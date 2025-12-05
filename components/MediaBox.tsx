@@ -90,6 +90,8 @@ interface MediaBoxProps {
   onPublish: (index: number) => void;
   onSchedule: (index: number) => void;
   platformIcons: Record<Platform, React.ReactNode>;
+  onAddNewBox?: () => void;
+  isLastBox?: boolean;
 }
 
 export const MediaBox: React.FC<MediaBoxProps> = ({
@@ -107,6 +109,8 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   onPublish,
   onSchedule,
   platformIcons,
+  onAddNewBox,
+  isLastBox = false,
 }) => {
   const { user, showToast, setActivePage } = useAppContext();
   const [isGenerating, setIsGenerating] = useState(false);
@@ -754,6 +758,17 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Add Image/Video button - Show at the bottom if this is the last box */}
+      {isLastBox && onAddNewBox && (
+        <button
+          onClick={onAddNewBox}
+          className="mt-3 w-full h-20 flex items-center justify-center text-primary-600 dark:text-primary-400 bg-white dark:bg-gray-800 border-2 border-dashed border-primary-300 dark:border-primary-700 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-900/30 transition-colors shadow-sm"
+          title="Add Image/Video"
+        >
+          <PlusIcon className="w-8 h-8" />
+        </button>
       )}
     </div>
   );
