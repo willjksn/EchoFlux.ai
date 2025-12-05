@@ -364,6 +364,61 @@ export const Dashboard: React.FC = () => {
               </div>
           </div>
 
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Upcoming Schedule */}
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                   <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Upcoming Schedule</h3>
+                        <button onClick={() => setActivePage('calendar')} className="text-sm text-primary-600 hover:underline">View Calendar</button>
+                   </div>
+                   <div className="space-y-3">
+                        {upcomingEvents.length > 0 ? (
+                            upcomingEvents.map(event => <UpcomingEventCard key={event.id} event={event} onClick={() => handleEventClick(event)} />)
+                        ) : (
+                            <div className="text-center py-8 bg-gray-50 dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
+                                <p className="text-gray-500 text-sm">No upcoming posts.</p>
+                                <button onClick={() => setActivePage('compose')} className="mt-2 text-primary-600 text-sm font-medium">Schedule one now</button>
+                            </div>
+                        )}
+                   </div>
+              </div>
+                
+              {/* Urgent Messages */}
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                  <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Urgent Messages</h3>
+                        <button onClick={() => setViewMode('Inbox')} className="text-sm text-primary-600 hover:underline">Go to Inbox</button>
+                   </div>
+                   <div className="space-y-3">
+                        {filteredMessages.slice(0, 3).length > 0 ? (
+                            filteredMessages.slice(0, 3).map(msg => (
+                                <div key={msg.id} className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700 shadow-sm flex gap-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700" onClick={async (e) => {
+                                    e.stopPropagation();
+                                    await ensureCRMProfile(msg.user);
+                                    openCRM(msg.user);
+                                }}>
+                                    <div className="flex-shrink-0 pt-1">
+                                        <img src={msg.user.avatar} className="w-8 h-8 rounded-full" alt={msg.user.name} />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex justify-between">
+                                            <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{msg.user.name}</p>
+                                            <span className="text-xs text-gray-400">{platformFilterIcons[msg.platform]}</span>
+                                        </div>
+                                        <p className="text-sm text-gray-600 dark:text-gray-300 truncate">{msg.content}</p>
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="text-center py-8 bg-gray-50 dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
+                                <p className="text-green-600 font-medium text-sm">Inbox Zero! 🎉</p>
+                                <p className="text-gray-400 text-xs mt-1">You're all caught up.</p>
+                            </div>
+                        )}
+                   </div>
+              </div>
+          </div>
+
           {/* Enhanced Metrics Section */}
           <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">{isBusiness ? 'Business Metrics' : 'Audience Stats'}</h3>
@@ -2187,61 +2242,6 @@ export const Dashboard: React.FC = () => {
               </div>
             )}
             
-          </div>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Upcoming Schedule */}
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                   <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Upcoming Schedule</h3>
-                        <button onClick={() => setActivePage('calendar')} className="text-sm text-primary-600 hover:underline">View Calendar</button>
-                   </div>
-                   <div className="space-y-3">
-                        {upcomingEvents.length > 0 ? (
-                            upcomingEvents.map(event => <UpcomingEventCard key={event.id} event={event} onClick={() => handleEventClick(event)} />)
-                        ) : (
-                            <div className="text-center py-8 bg-gray-50 dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
-                                <p className="text-gray-500 text-sm">No upcoming posts.</p>
-                                <button onClick={() => setActivePage('compose')} className="mt-2 text-primary-600 text-sm font-medium">Schedule one now</button>
-                            </div>
-                        )}
-                   </div>
-              </div>
-                
-              {/* Urgent Messages */}
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                  <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Urgent Messages</h3>
-                        <button onClick={() => setViewMode('Inbox')} className="text-sm text-primary-600 hover:underline">Go to Inbox</button>
-                   </div>
-                   <div className="space-y-3">
-                        {filteredMessages.slice(0, 3).length > 0 ? (
-                            filteredMessages.slice(0, 3).map(msg => (
-                                <div key={msg.id} className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700 shadow-sm flex gap-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700" onClick={async (e) => {
-                                    e.stopPropagation();
-                                    await ensureCRMProfile(msg.user);
-                                    openCRM(msg.user);
-                                }}>
-                                    <div className="flex-shrink-0 pt-1">
-                                        <img src={msg.user.avatar} className="w-8 h-8 rounded-full" alt={msg.user.name} />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex justify-between">
-                                            <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{msg.user.name}</p>
-                                            <span className="text-xs text-gray-400">{platformFilterIcons[msg.platform]}</span>
-                                        </div>
-                                        <p className="text-sm text-gray-600 dark:text-gray-300 truncate">{msg.content}</p>
-                                    </div>
-                                </div>
-                            ))
-                        ) : (
-                            <div className="text-center py-8 bg-gray-50 dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
-                                <p className="text-green-600 font-medium text-sm">Inbox Zero! 🎉</p>
-                                <p className="text-gray-400 text-xs mt-1">You're all caught up.</p>
-                            </div>
-                        )}
-                   </div>
-              </div>
           </div>
       </div>
   );
