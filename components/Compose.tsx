@@ -2362,8 +2362,6 @@ const CaptionGenerator: React.FC = () => {
               onPublish={handlePublishMedia}
               onSchedule={handleScheduleMedia}
               platformIcons={platformIcons}
-              onAddNewBox={handleAddMediaBox}
-              isLastBox={true}
             />
             </div>
           </div>
@@ -2387,10 +2385,17 @@ const CaptionGenerator: React.FC = () => {
                   onPublish={handlePublishMedia}
                   onSchedule={handleScheduleMedia}
                   platformIcons={platformIcons}
-                  onAddNewBox={handleAddMediaBox}
-                  isLastBox={true}
                 />
               ))}
+              {/* Add Image/Video button - Outside the image box */}
+              <button
+                onClick={handleAddMediaBox}
+                className="mt-4 h-20 w-full flex items-center justify-center gap-2 text-primary-600 dark:text-primary-400 bg-white dark:bg-gray-800 border-2 border-dashed border-primary-300 dark:border-primary-700 rounded-xl hover:bg-primary-50 dark:hover:bg-primary-900/30 transition-colors shadow-sm"
+                title="Add Image/Video"
+              >
+                <PlusIcon className="w-6 h-6" />
+                <span className="text-sm font-medium">image/video</span>
+              </button>
             </div>
           </div>
         ) : (
@@ -2412,10 +2417,17 @@ const CaptionGenerator: React.FC = () => {
                 onPublish={handlePublishMedia}
                 onSchedule={handleScheduleMedia}
                 platformIcons={platformIcons}
-                onAddNewBox={handleAddMediaBox}
-                isLastBox={index === composeState.mediaItems.length - 1}
               />
             ))}
+            {/* Add Image/Video button - Outside the image boxes */}
+            <button
+              onClick={handleAddMediaBox}
+              className="h-20 flex flex-col items-center justify-center gap-2 text-primary-600 dark:text-primary-400 bg-white dark:bg-gray-800 border-2 border-dashed border-primary-300 dark:border-primary-700 rounded-xl hover:bg-primary-50 dark:hover:bg-primary-900/30 transition-colors shadow-sm"
+              title="Add Image/Video"
+            >
+              <PlusIcon className="w-6 h-6" />
+              <span className="text-xs font-medium">image/video</span>
+            </button>
           </div>
         )}
       </div>
