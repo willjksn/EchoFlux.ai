@@ -89,7 +89,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   onSchedule,
   platformIcons,
 }) => {
-  const { user, showToast, mediaLibraryItems, setActivePage } = useAppContext();
+  const { user, showToast, setActivePage } = useAppContext();
   const [isGenerating, setIsGenerating] = useState(false);
   const [showMediaLibraryModal, setShowMediaLibraryModal] = useState(false);
   const [libraryMediaItems, setLibraryMediaItems] = useState<MediaLibraryItem[]>([]);
@@ -262,7 +262,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   );
 
   return (
-    <div className={`bg-white dark:bg-gray-800 p-4 rounded-xl border-2 transition-colors ${
+    <div className={`bg-white dark:bg-gray-800 p-4 rounded-xl border-2 transition-colors w-full ${
       isSelected 
         ? 'border-primary-500 dark:border-primary-500' 
         : 'border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-700'
@@ -291,18 +291,18 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
 
       {/* Media Preview */}
       {mediaItem.previewUrl ? (
-        <div className="relative w-full h-20 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden mb-3">
+        <div className="relative w-full h-32 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden mb-3 flex items-center justify-center">
           {mediaItem.type === 'image' ? (
             <img
               src={mediaItem.previewUrl}
               alt={`Post ${index + 1}`}
-              className="h-full w-full object-cover"
+              className="max-h-full max-w-full object-contain"
             />
           ) : (
             <video
               src={mediaItem.previewUrl}
               controls
-              className="h-full w-full object-cover"
+              className="max-h-full max-w-full object-contain"
             />
           )}
           {isGenerating && (
@@ -443,8 +443,8 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
         value={mediaItem.captionText}
         onChange={e => onUpdate(index, { captionText: e.target.value })}
         placeholder="Write caption or select AI suggestion..."
-        rows={3}
-        className="w-full p-2 text-xs border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 resize-none mb-3"
+        rows={4}
+        className="w-full p-2.5 text-sm border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 resize-y mb-3"
       />
 
       {/* Schedule Date */}
@@ -491,15 +491,19 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
         </div>
       </div>
 
+      {/* Preview Button - Always visible if media exists */}
+      {mediaItem.previewUrl && (
+        <button
+          onClick={() => onPreview(index)}
+          className="w-full mb-3 flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+        >
+          <MobileIcon className="w-3 h-3" /> Preview
+        </button>
+      )}
+
       {/* Action Buttons */}
       {hasContent && (
         <div className="flex flex-col gap-2">
-          <button
-            onClick={() => onPreview(index)}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-          >
-            <MobileIcon className="w-3 h-3" /> Preview
-          </button>
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => onSchedule(index)}

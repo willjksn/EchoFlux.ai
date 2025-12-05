@@ -93,7 +93,11 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
                     </span>
                 </div>
 
-                <div className="mt-10 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+                <div className={`mt-10 grid gap-8 ${
+                    view === 'Creator' 
+                        ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4' 
+                        : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 max-w-4xl mx-auto'
+                }`}>
                     {pricingTiers.map((tier) => {
                         const isCurrentPlan = currentPlan === tier.name;
                         const isAgency = tier.name === 'Agency';
@@ -116,7 +120,7 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
                         let buttonText = 'Choose Plan';
                         if (!isAuthenticated && tier.priceMonthly === 0) buttonText = 'Start for free';
                         if (isCurrentPlan) buttonText = 'Current Plan';
-                        if (isAgency) buttonText = 'Contact Sales';
+                        if (isAgency) buttonText = 'Call for Quote';
 
                         return (
                             <div key={tier.name} className={`relative flex flex-col p-8 rounded-2xl shadow-lg transition-transform hover:-translate-y-1 ${tier.isRecommended ? 'bg-white dark:bg-gray-800 ring-2 ring-primary-500' : 'bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700'}`}>
@@ -129,7 +133,7 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
                                 <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 h-10">{tier.description}</p>
                                 <div className="mt-6">
                                     {isAgency ? (
-                                        <span className="text-4xl font-extrabold text-gray-900 dark:text-white">Contact Sales</span>
+                                        <span className="text-4xl font-extrabold text-gray-900 dark:text-white">Call for Quote</span>
                                     ) : (
                                         <>
                                             <span className="text-4xl font-extrabold text-gray-900 dark:text-white">${price}</span>

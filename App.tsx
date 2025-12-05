@@ -27,13 +27,8 @@ import Automation from './components/Automation';
 import { Calendar } from './components/Calendar';
 import MediaLibrary from './components/MediaLibrary';
 import { Approvals } from './components/Approvals';
-/* OnboardingSelector was missing — provide a local fallback stub to avoid compile errors.
-   Replace this stub with the real ./components/OnboardingSelector export when that file is added. */
-const OnboardingSelector: React.FC<{ onSelect: (type: any) => void }> = ({ onSelect }) => null;
-
-/* CreatorOnboardingModal was missing — provide a local fallback stub to avoid compile errors.
-   Replace this stub with the real ./components/CreatorOnboardingModal export when that file is added. */
-const CreatorOnboardingModal: React.FC<{ onComplete: () => void }> = ({ onComplete }) => null;
+import { OnboardingSelector } from './components/OnboardingSeledtor';
+import { CreatorOnboardingModal } from './components/CreatorOnboardingModal';
 import { BusinessOnboardingModal } from './components/BusinessOnboardingModal';
 import { InteractiveTour } from './components/InteractiveTour';
 import { PaymentModal } from './components/PaymentModal';

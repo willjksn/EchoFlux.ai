@@ -258,6 +258,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNaviga
                            Plan, guide, and run your social media hands-free. Talk to your AI strategist in real-time to discover trends and draft content instantly.
                         </Feature>
                         <Feature icon={<FilmIcon />} title="AI Director Mode">
+                           <span className="inline-flex items-center rounded-full bg-yellow-100 dark:bg-yellow-900/30 px-2 py-0.5 text-xs font-medium text-yellow-800 dark:text-yellow-200 mr-2">Coming Soon</span>
                            Direct multi-scene short films. Our AI creates storyboards and generates sequential clips, maintaining character consistency with your Avatar.
                         </Feature>
                          <Feature icon={<TargetIcon />} title="AI Content Strategist">

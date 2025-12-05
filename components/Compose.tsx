@@ -378,41 +378,79 @@ const CaptionGenerator: React.FC = () => {
 
   // Check for pending media from Media Library
   useEffect(() => {
-    const pendingMedia = localStorage.getItem('pendingMediaFromLibrary');
-    if (pendingMedia) {
-      try {
-        const mediaData = JSON.parse(pendingMedia);
-        const newMediaItem: MediaItemState = {
-          id: Date.now().toString(),
-          previewUrl: mediaData.url,
-          data: '', // Media Library items are already URLs, no base64 needed
-          mimeType: mediaData.mimeType,
-          type: mediaData.type,
-          results: [],
-          captionText: '',
-          postGoal: composeState.postGoal,
-          postTone: composeState.postTone,
-          selectedPlatforms: {
-            Instagram: false,
-            TikTok: false,
-            X: false,
-            Threads: false,
-            YouTube: false,
-            LinkedIn: false,
-            Facebook: false,
-          },
-        };
-        setComposeState(prev => ({
-          ...prev,
-          mediaItems: [...prev.mediaItems, newMediaItem],
-        }));
-        localStorage.removeItem('pendingMediaFromLibrary');
-        showToast(`Added ${mediaData.name} to compose`, 'success');
-      } catch (error) {
-        console.error('Failed to add media from library:', error);
-        localStorage.removeItem('pendingMediaFromLibrary');
+    const handleMediaLibraryItem = () => {
+      const pendingMedia = localStorage.getItem('pendingMediaFromLibrary');
+      if (pendingMedia) {
+        try {
+          const mediaData = JSON.parse(pendingMedia);
+          
+          // Use functional update to check for duplicates with latest state
+          setComposeState(prev => {
+            // Check if this media is already added (prevent duplicates)
+            const alreadyExists = prev.mediaItems.some(
+              item => item.previewUrl === mediaData.url
+            );
+            
+            if (!alreadyExists) {
+              const newMediaItem: MediaItemState = {
+                id: Date.now().toString(),
+                previewUrl: mediaData.url,
+                data: '', // Media Library items are already URLs, no base64 needed
+                mimeType: mediaData.mimeType,
+                type: mediaData.type,
+                results: [],
+                captionText: '',
+                postGoal: prev.postGoal,
+                postTone: prev.postTone,
+                selectedPlatforms: {
+                  Instagram: false,
+                  TikTok: false,
+                  X: false,
+                  Threads: false,
+                  YouTube: false,
+                  LinkedIn: false,
+                  Facebook: false,
+                },
+              };
+              // Always add to mediaItems array so it shows in a MediaBox
+              setTimeout(() => {
+                showToast(`Added ${mediaData.name} to compose`, 'success');
+              }, 100);
+              return {
+                ...prev,
+                mediaItems: [...prev.mediaItems, newMediaItem],
+              };
+            }
+            return prev;
+          });
+          
+          localStorage.removeItem('pendingMediaFromLibrary');
+        } catch (error) {
+          console.error('Failed to add media from library:', error);
+          localStorage.removeItem('pendingMediaFromLibrary');
+        }
       }
-    }
+    };
+
+    // Check immediately on mount
+    handleMediaLibraryItem();
+    
+    // Also check after delays to catch navigation
+    const timeoutId1 = setTimeout(handleMediaLibraryItem, 300);
+    const timeoutId2 = setTimeout(handleMediaLibraryItem, 800);
+    
+    // Listen for custom event from Media Library
+    window.addEventListener('mediaLibraryItemAdded', handleMediaLibraryItem);
+    
+    // Also listen for focus event (when tab becomes active)
+    window.addEventListener('focus', handleMediaLibraryItem);
+    
+    return () => {
+      clearTimeout(timeoutId1);
+      clearTimeout(timeoutId2);
+      window.removeEventListener('mediaLibraryItemAdded', handleMediaLibraryItem);
+      window.removeEventListener('focus', handleMediaLibraryItem);
+    };
   }, [setComposeState, composeState.postGoal, composeState.postTone, showToast]);
 
   // Batch upload handlers
@@ -2136,101 +2174,6 @@ const CaptionGenerator: React.FC = () => {
         )}
       </div>
 
-      {/* Hashtag Manager - Moved to top */}
-      <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <div className="text-primary-600 dark:text-primary-400">
-              <HashtagIcon />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Hashtag Manager
-            </h3>
-          </div>
-          <button
-            onClick={() => setIsHashtagPopoverOpen(!isHashtagPopoverOpen)}
-            className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-          >
-            {isHashtagPopoverOpen ? 'Hide' : 'Manage'}
-          </button>
-        </div>
-
-        {isHashtagPopoverOpen && (
-          <div className="space-y-4">
-            <div className="space-y-2 max-h-48 overflow-y-auto">
-              {hashtagSets && hashtagSets.length > 0 ? (
-                hashtagSets.map(set => (
-                  <div
-                    key={set.id}
-                    className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
-                  >
-                    <div className="flex-1">
-                      <span className="font-semibold text-sm text-gray-900 dark:text-white">
-                        {set.name}
-                      </span>
-                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                        {set.tags.join(' ')}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => {
-                        // Insert into first media box with caption, or show toast
-                        const firstBoxWithCaption = composeState.mediaItems.findIndex(
-                          item => item.previewUrl && item.captionText.trim()
-                        );
-                        if (firstBoxWithCaption !== -1) {
-                          handleUpdateMediaItem(firstBoxWithCaption, {
-                            captionText: composeState.mediaItems[firstBoxWithCaption].captionText + '\n\n' + set.tags.join(' ')
-                          });
-                          showToast(`Added hashtags to Post ${firstBoxWithCaption + 1}`, 'success');
-                        } else {
-                          showToast('Add a caption to a post first to insert hashtags', 'error');
-                        }
-                      }}
-                      className="ml-3 px-3 py-1.5 text-xs font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/30 rounded-md hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors"
-                    >
-                      Use
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                  No saved hashtag sets yet. Create one below.
-                </p>
-              )}
-            </div>
-
-            <div className="border-t pt-4 dark:border-gray-700">
-              <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
-                Create New Hashtag Set
-              </h4>
-              <div className="space-y-2">
-                <input
-                  type="text"
-                  value={newHashtagSetName}
-                  onChange={e => setNewHashtagSetName(e.target.value)}
-                  placeholder="Set Name (e.g. Tech, Fashion, Food)"
-                  className="w-full p-2 text-sm border rounded-md dark:bg-gray-900 dark:border-gray-600 dark:text-white"
-                />
-                <input
-                  type="text"
-                  value={newHashtagSetTags}
-                  onChange={e => setNewHashtagSetTags(e.target.value)}
-                  placeholder="#hashtag1 #hashtag2 #hashtag3"
-                  className="w-full p-2 text-sm border rounded-md dark:bg-gray-900 dark:border-gray-600 dark:text-white"
-                />
-                <button
-                  onClick={handleCreateHashtagSet}
-                  className="w-full flex justify-center items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 transition-colors"
-                >
-                  <PlusIcon className="w-4 h-4" /> Save Hashtag Set
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
       {/* Media Upload Boxes */}
       <div className="space-y-6">
         {composeState.mediaItems.length > 0 && (
@@ -2278,24 +2221,54 @@ const CaptionGenerator: React.FC = () => {
           </div>
         )}
 
+        {/* Always show media boxes - initialize with one empty box if none exist */}
         {composeState.mediaItems.length === 0 ? (
-          <div
-            onClick={handleAddMediaBox}
-            className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-md border-2 border-dashed border-gray-300 dark:border-gray-600 cursor-pointer hover:border-primary-400 dark:hover:border-primary-600 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-          >
-            <div className="flex flex-col items-center justify-center space-y-3">
-              <div className="p-4 bg-primary-100 dark:bg-primary-900/30 rounded-full">
-                <UploadIcon className="w-8 h-8 text-primary-600 dark:text-primary-400" />
-              </div>
-              <div className="text-center">
-                <p className="text-lg font-semibold text-gray-900 dark:text-white">
-                  Upload Image or Video
-                </p>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  Click to add your first post
-                </p>
-              </div>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <MediaBox
+              key="initial"
+              mediaItem={{
+                id: Date.now().toString(),
+                previewUrl: '',
+                data: '',
+                mimeType: '',
+                type: 'image',
+                results: [],
+                captionText: '',
+                postGoal: composeState.postGoal,
+                postTone: composeState.postTone,
+                selectedPlatforms: {
+                  Instagram: false,
+                  TikTok: false,
+                  X: false,
+                  Threads: false,
+                  YouTube: false,
+                  LinkedIn: false,
+                  Facebook: false,
+                },
+              }}
+              index={0}
+              onUpdate={(idx, updates) => {
+                if (composeState.mediaItems.length === 0) {
+                  handleAddMediaBox();
+                  setTimeout(() => {
+                    handleUpdateMediaItem(0, updates);
+                  }, 0);
+                } else {
+                  handleUpdateMediaItem(idx, updates);
+                }
+              }}
+              onRemove={() => {}}
+              canGenerate={canGenerate}
+              onGenerateComplete={handleCaptionGenerationComplete}
+              goalOptions={goalOptions}
+              toneOptions={toneOptions}
+              isSelected={false}
+              onToggleSelect={() => {}}
+              onPreview={handlePreviewMedia}
+              onPublish={handlePublishMedia}
+              onSchedule={handleScheduleMedia}
+              platformIcons={platformIcons}
+            />
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

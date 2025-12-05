@@ -4,7 +4,7 @@ import { User, Activity } from '../types';
 import { UserManagementModal } from './UserManagementModal';
 import { TeamIcon, DollarSignIcon, UserPlusIcon, ArrowUpCircleIcon, ImageIcon, VideoIcon, LockIcon, TrendingIcon } from './icons/UIIcons';
 import { db } from '../firebaseConfig';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, setDoc, doc } from 'firebase/firestore';
 import { useAppContext } from './AppContext';
 import { defaultSettings } from '../constants';
 import { getModelUsageAnalytics, type ModelUsageStats } from '../src/services/modelUsageService';
@@ -174,9 +174,29 @@ export const AdminDashboard: React.FC = () => {
         );
     }, [users, searchTerm]);
     
-    const handleSaveUser = (updatedUser: User) => {
-        setUsers(prevUsers => prevUsers.map(u => u.id === updatedUser.id ? updatedUser : u));
-        setEditingUser(null);
+    const handleSaveUser = async (updatedUser: User) => {
+        try {
+            // Ensure plan is valid
+            const validPlans: User['plan'][] = ['Free', 'Pro', 'Elite', 'Agency', 'Starter', 'Growth'];
+            if (!validPlans.includes(updatedUser.plan)) {
+                console.error('Invalid plan:', updatedUser.plan);
+                return;
+            }
+
+            // Save to Firestore - use merge to preserve other fields
+            await setDoc(doc(db, 'users', updatedUser.id), {
+                plan: updatedUser.plan,
+            }, { merge: true });
+            
+            // Update local state
+            setUsers(prevUsers => prevUsers.map(u => u.id === updatedUser.id ? updatedUser : u));
+            setEditingUser(null);
+            
+            console.log('User plan saved successfully:', updatedUser.id, updatedUser.plan);
+        } catch (error) {
+            console.error('Failed to save user plan:', error);
+            throw error; // Re-throw to let modal handle it
+        }
     };
 
     const { 

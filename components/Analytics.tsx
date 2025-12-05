@@ -3,9 +3,11 @@ import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { AnalyticsData, Platform } from '../types';
 import { useAppContext } from './AppContext';
 import { UpgradePrompt } from './UpgradePrompt';
-import { SparklesIcon } from './icons/UIIcons';
+import { SparklesIcon, ClockIcon, TrashIcon } from './icons/UIIcons';
 import { generateAnalyticsReport, getAnalytics } from "../src/services/geminiService";
 import { AnalyticsReportModal } from './analytics/AnalyticsReportModal';
+import { db } from '../firebaseConfig';
+import { collection, setDoc, doc, getDocs, query, orderBy, deleteDoc } from 'firebase/firestore';
 
 // Lazy load child components
 const StatCardGrid = lazy(() => import('./analytics/StatCardGrid'));
@@ -63,6 +65,10 @@ export const Analytics: React.FC = () => {
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const [reportContent, setReportContent] = useState('');
     const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+    
+    // State for Report History
+    const [savedReports, setSavedReports] = useState<Array<{ id: string; content: string; createdAt: string; dateRange: string; platform: string }>>([]);
+    const [showHistory, setShowHistory] = useState(false);
 
 
     useEffect(() => {
@@ -107,6 +113,29 @@ export const Analytics: React.FC = () => {
         fetchAnalytics();
     }, [selectedClient, dateRange, platform]);
 
+    // Load saved reports on mount
+    useEffect(() => {
+        const loadSavedReports = async () => {
+            if (!user?.id) return;
+            try {
+                const reportsRef = collection(db, 'users', user.id, 'analytics_reports');
+                const q = query(reportsRef, orderBy('createdAt', 'desc'));
+                const snapshot = await getDocs(q);
+                const reports: Array<{ id: string; content: string; createdAt: string; dateRange: string; platform: string }> = [];
+                snapshot.forEach((doc) => {
+                    reports.push({
+                        id: doc.id,
+                        ...doc.data(),
+                    } as any);
+                });
+                setSavedReports(reports);
+            } catch (error) {
+                console.error('Failed to load saved reports:', error);
+            }
+        };
+        loadSavedReports();
+    }, [user?.id]);
+
     const handleGenerateReport = async () => {
         // Use fallback data if data is null
         const analyticsData = data || EMPTY_ANALYTICS_DATA;
@@ -124,8 +153,10 @@ export const Analytics: React.FC = () => {
             const report = await generateAnalyticsReport(analyticsData);
             
             // Handle new format: { report: "formatted text" }
+            let finalReportContent = '';
             if (report && typeof report === 'object' && report.report && typeof report.report === 'string') {
-                setReportContent(report.report);
+                finalReportContent = report.report;
+                setReportContent(finalReportContent);
             }
             // Handle legacy JSON format (fallback)
             else if (report && typeof report === 'object') {
@@ -146,14 +177,44 @@ export const Analytics: React.FC = () => {
                 if (report.error || report.note) {
                     formattedReport = `Error: ${report.error || report.note}`;
                 }
-                setReportContent(formattedReport || "Sorry, there was an error generating the report. Please try again.");
+                finalReportContent = formattedReport || "Sorry, there was an error generating the report. Please try again.";
+                setReportContent(finalReportContent);
             } 
             // Handle string format (legacy)
             else if (typeof report === 'string') {
-                setReportContent(report);
+                finalReportContent = report;
+                setReportContent(finalReportContent);
             } 
             else {
-                setReportContent("Sorry, there was an error generating the report. Please try again.");
+                finalReportContent = "Sorry, there was an error generating the report. Please try again.";
+                setReportContent(finalReportContent);
+            }
+            
+            // Save report to Firestore
+            if (finalReportContent && user?.id && !finalReportContent.includes('Error:') && !finalReportContent.includes('Sorry')) {
+                try {
+                    const reportId = `report_${Date.now()}`;
+                    await setDoc(doc(db, 'users', user.id, 'analytics_reports', reportId), {
+                        content: finalReportContent,
+                        createdAt: new Date().toISOString(),
+                        dateRange: dateRange,
+                        platform: platform,
+                    });
+                    // Reload reports
+                    const reportsRef = collection(db, 'users', user.id, 'analytics_reports');
+                    const q = query(reportsRef, orderBy('createdAt', 'desc'));
+                    const snapshot = await getDocs(q);
+                    const reports: Array<{ id: string; content: string; createdAt: string; dateRange: string; platform: string }> = [];
+                    snapshot.forEach((doc) => {
+                        reports.push({
+                            id: doc.id,
+                            ...doc.data(),
+                        } as any);
+                    });
+                    setSavedReports(reports);
+                } catch (error) {
+                    console.error('Failed to save report:', error);
+                }
             }
         } catch (error: any) {
             const errorMessage = error?.message || 'Unknown error';
@@ -250,6 +311,13 @@ export const Analytics: React.FC = () => {
                     >
                         <SparklesIcon /> Generate Report
                     </button>
+                    <button
+                        onClick={() => setShowHistory(!showHistory)}
+                        className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
+                    >
+                        <ClockIcon className="w-4 h-4" />
+                        {showHistory ? 'Hide' : 'View'} History ({savedReports.length})
+                    </button>
                     <select
                         value={dateRange}
                         onChange={(e) => setDateRange(e.target.value as '7d' | '30d' | '90d')}
@@ -288,6 +356,70 @@ export const Analytics: React.FC = () => {
                     </button>
                 ))}
             </div>
+
+            {/* Report History View */}
+            {showHistory && (
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Saved Reports</h2>
+                    {savedReports.length === 0 ? (
+                        <p className="text-gray-500 dark:text-gray-400 text-center py-8">No saved reports yet. Generate your first report!</p>
+                    ) : (
+                        <div className="space-y-3">
+                            {savedReports.map((report) => (
+                                <div
+                                    key={report.id}
+                                    className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                                >
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-3 mb-2">
+                                                <h3 className="font-semibold text-gray-900 dark:text-white">
+                                                    Report - {report.dateRange} • {report.platform}
+                                                </h3>
+                                            </div>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                                                Created: {new Date(report.createdAt).toLocaleDateString()} at {new Date(report.createdAt).toLocaleTimeString()}
+                                            </p>
+                                            <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+                                                {report.content.substring(0, 150)}...
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-2 ml-4">
+                                            <button
+                                                onClick={() => {
+                                                    setReportContent(report.content);
+                                                    setIsReportModalOpen(true);
+                                                    setShowHistory(false);
+                                                }}
+                                                className="px-3 py-1.5 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+                                            >
+                                                View
+                                            </button>
+                                            <button
+                                                onClick={async () => {
+                                                    if (!user?.id) return;
+                                                    try {
+                                                        await deleteDoc(doc(db, 'users', user.id, 'analytics_reports', report.id));
+                                                        setSavedReports(prev => prev.filter(r => r.id !== report.id));
+                                                        showToast('Report deleted', 'success');
+                                                    } catch (error) {
+                                                        console.error('Failed to delete report:', error);
+                                                        showToast('Failed to delete report', 'error');
+                                                    }
+                                                }}
+                                                className="p-1.5 text-gray-500 hover:text-red-600 transition-colors"
+                                                title="Delete"
+                                            >
+                                                <TrashIcon className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
 
             <Suspense fallback={<AnalyticsSkeleton />}>
                 {isLoading || !data ? <AnalyticsSkeleton /> : renderTabContent()}

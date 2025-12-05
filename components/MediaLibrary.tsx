@@ -342,10 +342,7 @@ export const MediaLibrary: React.FC = () => {
                     : 'border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-700'
                 }`}
               >
-                <div
-                  onClick={() => handleSelectItem(item.id)}
-                  className="cursor-pointer"
-                >
+                <div className="relative">
                   {item.type === 'video' ? (
                     <video
                       src={item.url}
@@ -359,13 +356,19 @@ export const MediaLibrary: React.FC = () => {
                       className="w-full h-48 object-cover"
                     />
                   )}
-                  <div className="absolute top-2 left-2">
+                  <div className="absolute top-2 left-2 z-30">
                     <input
                       type="checkbox"
                       checked={selectedItems.has(item.id)}
-                      onChange={() => handleSelectItem(item.id)}
-                      className="w-5 h-5 text-primary-600 bg-white border-gray-300 rounded focus:ring-primary-500"
-                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        handleSelectItem(item.id);
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                      }}
+                      className="w-5 h-5 text-primary-600 bg-white border-gray-300 rounded focus:ring-primary-500 cursor-pointer pointer-events-auto"
                     />
                   </div>
                   <div className="absolute top-2 right-2">
@@ -389,13 +392,13 @@ export const MediaLibrary: React.FC = () => {
                     )}
                   </div>
                 </div>
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 pointer-events-none">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       handleUseInCompose(item);
                     }}
-                    className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-sm font-medium"
+                    className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-sm font-medium pointer-events-auto"
                   >
                     Use in Post
                   </button>
@@ -404,7 +407,7 @@ export const MediaLibrary: React.FC = () => {
                       e.stopPropagation();
                       handleDelete(item.id);
                     }}
-                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium"
+                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium pointer-events-auto"
                   >
                     <TrashIcon className="w-4 h-4 inline mr-1" />
                     Delete

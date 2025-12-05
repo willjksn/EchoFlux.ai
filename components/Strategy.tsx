@@ -1120,107 +1120,109 @@ export const Strategy: React.FC = () => {
                                                     })()}
                                                 </div>
                                             </div>
-                                            <div className="flex-grow">
-                                                <div className="flex items-start gap-3">
-                                                    <div className="flex-1">
-                                                        <p className="font-medium text-gray-900 dark:text-white mb-1">{day.topic}</p>
-                                                        {/* Show suggested media type and current media type */}
-                                                        {day.mediaUrl && day.mediaType && (
-                                                            <div className="mb-2">
-                                                                <span className="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full font-medium">
-                                                                    {day.mediaType === 'image' ? '📸 Image' : '🎥 Video'} Uploaded
-                                                                </span>
-                                                                {day.suggestedMediaType && day.suggestedMediaType !== day.mediaType && (
-                                                                    <span className="ml-2 text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full font-medium">
-                                                                        💡 Consider: {day.suggestedMediaType === 'image' ? 'Image' : 'Video'}
+                                            <div className="flex-grow flex-1 min-w-0">
+                                                <div className="flex flex-col gap-3">
+                                                    <div className="flex items-start gap-3">
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-medium text-gray-900 dark:text-white mb-1">{day.topic}</p>
+                                                            {/* Show suggested media type and current media type */}
+                                                            {day.mediaUrl && day.mediaType && (
+                                                                <div className="mb-2">
+                                                                    <span className="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full font-medium">
+                                                                        {day.mediaType === 'image' ? '📸 Image' : '🎥 Video'} Uploaded
                                                                     </span>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                        {!day.mediaUrl && day.suggestedMediaType && (
-                                                            <div className="mb-2">
-                                                                <span className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full font-medium">
-                                                                    Suggested: {day.suggestedMediaType === 'image' ? '📸 Image' : '🎥 Video'}
-                                                                </span>
+                                                                    {day.suggestedMediaType && day.suggestedMediaType !== day.mediaType && (
+                                                                        <span className="ml-2 text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full font-medium">
+                                                                            💡 Consider: {day.suggestedMediaType === 'image' ? 'Image' : 'Video'}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                            {!day.mediaUrl && day.suggestedMediaType && (
+                                                                <div className="mb-2">
+                                                                    <span className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full font-medium">
+                                                                        Suggested: {day.suggestedMediaType === 'image' ? '📸 Image' : '🎥 Video'}
+                                                                    </span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        {/* Show image/video suggestions beside the post line */}
+                                                        {((day.imageIdeas && day.imageIdeas.length > 0) || (day.videoIdeas && day.videoIdeas.length > 0)) && (
+                                                            <div className="flex-shrink-0 w-56 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                                                                <p className="text-xs font-semibold text-blue-900 dark:text-blue-200 mb-1.5">
+                                                                    💡 Suggestions:
+                                                                </p>
+                                                                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                                                                    {day.imageIdeas && day.imageIdeas.length > 0 && (
+                                                                        <div className="text-xs text-blue-800 dark:text-blue-300">
+                                                                            <span className="font-medium">📸 Images:</span>
+                                                                            <ul className="mt-0.5 ml-3 list-disc space-y-0.5">
+                                                                                {day.imageIdeas.map((idea, idx) => (
+                                                                                    <li key={idx} className="leading-tight">{idea}</li>
+                                                                                ))}
+                                                                            </ul>
+                                                                        </div>
+                                                                    )}
+                                                                    {day.videoIdeas && day.videoIdeas.length > 0 && (
+                                                                        <div className="text-xs text-blue-800 dark:text-blue-300">
+                                                                            <span className="font-medium">🎥 Videos:</span>
+                                                                            <ul className="mt-0.5 ml-3 list-disc space-y-0.5">
+                                                                                {day.videoIdeas.map((idea, idx) => (
+                                                                                    <li key={idx} className="leading-tight">{idea}</li>
+                                                                                ))}
+                                                                            </ul>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         )}
                                                     </div>
-                                                    {/* Show image/video suggestions beside the post line */}
-                                                    {((day.imageIdeas && day.imageIdeas.length > 0) || (day.videoIdeas && day.videoIdeas.length > 0)) && (
-                                                        <div className="flex-shrink-0 w-64 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                                                            <p className="text-xs font-semibold text-blue-900 dark:text-blue-200 mb-1.5">
-                                                                💡 Suggestions:
+                                                    {/* Show uploaded media info */}
+                                                    {day.mediaUrl && (
+                                                        <div className="p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                                                            <p className="text-xs font-semibold text-green-800 dark:text-green-200">
+                                                                ✅ Media uploaded • Caption generated • Scheduled to calendar
                                                             </p>
-                                                            <div className="space-y-1.5 max-h-32 overflow-y-auto">
-                                                                {day.imageIdeas && day.imageIdeas.length > 0 && (
-                                                                    <div className="text-xs text-blue-800 dark:text-blue-300">
-                                                                        <span className="font-medium">📸 Images:</span>
-                                                                        <ul className="mt-0.5 ml-3 list-disc space-y-0.5">
-                                                                            {day.imageIdeas.slice(0, 2).map((idea, idx) => (
-                                                                                <li key={idx} className="leading-tight">{idea}</li>
-                                                                            ))}
-                                                                        </ul>
-                                                                    </div>
-                                                                )}
-                                                                {day.videoIdeas && day.videoIdeas.length > 0 && (
-                                                                    <div className="text-xs text-blue-800 dark:text-blue-300">
-                                                                        <span className="font-medium">🎥 Videos:</span>
-                                                                        <ul className="mt-0.5 ml-3 list-disc space-y-0.5">
-                                                                            {day.videoIdeas.slice(0, 2).map((idea, idx) => (
-                                                                                <li key={idx} className="leading-tight">{idea}</li>
-                                                                            ))}
-                                                                        </ul>
-                                                                    </div>
-                                                                )}
-                                                            </div>
                                                         </div>
                                                     )}
-                                                {/* Show uploaded media info */}
-                                                {day.mediaUrl && (
-                                                    <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                                                        <p className="text-xs font-semibold text-green-800 dark:text-green-200">
-                                                            ✅ Media uploaded • Caption generated • Scheduled to calendar
-                                                        </p>
-                                                    </div>
-                                                )}
-                                                {/* Caption input */}
-                                                <div className="mt-3">
-                                                    <textarea
-                                                        value={day.caption || ''}
-                                                        onChange={(e) => {
-                                                            const updatedPlan = {
-                                                                ...plan,
-                                                                weeks: plan.weeks.map((w, wIdx) => {
-                                                                    if (wIdx !== weekIndex) return w;
-                                                                    return {
-                                                                        ...w,
-                                                                        content: w.content.map((d, dIdx) => {
-                                                                            if (dIdx !== dayIndex) return d;
-                                                                            return { ...d, caption: e.target.value };
-                                                                        })
-                                                                    };
-                                                                })
-                                                            };
-                                                            setPlan(updatedPlan);
-                                                            if (selectedStrategy) {
-                                                                const updatedStrategy = {
-                                                                    ...selectedStrategy,
-                                                                    plan: updatedPlan
+                                                    {/* Caption input */}
+                                                    <div className="w-full">
+                                                        <textarea
+                                                            value={day.caption || ''}
+                                                            onChange={(e) => {
+                                                                const updatedPlan = {
+                                                                    ...plan,
+                                                                    weeks: plan.weeks.map((w, wIdx) => {
+                                                                        if (wIdx !== weekIndex) return w;
+                                                                        return {
+                                                                            ...w,
+                                                                            content: w.content.map((d, dIdx) => {
+                                                                                if (dIdx !== dayIndex) return d;
+                                                                                return { ...d, caption: e.target.value };
+                                                                            })
+                                                                        };
+                                                                    })
                                                                 };
-                                                                setSelectedStrategy(updatedStrategy);
-                                                                // Auto-save
-                                                                if (user) {
-                                                                    setDoc(doc(db, 'users', user.id, 'strategies', selectedStrategy.id), updatedStrategy).catch(console.error);
+                                                                setPlan(updatedPlan);
+                                                                if (selectedStrategy) {
+                                                                    const updatedStrategy = {
+                                                                        ...selectedStrategy,
+                                                                        plan: updatedPlan
+                                                                    };
+                                                                    setSelectedStrategy(updatedStrategy);
+                                                                    // Auto-save
+                                                                    if (user) {
+                                                                        setDoc(doc(db, 'users', user.id, 'strategies', selectedStrategy.id), updatedStrategy).catch(console.error);
+                                                                    }
                                                                 }
-                                                            }
-                                                        }}
-                                                        placeholder="Add caption for this post..."
-                                                        className="w-full p-2 text-sm border rounded-lg bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-primary-500 dark:text-white dark:placeholder-gray-400 resize-none"
-                                                        rows={2}
-                                                    />
+                                                            }}
+                                                            placeholder="Caption will be auto-generated when you upload media..."
+                                                            className="w-full p-3 text-sm border rounded-lg bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-primary-500 dark:text-white dark:placeholder-gray-400 resize-y"
+                                                            rows={4}
+                                                        />
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
                                             <div className="flex items-center gap-2 flex-shrink-0">
                                                 {/* Media Preview/Upload */}
                                                 {day.mediaUrl ? (

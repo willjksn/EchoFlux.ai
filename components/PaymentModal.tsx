@@ -108,7 +108,7 @@ export const PaymentModal: React.FC = () => {
                 
                 // Update user plan, userType (if needed), and reset usage counters
                 const now = new Date().toISOString();
-                await setUser({
+                const updatedUser = {
                     id: user.id,
                     plan: planName,
                     userType: newUserType,
@@ -119,7 +119,13 @@ export const PaymentModal: React.FC = () => {
                     billingCycle: paymentPlan.cycle, // Set billing cycle
                     cancelAtPeriodEnd: false, // Clear cancellation if resubscribing
                     subscriptionEndDate: undefined, // Clear end date if resubscribing
-                });
+                };
+                
+                // Save to Firestore first to ensure persistence
+                await setDoc(doc(db, 'users', user.id), updatedUser, { merge: true });
+                
+                // Then update local state
+                await setUser(updatedUser);
                 
                 console.log('Plan updated successfully:', planName);
                 

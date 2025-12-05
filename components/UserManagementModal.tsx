@@ -15,11 +15,18 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, 
     }, [user]);
 
     const handlePlanChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        setEditedUser(prev => ({ ...prev, plan: e.target.value as User['plan'] }));
+        const newPlan = e.target.value as User['plan'];
+        setEditedUser(prev => ({ ...prev, plan: newPlan }));
     };
 
-    const handleSave = () => {
-        onSave(editedUser);
+    const handleSave = async () => {
+        try {
+            await onSave(editedUser);
+            onClose();
+        } catch (error) {
+            console.error('Failed to save user:', error);
+            // Error handling could be improved with toast notification
+        }
     };
 
     return (
@@ -41,14 +48,17 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, 
                             <label htmlFor="plan" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Subscription Plan</label>
                             <select 
                                 id="plan" 
-                                value={editedUser.plan} 
+                                value={editedUser.plan || 'Free'} 
                                 onChange={handlePlanChange} 
+                                disabled={false}
                                 className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:text-white"
                             >
-                                <option>Free</option>
-                                <option>Pro</option>
-                                <option>Elite</option>
-                                <option>Agency</option>
+                                <option value="Free">Free</option>
+                                <option value="Pro">Pro</option>
+                                <option value="Elite">Elite</option>
+                                <option value="Agency">Agency</option>
+                                <option value="Starter">Starter</option>
+                                <option value="Growth">Growth</option>
                             </select>
                         </div>
                         <p className="text-xs text-gray-500 dark:text-gray-400">
