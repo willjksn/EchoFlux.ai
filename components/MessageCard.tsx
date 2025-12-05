@@ -127,11 +127,9 @@ export const MessageCard: React.FC<MessageCardProps> = ({ message, id, isSelecte
   }, []);
 
   const handleGenerateReply = useCallback(async () => {
-    // Only generate reply if auto-respond is explicitly enabled
-    // Exit early if toggle is not set to auto-respond
-    if (!settings.autoReply && !settings.autoRespond) {
+    // Only generate reply if auto-respond toggle is enabled
+    if (!settings.autoRespond) {
       setError(null);
-      setIsLoading(false);
       return;
     }
     
@@ -160,19 +158,16 @@ export const MessageCard: React.FC<MessageCardProps> = ({ message, id, isSelecte
   
   useEffect(() => {
     // Clear error if auto-respond is disabled
-    if (!settings.autoReply && !settings.autoRespond) {
+    if (!settings.autoRespond) {
       setError(null);
-      setIsLoading(false);
       return;
     }
     
-    // Only auto-generate reply if auto-respond is explicitly enabled
-    // Double-check to ensure we don't respond unless toggle is ON
-    const isAutoRespondEnabled = settings.autoReply === true || settings.autoRespond === true;
-    if (isAutoRespondEnabled && !isSent && !isLoading) {
+    // Only auto-generate reply if auto-respond toggle is enabled
+    if (settings.autoRespond && !isSent) {
         handleGenerateReply();
     }
-  }, [message.id, settings.autoReply, settings.autoRespond, isSent, isLoading, handleGenerateReply]);
+  }, [message.id, settings.autoRespond, isSent, handleGenerateReply]);
 
   useEffect(() => {
     if (!isSpeechRecognitionSupported) {

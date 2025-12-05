@@ -2316,8 +2316,9 @@ const CaptionGenerator: React.FC = () => {
 
         {/* Always show media boxes - initialize with one empty box if none exist */}
         {composeState.mediaItems.length === 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 justify-items-center">
-            <MediaBox
+          <div className="flex justify-center">
+            <div className="w-full max-w-md">
+              <MediaBox
               key="initial"
               mediaItem={{
                 id: Date.now().toString(),
@@ -2362,9 +2363,42 @@ const CaptionGenerator: React.FC = () => {
               onSchedule={handleScheduleMedia}
               platformIcons={platformIcons}
             />
+            </div>
+          </div>
+        ) : composeState.mediaItems.length === 1 ? (
+          <div className="flex justify-center">
+            <div className="w-full max-w-md">
+              {composeState.mediaItems.map((item, index) => (
+                <MediaBox
+                  key={item.id}
+                  mediaItem={item}
+                  index={index}
+                  onUpdate={handleUpdateMediaItem}
+                  onRemove={handleRemoveMediaItem}
+                  canGenerate={canGenerate}
+                  onGenerateComplete={handleCaptionGenerationComplete}
+                  goalOptions={goalOptions}
+                  toneOptions={toneOptions}
+                  isSelected={selectedIndices.has(index)}
+                  onToggleSelect={handleToggleSelect}
+                  onPreview={handlePreviewMedia}
+                  onPublish={handlePublishMedia}
+                  onSchedule={handleScheduleMedia}
+                  platformIcons={platformIcons}
+                />
+              ))}
+              {/* Add Image/Video button - Always show compact plus sign */}
+              <button
+                onClick={handleAddMediaBox}
+                className="mt-4 h-24 w-full flex items-center justify-center text-primary-600 dark:text-primary-400 bg-white dark:bg-gray-800 border-2 border-dashed border-primary-300 dark:border-primary-700 rounded-xl hover:bg-primary-50 dark:hover:bg-primary-900/30 transition-colors shadow-sm"
+                title="Add Image/Video"
+              >
+                <PlusIcon className="w-8 h-8" />
+              </button>
+            </div>
           </div>
         ) : (
-          <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 ${composeState.mediaItems.length === 1 ? 'justify-items-center' : 'justify-items-start'}`}>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 justify-items-start">
             {composeState.mediaItems.map((item, index) => (
               <MediaBox
                 key={item.id}
