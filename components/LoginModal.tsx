@@ -20,15 +20,32 @@ const Terms: React.FC = () => (
       applicable laws and regulations.
     </p>
     <p>
+      <strong>Platform Feature Availability:</strong> EngageSuite.ai integrates with multiple social media platforms, 
+      but feature availability varies by platform due to API limitations:
+    </p>
+    <ul className="list-disc pl-6 space-y-1 mt-2">
+      <li><strong>Instagram/Facebook:</strong> Full features available for Business Accounts</li>
+      <li><strong>X (Twitter):</strong> Requires paid API tier for most features</li>
+      <li><strong>TikTok:</strong> Posting only - inbox/DM features not supported</li>
+      <li><strong>YouTube:</strong> Publishing & analytics - no DM automation</li>
+      <li><strong>LinkedIn:</strong> Post publishing - no messaging automation</li>
+      <li><strong>Threads:</strong> Publishing only - limited features</li>
+    </ul>
+    <p>
       You are responsible for any content you create, schedule, or publish through EngageSuite.ai.
       We do not guarantee performance of any content or strategy recommendations provided by the AI.
     </p>
     <p>
       EngageSuite.ai is provided &quot;as is&quot; without warranties of any kind. We are not
-      liable for any loss or damage resulting from use of the platform.
+      liable for any loss or damage resulting from use of the platform, platform outages, API deprecations, 
+      or third-party policy changes.
     </p>
     <p>
-      By continuing, you acknowledge that you have read and understood these terms.
+      <strong>Prohibited Use:</strong> You may not circumvent API limitations, automate prohibited behaviors, 
+      or violate any platform's Terms of Service.
+    </p>
+    <p>
+      By continuing, you acknowledge that you have read and understood these terms and the full Terms of Service.
     </p>
   </div>
 );
