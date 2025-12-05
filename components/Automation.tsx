@@ -1001,8 +1001,9 @@ export const Automation: React.FC = () => {
                           <textarea
                             value={media.caption}
                             onChange={(e) => handleUpdateMediaCaption(index, e.target.value)}
-                            className="w-full p-2 text-xs border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white resize-y min-h-[60px] pr-8"
+                            className="w-full p-2 text-xs border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white resize-y min-h-[100px] max-h-[300px] pr-8 overflow-y-auto"
                             placeholder="Caption will be generated..."
+                            rows={4}
                           />
                           <button
                             type="button"
