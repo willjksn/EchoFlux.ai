@@ -2390,7 +2390,7 @@ const CaptionGenerator: React.FC = () => {
               {/* Add Image/Video button - Outside the image box */}
               <button
                 onClick={handleAddMediaBox}
-                className="mt-4 min-h-24 h-auto py-4 w-full flex items-center justify-center gap-2 text-primary-600 dark:text-primary-400 bg-white dark:bg-gray-800 border-2 border-dashed border-primary-300 dark:border-primary-700 rounded-xl hover:bg-primary-50 dark:hover:bg-primary-900/30 transition-colors shadow-sm"
+                className="mt-4 h-24 w-full flex items-center justify-center gap-2 text-primary-600 dark:text-primary-400 bg-white dark:bg-gray-800 border-2 border-dashed border-primary-300 dark:border-primary-700 rounded-xl hover:bg-primary-50 dark:hover:bg-primary-900/30 transition-colors shadow-sm"
                 title="Add Image/Video"
               >
                 <PlusIcon className="w-6 h-6" />
@@ -2422,7 +2422,7 @@ const CaptionGenerator: React.FC = () => {
             {/* Add Image/Video button - Outside the image boxes */}
             <button
               onClick={handleAddMediaBox}
-              className="min-h-24 h-auto py-4 flex flex-col items-center justify-center gap-2 text-primary-600 dark:text-primary-400 bg-white dark:bg-gray-800 border-2 border-dashed border-primary-300 dark:border-primary-700 rounded-xl hover:bg-primary-50 dark:hover:bg-primary-900/30 transition-colors shadow-sm"
+              className="h-24 w-full flex flex-col items-center justify-center gap-2 text-primary-600 dark:text-primary-400 bg-white dark:bg-gray-800 border-2 border-dashed border-primary-300 dark:border-primary-700 rounded-xl hover:bg-primary-50 dark:hover:bg-primary-900/30 transition-colors shadow-sm"
               title="Add Image/Video"
             >
               <PlusIcon className="w-6 h-6" />
