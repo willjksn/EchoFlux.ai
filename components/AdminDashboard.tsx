@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, Activity } from '../types';
 import { UserManagementModal } from './UserManagementModal';
+import { PromotionsManagement } from './PromotionsManagement';
 import { TeamIcon, DollarSignIcon, UserPlusIcon, ArrowUpCircleIcon, ImageIcon, VideoIcon, LockIcon, TrendingIcon } from './icons/UIIcons';
 import { db } from '../firebaseConfig';
 import { collection, query, orderBy, onSnapshot, setDoc, doc } from 'firebase/firestore';
@@ -68,6 +69,7 @@ export const AdminDashboard: React.FC = () => {
     const [modelUsageStats, setModelUsageStats] = useState<ModelUsageStats | null>(null);
     const [isLoadingModelStats, setIsLoadingModelStats] = useState(true);
     const [modelStatsDays, setModelStatsDays] = useState<number>(30);
+    const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'promotions'>('overview');
 
     // Fetch model usage analytics
     useEffect(() => {
@@ -257,8 +259,45 @@ export const AdminDashboard: React.FC = () => {
                     onSave={handleSaveUser}
                 />
             )}
+            <div className="flex justify-between items-center mb-6">
             <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Admin Dashboard</h2>
-            
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setActiveTab('overview')}
+                        className={`px-4 py-2 rounded-md transition-colors ${
+                            activeTab === 'overview'
+                                ? 'bg-primary-600 text-white'
+                                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                        }`}
+                    >
+                        Overview
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('users')}
+                        className={`px-4 py-2 rounded-md transition-colors ${
+                            activeTab === 'users'
+                                ? 'bg-primary-600 text-white'
+                                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                        }`}
+                    >
+                        Users
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('promotions')}
+                        className={`px-4 py-2 rounded-md transition-colors ${
+                            activeTab === 'promotions'
+                                ? 'bg-primary-600 text-white'
+                                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                        }`}
+                    >
+                        Promotions
+                    </button>
+                </div>
+            </div>
+
+            {activeTab === 'promotions' && <PromotionsManagement />}
+            {activeTab === 'overview' && (
+                <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                 <StatCard title="Total Users" value={totalUsers} icon={<TeamIcon />}/>
                 <StatCard title="Simulated MRR" value={`$${simulatedMRR.toLocaleString()}`} icon={<DollarSignIcon />}/>
@@ -505,7 +544,9 @@ export const AdminDashboard: React.FC = () => {
                     </div>
                 )}
             </div>
-
+                </>
+            )}
+            {activeTab === 'users' && (
             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white">User Management</h3>
@@ -573,6 +614,7 @@ export const AdminDashboard: React.FC = () => {
                     )}
                 </div>
             </div>
+            )}
         </div>
     );
 };

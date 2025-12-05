@@ -22,8 +22,9 @@ const businessTiers = [
 
 
 export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateRequest }) => {
-    const { user, openPaymentModal, setActivePage, isAuthenticated, pricingView, setPricingView } = useAppContext();
+    const { user, openPaymentModal, setActivePage, isAuthenticated, pricingView, setPricingView, showToast } = useAppContext();
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'annually'>('monthly');
+    const [promoCode, setPromoCode] = useState('');
     // Initialize view from context or userType, default to Creator
     const initialView = pricingView || (user?.userType === 'Business' ? 'Business' : 'Creator');
     const [view, setView] = useState<'Creator' | 'Business'>(initialView);
@@ -80,17 +81,43 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
                     </div>
                 </div>
 
-                <div className="mt-8 flex justify-center items-center space-x-4">
-                    <span className={`font-medium ${billingCycle === 'monthly' ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400'}`}>Monthly</span>
-                    <button 
-                        onClick={() => setBillingCycle(billingCycle === 'monthly' ? 'annually' : 'monthly')} 
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${billingCycle === 'annually' ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'}`}
-                    >
-                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${billingCycle === 'annually' ? 'translate-x-6' : 'translate-x-1'}`} />
-                    </button>
-                    <span className={`font-medium ${billingCycle === 'annually' ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400'}`}>
-                        Annually <span className="text-sm text-green-500 font-semibold">(Save 20%)</span>
-                    </span>
+                <div className="mt-8 flex flex-col items-center gap-4">
+                    <div className="flex justify-center items-center space-x-4">
+                        <span className={`font-medium ${billingCycle === 'monthly' ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400'}`}>Monthly</span>
+                        <button 
+                            onClick={() => setBillingCycle(billingCycle === 'monthly' ? 'annually' : 'monthly')} 
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${billingCycle === 'annually' ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'}`}
+                        >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${billingCycle === 'annually' ? 'translate-x-6' : 'translate-x-1'}`} />
+                        </button>
+                        <span className={`font-medium ${billingCycle === 'annually' ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                            Annually <span className="text-sm text-green-500 font-semibold">(Save 20%)</span>
+                        </span>
+                    </div>
+                    {/* Promotion Code Input */}
+                    {isAuthenticated && (
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="text"
+                                value={promoCode}
+                                onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                                placeholder="Enter promotion code"
+                                className="px-4 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                            />
+                            <button
+                                onClick={() => {
+                                    if (!promoCode.trim()) {
+                                        showToast('Please enter a promotion code', 'error');
+                                        return;
+                                    }
+                                    showToast('Promotion code will be applied at checkout', 'success');
+                                }}
+                                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+                            >
+                                Apply
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 <div className={`mt-10 grid gap-8 ${
@@ -114,7 +141,13 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
                                 onGetStartedClick();
                                 return;
                             }
-                            if(isAuthenticated) openPaymentModal({ name: tier.name, price, cycle: billingCycle });
+                            if(isAuthenticated) {
+                                // Store promo code in localStorage if entered
+                                if (promoCode) {
+                                    localStorage.setItem('pendingPromoCode', promoCode);
+                                }
+                                openPaymentModal({ name: tier.name, price, cycle: billingCycle });
+                            }
                         };
                         
                         let buttonText = 'Choose Plan';

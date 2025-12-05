@@ -606,5 +606,38 @@ export interface SocialAccount {
   lastSyncedAt?: string; // Last time we fetched data from this platform
 }
 
+export interface Promotion {
+    id: string;
+    code: string; // Unique promotion code (e.g., "SUMMER50", "FIRST10FREE")
+    name: string; // Display name for the promotion
+    description?: string;
+    type: 'percentage' | 'fixed' | 'free'; // Discount type
+    discountValue: number; // Percentage (0-100) or fixed amount in dollars, or 0 for free
+    applicablePlans: Plan[]; // Which plans this promotion applies to (empty = all plans)
+    startDate: string; // ISO timestamp
+    endDate: string; // ISO timestamp (empty string = no expiration)
+    maxUses?: number; // Maximum number of times this promotion can be used (undefined = unlimited)
+    currentUses: number; // Current number of times used
+    maxUsesPerUser?: number; // Maximum times a single user can use this (default: 1)
+    isActive: boolean; // Admin can enable/disable without deleting
+    createdAt: string; // ISO timestamp
+    createdBy: string; // Admin user ID who created it
+    freeDays?: number; // Number of free days to grant (for free promotions)
+    discountDurationDays?: number; // Number of days the discount applies (for recurring subscriptions)
+}
+
+export interface PromotionUsage {
+    id: string;
+    promotionId: string;
+    userId: string;
+    userEmail: string;
+    plan: Plan;
+    originalPrice: number;
+    discountedPrice: number;
+    discountAmount: number;
+    usedAt: string; // ISO timestamp
+    expiresAt?: string; // ISO timestamp (for free days or discount duration)
+}
+
 // Update User interface to include social accounts
 // This extends the User interface below

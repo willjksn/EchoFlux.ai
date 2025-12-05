@@ -1077,61 +1077,91 @@ export const Dashboard: React.FC = () => {
               ) : null;
             })()}
             
-            {/* Engagement Heatmap - Redesigned */}
+            {/* Best Posting Times - Dynamic Based on User Data */}
             {user.plan !== 'Free' && (() => {
-            // Generate mock engagement data for heatmap (7 days x 8 time slots)
-            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-            const timeSlots = ['6AM', '9AM', '12PM', '3PM', '6PM', '9PM', '12AM', '3AM'];
+            // Analyze user's actual posting patterns and engagement
+            const publishedPosts = posts?.filter(p => p.status === 'Published' && (p.scheduledDate || p.createdAt)) || [];
+            const scheduledPosts = posts?.filter(p => p.status === 'Scheduled' && p.scheduledDate) || [];
+            const allPostsWithDates = [...publishedPosts, ...scheduledPosts];
             
-            // Generate mock engagement levels (0-100) for each day/time combination
-            const generateHeatmapData = () => {
-              const data: number[][] = [];
-              for (let day = 0; day < 7; day++) {
-                const dayData: number[] = [];
-                for (let slot = 0; slot < 8; slot++) {
-                  // Higher engagement on weekdays during peak hours (9AM, 12PM, 3PM, 6PM)
-                  let baseEngagement = 20;
-                  
-                  // Weekdays (Mon-Fri, days 1-5) have higher engagement
-                  if (day >= 1 && day <= 5) {
-                    baseEngagement += 30;
-                  }
-                  
-                  // Peak hours have higher engagement
-                  if ([1, 2, 3, 4].includes(slot)) { // 9AM, 12PM, 3PM, 6PM
-                    baseEngagement += 40;
-                  }
-                  
-                  // Add some randomization for realistic look
-                  const engagement = Math.min(100, baseEngagement + Math.floor(Math.random() * 20) - 10);
-                  dayData.push(Math.max(0, engagement));
-                }
-                data.push(dayData);
+            // Group posts by day of week and time
+            const dayTimeMap: Record<string, { count: number; engagement: number }> = {};
+            const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            
+            allPostsWithDates.forEach(post => {
+              const postDate = post.scheduledDate || post.createdAt;
+              if (!postDate) return;
+              
+              const date = new Date(postDate);
+              const dayName = daysOfWeek[date.getDay()];
+              const hour = date.getHours();
+              
+              // Round to nearest hour slot (6AM, 9AM, 12PM, 3PM, 6PM, 9PM)
+              const timeSlots = [6, 9, 12, 15, 18, 21];
+              const nearestSlot = timeSlots.reduce((prev, curr) => 
+                Math.abs(curr - hour) < Math.abs(prev - hour) ? curr : prev
+              );
+              
+              const timeKey = `${dayName}-${nearestSlot}`;
+              if (!dayTimeMap[timeKey]) {
+                dayTimeMap[timeKey] = { count: 0, engagement: 0 };
               }
-              return data;
-            };
-            
-            const heatmapData = generateHeatmapData();
-            
-            // Find optimal posting windows (highest engagement)
-            const optimalSlots: Array<{ day: number; slot: number; value: number }> = [];
-            heatmapData.forEach((dayData, dayIndex) => {
-              dayData.forEach((value, slotIndex) => {
-                if (value >= 70) {
-                  optimalSlots.push({ day: dayIndex, slot: slotIndex, value });
-                }
-              });
+              
+              dayTimeMap[timeKey].count++;
+              // Use comments as engagement proxy
+              dayTimeMap[timeKey].engagement += post.comments?.length || 0;
             });
             
-            // Get color intensity based on engagement level - New gradient color scheme
-            const getColorIntensity = (value: number) => {
-              // Cool to warm gradient: blue (low) -> cyan -> green -> yellow -> orange -> red (high)
-              if (value >= 70) return 'bg-gradient-to-br from-emerald-500 to-green-600 dark:from-emerald-600 dark:to-green-700';
-              if (value >= 50) return 'bg-gradient-to-br from-cyan-400 to-emerald-500 dark:from-cyan-500 dark:to-emerald-600';
-              if (value >= 30) return 'bg-gradient-to-br from-blue-400 to-cyan-400 dark:from-blue-500 dark:to-cyan-500';
-              if (value >= 15) return 'bg-gradient-to-br from-indigo-300 to-blue-400 dark:from-indigo-400 dark:to-blue-500';
-              return 'bg-gray-200 dark:bg-gray-700';
-            };
+            // Calculate best times per day
+            const bestTimes = daysOfWeek.map(day => {
+              const daySlots = Object.keys(dayTimeMap)
+                .filter(key => key.startsWith(day))
+                .map(key => ({
+                  time: parseInt(key.split('-')[1]),
+                  ...dayTimeMap[key],
+                  avgEngagement: dayTimeMap[key].engagement / dayTimeMap[key].count
+                }))
+                .sort((a, b) => {
+                  // Sort by average engagement first, then by count
+                  if (Math.abs(a.avgEngagement - b.avgEngagement) > 0.5) {
+                    return b.avgEngagement - a.avgEngagement;
+                  }
+                  return b.count - a.count;
+                })
+                .slice(0, 3); // Top 3 times per day
+              
+              // Format times
+              const formattedTimes = daySlots.map(slot => {
+                const hour = slot.time;
+                const period = hour >= 12 ? 'PM' : 'AM';
+                const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+                return `${displayHour}:00 ${period}`;
+              });
+              
+              // Determine engagement level
+              const totalPosts = daySlots.reduce((sum, slot) => sum + slot.count, 0);
+              const avgEngagement = daySlots.length > 0 
+                ? daySlots.reduce((sum, slot) => sum + slot.avgEngagement, 0) / daySlots.length 
+                : 0;
+              
+              let engagement: 'High' | 'Medium' | 'Low' = 'Low';
+              if (totalPosts >= 5 && avgEngagement >= 2) {
+                engagement = 'High';
+              } else if (totalPosts >= 2 || avgEngagement >= 1) {
+                engagement = 'Medium';
+              }
+              
+              // If no data, use generic recommendations
+              if (formattedTimes.length === 0) {
+                if (['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].includes(day)) {
+                  return { day, times: ['9:00 AM', '12:00 PM', '6:00 PM'], engagement: 'High' as const };
+                } else {
+                  return { day, times: ['10:00 AM', '2:00 PM'], engagement: 'Medium' as const };
+                }
+              }
+              
+              return { day, times: formattedTimes, engagement };
+            });
             
             return (
               <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 p-5 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-600">
@@ -1140,74 +1170,53 @@ export const Dashboard: React.FC = () => {
                     <TrendingIcon className="w-5 h-5 text-white" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-base font-bold text-gray-900 dark:text-white">Engagement Heatmap</h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Optimal posting times</p>
+                    <h3 className="text-base font-bold text-gray-900 dark:text-white">Best Posting Times</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Optimal times for maximum engagement</p>
                   </div>
                 </div>
                 
-                {/* Compact Heatmap */}
-                <div className="overflow-x-auto -mx-1 px-1">
-                  <div className="inline-block min-w-full">
-                    {/* Time slots header */}
-                    <div className="flex gap-1 mb-1.5">
-                      <div className="w-10 flex-shrink-0"></div>
-                      {timeSlots.map((slot, idx) => (
-                        <div key={idx} className="flex-1 text-center">
-                          <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400">{slot.replace('AM', '').replace('PM', '')}</span>
-                        </div>
-                      ))}
-                    </div>
-                    
-                    {/* Heatmap grid */}
-                    <div className="space-y-1">
-                      {days.map((day, dayIdx) => (
-                        <div key={dayIdx} className="flex items-center gap-1">
-                          <div className="w-10 flex-shrink-0">
-                            <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-400">{day}</span>
-                          </div>
-                          {timeSlots.map((_, slotIdx) => {
-                            const value = heatmapData[dayIdx][slotIdx];
-                            const isOptimal = value >= 70;
-                            return (
-                              <div
-                                key={slotIdx}
-                                className={`flex-1 h-7 rounded-md ${getColorIntensity(value)} transition-all hover:scale-110 cursor-pointer relative group ${
-                                  isOptimal ? 'ring-2 ring-yellow-400 ring-offset-1 shadow-lg' : ''
-                                }`}
-                                title={`${day} ${timeSlots[slotIdx]}: ${value}% engagement`}
-                              >
-                                {isOptimal && (
-                                  <div className="absolute inset-0 flex items-center justify-center">
-                                    <span className="text-white text-[9px] font-bold drop-shadow-md">★</span>
-                                  </div>
-                                )}
-                                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-black/10 rounded-md transition-opacity"></div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ))}
-                    </div>
-                    
-                    {/* Compact Legend */}
-                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-3 h-3 rounded bg-gray-300 dark:bg-gray-600"></div>
-                          <span className="text-[10px] text-gray-500 dark:text-gray-400">Low</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-3 h-3 rounded bg-gradient-to-br from-emerald-500 to-green-600"></div>
-                          <span className="text-[10px] text-gray-500 dark:text-gray-400">High</span>
-                        </div>
+                {/* Best Times List */}
+                <div className="space-y-3">
+                  {bestTimes.map((dayData, index) => (
+                    <div key={index} className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-600">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-semibold text-gray-900 dark:text-white">{dayData.day}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          dayData.engagement === 'High' 
+                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' 
+                            : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                        }`}>
+                          {dayData.engagement}
+                        </span>
                       </div>
-                      {optimalSlots.length > 0 && (
-                        <div className="flex items-center gap-1">
-                          <span className="text-[10px] text-yellow-500">★</span>
-                          <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-400">{optimalSlots.length} optimal</span>
-                        </div>
-                      )}
+                      <div className="flex flex-wrap gap-2">
+                        {dayData.times.map((time, timeIndex) => (
+                          <div
+                            key={timeIndex}
+                            className="px-3 py-1.5 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 rounded-md text-sm font-medium"
+                          >
+                            {time}
+                          </div>
+                        ))}
+                      </div>
                     </div>
+                  ))}
+                </div>
+                
+                {/* Summary */}
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
+                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                    <TrendingIcon className="w-4 h-4 text-primary-600 dark:text-primary-400" />
+                    <span className="font-medium">
+                      {allPostsWithDates.length > 0 
+                        ? 'Based on your posting history' 
+                        : 'Tip:'}
+                    </span>
+                    <span>
+                      {allPostsWithDates.length > 0
+                        ? 'These times are calculated from your actual posts and engagement patterns'
+                        : 'Weekdays between 9 AM - 6 PM typically see the highest engagement'}
+                    </span>
                   </div>
                 </div>
               </div>

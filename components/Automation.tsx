@@ -1,7 +1,18 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { Platform, Post, CalendarEvent } from '../types';
 import { useAppContext } from './AppContext';
-import { UploadIcon, SparklesIcon, CheckCircleIcon, RefreshIcon, CalendarIcon } from './icons/UIIcons';
+import { UploadIcon, SparklesIcon, CheckCircleIcon, RefreshIcon, CalendarIcon, TrashIcon, XMarkIcon, EmojiIcon, FaceSmileIcon, CatIcon, PizzaIcon, SoccerBallIcon, CarIcon, LightbulbIcon, HeartIcon, PlusIcon } from './icons/UIIcons';
+import { EMOJIS, EMOJI_CATEGORIES, Emoji } from './emojiData';
+
+const categoryIcons: Record<string, React.ReactNode> = {
+    FaceSmileIcon: <FaceSmileIcon className="w-5 h-5"/>,
+    CatIcon: <CatIcon className="w-5 h-5"/>,
+    PizzaIcon: <PizzaIcon className="w-5 h-5"/>,
+    SoccerBallIcon: <SoccerBallIcon className="w-5 h-5"/>,
+    CarIcon: <CarIcon className="w-5 h-5"/>,
+    LightbulbIcon: <LightbulbIcon className="w-5 h-5"/>,
+    HeartIcon: <HeartIcon className="w-5 h-5"/>,
+};
 import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
 import { db, storage } from '../firebaseConfig';
 import { collection, setDoc, doc, getDocs, query, where, deleteDoc } from 'firebase/firestore';
@@ -39,19 +50,19 @@ interface ProcessedMedia {
 }
 
 const fileToBase64 = (file: File): Promise<{ data: string; mimeType: string }> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => {
-      const result = reader.result as string;
-      resolve({ data: result.split(',')[1], mimeType: file.type });
-    };
-    reader.onerror = error => reject(error);
-  });
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => {
+            const result = reader.result as string;
+            resolve({ data: result.split(',')[1], mimeType: file.type });
+        };
+        reader.onerror = error => reject(error);
+    });
 };
 
 export const Automation: React.FC = () => {
-  const { user, showToast, addCalendarEvent, setPosts, posts } = useAppContext();
+  const { user, showToast, addCalendarEvent, setPosts, posts, setActivePage } = useAppContext();
   const [uploadedFiles, setUploadedFiles] = useState<ProcessedMedia[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingIndex, setProcessingIndex] = useState<number | null>(null);
@@ -66,16 +77,81 @@ export const Automation: React.FC = () => {
     LinkedIn: false,
     Facebook: false,
   });
-  
-  // Filter options for Business Starter/Growth plans
-  const isBusiness = user?.userType === 'Business';
-  const isAgencyPlan = user?.plan === 'Agency';
-  const showAdvancedOptions = !isBusiness || isAgencyPlan; // Hide for Business Starter/Growth, show for Agency and all Creators
+    
+    // Filter options for Business Starter/Growth plans
+    const isBusiness = user?.userType === 'Business';
+    const isAgencyPlan = user?.plan === 'Agency';
+    const showAdvancedOptions = !isBusiness || isAgencyPlan; // Hide for Business Starter/Growth, show for Agency and all Creators
   const [showSummary, setShowSummary] = useState(false);
   const [scheduledPosts, setScheduledPosts] = useState<Array<{ media: ProcessedMedia; post: Post; event: CalendarEvent }>>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState<number | null>(null);
+  const [emojiSearchTerm, setEmojiSearchTerm] = useState('');
+  const [activeEmojiCategory, setActiveEmojiCategory] = useState<Emoji['category']>(EMOJI_CATEGORIES[0].name);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
+
+  const goalOptions = useMemo(
+    () => [
+      { value: 'engagement', label: 'Increase Engagement' },
+      { value: 'sales', label: 'Drive Sales' },
+      { value: 'awareness', label: 'Build Awareness' },
+      ...(showAdvancedOptions
+        ? [{ value: 'followers', label: 'Increase Followers/Fans' }]
+        : [])
+    ],
+    [showAdvancedOptions]
+  );
+
+  const toneOptions = useMemo(
+    () => [
+      { value: 'friendly', label: 'Friendly' },
+      { value: 'witty', label: 'Witty' },
+      { value: 'inspirational', label: 'Inspirational' },
+      { value: 'professional', label: 'Professional' },
+      ...(showAdvancedOptions
+        ? [
+            { value: 'sexy-bold', label: 'Sexy / Bold' },
+            { value: 'sexy-explicit', label: 'Sexy / Explicit' }
+          ]
+        : [])
+    ],
+    [showAdvancedOptions]
+  );
+
+  const filteredEmojis = useMemo(() => {
+    let emojis = EMOJIS;
+    
+    if (emojiSearchTerm) {
+      const searchLower = emojiSearchTerm.toLowerCase();
+      emojis = emojis.filter(e => 
+        e.description.toLowerCase().includes(searchLower) ||
+        e.aliases.some(alias => alias.toLowerCase().includes(searchLower))
+      );
+    } else {
+      emojis = emojis.filter(e => e.category === activeEmojiCategory);
+    }
+    
+    return emojis;
+  }, [emojiSearchTerm, activeEmojiCategory]);
+
+  // Close emoji picker when clicking outside
+    useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.emoji-picker-container') && !target.closest('.emoji-button')) {
+        setEmojiPickerOpen(null);
+      }
+    };
+
+    if (emojiPickerOpen !== null) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [emojiPickerOpen]);
 
   // Load persisted automation files from Firestore
   useEffect(() => {
@@ -98,6 +174,11 @@ export const Automation: React.FC = () => {
         snapshot.forEach((doc) => {
           const data = doc.data();
           const previewUrl = data.mediaUrl || data.previewUrl;
+          
+          // Skip deleted files
+          if (deletedFileIdsRef.current.has(doc.id)) {
+            return;
+          }
           
           // Skip items with blob URLs - they're invalid and won't work after reload
           if (previewUrl && (previewUrl.startsWith('blob:') || previewUrl.startsWith('data:'))) {
@@ -143,12 +224,33 @@ export const Automation: React.FC = () => {
     };
   }, [user?.id]);
 
+  // Track deleted file IDs to prevent re-saving
+  const deletedFileIdsRef = useRef<Set<string>>(new Set());
+  
+  // Load deleted IDs from localStorage on mount
+  useEffect(() => {
+    const savedDeletedIds = localStorage.getItem(`automation_deleted_ids_${user?.id}`);
+    if (savedDeletedIds) {
+      try {
+        const ids = JSON.parse(savedDeletedIds);
+        deletedFileIdsRef.current = new Set(ids);
+      } catch (e) {
+        console.error('Failed to load deleted IDs:', e);
+      }
+    }
+  }, [user?.id]);
+
   // Save files to Firestore when they change
   useEffect(() => {
     if (!user || isLoading) return;
 
     const saveFiles = async () => {
       for (const file of uploadedFiles) {
+        // Skip files that were deleted
+        if (file.id && deletedFileIdsRef.current.has(file.id)) {
+          continue;
+        }
+
         // Only save files that aren't scheduled yet
         if (file.status === 'pending' || file.status === 'error') {
           try {
@@ -261,6 +363,26 @@ export const Automation: React.FC = () => {
     e.stopPropagation();
     handleFileSelect(e.dataTransfer.files);
   }, [handleFileSelect]);
+
+  const handleUseInCompose = (media: ProcessedMedia) => {
+    // Navigate to compose page
+    setActivePage('compose');
+    
+    // Store the media item in localStorage so Compose can pick it up
+    const isVideo = media.mimeType?.startsWith('video/') || (media.file && media.file.type.startsWith('video/'));
+    const mediaToAdd = {
+      url: media.previewUrl,
+      type: isVideo ? 'video' : 'image',
+      mimeType: media.mimeType || (media.file ? media.file.type : 'image/jpeg'),
+      name: media.fileName || media.file?.name || 'Media',
+    };
+    localStorage.setItem('pendingMediaFromLibrary', JSON.stringify(mediaToAdd));
+    
+    // Dispatch custom event to trigger import in Compose
+    window.dispatchEvent(new CustomEvent('mediaLibraryItemAdded'));
+    
+    showToast('Media added to Compose page', 'success');
+  };
 
   const analyzeMedia = async (media: ProcessedMedia): Promise<Partial<ProcessedMedia>> => {
     try {
@@ -435,6 +557,10 @@ export const Automation: React.FC = () => {
       setScheduledPosts(newScheduledPosts);
       setShowSummary(true);
       showToast(`Successfully created and scheduled ${newScheduledPosts.length} posts!`, 'success');
+      // Navigate to approvals page to show scheduled posts
+      setTimeout(() => {
+        setActivePage('approvals');
+      }, 2000);
     } catch (error) {
       console.error('Automation error:', error);
       showToast('Automation failed. Please try again.', 'error');
@@ -444,17 +570,172 @@ export const Automation: React.FC = () => {
     }
   };
 
-  const handleClear = () => {
-    uploadedFiles.forEach(media => {
-      URL.revokeObjectURL(media.previewUrl);
+  const handleDeleteSelected = async () => {
+    if (!user || selectedIndices.size === 0) return;
+    
+    // Get selected files in reverse order to maintain indices
+    const selectedFiles = Array.from(selectedIndices).sort((a, b) => b - a);
+    
+    // Delete selected files from Firestore and track deleted IDs
+    const deletePromises = selectedFiles.map(async (index) => {
+      const media = uploadedFiles[index];
+      if (!media) return;
+      
+      if (media.id) {
+        deletedFileIdsRef.current.add(media.id);
+        try {
+          await deleteDoc(doc(db, 'users', user.id, 'automation_files', media.id));
+        } catch (error) {
+          console.error('Failed to delete file:', error);
+          deletedFileIdsRef.current.delete(media.id);
+        }
+      }
+      // Revoke blob URLs
+      if (media.previewUrl && media.previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(media.previewUrl);
+      }
     });
-    setUploadedFiles([]);
-    setScheduledPosts([]);
-    setShowSummary(false);
+    
+    await Promise.all(deletePromises);
+    
+    // Remove selected files from state (in reverse order to maintain indices)
+    let newFiles = [...uploadedFiles];
+    selectedFiles.forEach(index => {
+      newFiles = newFiles.filter((_, i) => i !== index);
+    });
+    setUploadedFiles(newFiles);
+    
+    // Persist deleted IDs to localStorage
+    if (user) {
+      localStorage.setItem(`automation_deleted_ids_${user.id}`, JSON.stringify(Array.from(deletedFileIdsRef.current)));
+    }
+    
+    setSelectedIndices(new Set());
+    showToast(`${selectedFiles.length} file(s) deleted`, 'success');
   };
 
-  return (
-    <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full">
+  const handleDeleteMedia = async (index: number) => {
+    const media = uploadedFiles[index];
+    if (!media) return;
+
+    // Track deleted ID to prevent re-saving
+    if (media.id) {
+      deletedFileIdsRef.current.add(media.id);
+    }
+
+    // Optimistically remove from UI first
+    const newFiles = uploadedFiles.filter((_, i) => i !== index);
+    setUploadedFiles(newFiles);
+    
+    // Adjust selected indices
+    const adjusted = new Set<number>();
+    selectedIndices.forEach(idx => {
+      if (idx > index) {
+        adjusted.add(idx - 1);
+      } else if (idx < index) {
+        adjusted.add(idx);
+      }
+    });
+    setSelectedIndices(adjusted);
+
+    // Delete from Firestore
+    if (media.id && user) {
+      try {
+        await deleteDoc(doc(db, 'users', user.id, 'automation_files', media.id));
+        // Persist deleted ID to localStorage
+        localStorage.setItem(`automation_deleted_ids_${user.id}`, JSON.stringify(Array.from(deletedFileIdsRef.current)));
+        showToast('File deleted successfully', 'success');
+            } catch (error) {
+        console.error('Failed to delete from Firestore:', error);
+        // Revert on error
+        deletedFileIdsRef.current.delete(media.id);
+        localStorage.setItem(`automation_deleted_ids_${user.id}`, JSON.stringify(Array.from(deletedFileIdsRef.current)));
+        setUploadedFiles(uploadedFiles);
+        showToast('Failed to delete file', 'error');
+      }
+    } else {
+      // If no ID, it's a new file that hasn't been saved yet, so just remove from state
+      showToast('File removed', 'success');
+    }
+  };
+
+  const handleRegenerateCaptions = async (index: number) => {
+    const media = uploadedFiles[index];
+    if (!media || !user) return;
+
+    try {
+      const analysis = await analyzeMedia(media);
+      setUploadedFiles(prev => prev.map((m, idx) => 
+        idx === index ? { ...m, ...analysis, status: 'pending' } : m
+      ));
+      showToast('Captions regenerated successfully', 'success');
+    } catch (error) {
+      console.error('Failed to regenerate captions:', error);
+      showToast('Failed to regenerate captions', 'error');
+    }
+  };
+
+  const handleBulkRegenerateCaptions = async () => {
+    if (selectedIndices.size === 0) {
+      showToast('Please select at least one image to regenerate captions', 'error');
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const indices = Array.from(selectedIndices);
+      for (const index of indices) {
+        await handleRegenerateCaptions(index);
+      }
+      showToast(`Regenerated captions for ${indices.length} image(s)`, 'success');
+      setSelectedIndices(new Set());
+    } catch (error) {
+      console.error('Failed to regenerate captions:', error);
+      showToast('Failed to regenerate some captions', 'error');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleToggleSelect = (index: number) => {
+    setSelectedIndices(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(index)) {
+        newSet.delete(index);
+      } else {
+        newSet.add(index);
+      }
+      return newSet;
+    });
+  };
+
+  const handleEmojiSelect = (emoji: string, index: number) => {
+    setUploadedFiles(prev => prev.map((m, idx) => 
+      idx === index ? { ...m, caption: m.caption + emoji } : m
+    ));
+    setEmojiPickerOpen(null);
+  };
+
+  const handleUpdateMediaGoal = (index: number, newGoal: string) => {
+    setUploadedFiles(prev => prev.map((m, idx) => 
+      idx === index ? { ...m, goal: newGoal } : m
+    ));
+  };
+
+  const handleUpdateMediaTone = (index: number, newTone: string) => {
+    setUploadedFiles(prev => prev.map((m, idx) => 
+      idx === index ? { ...m, tone: newTone } : m
+    ));
+  };
+
+  const handleUpdateMediaCaption = (index: number, newCaption: string) => {
+    setUploadedFiles(prev => prev.map((m, idx) => 
+      idx === index ? { ...m, caption: newCaption } : m
+    ));
+    };
+
+    return (
+        <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full">
       <div className="max-w-4xl mx-auto">
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
@@ -467,7 +748,7 @@ export const Automation: React.FC = () => {
 
         {/* Settings */}
         <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Settings</h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Default Settings</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -478,10 +759,9 @@ export const Automation: React.FC = () => {
                 onChange={(e) => setGoal(e.target.value)}
                 className="w-full p-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
               >
-                <option value="engagement">Increase Engagement</option>
-                <option value="sales">Drive Sales</option>
-                <option value="awareness">Build Awareness</option>
-                <option value="followers">Increase Followers/Fans</option>
+                {goalOptions.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
               </select>
             </div>
             <div>
@@ -493,19 +773,28 @@ export const Automation: React.FC = () => {
                 onChange={(e) => setTone(e.target.value)}
                 className="w-full p-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
               >
-                <option value="friendly">Friendly</option>
-                <option value="witty">Witty</option>
-                <option value="inspirational">Inspirational</option>
-                <option value="professional">Professional</option>
-                {showAdvancedOptions && (
-                  <>
-                    <option value="sexy-bold">Sexy / Bold</option>
-                    <option value="sexy-explicit">Sexy / Explicit</option>
-                  </>
-                )}
+                {toneOptions.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
               </select>
             </div>
           </div>
+          {selectedIndices.size > 0 && (
+            <div className="mt-4">
+              <button
+                onClick={() => {
+                  const indices = Array.from(selectedIndices);
+                  setUploadedFiles(prev => prev.map((m, idx) => 
+                    indices.includes(idx) ? { ...m, goal, tone } : m
+                  ));
+                  showToast(`Applied settings to ${indices.length} selected image(s)`, 'success');
+                }}
+                className="px-4 py-2 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700"
+              >
+                Apply to Selected ({selectedIndices.size})
+              </button>
+            </div>
+          )}
           <div className="mt-4">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Platforms to Post To
@@ -527,48 +816,61 @@ export const Automation: React.FC = () => {
               ))}
             </div>
           </div>
-        </div>
-
-        {/* Upload Area */}
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
-          <div
-            ref={dropZoneRef}
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-            className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-12 text-center hover:border-primary-500 dark:hover:border-primary-500 transition-colors cursor-pointer"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <UploadIcon className="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-500" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              Drag & Drop Images or Videos
-            </h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
-              or click to browse files
-            </p>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept="image/*,video/*"
-              onChange={(e) => handleFileSelect(e.target.files)}
-              className="hidden"
-            />
+            </div>
+            
+        {/* Upload Area - Center when no files, compact when files exist */}
+        {uploadedFiles.length === 0 ? (
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
+            <div
+              ref={dropZoneRef}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+              className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center hover:border-primary-500 dark:hover:border-primary-500 transition-colors cursor-pointer"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <UploadIcon className="w-12 h-12 mx-auto mb-2 text-gray-400 dark:text-gray-500" />
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Drag & drop or click to upload images/videos
+              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/*,video/*"
+                onChange={(e) => handleFileSelect(e.target.files)}
+                className="hidden"
+              />
+            </div>
           </div>
-
-          {/* Uploaded Files Preview */}
-          {uploadedFiles.length > 0 && (
-            <div className="mt-6">
+        ) : (
+          <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
+            {/* Uploaded Files Preview */}
+            <div>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                   Uploaded Files ({uploadedFiles.length})
                 </h3>
                 <div className="flex gap-2">
-                  <button
-                    onClick={handleClear}
-                    className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
-                  >
-                    Clear All
-                  </button>
+                  {selectedIndices.size > 0 && (
+                    <>
+                      <button
+                        onClick={handleBulkRegenerateCaptions}
+                        disabled={isProcessing}
+                        className="flex items-center gap-2 px-4 py-2 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50"
+                      >
+                        <SparklesIcon className="w-4 h-4" />
+                        Regenerate ({selectedIndices.size})
+                      </button>
+                      <button
+                        onClick={handleDeleteSelected}
+                        disabled={isProcessing}
+                        className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md disabled:opacity-50"
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                        Delete Selected ({selectedIndices.size})
+                      </button>
+                    </>
+                  )}
                   <button
                     onClick={startAutomation}
                     disabled={isProcessing}
@@ -585,37 +887,36 @@ export const Automation: React.FC = () => {
                         Start Automation
                       </>
                     )}
-                  </button>
+                    </button>
                 </div>
-              </div>
+            </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {uploadedFiles.map((media, index) => {
                   const isVideo = media.mimeType?.startsWith('video/') || (media.file && media.file.type.startsWith('video/'));
                   const fileName = media.fileName || media.file?.name || `Media ${index + 1}`;
+                  const isSelected = selectedIndices.has(index);
                   return (
                   <div
                     key={media.id || index}
-                    className="relative border rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-700"
+                    className={`relative border-2 rounded-lg overflow-hidden bg-white dark:bg-gray-800 ${
+                      isSelected ? 'border-primary-500' : 'border-gray-200 dark:border-gray-700'
+                    }`}
                   >
-                    {isVideo ? (
-                      <video
-                        src={media.previewUrl}
-                        className="w-full h-32 object-cover"
-                        controls={false}
-                      />
-                    ) : (
-                      <img
-                        src={media.previewUrl}
-                        alt={`Upload ${index + 1}`}
-                        className="w-full h-32 object-cover"
-                      />
-                    )}
-                    <div className="p-2">
-                      <div className="flex items-center justify-between mb-1">
+                    {/* Header with checkbox and delete button */}
+                    <div className="flex items-center justify-between p-2 border-b border-gray-200 dark:border-gray-700">
+                                        <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleToggleSelect(index)}
+                          className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500"
+                        />
                         <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">
                           {fileName}
                         </span>
+                                        </div>
+                      <div className="flex items-center gap-1">
                         {media.status === 'analyzing' && (
                           <RefreshIcon className="w-4 h-4 animate-spin text-primary-600" />
                         )}
@@ -625,25 +926,180 @@ export const Automation: React.FC = () => {
                         {media.status === 'error' && (
                           <span className="text-xs text-red-600">Error</span>
                         )}
-                      </div>
+                        <button
+                          onClick={() => handleDeleteMedia(index)}
+                          className="p-1 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                          title="Delete"
+                        >
+                          <XMarkIcon className="w-4 h-4" />
+                        </button>
+                                        </div>
+                                    </div>
+
+                    {/* Media Preview */}
+                    <div className="relative group">
+                      {isVideo ? (
+                        <video
+                          src={media.previewUrl}
+                          className="w-full h-40 object-contain bg-gray-100 dark:bg-gray-700"
+                          controls={false}
+                        />
+                      ) : (
+                        <img
+                          src={media.previewUrl}
+                          alt={`Upload ${index + 1}`}
+                          className="w-full h-40 object-contain bg-gray-100 dark:bg-gray-700"
+                        />
+                      )}
                       {isProcessing && processingIndex === index && (
-                        <div className="text-xs text-primary-600 dark:text-primary-400">
-                          Analyzing...
-                        </div>
+                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                          <div className="text-white text-sm">Analyzing...</div>
+                                </div>
                       )}
-                      {media.status === 'scheduled' && (
-                        <div className="text-xs text-green-600 dark:text-green-400">
-                          Scheduled
+                                        </div>
+
+                    {/* Controls */}
+                    <div className="p-3 space-y-3">
+                      {/* Goal and Tone Dropdowns */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Goal
+                          </label>
+                          <select
+                            value={media.goal}
+                            onChange={(e) => handleUpdateMediaGoal(index, e.target.value)}
+                            className="w-full p-1.5 text-xs border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+                          >
+                            {goalOptions.map(opt => (
+                              <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                          </select>
+                                    </div>
+                                    <div>
+                          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Tone
+                          </label>
+                          <select
+                            value={media.tone}
+                            onChange={(e) => handleUpdateMediaTone(index, e.target.value)}
+                            className="w-full p-1.5 text-xs border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+                          >
+                            {toneOptions.map(opt => (
+                              <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                          </select>
                         </div>
-                      )}
+                                    </div>
+
+                      {/* Caption with Emoji Button */}
+                                        <div>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Caption
+                        </label>
+                        <div className="relative">
+                          <textarea
+                            value={media.caption}
+                            onChange={(e) => handleUpdateMediaCaption(index, e.target.value)}
+                            className="w-full p-2 text-xs border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white resize-y min-h-[60px] pr-8"
+                            placeholder="Caption will be generated..."
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setEmojiPickerOpen(emojiPickerOpen === index ? null : index)}
+                            className="emoji-button absolute right-2 top-2 p-1 text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
+                            title="Add emoji"
+                          >
+                            <EmojiIcon className="w-4 h-4" />
+                          </button>
+                          {emojiPickerOpen === index && (
+                            <div className="emoji-picker-container absolute z-20 right-0 top-full mt-1 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-2 flex flex-col border border-gray-200 dark:border-gray-600">
+                              <div className="px-1 pb-2">
+                                <input
+                                  type="text"
+                                  placeholder="Search emojis..."
+                                  value={emojiSearchTerm}
+                                  onChange={e => setEmojiSearchTerm(e.target.value)}
+                                  className="w-full p-2 border rounded-md bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-sm"
+                                />
+                              </div>
+                              <div className="grid grid-cols-8 gap-1 overflow-y-auto max-h-64 pr-1 scrollbar-thin min-h-[200px]">
+                                {filteredEmojis.length > 0 ? (
+                                  filteredEmojis.map(({ emoji, description }) => (
+                                    <button
+                                      key={description}
+                                      type="button"
+                                      onClick={() => handleEmojiSelect(emoji, index)}
+                                      className="text-2xl p-1 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 flex justify-center items-center"
+                                      title={description}
+                                    >
+                                      {emoji}
+                                    </button>
+                                  ))
+                                ) : (
+                                  <div className="col-span-8 text-center text-gray-500 dark:text-gray-400 py-4 text-sm">
+                                    No emojis found
+                                        </div>
+                                    )}
+                                </div>
+                              <div className="pt-2 border-t border-gray-200 dark:border-gray-700 grid grid-cols-7 gap-1">
+                                {EMOJI_CATEGORIES.map(({name, icon}) => (
+                                  <button 
+                                    key={name}
+                                    onClick={() => { setActiveEmojiCategory(name); setEmojiSearchTerm(''); }}
+                                    className={`p-1.5 rounded-md ${activeEmojiCategory === name && !emojiSearchTerm ? 'bg-primary-100 dark:bg-primary-900/50' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                                    title={name}
+                                  >
+                                    <span className={activeEmojiCategory === name && !emojiSearchTerm ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400'}>
+                                      {categoryIcons[icon]}
+                                    </span>
+                                  </button>
+                                ))}
+                                </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Regenerate Button */}
+                      <button
+                        onClick={() => handleRegenerateCaptions(index)}
+                        disabled={isProcessing}
+                        className="w-full flex items-center justify-center gap-2 px-3 py-1.5 text-xs bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50"
+                      >
+                        <SparklesIcon className="w-3 h-3" />
+                        Regenerate Captions
+                      </button>
                     </div>
                   </div>
                   );
                 })}
+                
+                {/* Upload Box - Always visible after uploaded files */}
+                <div
+                  ref={dropZoneRef}
+                  onDragOver={handleDragOver}
+                  onDrop={handleDrop}
+                  className="flex flex-col items-center justify-center h-40 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors bg-white dark:bg-gray-800"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <PlusIcon className="w-6 h-6 text-gray-400 dark:text-primary-500" />
+                  <span className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                    image/video
+                  </span>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/*,video/*"
+                    onChange={(e) => handleFileSelect(e.target.files)}
+                    className="hidden"
+                  />
+                </div>
               </div>
             </div>
-          )}
-        </div>
+                            </div>
+        )}
 
         {/* Summary Modal */}
         {showSummary && scheduledPosts.length > 0 && (
@@ -659,8 +1115,8 @@ export const Automation: React.FC = () => {
                     className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                   >
                     ✕
-                  </button>
-                </div>
+                                    </button>
+                                </div>
 
                 <p className="text-gray-600 dark:text-gray-400 mb-6">
                   Successfully created and scheduled {scheduledPosts.length} post{scheduledPosts.length !== 1 ? 's' : ''}:
@@ -675,18 +1131,18 @@ export const Automation: React.FC = () => {
                       className="border rounded-lg p-4 bg-gray-50 dark:bg-gray-700"
                     >
                       <div className="flex gap-4">
-                        <div className="w-24 h-24 flex-shrink-0">
+                        <div className="w-24 h-24 flex-shrink-0 bg-gray-100 dark:bg-gray-700 rounded">
                           {isVideo ? (
                             <video
                               src={media.previewUrl}
-                              className="w-full h-full object-cover rounded"
+                              className="w-full h-full object-contain rounded"
                               controls={false}
                             />
                           ) : (
                             <img
                               src={media.previewUrl}
                               alt={`Post ${index + 1}`}
-                              className="w-full h-full object-cover rounded"
+                              className="w-full h-full object-contain rounded"
                             />
                           )}
                         </div>
@@ -709,7 +1165,7 @@ export const Automation: React.FC = () => {
                                 timeStyle: 'short',
                               })}
                             </span>
-                          </div>
+                            </div>
                         </div>
                       </div>
                     </div>
@@ -728,13 +1184,13 @@ export const Automation: React.FC = () => {
                     Done
                   </button>
                 </div>
-              </div>
+            </div>
             </div>
           </div>
         )}
-      </div>
-    </div>
-  );
+            </div>
+        </div>
+    );
 };
 
 export default Automation;

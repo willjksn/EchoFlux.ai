@@ -36,7 +36,7 @@ import { useAppContext } from './AppContext';
 import { MobilePreviewModal } from './MobilePreviewModal';
 import { MediaBox } from './MediaBox';
 import { db, storage } from '../firebaseConfig';
-import { collection, setDoc, doc } from 'firebase/firestore';
+import { collection, setDoc, doc, getDocs, deleteDoc, query, where } from 'firebase/firestore';
 // @ts-ignore
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { scheduleMultiplePosts, analyzeOptimalPostingTimes } from '../src/services/smartSchedulingService';
@@ -286,87 +286,132 @@ const CaptionGenerator: React.FC = () => {
     });
   };
 
-  // Persist mediaItems to localStorage
-  useEffect(() => {
-    if (composeState.mediaItems.length > 0) {
-      // Only save items with valid Firebase URLs (not blob URLs)
-      const itemsToSave = composeState.mediaItems
-        .filter(item => {
-          // Don't save items with blob URLs - they won't work after reload
-          if (item.previewUrl && (item.previewUrl.startsWith('blob:') || item.previewUrl.startsWith('data:'))) {
-            return false;
-          }
-          return true;
-        })
-        .map(item => ({
-          ...item,
-          // Keep data URLs for persistence only if previewUrl is not a Firebase URL
-          // If previewUrl is a Firebase URL, we don't need the base64 data
-          data: item.previewUrl && item.previewUrl.startsWith('http') ? '' : item.data,
-        }));
-      
-      if (itemsToSave.length > 0) {
-        localStorage.setItem('compose_mediaItems', JSON.stringify(itemsToSave));
-      } else {
-        localStorage.removeItem('compose_mediaItems');
-      }
-    }
-  }, [composeState.mediaItems]);
+  // Track deleted media item IDs to prevent re-saving
+  const deletedMediaIdsRef = useRef<Set<string>>(new Set());
 
-  // Load mediaItems from localStorage on mount
+  // Persist mediaItems to Firestore
   useEffect(() => {
-    if (user) {
-      try {
-        const saved = localStorage.getItem('compose_mediaItems');
-        if (saved) {
-          const items = JSON.parse(saved) as MediaItemState[];
-          // Only load items that have valid Firebase URLs (not blob/data URLs)
-          const validItems = items
-            .filter(item => {
-              if (!item.previewUrl) return false;
-              // Filter out blob URLs and data URLs - they won't work after page reload
-              if (item.previewUrl.startsWith('blob:') || item.previewUrl.startsWith('data:')) {
-                return false;
-              }
-              // Only keep Firebase Storage URLs or Media Library URLs
-              return item.previewUrl.startsWith('http');
-            })
-            .map(item => ({
-              ...item,
-              // Ensure selectedPlatforms exists
-              selectedPlatforms: item.selectedPlatforms || {
-                Instagram: false,
-                TikTok: false,
-                X: false,
-                Threads: false,
-                YouTube: false,
-                LinkedIn: false,
-                Facebook: false,
-              },
-            }));
-          
-          // Clean up localStorage if we filtered out invalid items
-          if (validItems.length !== items.length) {
-            if (validItems.length > 0) {
-              localStorage.setItem('compose_mediaItems', JSON.stringify(validItems));
-            } else {
-              localStorage.removeItem('compose_mediaItems');
-            }
-          }
-          
-          if (validItems.length > 0) {
+    if (!user || composeState.mediaItems.length === 0) {
+      // Clear Firestore if no items
+      if (user && composeState.mediaItems.length === 0) {
+        // Don't delete here - let individual deletions handle it
+      }
+      return;
+    }
+
+    const saveMediaItems = async () => {
+      for (const item of composeState.mediaItems) {
+        // Skip items with blob URLs - they won't work after reload
+        if (item.previewUrl && (item.previewUrl.startsWith('blob:') || item.previewUrl.startsWith('data:'))) {
+          continue;
+        }
+
+        // Skip deleted items
+        if (item.id && deletedMediaIdsRef.current.has(item.id)) {
+          continue;
+        }
+
+        try {
+          const itemData: any = {
+            previewUrl: item.previewUrl,
+            captionText: item.captionText || '',
+            postGoal: item.postGoal || 'engagement',
+            postTone: item.postTone || 'friendly',
+            selectedPlatforms: item.selectedPlatforms || {},
+            results: item.results || [],
+            type: item.type || 'image',
+            mimeType: item.mimeType || '',
+            scheduledDate: item.scheduledDate || null,
+            updatedAt: new Date().toISOString(),
+          };
+
+          if (item.id) {
+            // Update existing
+            await setDoc(doc(db, 'users', user.id, 'compose_media', item.id), itemData);
+          } else {
+            // Create new
+            const newId = Date.now().toString();
+            await setDoc(doc(db, 'users', user.id, 'compose_media', newId), {
+              ...itemData,
+              createdAt: new Date().toISOString(),
+            });
+            // Update local state with ID
             setComposeState(prev => ({
               ...prev,
-              mediaItems: validItems,
+              mediaItems: prev.mediaItems.map(m => 
+                m.previewUrl === item.previewUrl && !m.id ? { ...m, id: newId } : m
+              ),
             }));
           }
+        } catch (error) {
+          console.error('Failed to save media item:', error);
         }
-      } catch (e) {
-        console.error('Failed to load saved media items:', e);
-        // Clear corrupted localStorage data
-        localStorage.removeItem('compose_mediaItems');
       }
-    }
+    };
+
+    saveMediaItems();
+  }, [composeState.mediaItems, user]);
+
+  // Load mediaItems from Firestore on mount
+  useEffect(() => {
+    if (!user) return;
+
+    let mounted = true;
+
+    const loadMediaItems = async () => {
+      try {
+        const composeRef = collection(db, 'users', user.id, 'compose_media');
+        const snapshot = await getDocs(composeRef);
+        
+        if (!mounted) return;
+        
+        const loadedItems: MediaItemState[] = [];
+        snapshot.forEach((docSnapshot) => {
+          const data = docSnapshot.data();
+          // Skip items with blob URLs
+          if (data.previewUrl && (data.previewUrl.startsWith('blob:') || data.previewUrl.startsWith('data:'))) {
+            return;
+          }
+          
+          loadedItems.push({
+            id: docSnapshot.id,
+            previewUrl: data.previewUrl || '',
+            captionText: data.captionText || '',
+            postGoal: data.postGoal || 'engagement',
+            postTone: data.postTone || 'friendly',
+            selectedPlatforms: data.selectedPlatforms || {
+              Instagram: false,
+              TikTok: false,
+              X: false,
+              Threads: false,
+              YouTube: false,
+              LinkedIn: false,
+              Facebook: false,
+            },
+            results: data.results || [],
+            type: data.type || 'image',
+            mimeType: data.mimeType || '',
+            scheduledDate: data.scheduledDate || undefined,
+            data: '', // Don't load base64 data
+          });
+        });
+        
+        if (mounted && loadedItems.length > 0) {
+          setComposeState(prev => ({
+            ...prev,
+            mediaItems: loadedItems,
+          }));
+        }
+      } catch (error) {
+        console.error('Failed to load compose media items:', error);
+      }
+    };
+
+    loadMediaItems();
+
+    return () => {
+      mounted = false;
+    };
   }, [user?.id]);
 
   // Clear localStorage when all items are removed
@@ -490,11 +535,37 @@ const CaptionGenerator: React.FC = () => {
     }));
   };
 
-  const handleRemoveMediaItem = (index: number) => {
+  const handleRemoveMediaItem = async (index: number) => {
+    const item = composeState.mediaItems[index];
+    if (!item) return;
+
+    // Track deleted ID to prevent re-saving
+    if (item.id) {
+      deletedMediaIdsRef.current.add(item.id);
+    }
+
+    // Remove from UI
     setComposeState(prev => ({
       ...prev,
       mediaItems: prev.mediaItems.filter((_, i) => i !== index),
     }));
+
+    // Delete from Firestore
+    if (item.id && user) {
+      try {
+        await deleteDoc(doc(db, 'users', user.id, 'compose_media', item.id));
+      } catch (error) {
+        console.error('Failed to delete from Firestore:', error);
+        // Revert on error
+        deletedMediaIdsRef.current.delete(item.id);
+        setComposeState(prev => ({
+          ...prev,
+          mediaItems: [...prev.mediaItems.slice(0, index), item, ...prev.mediaItems.slice(index)],
+        }));
+      }
+    }
+
+    // Adjust selected indices
     setSelectedIndices(prev => {
       const newSet = new Set(prev);
       newSet.delete(index);
@@ -945,7 +1016,29 @@ const CaptionGenerator: React.FC = () => {
         contentType: item.mimeType,
       });
 
-      return await getDownloadURL(storageRef);
+      const mediaUrl = await getDownloadURL(storageRef);
+
+      // Save to media library
+      try {
+        const mediaLibraryItem = {
+          id: timestamp.toString(),
+          userId: user.id,
+          url: mediaUrl,
+          name: `Compose Media ${new Date().toLocaleDateString()}`,
+          type: item.type || (item.mimeType.startsWith('image') ? 'image' : 'video'),
+          mimeType: item.mimeType,
+          size: bytes.length,
+          uploadedAt: new Date().toISOString(),
+          usedInPosts: [],
+          tags: [],
+        };
+        await setDoc(doc(db, 'users', user.id, 'media_library', mediaLibraryItem.id), mediaLibraryItem);
+      } catch (libraryError) {
+        // Don't fail the upload if media library save fails
+        console.error('Failed to save to media library:', libraryError);
+      }
+
+      return mediaUrl;
     } catch (e) {
       console.error('Upload failed:', e);
       return undefined;
@@ -2223,7 +2316,7 @@ const CaptionGenerator: React.FC = () => {
 
         {/* Always show media boxes - initialize with one empty box if none exist */}
         {composeState.mediaItems.length === 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4">
             <MediaBox
               key="initial"
               mediaItem={{
@@ -2271,7 +2364,7 @@ const CaptionGenerator: React.FC = () => {
             />
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4">
             {composeState.mediaItems.map((item, index) => (
               <MediaBox
                 key={item.id}

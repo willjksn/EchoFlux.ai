@@ -4,11 +4,15 @@ import { CreditCardIcon, VisaIcon, MastercardIcon, CheckCircleIcon } from './ico
 import { PaymentPlan, User } from '../types';
 import { doc, setDoc, deleteField } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
+import { validatePromotion, applyPromotion } from '../src/services/promotionService';
 
 export const PaymentModal: React.FC = () => {
     const { paymentPlan, closePaymentModal, user, setUser, selectedClient, setClients, showToast, setPricingView, setActivePage } = useAppContext();
     const [isLoading, setIsLoading] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
+    const [promoCode, setPromoCode] = useState('');
+    const [appliedPromotion, setAppliedPromotion] = useState<any>(null);
+    const [finalPrice, setFinalPrice] = useState(paymentPlan?.price || 0);
     const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     // Cleanup timeout on unmount
@@ -106,6 +110,18 @@ export const PaymentModal: React.FC = () => {
                 }
                 // Agency plan keeps current userType
                 
+                // Apply promotion if one was used
+                if (appliedPromotion && appliedPromotion.promotion) {
+                    await applyPromotion(
+                        appliedPromotion.promotion.id,
+                        planName,
+                        paymentPlan.price,
+                        appliedPromotion.discountedPrice,
+                        appliedPromotion.discountAmount,
+                        appliedPromotion.expiresAt
+                    );
+                }
+                
                 // Update user plan, userType (if needed), and reset usage counters
                 const now = new Date().toISOString();
                 const updatedUser = {
@@ -129,7 +145,10 @@ export const PaymentModal: React.FC = () => {
                 
                 console.log('Plan updated successfully:', planName);
                 
-            showToast(`Successfully switched to the ${paymentPlan.name} plan!`, 'success');
+            const successMessage = appliedPromotion 
+                ? `Successfully switched to the ${paymentPlan.name} plan with ${appliedPromotion.promotion.name}!`
+                : `Successfully switched to the ${paymentPlan.name} plan!`;
+            showToast(successMessage, 'success');
                 setIsLoading(false);
                 setIsSuccess(true);
                 
@@ -244,9 +263,61 @@ export const PaymentModal: React.FC = () => {
                             </div>
                         </div>
                     </div>
+                    {/* Promotion Code Section */}
+                    <div className="p-6 border-t border-gray-200 dark:border-gray-700">
+                        <div className="flex items-center gap-2 mb-4">
+                            <input
+                                type="text"
+                                value={promoCode}
+                                onChange={(e) => setPromoCode(e.target.value)}
+                                placeholder="Enter promotion code"
+                                className="flex-1 px-4 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => handleValidatePromotion(promoCode)}
+                                disabled={!promoCode || isLoading}
+                                className="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500 disabled:opacity-50 transition-colors"
+                            >
+                                Apply
+                            </button>
+                        </div>
+                        {appliedPromotion && (
+                            <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md mb-4">
+                                <div>
+                                    <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                                        {appliedPromotion.promotion.name} applied!
+                                    </p>
+                                    <p className="text-xs text-green-600 dark:text-green-400">
+                                        Save ${appliedPromotion.discountAmount.toFixed(2)}
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleRemovePromotion}
+                                    className="text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-200 text-sm"
+                                >
+                                    Remove
+                                </button>
+                            </div>
+                        )}
+                    </div>
                     <div className="p-6 bg-gray-50 dark:bg-gray-900/50 rounded-b-xl">
+                        <div className="flex justify-between items-center mb-4">
+                            <span className="text-sm text-gray-600 dark:text-gray-400">Total:</span>
+                            <div className="text-right">
+                                {appliedPromotion && (
+                                    <div className="text-sm text-gray-500 dark:text-gray-400 line-through mb-1">
+                                        ${paymentPlan.price.toFixed(2)}
+                                    </div>
+                                )}
+                                <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                                    ${finalPrice.toFixed(2)}
+                                </div>
+                            </div>
+                        </div>
                          <button type="submit" disabled={isLoading} className="w-full flex justify-center py-3 px-4 border border-transparent text-base font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50">
-                            {isLoading ? 'Processing...' : `Pay $${paymentPlan.price}`}
+                            {isLoading ? 'Processing...' : `Pay $${finalPrice.toFixed(2)}`}
                         </button>
                     </div>
                 </form>

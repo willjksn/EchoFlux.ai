@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { MediaItemState, CaptionResult, Platform } from '../types';
 import { generateCaptions } from '../src/services/geminiService';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -12,7 +12,16 @@ import {
   MobileIcon,
   ImageIcon,
   PlusIcon,
+  EmojiIcon,
+  FaceSmileIcon,
+  CatIcon,
+  PizzaIcon,
+  SoccerBallIcon,
+  CarIcon,
+  LightbulbIcon,
+  HeartIcon,
 } from './icons/UIIcons';
+import { EMOJIS, EMOJI_CATEGORIES, Emoji } from './emojiData';
 import {
   InstagramIcon,
   TikTokIcon,
@@ -25,8 +34,18 @@ import {
 import { useAppContext } from './AppContext';
 import { MediaLibraryItem } from '../types';
 import { db } from '../firebaseConfig';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, setDoc, doc } from 'firebase/firestore';
 import { VideoIcon } from './icons/UIIcons';
+
+const categoryIcons: Record<string, React.ReactNode> = {
+    FaceSmileIcon: <FaceSmileIcon className="w-5 h-5"/>,
+    CatIcon: <CatIcon className="w-5 h-5"/>,
+    PizzaIcon: <PizzaIcon className="w-5 h-5"/>,
+    SoccerBallIcon: <SoccerBallIcon className="w-5 h-5"/>,
+    CarIcon: <CarIcon className="w-5 h-5"/>,
+    LightbulbIcon: <LightbulbIcon className="w-5 h-5"/>,
+    HeartIcon: <HeartIcon className="w-5 h-5"/>,
+};
 
 const platformIcons: Record<Platform, React.ReactNode> = {
   Instagram: <InstagramIcon />,
@@ -94,7 +113,12 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   const [showMediaLibraryModal, setShowMediaLibraryModal] = useState(false);
   const [libraryMediaItems, setLibraryMediaItems] = useState<MediaLibraryItem[]>([]);
   const [isLoadingLibrary, setIsLoadingLibrary] = useState(false);
+  const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
+  const [emojiSearchTerm, setEmojiSearchTerm] = useState('');
+  const [activeEmojiCategory, setActiveEmojiCategory] = useState<Emoji['category']>(EMOJI_CATEGORIES[0].name);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
+  const captionTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Load media library items when modal opens
   React.useEffect(() => {
@@ -162,6 +186,26 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
       
       // Revoke the temporary blob URL
       URL.revokeObjectURL(tempPreviewUrl);
+
+      // Save to media library
+      try {
+        const mediaLibraryItem = {
+          id: timestamp.toString(),
+          userId: user.id,
+          url: firebaseUrl,
+          name: file.name,
+          type: fileType,
+          mimeType: file.type,
+          size: file.size,
+          uploadedAt: new Date().toISOString(),
+          usedInPosts: [],
+          tags: [],
+        };
+        await setDoc(doc(db, 'users', user.id, 'media_library', mediaLibraryItem.id), mediaLibraryItem);
+      } catch (libraryError) {
+        // Don't fail the upload if media library save fails
+        console.error('Failed to save to media library:', libraryError);
+      }
 
       // Convert to base64 for storage (optional, but kept for compatibility)
       const base64 = await fileToBase64(file);
@@ -256,6 +300,62 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
     onUpdate(index, { captionText });
   };
 
+  const filteredEmojis = useMemo(() => {
+    let emojis = EMOJIS;
+    
+    if (emojiSearchTerm) {
+      const searchLower = emojiSearchTerm.toLowerCase();
+      emojis = emojis.filter(e => 
+        e.description.toLowerCase().includes(searchLower) ||
+        e.aliases.some(alias => alias.toLowerCase().includes(searchLower))
+      );
+    } else {
+      emojis = emojis.filter(e => e.category === activeEmojiCategory);
+    }
+    
+    return emojis;
+  }, [emojiSearchTerm, activeEmojiCategory]);
+
+  const handleEmojiSelect = (emoji: string) => {
+    if (captionTextareaRef.current) {
+      const { selectionStart, selectionEnd } = captionTextareaRef.current;
+      const currentText = mediaItem.captionText || '';
+      const newText =
+        currentText.substring(0, selectionStart) +
+        emoji +
+        currentText.substring(selectionEnd);
+      onUpdate(index, { captionText: newText });
+      
+      setTimeout(() => {
+        if (captionTextareaRef.current) {
+          captionTextareaRef.current.focus();
+          const newCursorPosition = selectionStart + emoji.length;
+          captionTextareaRef.current.setSelectionRange(newCursorPosition, newCursorPosition);
+        }
+      }, 0);
+    } else {
+      onUpdate(index, { captionText: (mediaItem.captionText || '') + emoji });
+    }
+    setIsEmojiPickerOpen(false);
+  };
+
+  // Close emoji picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.emoji-picker-container') && !target.closest('.emoji-button')) {
+        setIsEmojiPickerOpen(false);
+      }
+    };
+
+    if (isEmojiPickerOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [isEmojiPickerOpen]);
+
   const hasContent = mediaItem.previewUrl && mediaItem.captionText.trim();
   const platformsToPost = (Object.keys(mediaItem.selectedPlatforms || {}) as Platform[]).filter(
     p => mediaItem.selectedPlatforms?.[p]
@@ -291,7 +391,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
 
       {/* Media Preview */}
       {mediaItem.previewUrl ? (
-        <div className="relative w-full h-32 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden mb-3 flex items-center justify-center">
+        <div className="relative w-full h-40 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden mb-3 flex items-center justify-center">
           {mediaItem.type === 'image' ? (
             <img
               src={mediaItem.previewUrl}
@@ -439,13 +539,67 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
       )}
 
       {/* Caption Input */}
-      <textarea
-        value={mediaItem.captionText}
-        onChange={e => onUpdate(index, { captionText: e.target.value })}
-        placeholder="Write caption or select AI suggestion..."
-        rows={4}
-        className="w-full p-2.5 text-sm border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 resize-y mb-3"
-      />
+      <div className="relative mb-3">
+        <textarea
+          ref={captionTextareaRef}
+          value={mediaItem.captionText}
+          onChange={e => onUpdate(index, { captionText: e.target.value })}
+          placeholder="Write caption or select AI suggestion..."
+          rows={4}
+          className="w-full p-2.5 pr-8 text-sm border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 resize-y"
+        />
+        <button
+          type="button"
+          onClick={() => setIsEmojiPickerOpen(!isEmojiPickerOpen)}
+          className="emoji-button absolute right-2 top-2 p-1 text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
+          title="Add emoji"
+        >
+          <EmojiIcon className="w-4 h-4" />
+        </button>
+        {isEmojiPickerOpen && (
+          <div
+            ref={emojiPickerRef}
+            className="emoji-picker-container absolute z-20 right-0 top-full mt-1 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-2 flex flex-col border border-gray-200 dark:border-gray-600"
+          >
+            <div className="px-1 pb-2">
+              <input
+                type="text"
+                placeholder="Search emojis..."
+                value={emojiSearchTerm}
+                onChange={e => setEmojiSearchTerm(e.target.value)}
+                className="w-full p-2 border rounded-md bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-sm"
+              />
+            </div>
+            <div className="grid grid-cols-8 gap-1 overflow-y-auto max-h-64 pr-1 scrollbar-thin">
+              {filteredEmojis.map(({ emoji, description }) => (
+                <button
+                  key={description}
+                  type="button"
+                  onClick={() => handleEmojiSelect(emoji)}
+                  className="text-2xl p-1 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 flex justify-center items-center"
+                  title={description}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+            <div className="pt-2 border-t border-gray-200 dark:border-gray-700 grid grid-cols-7 gap-1">
+              {EMOJI_CATEGORIES.map(({name, icon}) => (
+                <button 
+                  key={name}
+                  onClick={() => { setActiveEmojiCategory(name); setEmojiSearchTerm(''); }}
+                  className={`p-1.5 rounded-md ${activeEmojiCategory === name && !emojiSearchTerm ? 'bg-primary-100 dark:bg-primary-900/50' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                  title={name}
+                >
+                  <span className={activeEmojiCategory === name && !emojiSearchTerm ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400'}>
+                    {categoryIcons[icon]}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Schedule Date */}
       {mediaItem.scheduledDate && (

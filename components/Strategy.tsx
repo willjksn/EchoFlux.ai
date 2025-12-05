@@ -12,6 +12,7 @@ import { storage } from '../firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db } from '../firebaseConfig';
 import { doc, setDoc, getDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { MediaLibraryItem } from '../types';
 
 const platformIcons: Record<Platform, React.ReactElement> = {
     Instagram: <InstagramIcon className="w-4 h-4" />,
@@ -323,6 +324,26 @@ export const Strategy: React.FC = () => {
             });
 
             const mediaUrl = await getDownloadURL(storageRef);
+
+            // Save to media library
+            try {
+                const mediaLibraryItem: MediaLibraryItem = {
+                    id: timestamp.toString(),
+                    userId: user.id,
+                    url: mediaUrl,
+                    name: file.name || `Strategy Media ${new Date().toLocaleDateString()}`,
+                    type: fileType,
+                    mimeType: file.type,
+                    size: file.size,
+                    uploadedAt: new Date().toISOString(),
+                    usedInPosts: [],
+                    tags: [],
+                };
+                await setDoc(doc(db, 'users', user.id, 'media_library', mediaLibraryItem.id), mediaLibraryItem);
+            } catch (libraryError) {
+                // Don't fail the upload if media library save fails
+                console.error('Failed to save to media library:', libraryError);
+            }
 
             // Get the current day to use for analysis
             const currentDay = plan.weeks[weekIndex].content[dayIndex];

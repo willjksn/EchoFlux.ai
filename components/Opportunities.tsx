@@ -179,8 +179,8 @@ export const Opportunities: React.FC = () => {
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-3">
-                                <div className="p-2 bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 rounded-full">
-                                    <TrendingIcon className="w-5 h-5" />
+                            <div className="p-2 bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 rounded-full">
+                                <TrendingIcon className="w-5 h-5" />
                                 </div>
                                 <div>
                                     <h3 className="text-xl font-bold text-gray-900 dark:text-white">Discover Trends</h3>
@@ -393,11 +393,11 @@ export const Opportunities: React.FC = () => {
                                                      </button>
                                                  </div>
                                                  <div className="flex flex-wrap gap-2">
-                                                     {result.relatedHashtags.map((tag: string, idx: number) => (
-                                                         <span key={idx} className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full">
-                                                             {tag}
-                                                         </span>
-                                                     ))}
+                                                 {result.relatedHashtags.map((tag: string, idx: number) => (
+                                                     <span key={idx} className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full">
+                                                         {tag}
+                                                     </span>
+                                                 ))}
                                                  </div>
                                              </div>
                                          )}

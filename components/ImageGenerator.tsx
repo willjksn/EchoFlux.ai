@@ -6,7 +6,7 @@ import { Platform, CalendarEvent } from '../types';
 import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
 import { UpgradePrompt } from './UpgradePrompt';
 import { db, storage } from '../firebaseConfig';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, setDoc, doc } from 'firebase/firestore';
 import { MobilePreviewModal } from './MobilePreviewModal';
 // FIX: Use namespace import for firebase/storage to resolve module resolution issues.
 import * as storageApi from 'firebase/storage';
@@ -218,7 +218,29 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, usag
             contentType: 'image/png'
         });
         
-        return await storageApi.getDownloadURL(storageRef);
+        const mediaUrl = await storageApi.getDownloadURL(storageRef);
+        
+        // Save to media library
+        try {
+            const mediaLibraryItem = {
+                id: timestamp.toString(),
+                userId: user.id,
+                url: mediaUrl,
+                name: `Generated Image ${new Date().toLocaleDateString()}`,
+                type: 'image' as const,
+                mimeType: 'image/png',
+                size: bytes.length,
+                uploadedAt: new Date().toISOString(),
+                usedInPosts: [],
+                tags: [],
+            };
+            await setDoc(doc(db, 'users', user.id, 'media_library', mediaLibraryItem.id), mediaLibraryItem);
+        } catch (libraryError) {
+            // Don't fail the upload if media library save fails
+            console.error('Failed to save to media library:', libraryError);
+        }
+        
+        return mediaUrl;
     };
 
     const handleSchedule = async (date: string) => {

@@ -1,7 +1,18 @@
-import React, { useState, useRef, ChangeEvent, useEffect } from 'react';
-import { CameraIcon, TrashIcon, CheckCircleIcon, CalendarIcon, CreditCardIcon, LockIcon, DownloadIcon, SparklesIcon } from './icons/UIIcons';
+import React, { useState, useRef, ChangeEvent, useEffect, useMemo, useLayoutEffect } from 'react';
+import { CameraIcon, TrashIcon, CheckCircleIcon, CalendarIcon, CreditCardIcon, LockIcon, DownloadIcon, SparklesIcon, EmojiIcon, FaceSmileIcon, CatIcon, PizzaIcon, SoccerBallIcon, CarIcon, LightbulbIcon, HeartIcon } from './icons/UIIcons';
+import { EMOJIS, EMOJI_CATEGORIES, Emoji } from './emojiData';
 import { useAppContext } from './AppContext';
 import { User, MediaItem, Client, Plan } from '../types';
+
+const categoryIcons: Record<string, React.ReactNode> = {
+    FaceSmileIcon: <FaceSmileIcon className="w-5 h-5"/>,
+    CatIcon: <CatIcon className="w-5 h-5"/>,
+    PizzaIcon: <PizzaIcon className="w-5 h-5"/>,
+    SoccerBallIcon: <SoccerBallIcon className="w-5 h-5"/>,
+    CarIcon: <CarIcon className="w-5 h-5"/>,
+    LightbulbIcon: <LightbulbIcon className="w-5 h-5"/>,
+    HeartIcon: <HeartIcon className="w-5 h-5"/>,
+};
 import { auth, storage } from '../firebaseConfig';
 // @ts-ignore
 import * as storageFunctions from 'firebase/storage';
@@ -24,6 +35,132 @@ export const Profile: React.FC = () => {
     const [usageTab, setUsageTab] = useState<'stats' | 'ads'>('stats');
     const [storedAds, setStoredAds] = useState<any[]>([]);
     const [isLoadingAds, setIsLoadingAds] = useState(false);
+    
+    // Emoji picker state for name field
+    const [isNameEmojiPickerOpen, setIsNameEmojiPickerOpen] = useState(false);
+    const [nameEmojiSearchTerm, setNameEmojiSearchTerm] = useState('');
+    const [nameActiveEmojiCategory, setNameActiveEmojiCategory] = useState<Emoji['category']>(EMOJI_CATEGORIES[0].name);
+    const [namePopoverPositionClass, setNamePopoverPositionClass] = useState('bottom-full mb-2');
+    const nameInputRef = useRef<HTMLInputElement>(null);
+    const nameEmojiPickerRef = useRef<HTMLDivElement>(null);
+    const nameEmojiButtonRef = useRef<HTMLButtonElement>(null);
+    
+    // Emoji picker state for bio field
+    const [isBioEmojiPickerOpen, setIsBioEmojiPickerOpen] = useState(false);
+    const [bioEmojiSearchTerm, setBioEmojiSearchTerm] = useState('');
+    const [bioActiveEmojiCategory, setBioActiveEmojiCategory] = useState<Emoji['category']>(EMOJI_CATEGORIES[0].name);
+    const [bioPopoverPositionClass, setBioPopoverPositionClass] = useState('bottom-full mb-2');
+    const bioTextareaRef = useRef<HTMLTextAreaElement>(null);
+    const bioEmojiPickerRef = useRef<HTMLDivElement>(null);
+    const bioEmojiButtonRef = useRef<HTMLButtonElement>(null);
+    
+    const nameFilteredEmojis = useMemo(() => {
+        const lowercasedTerm = nameEmojiSearchTerm.toLowerCase();
+        if (lowercasedTerm) {
+            return EMOJIS.filter(e =>
+                e.description.toLowerCase().includes(lowercasedTerm) ||
+                e.aliases.some(a => a.includes(lowercasedTerm))
+            );
+        }
+        return EMOJIS.filter(e => e.category === nameActiveEmojiCategory);
+    }, [nameEmojiSearchTerm, nameActiveEmojiCategory]);
+    
+    const bioFilteredEmojis = useMemo(() => {
+        const lowercasedTerm = bioEmojiSearchTerm.toLowerCase();
+        if (lowercasedTerm) {
+            return EMOJIS.filter(e =>
+                e.description.toLowerCase().includes(lowercasedTerm) ||
+                e.aliases.some(a => a.includes(lowercasedTerm))
+            );
+        }
+        return EMOJIS.filter(e => e.category === bioActiveEmojiCategory);
+    }, [bioEmojiSearchTerm, bioActiveEmojiCategory]);
+    
+    useLayoutEffect(() => {
+        if (isNameEmojiPickerOpen && nameInputRef.current) {
+            const POPOVER_HEIGHT = 350;
+            const rect = nameInputRef.current.getBoundingClientRect();
+            const spaceAbove = rect.top;
+            if (spaceAbove < POPOVER_HEIGHT + 10) {
+                setNamePopoverPositionClass('top-full mt-2');
+            } else {
+                setNamePopoverPositionClass('bottom-full mb-2');
+            }
+        }
+    }, [isNameEmojiPickerOpen]);
+    
+    useLayoutEffect(() => {
+        if (isBioEmojiPickerOpen && bioTextareaRef.current) {
+            const POPOVER_HEIGHT = 350;
+            const rect = bioTextareaRef.current.getBoundingClientRect();
+            const spaceAbove = rect.top;
+            if (spaceAbove < POPOVER_HEIGHT + 10) {
+                setBioPopoverPositionClass('top-full mt-2');
+            } else {
+                setBioPopoverPositionClass('bottom-full mb-2');
+            }
+        }
+    }, [isBioEmojiPickerOpen]);
+    
+    const handleNameEmojiSelect = (emoji: string) => {
+        if (nameInputRef.current && editableUser) {
+            const { selectionStart, selectionEnd } = nameInputRef.current;
+            const currentName = editableUser.name || '';
+            const newName =
+                currentName.substring(0, selectionStart) +
+                emoji +
+                currentName.substring(selectionEnd);
+            setEditableUser({ ...editableUser, name: newName });
+            setTimeout(() => {
+                if (nameInputRef.current) {
+                    nameInputRef.current.focus();
+                    const newCursorPosition = selectionStart + emoji.length;
+                    nameInputRef.current.setSelectionRange(newCursorPosition, newCursorPosition);
+                }
+            }, 0);
+        }
+    };
+    
+    const handleBioEmojiSelect = (emoji: string) => {
+        if (bioTextareaRef.current && editableUser) {
+            const { selectionStart, selectionEnd } = bioTextareaRef.current;
+            const currentBio = editableUser.bio || '';
+            const newBio =
+                currentBio.substring(0, selectionStart) +
+                emoji +
+                currentBio.substring(selectionEnd);
+            setEditableUser({ ...editableUser, bio: newBio });
+            setTimeout(() => {
+                if (bioTextareaRef.current) {
+                    bioTextareaRef.current.focus();
+                    const newCursorPosition = selectionStart + emoji.length;
+                    bioTextareaRef.current.setSelectionRange(newCursorPosition, newCursorPosition);
+                }
+            }, 0);
+        }
+    };
+    
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (
+                nameEmojiPickerRef.current && 
+                !nameEmojiPickerRef.current.contains(event.target as Node) &&
+                nameEmojiButtonRef.current && 
+                !nameEmojiButtonRef.current.contains(event.target as Node) &&
+                bioEmojiPickerRef.current && 
+                !bioEmojiPickerRef.current.contains(event.target as Node) &&
+                bioEmojiButtonRef.current && 
+                !bioEmojiButtonRef.current.contains(event.target as Node)
+            ) {
+                setIsNameEmojiPickerOpen(false);
+                setNameEmojiSearchTerm('');
+                setIsBioEmojiPickerOpen(false);
+                setBioEmojiSearchTerm('');
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     const currentData = selectedClient ? clients.find(c => c.id === selectedClient.id) : user;
     const currentAccountName = selectedClient ? selectedClient.name : user?.name;
@@ -290,13 +427,68 @@ export const Profile: React.FC = () => {
                     </div>
                     <div className="flex-1 space-y-2">
                         {canEdit && isEditing && editableUser ? (
-                            <input 
-                                type="text" 
-                                name="name" 
-                                value={editableUser.name} 
-                                onChange={handleInputChange} 
-                                className="w-full p-3 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-xl font-bold focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all" 
-                            />
+                            <div className="relative">
+                                <input 
+                                    ref={nameInputRef}
+                                    type="text" 
+                                    name="name" 
+                                    value={editableUser.name} 
+                                    onChange={handleInputChange} 
+                                    className="w-full p-3 pr-10 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-xl font-bold focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all" 
+                                />
+                                <button
+                                    ref={nameEmojiButtonRef}
+                                    type="button"
+                                    onClick={() => setIsNameEmojiPickerOpen(prev => !prev)}
+                                    className="absolute right-2 top-2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                    title="Add emoji"
+                                >
+                                    <EmojiIcon className="w-5 h-5" />
+                                </button>
+                                {isNameEmojiPickerOpen && (
+                                    <div
+                                        ref={nameEmojiPickerRef}
+                                        className={`absolute z-10 right-0 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-2 flex flex-col border border-gray-200 dark:border-gray-600 ${namePopoverPositionClass}`}
+                                    >
+                                        <div className="px-1 pb-2">
+                                            <input
+                                                type="text"
+                                                placeholder="Search emojis..."
+                                                value={nameEmojiSearchTerm}
+                                                onChange={e => setNameEmojiSearchTerm(e.target.value)}
+                                                className="w-full p-2 border rounded-md bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-sm"
+                                            />
+                                        </div>
+                                        <div className="grid grid-cols-8 gap-1 overflow-y-auto max-h-64 pr-1 scrollbar-thin">
+                                            {nameFilteredEmojis.map(({ emoji, description }) => (
+                                                <button
+                                                    key={description}
+                                                    type="button"
+                                                    onClick={() => handleNameEmojiSelect(emoji)}
+                                                    className="text-2xl p-1 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 flex justify-center items-center"
+                                                    title={description}
+                                                >
+                                                    {emoji}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <div className="pt-2 border-t border-gray-200 dark:border-gray-700 grid grid-cols-7 gap-1">
+                                            {EMOJI_CATEGORIES.map(({name, icon}) => (
+                                                <button 
+                                                    key={name}
+                                                    onClick={() => { setNameActiveEmojiCategory(name); setNameEmojiSearchTerm(''); }}
+                                                    className={`p-1.5 rounded-md ${nameActiveEmojiCategory === name && !nameEmojiSearchTerm ? 'bg-primary-100 dark:bg-primary-900/50' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                                                    title={name}
+                                                >
+                                                    <span className={nameActiveEmojiCategory === name && !nameEmojiSearchTerm ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400'}>
+                                                        {categoryIcons[icon]}
+                                                    </span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         ) : (
                             <h3 className="text-2xl font-bold text-gray-900 dark:text-white">{currentData.name}</h3>
                         )}
@@ -306,14 +498,69 @@ export const Profile: React.FC = () => {
                  {canEdit && (isEditing && editableUser ? (
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Bio</label>
-                        <textarea 
-                            name="bio" 
-                            value={editableUser.bio} 
-                            onChange={handleInputChange} 
-                            rows={4} 
-                            className="w-full p-3 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all resize-none" 
-                            placeholder="Tell us about yourself..."
-                        />
+                        <div className="relative">
+                            <textarea 
+                                ref={bioTextareaRef}
+                                name="bio" 
+                                value={editableUser.bio} 
+                                onChange={handleInputChange} 
+                                rows={4} 
+                                className="w-full p-3 pr-10 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all resize-none" 
+                                placeholder="Tell us about yourself..."
+                            />
+                            <button
+                                ref={bioEmojiButtonRef}
+                                type="button"
+                                onClick={() => setIsBioEmojiPickerOpen(prev => !prev)}
+                                className="absolute right-2 top-2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                title="Add emoji"
+                            >
+                                <EmojiIcon className="w-5 h-5" />
+                            </button>
+                            {isBioEmojiPickerOpen && (
+                                <div
+                                    ref={bioEmojiPickerRef}
+                                    className={`absolute z-10 right-0 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-2 flex flex-col border border-gray-200 dark:border-gray-600 ${bioPopoverPositionClass}`}
+                                >
+                                    <div className="px-1 pb-2">
+                                        <input
+                                            type="text"
+                                            placeholder="Search emojis..."
+                                            value={bioEmojiSearchTerm}
+                                            onChange={e => setBioEmojiSearchTerm(e.target.value)}
+                                            className="w-full p-2 border rounded-md bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-sm"
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-8 gap-1 overflow-y-auto max-h-64 pr-1 scrollbar-thin">
+                                        {bioFilteredEmojis.map(({ emoji, description }) => (
+                                            <button
+                                                key={description}
+                                                type="button"
+                                                onClick={() => handleBioEmojiSelect(emoji)}
+                                                className="text-2xl p-1 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 flex justify-center items-center"
+                                                title={description}
+                                            >
+                                                {emoji}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="pt-2 border-t border-gray-200 dark:border-gray-700 grid grid-cols-7 gap-1">
+                                        {EMOJI_CATEGORIES.map(({name, icon}) => (
+                                            <button 
+                                                key={name}
+                                                onClick={() => { setBioActiveEmojiCategory(name); setBioEmojiSearchTerm(''); }}
+                                                className={`p-1.5 rounded-md ${bioActiveEmojiCategory === name && !bioEmojiSearchTerm ? 'bg-primary-100 dark:bg-primary-900/50' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                                                title={name}
+                                            >
+                                                <span className={bioActiveEmojiCategory === name && !bioEmojiSearchTerm ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400'}>
+                                                    {categoryIcons[icon]}
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                  ) : (
                     'bio' in currentData && (currentData as User).bio ? (

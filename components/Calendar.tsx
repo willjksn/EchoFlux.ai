@@ -124,7 +124,7 @@ export const Calendar: React.FC = () => {
         // Empty cells for days before the 1st
         for (let i = 0; i < firstDay; i++) {
             grid.push(
-                <div key={`empty-${i}`} className="bg-gray-50 dark:bg-gray-800/30 min-h-[140px] border-r border-b border-gray-200 dark:border-gray-700"></div>
+                <div key={`empty-${i}`} className="bg-gray-50 dark:bg-gray-800/30 min-h-[80px] border-r border-b border-gray-200 dark:border-gray-700"></div>
             );
         }
 
@@ -151,16 +151,18 @@ export const Calendar: React.FC = () => {
 
             const todayHighlight = isToday(currentDay);
             
+            const hasEvents = dayEvents.length > 0;
+            
             grid.push(
                 <div 
                     key={dayCounter} 
-                    className={`min-h-[140px] border-r border-b border-gray-200 dark:border-gray-700 p-3 relative group flex flex-col transition-all ${
+                    className={`${hasEvents ? 'min-h-[140px]' : 'min-h-[80px]'} border-r border-b border-gray-200 dark:border-gray-700 p-3 relative group flex flex-col transition-all ${
                         todayHighlight 
                             ? 'bg-gradient-to-br from-primary-50 to-blue-50 dark:from-primary-900/20 dark:to-blue-900/20 ring-2 ring-primary-400 dark:ring-primary-500' 
                             : 'bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50'
                     }`}
                 >
-                    <div className="flex justify-between items-start mb-2 h-7">
+                    <div className="flex justify-between items-start mb-2 h-7 flex-shrink-0">
                         <span className={`font-bold text-base ${
                             todayHighlight 
                                 ? 'text-primary-700 dark:text-primary-300' 
@@ -176,7 +178,7 @@ export const Calendar: React.FC = () => {
                             </span>
                         )}
                     </div>
-                    <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pb-8">
+                    <div className={`space-y-2 ${hasEvents ? 'flex-1 overflow-y-auto custom-scrollbar pb-8' : 'flex-shrink-0'}`}>
                         {dayEvents.map(evt => {
                             const timeString = new Date(evt.date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
                             const statusColors = {
@@ -679,7 +681,7 @@ export const Calendar: React.FC = () => {
                     ))}
                 </div>
 
-                <div className="grid grid-cols-7 auto-rows-fr min-h-[600px]">
+                <div className="grid grid-cols-7 auto-rows-min">
                     {renderCalendarGrid()}
                 </div>
             </div>
