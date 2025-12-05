@@ -1009,8 +1009,8 @@ export const Dashboard: React.FC = () => {
                 });
               }
               
-              // Limit to 3 recommendations
-              const displayRecommendations = recommendations.slice(0, 3);
+              // Limit to 5 recommendations for taller box
+              const displayRecommendations = recommendations.slice(0, 5);
               
               const getIcon = (type: string) => {
                 switch(type) {
@@ -1050,7 +1050,7 @@ export const Dashboard: React.FC = () => {
                       <p className="text-xs text-gray-500 dark:text-gray-400">Smart Recommendations</p>
                     </div>
                   </div>
-                  <div className="space-y-2.5">
+                  <div className="space-y-2.5 max-h-[500px] overflow-y-auto custom-scrollbar">
                     {displayRecommendations.map((rec, idx) => (
                       <div key={idx} className={`p-3.5 rounded-xl border bg-gradient-to-r ${getGradientClasses(rec.type)} backdrop-blur-sm hover:shadow-md transition-all`}>
                         <div className="flex items-start gap-2.5">
@@ -1164,24 +1164,24 @@ export const Dashboard: React.FC = () => {
             });
             
             return (
-              <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 p-5 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-600">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl">
-                    <TrendingIcon className="w-5 h-5 text-white" />
+              <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 p-3 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-600">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="p-1.5 bg-gradient-to-br from-orange-500 to-red-500 rounded-lg">
+                    <TrendingIcon className="w-4 h-4 text-white" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-base font-bold text-gray-900 dark:text-white">Best Posting Times</h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Optimal times for maximum engagement</p>
+                    <h3 className="text-sm font-bold text-gray-900 dark:text-white">Best Posting Times</h3>
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400">Optimal times for maximum engagement</p>
                   </div>
                 </div>
                 
                 {/* Best Times List */}
-                <div className="space-y-3">
+                <div className="space-y-1.5 max-h-[280px] overflow-y-auto custom-scrollbar">
                   {bestTimes.map((dayData, index) => (
-                    <div key={index} className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-600">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-semibold text-gray-900 dark:text-white">{dayData.day}</span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                    <div key={index} className="bg-white dark:bg-gray-800 rounded-lg p-2 border border-gray-200 dark:border-gray-600">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-semibold text-gray-900 dark:text-white">{dayData.day}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
                           dayData.engagement === 'High' 
                             ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' 
                             : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
@@ -1189,11 +1189,11 @@ export const Dashboard: React.FC = () => {
                           {dayData.engagement}
                         </span>
                       </div>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-1.5">
                         {dayData.times.map((time, timeIndex) => (
                           <div
                             key={timeIndex}
-                            className="px-3 py-1.5 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 rounded-md text-sm font-medium"
+                            className="px-2 py-1 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 rounded-md text-xs font-medium"
                           >
                             {time}
                           </div>
@@ -1204,18 +1204,18 @@ export const Dashboard: React.FC = () => {
                 </div>
                 
                 {/* Summary */}
-                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
-                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                    <TrendingIcon className="w-4 h-4 text-primary-600 dark:text-primary-400" />
+                <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600">
+                  <div className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
+                    <TrendingIcon className="w-3 h-3 text-primary-600 dark:text-primary-400" />
                     <span className="font-medium">
                       {allPostsWithDates.length > 0 
                         ? 'Based on your posting history' 
                         : 'Tip:'}
                     </span>
-                    <span>
+                    <span className="text-[10px]">
                       {allPostsWithDates.length > 0
-                        ? 'These times are calculated from your actual posts and engagement patterns'
-                        : 'Weekdays between 9 AM - 6 PM typically see the highest engagement'}
+                        ? 'Calculated from your posts'
+                        : 'Weekdays 9 AM - 6 PM'}
                     </span>
                   </div>
                 </div>
@@ -1801,7 +1801,7 @@ export const Dashboard: React.FC = () => {
                 });
               }
               
-              return suggestions.slice(0, 3);
+              return suggestions.slice(0, 5);
             };
             
             const suggestions = generateSuggestions();
@@ -1849,7 +1849,7 @@ export const Dashboard: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                  <div className="space-y-2.5">
+                  <div className="space-y-2.5 max-h-[500px] overflow-y-auto custom-scrollbar">
                     {suggestions.map((suggestion, idx) => {
                       const badge = getTypeBadge(suggestion.type);
                       return (
