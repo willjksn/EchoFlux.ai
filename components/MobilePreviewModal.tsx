@@ -46,9 +46,9 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({ isOpen, 
                             <div className="bg-black aspect-square flex items-center justify-center overflow-hidden relative">
                                 {media ? (
                                     media.type === 'image' ? (
-                                        <img src={media.previewUrl} alt="Post Media" className="w-full h-full object-cover" />
+                                        <img src={media.previewUrl} alt="Post Media" className="w-full h-full object-contain" />
                                     ) : (
-                                        <video src={media.previewUrl} className="w-full h-full object-cover" controls />
+                                        <video src={media.previewUrl} className="w-full h-full object-contain" controls />
                                     )
                                 ) : (
                                     <div className="w-full h-full flex items-center justify-center bg-gray-100 text-gray-400 text-sm">No Media</div>

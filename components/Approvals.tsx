@@ -39,7 +39,7 @@ const statusColors: Record<ApprovalStatus, string> = {
 };
 
 export const Approvals: React.FC = () => {
-    const { posts, user, setActivePage, showToast, addCalendarEvent } = useAppContext();
+    const { posts, user, setActivePage, showToast, addCalendarEvent, setPosts } = useAppContext();
     const [activePost, setActivePost] = useState<Post | null>(null);
     const [comment, setComment] = useState('');
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -80,10 +80,15 @@ export const Approvals: React.FC = () => {
             try {
                 // Fix: Use v9 modular SDK
                 await deleteDoc(doc(db, 'users', user.id, 'posts', postId));
+                // Update local state immediately
+                if (setPosts) {
+                    setPosts(prev => prev.filter(p => p.id !== postId));
+                }
                 setActivePost(null);
                 showToast('Post deleted', 'success');
             } catch (e) {
                 showToast('Failed to delete', 'error');
+                console.error('Delete error:', e);
             }
         }
     }
@@ -356,6 +361,7 @@ export const Approvals: React.FC = () => {
                     })}
                 </div>
             </div>
+            )}
 
             {/* Detail Modal */}
             {activePost && (

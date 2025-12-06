@@ -20,10 +20,18 @@ const NavItem: React.FC<NavItemProps> = ({ page, icon, label, tourId }) => {
           // If clicking Inbox, set localStorage flag and navigate to dashboard
           if (page === 'inbox') {
             localStorage.setItem('dashboardViewMode', 'Inbox');
+            // If already on dashboard, trigger viewMode update via custom event
+            if (activePage === 'dashboard') {
+              window.dispatchEvent(new CustomEvent('dashboardViewModeChanged'));
+            }
             setActivePage('dashboard');
           } else if (page === 'dashboard') {
             // Clear Inbox flag when clicking Dashboard to show Overview
             localStorage.removeItem('dashboardViewMode');
+            // If already on dashboard, trigger viewMode update
+            if (activePage === 'dashboard') {
+              window.dispatchEvent(new CustomEvent('dashboardViewModeChanged'));
+            }
             setActivePage('dashboard');
           } else {
             setActivePage(page);

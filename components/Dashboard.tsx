@@ -181,14 +181,30 @@ export const Dashboard: React.FC = () => {
   
   // Sync viewMode with localStorage when it changes
   useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'dashboardViewMode') {
+        if (e.newValue === 'Inbox') {
+          setViewMode('Inbox');
+        } else if (!e.newValue && viewMode === 'Inbox') {
+          setViewMode('Overview');
+        }
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Also check localStorage on mount and when activePage changes
     const savedViewMode = localStorage.getItem('dashboardViewMode');
     if (savedViewMode === 'Inbox' && viewMode !== 'Inbox') {
       setViewMode('Inbox');
     } else if (!savedViewMode && viewMode === 'Inbox') {
-      // If localStorage is cleared but we're still in Inbox, switch to Overview
       setViewMode('Overview');
     }
-  }, []);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [viewMode]);
   
   // Update localStorage when viewMode changes manually
   useEffect(() => {
