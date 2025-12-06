@@ -329,7 +329,7 @@ export const Approvals: React.FC = () => {
                                             {post.mediaUrl && (
                                                 <div className="w-20 h-20 flex-shrink-0 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden shadow-sm border border-gray-200 dark:border-gray-600">
                                                     {post.mediaType === 'video' ? (
-                                                        <video src={post.mediaUrl} className="w-full h-full object-cover" />
+                                                        <video src={post.mediaUrl} className="w-full h-full object-cover" controls muted={false} />
                                                     ) : (
                                                         <img src={post.mediaUrl} alt="preview" className="w-full h-full object-cover" />
                                                     )}

@@ -434,8 +434,12 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
                 src={mediaItem.previewUrl}
                 className="w-full h-full object-contain"
                 preload="metadata"
+                controls
+                muted={false}
                 ref={(videoRef) => {
                   if (videoRef) {
+                    // Ensure video is not muted
+                    videoRef.muted = false;
                     videoRef.addEventListener('play', () => {
                       const playOverlay = videoRef.parentElement?.querySelector('.play-overlay');
                       if (playOverlay) {
