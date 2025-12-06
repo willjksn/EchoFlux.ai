@@ -167,6 +167,9 @@ export const Approvals: React.FC = () => {
         });
     }
 
+    // Check if there are any posts at all
+    const hasAnyPosts = filteredPosts.length > 0;
+    
     return (
         <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full flex flex-col">
             <MobilePreviewModal 
@@ -181,6 +184,9 @@ export const Approvals: React.FC = () => {
                  <div>
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Workflow</h1>
                     <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Manage content pipeline from draft to publication.</p>
+                    {!hasAnyPosts && (
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">Posts appear here when you save drafts or create content from Compose or Automation.</p>
+                    )}
                 </div>
                 <div className="flex items-center gap-3">
                     {/* Source Filter */}
