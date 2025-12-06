@@ -1325,35 +1325,72 @@ const CaptionGenerator: React.FC = () => {
         updatedPlatforms[platform] = true;
       });
 
-      // Get optimal times for each platform
+      // Get optimal times for each platform using real-time data
       let bestScheduledDate: string | undefined;
       try {
+        // Import real-time posting service
+        const { getRealTimePostingData } = await import('../src/services/realTimePostingService');
         const analytics = await getAnalytics();
         
         // Find the best time across all recommended platforms
         const allOptimalTimes: Array<{ platform: Platform; time: Date; score: number }> = [];
         
         for (const platform of topPlatforms) {
+          // Get real-time posting data for this platform
+          const realTimeData = await getRealTimePostingData(platform, {
+            useCache: true,
+            cacheDuration: 60, // Cache for 60 minutes
+          });
+          
+          // Also get analytics-based optimal times as fallback
           const optimalTimes = analyzeOptimalPostingTimes(analytics, {
             platform: platform,
             avoidClumping: true,
             minHoursBetween: 2,
           });
           
-          if (optimalTimes.length > 0) {
-            const optimal = optimalTimes[0];
+          // Use real-time data if available, otherwise fall back to analytics
+          const bestDays = realTimeData.optimalDays.length > 0 
+            ? realTimeData.optimalDays 
+            : optimalTimes.map(t => t.dayOfWeek);
+          const bestHours = realTimeData.optimalHours.length > 0
+            ? realTimeData.optimalHours
+            : optimalTimes.map(t => t.hour);
+          
+          if (bestDays.length > 0 && bestHours.length > 0) {
+            // Find the next optimal time
             const now = new Date();
             const scheduledDate = new Date();
-            scheduledDate.setDate(now.getDate() + (optimal.dayOfWeek - now.getDay() + 7) % 7);
-            scheduledDate.setHours(optimal.hour, optimal.minute, 0, 0);
             
-            // Score based on platform recommendation score
+            // Find next optimal day
+            const currentDay = now.getDay();
+            const nextOptimalDay = bestDays.find(d => d >= currentDay) || bestDays[0];
+            const daysToAdd = (nextOptimalDay - currentDay + 7) % 7;
+            if (daysToAdd === 0 && !bestDays.includes(currentDay)) {
+              scheduledDate.setDate(now.getDate() + 7);
+            } else {
+              scheduledDate.setDate(now.getDate() + daysToAdd);
+            }
+            
+            // Set to best hour
+            const bestHour = bestHours[0];
+            scheduledDate.setHours(bestHour, 0, 0, 0);
+            
+            // Ensure it's in the future
+            if (scheduledDate < now) {
+              scheduledDate.setDate(scheduledDate.getDate() + 1);
+            }
+            
+            // Score based on platform recommendation and real-time engagement
             const platformRec = analysis.recommendations.find((r: any) => r.platform === platform);
             const platformScore = platformRec?.score || 50;
+            const engagementBoost = realTimeData.currentEngagementScore || 50;
+            const trendBoost = realTimeData.trendDirection === 'up' ? 10 : 0;
+            
             allOptimalTimes.push({
               platform,
               time: scheduledDate,
-              score: platformScore,
+              score: platformScore + (engagementBoost / 2) + trendBoost,
             });
           }
         }
