@@ -66,6 +66,7 @@ const pageTitles: Record<Page, string> = {
     strategy: 'AI Content Strategist',
     ads: 'AI Ad Generator',
     mediaLibrary: 'Media Library',
+    inbox: 'Inbox',
 };
 
 const MainContent: React.FC = () => {
@@ -95,6 +96,10 @@ const MainContent: React.FC = () => {
             case 'strategy': return <Strategy />;
             case 'ads': return <AdGenerator />;
             case 'mediaLibrary': return <MediaLibrary />;
+            case 'inbox': 
+                // Inbox is handled by Dashboard component with viewMode='Inbox'
+                localStorage.setItem('dashboardViewMode', 'Inbox');
+                return <Dashboard />;
             default: return <Dashboard />;
         }
     } catch (error: any) {

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Page } from '../types';
-import { DashboardIcon, AnalyticsIcon, SettingsIcon, LogoIcon, ComposeIcon, TrendingIcon, TeamIcon, RocketIcon, BriefcaseIcon, AdminIcon, AutomationIcon, CalendarIcon, KanbanIcon, GlobeIcon, TargetIcon, SparklesIcon, ImageIcon } from './icons/UIIcons';
+import { DashboardIcon, AnalyticsIcon, SettingsIcon, LogoIcon, ComposeIcon, TrendingIcon, TeamIcon, RocketIcon, BriefcaseIcon, AdminIcon, AutomationIcon, CalendarIcon, KanbanIcon, GlobeIcon, TargetIcon, SparklesIcon, ImageIcon, ChatIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 
 interface NavItemProps {
@@ -17,11 +17,17 @@ const NavItem: React.FC<NavItemProps> = ({ page, icon, label, tourId }) => {
     <li id={tourId}>
       <button
         onClick={() => {
-          setActivePage(page);
+          if (page === 'inbox') {
+            // Navigate to dashboard and set viewMode to Inbox via localStorage
+            localStorage.setItem('dashboardViewMode', 'Inbox');
+            setActivePage('dashboard');
+          } else {
+            setActivePage(page);
+          }
           setIsSidebarOpen(false);
         }}
         className={`w-full text-left flex items-center p-3 my-1 rounded-lg transition-colors ${
-          activePage === page
+          activePage === page || (page === 'inbox' && activePage === 'dashboard' && isInboxView)
             ? 'bg-primary-500 text-white'
             : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
         }`}
@@ -45,6 +51,7 @@ export const Sidebar: React.FC = () => {
 
   const allNavItems: (Omit<NavItemProps, 'page' | 'label'> & { page: Page | 'admin', label: string })[] = [
     { page: 'dashboard', icon: <DashboardIcon />, label: 'Dashboard' },
+    { page: 'inbox', icon: <ChatIcon />, label: 'Inbox' },
     { page: 'compose', icon: <ComposeIcon />, label: 'Compose', tourId: 'tour-step-3-compose-nav' },
     { page: 'mediaLibrary', icon: <ImageIcon />, label: 'Media Library' },
     { page: 'automation', icon: <AutomationIcon />, label: 'Automation' },

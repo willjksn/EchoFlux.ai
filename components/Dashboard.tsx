@@ -168,7 +168,24 @@ export const Dashboard: React.FC = () => {
     };
   }, []);
   
-  const [viewMode, setViewMode] = useState<'Overview' | 'Inbox'>('Overview');
+  const [viewMode, setViewMode] = useState<'Overview' | 'Inbox'>(() => {
+    // Check if we should show inbox view from localStorage (set by sidebar)
+    const savedViewMode = localStorage.getItem('dashboardViewMode');
+    if (savedViewMode === 'Inbox') {
+      return 'Inbox';
+    }
+    return 'Overview';
+  });
+  
+  // Clear localStorage flag after component mounts
+  useEffect(() => {
+    if (viewMode === 'Inbox') {
+      const timer = setTimeout(() => {
+        localStorage.removeItem('dashboardViewMode');
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [viewMode]);
   const [isLoading, setIsLoading] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   
