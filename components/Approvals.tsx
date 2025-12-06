@@ -535,7 +535,13 @@ export const Approvals: React.FC = () => {
                                             <button 
                                                 onClick={async () => {
                                                     // Publish immediately
-                                                    await updatePostInDb({ ...activePost, status: 'Published', scheduledDate: activePost.scheduledDate || new Date().toISOString() });
+                                                    const updatedPost = { ...activePost, status: 'Published' as const, scheduledDate: activePost.scheduledDate || new Date().toISOString() };
+                                                    await updatePostInDb(updatedPost);
+                                                    
+                                                    // Update local state immediately to remove from Scheduled column
+                                                    if (setPosts) {
+                                                        setPosts(prev => prev.map(p => p.id === activePost.id ? updatedPost : p));
+                                                    }
                                                     
                                                     // Update calendar event status to Published
                                                     const calendarEvent = {
