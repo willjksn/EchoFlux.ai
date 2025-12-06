@@ -67,6 +67,7 @@ const pageTitles: Record<Page, string> = {
     ads: 'AI Ad Generator',
     mediaLibrary: 'Media Library',
     inbox: 'Inbox',
+    autopilot: 'AI Autopilot',
 };
 
 const MainContent: React.FC = () => {
