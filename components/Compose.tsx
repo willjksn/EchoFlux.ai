@@ -1321,7 +1321,7 @@ const CaptionGenerator: React.FC = () => {
         Facebook: false,
       };
 
-      topPlatforms.forEach(platform => {
+      topPlatforms.forEach((platform: Platform) => {
         updatedPlatforms[platform] = true;
       });
 
@@ -1347,12 +1347,13 @@ const CaptionGenerator: React.FC = () => {
             scheduledDate.setDate(now.getDate() + (optimal.dayOfWeek - now.getDay() + 7) % 7);
             scheduledDate.setHours(optimal.hour, optimal.minute, 0, 0);
             
-            // Score based on platform recommendation score and time quality
-            const platformScore = analysis.recommendations.find((r: any) => r.platform === platform)?.score || 50;
+            // Score based on platform recommendation score
+            const platformRec = analysis.recommendations.find((r: any) => r.platform === platform);
+            const platformScore = platformRec?.score || 50;
             allOptimalTimes.push({
               platform,
               time: scheduledDate,
-              score: platformScore + (optimal.score || 0),
+              score: platformScore,
             });
           }
         }
