@@ -21,6 +21,10 @@ const NavItem: React.FC<NavItemProps> = ({ page, icon, label, tourId }) => {
           if (page === 'inbox') {
             localStorage.setItem('dashboardViewMode', 'Inbox');
             setActivePage('dashboard');
+          } else if (page === 'dashboard') {
+            // Clear Inbox flag when clicking Dashboard to show Overview
+            localStorage.removeItem('dashboardViewMode');
+            setActivePage('dashboard');
           } else {
             setActivePage(page);
           }

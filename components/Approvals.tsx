@@ -244,7 +244,12 @@ export const Approvals: React.FC = () => {
                                 <span className="bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-3 py-1 rounded-full text-xs font-bold shadow-sm border border-gray-200 dark:border-gray-600">{col.items.length}</span>
                             </div>
                             <div className="p-4 flex-1 overflow-y-auto space-y-3 custom-scrollbar">
-                                {col.items.map(post => (
+                                {col.items.length === 0 ? (
+                                    <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">
+                                        No {col.title.toLowerCase()} posts
+                                    </div>
+                                ) : (
+                                    col.items.map(post => (
                                     <div 
                                         key={post.id} 
                                         onClick={() => {
@@ -320,7 +325,8 @@ export const Approvals: React.FC = () => {
                                             )}
                                         </div>
                                     </div>
-                                ))}
+                                    ))
+                                )}
                             </div>
                         </div>
                         );

@@ -172,15 +172,30 @@ export const Dashboard: React.FC = () => {
     // Check if we should show inbox view from localStorage (set by sidebar)
     const savedViewMode = localStorage.getItem('dashboardViewMode');
     if (savedViewMode === 'Inbox') {
+      // Clear the flag after reading it
+      setTimeout(() => localStorage.removeItem('dashboardViewMode'), 100);
       return 'Inbox';
     }
     return 'Overview';
   });
   
-  // Clear localStorage flag when viewMode changes manually or when component unmounts
+  // Sync viewMode with localStorage when it changes
+  useEffect(() => {
+    const savedViewMode = localStorage.getItem('dashboardViewMode');
+    if (savedViewMode === 'Inbox' && viewMode !== 'Inbox') {
+      setViewMode('Inbox');
+    } else if (!savedViewMode && viewMode === 'Inbox') {
+      // If localStorage is cleared but we're still in Inbox, switch to Overview
+      setViewMode('Overview');
+    }
+  }, []);
+  
+  // Update localStorage when viewMode changes manually
   useEffect(() => {
     if (viewMode === 'Overview') {
       localStorage.removeItem('dashboardViewMode');
+    } else if (viewMode === 'Inbox') {
+      localStorage.setItem('dashboardViewMode', 'Inbox');
     }
   }, [viewMode]);
   const [isLoading, setIsLoading] = useState(false);
