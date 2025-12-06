@@ -231,6 +231,23 @@ export const Approvals: React.FC = () => {
                 </div>
             </div>
 
+            {!hasAnyPosts ? (
+                <div className="flex-1 flex items-center justify-center">
+                    <div className="text-center py-12">
+                        <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
+                            <SparklesIcon className="w-8 h-8 text-gray-400 dark:text-gray-500" />
+                        </div>
+                        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">No posts in workflow</h3>
+                        <p className="text-gray-500 dark:text-gray-400 mb-6">Create a draft from Compose or Automation to get started.</p>
+                        <button 
+                            onClick={() => setActivePage('compose')} 
+                            className="px-5 py-2.5 bg-gradient-to-r from-primary-600 to-primary-500 text-white rounded-lg hover:from-primary-700 hover:to-primary-600 text-sm font-semibold shadow-md transition-all"
+                        >
+                            Create Post
+                        </button>
+                    </div>
+                </div>
+            ) : (
             <div className="flex-1 overflow-x-auto overflow-y-hidden">
                 <div className="flex h-full gap-6 min-w-[1000px] pb-4">
                     {columns.map(col => {
