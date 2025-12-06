@@ -67,9 +67,8 @@ const pageTitles: Record<Page, string> = {
     strategy: 'AI Content Strategist',
     ads: 'AI Ad Generator',
     mediaLibrary: 'Media Library',
+    autopilot: 'AI Autopilot',
 };
-<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>
-read_lints
 
 const MainContent: React.FC = () => {
     try {
