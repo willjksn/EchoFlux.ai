@@ -2587,8 +2587,8 @@ const CaptionGenerator: React.FC = () => {
           </div>
         )}
 
-        {/* Static action buttons - always visible for text-only announcements */}
-        {composeState.mediaItems.length === 0 && (
+        {/* Static action buttons - always visible */}
+        {(
           <div className="flex flex-wrap items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 mb-6">
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mr-2">Quick Actions:</span>
             <button

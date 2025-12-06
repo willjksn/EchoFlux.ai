@@ -345,11 +345,28 @@ export const Approvals: React.FC = () => {
                                                 <img src={post.author.avatar} alt={post.author.name} className="w-5 h-5 rounded-full" />
                                                 <span className="text-xs text-gray-500 truncate max-w-[80px]">{post.author.name}</span>
                                             </div>
-                                            {post.comments.length > 0 && (
-                                                <div className="flex items-center gap-1 text-xs text-gray-400">
-                                                    <ChatIcon className="w-3 h-3" /> {post.comments.length}
-                                                </div>
-                                            )}
+                                            <div className="flex items-center gap-2">
+                                                {post.comments.length > 0 && (
+                                                    <div className="flex items-center gap-1 text-xs text-gray-400">
+                                                        <ChatIcon className="w-3 h-3" /> {post.comments.length}
+                                                    </div>
+                                                )}
+                                                {/* Delete button for Draft posts */}
+                                                {post.status === 'Draft' && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation(); // Prevent card click
+                                                            if (window.confirm('Delete this draft?')) {
+                                                                handleDelete(post.id);
+                                                            }
+                                                        }}
+                                                        className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                                                        title="Delete draft"
+                                                    >
+                                                        <TrashIcon className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                     ))
