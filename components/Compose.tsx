@@ -1556,8 +1556,9 @@ const CaptionGenerator: React.FC = () => {
           author: { name: user.name, avatar: user.avatar },
           comments: [],
           scheduledDate: publishDate.toISOString(),
-          clientId: selectedClient?.id
-        };
+          clientId: selectedClient?.id,
+          timestamp: new Date().toISOString(),
+        } as Post & { timestamp: string };
 
         const safePost = JSON.parse(JSON.stringify(newPost));
         await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
