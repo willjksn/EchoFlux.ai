@@ -153,8 +153,7 @@ export const Approvals: React.FC = () => {
             if (status === 'Draft' && p.status === 'Draft') return true;
             if (status === 'Approved' && p.status === 'Approved') return true;
             if (status === 'Scheduled' && p.status === 'Scheduled') return true;
-            // Published posts should stay visible in Scheduled column for quick view
-            if (status === 'Scheduled' && p.status === 'Published') return true;
+            // Published posts should NOT appear in workflow - they're done
             return false;
         })
     }));

@@ -765,8 +765,9 @@ const CaptionGenerator: React.FC = () => {
 
   const handlePublishMedia = async (index: number) => {
     const item = composeState.mediaItems[index];
-    if (!item.previewUrl || !item.captionText.trim()) {
-      showToast('Please add media and caption.', 'error');
+    // Allow text-only posts (announcements without media)
+    if (!item.captionText.trim()) {
+      showToast('Please add a caption.', 'error');
       return;
     }
 
@@ -780,13 +781,17 @@ const CaptionGenerator: React.FC = () => {
 
     setIsSaving(true);
     try {
-      const mediaUrl = item.previewUrl.startsWith('http')
-        ? item.previewUrl
-        : await uploadMediaItem(item);
+      // Upload media only if it exists
+      let mediaUrl: string | undefined = undefined;
+      if (item.previewUrl) {
+        mediaUrl = item.previewUrl.startsWith('http')
+          ? item.previewUrl
+          : await uploadMediaItem(item);
 
-      if (!mediaUrl) {
-        showToast('Failed to upload media.', 'error');
-        return;
+        if (!mediaUrl) {
+          showToast('Failed to upload media.', 'error');
+          return;
+        }
       }
 
       const title = item.captionText.trim()
@@ -846,8 +851,9 @@ const CaptionGenerator: React.FC = () => {
 
   const handleScheduleMedia = async (index: number) => {
     const item = composeState.mediaItems[index];
-    if (!item.previewUrl || !item.captionText.trim()) {
-      showToast('Please add media and caption.', 'error');
+    // Allow text-only posts (announcements without media)
+    if (!item.captionText.trim()) {
+      showToast('Please add a caption.', 'error');
       return;
     }
 
@@ -866,13 +872,17 @@ const CaptionGenerator: React.FC = () => {
 
     setIsSaving(true);
     try {
-      const mediaUrl = item.previewUrl.startsWith('http')
-        ? item.previewUrl
-        : await uploadMediaItem(item);
+      // Upload media only if it exists
+      let mediaUrl: string | undefined = undefined;
+      if (item.previewUrl) {
+        mediaUrl = item.previewUrl.startsWith('http')
+          ? item.previewUrl
+          : await uploadMediaItem(item);
 
-      if (!mediaUrl) {
-        showToast('Failed to upload media.', 'error');
-        return;
+        if (!mediaUrl) {
+          showToast('Failed to upload media.', 'error');
+          return;
+        }
       }
 
       const title = item.captionText.trim()
@@ -1831,8 +1841,9 @@ const CaptionGenerator: React.FC = () => {
 
   const handleSaveToWorkflowMedia = async (index: number, status: 'Draft' | 'Approved') => {
     const item = composeState.mediaItems[index];
-    if (!item.previewUrl || !item.captionText.trim()) {
-      showToast('Please add media and caption.', 'error');
+    // Allow text-only posts (announcements without media)
+    if (!item.captionText.trim()) {
+      showToast('Please add a caption.', 'error');
       return;
     }
 
@@ -1846,13 +1857,17 @@ const CaptionGenerator: React.FC = () => {
 
     setIsSaving(true);
     try {
-      const mediaUrl = item.previewUrl.startsWith('http')
-        ? item.previewUrl
-        : await uploadMediaItem(item);
+      // Upload media only if it exists
+      let mediaUrl: string | undefined = undefined;
+      if (item.previewUrl) {
+        mediaUrl = item.previewUrl.startsWith('http')
+          ? item.previewUrl
+          : await uploadMediaItem(item);
 
-      if (!mediaUrl) {
-        showToast('Failed to upload media.', 'error');
-        return;
+        if (!mediaUrl) {
+          showToast('Failed to upload media.', 'error');
+          return;
+        }
       }
 
       const title = item.captionText.trim()
