@@ -1279,6 +1279,125 @@ const CaptionGenerator: React.FC = () => {
     }
   };
 
+  const handleAIAutoScheduleSingle = async (index: number) => {
+    const item = composeState.mediaItems[index];
+    if (!item || !item.previewUrl || !item.captionText.trim()) {
+      showToast('Please add media and caption first.', 'error');
+      return;
+    }
+
+    setIsAnalyzing(true);
+    try {
+      // Extract hashtags from caption
+      const hashtags = item.captionText.match(/#\w+/g) || [];
+      
+      // Analyze post for best platforms
+      const analysis = await analyzePostForPlatforms({
+        caption: item.captionText,
+        hashtags,
+        mediaType: item.type,
+        goal: item.postGoal,
+        tone: item.postTone,
+      });
+
+      // Get top recommended platforms (top 2-3)
+      const topPlatforms = analysis.recommendations
+        .slice(0, 3)
+        .map((rec: any) => rec.platform as Platform);
+
+      if (topPlatforms.length === 0) {
+        showToast('Could not determine best platforms. Please select manually.', 'error');
+        return;
+      }
+
+      // Update platforms
+      const updatedPlatforms: Record<Platform, boolean> = {
+        Instagram: false,
+        TikTok: false,
+        X: false,
+        Threads: false,
+        YouTube: false,
+        LinkedIn: false,
+        Facebook: false,
+      };
+
+      topPlatforms.forEach(platform => {
+        updatedPlatforms[platform] = true;
+      });
+
+      // Get optimal times for each platform
+      let bestScheduledDate: string | undefined;
+      try {
+        const analytics = await getAnalytics();
+        
+        // Find the best time across all recommended platforms
+        const allOptimalTimes: Array<{ platform: Platform; time: Date; score: number }> = [];
+        
+        for (const platform of topPlatforms) {
+          const optimalTimes = analyzeOptimalPostingTimes(analytics, {
+            platform: platform,
+            avoidClumping: true,
+            minHoursBetween: 2,
+          });
+          
+          if (optimalTimes.length > 0) {
+            const optimal = optimalTimes[0];
+            const now = new Date();
+            const scheduledDate = new Date();
+            scheduledDate.setDate(now.getDate() + (optimal.dayOfWeek - now.getDay() + 7) % 7);
+            scheduledDate.setHours(optimal.hour, optimal.minute, 0, 0);
+            
+            // Score based on platform recommendation score and time quality
+            const platformScore = analysis.recommendations.find((r: any) => r.platform === platform)?.score || 50;
+            allOptimalTimes.push({
+              platform,
+              time: scheduledDate,
+              score: platformScore + (optimal.score || 0),
+            });
+          }
+        }
+        
+        // Sort by score and pick the best time
+        if (allOptimalTimes.length > 0) {
+          allOptimalTimes.sort((a, b) => b.score - a.score);
+          bestScheduledDate = allOptimalTimes[0].time.toISOString();
+        } else {
+          // Fallback: schedule for tomorrow at a good time
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          tomorrow.setHours(14, 0, 0, 0); // 2 PM default
+          bestScheduledDate = tomorrow.toISOString();
+        }
+      } catch (err) {
+        console.error('Failed to get optimal time:', err);
+        // Fallback: schedule for tomorrow at 2 PM
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        tomorrow.setHours(14, 0, 0, 0);
+        bestScheduledDate = tomorrow.toISOString();
+      }
+
+      // Update the item with recommended platforms and scheduled date
+      handleUpdateMediaItem(index, {
+        selectedPlatforms: updatedPlatforms,
+        scheduledDate: bestScheduledDate,
+      });
+
+      // Wait a bit for state to update
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      // Now schedule the post
+      await handleScheduleMedia(index);
+      
+      showToast(`AI scheduled post for ${new Date(bestScheduledDate).toLocaleString()} on ${topPlatforms.join(', ')}`, 'success');
+    } catch (error) {
+      console.error('AI Auto-Schedule failed:', error);
+      showToast('Failed to auto-schedule post. Please try again.', 'error');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
   const handleApplyAISchedule = async () => {
     if (aiRecommendations.length === 0) return;
 
@@ -2637,9 +2756,7 @@ const CaptionGenerator: React.FC = () => {
               onSchedule={handleScheduleMedia}
               onSaveToWorkflow={handleSaveToWorkflowMedia}
               onAIAutoSchedule={async (idx) => {
-                // Select this item and trigger AI Auto Schedule
-                setSelectedIndices(new Set([idx]));
-                await handleAIAutoSchedule();
+                await handleAIAutoScheduleSingle(idx);
               }}
               platformIcons={platformIcons}
             />
