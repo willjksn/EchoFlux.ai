@@ -10,7 +10,14 @@ import { generateCritique } from "../src/services/geminiService";
 import { db } from '../firebaseConfig';
 import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 
-const statusColumns: ApprovalStatus[] = ['Draft', 'In Review', 'Approved', 'Scheduled'];
+// Filter status columns based on plan - Agency gets 'In Review', others don't
+const getStatusColumns = (userPlan?: string): ApprovalStatus[] => {
+  const baseColumns: ApprovalStatus[] = ['Draft', 'Approved', 'Scheduled'];
+  if (userPlan === 'Agency') {
+    return ['Draft', 'In Review', 'Approved', 'Scheduled'];
+  }
+  return baseColumns;
+};
 
 const platformIcons: Record<Platform, React.ReactElement<{ className?: string }>> = {
   Instagram: <InstagramIcon />,
@@ -130,6 +137,7 @@ export const Approvals: React.FC = () => {
         return true;
     });
 
+    const statusColumns = getStatusColumns(user?.plan);
     const columns = statusColumns.map(status => ({
         title: status,
         items: filteredPosts.filter(p => {
@@ -169,7 +177,7 @@ export const Approvals: React.FC = () => {
 
             <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
                  <div>
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Approval Workflow</h1>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Workflow</h1>
                     <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Manage content pipeline from draft to publication.</p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -237,7 +245,24 @@ export const Approvals: React.FC = () => {
                                 {col.items.map(post => (
                                     <div 
                                         key={post.id} 
-                                        onClick={() => setActivePost(post)}
+                                        onClick={() => {
+                                            // If Draft, navigate to Compose with preserved data
+                                            if (post.status === 'Draft') {
+                                                // Store post data in localStorage for Compose to load
+                                                localStorage.setItem('draftPostToEdit', JSON.stringify({
+                                                    id: post.id,
+                                                    content: post.content,
+                                                    mediaUrl: post.mediaUrl,
+                                                    mediaType: post.mediaType,
+                                                    platforms: post.platforms,
+                                                    postGoal: (post as any).postGoal || 'engagement',
+                                                    postTone: (post as any).postTone || 'friendly',
+                                                }));
+                                                setActivePage('compose');
+                                                return;
+                                            }
+                                            setActivePost(post);
+                                        }}
                                         className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all group"
                                     >
                                         <div className="flex items-center justify-between mb-2">
@@ -389,17 +414,38 @@ export const Approvals: React.FC = () => {
                                     )}
                                     {activePost.status === 'Approved' && (
                                         <>
+                                            {user?.plan === 'Agency' && (
+                                                <button 
+                                                    onClick={() => handleMoveStatus(activePost.id, 'In Review')} 
+                                                    className="px-5 py-2.5 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 text-sm font-semibold transition-all"
+                                                >
+                                                    Re-open Review
+                                                </button>
+                                            )}
                                             <button 
-                                                onClick={() => handleMoveStatus(activePost.id, 'In Review')} 
-                                                className="px-5 py-2.5 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 text-sm font-semibold transition-all"
-                                            >
-                                                Re-open Review
-                                            </button>
-                                            <button 
-                                                onClick={() => handleMoveStatus(activePost.id, 'Scheduled')} 
+                                                onClick={async () => {
+                                                    // Schedule the post
+                                                    const scheduledDate = new Date();
+                                                    scheduledDate.setDate(scheduledDate.getDate() + 1);
+                                                    scheduledDate.setHours(12, 0, 0, 0);
+                                                    await updatePostInDb({ ...activePost, status: 'Scheduled', scheduledDate: scheduledDate.toISOString() });
+                                                    showToast('Post scheduled!', 'success');
+                                                    setActivePost(null);
+                                                }}
                                                 className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-lg hover:from-purple-700 hover:to-purple-600 text-sm font-semibold shadow-md transition-all"
                                             >
-                                                Schedule Post
+                                                Schedule
+                                            </button>
+                                            <button 
+                                                onClick={async () => {
+                                                    // Publish immediately
+                                                    await updatePostInDb({ ...activePost, status: 'Published' });
+                                                    showToast('Post published!', 'success');
+                                                    setActivePost(null);
+                                                }}
+                                                className="px-5 py-2.5 bg-gradient-to-r from-green-600 to-emerald-500 text-white rounded-lg hover:from-green-700 hover:to-emerald-600 text-sm font-semibold shadow-md transition-all"
+                                            >
+                                                Publish
                                             </button>
                                         </>
                                     )}

@@ -21,6 +21,8 @@ import {
   LightbulbIcon,
   HeartIcon,
   PlayIcon,
+  CheckCircleIcon,
+  ClipboardCheckIcon,
 } from './icons/UIIcons';
 import { MusicTrack } from '../types';
 import { EMOJIS, EMOJI_CATEGORIES, Emoji } from './emojiData';
@@ -92,6 +94,7 @@ interface MediaBoxProps {
   onPreview: (index: number) => void;
   onPublish: (index: number) => void;
   onSchedule: (index: number) => void;
+  onSaveToWorkflow: (index: number, status: 'Draft' | 'Approved') => void;
   platformIcons: Record<Platform, React.ReactNode>;
 }
 
@@ -109,6 +112,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   onPreview,
   onPublish,
   onSchedule,
+  onSaveToWorkflow,
   platformIcons,
 }) => {
   const { user, showToast, setActivePage } = useAppContext();
@@ -779,6 +783,24 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
       {/* Action Buttons */}
       {hasContent && (
         <div className="flex flex-col gap-2">
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => onSaveToWorkflow(index, 'Draft')}
+              disabled={platformsToPost.length === 0}
+              className="flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
+              title={platformsToPost.length === 0 ? 'Select at least one platform' : 'Save as Draft'}
+            >
+              <ClipboardCheckIcon className="w-3 h-3" /> Draft
+            </button>
+            <button
+              onClick={() => onSaveToWorkflow(index, 'Approved')}
+              disabled={platformsToPost.length === 0}
+              className="flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-md hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors disabled:opacity-50"
+              title={platformsToPost.length === 0 ? 'Select at least one platform' : 'Save as Approved'}
+            >
+              <CheckCircleIcon className="w-3 h-3" /> Approved
+            </button>
+          </div>
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => onSchedule(index)}

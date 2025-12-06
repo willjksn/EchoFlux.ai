@@ -621,37 +621,31 @@ export const Automation: React.FC = () => {
     // Track deleted ID to prevent re-saving
     if (media.id) {
       deletedFileIdsRef.current.add(media.id);
+      // Persist deleted ID immediately to prevent re-saving
+      if (user) {
+        localStorage.setItem(`automation_deleted_ids_${user.id}`, JSON.stringify(Array.from(deletedFileIdsRef.current)));
+      }
     }
 
-    // Optimistically remove from UI first
+    // Revoke blob URL if it exists
+    if (media.previewUrl && media.previewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(media.previewUrl);
+    }
+
+    // Remove from state immediately (optimistic update)
     const newFiles = uploadedFiles.filter((_, i) => i !== index);
     setUploadedFiles(newFiles);
-    
-    // Adjust selected indices
-    const adjusted = new Set<number>();
-    selectedIndices.forEach(idx => {
-      if (idx > index) {
-        adjusted.add(idx - 1);
-      } else if (idx < index) {
-        adjusted.add(idx);
-      }
-    });
-    setSelectedIndices(adjusted);
 
-    // Delete from Firestore
+    // Delete from Firestore (async, but we've already removed from UI)
     if (media.id && user) {
       try {
         await deleteDoc(doc(db, 'users', user.id, 'automation_files', media.id));
-        // Persist deleted ID to localStorage
-        localStorage.setItem(`automation_deleted_ids_${user.id}`, JSON.stringify(Array.from(deletedFileIdsRef.current)));
         showToast('File deleted successfully', 'success');
-            } catch (error) {
+      } catch (error) {
         console.error('Failed to delete from Firestore:', error);
-        // Revert on error
-        deletedFileIdsRef.current.delete(media.id);
-        localStorage.setItem(`automation_deleted_ids_${user.id}`, JSON.stringify(Array.from(deletedFileIdsRef.current)));
-        setUploadedFiles(uploadedFiles);
-        showToast('Failed to delete file', 'error');
+        // On error, don't revert - file is already removed from UI
+        // Just log the error
+        showToast('File removed from view, but deletion from storage failed', 'error');
       }
     } else {
       // If no ID, it's a new file that hasn't been saved yet, so just remove from state
@@ -779,22 +773,44 @@ export const Automation: React.FC = () => {
               </select>
             </div>
           </div>
-          {selectedIndices.size > 0 && (
-            <div className="mt-4">
-              <button
-                onClick={() => {
-                  const indices = Array.from(selectedIndices);
-                  setUploadedFiles(prev => prev.map((m, idx) => 
-                    indices.includes(idx) ? { ...m, goal, tone } : m
-                  ));
-                  showToast(`Applied settings to ${indices.length} selected image(s)`, 'success');
-                }}
-                className="px-4 py-2 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700"
-              >
-                Apply to Selected ({selectedIndices.size})
-              </button>
-            </div>
-          )}
+          <div className="mt-4">
+            <button
+              onClick={async () => {
+                if (uploadedFiles.length === 0) {
+                  showToast('Please upload media first', 'error');
+                  return;
+                }
+                setIsProcessing(true);
+                try {
+                  // Generate captions for all uploaded media using default goal and tone
+                  for (let i = 0; i < uploadedFiles.length; i++) {
+                    const media = uploadedFiles[i];
+                    setProcessingIndex(i);
+                    const analysis = await analyzeMedia({
+                      ...media,
+                      goal,
+                      tone,
+                    });
+                    setUploadedFiles(prev => prev.map((m, idx) => 
+                      idx === i ? { ...m, ...analysis, goal, tone } : m
+                    ));
+                  }
+                  showToast(`Generated captions for ${uploadedFiles.length} media file(s)`, 'success');
+                } catch (error) {
+                  console.error('Failed to generate captions:', error);
+                  showToast('Failed to generate captions. Please try again.', 'error');
+                } finally {
+                  setIsProcessing(false);
+                  setProcessingIndex(null);
+                }
+              }}
+              disabled={isProcessing || uploadedFiles.length === 0}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <SparklesIcon className="w-4 h-4" />
+              {isProcessing ? 'Generating Captions...' : `Generate Captions for All (${uploadedFiles.length})`}
+            </button>
+          </div>
           <div className="mt-4">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Platforms to Post To
@@ -851,26 +867,6 @@ export const Automation: React.FC = () => {
                   Uploaded Files ({uploadedFiles.length})
                 </h3>
                 <div className="flex gap-2">
-                  {selectedIndices.size > 0 && (
-                    <>
-                      <button
-                        onClick={handleBulkRegenerateCaptions}
-                        disabled={isProcessing}
-                        className="flex items-center gap-2 px-4 py-2 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50"
-                      >
-                        <SparklesIcon className="w-4 h-4" />
-                        Regenerate ({selectedIndices.size})
-                      </button>
-                      <button
-                        onClick={handleDeleteSelected}
-                        disabled={isProcessing}
-                        className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md disabled:opacity-50"
-                      >
-                        <TrashIcon className="w-4 h-4" />
-                        Delete Selected ({selectedIndices.size})
-                      </button>
-                    </>
-                  )}
                   <button
                     onClick={startAutomation}
                     disabled={isProcessing}
@@ -899,23 +895,15 @@ export const Automation: React.FC = () => {
                   return (
                   <div
                     key={media.id || index}
-                    className={`relative border-2 rounded-lg overflow-hidden bg-white dark:bg-gray-800 ${
-                      isSelected ? 'border-primary-500' : 'border-gray-200 dark:border-gray-700'
-                    }`}
+                    className="relative border-2 rounded-lg overflow-hidden bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
                   >
-                    {/* Header with checkbox and delete button */}
+                    {/* Header with delete button */}
                     <div className="flex items-center justify-between p-2 border-b border-gray-200 dark:border-gray-700">
-                                        <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => handleToggleSelect(index)}
-                          className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500"
-                        />
+                      <div className="flex items-center gap-2">
                         <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">
                           {fileName}
                         </span>
-                                        </div>
+                      </div>
                       <div className="flex items-center gap-1">
                         {media.status === 'analyzing' && (
                           <RefreshIcon className="w-4 h-4 animate-spin text-primary-600" />
@@ -927,14 +915,17 @@ export const Automation: React.FC = () => {
                           <span className="text-xs text-red-600">Error</span>
                         )}
                         <button
-                          onClick={() => handleDeleteMedia(index)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteMedia(index);
+                          }}
                           className="p-1 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
                           title="Delete"
                         >
                           <XMarkIcon className="w-4 h-4" />
                         </button>
-                                        </div>
-                                    </div>
+                      </div>
+                    </div>
 
                     {/* Media Preview */}
                     <div className="relative group">

@@ -88,7 +88,8 @@ const CaptionGenerator: React.FC = () => {
     hashtagSets,
     setHashtagSets,
     composeContext,
-    addCalendarEvent
+    addCalendarEvent,
+    setActivePage
   } = useAppContext();
 
   // Error boundary - prevent blank page
@@ -353,6 +354,59 @@ const CaptionGenerator: React.FC = () => {
 
     saveMediaItems();
   }, [composeState.mediaItems, user]);
+
+  // Load draft post from Workflow if navigating from there
+  useEffect(() => {
+    const draftPostData = localStorage.getItem('draftPostToEdit');
+    if (draftPostData && user) {
+      try {
+        const draftPost = JSON.parse(draftPostData);
+        // Create a MediaItemState from the draft post
+        const mediaItem: MediaItemState = {
+          id: draftPost.id,
+          previewUrl: draftPost.mediaUrl || '',
+          data: '',
+          mimeType: draftPost.mediaType === 'video' ? 'video/mp4' : 'image/jpeg',
+          type: draftPost.mediaType || 'image',
+          results: [],
+          captionText: draftPost.content || '',
+          postGoal: draftPost.postGoal || 'engagement',
+          postTone: draftPost.postTone || 'friendly',
+          selectedPlatforms: draftPost.platforms?.reduce((acc: Record<Platform, boolean>, p: Platform) => {
+            acc[p] = true;
+            return acc;
+          }, {
+            Instagram: false,
+            TikTok: false,
+            X: false,
+            Threads: false,
+            YouTube: false,
+            LinkedIn: false,
+            Facebook: false,
+          } as Record<Platform, boolean>) || {
+            Instagram: false,
+            TikTok: false,
+            X: false,
+            Threads: false,
+            YouTube: false,
+            LinkedIn: false,
+            Facebook: false,
+          },
+        };
+        setComposeState(prev => ({
+          ...prev,
+          mediaItems: [mediaItem],
+          postGoal: draftPost.postGoal || prev.postGoal,
+          postTone: draftPost.postTone || prev.postTone,
+        }));
+        localStorage.removeItem('draftPostToEdit');
+        showToast('Draft loaded. Continue editing.', 'success');
+      } catch (error) {
+        console.error('Failed to load draft post:', error);
+        localStorage.removeItem('draftPostToEdit');
+      }
+    }
+  }, [user, showToast, setComposeState]);
 
   // Load mediaItems from Firestore on mount
   useEffect(() => {
@@ -1334,24 +1388,34 @@ const CaptionGenerator: React.FC = () => {
     try {
       for (const item of selectedItems) {
         const index = composeState.mediaItems.findIndex(m => m.id === item.id);
-        if (index === -1 || !item.data) continue;
+        if (index === -1 || !item.previewUrl) continue;
 
         // Generate captions for this item
         try {
-          const timestamp = Date.now();
-          const extension = item.mimeType.split('/')[1] || 'png';
-          const storagePath = `users/${user!.id}/uploads/${timestamp}.${extension}`;
-          const storageRef = ref(storage, storagePath);
+          let mediaUrl = item.previewUrl;
+          
+          // If previewUrl is already a Firebase URL (starts with http), use it directly
+          // Otherwise, if we have base64 data, upload it first
+          if (!mediaUrl.startsWith('http') && item.data) {
+            const timestamp = Date.now();
+            const extension = item.mimeType.split('/')[1] || 'png';
+            const storagePath = `users/${user!.id}/uploads/${timestamp}.${extension}`;
+            const storageRef = ref(storage, storagePath);
 
-          const bytes = base64ToBytes(item.data);
-          await uploadBytes(storageRef, bytes, {
-            contentType: item.mimeType,
-          });
+            const bytes = base64ToBytes(item.data);
+            await uploadBytes(storageRef, bytes, {
+              contentType: item.mimeType,
+            });
 
-          const mediaUrl = await getDownloadURL(storageRef);
+            mediaUrl = await getDownloadURL(storageRef);
+          } else if (!mediaUrl.startsWith('http')) {
+            // If we don't have data and previewUrl is not a URL, skip
+            showToast(`Media item ${index + 1} needs to be uploaded first.`, 'error');
+            continue;
+          }
 
           const res = await generateCaptions({
-            mediaUrl,
+            mediaUrl: mediaUrl,
             goal: item.postGoal,
             tone: item.postTone,
             promptText: undefined,
@@ -1741,6 +1805,74 @@ const CaptionGenerator: React.FC = () => {
     }
   };
 
+  const handleSaveToWorkflowMedia = async (index: number, status: 'Draft' | 'Approved') => {
+    const item = composeState.mediaItems[index];
+    if (!item.previewUrl || !item.captionText.trim()) {
+      showToast('Please add media and caption.', 'error');
+      return;
+    }
+
+    const platformsToPost = (Object.keys(item.selectedPlatforms || {}) as Platform[]).filter(
+      p => item.selectedPlatforms?.[p]
+    );
+    if (platformsToPost.length === 0) {
+      showToast('Please select at least one platform.', 'error');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const mediaUrl = item.previewUrl.startsWith('http')
+        ? item.previewUrl
+        : await uploadMediaItem(item);
+
+      if (!mediaUrl) {
+        showToast('Failed to upload media.', 'error');
+        return;
+      }
+
+      const title = item.captionText.trim()
+        ? item.captionText.substring(0, 30) + '...'
+        : 'New Post';
+
+      const postId = Date.now().toString();
+      const draftDate = new Date();
+      draftDate.setHours(12, 0, 0, 0);
+
+      if (user) {
+        const newPost: Post = {
+          id: postId,
+          content: item.captionText,
+          mediaUrl: mediaUrl,
+          mediaType: item.type,
+          platforms: platformsToPost,
+          status: status,
+          author: { name: user.name, avatar: user.avatar },
+          comments: [],
+          scheduledDate: status === 'Draft' ? draftDate.toISOString() : undefined,
+          clientId: selectedClient?.id,
+        };
+
+        const safePost = JSON.parse(JSON.stringify(newPost));
+        await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
+      }
+
+      // Remove from mediaItems after saving
+      setComposeState(prev => ({
+        ...prev,
+        mediaItems: prev.mediaItems.filter((_, idx) => idx !== index),
+      }));
+
+      showToast(`Saved to ${status} workflow!`, 'success');
+      setActivePage('approvals');
+    } catch (e) {
+      console.error(e);
+      showToast('Failed to save to workflow.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleSaveToWorkflow = async (status: 'Draft' | 'In Review') => {
     if (!user) return;
     const platformsToPost = (Object.keys(selectedPlatforms) as Platform[]).filter(
@@ -1936,7 +2068,10 @@ const CaptionGenerator: React.FC = () => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const fileType = file.type.startsWith('image') ? 'image' : 'video';
+    // Better video detection - check both mimeType and file extension
+    const isVideo = file.type.startsWith('video/') || 
+                    /\.(mp4|mov|avi|wmv|flv|webm|mkv|m4v)$/i.test(file.name);
+    const fileType = isVideo ? 'video' : 'image';
 
     try {
       const base64 = await fileToBase64(file);
@@ -2332,6 +2467,32 @@ const CaptionGenerator: React.FC = () => {
               Generate Captions ({selectedIndices.size})
             </button>
             <button
+              onClick={async () => {
+                const indices = Array.from(selectedIndices);
+                for (const idx of indices) {
+                  await handleSaveToWorkflowMedia(idx, 'Draft');
+                }
+              }}
+              disabled={selectedIndices.size === 0 || isSaving}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 whitespace-nowrap"
+            >
+              <ClipboardCheckIcon className="w-3.5 h-3.5" />
+              Draft ({selectedIndices.size})
+            </button>
+            <button
+              onClick={async () => {
+                const indices = Array.from(selectedIndices);
+                for (const idx of indices) {
+                  await handleSaveToWorkflowMedia(idx, 'Approved');
+                }
+              }}
+              disabled={selectedIndices.size === 0 || isSaving}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-md hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors disabled:opacity-50 whitespace-nowrap"
+            >
+              <CheckCircleIcon className="w-3.5 h-3.5" />
+              Approved ({selectedIndices.size})
+            </button>
+            <button
               onClick={handleScheduleAll}
               disabled={selectedIndices.size === 0 || isSaving}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-50 whitespace-nowrap"
@@ -2413,6 +2574,7 @@ const CaptionGenerator: React.FC = () => {
               onPreview={handlePreviewMedia}
               onPublish={handlePublishMedia}
               onSchedule={handleScheduleMedia}
+              onSaveToWorkflow={handleSaveToWorkflowMedia}
               platformIcons={platformIcons}
             />
             </div>
@@ -2436,6 +2598,7 @@ const CaptionGenerator: React.FC = () => {
                   onPreview={handlePreviewMedia}
                   onPublish={handlePublishMedia}
                   onSchedule={handleScheduleMedia}
+                  onSaveToWorkflow={handleSaveToWorkflowMedia}
                   platformIcons={platformIcons}
                 />
               ))}
@@ -2468,6 +2631,7 @@ const CaptionGenerator: React.FC = () => {
                 onPreview={handlePreviewMedia}
                 onPublish={handlePublishMedia}
                 onSchedule={handleScheduleMedia}
+                onSaveToWorkflow={handleSaveToWorkflowMedia}
                 platformIcons={platformIcons}
               />
             ))}
