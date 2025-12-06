@@ -478,14 +478,13 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
                     e.stopPropagation();
                     const video = e.currentTarget.closest('.relative')?.querySelector('video') as HTMLVideoElement;
                     if (video) {
-                      video.controls = !video.controls;
                       video.requestFullscreen?.();
                     }
                   }}
                   className="bg-black/60 text-white px-2 py-1 rounded text-xs hover:bg-black/80"
-                  title="Show controls"
+                  title="Fullscreen"
                 >
-                  Controls
+                  Fullscreen
                 </button>
               </div>
             </>
