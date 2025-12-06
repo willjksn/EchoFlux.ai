@@ -704,7 +704,8 @@ const CaptionGenerator: React.FC = () => {
             comments: [],
             scheduledDate: scheduledDate,
             clientId: selectedClient?.id,
-          };
+            timestamp: new Date().toISOString(),
+          } as Post & { timestamp: string };
 
           const safePost = JSON.parse(JSON.stringify(newPost));
           await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
@@ -807,7 +808,8 @@ const CaptionGenerator: React.FC = () => {
           comments: [],
           scheduledDate: publishDate,
           clientId: selectedClient?.id,
-        };
+          timestamp: new Date().toISOString(),
+        } as Post & { timestamp: string };
 
         const safePost = JSON.parse(JSON.stringify(newPost));
         await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
@@ -891,7 +893,8 @@ const CaptionGenerator: React.FC = () => {
           comments: [],
           scheduledDate: item.scheduledDate,
           clientId: selectedClient?.id,
-        };
+          timestamp: new Date().toISOString(),
+        } as Post & { timestamp: string };
 
         const safePost = JSON.parse(JSON.stringify(newPost));
         await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
@@ -1040,7 +1043,8 @@ const CaptionGenerator: React.FC = () => {
             comments: [],
             scheduledDate: scheduledDate,
             clientId: selectedClient?.id,
-          };
+            timestamp: new Date().toISOString(),
+          } as Post & { timestamp: string };
 
           const safePost = JSON.parse(JSON.stringify(newPost));
           await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
@@ -1706,8 +1710,9 @@ const CaptionGenerator: React.FC = () => {
           author: { name: user.name, avatar: user.avatar },
           comments: [],
           scheduledDate: new Date(date).toISOString(),
-          clientId: selectedClient?.id
-        };
+          clientId: selectedClient?.id,
+          timestamp: new Date().toISOString(),
+        } as Post & { timestamp: string };
 
         const safePost = JSON.parse(JSON.stringify(newPost));
         await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
@@ -1868,7 +1873,8 @@ const CaptionGenerator: React.FC = () => {
           comments: [],
           scheduledDate: status === 'Draft' ? draftDate.toISOString() : undefined,
           clientId: selectedClient?.id,
-        };
+          timestamp: new Date().toISOString(), // Add timestamp for Firestore ordering
+        } as Post & { timestamp: string };
 
         const safePost = JSON.parse(JSON.stringify(newPost));
         await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
@@ -1950,8 +1956,9 @@ const CaptionGenerator: React.FC = () => {
         author: { name: user?.name || 'User', avatar: user?.avatar || '' },
         comments: [],
         scheduledDate: status === 'Draft' ? draftDate.toISOString() : undefined,
-        clientId: selectedClient?.id
-      };
+        clientId: selectedClient?.id,
+        timestamp: new Date().toISOString(),
+      } as Post & { timestamp: string };
 
       const postsCollectionRef = collection(db, 'users', user.id, 'posts');
       const safePost = JSON.parse(JSON.stringify(newPost));
@@ -2206,10 +2213,10 @@ const CaptionGenerator: React.FC = () => {
       });
     } else {
       // Legacy: insert into main caption (for single media mode)
-      setComposeState(prev => ({
-        ...prev,
-        captionText: prev.captionText + '\n\n' + tags.join(' ')
-      }));
+    setComposeState(prev => ({
+      ...prev,
+      captionText: prev.captionText + '\n\n' + tags.join(' ')
+    }));
     }
     setIsHashtagPopoverOpen(false);
   };
@@ -2502,7 +2509,7 @@ const CaptionGenerator: React.FC = () => {
               <SparklesIcon className="w-3.5 h-3.5" />
               Generate Captions ({selectedIndices.size})
             </button>
-            <button
+                  <button
               onClick={async () => {
                 const indices = Array.from(selectedIndices);
                 for (const idx of indices) {
@@ -2511,11 +2518,11 @@ const CaptionGenerator: React.FC = () => {
               }}
               disabled={selectedIndices.size === 0 || isSaving}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 whitespace-nowrap"
-            >
+                  >
               <ClipboardCheckIcon className="w-3.5 h-3.5" />
               Draft ({selectedIndices.size})
-            </button>
-            <button
+                  </button>
+                  <button
               onClick={async () => {
                 const indices = Array.from(selectedIndices);
                 for (const idx of indices) {
@@ -2524,10 +2531,10 @@ const CaptionGenerator: React.FC = () => {
               }}
               disabled={selectedIndices.size === 0 || isSaving}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-md hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors disabled:opacity-50 whitespace-nowrap"
-            >
+                  >
               <CheckCircleIcon className="w-3.5 h-3.5" />
               Approved ({selectedIndices.size})
-            </button>
+                  </button>
             <button
               onClick={handleScheduleAll}
               disabled={selectedIndices.size === 0 || isSaving}
@@ -2686,48 +2693,48 @@ const CaptionGenerator: React.FC = () => {
 
       {/* Goal & tone - only show for legacy single media mode */}
       {composeState.mediaItems.length === 0 && composeState.media && (
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label
-              htmlFor="goal"
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              Goal of the post
-            </label>
-            <select
-              id="goal"
-              value={composeState.postGoal}
-              onChange={e => setComposeState(prev => ({ ...prev, postGoal: e.target.value }))}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
-            >
-              {goalOptions.map(opt => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label
-              htmlFor="tone"
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              Tone of voice
-            </label>
-            <select
-              id="tone"
-              value={composeState.postTone}
-              onChange={e => setComposeState(prev => ({ ...prev, postTone: e.target.value }))}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
-            >
-              {toneOptions.map(opt => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
+      <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label
+            htmlFor="goal"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+          >
+            Goal of the post
+          </label>
+          <select
+            id="goal"
+            value={composeState.postGoal}
+            onChange={e => setComposeState(prev => ({ ...prev, postGoal: e.target.value }))}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+          >
+            {goalOptions.map(opt => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
         </div>
+        <div>
+          <label
+            htmlFor="tone"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+          >
+            Tone of voice
+          </label>
+          <select
+            id="tone"
+            value={composeState.postTone}
+            onChange={e => setComposeState(prev => ({ ...prev, postTone: e.target.value }))}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+          >
+            {toneOptions.map(opt => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
       )}
 
       {error && <p className="text-center text-red-500">{error}</p>}
@@ -2845,55 +2852,55 @@ const CaptionGenerator: React.FC = () => {
             ))}
           </div>
         )}
-      </div>
+          </div>
 
       {/* Scheduling - Legacy single media mode only */}
           {composeState.mediaItems.length === 0 && isScheduling && (
             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md space-y-4">
-              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg space-y-4 animate-fade-in">
-                <div className="flex items-center gap-2">
-                  <CalendarIcon className="w-5 h-5 text-blue-600 dark:text-white" />
-                  <h4 className="font-semibold text-blue-800 dark:text-blue-200">
-                    Schedule Post
-                  </h4>
-                </div>
+            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg space-y-4 animate-fade-in">
+              <div className="flex items-center gap-2">
+                <CalendarIcon className="w-5 h-5 text-blue-600 dark:text-white" />
+                <h4 className="font-semibold text-blue-800 dark:text-blue-200">
+                  Schedule Post
+                </h4>
+              </div>
 
-                <div className="flex flex-col gap-3">
-                  <label className="text-sm text-gray-600 dark:text-gray-400">
-                    Select Date & Time:
-                  </label>
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <input
-                      type="datetime-local"
-                      value={scheduleDate}
-                      onChange={e => setScheduleDate(e.target.value)}
-                      className="flex-grow p-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
-                    />
-                    <button
-                      onClick={() => handleSchedule(scheduleDate)}
-                      disabled={!scheduleDate || isSaving}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 font-medium whitespace-nowrap flex items-center gap-2"
-                    >
-                      {isSaving ? <RefreshIcon className="animate-spin" /> : null}
-                      Confirm Schedule
-                    </button>
-                  </div>
+              <div className="flex flex-col gap-3">
+                <label className="text-sm text-gray-600 dark:text-gray-400">
+                  Select Date & Time:
+                </label>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <input
+                    type="datetime-local"
+                    value={scheduleDate}
+                    onChange={e => setScheduleDate(e.target.value)}
+                    className="flex-grow p-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
+                  />
+                  <button
+                    onClick={() => handleSchedule(scheduleDate)}
+                    disabled={!scheduleDate || isSaving}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 font-medium whitespace-nowrap flex items-center gap-2"
+                  >
+                    {isSaving ? <RefreshIcon className="animate-spin" /> : null}
+                    Confirm Schedule
+                  </button>
                 </div>
+              </div>
 
-                <div className="flex items-center gap-4">
-                  <div className="h-px bg-blue-200 dark:bg-blue-800 flex-grow"></div>
-                  <span className="text-xs text-blue-500 uppercase font-bold">
-                    OR
-                  </span>
-                  <div className="h-px bg-blue-200 dark:bg-blue-800 flex-grow"></div>
-                </div>
+              <div className="flex items-center gap-4">
+                <div className="h-px bg-blue-200 dark:bg-blue-800 flex-grow"></div>
+                <span className="text-xs text-blue-500 uppercase font-bold">
+                  OR
+                </span>
+                <div className="h-px bg-blue-200 dark:bg-blue-800 flex-grow"></div>
+              </div>
 
-                <button
-                  onClick={handleSmartSchedule}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-purple-700 dark:text-purple-300 bg-gradient-to-r from-purple-100 to-blue-100 dark:from-purple-900/40 dark:to-blue-900/40 border border-purple-200 dark:border-purple-800 rounded-md hover:shadow-md transition-all"
-                >
-                  <SparklesIcon className="w-4 h-4" /> Schedule for Best Time (AI)
-                </button>
+              <button
+                onClick={handleSmartSchedule}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-purple-700 dark:text-purple-300 bg-gradient-to-r from-purple-100 to-blue-100 dark:from-purple-900/40 dark:to-blue-900/40 border border-purple-200 dark:border-purple-800 rounded-md hover:shadow-md transition-all"
+              >
+                <SparklesIcon className="w-4 h-4" /> Schedule for Best Time (AI)
+              </button>
               </div>
             </div>
           )}
@@ -3039,7 +3046,7 @@ export const Compose: React.FC = () => {
       case 'captions':
         return <CaptionGenerator />;
       case 'image':
-        return (
+            return (
           <div className="text-center p-12 bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-100 dark:border-gray-700">
             <ImageIcon className="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-500" />
             <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Coming Soon</h3>
@@ -3052,7 +3059,7 @@ export const Compose: React.FC = () => {
           </div>
         );
       case 'video':
-        return (
+            return (
           <div className="text-center p-12 bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-100 dark:border-gray-700">
             <VideoIcon className="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-500" />
             <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Coming Soon</h3>
