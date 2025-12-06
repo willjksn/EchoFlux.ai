@@ -507,7 +507,13 @@ export const Approvals: React.FC = () => {
                                                 onClick={async () => {
                                                     // Publish immediately
                                                     const publishDate = new Date().toISOString();
-                                                    await updatePostInDb({ ...activePost, status: 'Published', scheduledDate: activePost.scheduledDate || publishDate });
+                                                    const updatedPost = { ...activePost, status: 'Published' as const, scheduledDate: activePost.scheduledDate || publishDate };
+                                                    await updatePostInDb(updatedPost);
+                                                    
+                                                    // Update local state immediately to remove from workflow
+                                                    if (setPosts) {
+                                                        setPosts(prev => prev.map(p => p.id === activePost.id ? updatedPost : p));
+                                                    }
                                                     
                                                     // Create or update calendar event
                                                     const calendarEvent = {
