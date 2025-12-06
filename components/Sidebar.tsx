@@ -8,18 +8,17 @@ interface NavItemProps {
   icon: React.ReactNode;
   label: string;
   tourId?: string;
-  isInboxView?: boolean;
 }
 
-const NavItem: React.FC<NavItemProps> = ({ page, icon, label, tourId, isInboxView = false }) => {
+const NavItem: React.FC<NavItemProps> = ({ page, icon, label, tourId }) => {
   const { activePage, setActivePage, setIsSidebarOpen } = useAppContext();
   
   return (
     <li id={tourId}>
       <button
         onClick={() => {
+          // If clicking Inbox, set localStorage flag and navigate to dashboard
           if (page === 'inbox') {
-            // Navigate to dashboard and set viewMode to Inbox via localStorage
             localStorage.setItem('dashboardViewMode', 'Inbox');
             setActivePage('dashboard');
           } else {
@@ -28,7 +27,7 @@ const NavItem: React.FC<NavItemProps> = ({ page, icon, label, tourId, isInboxVie
           setIsSidebarOpen(false);
         }}
         className={`w-full text-left flex items-center p-3 my-1 rounded-lg transition-colors ${
-          activePage === page || (page === 'inbox' && activePage === 'dashboard' && isInboxView)
+          activePage === page || (page === 'inbox' && activePage === 'dashboard' && localStorage.getItem('dashboardViewMode') === 'Inbox')
             ? 'bg-primary-500 text-white'
             : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
         }`}
@@ -128,13 +127,7 @@ export const Sidebar: React.FC = () => {
         </div>
         <nav className="p-4 flex-grow overflow-y-auto custom-scrollbar">
           <ul>
-            {navItems.map(item => (
-              <NavItem 
-                key={item.page} 
-                {...item} 
-                isInboxView={item.page === 'inbox' ? isInboxView : false}
-              />
-            ))}
+            {navItems.map(item => <NavItem key={item.page} {...item} />)}
           </ul>
         </nav>
         <div className="p-2.5 border-t border-gray-200 dark:border-gray-700 flex-shrink-0 bg-gray-50 dark:bg-gray-900/50">

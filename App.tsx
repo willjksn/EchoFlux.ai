@@ -45,6 +45,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 
 const pageTitles: Record<Page, string> = {
     dashboard: 'Dashboard',
+    inbox: 'Inbox',
     analytics: 'Analytics',
     settings: 'Settings',
     compose: 'Compose',
@@ -66,9 +67,9 @@ const pageTitles: Record<Page, string> = {
     strategy: 'AI Content Strategist',
     ads: 'AI Ad Generator',
     mediaLibrary: 'Media Library',
-    inbox: 'Inbox',
-    autopilot: 'AI Autopilot',
 };
+<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>
+read_lints
 
 const MainContent: React.FC = () => {
     try {
@@ -97,10 +98,6 @@ const MainContent: React.FC = () => {
             case 'strategy': return <Strategy />;
             case 'ads': return <AdGenerator />;
             case 'mediaLibrary': return <MediaLibrary />;
-            case 'inbox': 
-                // Inbox is handled by Dashboard component with viewMode='Inbox'
-                localStorage.setItem('dashboardViewMode', 'Inbox');
-                return <Dashboard />;
             default: return <Dashboard />;
         }
     } catch (error: any) {

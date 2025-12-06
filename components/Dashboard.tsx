@@ -177,13 +177,10 @@ export const Dashboard: React.FC = () => {
     return 'Overview';
   });
   
-  // Clear localStorage flag after component mounts
+  // Clear localStorage flag when viewMode changes manually or when component unmounts
   useEffect(() => {
-    if (viewMode === 'Inbox') {
-      const timer = setTimeout(() => {
-        localStorage.removeItem('dashboardViewMode');
-      }, 100);
-      return () => clearTimeout(timer);
+    if (viewMode === 'Overview') {
+      localStorage.removeItem('dashboardViewMode');
     }
   }, [viewMode]);
   const [isLoading, setIsLoading] = useState(false);
@@ -695,33 +692,25 @@ export const Dashboard: React.FC = () => {
               
               // Recent posts
               posts.slice(0, 2).forEach(post => {
-                const postDate = post.createdAt ? new Date(post.createdAt) : new Date();
-                // Only add if date is valid
-                if (!isNaN(postDate.getTime())) {
-                  activities.push({
-                    id: `post-${post.id}`,
-                    type: 'post',
-                    message: `Published post on ${post.platforms[0] || 'social media'}`,
-                    timestamp: postDate,
-                    icon: <SparklesIcon className="w-4 h-4" />
-                  });
-                }
+                activities.push({
+                  id: `post-${post.id}`,
+                  type: 'post',
+                  message: `Published post on ${post.platforms[0] || 'social media'}`,
+                  timestamp: new Date(post.createdAt || Date.now()),
+                  icon: <SparklesIcon className="w-4 h-4" />
+                });
               });
               
               // Recent messages
               if (messages.length > 0) {
                 messages.slice(0, 1).forEach(msg => {
-                  const msgDate = msg.timestamp ? new Date(msg.timestamp) : new Date();
-                  // Only add if date is valid
-                  if (!isNaN(msgDate.getTime())) {
-                    activities.push({
-                      id: `message-${msg.id}`,
-                      type: 'message',
-                      message: `New ${isBusiness ? 'lead' : 'fan'} message from ${msg.user.name}`,
-                      timestamp: msgDate,
-                      icon: <ChatIcon className="w-4 h-4" />
-                    });
-                  }
+                  activities.push({
+                    id: `message-${msg.id}`,
+                    type: 'message',
+                    message: `New ${isBusiness ? 'lead' : 'fan'} message from ${msg.user.name}`,
+                    timestamp: new Date(msg.timestamp),
+                    icon: <ChatIcon className="w-4 h-4" />
+                  });
                 });
               }
               
