@@ -27,7 +27,8 @@ const NavItem: React.FC<NavItemProps> = ({ page, icon, label, tourId }) => {
           setIsSidebarOpen(false);
         }}
         className={`w-full text-left flex items-center p-3 my-1 rounded-lg transition-colors ${
-          activePage === page || (page === 'inbox' && activePage === 'dashboard' && localStorage.getItem('dashboardViewMode') === 'Inbox')
+          (page === 'inbox' && activePage === 'dashboard' && localStorage.getItem('dashboardViewMode') === 'Inbox') ||
+          (page !== 'inbox' && activePage === page && !(page === 'dashboard' && localStorage.getItem('dashboardViewMode') === 'Inbox'))
             ? 'bg-primary-500 text-white'
             : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
         }`}

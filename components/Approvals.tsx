@@ -39,7 +39,7 @@ const statusColors: Record<ApprovalStatus, string> = {
 };
 
 export const Approvals: React.FC = () => {
-    const { posts, user, setActivePage, showToast } = useAppContext();
+    const { posts, user, setActivePage, showToast, addCalendarEvent } = useAppContext();
     const [activePost, setActivePost] = useState<Post | null>(null);
     const [comment, setComment] = useState('');
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -147,7 +147,9 @@ export const Approvals: React.FC = () => {
             if (status === 'In Review' && (p.status === 'Pending Review' || p.status === 'Review')) return true;
             if (status === 'Draft' && p.status === 'Draft') return true;
             if (status === 'Approved' && p.status === 'Approved') return true;
-            if (status === 'Scheduled' && (p.status === 'Scheduled' || p.status === 'Published')) return true;
+            if (status === 'Scheduled' && p.status === 'Scheduled') return true;
+            // Published posts should stay visible in Scheduled column for quick view
+            if (status === 'Scheduled' && p.status === 'Published') return true;
             return false;
         })
     }));
@@ -428,7 +430,21 @@ export const Approvals: React.FC = () => {
                                                     const scheduledDate = new Date();
                                                     scheduledDate.setDate(scheduledDate.getDate() + 1);
                                                     scheduledDate.setHours(12, 0, 0, 0);
-                                                    await updatePostInDb({ ...activePost, status: 'Scheduled', scheduledDate: scheduledDate.toISOString() });
+                                                    const scheduledDateISO = scheduledDate.toISOString();
+                                                    await updatePostInDb({ ...activePost, status: 'Scheduled', scheduledDate: scheduledDateISO });
+                                                    
+                                                    // Create calendar event
+                                                    const calendarEvent = {
+                                                        id: `cal-${activePost.id}`,
+                                                        title: activePost.content.substring(0, 50) + (activePost.content.length > 50 ? '...' : ''),
+                                                        date: scheduledDateISO,
+                                                        type: activePost.mediaType === 'video' ? 'Reel' : 'Post',
+                                                        platform: activePost.platforms[0] || 'Instagram',
+                                                        status: 'Scheduled' as const,
+                                                        thumbnail: activePost.mediaUrl || undefined,
+                                                    };
+                                                    await addCalendarEvent(calendarEvent);
+                                                    
                                                     showToast('Post scheduled!', 'success');
                                                     setActivePost(null);
                                                 }}
@@ -439,7 +455,21 @@ export const Approvals: React.FC = () => {
                                             <button 
                                                 onClick={async () => {
                                                     // Publish immediately
-                                                    await updatePostInDb({ ...activePost, status: 'Published' });
+                                                    const publishDate = new Date().toISOString();
+                                                    await updatePostInDb({ ...activePost, status: 'Published', scheduledDate: activePost.scheduledDate || publishDate });
+                                                    
+                                                    // Create or update calendar event
+                                                    const calendarEvent = {
+                                                        id: `cal-${activePost.id}`,
+                                                        title: activePost.content.substring(0, 50) + (activePost.content.length > 50 ? '...' : ''),
+                                                        date: activePost.scheduledDate || publishDate,
+                                                        type: activePost.mediaType === 'video' ? 'Reel' : 'Post',
+                                                        platform: activePost.platforms[0] || 'Instagram',
+                                                        status: 'Published' as const,
+                                                        thumbnail: activePost.mediaUrl || undefined,
+                                                    };
+                                                    await addCalendarEvent(calendarEvent);
+                                                    
                                                     showToast('Post published!', 'success');
                                                     setActivePost(null);
                                                 }}
@@ -450,13 +480,32 @@ export const Approvals: React.FC = () => {
                                         </>
                                     )}
                                     {activePost.status === 'Scheduled' && (
-                                         <button 
-                                             onClick={() => showToast('Already scheduled!', 'success')} 
-                                             disabled 
-                                             className="px-5 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 rounded-lg cursor-not-allowed text-sm font-semibold"
-                                         >
-                                             Scheduled
-                                         </button>
+                                        <>
+                                            <button 
+                                                onClick={async () => {
+                                                    // Publish immediately
+                                                    await updatePostInDb({ ...activePost, status: 'Published', scheduledDate: activePost.scheduledDate || new Date().toISOString() });
+                                                    
+                                                    // Update calendar event status to Published
+                                                    const calendarEvent = {
+                                                        id: `cal-${activePost.id}`,
+                                                        title: activePost.content.substring(0, 50) + (activePost.content.length > 50 ? '...' : ''),
+                                                        date: activePost.scheduledDate || new Date().toISOString(),
+                                                        type: activePost.mediaType === 'video' ? 'Reel' : 'Post',
+                                                        platform: activePost.platforms[0] || 'Instagram',
+                                                        status: 'Published' as const,
+                                                        thumbnail: activePost.mediaUrl || undefined,
+                                                    };
+                                                    await addCalendarEvent(calendarEvent);
+                                                    
+                                                    showToast('Post published!', 'success');
+                                                    setActivePost(null);
+                                                }}
+                                                className="px-5 py-2.5 bg-gradient-to-r from-green-600 to-emerald-500 text-white rounded-lg hover:from-green-700 hover:to-emerald-600 text-sm font-semibold shadow-md transition-all"
+                                            >
+                                                Publish Now
+                                            </button>
+                                        </>
                                     )}
                                 </div>
                             </div>

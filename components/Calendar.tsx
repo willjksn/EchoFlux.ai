@@ -37,14 +37,14 @@ export const Calendar: React.FC = () => {
     });
     const [isSaving, setIsSaving] = useState(false);
 
-    // Filter calendar events: only show Scheduled posts with media, exclude Published
+    // Filter calendar events: show Scheduled AND Published posts with media
     const filteredEvents = useMemo(() => {
         if (!calendarEvents || !Array.isArray(calendarEvents)) return [];
         if (!posts || !Array.isArray(posts)) return [];
         
         return calendarEvents.filter(evt => {
-            // Only show Scheduled events (not Published or Draft)
-            if (evt.status !== 'Scheduled') return false;
+            // Show both Scheduled and Published events
+            if (evt.status !== 'Scheduled' && evt.status !== 'Published') return false;
             
             // Find associated post
             const associatedPost = posts.find(p => {
@@ -132,11 +132,6 @@ export const Calendar: React.FC = () => {
         while (dayCounter <= daysInMonth) {
             const currentDay = dayCounter;
             
-            // Mock Best Time Logic: Tuesday (2) and Thursday (4)
-            const dateObj = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDay);
-            const dayOfWeek = dateObj.getDay();
-            const isBestTime = dayOfWeek === 2 || dayOfWeek === 4;
-
             const dayEvents = filteredEvents.filter(e => {
                 const eventDate = new Date(e.date);
                 return (
@@ -166,17 +161,10 @@ export const Calendar: React.FC = () => {
                         <span className={`font-bold text-base ${
                             todayHighlight 
                                 ? 'text-primary-700 dark:text-primary-300' 
-                                : isBestTime 
-                                    ? 'text-purple-600 dark:text-purple-400' 
-                                    : 'text-gray-700 dark:text-gray-300'
+                                : 'text-gray-700 dark:text-gray-300'
                         }`}>
                             {currentDay}
                         </span>
-                        {isBestTime && (
-                            <span className="flex items-center text-[10px] font-bold text-purple-600 dark:text-purple-400 bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/40 dark:to-pink-900/40 px-2 py-0.5 rounded-full shadow-sm" title="High Engagement Potential">
-                                <SparklesIcon className="w-3 h-3 mr-1" /> Best
-                            </span>
-                        )}
                     </div>
                     <div className={`space-y-2 ${hasEvents ? 'flex-1 overflow-y-auto custom-scrollbar pb-8' : 'flex-shrink-0'}`}>
                         {dayEvents.map(evt => {
@@ -193,6 +181,12 @@ export const Calendar: React.FC = () => {
                                     border: 'border-l-4 border-blue-500 dark:border-blue-400',
                                     dot: 'bg-blue-500 dark:bg-blue-400',
                                     text: 'text-blue-700 dark:text-blue-300'
+                                },
+                                Published: {
+                                    bg: 'bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30',
+                                    border: 'border-l-4 border-green-500 dark:border-green-400',
+                                    dot: 'bg-green-500 dark:bg-green-400',
+                                    text: 'text-green-700 dark:text-green-300'
                                 },
                                 Draft: {
                                     bg: 'bg-gray-100 dark:bg-gray-700/50',
@@ -657,10 +651,6 @@ export const Calendar: React.FC = () => {
                          <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-green-500 shadow-sm"></span> <span className="text-gray-700 dark:text-gray-300 font-medium">Published</span></div>
                          <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-blue-500 shadow-sm"></span> <span className="text-gray-700 dark:text-gray-300 font-medium">Scheduled</span></div>
                          <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-gray-400 shadow-sm"></span> <span className="text-gray-700 dark:text-gray-300 font-medium">Draft</span></div>
-                         <div className="flex items-center gap-2 ml-2 pl-2 border-l border-gray-200 dark:border-gray-700">
-                             <SparklesIcon className="w-4 h-4 text-purple-500 dark:text-purple-400"/> 
-                             <span className="text-gray-700 dark:text-gray-300 font-medium">Best Time</span>
-                         </div>
                     </div>
                     <button 
                         onClick={() => setActivePage('compose')} 
