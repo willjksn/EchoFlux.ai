@@ -52,7 +52,7 @@ export const Sidebar: React.FC = () => {
     { page: 'ads', icon: <SparklesIcon />, label: 'Ad Generator' },
     { page: 'opportunities', icon: <TrendingIcon />, label: 'Opportunities', tourId: 'tour-step-opportunities-nav' },
     { page: 'calendar', icon: <CalendarIcon />, label: 'Calendar' },
-    { page: 'approvals', icon: <KanbanIcon />, label: 'Approvals' },
+    { page: 'approvals', icon: <KanbanIcon />, label: 'Workflow' },
     { page: 'bio', icon: <GlobeIcon />, label: 'Link in Bio' },
     { page: 'analytics', icon: <AnalyticsIcon />, label: 'Analytics', tourId: 'tour-step-2-analytics-nav' },
     { page: 'team', icon: <TeamIcon />, label: 'Team', tourId: 'tour-step-team-nav' },
