@@ -131,9 +131,9 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({ isOpen, 
                              {media && (
                                 <div className={`w-full ${isDarkMode ? 'bg-black' : 'bg-gray-100'}`}>
                                      {media.type === 'image' ? (
-                                        <img src={media.previewUrl} alt="Post Media" className="w-full object-cover" />
+                                        <img src={media.previewUrl} alt="Post Media" className="w-full object-contain" />
                                     ) : (
-                                        <video src={media.previewUrl} className="w-full" controls />
+                                        <video src={media.previewUrl} className="w-full object-contain" controls />
                                     )}
                                 </div>
                              )}
@@ -166,9 +166,9 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({ isOpen, 
                         <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
                             {media ? (
                                 media.type === 'image' ? (
-                                    <img src={media.previewUrl} alt="Post Media" className="w-full h-full object-cover opacity-80" />
+                                    <img src={media.previewUrl} alt="Post Media" className="w-full h-full object-contain opacity-80" />
                                 ) : (
-                                    <video src={media.previewUrl} className="w-full h-full object-cover" controls={false} autoPlay loop muted playsInline />
+                                    <video src={media.previewUrl} className="w-full h-full object-contain" controls={false} autoPlay loop muted playsInline />
                                 )
                             ) : (
                                 <div className="text-gray-500">No Media</div>
@@ -299,9 +299,9 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({ isOpen, 
                              {media && (
                                 <div className={`w-full ${isDarkMode ? 'bg-black' : 'bg-gray-100'}`}>
                                      {media.type === 'image' ? (
-                                        <img src={media.previewUrl} alt="Post Media" className="w-full object-cover" />
+                                        <img src={media.previewUrl} alt="Post Media" className="w-full object-contain" />
                                     ) : (
-                                        <video src={media.previewUrl} className="w-full" controls />
+                                        <video src={media.previewUrl} className="w-full object-contain" controls />
                                     )}
                                 </div>
                              )}
