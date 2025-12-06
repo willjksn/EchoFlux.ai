@@ -3,14 +3,27 @@
 
 import type { Platform } from '../../types';
 
+export type ContentType = 'reel' | 'short_video' | 'carousel' | 'single_image' | 'video' | 'story' | 'text';
+
+export interface ContentTypePerformance {
+  contentType: ContentType;
+  optimalHours: number[];
+  optimalDays: number[];
+  averageEngagement: number; // 0-100
+  peakEngagement: number; // 0-100
+  bestPlatforms: Platform[];
+}
+
 export interface RealTimePostingData {
   platform: Platform;
+  contentType?: ContentType; // Optional content type filter
   optimalHours: number[]; // Array of hours (0-23) with highest engagement
   optimalDays: number[]; // Array of day numbers (0-6, Sunday=0)
   currentEngagementScore?: number; // Current engagement level (0-100)
   trendDirection?: 'up' | 'down' | 'stable'; // Engagement trend
   dataSource: 'api' | 'aggregated' | 'industry';
   timestamp: string;
+  contentTypeInsights?: ContentTypePerformance[];
 }
 
 export interface PlatformPostingInsights {
@@ -30,15 +43,17 @@ export interface PlatformPostingInsights {
 export async function getRealTimePostingData(
   platform: Platform,
   options?: {
+    contentType?: ContentType;
     useCache?: boolean;
     cacheDuration?: number; // minutes
   }
 ): Promise<RealTimePostingData> {
-  const { useCache = true, cacheDuration = 60 } = options || {};
+  const { contentType, useCache = true, cacheDuration = 60 } = options || {};
 
-  // Check cache first
+  // Check cache first (with content type key)
+  const cacheKey = `${platform}-${contentType || 'all'}`;
   if (useCache) {
-    const cached = getCachedData(platform);
+    const cached = getCachedData(cacheKey as Platform);
     if (cached && isCacheValid(cached, cacheDuration)) {
       return cached;
     }
@@ -46,9 +61,13 @@ export async function getRealTimePostingData(
 
   try {
     // Try to fetch from real-time sources
-    const realTimeData = await fetchFromRealTimeSources(platform);
+    const realTimeData = await fetchFromRealTimeSources(platform, contentType);
     if (realTimeData) {
-      cacheData(platform, realTimeData);
+      // Add content type insights
+      const insights = await getContentTypePerformance(platform, contentType);
+      realTimeData.contentTypeInsights = insights;
+      
+      cacheData(cacheKey as Platform, realTimeData);
       return realTimeData;
     }
   } catch (error) {
@@ -56,14 +75,18 @@ export async function getRealTimePostingData(
   }
 
   // Fallback to aggregated industry data
-  return getIndustryBenchmarkData(platform);
+  const fallbackData = getIndustryBenchmarkData(platform, contentType);
+  const insights = await getContentTypePerformance(platform, contentType);
+  fallbackData.contentTypeInsights = insights;
+  return fallbackData;
 }
 
 /**
  * Fetch from real-time data sources (APIs, public endpoints)
  */
 async function fetchFromRealTimeSources(
-  platform: Platform
+  platform: Platform,
+  contentType?: ContentType
 ): Promise<RealTimePostingData | null> {
   try {
     // Option 1: Use public social media analytics APIs
@@ -71,20 +94,20 @@ async function fetchFromRealTimeSources(
     
     switch (platform) {
       case 'Instagram':
-        return await fetchInstagramPostingData();
+        return await fetchInstagramPostingData(contentType);
       case 'TikTok':
-        return await fetchTikTokPostingData();
+        return await fetchTikTokPostingData(contentType);
       case 'X':
       case 'Twitter':
-        return await fetchTwitterPostingData();
+        return await fetchTwitterPostingData(contentType);
       case 'LinkedIn':
-        return await fetchLinkedInPostingData();
+        return await fetchLinkedInPostingData(contentType);
       case 'Facebook':
-        return await fetchFacebookPostingData();
+        return await fetchFacebookPostingData(contentType);
       case 'YouTube':
-        return await fetchYouTubePostingData();
+        return await fetchYouTubePostingData(contentType);
       case 'Threads':
-        return await fetchThreadsPostingData();
+        return await fetchThreadsPostingData(contentType);
       default:
         return null;
     }
@@ -98,14 +121,25 @@ async function fetchFromRealTimeSources(
  * Fetch Instagram posting time data
  * Uses public data aggregators and industry benchmarks
  */
-async function fetchInstagramPostingData(): Promise<RealTimePostingData> {
+async function fetchInstagramPostingData(contentType?: ContentType): Promise<RealTimePostingData> {
   // In production, you could integrate with:
   // - Instagram Graph API (requires app approval)
   // - Third-party analytics APIs (Sprout Social, Hootsuite)
   // - Public data aggregators
   
-  // For now, return enhanced industry data with real-time adjustments
-  const baseData = getIndustryBenchmarkData('Instagram');
+  // Base data
+  let baseData = getIndustryBenchmarkData('Instagram', contentType);
+  
+  // Adjust based on content type
+  if (contentType) {
+    const typeAdjustments = getContentTypeAdjustments('Instagram', contentType);
+    baseData = {
+      ...baseData,
+      optimalHours: typeAdjustments.optimalHours || baseData.optimalHours,
+      optimalDays: typeAdjustments.optimalDays || baseData.optimalDays,
+      contentType,
+    };
+  }
   
   // Simulate real-time adjustments based on current day/time
   const now = new Date();
@@ -135,13 +169,25 @@ async function fetchInstagramPostingData(): Promise<RealTimePostingData> {
 /**
  * Fetch TikTok posting time data
  */
-async function fetchTikTokPostingData(): Promise<RealTimePostingData> {
-  const baseData = getIndustryBenchmarkData('TikTok');
+async function fetchTikTokPostingData(contentType?: ContentType): Promise<RealTimePostingData> {
+  let baseData = getIndustryBenchmarkData('TikTok', contentType);
+  
+  // Adjust based on content type
+  if (contentType) {
+    const typeAdjustments = getContentTypeAdjustments('TikTok', contentType);
+    baseData = {
+      ...baseData,
+      optimalHours: typeAdjustments.optimalHours || baseData.optimalHours,
+      optimalDays: typeAdjustments.optimalDays || baseData.optimalDays,
+      contentType,
+    };
+  }
+  
   const now = new Date();
   const currentHour = now.getHours();
   
   // TikTok peak hours: Evening (6-9 PM) and late night (9 PM - 12 AM)
-  const peakHours = [18, 19, 20, 21, 22, 23];
+  const peakHours = baseData.optimalHours.length > 0 ? baseData.optimalHours : [18, 19, 20, 21, 22, 23];
   
   return {
     ...baseData,
@@ -155,17 +201,21 @@ async function fetchTikTokPostingData(): Promise<RealTimePostingData> {
 /**
  * Fetch Twitter/X posting time data
  */
-async function fetchTwitterPostingData(): Promise<RealTimePostingData> {
-  const baseData = getIndustryBenchmarkData('X');
+async function fetchTwitterPostingData(contentType?: ContentType): Promise<RealTimePostingData> {
+  let baseData = getIndustryBenchmarkData('X', contentType);
   
-  // Twitter/X best times: Weekdays 9 AM - 3 PM, Wednesday peak
-  const optimalHours = [9, 10, 11, 12, 13, 14, 15];
-  const optimalDays = [1, 2, 3, 4, 5]; // Mon-Fri
+  if (contentType) {
+    const typeAdjustments = getContentTypeAdjustments('X', contentType);
+    baseData = {
+      ...baseData,
+      optimalHours: typeAdjustments.optimalHours || baseData.optimalHours,
+      optimalDays: typeAdjustments.optimalDays || baseData.optimalDays,
+      contentType,
+    };
+  }
   
   return {
     ...baseData,
-    optimalHours,
-    optimalDays,
     dataSource: 'aggregated',
   };
 }
@@ -173,17 +223,21 @@ async function fetchTwitterPostingData(): Promise<RealTimePostingData> {
 /**
  * Fetch LinkedIn posting time data
  */
-async function fetchLinkedInPostingData(): Promise<RealTimePostingData> {
-  const baseData = getIndustryBenchmarkData('LinkedIn');
+async function fetchLinkedInPostingData(contentType?: ContentType): Promise<RealTimePostingData> {
+  let baseData = getIndustryBenchmarkData('LinkedIn', contentType);
   
-  // LinkedIn best times: Tuesday-Thursday, 8-10 AM and 12-1 PM
-  const optimalHours = [8, 9, 10, 12, 13];
-  const optimalDays = [2, 3, 4]; // Tue-Thu
+  if (contentType) {
+    const typeAdjustments = getContentTypeAdjustments('LinkedIn', contentType);
+    baseData = {
+      ...baseData,
+      optimalHours: typeAdjustments.optimalHours || baseData.optimalHours,
+      optimalDays: typeAdjustments.optimalDays || baseData.optimalDays,
+      contentType,
+    };
+  }
   
   return {
     ...baseData,
-    optimalHours,
-    optimalDays,
     dataSource: 'aggregated',
   };
 }
@@ -191,17 +245,21 @@ async function fetchLinkedInPostingData(): Promise<RealTimePostingData> {
 /**
  * Fetch Facebook posting time data
  */
-async function fetchFacebookPostingData(): Promise<RealTimePostingData> {
-  const baseData = getIndustryBenchmarkData('Facebook');
+async function fetchFacebookPostingData(contentType?: ContentType): Promise<RealTimePostingData> {
+  let baseData = getIndustryBenchmarkData('Facebook', contentType);
   
-  // Facebook best times: Weekdays 10 AM - 12 PM, Tue-Thu peak
-  const optimalHours = [10, 11, 12];
-  const optimalDays = [2, 3, 4]; // Tue-Thu
+  if (contentType) {
+    const typeAdjustments = getContentTypeAdjustments('Facebook', contentType);
+    baseData = {
+      ...baseData,
+      optimalHours: typeAdjustments.optimalHours || baseData.optimalHours,
+      optimalDays: typeAdjustments.optimalDays || baseData.optimalDays,
+      contentType,
+    };
+  }
   
   return {
     ...baseData,
-    optimalHours,
-    optimalDays,
     dataSource: 'aggregated',
   };
 }
@@ -209,17 +267,21 @@ async function fetchFacebookPostingData(): Promise<RealTimePostingData> {
 /**
  * Fetch YouTube posting time data
  */
-async function fetchYouTubePostingData(): Promise<RealTimePostingData> {
-  const baseData = getIndustryBenchmarkData('YouTube');
+async function fetchYouTubePostingData(contentType?: ContentType): Promise<RealTimePostingData> {
+  let baseData = getIndustryBenchmarkData('YouTube', contentType);
   
-  // YouTube best times: Weekdays 2-4 PM, weekends 9-11 AM
-  const optimalHours = [14, 15, 16]; // Weekdays
-  const optimalDays = [1, 2, 3, 4, 5]; // Mon-Fri
+  if (contentType) {
+    const typeAdjustments = getContentTypeAdjustments('YouTube', contentType);
+    baseData = {
+      ...baseData,
+      optimalHours: typeAdjustments.optimalHours || baseData.optimalHours,
+      optimalDays: typeAdjustments.optimalDays || baseData.optimalDays,
+      contentType,
+    };
+  }
   
   return {
     ...baseData,
-    optimalHours,
-    optimalDays,
     dataSource: 'aggregated',
   };
 }
@@ -227,27 +289,377 @@ async function fetchYouTubePostingData(): Promise<RealTimePostingData> {
 /**
  * Fetch Threads posting time data
  */
-async function fetchThreadsPostingData(): Promise<RealTimePostingData> {
+async function fetchThreadsPostingData(contentType?: ContentType): Promise<RealTimePostingData> {
   // Threads is newer, similar to Instagram but with different peak times
-  const baseData = getIndustryBenchmarkData('Instagram');
+  let baseData = getIndustryBenchmarkData('Threads', contentType);
   
-  // Threads peak: Weekdays 12-2 PM, evenings 7-9 PM
-  const optimalHours = [12, 13, 14, 19, 20, 21];
-  const optimalDays = [1, 2, 3, 4, 5]; // Mon-Fri
+  if (contentType) {
+    const typeAdjustments = getContentTypeAdjustments('Threads', contentType);
+    baseData = {
+      ...baseData,
+      optimalHours: typeAdjustments.optimalHours || baseData.optimalHours,
+      optimalDays: typeAdjustments.optimalDays || baseData.optimalDays,
+      contentType,
+    };
+  }
   
   return {
     ...baseData,
-    platform: 'Threads',
-    optimalHours,
-    optimalDays,
     dataSource: 'aggregated',
   };
 }
 
 /**
+ * Get content type performance adjustments
+ */
+function getContentTypeAdjustments(
+  platform: Platform,
+  contentType: ContentType
+): { optimalHours: number[]; optimalDays: number[] } {
+  // Content type specific optimal times based on industry data
+  const adjustments: Record<string, Record<ContentType, { optimalHours: number[]; optimalDays: number[] }>> = {
+    Instagram: {
+      reel: {
+        optimalHours: [18, 19, 20, 21, 22], // Evenings for Reels
+        optimalDays: [1, 2, 3, 4, 5, 6], // Mon-Sat
+      },
+      short_video: {
+        optimalHours: [19, 20, 21, 22], // Late evening for short videos
+        optimalDays: [1, 2, 3, 4, 5, 6],
+      },
+      carousel: {
+        optimalHours: [10, 11, 12, 13, 14, 15], // Daytime for carousels
+        optimalDays: [1, 2, 3, 4], // Mon-Thu
+      },
+      single_image: {
+        optimalHours: [11, 12, 13, 14, 15], // Midday for images
+        optimalDays: [1, 2, 3, 4],
+      },
+      video: {
+        optimalHours: [17, 18, 19, 20], // Evening for videos
+        optimalDays: [1, 2, 3, 4, 5],
+      },
+      story: {
+        optimalHours: [8, 9, 12, 17, 18, 19], // Multiple peaks for stories
+        optimalDays: [1, 2, 3, 4, 5, 6],
+      },
+      text: {
+        optimalHours: [9, 10, 11, 12, 13, 14], // Business hours for text
+        optimalDays: [1, 2, 3, 4, 5],
+      },
+    },
+    TikTok: {
+      reel: {
+        optimalHours: [19, 20, 21, 22, 23], // Late evening/night
+        optimalDays: [1, 2, 3, 4, 5, 6],
+      },
+      short_video: {
+        optimalHours: [18, 19, 20, 21, 22, 23],
+        optimalDays: [1, 2, 3, 4, 5, 6],
+      },
+      carousel: {
+        optimalHours: [12, 13, 14, 15, 16],
+        optimalDays: [1, 2, 3, 4, 5],
+      },
+      single_image: {
+        optimalHours: [11, 12, 13, 14],
+        optimalDays: [1, 2, 3, 4],
+      },
+      video: {
+        optimalHours: [19, 20, 21, 22, 23],
+        optimalDays: [1, 2, 3, 4, 5, 6],
+      },
+      story: {
+        optimalHours: [18, 19, 20, 21, 22],
+        optimalDays: [1, 2, 3, 4, 5, 6],
+      },
+      text: {
+        optimalHours: [9, 10, 11, 12, 13],
+        optimalDays: [1, 2, 3, 4, 5],
+      },
+    },
+    X: {
+      reel: {
+        optimalHours: [12, 13, 14, 15, 16],
+        optimalDays: [3], // Wednesday peak
+      },
+      short_video: {
+        optimalHours: [13, 14, 15, 16],
+        optimalDays: [3],
+      },
+      carousel: {
+        optimalHours: [10, 11, 12, 13],
+        optimalDays: [1, 2, 3, 4, 5],
+      },
+      single_image: {
+        optimalHours: [9, 10, 11, 12, 13, 14],
+        optimalDays: [3],
+      },
+      video: {
+        optimalHours: [12, 13, 14, 15],
+        optimalDays: [3],
+      },
+      story: {
+        optimalHours: [9, 10, 11, 12, 13],
+        optimalDays: [1, 2, 3, 4, 5],
+      },
+      text: {
+        optimalHours: [9, 10, 11, 12, 13, 14, 15],
+        optimalDays: [3],
+      },
+    },
+    LinkedIn: {
+      reel: {
+        optimalHours: [8, 9, 12, 13],
+        optimalDays: [2, 3, 4],
+      },
+      short_video: {
+        optimalHours: [8, 9, 12],
+        optimalDays: [2, 3, 4],
+      },
+      carousel: {
+        optimalHours: [8, 9, 10, 12, 13],
+        optimalDays: [2, 3, 4],
+      },
+      single_image: {
+        optimalHours: [8, 9, 10, 12],
+        optimalDays: [2, 3, 4],
+      },
+      video: {
+        optimalHours: [8, 9, 12, 13],
+        optimalDays: [2, 3, 4],
+      },
+      story: {
+        optimalHours: [8, 9, 12, 17],
+        optimalDays: [2, 3, 4],
+      },
+      text: {
+        optimalHours: [8, 9, 10, 12, 13],
+        optimalDays: [2, 3, 4],
+      },
+    },
+    Facebook: {
+      reel: {
+        optimalHours: [10, 11, 12, 13],
+        optimalDays: [2, 3, 4],
+      },
+      short_video: {
+        optimalHours: [11, 12, 13],
+        optimalDays: [2, 3, 4],
+      },
+      carousel: {
+        optimalHours: [10, 11, 12],
+        optimalDays: [2, 3, 4],
+      },
+      single_image: {
+        optimalHours: [10, 11, 12],
+        optimalDays: [2, 3, 4],
+      },
+      video: {
+        optimalHours: [10, 11, 12, 13],
+        optimalDays: [2, 3, 4],
+      },
+      story: {
+        optimalHours: [9, 10, 11, 12, 13],
+        optimalDays: [2, 3, 4],
+      },
+      text: {
+        optimalHours: [10, 11, 12],
+        optimalDays: [2, 3, 4],
+      },
+    },
+    YouTube: {
+      reel: {
+        optimalHours: [14, 15, 16, 17],
+        optimalDays: [1, 2, 3, 4, 5],
+      },
+      short_video: {
+        optimalHours: [14, 15, 16, 17, 18],
+        optimalDays: [1, 2, 3, 4, 5],
+      },
+      carousel: {
+        optimalHours: [13, 14, 15],
+        optimalDays: [1, 2, 3, 4, 5],
+      },
+      single_image: {
+        optimalHours: [13, 14, 15],
+        optimalDays: [1, 2, 3, 4, 5],
+      },
+      video: {
+        optimalHours: [14, 15, 16, 17],
+        optimalDays: [1, 2, 3, 4, 5],
+      },
+      story: {
+        optimalHours: [14, 15, 16],
+        optimalDays: [1, 2, 3, 4, 5],
+      },
+      text: {
+        optimalHours: [13, 14, 15],
+        optimalDays: [1, 2, 3, 4, 5],
+      },
+    },
+    Threads: {
+      reel: {
+        optimalHours: [12, 13, 14, 19, 20, 21],
+        optimalDays: [1, 2, 3, 4, 5],
+      },
+      short_video: {
+        optimalHours: [19, 20, 21],
+        optimalDays: [1, 2, 3, 4, 5],
+      },
+      carousel: {
+        optimalHours: [12, 13, 14],
+        optimalDays: [1, 2, 3, 4],
+      },
+      single_image: {
+        optimalHours: [12, 13, 14],
+        optimalDays: [1, 2, 3, 4],
+      },
+      video: {
+        optimalHours: [19, 20, 21],
+        optimalDays: [1, 2, 3, 4, 5],
+      },
+      story: {
+        optimalHours: [12, 13, 19, 20],
+        optimalDays: [1, 2, 3, 4, 5],
+      },
+      text: {
+        optimalHours: [12, 13, 14],
+        optimalDays: [1, 2, 3, 4, 5],
+      },
+    },
+  };
+
+  return adjustments[platform]?.[contentType] || {
+    optimalHours: [],
+    optimalDays: [],
+  };
+}
+
+/**
+ * Get content type performance data
+ */
+async function getContentTypePerformance(
+  platform: Platform,
+  contentType?: ContentType
+): Promise<ContentTypePerformance[]> {
+  const allContentTypes: ContentType[] = ['reel', 'short_video', 'carousel', 'single_image', 'video', 'story', 'text'];
+  
+  const performances: ContentTypePerformance[] = [];
+  
+  for (const type of allContentTypes) {
+    const adjustments = getContentTypeAdjustments(platform, type);
+    const baseData = getIndustryBenchmarkData(platform, type);
+    
+    // Calculate engagement scores
+    const avgEngagement = calculateContentTypeEngagement(type, platform);
+    const peakEngagement = avgEngagement + 15; // Peak is typically 15% higher
+    
+    performances.push({
+      contentType: type,
+      optimalHours: adjustments.optimalHours.length > 0 ? adjustments.optimalHours : baseData.optimalHours,
+      optimalDays: adjustments.optimalDays.length > 0 ? adjustments.optimalDays : baseData.optimalDays,
+      averageEngagement: avgEngagement,
+      peakEngagement: Math.min(100, peakEngagement),
+      bestPlatforms: getBestPlatformsForContentType(type),
+    });
+  }
+  
+  // Sort by average engagement (highest first)
+  performances.sort((a, b) => b.averageEngagement - a.averageEngagement);
+  
+  return performances;
+}
+
+function calculateContentTypeEngagement(contentType: ContentType, platform: Platform): number {
+  // Base engagement scores by content type and platform
+  const scores: Record<Platform, Record<ContentType, number>> = {
+    Instagram: {
+      reel: 85,
+      short_video: 80,
+      carousel: 75,
+      single_image: 70,
+      video: 75,
+      story: 65,
+      text: 60,
+    },
+    TikTok: {
+      reel: 90,
+      short_video: 88,
+      carousel: 60,
+      single_image: 55,
+      video: 85,
+      story: 70,
+      text: 50,
+    },
+    X: {
+      reel: 70,
+      short_video: 75,
+      carousel: 65,
+      single_image: 70,
+      video: 75,
+      story: 60,
+      text: 80,
+    },
+    LinkedIn: {
+      reel: 75,
+      short_video: 70,
+      carousel: 80,
+      single_image: 75,
+      video: 78,
+      story: 65,
+      text: 85,
+    },
+    Facebook: {
+      reel: 80,
+      short_video: 75,
+      carousel: 78,
+      single_image: 75,
+      video: 80,
+      story: 70,
+      text: 72,
+    },
+    YouTube: {
+      reel: 85,
+      short_video: 88,
+      carousel: 60,
+      single_image: 55,
+      video: 90,
+      story: 65,
+      text: 50,
+    },
+    Threads: {
+      reel: 82,
+      short_video: 78,
+      carousel: 72,
+      single_image: 70,
+      video: 75,
+      story: 68,
+      text: 75,
+    },
+  };
+  
+  return scores[platform]?.[contentType] || 60;
+}
+
+function getBestPlatformsForContentType(contentType: ContentType): Platform[] {
+  const platformRankings: Record<ContentType, Platform[]> = {
+    reel: ['TikTok', 'Instagram', 'YouTube', 'Threads', 'Facebook'],
+    short_video: ['TikTok', 'YouTube', 'Instagram', 'Facebook', 'Threads'],
+    carousel: ['Instagram', 'LinkedIn', 'Facebook', 'Threads'],
+    single_image: ['Instagram', 'LinkedIn', 'Facebook', 'Threads'],
+    video: ['YouTube', 'TikTok', 'Instagram', 'Facebook', 'LinkedIn'],
+    story: ['Instagram', 'Facebook', 'TikTok', 'Threads'],
+    text: ['LinkedIn', 'X', 'Threads', 'Facebook'],
+  };
+  
+  return platformRankings[contentType] || [];
+}
+
+/**
  * Get industry benchmark data (fallback)
  */
-function getIndustryBenchmarkData(platform: Platform): RealTimePostingData {
+function getIndustryBenchmarkData(platform: Platform, contentType?: ContentType): RealTimePostingData {
   const benchmarks: Record<Platform, RealTimePostingData> = {
     Instagram: {
       platform: 'Instagram',

@@ -1336,8 +1336,14 @@ const CaptionGenerator: React.FC = () => {
         const allOptimalTimes: Array<{ platform: Platform; time: Date; score: number }> = [];
         
         for (const platform of topPlatforms) {
-          // Get real-time posting data for this platform
+          // Determine content type from media item
+          const contentType = item.type === 'video' 
+            ? (platform === 'TikTok' || platform === 'YouTube' ? 'short_video' : 'reel')
+            : (item.type === 'image' ? 'single_image' : 'text');
+          
+          // Get real-time posting data for this platform and content type
           const realTimeData = await getRealTimePostingData(platform, {
+            contentType,
             useCache: true,
             cacheDuration: 60, // Cache for 60 minutes
           });
