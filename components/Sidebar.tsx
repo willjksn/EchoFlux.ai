@@ -8,9 +8,10 @@ interface NavItemProps {
   icon: React.ReactNode;
   label: string;
   tourId?: string;
+  isInboxView?: boolean;
 }
 
-const NavItem: React.FC<NavItemProps> = ({ page, icon, label, tourId }) => {
+const NavItem: React.FC<NavItemProps> = ({ page, icon, label, tourId, isInboxView = false }) => {
   const { activePage, setActivePage, setIsSidebarOpen } = useAppContext();
   
   return (
@@ -127,7 +128,13 @@ export const Sidebar: React.FC = () => {
         </div>
         <nav className="p-4 flex-grow overflow-y-auto custom-scrollbar">
           <ul>
-            {navItems.map(item => <NavItem key={item.page} {...item} />)}
+            {navItems.map(item => (
+              <NavItem 
+                key={item.page} 
+                {...item} 
+                isInboxView={item.page === 'inbox' ? isInboxView : false}
+              />
+            ))}
           </ul>
         </nav>
         <div className="p-2.5 border-t border-gray-200 dark:border-gray-700 flex-shrink-0 bg-gray-50 dark:bg-gray-900/50">
