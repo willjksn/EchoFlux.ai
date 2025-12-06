@@ -2636,6 +2636,11 @@ const CaptionGenerator: React.FC = () => {
               onPublish={handlePublishMedia}
               onSchedule={handleScheduleMedia}
               onSaveToWorkflow={handleSaveToWorkflowMedia}
+              onAIAutoSchedule={async (idx) => {
+                // Select this item and trigger AI Auto Schedule
+                setSelectedIndices(new Set([idx]));
+                await handleAIAutoSchedule();
+              }}
               platformIcons={platformIcons}
             />
             </div>
@@ -2660,6 +2665,11 @@ const CaptionGenerator: React.FC = () => {
                   onPublish={handlePublishMedia}
                   onSchedule={handleScheduleMedia}
                   onSaveToWorkflow={handleSaveToWorkflowMedia}
+                  onAIAutoSchedule={async (idx) => {
+                    // Select this item and trigger AI Auto Schedule
+                    setSelectedIndices(new Set([idx]));
+                    await handleAIAutoSchedule();
+                  }}
                   platformIcons={platformIcons}
                 />
               ))}
@@ -2693,6 +2703,11 @@ const CaptionGenerator: React.FC = () => {
                 onPublish={handlePublishMedia}
                 onSchedule={handleScheduleMedia}
                 onSaveToWorkflow={handleSaveToWorkflowMedia}
+                onAIAutoSchedule={async (idx) => {
+                  // Select this item and trigger AI Auto Schedule
+                  setSelectedIndices(new Set([idx]));
+                  await handleAIAutoSchedule();
+                }}
                 platformIcons={platformIcons}
               />
             ))}
