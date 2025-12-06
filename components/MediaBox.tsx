@@ -726,18 +726,36 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
         </div>
       )}
 
-      {/* Schedule Date */}
-      {mediaItem.scheduledDate && (
-        <div className="mb-3 flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
-          <CalendarIcon className="w-3 h-3" />
-          <span>
-            {new Date(mediaItem.scheduledDate).toLocaleString([], {
-              dateStyle: 'short',
-              timeStyle: 'short',
-            })}
-          </span>
-        </div>
-      )}
+      {/* Schedule Date/Time Picker */}
+      <div className="mb-3">
+        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+          Schedule Date & Time
+        </label>
+        <input
+          type="datetime-local"
+          value={mediaItem.scheduledDate ? new Date(mediaItem.scheduledDate).toISOString().slice(0, 16) : ''}
+          onChange={(e) => {
+            if (e.target.value) {
+              const date = new Date(e.target.value);
+              onUpdate(index, { scheduledDate: date.toISOString() });
+            } else {
+              onUpdate(index, { scheduledDate: undefined });
+            }
+          }}
+          className="w-full p-1.5 text-xs border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+        />
+        {mediaItem.scheduledDate && (
+          <div className="mt-1 flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
+            <CalendarIcon className="w-3 h-3" />
+            <span>
+              {new Date(mediaItem.scheduledDate).toLocaleString([], {
+                dateStyle: 'short',
+                timeStyle: 'short',
+              })}
+            </span>
+          </div>
+        )}
+      </div>
 
       {/* Platform Selection */}
       <div className="mb-3">

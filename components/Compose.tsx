@@ -89,7 +89,8 @@ const CaptionGenerator: React.FC = () => {
     setHashtagSets,
     composeContext,
     addCalendarEvent,
-    setActivePage
+    setActivePage,
+    setPosts
   } = useAppContext();
 
   // Error boundary - prevent blank page
@@ -931,13 +932,29 @@ const CaptionGenerator: React.FC = () => {
       return;
     }
 
-    const platformsToPost = (Object.keys(selectedPlatforms) as Platform[]).filter(
-      p => selectedPlatforms[p]
-    );
-    if (platformsToPost.length === 0) {
-      showToast('Please select at least one platform.', 'error');
+    // Check if any media item has platforms selected
+    const itemsWithPlatforms = composeState.mediaItems.filter(item => {
+      const platforms = (Object.keys(item.selectedPlatforms || {}) as Platform[]).filter(
+        p => item.selectedPlatforms?.[p]
+      );
+      return platforms.length > 0;
+    });
+
+    if (itemsWithPlatforms.length === 0) {
+      showToast('Please select at least one platform for your media items.', 'error');
       return;
     }
+
+    // Get platforms from the first item with platforms (or use all unique platforms)
+    const allPlatforms = new Set<Platform>();
+    composeState.mediaItems.forEach(item => {
+      (Object.keys(item.selectedPlatforms || {}) as Platform[]).forEach(p => {
+        if (item.selectedPlatforms?.[p]) {
+          allPlatforms.add(p);
+        }
+      });
+    });
+    const platformsToPost = Array.from(allPlatforms);
 
     setIsLoading(true);
     try {
@@ -1864,6 +1881,25 @@ const CaptionGenerator: React.FC = () => {
       }));
 
       showToast(`Saved to ${status} workflow!`, 'success');
+      
+      // Refresh posts in context
+      if (setPosts) {
+        try {
+          const postsRef = collection(db, 'users', user.id, 'posts');
+          const snapshot = await getDocs(postsRef);
+          const updatedPosts: Post[] = [];
+          snapshot.forEach((doc) => {
+            updatedPosts.push({
+              id: doc.id,
+              ...doc.data(),
+            } as Post);
+          });
+          setPosts(updatedPosts);
+        } catch (error) {
+          console.error('Failed to refresh posts:', error);
+        }
+      }
+      
       setActivePage('approvals');
     } catch (e) {
       console.error(e);

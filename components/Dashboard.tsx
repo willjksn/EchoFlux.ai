@@ -703,28 +703,34 @@ export const Dashboard: React.FC = () => {
               // Sort by timestamp (most recent first)
               activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
               
-              return activities.length > 0 ? (
+              return (
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white">Recent Activity</h3>
                   </div>
-                  <div className="space-y-3">
-                    {activities.slice(0, 5).map(activity => (
-                      <div key={activity.id} className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                        <div className="flex-shrink-0 mt-0.5 text-primary-600 dark:text-primary-400">
-                          {activity.icon}
+                  {activities.length > 0 ? (
+                    <div className="space-y-3">
+                      {activities.slice(0, 5).map(activity => (
+                        <div key={activity.id} className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                          <div className="flex-shrink-0 mt-0.5 text-primary-600 dark:text-primary-400">
+                            {activity.icon}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 dark:text-white">{activity.message}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                              {activity.timestamp.toLocaleDateString()} at {activity.timestamp.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                            </p>
+                          </div>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">{activity.message}</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            {activity.timestamp.toLocaleDateString()} at {activity.timestamp.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-sm text-gray-500 dark:text-gray-400">No recent activity</p>
+                    </div>
+                  )}
                 </div>
-              ) : null;
+              );
             })()}
             
             {/* Goals & Milestones Widget */}
