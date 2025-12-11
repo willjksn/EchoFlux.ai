@@ -27,6 +27,10 @@ import {
   XIcon,
   YouTubeIcon,
   LinkedInIcon,
+  PinterestIcon,
+  DiscordIcon,
+  TelegramIcon,
+  RedditIcon,
   FacebookIcon
 } from './icons/PlatformIcons';
 import { ImageGenerator } from './ImageGenerator';
@@ -36,12 +40,13 @@ import { useAppContext } from './AppContext';
 import { MobilePreviewModal } from './MobilePreviewModal';
 import { MediaBox } from './MediaBox';
 import { db, storage } from '../firebaseConfig';
-import { collection, setDoc, doc, getDocs, deleteDoc, query, where } from 'firebase/firestore';
+import { collection, setDoc, doc, getDocs, deleteDoc, query, where, getDoc } from 'firebase/firestore';
 // @ts-ignore
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { scheduleMultiplePosts, analyzeOptimalPostingTimes } from '../src/services/smartSchedulingService';
 import { getAnalytics } from '../src/services/geminiService';
 import { MediaItemState } from '../types';
+import { publishInstagramPost, publishTweet } from '../src/services/socialMediaService';
 
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -69,6 +74,10 @@ const platformIcons: Record<Platform, React.ReactNode> = {
   YouTube: <YouTubeIcon />,
   LinkedIn: <LinkedInIcon />,
   Facebook: <FacebookIcon />,
+  Pinterest: <PinterestIcon />,
+  Discord: <DiscordIcon />,
+  Telegram: <TelegramIcon />,
+  Reddit: <RedditIcon />,
 };
 
 const SpeechRecognition =
@@ -90,7 +99,8 @@ const CaptionGenerator: React.FC = () => {
     composeContext,
     addCalendarEvent,
     setActivePage,
-    setPosts
+    setPosts,
+    socialAccounts
   } = useAppContext();
 
   // Error boundary - prevent blank page
@@ -113,7 +123,11 @@ const CaptionGenerator: React.FC = () => {
     Threads: false,
     YouTube: false,
     LinkedIn: false,
-    Facebook: false
+    Facebook: false,
+    Pinterest: false,
+    Discord: false,
+    Telegram: false,
+    Reddit: false
   });
   const [isPublished, setIsPublished] = useState(false);
 
@@ -154,6 +168,10 @@ const CaptionGenerator: React.FC = () => {
   }>>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [autoConfirmEnabled, setAutoConfirmEnabled] = useState(false);
+  
+  // Upgrade modal state
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const [upgradeModalReason, setUpgradeModalReason] = useState<'limit' | 'feature'>('limit');
 
   // Plan + role logic
   const isAgency = user?.plan === 'Agency' || user?.plan === 'Elite';
@@ -164,10 +182,11 @@ const CaptionGenerator: React.FC = () => {
   // Caption limits including new plans, with safe default
   const captionLimits = useMemo(
     () => ({
-      Free: 50,
+      Free: 0, // Free plan: No AI captions
+      Caption: 100, // Caption Pro plan: 100 captions/month
       Pro: 500,
       Elite: 1500,
-      Agency: Infinity,
+      Agency: 10000, // Agency plan: 10,000 captions/month (soft cap, overage fees apply)
       Starter: 1000,
       Growth: 2500
     }),
@@ -284,7 +303,11 @@ const CaptionGenerator: React.FC = () => {
       Threads: false,
       YouTube: false,
       LinkedIn: false,
-      Facebook: false
+      Facebook: false,
+      Pinterest: false,
+      Discord: false,
+      Telegram: false,
+      Reddit: false
     });
   };
 
@@ -326,6 +349,7 @@ const CaptionGenerator: React.FC = () => {
             scheduledDate: item.scheduledDate || null,
             selectedMusic: item.selectedMusic || null,
             musicNote: item.musicNote || null,
+            instagramPostType: item.instagramPostType || null,
             updatedAt: new Date().toISOString(),
           };
 
@@ -358,55 +382,84 @@ const CaptionGenerator: React.FC = () => {
 
   // Load draft post from Workflow if navigating from there
   useEffect(() => {
-    const draftPostData = localStorage.getItem('draftPostToEdit');
-    if (draftPostData && user) {
-      try {
-        const draftPost = JSON.parse(draftPostData);
-        // Create a MediaItemState from the draft post
-        const mediaItem: MediaItemState = {
-          id: draftPost.id,
-          previewUrl: draftPost.mediaUrl || '',
-          data: '',
-          mimeType: draftPost.mediaType === 'video' ? 'video/mp4' : 'image/jpeg',
-          type: draftPost.mediaType || 'image',
-          results: [],
-          captionText: draftPost.content || '',
-          postGoal: draftPost.postGoal || 'engagement',
-          postTone: draftPost.postTone || 'friendly',
-          selectedPlatforms: draftPost.platforms?.reduce((acc: Record<Platform, boolean>, p: Platform) => {
-            acc[p] = true;
-            return acc;
-          }, {
-            Instagram: false,
-            TikTok: false,
-            X: false,
-            Threads: false,
-            YouTube: false,
-            LinkedIn: false,
-            Facebook: false,
-          } as Record<Platform, boolean>) || {
-            Instagram: false,
-            TikTok: false,
-            X: false,
-            Threads: false,
-            YouTube: false,
-            LinkedIn: false,
-            Facebook: false,
-          },
-        };
-        setComposeState(prev => ({
-          ...prev,
-          mediaItems: [mediaItem],
-          postGoal: draftPost.postGoal || prev.postGoal,
-          postTone: draftPost.postTone || prev.postTone,
-        }));
-        localStorage.removeItem('draftPostToEdit');
-        showToast('Draft loaded. Continue editing.', 'success');
-      } catch (error) {
-        console.error('Failed to load draft post:', error);
-        localStorage.removeItem('draftPostToEdit');
+    const checkForDraft = () => {
+      const draftPostData = localStorage.getItem('draftPostToEdit');
+      if (draftPostData && user) {
+        try {
+          const draftPost = JSON.parse(draftPostData);
+          // Create a MediaItemState from the draft post
+          const mediaItem: MediaItemState = {
+            id: draftPost.id,
+            previewUrl: draftPost.mediaUrl || '',
+            data: '',
+            mimeType: draftPost.mediaType === 'video' ? 'video/mp4' : 'image/jpeg',
+            type: draftPost.mediaType || 'image',
+            results: [],
+            captionText: draftPost.content || '',
+            postGoal: draftPost.postGoal || 'engagement',
+            postTone: draftPost.postTone || 'friendly',
+            selectedPlatforms: draftPost.platforms?.reduce((acc: Record<Platform, boolean>, p: Platform) => {
+              acc[p] = true;
+              return acc;
+            }, {
+              Instagram: false,
+              TikTok: false,
+              X: false,
+              Threads: false,
+              YouTube: false,
+              LinkedIn: false,
+              Facebook: false,
+              Pinterest: false,
+              Discord: false,
+              Telegram: false,
+              Reddit: false,
+            } as Record<Platform, boolean>) || {
+              Instagram: false,
+              TikTok: false,
+              X: false,
+              Threads: false,
+              YouTube: false,
+              LinkedIn: false,
+              Facebook: false,
+              Pinterest: false,
+              Discord: false,
+              Telegram: false,
+              Reddit: false,
+            },
+          };
+          setComposeState(prev => ({
+            ...prev,
+            mediaItems: [mediaItem],
+            postGoal: draftPost.postGoal || prev.postGoal,
+            postTone: draftPost.postTone || prev.postTone,
+          }));
+          localStorage.removeItem('draftPostToEdit');
+          showToast('Draft loaded. Continue editing.', 'success');
+        } catch (error) {
+          console.error('Failed to load draft post:', error);
+          localStorage.removeItem('draftPostToEdit');
+        }
       }
-    }
+    };
+    
+    // Check immediately
+    checkForDraft();
+    
+    // Also check after a short delay to catch navigation
+    const timeoutId = setTimeout(checkForDraft, 300);
+    
+    // Listen for page visibility changes
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        checkForDraft();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [user, showToast, setComposeState]);
 
   // Load mediaItems from Firestore on mount
@@ -446,6 +499,7 @@ const CaptionGenerator: React.FC = () => {
               Facebook: false,
             },
             results: data.results || [],
+            instagramPostType: data.instagramPostType,
             type: data.type || 'image',
             mimeType: data.mimeType || '',
             scheduledDate: data.scheduledDate || undefined,
@@ -514,6 +568,10 @@ const CaptionGenerator: React.FC = () => {
                   YouTube: false,
                   LinkedIn: false,
                   Facebook: false,
+                  Pinterest: false,
+                  Discord: false,
+                  Telegram: false,
+                  Reddit: false,
                 },
               };
               // Always add to mediaItems array so it shows in a MediaBox
@@ -524,6 +582,11 @@ const CaptionGenerator: React.FC = () => {
                 ...prev,
                 mediaItems: [...prev.mediaItems, newMediaItem],
               };
+            } else {
+              // If already exists, still show toast but don't add duplicate
+              setTimeout(() => {
+                showToast(`${mediaData.name} is already in compose`, 'success');
+              }, 100);
             }
             return prev;
           });
@@ -542,6 +605,7 @@ const CaptionGenerator: React.FC = () => {
     // Also check after delays to catch navigation
     const timeoutId1 = setTimeout(handleMediaLibraryItem, 300);
     const timeoutId2 = setTimeout(handleMediaLibraryItem, 800);
+    const timeoutId3 = setTimeout(handleMediaLibraryItem, 1500);
     
     // Listen for custom event from Media Library
     window.addEventListener('mediaLibraryItemAdded', handleMediaLibraryItem);
@@ -549,11 +613,21 @@ const CaptionGenerator: React.FC = () => {
     // Also listen for focus event (when tab becomes active)
     window.addEventListener('focus', handleMediaLibraryItem);
     
+    // Listen for page visibility changes
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        handleMediaLibraryItem();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
     return () => {
       clearTimeout(timeoutId1);
       clearTimeout(timeoutId2);
+      clearTimeout(timeoutId3);
       window.removeEventListener('mediaLibraryItemAdded', handleMediaLibraryItem);
       window.removeEventListener('focus', handleMediaLibraryItem);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [setComposeState, composeState.postGoal, composeState.postTone, showToast]);
 
@@ -577,6 +651,10 @@ const CaptionGenerator: React.FC = () => {
         YouTube: false,
         LinkedIn: false,
         Facebook: false,
+        Pinterest: false,
+        Discord: false,
+        Telegram: false,
+        Reddit: false,
       },
     };
     setComposeState(prev => ({
@@ -713,11 +791,17 @@ const CaptionGenerator: React.FC = () => {
 
         // Create calendar event for each platform
         for (const platform of itemPlatforms) {
+          // Determine event type: use Instagram post type if Instagram, otherwise infer from media type
+          let eventType: 'Post' | 'Story' | 'Reel' = item.type === 'video' ? 'Reel' : 'Post';
+          if (platform === 'Instagram' && item.instagramPostType) {
+            eventType = item.instagramPostType;
+          }
+          
           const newEvent: CalendarEvent = {
             id: `cal-${postId}-${platform}`,
             title: title,
             date: scheduledDate,
-            type: item.type === 'video' ? 'Reel' : 'Post',
+            type: eventType,
             platform: platform,
             status: 'Scheduled',
             thumbnail: mediaUrl,
@@ -765,6 +849,20 @@ const CaptionGenerator: React.FC = () => {
 
   const handlePublishMedia = async (index: number) => {
     const item = composeState.mediaItems[index];
+    
+    // Prevent double-publishing
+    if (isSaving) {
+      console.log('Already publishing, ignoring duplicate request');
+      return;
+    }
+    
+    // Block Caption plan from publishing (caption generation only)
+    if (user?.plan === 'Caption') {
+      showToast('Caption Pro plan is for caption generation only. Upgrade to Pro or higher to publish posts.', 'error');
+      setActivePage('pricing');
+      return;
+    }
+    
     // Allow text-only posts (announcements without media)
     if (!item.captionText.trim()) {
       showToast('Please add a caption.', 'error');
@@ -783,29 +881,79 @@ const CaptionGenerator: React.FC = () => {
     try {
       // Upload media only if it exists
       let mediaUrl: string | undefined = undefined;
+      let mediaUrls: string[] | undefined = undefined;
       if (item.previewUrl) {
-        mediaUrl = item.previewUrl.startsWith('http')
-          ? item.previewUrl
-          : await uploadMediaItem(item);
+        // Check if it's already a full HTTP/HTTPS URL (not blob or data URL)
+        if (item.previewUrl.startsWith('http://') || item.previewUrl.startsWith('https://')) {
+          mediaUrl = item.previewUrl;
+        } else {
+          // For blob URLs or data URLs, we need to upload
+          mediaUrl = await uploadMediaItem(item);
+        }
 
         if (!mediaUrl) {
           showToast('Failed to upload media.', 'error');
           return;
         }
+        
+        // Set mediaUrls array for multi-image support
+        mediaUrls = [mediaUrl];
+      }
+
+      // Validate media was uploaded if preview exists
+      if (item.previewUrl && !mediaUrl) {
+        showToast('Failed to upload media. Please try again.', 'error');
+        setIsSaving(false);
+        return;
       }
 
       const title = item.captionText.trim()
         ? item.captionText.substring(0, 30) + '...'
         : 'New Post';
 
-      const postId = Date.now().toString();
+      // Check if this is a draft being edited (has item.id from draft post)
+      const isDraftEdit = item.id && item.id.length > 0;
+      const postId = isDraftEdit ? item.id : Date.now().toString();
       const publishDate = new Date().toISOString();
 
       if (user) {
+        // If editing a draft, check if post exists and delete draft calendar events
+        if (isDraftEdit) {
+          // Delete ALL draft calendar events for this post
+          try {
+            const calendarEventsRef = collection(db, 'users', user.id, 'calendar_events');
+            const calendarSnapshot = await getDocs(calendarEventsRef);
+            const eventsToDelete: string[] = [];
+            
+            calendarSnapshot.forEach((eventDoc) => {
+              const eventId = eventDoc.id;
+              // Check if this event is related to this post
+              if (eventId.includes(postId)) {
+                // Delete if it's a draft event or if it's a calendar event for this post
+                if (eventId.startsWith('draft-') || eventId.startsWith(`cal-${postId}-`)) {
+                  eventsToDelete.push(eventId);
+                }
+              }
+            });
+            
+            // Delete all matching events
+            for (const eventId of eventsToDelete) {
+              try {
+                await deleteDoc(doc(db, 'users', user.id, 'calendar_events', eventId));
+              } catch (e) {
+                // Event might not exist, ignore
+              }
+            }
+          } catch (error) {
+            console.error('Failed to delete draft calendar events:', error);
+          }
+        }
+
         const newPost: Post = {
           id: postId,
           content: item.captionText,
-          mediaUrl: mediaUrl,
+          mediaUrl: mediaUrl, // Primary image (for backward compatibility)
+          mediaUrls: mediaUrls, // Multiple images array
           mediaType: item.type,
           platforms: platformsToPost,
           status: 'Published',
@@ -820,27 +968,119 @@ const CaptionGenerator: React.FC = () => {
         await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
       }
 
+      // Publish to Instagram if selected
+      const hasInstagram = platformsToPost.includes('Instagram');
+      if (hasInstagram && mediaUrl) {
+        try {
+          // Determine Instagram media type
+          let instagramMediaType: 'IMAGE' | 'REELS' | 'VIDEO' = 'IMAGE';
+          if (item.type === 'video') {
+            instagramMediaType = item.instagramPostType === 'Reel' ? 'REELS' : 'VIDEO';
+          }
+
+          // Publish to Instagram (with multiple images support for carousel)
+          const additionalImageUrls = mediaUrls && mediaUrls.length > 1 ? mediaUrls.slice(1) : undefined;
+          const result = await publishInstagramPost(
+            mediaUrl,
+            item.captionText,
+            instagramMediaType,
+            undefined, // scheduledPublishTime (not used for immediate publish)
+            additionalImageUrls // For carousel posts
+          );
+
+          if (result.status === 'published') {
+            console.log('Published to Instagram:', result.mediaId);
+          }
+        } catch (instagramError: any) {
+          console.error('Failed to publish to Instagram:', instagramError);
+          // Continue with other platforms even if Instagram fails
+          showToast(`Failed to publish to Instagram: ${instagramError.message || 'Please check your connection'}. Other platforms published successfully.`, 'error');
+        }
+      }
+
+      // Publish to X (Twitter) if selected
+      const hasX = platformsToPost.includes('X');
+      if (hasX) {
+        try {
+          // Log media URL before publishing to X for debugging
+          console.log('Publishing to X with mediaUrl:', mediaUrl);
+          console.log('Publishing to X with mediaUrls:', mediaUrls);
+          if (mediaUrl && (mediaUrl.includes('flux.ai') || !mediaUrl.includes('firebase'))) {
+            console.warn('WARNING: Unexpected media URL format:', mediaUrl);
+          }
+          
+          // Publish to X (with multiple images support)
+          const xMediaUrls = mediaUrls && mediaUrls.length > 0 ? mediaUrls : (mediaUrl ? [mediaUrl] : undefined);
+          const result = await publishTweet(
+            item.captionText,
+            mediaUrl || undefined, // Single URL for backward compatibility
+            item.type === 'video' ? 'video' : item.type === 'image' ? 'image' : undefined,
+            xMediaUrls // Multiple URLs for multi-image posts
+          );
+
+          console.log('Published to X:', result.tweetId);
+        } catch (xError: any) {
+          console.error('Failed to publish to X:', xError);
+          // Continue with other platforms even if X fails
+          showToast(`Failed to publish to X: ${xError.message || 'Please check your connection'}. Other platforms published successfully.`, 'error');
+        }
+      }
+
       // Create calendar event for each platform
       for (const platform of platformsToPost) {
         const newEvent: CalendarEvent = {
           id: `cal-${postId}-${platform}`,
           title: title,
           date: publishDate,
-          type: item.type === 'video' ? 'Reel' : 'Post',
+          type: platform === 'Instagram' && item.instagramPostType ? item.instagramPostType : (item.type === 'video' ? 'Reel' : 'Post'),
           platform: platform,
           status: 'Published',
-          thumbnail: mediaUrl,
+          ...(mediaUrl && { thumbnail: mediaUrl }), // Only include thumbnail if mediaUrl exists
         };
+
         await addCalendarEvent(newEvent);
       }
 
-      // Remove published item
-      setComposeState(prev => ({
-        ...prev,
-        mediaItems: prev.mediaItems.filter((_, i) => i !== index),
-      }));
+      // Remove published item from compose page IMMEDIATELY
+      // Use functional update to ensure we're working with latest state
+      setComposeState(prev => {
+        const newItems = prev.mediaItems.filter((_, i) => i !== index);
+        return {
+          ...prev,
+          mediaItems: newItems,
+        };
+      });
 
-      showToast(`Published to ${platformsToPost.join(', ')}!`, 'success');
+      // Refresh posts to update UI
+      if (setPosts) {
+        try {
+          const postsRef = collection(db, 'users', user.id, 'posts');
+          const snapshot = await getDocs(postsRef);
+          const updatedPosts: Post[] = [];
+          snapshot.forEach((doc) => {
+            updatedPosts.push({
+              id: doc.id,
+              ...doc.data(),
+            } as Post);
+          });
+          setPosts(updatedPosts);
+        } catch (error) {
+          console.error('Failed to refresh posts:', error);
+        }
+      }
+
+      // Build success message - only mention Instagram if it was selected but not connected
+      let successMessage = `Published to ${platformsToPost.join(', ')}!`;
+      
+      // Check if Instagram was selected but not connected
+      if (hasInstagram && platformsToPost.includes('Instagram')) {
+        const instagramConnected = socialAccounts?.Instagram?.connected;
+        if (!instagramConnected) {
+          successMessage += ' (Note: Instagram requires account connection)';
+        }
+      }
+      
+      showToast(successMessage, 'success');
     } catch (e) {
       console.error(e);
       showToast('Failed to publish post.', 'error');
@@ -851,6 +1091,14 @@ const CaptionGenerator: React.FC = () => {
 
   const handleScheduleMedia = async (index: number) => {
     const item = composeState.mediaItems[index];
+    
+    // Block Caption plan from scheduling (caption generation only)
+    if (user?.plan === 'Caption') {
+      showToast('Caption Pro plan is for caption generation only. Upgrade to Pro or higher to schedule posts.', 'error');
+      setActivePage('pricing');
+      return;
+    }
+    
     // Allow text-only posts (announcements without media)
     if (!item.captionText.trim()) {
       showToast('Please add a caption.', 'error');
@@ -872,8 +1120,10 @@ const CaptionGenerator: React.FC = () => {
 
     setIsSaving(true);
     try {
-      // Upload media only if it exists
+      // Upload primary media
       let mediaUrl: string | undefined = undefined;
+      let mediaUrls: string[] | undefined = undefined;
+      
       if (item.previewUrl) {
         mediaUrl = item.previewUrl.startsWith('http')
           ? item.previewUrl
@@ -884,18 +1134,89 @@ const CaptionGenerator: React.FC = () => {
           return;
         }
       }
+      
+      // Upload additional images if they exist
+      if (item.additionalImages && item.additionalImages.length > 0) {
+        const uploadedUrls: string[] = [];
+        for (const additionalImg of item.additionalImages) {
+          let imgUrl: string | undefined = undefined;
+          
+          if (additionalImg.previewUrl.startsWith('http://') || additionalImg.previewUrl.startsWith('https://')) {
+            imgUrl = additionalImg.previewUrl;
+          } else if (additionalImg.data) {
+            // Upload additional image
+            const timestamp = Date.now();
+            const extension = additionalImg.mimeType.split('/')[1] || 'png';
+            const storagePath = `users/${user.id}/uploads/${timestamp}.${extension}`;
+            const storageRef = ref(storage, storagePath);
+            
+            const bytes = base64ToBytes(additionalImg.data);
+            await uploadBytes(storageRef, bytes, {
+              contentType: additionalImg.mimeType,
+            });
+            
+            imgUrl = await getDownloadURL(storageRef);
+          }
+          
+          if (imgUrl) {
+            uploadedUrls.push(imgUrl);
+          }
+        }
+        
+        if (uploadedUrls.length > 0) {
+          // Combine primary image with additional images
+          mediaUrls = [mediaUrl, ...uploadedUrls].filter(Boolean) as string[];
+          // Keep mediaUrl for backward compatibility
+          mediaUrl = mediaUrls[0];
+        }
+      }
 
       const title = item.captionText.trim()
         ? item.captionText.substring(0, 30) + '...'
         : 'New Post';
 
-      const postId = Date.now().toString();
+      // Check if this is a draft being edited (has item.id from draft post)
+      const isDraftEdit = item.id && item.id.length > 0;
+      const postId = isDraftEdit ? item.id : Date.now().toString();
 
       if (user) {
+        // If editing a draft, check if post exists and delete draft calendar events
+        if (isDraftEdit) {
+          // Delete ALL draft calendar events for this post
+          try {
+            const calendarEventsRef = collection(db, 'users', user.id, 'calendar_events');
+            const calendarSnapshot = await getDocs(calendarEventsRef);
+            const eventsToDelete: string[] = [];
+            
+            calendarSnapshot.forEach((eventDoc) => {
+              const eventId = eventDoc.id;
+              // Check if this event is related to this post
+              if (eventId.includes(postId)) {
+                // Delete if it's a draft event or if it's a calendar event for this post
+                if (eventId.startsWith('draft-') || eventId.startsWith(`cal-${postId}-`)) {
+                  eventsToDelete.push(eventId);
+                }
+              }
+            });
+            
+            // Delete all matching events
+            for (const eventId of eventsToDelete) {
+              try {
+                await deleteDoc(doc(db, 'users', user.id, 'calendar_events', eventId));
+              } catch (e) {
+                // Event might not exist, ignore
+              }
+            }
+          } catch (error) {
+            console.error('Failed to delete draft calendar events:', error);
+          }
+        }
+
         const newPost: Post = {
           id: postId,
           content: item.captionText,
-          mediaUrl: mediaUrl,
+          mediaUrl: mediaUrl, // Primary image (for backward compatibility)
+          mediaUrls: mediaUrls, // Multiple images array
           mediaType: item.type,
           platforms: platformsToPost,
           status: 'Scheduled',
@@ -910,25 +1231,63 @@ const CaptionGenerator: React.FC = () => {
         await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
       }
 
-      // Create calendar event for each platform
-      for (const platform of platformsToPost) {
-        const newEvent: CalendarEvent = {
-          id: `cal-${postId}-${platform}`,
-          title: title,
-          date: item.scheduledDate,
-          type: item.type === 'video' ? 'Reel' : 'Post',
-          platform: platform,
-          status: 'Scheduled',
-          thumbnail: mediaUrl,
-        };
-        await addCalendarEvent(newEvent);
+      // Schedule to Instagram if selected
+      const hasInstagram = platformsToPost.includes('Instagram');
+      if (hasInstagram && mediaUrl) {
+        try {
+          let instagramMediaType: 'IMAGE' | 'REELS' | 'VIDEO' = 'IMAGE';
+          if (item.type === 'video') {
+            instagramMediaType = item.instagramPostType === 'Reel' ? 'REELS' : 'VIDEO';
+          }
+
+          // Schedule using Instagram's scheduled posting
+          const result = await publishInstagramPost(
+            mediaUrl,
+            item.captionText,
+            instagramMediaType,
+            item.scheduledDate // Pass scheduled time
+          );
+
+          if (result.status === 'scheduled') {
+            console.log('Scheduled to Instagram:', result.containerId);
+          }
+        } catch (instagramError: any) {
+          console.error('Failed to schedule to Instagram:', instagramError);
+          // Continue with other platforms even if Instagram fails
+          showToast(`Failed to schedule to Instagram: ${instagramError.message || 'Please check your connection'}. Other platforms scheduled successfully.`, 'error');
+        }
       }
 
-      // Remove scheduled item
-      setComposeState(prev => ({
-        ...prev,
-        mediaItems: prev.mediaItems.filter((_, i) => i !== index),
-      }));
+      // Note: Calendar events are derived from Posts collection
+      // The scheduled post will automatically appear in the calendar
+      // No need to create separate calendar events (prevents duplicates)
+
+      // Remove scheduled item from compose page IMMEDIATELY
+      setComposeState(prev => {
+        const filteredItems = prev.mediaItems.filter((_, i) => i !== index);
+        return {
+          ...prev,
+          mediaItems: filteredItems,
+        };
+      });
+
+      // Refresh posts to update UI
+      if (setPosts) {
+        try {
+          const postsRef = collection(db, 'users', user.id, 'posts');
+          const snapshot = await getDocs(postsRef);
+          const updatedPosts: Post[] = [];
+          snapshot.forEach((doc) => {
+            updatedPosts.push({
+              id: doc.id,
+              ...doc.data(),
+            } as Post);
+          });
+          setPosts(updatedPosts);
+        } catch (error) {
+          console.error('Failed to refresh posts:', error);
+        }
+      }
 
       showToast(`Scheduled for ${new Date(item.scheduledDate).toLocaleString()}!`, 'success');
     } catch (e) {
@@ -1041,6 +1400,77 @@ const CaptionGenerator: React.FC = () => {
         const scheduledDate = publishNow ? new Date().toISOString() : (item.scheduledDate || new Date().toISOString());
         const status = publishNow ? 'Published' : 'Scheduled';
 
+        // Publish to Instagram if selected and publishing now
+        const hasInstagram = platformsToPost.includes('Instagram');
+        if (hasInstagram && mediaUrl) {
+          if (publishNow) {
+            // Publish immediately
+            try {
+              let instagramMediaType: 'IMAGE' | 'REELS' | 'VIDEO' = 'IMAGE';
+              if (item.type === 'video') {
+                instagramMediaType = item.instagramPostType === 'Reel' ? 'REELS' : 'VIDEO';
+              }
+
+              const result = await publishInstagramPost(
+                mediaUrl,
+                item.captionText,
+                instagramMediaType
+              );
+
+              if (result.status === 'published') {
+                console.log(`Published post ${i + 1} to Instagram:`, result.mediaId);
+              }
+            } catch (instagramError: any) {
+              console.error(`Failed to publish post ${i + 1} to Instagram:`, instagramError);
+              // Continue with other platforms
+            }
+          } else {
+            // Schedule for later using Instagram's scheduled posting
+            try {
+              let instagramMediaType: 'IMAGE' | 'REELS' | 'VIDEO' = 'IMAGE';
+              if (item.type === 'video') {
+                instagramMediaType = item.instagramPostType === 'Reel' ? 'REELS' : 'VIDEO';
+              }
+
+              // Get additional images for carousel if available
+              const itemMediaUrls = (item as any).mediaUrls || (mediaUrl ? [mediaUrl] : []);
+              const additionalImageUrls = itemMediaUrls.length > 1 ? itemMediaUrls.slice(1) : undefined;
+              
+              const result = await publishInstagramPost(
+                mediaUrl,
+                item.captionText,
+                instagramMediaType,
+                scheduledDate // Pass scheduled time
+              );
+
+              if (result.status === 'scheduled') {
+                console.log(`Scheduled post ${i + 1} to Instagram:`, result.containerId);
+              }
+            } catch (instagramError: any) {
+              console.error(`Failed to schedule post ${i + 1} to Instagram:`, instagramError);
+              // Continue with other platforms
+            }
+          }
+        }
+
+        // Publish to X (Twitter) if selected
+        const hasX = platformsToPost.includes('X');
+        if (hasX && publishNow) {
+          // Note: X API doesn't support native scheduling, so we only publish immediately
+          try {
+            const result = await publishTweet(
+              item.captionText,
+              mediaUrl || undefined,
+              item.type === 'video' ? 'video' : item.type === 'image' ? 'image' : undefined
+            );
+
+            console.log(`Published post ${i + 1} to X:`, result.tweetId);
+          } catch (xError: any) {
+            console.error(`Failed to publish post ${i + 1} to X:`, xError);
+            // Continue with other platforms
+          }
+        }
+
         if (user) {
           const newPost: Post = {
             id: postId,
@@ -1066,7 +1496,7 @@ const CaptionGenerator: React.FC = () => {
             id: `cal-${postId}-${platform}`,
             title: title,
             date: scheduledDate,
-            type: item.type === 'video' ? 'Reel' : 'Post',
+            type: platform === 'Instagram' && item.instagramPostType ? item.instagramPostType : (item.type === 'video' ? 'Reel' : 'Post'),
             platform: platform,
             status: status,
             thumbnail: mediaUrl,
@@ -1092,7 +1522,50 @@ const CaptionGenerator: React.FC = () => {
   };
 
   const uploadMediaItem = async (item: MediaItemState): Promise<string | undefined> => {
-    if (!item.data || !user) return undefined;
+    if (!user) return undefined;
+    
+    // If previewUrl is already a full HTTP/HTTPS URL, return it directly (no need to re-upload)
+    if (item.previewUrl && (item.previewUrl.startsWith('http://') || item.previewUrl.startsWith('https://'))) {
+      console.log('uploadMediaItem: Using existing URL:', item.previewUrl);
+      return item.previewUrl;
+    }
+    
+    // Handle blob URLs - convert to base64 data
+    if (item.previewUrl && item.previewUrl.startsWith('blob:')) {
+      try {
+        // Fetch the blob and convert to base64
+        const response = await fetch(item.previewUrl);
+        const blob = await response.blob();
+        const reader = new FileReader();
+        
+        const base64Data = await new Promise<string>((resolve, reject) => {
+          reader.onloadend = () => {
+            const base64 = reader.result as string;
+            // Remove data URL prefix (e.g., "data:image/png;base64,")
+            const base64Data = base64.includes(',') ? base64.split(',')[1] : base64;
+            resolve(base64Data);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+        
+        // Update item.data with the base64 data
+        item.data = base64Data;
+        // Update mimeType if not set
+        if (!item.mimeType && blob.type) {
+          item.mimeType = blob.type;
+        }
+      } catch (error) {
+        console.error('Failed to convert blob URL to base64:', error);
+        return undefined;
+      }
+    }
+    
+    // If no data to upload, return undefined
+    if (!item.data) {
+      console.warn('uploadMediaItem: No data to upload and previewUrl is not a full URL:', item.previewUrl);
+      return undefined;
+    }
 
     try {
       const timestamp = Date.now();
@@ -1105,7 +1578,20 @@ const CaptionGenerator: React.FC = () => {
         contentType: item.mimeType,
       });
 
-      let mediaUrl = await getDownloadURL(storageRef);
+      const mediaUrl = await getDownloadURL(storageRef);
+      
+      // Validate the URL is correct and doesn't contain unexpected domains
+      if (!mediaUrl || !mediaUrl.startsWith('http')) {
+        throw new Error('Invalid download URL returned from Firebase Storage');
+      }
+      
+      // Log URL for debugging (check for wrong domains)
+      if (mediaUrl.includes('flux.ai') && !mediaUrl.includes('firebase')) {
+        console.error('WARNING: Unexpected domain in media URL:', mediaUrl);
+      }
+      
+      console.log('uploadMediaItem: Uploaded to:', mediaUrl);
+      return mediaUrl;
 
       // Process video with music if music is selected and it's a video
       // Only for TikTok and YouTube (not Instagram)
@@ -1319,6 +1805,10 @@ const CaptionGenerator: React.FC = () => {
         YouTube: false,
         LinkedIn: false,
         Facebook: false,
+        Pinterest: false,
+        Discord: false,
+        Telegram: false,
+        Reddit: false,
       };
 
       topPlatforms.forEach((platform: Platform) => {
@@ -1466,6 +1956,10 @@ const CaptionGenerator: React.FC = () => {
           YouTube: false,
           LinkedIn: false,
           Facebook: false,
+          Pinterest: false,
+          Discord: false,
+          Telegram: false,
+          Reddit: false,
         };
 
         topPlatforms.forEach(platform => {
@@ -1530,7 +2024,7 @@ const CaptionGenerator: React.FC = () => {
               id: `cal-${postId}-${platform}`,
               title: title,
               date: scheduledDate,
-              type: updatedItem.type === 'video' ? 'Reel' : 'Post',
+              type: platform === 'Instagram' && updatedItem.instagramPostType ? updatedItem.instagramPostType : (updatedItem.type === 'video' ? 'Reel' : 'Post'),
               platform: platform,
               status: 'Scheduled',
               thumbnail: mediaUrl,
@@ -1574,7 +2068,9 @@ const CaptionGenerator: React.FC = () => {
     }
 
     if (!canGenerate) {
-      showToast('You have reached your monthly caption generation limit.', 'error');
+      // Show upgrade modal instead of just toast
+      setUpgradeModalReason('limit');
+      setIsUpgradeModalOpen(true);
       return;
     }
 
@@ -1608,11 +2104,17 @@ const CaptionGenerator: React.FC = () => {
             continue;
           }
 
+          // Get selected platforms for platform-specific hashtags
+          const selectedPlatforms = (Object.keys(item.selectedPlatforms || {}) as Platform[]).filter(
+            p => item.selectedPlatforms?.[p]
+          );
+          
           const res = await generateCaptions({
             mediaUrl: mediaUrl,
             goal: item.postGoal,
             tone: item.postTone,
             promptText: undefined,
+            platforms: selectedPlatforms.length > 0 ? selectedPlatforms : undefined, // Pass platforms for hashtag generation
           });
 
           let generatedResults: CaptionResult[] = [];
@@ -1768,6 +2270,15 @@ const CaptionGenerator: React.FC = () => {
     }
   };
 
+  // Helper function to convert datetime-local string to ISO string preserving local time
+  const convertLocalDateTimeToISO = (dateTimeLocal: string): string => {
+    // datetime-local format: "YYYY-MM-DDTHH:mm" (local time, no timezone)
+    // Create a Date object - JavaScript will interpret this as local time
+    const localDate = new Date(dateTimeLocal);
+    // Convert to ISO string (UTC) - this preserves the intended local time
+    return localDate.toISOString();
+  };
+
   const handleScheduleForReview = async (date: string) => {
     const platformsToPost = (Object.keys(selectedPlatforms) as Platform[]).filter(
       p => selectedPlatforms[p]
@@ -1808,7 +2319,7 @@ const CaptionGenerator: React.FC = () => {
           status: 'In Review',
           author: { name: user.name, avatar: user.avatar },
           comments: [],
-          scheduledDate: new Date(date).toISOString(),
+          scheduledDate: convertLocalDateTimeToISO(date),
           clientId: selectedClient?.id,
           timestamp: new Date().toISOString(),
         } as Post & { timestamp: string };
@@ -1884,7 +2395,7 @@ const CaptionGenerator: React.FC = () => {
           status: 'Scheduled',
           author: { name: user.name, avatar: user.avatar },
           comments: [],
-          scheduledDate: new Date(date).toISOString(),
+          scheduledDate: convertLocalDateTimeToISO(date),
           clientId: selectedClient?.id,
           timestamp: new Date().toISOString(),
         } as Post & { timestamp: string };
@@ -1896,7 +2407,7 @@ const CaptionGenerator: React.FC = () => {
       const newEvent: CalendarEvent = {
         id: `cal-${postId}`,
         title: title,
-        date: new Date(date).toISOString(),
+        date: convertLocalDateTimeToISO(date),
         type: composeState.media?.type === 'video' ? 'Reel' : 'Post',
         platform: platformsToPost[0],
         status: 'Scheduled',
@@ -2037,11 +2548,45 @@ const CaptionGenerator: React.FC = () => {
         ? item.captionText.substring(0, 30) + '...'
         : 'New Post';
 
-      const postId = Date.now().toString();
+      // Check if this is a draft being edited (has item.id from draft post)
+      const isDraftEdit = item.id && item.id.length > 0;
+      const postId = isDraftEdit ? item.id : Date.now().toString();
       const draftDate = new Date();
       draftDate.setHours(12, 0, 0, 0);
 
       if (user) {
+        // If editing a draft and approving it, delete draft calendar events
+        if (isDraftEdit && status === 'Approved') {
+          // Delete ALL draft calendar events for this post
+          try {
+            const calendarEventsRef = collection(db, 'users', user.id, 'calendar_events');
+            const calendarSnapshot = await getDocs(calendarEventsRef);
+            const eventsToDelete: string[] = [];
+            
+            calendarSnapshot.forEach((eventDoc) => {
+              const eventId = eventDoc.id;
+              // Check if this event is related to this post
+              if (eventId.includes(postId)) {
+                // Delete if it's a draft event or if it's a calendar event for this post
+                if (eventId.startsWith('draft-') || eventId.startsWith(`cal-${postId}-`)) {
+                  eventsToDelete.push(eventId);
+                }
+              }
+            });
+            
+            // Delete all matching events
+            for (const eventId of eventsToDelete) {
+              try {
+                await deleteDoc(doc(db, 'users', user.id, 'calendar_events', eventId));
+              } catch (e) {
+                // Event might not exist, ignore
+              }
+            }
+          } catch (error) {
+            console.error('Failed to delete draft calendar events:', error);
+          }
+        }
+
         const newPost: Post = {
           id: postId,
           content: item.captionText,
@@ -2058,6 +2603,9 @@ const CaptionGenerator: React.FC = () => {
 
         const safePost = JSON.parse(JSON.stringify(newPost));
         await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
+
+        // Note: Calendar events are now derived from Posts, not created separately
+        // Draft posts with scheduledDate will appear in Calendar automatically
       }
 
       // Remove from mediaItems after saving
@@ -2144,22 +2692,8 @@ const CaptionGenerator: React.FC = () => {
       const safePost = JSON.parse(JSON.stringify(newPost));
       await setDoc(doc(postsCollectionRef, newPost.id), safePost);
 
-      // Create calendar event for drafts (In Review posts will be handled by approvals workflow)
-      if (status === 'Draft') {
-        const platformsForCalendar: Platform[] = platformsToPost.length > 0 ? platformsToPost : ['Instagram' as Platform];
-        for (const platform of platformsForCalendar) {
-          const newEvent: CalendarEvent = {
-            id: `cal-${postId}-${platform}`,
-            title: title,
-            date: draftDate.toISOString(),
-            type: composeState.media?.type === 'video' ? 'Reel' : 'Post',
-            platform: platform,
-            status: 'Draft',
-            thumbnail: mediaUrl
-          };
-          await addCalendarEvent(newEvent);
-        }
-      }
+      // Note: Calendar events are now derived from Posts, not created separately
+      // Draft posts with scheduledDate will appear in Calendar automatically
 
       showToast(
         status === 'Draft' ? 'Saved to Drafts!' : 'Submitted for Review!',
@@ -2177,7 +2711,9 @@ const CaptionGenerator: React.FC = () => {
   // Generate captions using backend response shape (your current working logic)
   const generateForBase64 = async (base64Data: string, mimeType: string) => {
     if (!canGenerate) {
-      showToast('You have reached your monthly caption generation limit.', 'error');
+      // Show upgrade modal instead of just toast
+      setUpgradeModalReason('limit');
+      setIsUpgradeModalOpen(true);
       return;
     }
     setIsLoading(true);
@@ -2219,11 +2755,19 @@ const CaptionGenerator: React.FC = () => {
         return;
       }
 
+      // Get selected platforms from first media item (if any) for platform-specific hashtags
+      const firstItemPlatforms = composeState.mediaItems.length > 0 
+        ? (Object.keys(composeState.mediaItems[0].selectedPlatforms || {}) as Platform[]).filter(
+            p => composeState.mediaItems[0].selectedPlatforms?.[p]
+          )
+        : [];
+      
       const res = await generateCaptions({
         mediaUrl,
         goal: composeState.postGoal,
         tone: composeState.postTone,
-        promptText: undefined
+        promptText: undefined,
+        platforms: firstItemPlatforms.length > 0 ? firstItemPlatforms : undefined, // Pass platforms for hashtag generation
       });
 
       let generatedResults: CaptionResult[] = [];
@@ -2663,6 +3207,59 @@ const CaptionGenerator: React.FC = () => {
         </div>
       )}
 
+      {/* Upgrade Modal - Shows when limit is reached */}
+      {isUpgradeModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md shadow-2xl">
+            <div className="text-center">
+              <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-primary-100 dark:bg-primary-900/50 text-primary-600 dark:text-primary-400 mb-4">
+                <SparklesIcon className="w-8 h-8" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                {upgradeModalReason === 'limit' ? 'You\'ve Reached Your Limit!' : 'Upgrade to Unlock More'}
+              </h3>
+              {upgradeModalReason === 'limit' && (
+                <>
+                  <p className="text-gray-600 dark:text-gray-400 mb-4">
+                    You've used all {limit} of your monthly caption generations on the <strong>{user?.plan}</strong> plan.
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-500 mb-6">
+                    Upgrade to get more generations and unlock additional features!
+                  </p>
+                </>
+              )}
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <button
+                  onClick={() => {
+                    setIsUpgradeModalOpen(false);
+                    setActivePage('pricing');
+                  }}
+                  className="px-6 py-3 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 transition-colors"
+                >
+                  View Plans & Upgrade
+                </button>
+                <button
+                  onClick={() => setIsUpgradeModalOpen(false)}
+                  className="px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                >
+                  Maybe Later
+                </button>
+              </div>
+              {user?.plan === 'Free' && (
+                <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
+                  💡 <strong>Tip:</strong> Upgrade to Caption Pro ($9/mo) for 100 captions/month, or Pro ($29/mo) for unlimited features!
+                </p>
+              )}
+              {user?.plan === 'Caption' && (
+                <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
+                  💡 <strong>Tip:</strong> Upgrade to Pro ($29/mo) for 500 captions/month and unlock publishing, scheduling, and more features!
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="text-center">
         <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
           Compose & Schedule
@@ -2677,78 +3274,54 @@ const CaptionGenerator: React.FC = () => {
         )}
       </div>
 
+      {/* Tone & Goal Controls - Only show for Caption plan */}
+      {user?.plan === 'Caption' && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Goal Selector */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Post Goal
+              </label>
+              <select
+                value={composeState.postGoal}
+                onChange={(e) => setComposeState(prev => ({ ...prev, postGoal: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              >
+                {goalOptions.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Tone Selector */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Tone
+              </label>
+              <select
+                value={composeState.postTone}
+                onChange={(e) => setComposeState(prev => ({ ...prev, postTone: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              >
+                {toneOptions.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            These settings apply to all new caption generations. You can also customize tone in Settings → AI Training.
+          </p>
+        </div>
+      )}
+
       {/* Media Upload Boxes */}
       <div className="space-y-6">
-        {composeState.mediaItems.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 pb-2">
-            <button
-              onClick={handleBulkGenerateCaptions}
-              disabled={selectedIndices.size === 0 || isLoading || !canGenerate}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors disabled:opacity-50 whitespace-nowrap"
-            >
-              <SparklesIcon className="w-3.5 h-3.5" />
-              Generate Captions ({selectedIndices.size})
-            </button>
-                  <button
-              onClick={async () => {
-                const indices = Array.from(selectedIndices);
-                for (const idx of indices) {
-                  await handleSaveToWorkflowMedia(idx, 'Draft');
-                }
-              }}
-              disabled={selectedIndices.size === 0 || isSaving}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 whitespace-nowrap"
-                  >
-              <ClipboardCheckIcon className="w-3.5 h-3.5" />
-              Draft ({selectedIndices.size})
-                  </button>
-                  <button
-              onClick={async () => {
-                const indices = Array.from(selectedIndices);
-                for (const idx of indices) {
-                  await handleSaveToWorkflowMedia(idx, 'Approved');
-                }
-              }}
-              disabled={selectedIndices.size === 0 || isSaving}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-md hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors disabled:opacity-50 whitespace-nowrap"
-                  >
-              <CheckCircleIcon className="w-3.5 h-3.5" />
-              Approved ({selectedIndices.size})
-                  </button>
-            <button
-              onClick={handleScheduleAll}
-              disabled={selectedIndices.size === 0 || isSaving}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-50 whitespace-nowrap"
-            >
-              <CalendarIcon className="w-3.5 h-3.5" />
-              Schedule All ({selectedIndices.size})
-            </button>
-            <button
-              onClick={handleDeleteAll}
-              disabled={selectedIndices.size === 0}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors disabled:opacity-50 whitespace-nowrap"
-            >
-              <TrashIcon className="w-3.5 h-3.5" />
-              Delete All ({selectedIndices.size})
-            </button>
-            <button
-              onClick={handleGenerateBestTimes}
-              disabled={isLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-50 whitespace-nowrap"
-            >
-              <SparklesIcon className="w-3.5 h-3.5" />
-              {isLoading ? 'Generating...' : 'Generate Best Times (AI)'}
-            </button>
-            <button
-              onClick={handleAIAutoSchedule}
-              disabled={selectedIndices.size === 0 || isAnalyzing || isLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors disabled:opacity-50 whitespace-nowrap"
-            >
-              <SparklesIcon className="w-3.5 h-3.5" />
-              {isAnalyzing ? 'Analyzing...' : `AI Auto-Schedule (${selectedIndices.size})`}
-            </button>
-          </div>
-        )}
 
 
         {/* Always show media boxes - initialize with one empty box if none exist */}
@@ -2775,6 +3348,10 @@ const CaptionGenerator: React.FC = () => {
                   YouTube: false,
                   LinkedIn: false,
                   Facebook: false,
+                  Pinterest: false,
+                  Discord: false,
+                  Telegram: false,
+                  Reddit: false,
                 },
               }}
               index={0}
@@ -2803,6 +3380,10 @@ const CaptionGenerator: React.FC = () => {
                 await handleAIAutoScheduleSingle(idx);
               }}
               platformIcons={platformIcons}
+              onUpgradeClick={() => {
+                setUpgradeModalReason('limit');
+                setIsUpgradeModalOpen(true);
+              }}
             />
             </div>
           </div>
@@ -2832,6 +3413,10 @@ const CaptionGenerator: React.FC = () => {
                     await handleAIAutoSchedule();
                   }}
                   platformIcons={platformIcons}
+                  onUpgradeClick={() => {
+                    setUpgradeModalReason('limit');
+                    setIsUpgradeModalOpen(true);
+                  }}
                 />
               ))}
               {/* Add Image/Video button - Outside the image box */}
@@ -2870,6 +3455,10 @@ const CaptionGenerator: React.FC = () => {
                   await handleAIAutoSchedule();
                 }}
                 platformIcons={platformIcons}
+                onUpgradeClick={() => {
+                  setUpgradeModalReason('limit');
+                  setIsUpgradeModalOpen(true);
+                }}
               />
             ))}
             {/* Add Image/Video button - Outside the image boxes */}
@@ -3245,7 +3834,7 @@ export const Compose: React.FC = () => {
             <ImageIcon className="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-500" />
             <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Coming Soon</h3>
             <p className="text-gray-600 dark:text-gray-400 mb-4">
-              AI Image Generation is currently under development.
+              AI Image Generation is coming soon.
             </p>
             <p className="text-sm text-gray-500 dark:text-gray-500">
               Use the Captions tab to upload images and generate captions.
@@ -3258,7 +3847,7 @@ export const Compose: React.FC = () => {
             <VideoIcon className="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-500" />
             <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Coming Soon</h3>
             <p className="text-gray-600 dark:text-gray-400 mb-4">
-              AI Video Generation is currently under development.
+              AI Video Generation is coming soon.
             </p>
             <p className="text-sm text-gray-500 dark:text-gray-500">
               Use the Captions tab to upload videos and generate captions.

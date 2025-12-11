@@ -58,7 +58,7 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, usag
     const [caption, setCaption] = useState('');
     const [isCaptionLoading, setIsCaptionLoading] = useState(false);
     const [selectedPlatforms, setSelectedPlatforms] = useState<Record<Platform, boolean>>({
-        Instagram: false, TikTok: false, X: false, Threads: false, YouTube: false, LinkedIn: false, Facebook: false
+        Instagram: false, TikTok: false, X: false, Threads: false, YouTube: false, LinkedIn: false, Facebook: false, Pinterest: false, Discord: false, Telegram: false, Reddit: false
     });
     const [uploadedImage, setUploadedImage] = useState<{ data: string; mimeType: string; previewUrl: string } | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -329,7 +329,7 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, usag
         setCaption('');
         setPrompt('');
         handleClearImage();
-        setSelectedPlatforms({ Instagram: false, TikTok: false, X: false, Threads: false, YouTube: false, LinkedIn: false, Facebook: false });
+        setSelectedPlatforms({ Instagram: false, TikTok: false, X: false, Threads: false, YouTube: false, LinkedIn: false, Facebook: false, Pinterest: false, Discord: false, Telegram: false, Reddit: false });
         } catch (e) {
             console.error("Publish error:", e);
             showToast("Failed to publish image.", 'error');

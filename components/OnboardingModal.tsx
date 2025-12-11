@@ -9,6 +9,10 @@ import {
   YouTubeIcon,
   LinkedInIcon,
   FacebookIcon,
+  PinterestIcon,
+  DiscordIcon,
+  TelegramIcon,
+  RedditIcon,
 } from "./icons/PlatformIcons";
 import { LogoIcon } from "./icons/UIIcons";
 
@@ -41,6 +45,10 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
     YouTube: false,
     LinkedIn: false,
     Facebook: false,
+    Pinterest: false,
+    Discord: false,
+    Telegram: false,
+    Reddit: false,
   };
 
   const toggleAccountConnection = (platform: Platform) => {

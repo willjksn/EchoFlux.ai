@@ -29,7 +29,7 @@ const AddClientModal: React.FC<AddClientModalProps> = ({ isOpen, onClose, onSave
     const [email, setEmail] = useState('');
     const [plan, setPlan] = useState<'Free' | 'Pro' | 'Elite'>('Pro');
     const [connectedAccounts, setConnectedAccounts] = useState<Record<Platform, boolean>>({
-        Instagram: false, TikTok: false, X: false, Threads: false, YouTube: false, LinkedIn: false, Facebook: false
+        Instagram: false, TikTok: false, X: false, Threads: false, YouTube: false, LinkedIn: false, Facebook: false, Pinterest: false, Discord: false, Telegram: false, Reddit: false
     });
     
     if (!isOpen) return null;
@@ -68,7 +68,7 @@ const AddClientModal: React.FC<AddClientModalProps> = ({ isOpen, onClose, onSave
         setName('');
         setEmail('');
         setPlan('Pro');
-        setConnectedAccounts({ Instagram: false, TikTok: false, X: false, Threads: false, YouTube: false, LinkedIn: false, Facebook: false });
+        setConnectedAccounts({ Instagram: false, TikTok: false, X: false, Threads: false, YouTube: false, LinkedIn: false, Facebook: false, Pinterest: false, Discord: false, Telegram: false, Reddit: false });
     };
     
     const toggleAccount = (platform: Platform) => {

@@ -45,7 +45,7 @@ const removeUndefined = (obj: any): any => {
 
 const generateMockSocialStats = (): Record<Platform, SocialStats> => {
     const stats: any = {};
-    const platforms: Platform[] = ['Instagram','TikTok','X','Threads','YouTube','LinkedIn','Facebook'];
+    const platforms: Platform[] = ['Instagram','TikTok','X','Threads','YouTube','LinkedIn','Facebook','Pinterest','Discord','Telegram','Reddit'];
     platforms.forEach(p => {
         stats[p] = {
             followers: Math.floor(Math.random() * 15000) + 50,
@@ -100,13 +100,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                 } else {
                     // NEW user document
+                    // Get pending plan from localStorage if available
+                    const pendingPlan = (typeof window !== 'undefined'
+                        ? (localStorage.getItem('pendingPlan') as Plan | null)
+                        : null);
+                    
+                    // Default plan: Free for Creators, but Business users should select a plan
+                    // If no pendingPlan, default to Free (will be changed during onboarding)
+                    const defaultPlan: Plan = pendingPlan || 'Free';
+                    
                     const newUser: User = {
                         id: fbUser.uid,
                         name: fbUser.displayName || "New User",
                         email: fbUser.email || "",
                         avatar: fbUser.photoURL || `https://picsum.photos/seed/${fbUser.uid}/100/100`,
                         bio: "Welcome to EngageSuite.ai!",
-                        plan: "Free",
+                        plan: defaultPlan,
                         role: "User",
                         signupDate: new Date().toISOString(),
                         hasCompletedOnboarding: false,
@@ -127,6 +136,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     };
 
                     await setDoc(ref, newUser);
+                    
+                    // Clear pendingPlan from localStorage after use
+                    try {
+                        if (pendingPlan) {
+                            localStorage.removeItem('pendingPlan');
+                        }
+                    } catch {}
+                    
                     setUserState(newUser);
                 }
             } else {

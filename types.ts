@@ -12,7 +12,7 @@ declare global {
   }
 }
 
-export type Platform = 'Instagram' | 'TikTok' | 'X' | 'Threads' | 'YouTube' | 'LinkedIn' | 'Facebook';
+export type Platform = 'Instagram' | 'TikTok' | 'X' | 'Threads' | 'YouTube' | 'LinkedIn' | 'Facebook' | 'Pinterest' | 'Discord' | 'Telegram' | 'Reddit';
 
 export type MessageType = 'DM' | 'Comment';
 // Business categories: Lead, Support, Opportunity, General
@@ -54,7 +54,7 @@ export interface AnalyticsData {
   }[];
 }
 
-export type Page = 'dashboard' | 'analytics' | 'settings' | 'compose' | 'calendar' | 'team' | 'opportunities' | 'profile' | 'about' | 'contact' | 'pricing' | 'clients' | 'faq' | 'terms' | 'privacy' | 'admin' | 'automation' | 'approvals' | 'bio' | 'strategy' | 'autopilot' | 'ads' | 'mediaLibrary' | 'inbox';
+export type Page = 'dashboard' | 'analytics' | 'settings' | 'compose' | 'calendar' | 'team' | 'opportunities' | 'profile' | 'about' | 'contact' | 'pricing' | 'clients' | 'faq' | 'terms' | 'privacy' | 'dataDeletion' | 'admin' | 'automation' | 'approvals' | 'bio' | 'strategy' | 'autopilot' | 'ads' | 'mediaLibrary' | 'inbox';
 
 export interface Settings {
     autoReply: boolean;
@@ -145,7 +145,7 @@ export interface BioPageConfig {
     emailCapture?: EmailCaptureConfig;
 }
 
-export type Plan = 'Free' | 'Pro' | 'Elite' | 'Agency' | 'Growth' | 'Starter';
+export type Plan = 'Free' | 'Caption' | 'Pro' | 'Elite' | 'Agency' | 'Growth' | 'Starter';
 
 export interface Client {
   id: string;
@@ -189,6 +189,15 @@ export interface MediaLibraryItem {
   uploadedAt: string;
   usedInPosts?: string[]; // Array of post IDs where this media was used
   tags?: string[];
+  folderId?: string; // Folder ID - defaults to 'general' if not set
+}
+
+export interface MediaFolder {
+  id: string;
+  userId: string;
+  name: string;
+  createdAt: string;
+  itemCount?: number; // Optional: count of items in folder (can be computed)
 }
 
 export interface HashtagSet {
@@ -401,6 +410,12 @@ export interface MediaItemState {
     mimeType: string;
     type: 'image' | 'video';
     isGenerated?: boolean; // true if generated via AI, false/undefined if uploaded
+    additionalImages?: Array<{ // Additional images for multi-image posts
+        id: string;
+        previewUrl: string;
+        data: string;
+        mimeType: string;
+    }>;
     results: CaptionResult[];
     captionText: string;
     scheduledDate?: string; // Individual schedule date for this item
@@ -409,6 +424,7 @@ export interface MediaItemState {
     selectedPlatforms: Record<Platform, boolean>; // Individual platform selection per box
     selectedMusic?: MusicTrack; // Selected music track for Reels
     musicNote?: string; // Reminder note for adding music manually
+    instagramPostType?: 'Post' | 'Reel' | 'Story'; // Instagram-specific post type
 }
 
 export interface ComposeState {
@@ -467,7 +483,8 @@ export interface PostComment {
 export interface Post {
     id: string;
     content: string;
-    mediaUrl?: string;
+    mediaUrl?: string; // Single media URL (for backward compatibility)
+    mediaUrls?: string[]; // Multiple media URLs (for multi-image posts)
     mediaType?: 'image' | 'video';
     platforms: Platform[];
     status: ApprovalStatus;

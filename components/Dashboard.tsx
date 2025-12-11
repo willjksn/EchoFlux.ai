@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { MessageCard } from './MessageCard';
 import { Platform, Message, DashboardFilters, MessageType, CalendarEvent, MessageCategory } from '../types';
-import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
+import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon } from './icons/PlatformIcons';
 import { DashboardIcon, FlagIcon, SearchIcon, StarIcon, CalendarIcon, SparklesIcon, TrendingIcon, CheckCircleIcon, UserIcon, ArrowUpCircleIcon, KanbanIcon, BriefcaseIcon, LinkIcon, RocketIcon, ArrowUpIcon, ChatIcon, DollarSignIcon, HeartIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 import { updateUserSocialStats } from '../src/services/socialStatsService';
@@ -14,6 +14,10 @@ const platformFilterIcons: { [key in Platform]: React.ReactNode } = {
   YouTube: <YouTubeIcon />,
   LinkedIn: <LinkedInIcon />,
   Facebook: <FacebookIcon />,
+  Pinterest: <PinterestIcon />,
+  Discord: <DiscordIcon />,
+  Telegram: <TelegramIcon />,
+  Reddit: <RedditIcon />,
 };
 
 // ... (Keep helper components FilterButton, QuickAction, UpcomingEventCard unchanged) ...
@@ -168,58 +172,8 @@ export const Dashboard: React.FC = () => {
     };
   }, []);
   
-  const [viewMode, setViewMode] = useState<'Overview' | 'Inbox'>(() => {
-    // Check if we should show inbox view from localStorage (set by sidebar)
-    const savedViewMode = localStorage.getItem('dashboardViewMode');
-    if (savedViewMode === 'Inbox') {
-      // Clear the flag after reading it
-      setTimeout(() => localStorage.removeItem('dashboardViewMode'), 100);
-      return 'Inbox';
-    }
-    return 'Overview';
-  });
-  
-  // Sync viewMode with localStorage when it changes
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'dashboardViewMode') {
-        if (e.newValue === 'Inbox') {
-          setViewMode('Inbox');
-        } else if (!e.newValue && viewMode === 'Inbox') {
-          setViewMode('Overview');
-        }
-      }
-    };
-    
-    window.addEventListener('storage', handleStorageChange);
-    
-    // Also check localStorage on mount and when activePage changes
-    const savedViewMode = localStorage.getItem('dashboardViewMode');
-    if (savedViewMode === 'Inbox' && viewMode !== 'Inbox') {
-      setViewMode('Inbox');
-    } else if (!savedViewMode && viewMode === 'Inbox') {
-      setViewMode('Overview');
-    }
-    
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-    };
-  }, [viewMode]);
-  
-  // Update localStorage when viewMode changes manually
-  useEffect(() => {
-    if (viewMode === 'Overview') {
-      localStorage.removeItem('dashboardViewMode');
-    } else if (viewMode === 'Inbox') {
-      localStorage.setItem('dashboardViewMode', 'Inbox');
-    }
-  }, [viewMode]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
-  
-  const [filters, setFilters] = useState<DashboardFilters>({ platform: 'All', messageType: 'All', sentiment: 'All', status: 'All', category: 'All' });
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
+  const [filters] = useState<DashboardFilters>({ platform: 'All', messageType: 'All', sentiment: 'All', status: 'All', category: 'All' });
+  const [searchTerm] = useState('');
   
   // Track if we've updated social stats this session to avoid repeated calls
   const hasUpdatedStats = useRef(false);
@@ -265,14 +219,13 @@ export const Dashboard: React.FC = () => {
   // Include all the existing useEffects and handlers here...
    useEffect(() => {
     if (dashboardNavState) {
-        setFilters(prev => ({ ...prev, ...dashboardNavState.filters }));
         if (dashboardNavState.highlightId) {
-            setHighlightedMessageId(dashboardNavState.highlightId);
-            setViewMode('Inbox');
+            // Navigate to inbox page with highlighted message
+            setActivePage('inbox');
         }
         clearDashboardNavState();
     }
-  }, [dashboardNavState, clearDashboardNavState]);
+  }, [dashboardNavState, clearDashboardNavState, setActivePage]);
 
   const filteredMessages = useMemo(() => {
     return messages.filter(msg => {
@@ -332,14 +285,6 @@ export const Dashboard: React.FC = () => {
     }
   }, [selectedClient, user?.role, isBusiness]);
 
-  const handleSelectMessage = (id: string, isSelected: boolean) => { setSelectedMessageIds(prev => { const newSet = new Set(prev); if (isSelected) newSet.add(id); else newSet.delete(id); return newSet; }); };
-  const handleBulkArchive = () => { selectedMessageIds.forEach(id => updateMessage(id, { isArchived: true })); setSelectedMessageIds(new Set()); };
-  const handleBulkDelete = () => { if (window.confirm(`Are you sure you want to delete ${selectedMessageIds.size} selected messages?`)) { selectedMessageIds.forEach(id => deleteMessage(id)); setSelectedMessageIds(new Set()); } };
-  const handleFilterChange = <K extends keyof DashboardFilters>(key: K, value: DashboardFilters[K]) => { setFilters(prev => ({ ...prev, [key]: value })); };
-  const handleAutoRespondToggle = () => { setSettings(prev => ({ ...prev, autoRespond: !prev.autoRespond })); };
-  const handleToggleFlag = (id: string) => { const msg = messages.find(m => m.id === id); if (msg) updateMessage(id, { isFlagged: !msg.isFlagged }); };
-  const handleToggleFavorite = (id: string) => { const msg = messages.find(m => m.id === id); if (msg) updateMessage(id, { isFavorite: !msg.isFavorite }); };
-  const handleDeleteMessage = (id: string) => { if (window.confirm('Delete message?')) deleteMessage(id); };
   const handleEventClick = (event: CalendarEvent) => {
     // Store event ID in localStorage so Calendar can auto-select it
     localStorage.setItem('calendarSelectedEventId', event.id);
@@ -347,18 +292,6 @@ export const Dashboard: React.FC = () => {
     setActivePage('calendar');
   };
 
-  useEffect(() => {
-    if (!highlightedMessageId || viewMode !== 'Inbox') return;
-    const timerId = setTimeout(() => {
-        const element = document.getElementById(`message-card-${highlightedMessageId}`);
-        if (element) {
-            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            element.classList.add('highlight-animation');
-            setTimeout(() => { element.classList.remove('highlight-animation'); setHighlightedMessageId(null); }, 2000);
-        } else { setHighlightedMessageId(null); }
-    }, 100);
-    return () => clearTimeout(timerId);
-  }, [highlightedMessageId, filteredMessages, viewMode]);
 
   const renderCommandCenter = () => (
       <div className="space-y-6 animate-fade-in">
@@ -427,41 +360,54 @@ export const Dashboard: React.FC = () => {
                         )}
                    </div>
               </div>
-                
+              
               {/* Urgent Messages */}
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                  <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Urgent Messages</h3>
-                        <button onClick={() => setViewMode('Inbox')} className="text-sm text-primary-600 hover:underline">Go to Inbox</button>
-                   </div>
-                   <div className="space-y-3">
-                        {filteredMessages.slice(0, 3).length > 0 ? (
-                            filteredMessages.slice(0, 3).map(msg => (
-                                <div key={msg.id} className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700 shadow-sm flex gap-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700" onClick={async (e) => {
-                                    e.stopPropagation();
-                                    await ensureCRMProfile(msg.user);
-                                    openCRM(msg.user);
-                                }}>
-                                    <div className="flex-shrink-0 pt-1">
-                                        <img src={msg.user.avatar} className="w-8 h-8 rounded-full" alt={msg.user.name} />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex justify-between">
-                                            <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{msg.user.name}</p>
-                                            <span className="text-xs text-gray-400">{platformFilterIcons[msg.platform]}</span>
-                                        </div>
-                                        <p className="text-sm text-gray-600 dark:text-gray-300 truncate">{msg.content}</p>
-                                    </div>
-                                </div>
-                            ))
-                        ) : (
-                            <div className="text-center py-8 bg-gray-50 dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
-                                <p className="text-green-600 font-medium text-sm">Inbox Zero! 🎉</p>
-                                <p className="text-gray-400 text-xs mt-1">You're all caught up.</p>
+              {(() => {
+                // Get urgent messages: flagged messages or messages with negative sentiment
+                const urgentMessages = messages
+                  .filter(msg => {
+                    const clientMatch = selectedClient ? msg.clientId === selectedClient.id : !msg.clientId;
+                    return (msg.isFlagged || msg.sentiment === 'Negative') && !msg.isArchived && clientMatch;
+                  })
+                  .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                  .slice(0, 3);
+                
+                return (
+                  <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-bold text-gray-900 dark:text-white">Urgent Messages</h3>
+                      <button onClick={() => setActivePage('inbox')} className="text-sm text-primary-600 hover:underline">Go to Inbox</button>
+                    </div>
+                    <div className="space-y-3">
+                      {urgentMessages.length > 0 ? (
+                        urgentMessages.map(msg => (
+                          <div key={msg.id} className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700 shadow-sm flex gap-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700" onClick={async (e) => {
+                            e.stopPropagation();
+                            await ensureCRMProfile(msg.user);
+                            openCRM(msg.user);
+                          }}>
+                            <div className="flex-shrink-0 pt-1">
+                              <img src={msg.user.avatar} className="w-8 h-8 rounded-full" alt={msg.user.name} />
                             </div>
-                        )}
-                   </div>
-              </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex justify-between">
+                                <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{msg.user.name}</p>
+                                <span className="text-xs text-gray-400">{platformFilterIcons[msg.platform]}</span>
+                              </div>
+                              <p className="text-sm text-gray-600 dark:text-gray-300 truncate">{msg.content}</p>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-8 bg-gray-50 dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
+                          <p className="text-green-600 font-medium text-sm">Inbox Zero! 🎉</p>
+                          <p className="text-gray-400 text-xs mt-1">You're all caught up.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
           </div>
 
           {/* Enhanced Metrics Section */}
@@ -550,18 +496,48 @@ export const Dashboard: React.FC = () => {
               if (!shouldShowContentPerformance) return null;
               
               return (() => {
+              // Get posts from this week (last 7 days)
+              const oneWeekAgo = new Date();
+              oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+              
               const recentPosts = posts
-                .filter(p => p.status === 'Published')
-                .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+                .filter(p => {
+                  if (p.status !== 'Published') return false;
+                  // Use timestamp, scheduledDate, or createdAt to determine post date
+                  const postDate = p.timestamp 
+                    ? new Date(p.timestamp)
+                    : p.scheduledDate 
+                    ? new Date(p.scheduledDate)
+                    : p.createdAt 
+                    ? new Date(p.createdAt)
+                    : null;
+                  if (!postDate || isNaN(postDate.getTime())) return false;
+                  return postDate >= oneWeekAgo;
+                })
+                .sort((a, b) => {
+                  // Sort by date (most recent first)
+                  const dateA = a.timestamp ? new Date(a.timestamp).getTime() : 
+                               a.scheduledDate ? new Date(a.scheduledDate).getTime() :
+                               a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                  const dateB = b.timestamp ? new Date(b.timestamp).getTime() : 
+                               b.scheduledDate ? new Date(b.scheduledDate).getTime() :
+                               b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                  return dateB - dateA;
+                })
                 .slice(0, 3);
               
-              const calculateMockEngagement = (postId: string) => {
-                const seed = postId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+              // Calculate engagement - use consistent seed based on post ID for stable values
+              const calculateMockEngagement = (postId: string, postContent: string) => {
+                // Use both post ID and content hash for more stable but varied engagement
+                const idSeed = postId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+                const contentSeed = postContent.substring(0, 20).split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+                const combinedSeed = idSeed + contentSeed;
+                
                 return {
-                  likes: Math.floor((seed % 500) + 100),
-                  comments: Math.floor((seed % 50) + 10),
-                  shares: Math.floor((seed % 30) + 5),
-                  views: Math.floor((seed % 5000) + 1000)
+                  likes: Math.floor((combinedSeed % 500) + 100),
+                  comments: Math.floor((combinedSeed % 50) + 10),
+                  shares: Math.floor((combinedSeed % 30) + 5),
+                  views: Math.floor((combinedSeed % 5000) + 1000)
                 };
               };
               
@@ -573,11 +549,11 @@ export const Dashboard: React.FC = () => {
                   </div>
                   <div className="space-y-3">
                     {recentPosts.map(post => {
-                      const engagement = calculateMockEngagement(post.id);
+                      const engagement = calculateMockEngagement(post.id, post.content || '');
                       const totalEngagement = engagement.likes + engagement.comments + engagement.shares;
                       return (
                         <div key={post.id} className="p-3 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-lg border border-purple-200 dark:border-purple-700">
-                          <p className="text-sm font-medium text-gray-900 dark:text-white mb-2 truncate">{post.content.substring(0, 60)}...</p>
+                          <p className="text-sm font-medium text-gray-900 dark:text-white mb-2 truncate">{post.content?.substring(0, 60) || 'Post'}...</p>
                           <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
                             <div className="flex items-center gap-3">
                               <span className="flex items-center gap-1">
@@ -715,80 +691,112 @@ export const Dashboard: React.FC = () => {
                 </div>
               );
             })()}
+          </div>
+          
+          {/* Recent Activity - Standalone Section */}
+          {(() => {
+            // Generate activity timeline from posts, messages, and campaigns
+            const activities: Array<{ id: string; type: string; message: string; timestamp: Date; icon: React.ReactNode }> = [];
             
-            {/* Activity Timeline Widget */}
-            {(() => {
-              // Generate activity timeline from posts, messages, and campaigns
-              const activities: Array<{ id: string; type: string; message: string; timestamp: Date; icon: React.ReactNode }> = [];
-              
-              // Recent posts
-              posts.slice(0, 2).forEach(post => {
+            // Recent posts (include all Published posts, with or without media)
+            const recentPublishedPosts = posts
+              .filter(p => p.status === 'Published')
+              .sort((a, b) => {
+                const dateA = new Date(a.timestamp || a.scheduledDate || a.createdAt || 0);
+                const dateB = new Date(b.timestamp || b.scheduledDate || b.createdAt || 0);
+                return dateB.getTime() - dateA.getTime();
+              })
+              .slice(0, 5);
+            
+            recentPublishedPosts.forEach(post => {
+              const postDate = new Date(post.timestamp || post.scheduledDate || post.createdAt || Date.now());
+              const platformNames = post.platforms && post.platforms.length > 0 
+                ? post.platforms.join(', ') 
+                : 'social media';
+              const isTextOnly = !post.mediaUrl;
+              activities.push({
+                id: `post-${post.id}`,
+                type: 'post',
+                message: `Published ${isTextOnly ? 'text post' : 'post'} on ${platformNames}`,
+                timestamp: postDate,
+                icon: <SparklesIcon className="w-4 h-4" />
+              });
+            });
+            
+            // Recent messages
+            if (messages.length > 0) {
+              messages.slice(0, 1).forEach(msg => {
                 activities.push({
-                  id: `post-${post.id}`,
-                  type: 'post',
-                  message: `Published post on ${post.platforms[0] || 'social media'}`,
-                  timestamp: new Date(post.createdAt || Date.now()),
-                  icon: <SparklesIcon className="w-4 h-4" />
+                  id: `message-${msg.id}`,
+                  type: 'message',
+                  message: `New ${isBusiness ? 'lead' : 'fan'} message from ${msg.user.name}`,
+                  timestamp: new Date(msg.timestamp),
+                  icon: <ChatIcon className="w-4 h-4" />
                 });
               });
-              
-              // Recent messages
-              if (messages.length > 0) {
-                messages.slice(0, 1).forEach(msg => {
-                  activities.push({
-                    id: `message-${msg.id}`,
-                    type: 'message',
-                    message: `New ${isBusiness ? 'lead' : 'fan'} message from ${msg.user.name}`,
-                    timestamp: new Date(msg.timestamp),
-                    icon: <ChatIcon className="w-4 h-4" />
-                  });
-                });
-              }
-              
-              // Sort by timestamp (most recent first)
-              activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-              
-              return (
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">Recent Activity</h3>
-                  </div>
-                  {activities.length > 0 ? (
-                    <div className="space-y-3">
-                      {activities.slice(0, 5).map(activity => (
-                        <div key={activity.id} className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                          <div className="flex-shrink-0 mt-0.5 text-primary-600 dark:text-primary-400">
-                            {activity.icon}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 dark:text-white">{activity.message}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                              {activity.timestamp.toLocaleDateString()} at {activity.timestamp.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-8">
-                      <p className="text-sm text-gray-500 dark:text-gray-400">No recent activity</p>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
+            }
             
-            {/* Goals & Milestones Widget */}
-            {user.plan !== 'Free' && (() => {
+            // Sort by timestamp (most recent first)
+            activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+            
+            return (
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">Recent Activity</h3>
+                </div>
+                {activities.length > 0 ? (
+                  <div className="space-y-3">
+                    {activities.slice(0, 5).map(activity => (
+                      <div key={activity.id} className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                        <div className="flex-shrink-0 mt-0.5 text-primary-600 dark:text-primary-400">
+                          {activity.icon}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">{activity.message}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            {activity.timestamp.toLocaleDateString()} at {activity.timestamp.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">No recent activity</p>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+          
+          {/* First Row: Goals & Milestones, Best Posting Times, Quick Stats */}
+          {user.plan !== 'Free' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* Goals & Milestones Widget */}
+              {(() => {
               // Calculate goals progress using user-defined goals or defaults
               const currentFollowers = currentStats ? Object.values(currentStats).reduce((sum, stats) => sum + stats.followers, 0) : 0;
               const goalFollowers = user?.goals?.followerGoal || Math.ceil(currentFollowers * 1.5); // Use user goal or default to 50% more
               const followersProgress = goalFollowers > 0 ? Math.min((currentFollowers / goalFollowers) * 100, 100) : 0;
               
+              // Count ALL posts created this month (use timestamp, scheduledDate, or createdAt)
               const postsThisMonth = posts.filter(p => {
-                const postDate = new Date(p.createdAt || 0);
+                // Try multiple date fields to ensure we count all posts
+                const postDate = p.timestamp 
+                  ? new Date(p.timestamp)
+                  : p.scheduledDate 
+                  ? new Date(p.scheduledDate)
+                  : p.createdAt 
+                  ? new Date(p.createdAt)
+                  : null;
+                
+                if (!postDate || isNaN(postDate.getTime())) {
+                  return false; // Skip posts with invalid dates
+                }
+                
                 const now = new Date();
-                return postDate.getMonth() === now.getMonth() && postDate.getFullYear() === now.getFullYear();
+                return postDate.getMonth() === now.getMonth() && 
+                       postDate.getFullYear() === now.getFullYear();
               }).length;
               const goalPosts = user?.goals?.monthlyPostsGoal || 30; // Use user goal or default to 30 posts/month
               const postsProgress = goalPosts > 0 ? Math.min((postsThisMonth / goalPosts) * 100, 100) : 0;
@@ -897,239 +905,77 @@ export const Dashboard: React.FC = () => {
                     )}
                   </div>
                 </div>
-              );
-            })()}
-          </div>
-          
-          {/* Fan Engagement Hub - Creator & Agency Only */}
-          {(() => {
-            // Show for Creators OR Business Agency (since Agency manages creators)
-            const shouldShowFanHub = !isBusiness || user?.plan === 'Agency';
-            if (!shouldShowFanHub) return null;
-            
-            const fanMessages = messages.filter(m => !m.isArchived && (m.category === 'Fan Message' || !m.category));
-            const collabRequests = messages.filter(m => !m.isArchived && m.category === 'Collab Request');
-            const questions = messages.filter(m => !m.isArchived && m.category === 'Question');
-            const feedback = messages.filter(m => !m.isArchived && m.category === 'Feedback');
-            
-            return (fanMessages.length > 0 || collabRequests.length > 0 || questions.length > 0) ? (
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">Fan Engagement Hub</h3>
-                  <button onClick={() => setViewMode('Inbox')} className="text-sm text-primary-600 hover:underline">View Inbox</button>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <div className="p-4 bg-gradient-to-br from-pink-50 to-rose-50 dark:from-pink-900/20 dark:to-rose-900/20 rounded-lg border border-pink-200 dark:border-pink-700 text-center">
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white mb-1">{fanMessages.length}</p>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">Fan Messages</p>
+                );
+                })()}
+                
+                {/* Quick Stats Widget - Always shows next to Goals & Milestones for paid users */}
+                {(() => {
+              // Calculate quick stats
+              const totalPosts = posts.length;
+              const publishedPosts = posts.filter(p => p.status === 'Published').length;
+              const scheduledPosts = posts.filter(p => p.status === 'Scheduled').length;
+              const draftPosts = posts.filter(p => p.status === 'Draft').length;
+              
+              // Calculate engagement rate (mock calculation)
+              const totalEngagement = currentStats ? Object.values(currentStats).reduce((sum, stats) => 
+                sum + (stats.likes || 0) + (stats.comments || 0) + (stats.shares || 0), 0) : 0;
+              const totalReach = currentStats ? Object.values(currentStats).reduce((sum, stats) => 
+                sum + (stats.followers || 0), 0) : 0;
+              const engagementRate = totalReach > 0 ? ((totalEngagement / totalReach) * 100).toFixed(1) : '0.0';
+              
+              return (
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">Quick Stats</h3>
+                    <button onClick={() => setActivePage('analytics')} className="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 font-medium">
+                      View Details
+                    </button>
                   </div>
-                  <div className="p-4 bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 rounded-lg border border-blue-200 dark:border-blue-700 text-center">
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white mb-1">{collabRequests.length}</p>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">Collab Requests</p>
-                  </div>
-                  <div className="p-4 bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 rounded-lg border border-purple-200 dark:border-purple-700 text-center">
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white mb-1">{questions.length}</p>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">Questions</p>
-                  </div>
-                  <div className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg border border-green-200 dark:border-green-700 text-center">
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white mb-1">{feedback.length}</p>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">Feedback</p>
-                  </div>
-                </div>
-              </div>
-            ) : null;
-          })()}
-          
-          {/* Customer Engagement Hub - Business Starter/Growth Only */}
-          {isBusiness && user?.plan !== 'Agency' && (() => {
-            const leadMessages = messages.filter(m => !m.isArchived && m.category === 'Lead');
-            const supportMessages = messages.filter(m => !m.isArchived && m.category === 'Support');
-            const opportunityMessages = messages.filter(m => !m.isArchived && m.category === 'Opportunity');
-            const generalMessages = messages.filter(m => !m.isArchived && (!m.category || m.category === 'General'));
-            
-            return (leadMessages.length > 0 || supportMessages.length > 0 || opportunityMessages.length > 0 || generalMessages.length > 0) ? (
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">Customer Engagement Hub</h3>
-                  <button onClick={() => setViewMode('Inbox')} className="text-sm text-primary-600 hover:underline">View Inbox</button>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <div className="p-4 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 rounded-lg border border-emerald-200 dark:border-emerald-700 text-center">
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white mb-1">{leadMessages.length}</p>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">Lead Messages</p>
-                  </div>
-                  <div className="p-4 bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 rounded-lg border border-blue-200 dark:border-blue-700 text-center">
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white mb-1">{supportMessages.length}</p>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">Support Requests</p>
-                  </div>
-                  <div className="p-4 bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 rounded-lg border border-purple-200 dark:border-purple-700 text-center">
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white mb-1">{opportunityMessages.length}</p>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">Opportunities</p>
-                  </div>
-                  <div className="p-4 bg-gradient-to-br from-gray-50 to-slate-50 dark:from-gray-900/20 dark:to-slate-900/20 rounded-lg border border-gray-200 dark:border-gray-700 text-center">
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white mb-1">{generalMessages.length}</p>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">General Messages</p>
-                  </div>
-                </div>
-              </div>
-            ) : null;
-          })()}
-          
-          {/* AI Insights, Content Suggestions & Engagement Heatmap - Modern Grid Layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-            
-            {/* AI Insights & Recommendations Panel - Redesigned */}
-            {user.plan !== 'Free' && (() => {
-              // Generate actionable recommendations based on user data
-              const recommendations: Array<{ type: 'success' | 'info' | 'warning' | 'tip'; title: string; description: string; action?: () => void; actionLabel?: string }> = [];
-              
-              // Check posting frequency
-              const postsThisWeek = posts.filter(p => {
-                const postDate = new Date(p.createdAt || 0);
-                const weekAgo = new Date();
-                weekAgo.setDate(weekAgo.getDate() - 7);
-                return postDate > weekAgo;
-              }).length;
-              
-              if (postsThisWeek < 3) {
-                recommendations.push({
-                  type: 'tip',
-                  title: 'Increase Posting Frequency',
-                  description: `You've posted ${postsThisWeek} times this week. Consistent posting improves engagement.`,
-                  action: () => setActivePage('compose'),
-                  actionLabel: 'Create Post'
-                });
-              }
-              
-              // Check upcoming schedule
-              const upcomingCount = calendarEvents.filter(e => {
-                const eventDate = new Date(e.date);
-                return eventDate > new Date();
-              }).length;
-              
-              if (upcomingCount === 0) {
-                recommendations.push({
-                  type: 'warning',
-                  title: 'No Upcoming Posts',
-                  description: 'Schedule content ahead of time to maintain consistent presence.',
-                  action: () => setActivePage('compose'),
-                  actionLabel: 'Schedule Post'
-                });
-              }
-              
-              // Check unread messages
-              const unreadCount = messages.filter(m => !m.isArchived).length;
-              if (unreadCount > 5) {
-                recommendations.push({
-                  type: 'info',
-                  title: 'Messages Need Attention',
-                  description: `You have ${unreadCount} unread messages. Quick responses improve engagement.`,
-                  action: () => setViewMode('Inbox'),
-                  actionLabel: 'View Inbox'
-                });
-              }
-              
-              // Suggest automation for users who haven't used it
-              if (user?.plan !== 'Free') {
-                recommendations.push({
-                  type: 'tip',
-                  title: 'Try Quick Post Automation',
-                  description: 'Upload images or videos and let AI automatically create captions, hashtags, and schedule posts at optimal times.',
-                  action: () => setActivePage('automation'),
-                  actionLabel: 'Try Automation'
-                });
-              }
-              
-              // Success recommendation if posting consistently
-              if (postsThisWeek >= 5 && upcomingCount >= 3) {
-                recommendations.push({
-                  type: 'success',
-                  title: 'Great Consistency! 🎉',
-                  description: `You've posted ${postsThisWeek} times this week and have ${upcomingCount} posts scheduled. Keep it up!`
-                });
-              }
-              
-              // Default recommendation if no others
-              if (recommendations.length === 0) {
-                recommendations.push({
-                  type: 'tip',
-                  title: 'Explore Analytics',
-                  description: 'Check your analytics to see what content performs best and optimize your strategy.',
-                  action: () => setActivePage('analytics'),
-                  actionLabel: 'View Analytics'
-                });
-              }
-              
-              // Limit to 5 recommendations for taller box
-              const displayRecommendations = recommendations.slice(0, 5);
-              
-              const getIcon = (type: string) => {
-                switch(type) {
-                  case 'success': return <CheckCircleIcon className="w-5 h-5" />;
-                  case 'warning': return <FlagIcon className="w-5 h-5" />;
-                  case 'info': return <SparklesIcon className="w-5 h-5" />;
-                  default: return <SparklesIcon className="w-5 h-5" />;
-                }
-              };
-              
-              const getGradientClasses = (type: string) => {
-                switch(type) {
-                  case 'success': return 'from-emerald-50 to-green-50 dark:from-emerald-900/30 dark:to-green-900/20 border-emerald-200 dark:border-emerald-700/50';
-                  case 'warning': return 'from-amber-50 to-yellow-50 dark:from-amber-900/30 dark:to-yellow-900/20 border-amber-200 dark:border-amber-700/50';
-                  case 'info': return 'from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/20 border-blue-200 dark:border-blue-700/50';
-                  default: return 'from-purple-50 to-indigo-50 dark:from-purple-900/30 dark:to-indigo-900/20 border-purple-200 dark:border-purple-700/50';
-                }
-              };
-              
-              const getTextColor = (type: string) => {
-                switch(type) {
-                  case 'success': return 'text-emerald-700 dark:text-emerald-300';
-                  case 'warning': return 'text-amber-700 dark:text-amber-300';
-                  case 'info': return 'text-blue-700 dark:text-blue-300';
-                  default: return 'text-purple-700 dark:text-purple-300';
-                }
-              };
-              
-              return displayRecommendations.length > 0 ? (
-                <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 p-5 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-600">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="p-2 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl">
-                      <SparklesIcon className="w-5 h-5 text-white" />
-                    </div>
+                  <div className="space-y-4">
+                    {/* Post Status Breakdown */}
                     <div>
-                      <h3 className="text-base font-bold text-gray-900 dark:text-white">AI Insights</h3>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Smart Recommendations</p>
-                    </div>
-                  </div>
-                  <div className="space-y-2.5 max-h-[500px] overflow-y-auto custom-scrollbar">
-                    {displayRecommendations.map((rec, idx) => (
-                      <div key={idx} className={`p-3.5 rounded-xl border bg-gradient-to-r ${getGradientClasses(rec.type)} backdrop-blur-sm hover:shadow-md transition-all`}>
-                        <div className="flex items-start gap-2.5">
-                          <div className={`flex-shrink-0 mt-0.5 ${getTextColor(rec.type)}`}>
-                            {getIcon(rec.type)}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className={`font-semibold text-xs mb-1 ${getTextColor(rec.type)}`}>{rec.title}</p>
-                            <p className="text-xs text-gray-600 dark:text-gray-400 mb-2 leading-relaxed">{rec.description}</p>
-                            {rec.action && rec.actionLabel && (
-                              <button
-                                onClick={rec.action}
-                                className={`text-xs font-semibold ${getTextColor(rec.type)} hover:opacity-80 transition-opacity flex items-center gap-1`}
-                              >
-                                {rec.actionLabel} →
-                              </button>
-                            )}
-                          </div>
+                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Post Status</p>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-gray-600 dark:text-gray-400">Published</span>
+                          <span className="text-sm font-semibold text-green-600 dark:text-green-400">{publishedPosts}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-gray-600 dark:text-gray-400">Scheduled</span>
+                          <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">{scheduledPosts}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-gray-600 dark:text-gray-400">Drafts</span>
+                          <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">{draftPosts}</span>
                         </div>
                       </div>
-                    ))}
+                    </div>
+                    
+                    {/* Engagement Rate */}
+                    <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Engagement Rate</span>
+                        <span className="text-lg font-bold text-primary-600 dark:text-primary-400">{engagementRate}%</span>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Based on {new Intl.NumberFormat('en-US').format(totalReach)} total {isBusiness ? 'reach' : 'followers'}
+                      </p>
+                    </div>
+                    
+                    {/* Total Posts */}
+                    <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Total Posts</span>
+                        <span className="text-lg font-bold text-gray-900 dark:text-white">{totalPosts}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              ) : null;
-            })()}
-            
-            {/* Best Posting Times - Dynamic Based on User Data */}
-            {user.plan !== 'Free' && (() => {
+                );
+                })()}
+              
+              {/* Best Posting Times - Dynamic Based on User Data */}
+              {(() => {
             // Analyze user's actual posting patterns and engagement
             const publishedPosts = posts?.filter(p => p.status === 'Published' && (p.scheduledDate || p.createdAt)) || [];
             const scheduledPosts = posts?.filter(p => p.status === 'Scheduled' && p.scheduledDate) || [];
@@ -1273,6 +1119,641 @@ export const Dashboard: React.FC = () => {
               </div>
             );
           })()}
+            </div>
+          )}
+          
+          {/* Second Row: AI Insights and Content Ideas */}
+          {user.plan !== 'Free' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            {/* AI Insights & Recommendations Panel - Redesigned */}
+            {(() => {
+              // Generate actionable recommendations based on user data
+              const recommendations: Array<{ type: 'success' | 'info' | 'warning' | 'tip'; title: string; description: string; action?: () => void; actionLabel?: string }> = [];
+              
+              // Check posting frequency
+              const postsThisWeek = posts.filter(p => {
+                const postDate = new Date(p.createdAt || 0);
+                const weekAgo = new Date();
+                weekAgo.setDate(weekAgo.getDate() - 7);
+                return postDate > weekAgo;
+              }).length;
+              
+              if (postsThisWeek < 3) {
+                recommendations.push({
+                  type: 'tip',
+                  title: 'Increase Posting Frequency',
+                  description: `You've posted ${postsThisWeek} times this week. Consistent posting improves engagement.`,
+                  action: () => setActivePage('compose'),
+                  actionLabel: 'Create Post'
+                });
+              }
+              
+              // Check upcoming schedule
+              const upcomingCount = calendarEvents.filter(e => {
+                const eventDate = new Date(e.date);
+                return eventDate > new Date();
+              }).length;
+              
+              if (upcomingCount === 0) {
+                recommendations.push({
+                  type: 'warning',
+                  title: 'No Upcoming Posts',
+                  description: 'Schedule content ahead of time to maintain consistent presence.',
+                  action: () => setActivePage('compose'),
+                  actionLabel: 'Schedule Post'
+                });
+              }
+              
+              // Check unread messages
+              const unreadCount = messages.filter(m => !m.isArchived).length;
+              if (unreadCount > 5) {
+                recommendations.push({
+                  type: 'info',
+                  title: 'Messages Need Attention',
+                  description: `You have ${unreadCount} unread messages. Quick responses improve engagement.`,
+                  action: () => setActivePage('inbox'),
+                  actionLabel: 'View Inbox'
+                });
+              }
+              
+              // Suggest automation for users who haven't used it
+              if (user?.plan !== 'Free') {
+                recommendations.push({
+                  type: 'tip',
+                  title: 'Try Quick Post Automation',
+                  description: 'Upload images or videos and let AI automatically create captions, hashtags, and schedule posts at optimal times.',
+                  action: () => setActivePage('automation'),
+                  actionLabel: 'Try Automation'
+                });
+              }
+              
+              // Success recommendation if posting consistently
+              if (postsThisWeek >= 5 && upcomingCount >= 3) {
+                recommendations.push({
+                  type: 'success',
+                  title: 'Great Consistency! 🎉',
+                  description: `You've posted ${postsThisWeek} times this week and have ${upcomingCount} posts scheduled. Keep it up!`
+                });
+              }
+              
+              // Default recommendation if no others
+              if (recommendations.length === 0) {
+                recommendations.push({
+                  type: 'tip',
+                  title: 'Explore Analytics',
+                  description: 'Check your analytics to see what content performs best and optimize your strategy.',
+                  action: () => setActivePage('analytics'),
+                  actionLabel: 'View Analytics'
+                });
+              }
+              
+              // Limit to 5 recommendations for taller box
+              const displayRecommendations = recommendations.slice(0, 5);
+              
+              const getIcon = (type: string) => {
+                switch(type) {
+                  case 'success': return <CheckCircleIcon className="w-5 h-5" />;
+                  case 'warning': return <FlagIcon className="w-5 h-5" />;
+                  case 'info': return <SparklesIcon className="w-5 h-5" />;
+                  default: return <SparklesIcon className="w-5 h-5" />;
+                }
+              };
+              
+              const getGradientClasses = (type: string) => {
+                switch(type) {
+                  case 'success': return 'from-emerald-50 to-green-50 dark:from-emerald-900/30 dark:to-green-900/20 border-emerald-200 dark:border-emerald-700/50';
+                  case 'warning': return 'from-amber-50 to-yellow-50 dark:from-amber-900/30 dark:to-yellow-900/20 border-amber-200 dark:border-amber-700/50';
+                  case 'info': return 'from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/20 border-blue-200 dark:border-blue-700/50';
+                  default: return 'from-purple-50 to-indigo-50 dark:from-purple-900/30 dark:to-indigo-900/20 border-purple-200 dark:border-purple-700/50';
+                }
+              };
+              
+              const getTextColor = (type: string) => {
+                switch(type) {
+                  case 'success': return 'text-emerald-700 dark:text-emerald-300';
+                  case 'warning': return 'text-amber-700 dark:text-amber-300';
+                  case 'info': return 'text-blue-700 dark:text-blue-300';
+                  default: return 'text-purple-700 dark:text-purple-300';
+                }
+              };
+              
+              return displayRecommendations.length > 0 ? (
+                <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 p-5 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-600">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl">
+                      <SparklesIcon className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-gray-900 dark:text-white">AI Insights</h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Smart Recommendations</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2.5 max-h-[500px] overflow-y-auto custom-scrollbar">
+                    {displayRecommendations.map((rec, idx) => (
+                      <div key={idx} className={`p-3.5 rounded-xl border bg-gradient-to-r ${getGradientClasses(rec.type)} backdrop-blur-sm hover:shadow-md transition-all`}>
+                        <div className="flex items-start gap-2.5">
+                          <div className={`flex-shrink-0 mt-0.5 ${getTextColor(rec.type)}`}>
+                            {getIcon(rec.type)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={`font-semibold text-xs mb-1 ${getTextColor(rec.type)}`}>{rec.title}</p>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 mb-2 leading-relaxed">{rec.description}</p>
+                            {rec.action && rec.actionLabel && (
+                              <button
+                                onClick={rec.action}
+                                className={`text-xs font-semibold ${getTextColor(rec.type)} hover:opacity-80 transition-opacity flex items-center gap-1`}
+                              >
+                                {rec.actionLabel} →
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null;
+            })()}
+            
+            {/* Content Suggestions Panel - Phase 3 Feature 4 */}
+            {(() => {
+              // Generate content suggestions based on user's niche, recent posts, and performance
+              const niche = isBusiness ? user?.businessType : user?.niche;
+              const recentPosts = posts.filter(p => p.status === 'Published').slice(0, 5);
+              // Note: State hooks (isGeneratingIdeas, generatedIdeas, selectedCategory, showIdeasModal) 
+              // and handleGenerateIdeas function are now at the top level of the Dashboard component
+              
+              // Generate mock suggestions based on user type and niche
+              const generateSuggestions = (): Array<{ title: string; description: string; type: 'trending' | 'engagement' | 'niche' }> => {
+                const suggestions: Array<{ title: string; description: string; type: 'trending' | 'engagement' | 'niche' }> = [];
+                
+                if (isBusiness) {
+                  suggestions.push(
+                    {
+                      title: `Showcase ${niche || 'your business'} success story`,
+                      description: `Share a customer testimonial or case study to build trust.`,
+                      type: 'engagement'
+                    },
+                    {
+                      title: `Behind-the-scenes of ${niche || 'your operations'}`,
+                      description: `Give followers a peek into your business process.`,
+                      type: 'niche'
+                    },
+                    {
+                      title: `Industry tip or best practice`,
+                      description: `Position yourself as an expert by sharing valuable insights.`,
+                      type: 'trending'
+                    }
+                  );
+                } else {
+                  suggestions.push(
+                    {
+                      title: `Share a ${niche || 'personal'} milestone or achievement`,
+                      description: `Celebrate your progress with your audience.`,
+                      type: 'engagement'
+                    },
+                    {
+                      title: `Create ${niche || 'engaging'} behind-the-scenes content`,
+                      description: `Show your creative process or daily routine.`,
+                      type: 'niche'
+                    },
+                    {
+                      title: `Jump on trending ${niche || 'topic'} challenge`,
+                      description: `Participate in a trending challenge in your niche.`,
+                      type: 'trending'
+                    }
+                  );
+                }
+                
+                // If they have recent posts, suggest building on what worked
+                if (recentPosts.length > 0) {
+                  suggestions.push({
+                    title: 'Build on your best performing content',
+                    description: `Create a follow-up or series based on your successful posts.`,
+                    type: 'engagement'
+                  });
+                }
+                
+                return suggestions.slice(0, 5);
+              };
+              
+              const suggestions = generateSuggestions();
+              
+              const getTypeBadge = (type: string) => {
+                switch(type) {
+                  case 'trending': return { 
+                    label: 'Trending', 
+                    gradient: 'from-rose-500 to-pink-500',
+                    bg: 'bg-rose-50 dark:bg-rose-900/20',
+                    text: 'text-rose-700 dark:text-rose-300',
+                    border: 'border-rose-200 dark:border-rose-700/50',
+                    category: 'trending' as const
+                  };
+                  case 'engagement': return { 
+                    label: 'High Engagement', 
+                    gradient: 'from-blue-500 to-cyan-500',
+                    bg: 'bg-blue-50 dark:bg-blue-900/20',
+                    text: 'text-blue-700 dark:text-blue-300',
+                    border: 'border-blue-200 dark:border-blue-700/50',
+                    category: 'engagement' as const
+                  };
+                  default: return { 
+                    label: 'Niche', 
+                    gradient: 'from-purple-500 to-indigo-500',
+                    bg: 'bg-purple-50 dark:bg-purple-900/20',
+                    text: 'text-purple-700 dark:text-purple-300',
+                    border: 'border-purple-200 dark:border-purple-700/50',
+                    category: 'niche' as const
+                  };
+                }
+              };
+              
+              return suggestions.length > 0 ? (
+                <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 p-5 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-600">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl">
+                        <SparklesIcon className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-bold text-gray-900 dark:text-white">Content Ideas</h3>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">AI-Powered Suggestions</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-2.5 max-h-[500px] overflow-y-auto custom-scrollbar">
+                    {suggestions.map((suggestion, idx) => {
+                      const badge = getTypeBadge(suggestion.type);
+                      return (
+                        <div 
+                          key={idx}
+                          className={`group p-3.5 rounded-xl border ${badge.bg} ${badge.border} hover:shadow-lg transition-all cursor-pointer backdrop-blur-sm`}
+                          onClick={() => {
+                            setComposeContext({
+                              media: null,
+                              results: [],
+                              captionText: suggestion.title + ': ' + suggestion.description,
+                              postGoal: 'engagement',
+                              postTone: 'friendly'
+                            });
+                            setActivePage('compose');
+                          }}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className={`flex-shrink-0 p-1.5 bg-gradient-to-br ${badge.gradient} rounded-lg`}>
+                              <SparklesIcon className="w-3.5 h-3.5 text-white" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1.5">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleGenerateIdeas(badge.category);
+                                  }}
+                                  className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${badge.text} ${badge.bg} border ${badge.border} hover:opacity-80 transition-opacity cursor-pointer`}
+                                  disabled={isGeneratingIdeas}
+                                >
+                                  {badge.label}
+                                </button>
+                              </div>
+                              <p className={`font-semibold text-xs mb-1 ${badge.text}`}>
+                                {suggestion.title}
+                              </p>
+                              <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+                                {suggestion.description}
+                              </p>
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setComposeContext({
+                                  media: null,
+                                  results: [],
+                                  captionText: suggestion.title + ': ' + suggestion.description,
+                                  postGoal: 'engagement',
+                                  postTone: 'friendly'
+                                });
+                                setActivePage('compose');
+                              }}
+                              className={`flex-shrink-0 p-1.5 bg-gradient-to-br ${badge.gradient} text-white rounded-lg hover:opacity-90 transition-opacity opacity-0 group-hover:opacity-100`}
+                              title="Create post from this suggestion"
+                            >
+                              <SparklesIcon className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null;
+            })()}
+          </div>
+          )}
+          
+          {/* Fan Engagement Hub - Creator & Agency Only */}
+          {(() => {
+            // Show for Creators OR Business Agency (since Agency manages creators)
+            const shouldShowFanHub = !isBusiness || user?.plan === 'Agency';
+            if (!shouldShowFanHub) return null;
+            
+            const fanMessages = messages.filter(m => !m.isArchived && (m.category === 'Fan Message' || !m.category));
+            const collabRequests = messages.filter(m => !m.isArchived && m.category === 'Collab Request');
+            const questions = messages.filter(m => !m.isArchived && m.category === 'Question');
+            const feedback = messages.filter(m => !m.isArchived && m.category === 'Feedback');
+            
+            return (fanMessages.length > 0 || collabRequests.length > 0 || questions.length > 0) ? (
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">Fan Engagement Hub</h3>
+                  <button onClick={() => setActivePage('inbox')} className="text-sm text-primary-600 hover:underline">View Inbox</button>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="p-4 bg-gradient-to-br from-pink-50 to-rose-50 dark:from-pink-900/20 dark:to-rose-900/20 rounded-lg border border-pink-200 dark:border-pink-700 text-center">
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white mb-1">{fanMessages.length}</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Fan Messages</p>
+                  </div>
+                  <div className="p-4 bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 rounded-lg border border-blue-200 dark:border-blue-700 text-center">
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white mb-1">{collabRequests.length}</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Collab Requests</p>
+                  </div>
+                  <div className="p-4 bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 rounded-lg border border-purple-200 dark:border-purple-700 text-center">
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white mb-1">{questions.length}</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Questions</p>
+                  </div>
+                  <div className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg border border-green-200 dark:border-green-700 text-center">
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white mb-1">{feedback.length}</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Feedback</p>
+                  </div>
+                </div>
+              </div>
+            ) : null;
+          })()}
+          
+          {/* Customer Engagement Hub - Business Starter/Growth Only */}
+          {isBusiness && user?.plan !== 'Agency' && (() => {
+            const leadMessages = messages.filter(m => !m.isArchived && m.category === 'Lead');
+            const supportMessages = messages.filter(m => !m.isArchived && m.category === 'Support');
+            const opportunityMessages = messages.filter(m => !m.isArchived && m.category === 'Opportunity');
+            const generalMessages = messages.filter(m => !m.isArchived && (!m.category || m.category === 'General'));
+            
+            return (leadMessages.length > 0 || supportMessages.length > 0 || opportunityMessages.length > 0 || generalMessages.length > 0) ? (
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">Customer Engagement Hub</h3>
+                  <button onClick={() => setActivePage('inbox')} className="text-sm text-primary-600 hover:underline">View Inbox</button>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="p-4 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 rounded-lg border border-emerald-200 dark:border-emerald-700 text-center">
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white mb-1">{leadMessages.length}</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Lead Messages</p>
+                  </div>
+                  <div className="p-4 bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 rounded-lg border border-blue-200 dark:border-blue-700 text-center">
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white mb-1">{supportMessages.length}</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Support Requests</p>
+                  </div>
+                  <div className="p-4 bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 rounded-lg border border-purple-200 dark:border-purple-700 text-center">
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white mb-1">{opportunityMessages.length}</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Opportunities</p>
+                  </div>
+                  <div className="p-4 bg-gradient-to-br from-gray-50 to-slate-50 dark:from-gray-900/20 dark:to-slate-900/20 rounded-lg border border-gray-200 dark:border-gray-700 text-center">
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white mb-1">{generalMessages.length}</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">General Messages</p>
+                  </div>
+                </div>
+              </div>
+            ) : null;
+          })()}
+          
+          {/* Performance Comparison - Business Only (Separate Section) */}
+          {isBusiness && (
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-2">
+                    <TrendingIcon className="w-6 h-6 text-primary-600 dark:text-primary-400" />
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">Performance Comparison</h3>
+                  </div>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => setComparisonView('WoW')}
+                      className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                        comparisonView === 'WoW' 
+                          ? 'bg-primary-600 text-white' 
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      Week-over-Week
+                    </button>
+                    <button 
+                      onClick={() => setComparisonView('MoM')}
+                      className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                        comparisonView === 'MoM' 
+                          ? 'bg-primary-600 text-white' 
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      Month-over-Month
+                    </button>
+                  </div>
+                </div>
+                  
+                {/* Week-over-Week Comparison */}
+                {comparisonView === 'WoW' && (() => {
+                  // Calculate week-over-week metrics
+                  const now = new Date();
+                  const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                  const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+                  
+                  // Mock calculations - in real app, these would come from analytics data
+                  const currentWeekPosts = posts.filter(p => {
+                    const postDate = new Date(p.createdAt || 0);
+                    return postDate >= oneWeekAgo;
+                  }).length;
+                  
+                  const previousWeekPosts = Math.max(1, Math.round(currentWeekPosts * (0.85 + Math.random() * 0.3))); // Mock: 70-115% of current
+                  
+                  const currentWeekFollowers = (user?.socialStats?.totalFollowers || 0);
+                  const previousWeekFollowers = Math.max(1, Math.round(currentWeekFollowers * (0.95 + Math.random() * 0.1))); // Mock: 95-105% of current
+                  
+                  const currentWeekEngagement = messages.filter(m => !m.isArchived).length;
+                  const previousWeekEngagement = Math.max(1, Math.round(currentWeekEngagement * (0.8 + Math.random() * 0.4))); // Mock: 80-120% of current
+                  
+                  const currentWeekReach = isBusiness ? (user?.socialStats?.totalReach || 0) : currentWeekFollowers;
+                  const previousWeekReach = Math.max(1, Math.round(currentWeekReach * (0.9 + Math.random() * 0.2))); // Mock: 90-110% of current
+                  
+                  const calculateChange = (current: number, previous: number) => {
+                    const change = current - previous;
+                    const changePercent = previous > 0 ? Math.round((change / previous) * 100) : 0;
+                    return { change, changePercent, isPositive: changePercent >= 0 };
+                  };
+                  
+                  const postsChange = calculateChange(currentWeekPosts, previousWeekPosts);
+                  const followersChange = calculateChange(currentWeekFollowers, previousWeekFollowers);
+                  const engagementChange = calculateChange(currentWeekEngagement, previousWeekEngagement);
+                  const reachChange = calculateChange(currentWeekReach, previousWeekReach);
+                  
+                  const metrics = [
+                    {
+                      label: isBusiness ? 'Potential Reach' : 'Followers',
+                      current: currentWeekFollowers,
+                      previous: previousWeekFollowers,
+                      change: followersChange.change,
+                      changePercent: followersChange.changePercent,
+                      isPositive: followersChange.isPositive,
+                      icon: <UserIcon className="w-5 h-5" />,
+                      format: (n: number) => n.toLocaleString()
+                    },
+                    {
+                      label: isBusiness ? 'Reach' : 'Engagement',
+                      current: isBusiness ? currentWeekReach : currentWeekEngagement,
+                      previous: isBusiness ? previousWeekReach : previousWeekEngagement,
+                      change: isBusiness ? reachChange.change : engagementChange.change,
+                      changePercent: isBusiness ? reachChange.changePercent : engagementChange.changePercent,
+                      isPositive: isBusiness ? reachChange.isPositive : engagementChange.isPositive,
+                      icon: <HeartIcon className="w-5 h-5" />,
+                      format: (n: number) => n.toLocaleString()
+                    },
+                    {
+                      label: 'Posts Published',
+                      current: currentWeekPosts,
+                      previous: previousWeekPosts,
+                      change: postsChange.change,
+                      changePercent: postsChange.changePercent,
+                      isPositive: postsChange.isPositive,
+                      icon: <SparklesIcon className="w-5 h-5" />,
+                      format: (n: number) => n.toString()
+                    },
+                    {
+                      label: isBusiness ? 'Leads Generated' : 'Response Rate',
+                      current: isBusiness ? Math.round((currentWeekEngagement * 0.3)) : Math.round((messages.filter(m => m.isArchived).length / Math.max(1, messages.length)) * 100),
+                      previous: isBusiness ? Math.round((previousWeekEngagement * 0.25)) : Math.round((messages.filter(m => m.isArchived).length / Math.max(1, messages.length)) * 85),
+                      change: isBusiness ? Math.round((currentWeekEngagement * 0.3) - (previousWeekEngagement * 0.25)) : 5,
+                      changePercent: isBusiness ? 20 : 8,
+                      isPositive: true,
+                      icon: isBusiness ? <DollarSignIcon className="w-5 h-5" /> : <CheckCircleIcon className="w-5 h-5" />,
+                      format: (n: number) => isBusiness ? n.toLocaleString() : `${n}%`
+                    }
+                  ];
+                  
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                      {metrics.map((metric, idx) => (
+                        <div 
+                          key={idx}
+                          className="p-6 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-xl border border-gray-200 dark:border-gray-600"
+                        >
+                          <div className="flex items-center gap-2 mb-4">
+                            <div className={`flex-shrink-0 p-2 rounded-lg ${
+                              metric.isPositive 
+                                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' 
+                                : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                            }`}>
+                              {metric.icon}
+                            </div>
+                            <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+                              {metric.label}
+                            </span>
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                              {metric.format(metric.current)}
+                            </p>
+                            <div className="flex items-center gap-1 flex-wrap">
+                              <span className={`text-xs font-semibold flex items-center gap-1 ${
+                                metric.isPositive 
+                                  ? 'text-green-600 dark:text-green-400' 
+                                  : 'text-red-600 dark:text-red-400'
+                              }`}>
+                                {metric.isPositive ? (
+                                  <ArrowUpIcon className="w-3 h-3" />
+                                ) : (
+                                  <ArrowUpIcon className="w-3 h-3 rotate-180" />
+                                )}
+                                {Math.abs(metric.changePercent)}%
+                              </span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">vs. last week</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+                
+                {/* Month-over-Month Comparison */}
+                {comparisonView === 'MoM' && (() => {
+                  // Calculate month-over-month metrics
+                  const now = new Date();
+                  const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                  const twoMonthsAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+                  
+                  const currentMonthPosts = posts.filter(p => {
+                    const postDate = new Date(p.createdAt || 0);
+                    return postDate >= oneMonthAgo;
+                  }).length;
+                  
+                  const previousMonthPosts = Math.max(1, Math.round(currentMonthPosts * (0.75 + Math.random() * 0.5))); // Mock: 75-125% of current
+                  
+                  const currentMonthFollowers = (user?.socialStats?.totalFollowers || 0);
+                  const previousMonthFollowers = Math.max(1, Math.round(currentMonthFollowers * (0.9 + Math.random() * 0.2))); // Mock: 90-110% of current
+                  
+                  const currentMonthEngagement = messages.filter(m => !m.isArchived).length;
+                  const previousMonthEngagement = Math.max(1, Math.round(currentMonthEngagement * (0.7 + Math.random() * 0.6))); // Mock: 70-130% of current
+                  
+                  const calculateChange = (current: number, previous: number) => {
+                    const change = current - previous;
+                    const changePercent = previous > 0 ? Math.round((change / previous) * 100) : 0;
+                    return { change, changePercent, isPositive: changePercent >= 0 };
+                  };
+                  
+                  const postsChange = calculateChange(currentMonthPosts, previousMonthPosts);
+                  const followersChange = calculateChange(currentMonthFollowers, previousMonthFollowers);
+                  const engagementChange = calculateChange(currentMonthEngagement, previousMonthEngagement);
+                  
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div className="p-6 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-xl border border-gray-200 dark:border-gray-600">
+                        <div className="flex items-center justify-between mb-4">
+                          <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">Total Posts</span>
+                          <span className={`text-xs font-semibold ${
+                            postsChange.isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                          }`}>
+                            {postsChange.isPositive ? '+' : ''}{postsChange.changePercent}%
+                          </span>
+                        </div>
+                        <p className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{currentMonthPosts}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">vs. {previousMonthPosts} last month</p>
+                      </div>
+                      <div className="p-6 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-xl border border-gray-200 dark:border-gray-600">
+                        <div className="flex items-center justify-between mb-4">
+                          <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">{isBusiness ? 'Reach' : 'Followers'}</span>
+                          <span className={`text-xs font-semibold ${
+                            followersChange.isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                          }`}>
+                            {followersChange.isPositive ? '+' : ''}{followersChange.changePercent}%
+                          </span>
+                        </div>
+                        <p className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{currentMonthFollowers.toLocaleString()}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">vs. {previousMonthFollowers.toLocaleString()} last month</p>
+                      </div>
+                      <div className="p-6 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-xl border border-gray-200 dark:border-gray-600">
+                        <div className="flex items-center justify-between mb-4">
+                          <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">{isBusiness ? 'Leads' : 'Messages'}</span>
+                          <span className={`text-xs font-semibold ${
+                            engagementChange.isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                          }`}>
+                            {engagementChange.isPositive ? '+' : ''}{engagementChange.changePercent}%
+                          </span>
+                        </div>
+                        <p className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{currentMonthEngagement}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">vs. {previousMonthEngagement} last month</p>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
           
           {/* Lead Generation Dashboard - Business Only (Priority 1) */}
           {isBusiness && (() => {
@@ -1348,7 +1829,7 @@ export const Dashboard: React.FC = () => {
                   <button
                     onClick={() => {
                       setFilters(prev => ({ ...prev, category: 'Lead' }));
-                      setViewMode('Inbox');
+                      setActivePage('inbox');
                     }}
                     className="text-sm text-primary-600 dark:text-primary-400 hover:underline font-medium"
                   >
@@ -1793,182 +2274,6 @@ export const Dashboard: React.FC = () => {
             );
           })()}
           
-          {/* Content Suggestions Panel - Phase 3 Feature 4 */}
-          {user.plan !== 'Free' && (() => {
-            // Generate content suggestions based on user's niche, recent posts, and performance
-            const niche = isBusiness ? user?.businessType : user?.niche;
-            const recentPosts = posts.filter(p => p.status === 'Published').slice(0, 5);
-            // Note: State hooks (isGeneratingIdeas, generatedIdeas, selectedCategory, showIdeasModal) 
-            // and handleGenerateIdeas function are now at the top level of the Dashboard component
-            
-            // Generate mock suggestions based on user type and niche
-            const generateSuggestions = (): Array<{ title: string; description: string; type: 'trending' | 'engagement' | 'niche' }> => {
-              const suggestions: Array<{ title: string; description: string; type: 'trending' | 'engagement' | 'niche' }> = [];
-              
-              if (isBusiness) {
-                suggestions.push(
-                  {
-                    title: `Showcase ${niche || 'your business'} success story`,
-                    description: `Share a customer testimonial or case study to build trust.`,
-                    type: 'engagement'
-                  },
-                  {
-                    title: `Behind-the-scenes of ${niche || 'your operations'}`,
-                    description: `Give followers a peek into your business process.`,
-                    type: 'niche'
-                  },
-                  {
-                    title: `Industry tip or best practice`,
-                    description: `Position yourself as an expert by sharing valuable insights.`,
-                    type: 'trending'
-                  }
-                );
-              } else {
-                suggestions.push(
-                  {
-                    title: `Share a ${niche || 'personal'} milestone or achievement`,
-                    description: `Celebrate your progress with your audience.`,
-                    type: 'engagement'
-                  },
-                  {
-                    title: `Create ${niche || 'engaging'} behind-the-scenes content`,
-                    description: `Show your creative process or daily routine.`,
-                    type: 'niche'
-                  },
-                  {
-                    title: `Jump on trending ${niche || 'topic'} challenge`,
-                    description: `Participate in a trending challenge in your niche.`,
-                    type: 'trending'
-                  }
-                );
-              }
-              
-              // If they have recent posts, suggest building on what worked
-              if (recentPosts.length > 0) {
-                suggestions.push({
-                  title: 'Build on your best performing content',
-                  description: `Create a follow-up or series based on your successful posts.`,
-                  type: 'engagement'
-                });
-              }
-              
-              return suggestions.slice(0, 5);
-            };
-            
-            const suggestions = generateSuggestions();
-            
-            const getTypeBadge = (type: string) => {
-              switch(type) {
-                case 'trending': return { 
-                  label: 'Trending', 
-                  gradient: 'from-rose-500 to-pink-500',
-                  bg: 'bg-rose-50 dark:bg-rose-900/20',
-                  text: 'text-rose-700 dark:text-rose-300',
-                  border: 'border-rose-200 dark:border-rose-700/50',
-                  category: 'trending' as const
-                };
-                case 'engagement': return { 
-                  label: 'High Engagement', 
-                  gradient: 'from-blue-500 to-cyan-500',
-                  bg: 'bg-blue-50 dark:bg-blue-900/20',
-                  text: 'text-blue-700 dark:text-blue-300',
-                  border: 'border-blue-200 dark:border-blue-700/50',
-                  category: 'engagement' as const
-                };
-                default: return { 
-                  label: 'Niche', 
-                  gradient: 'from-purple-500 to-indigo-500',
-                  bg: 'bg-purple-50 dark:bg-purple-900/20',
-                  text: 'text-purple-700 dark:text-purple-300',
-                  border: 'border-purple-200 dark:border-purple-700/50',
-                  category: 'niche' as const
-                };
-              }
-            };
-            
-            return suggestions.length > 0 ? (
-              <>
-                <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 p-5 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-600">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl">
-                        <SparklesIcon className="w-5 h-5 text-white" />
-                      </div>
-                      <div>
-                        <h3 className="text-base font-bold text-gray-900 dark:text-white">Content Ideas</h3>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">AI-Powered Suggestions</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="space-y-2.5 max-h-[500px] overflow-y-auto custom-scrollbar">
-                    {suggestions.map((suggestion, idx) => {
-                      const badge = getTypeBadge(suggestion.type);
-                      return (
-                        <div 
-                          key={idx}
-                          className={`group p-3.5 rounded-xl border ${badge.bg} ${badge.border} hover:shadow-lg transition-all cursor-pointer backdrop-blur-sm`}
-                          onClick={() => {
-                            setComposeContext({
-                              media: null,
-                              results: [],
-                              captionText: suggestion.title + ': ' + suggestion.description,
-                              postGoal: 'engagement',
-                              postTone: 'friendly'
-                            });
-                            setActivePage('compose');
-                          }}
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className={`flex-shrink-0 p-1.5 bg-gradient-to-br ${badge.gradient} rounded-lg`}>
-                              <SparklesIcon className="w-3.5 h-3.5 text-white" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1.5">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleGenerateIdeas(badge.category);
-                                  }}
-                                  className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${badge.text} ${badge.bg} border ${badge.border} hover:opacity-80 transition-opacity cursor-pointer`}
-                                  disabled={isGeneratingIdeas}
-                                >
-                                  {badge.label}
-                                </button>
-                              </div>
-                              <p className={`font-semibold text-xs mb-1 ${badge.text}`}>
-                                {suggestion.title}
-                              </p>
-                              <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
-                                {suggestion.description}
-                              </p>
-                            </div>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setComposeContext({
-                                  media: null,
-                                  results: [],
-                                  captionText: suggestion.title + ': ' + suggestion.description,
-                                  postGoal: 'engagement',
-                                  postTone: 'friendly'
-                                });
-                                setActivePage('compose');
-                              }}
-                              className={`flex-shrink-0 p-1.5 bg-gradient-to-br ${badge.gradient} text-white rounded-lg hover:opacity-90 transition-opacity opacity-0 group-hover:opacity-100`}
-                              title="Create post from this suggestion"
-                            >
-                              <SparklesIcon className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </>
-            ) : null;
-          })()}
-          
           {/* Content Ideas Modal */}
           {showIdeasModal && (
             <div 
@@ -2073,447 +2378,13 @@ export const Dashboard: React.FC = () => {
             </div>
           )}
             
-            {/* Performance Comparison - Business Only, Beside Content Ideas */}
-            {isBusiness && (
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-2">
-                    <TrendingIcon className="w-6 h-6 text-primary-600 dark:text-primary-400" />
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">Performance Comparison</h3>
-                  </div>
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => setComparisonView('WoW')}
-                      className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                        comparisonView === 'WoW' 
-                          ? 'bg-primary-600 text-white' 
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                      }`}
-                    >
-                      Week-over-Week
-                    </button>
-                    <button 
-                      onClick={() => setComparisonView('MoM')}
-                      className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                        comparisonView === 'MoM' 
-                          ? 'bg-primary-600 text-white' 
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                      }`}
-                    >
-                      Month-over-Month
-                    </button>
-                  </div>
-                </div>
-                  
-                {/* Week-over-Week Comparison */}
-                {comparisonView === 'WoW' && (() => {
-                  // Calculate week-over-week metrics
-                  const now = new Date();
-                  const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-                  const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
-                  
-                  // Mock calculations - in real app, these would come from analytics data
-                  const currentWeekPosts = posts.filter(p => {
-                    const postDate = new Date(p.createdAt || 0);
-                    return postDate >= oneWeekAgo;
-                  }).length;
-                  
-                  const previousWeekPosts = Math.max(1, Math.round(currentWeekPosts * (0.85 + Math.random() * 0.3))); // Mock: 70-115% of current
-                  
-                  const currentWeekFollowers = (user?.socialStats?.totalFollowers || 0);
-                  const previousWeekFollowers = Math.max(1, Math.round(currentWeekFollowers * (0.95 + Math.random() * 0.1))); // Mock: 95-105% of current
-                  
-                  const currentWeekEngagement = messages.filter(m => !m.isArchived).length;
-                  const previousWeekEngagement = Math.max(1, Math.round(currentWeekEngagement * (0.8 + Math.random() * 0.4))); // Mock: 80-120% of current
-                  
-                  const currentWeekReach = isBusiness ? (user?.socialStats?.totalReach || 0) : currentWeekFollowers;
-                  const previousWeekReach = Math.max(1, Math.round(currentWeekReach * (0.9 + Math.random() * 0.2))); // Mock: 90-110% of current
-                  
-                  const calculateChange = (current: number, previous: number) => {
-                    const change = current - previous;
-                    const changePercent = previous > 0 ? Math.round((change / previous) * 100) : 0;
-                    return { change, changePercent, isPositive: changePercent >= 0 };
-                  };
-                  
-                  const postsChange = calculateChange(currentWeekPosts, previousWeekPosts);
-                  const followersChange = calculateChange(currentWeekFollowers, previousWeekFollowers);
-                  const engagementChange = calculateChange(currentWeekEngagement, previousWeekEngagement);
-                  const reachChange = calculateChange(currentWeekReach, previousWeekReach);
-                  
-                  const metrics = [
-                    {
-                      label: isBusiness ? 'Potential Reach' : 'Followers',
-                      current: currentWeekFollowers,
-                      previous: previousWeekFollowers,
-                      change: followersChange.change,
-                      changePercent: followersChange.changePercent,
-                      isPositive: followersChange.isPositive,
-                      icon: <UserIcon className="w-5 h-5" />,
-                      format: (n: number) => n.toLocaleString()
-                    },
-                    {
-                      label: isBusiness ? 'Reach' : 'Engagement',
-                      current: isBusiness ? currentWeekReach : currentWeekEngagement,
-                      previous: isBusiness ? previousWeekReach : previousWeekEngagement,
-                      change: isBusiness ? reachChange.change : engagementChange.change,
-                      changePercent: isBusiness ? reachChange.changePercent : engagementChange.changePercent,
-                      isPositive: isBusiness ? reachChange.isPositive : engagementChange.isPositive,
-                      icon: <HeartIcon className="w-5 h-5" />,
-                      format: (n: number) => n.toLocaleString()
-                    },
-                    {
-                      label: 'Posts Published',
-                      current: currentWeekPosts,
-                      previous: previousWeekPosts,
-                      change: postsChange.change,
-                      changePercent: postsChange.changePercent,
-                      isPositive: postsChange.isPositive,
-                      icon: <SparklesIcon className="w-5 h-5" />,
-                      format: (n: number) => n.toString()
-                    },
-                    {
-                      label: isBusiness ? 'Leads Generated' : 'Response Rate',
-                      current: isBusiness ? Math.round((currentWeekEngagement * 0.3)) : Math.round((messages.filter(m => m.isArchived).length / Math.max(1, messages.length)) * 100),
-                      previous: isBusiness ? Math.round((previousWeekEngagement * 0.25)) : Math.round((messages.filter(m => m.isArchived).length / Math.max(1, messages.length)) * 85),
-                      change: isBusiness ? Math.round((currentWeekEngagement * 0.3) - (previousWeekEngagement * 0.25)) : 5,
-                      changePercent: isBusiness ? 20 : 8,
-                      isPositive: true,
-                      icon: isBusiness ? <DollarSignIcon className="w-5 h-5" /> : <CheckCircleIcon className="w-5 h-5" />,
-                      format: (n: number) => isBusiness ? n.toLocaleString() : `${n}%`
-                    }
-                  ];
-                  
-                  return (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                      {metrics.map((metric, idx) => (
-                        <div 
-                          key={idx}
-                          className="p-6 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-xl border border-gray-200 dark:border-gray-600"
-                        >
-                          <div className="flex items-center gap-2 mb-4">
-                            <div className={`flex-shrink-0 p-2 rounded-lg ${
-                              metric.isPositive 
-                                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' 
-                                : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
-                            }`}>
-                              {metric.icon}
-                            </div>
-                            <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
-                              {metric.label}
-                            </span>
-                          </div>
-                          <div className="space-y-2">
-                            <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                              {metric.format(metric.current)}
-                            </p>
-                            <div className="flex items-center gap-1 flex-wrap">
-                              <span className={`text-xs font-semibold flex items-center gap-1 ${
-                                metric.isPositive 
-                                  ? 'text-green-600 dark:text-green-400' 
-                                  : 'text-red-600 dark:text-red-400'
-                              }`}>
-                                {metric.isPositive ? (
-                                  <ArrowUpIcon className="w-3 h-3" />
-                                ) : (
-                                  <ArrowUpIcon className="w-3 h-3 rotate-180" />
-                                )}
-                                {Math.abs(metric.changePercent)}%
-                              </span>
-                              <span className="text-xs text-gray-500 dark:text-gray-400">vs. last week</span>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })()}
-                
-                {/* Month-over-Month Comparison */}
-                {comparisonView === 'MoM' && (() => {
-                  // Calculate month-over-month metrics
-                  const now = new Date();
-                  const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-                  const twoMonthsAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
-                  
-                  const currentMonthPosts = posts.filter(p => {
-                    const postDate = new Date(p.createdAt || 0);
-                    return postDate >= oneMonthAgo;
-                  }).length;
-                  
-                  const previousMonthPosts = Math.max(1, Math.round(currentMonthPosts * (0.75 + Math.random() * 0.5))); // Mock: 75-125% of current
-                  
-                  const currentMonthFollowers = (user?.socialStats?.totalFollowers || 0);
-                  const previousMonthFollowers = Math.max(1, Math.round(currentMonthFollowers * (0.9 + Math.random() * 0.2))); // Mock: 90-110% of current
-                  
-                  const currentMonthEngagement = messages.filter(m => !m.isArchived).length;
-                  const previousMonthEngagement = Math.max(1, Math.round(currentMonthEngagement * (0.7 + Math.random() * 0.6))); // Mock: 70-130% of current
-                  
-                  const calculateChange = (current: number, previous: number) => {
-                    const change = current - previous;
-                    const changePercent = previous > 0 ? Math.round((change / previous) * 100) : 0;
-                    return { change, changePercent, isPositive: changePercent >= 0 };
-                  };
-                  
-                  const postsChange = calculateChange(currentMonthPosts, previousMonthPosts);
-                  const followersChange = calculateChange(currentMonthFollowers, previousMonthFollowers);
-                  const engagementChange = calculateChange(currentMonthEngagement, previousMonthEngagement);
-                  
-                  return (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <div className="p-6 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-xl border border-gray-200 dark:border-gray-600">
-                        <div className="flex items-center justify-between mb-4">
-                          <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">Total Posts</span>
-                          <span className={`text-xs font-semibold ${
-                            postsChange.isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-                          }`}>
-                            {postsChange.isPositive ? '+' : ''}{postsChange.changePercent}%
-                          </span>
-                        </div>
-                        <p className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{currentMonthPosts}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">vs. {previousMonthPosts} last month</p>
-                      </div>
-                      <div className="p-6 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-xl border border-gray-200 dark:border-gray-600">
-                        <div className="flex items-center justify-between mb-4">
-                          <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">{isBusiness ? 'Reach' : 'Followers'}</span>
-                          <span className={`text-xs font-semibold ${
-                            followersChange.isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-                          }`}>
-                            {followersChange.isPositive ? '+' : ''}{followersChange.changePercent}%
-                          </span>
-                        </div>
-                        <p className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{currentMonthFollowers.toLocaleString()}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">vs. {previousMonthFollowers.toLocaleString()} last month</p>
-                      </div>
-                      <div className="p-6 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-xl border border-gray-200 dark:border-gray-600">
-                        <div className="flex items-center justify-between mb-4">
-                          <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">{isBusiness ? 'Leads' : 'Messages'}</span>
-                          <span className={`text-xs font-semibold ${
-                            engagementChange.isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-                          }`}>
-                            {engagementChange.isPositive ? '+' : ''}{engagementChange.changePercent}%
-                          </span>
-                        </div>
-                        <p className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{currentMonthEngagement}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">vs. {previousMonthEngagement} last month</p>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-            )}
-            
-          </div>
       </div>
   );
 
-  const renderInbox = () => (
-    // ... (Keep the Inbox render code mostly the same) ...
-    <div className="space-y-6 animate-fade-in">
-         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            {/* ... Search & Auto-Respond UI ... */}
-            <div className="flex items-center gap-4">
-                <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Inbox</h2>
-                <div className="relative">
-                    <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon className="w-5 h-5 text-gray-400" /></span>
-                    <input type="text" placeholder="Search user or content..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10 pr-4 py-2 w-full sm:w-64 border rounded-full bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-primary-500 focus:border-primary-500 dark:text-white dark:placeholder-gray-400" />
-                </div>
-            </div>
-             <div className="flex items-center gap-4">
-                <button onClick={categorizeAllMessages} className="text-sm font-medium text-primary-600 hover:underline">Categorize Inbox</button>
-                 <div className="flex items-center gap-2 p-1.5 bg-gray-200 dark:bg-gray-700 rounded-full">
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300 pl-3 pr-1 truncate max-w-[200px]">
-                        Auto-Respond{user?.role === 'Admin' || user?.plan === 'Agency' ? ` (${accountName})` : ''}
-                    </span>
-                    <button onClick={handleAutoRespondToggle} className={`${ settings.autoRespond ? 'bg-primary-600' : 'bg-gray-400 dark:bg-gray-600'} relative inline-flex h-6 w-11 items-center rounded-full transition-colors`}><span className={`${ settings.autoRespond ? 'translate-x-6' : 'translate-x-1'} inline-block h-4 w-4 transform rounded-full bg-white transition-transform`} /></button>
-                </div>
-            </div>
-        </div>
-        
-        {/* ... Filters ... */}
-        <div className="flex border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
-          {(isBusiness 
-            ? (['All', 'Lead', 'Support', 'Opportunity', 'General'] as const)
-            : (['All', 'Fan Message', 'Question', 'Collab Request', 'Feedback', 'General'] as const)
-          ).map(cat => (
-            <button 
-              key={cat} 
-              onClick={() => handleFilterChange('category', cat as any)} 
-              className={`px-4 py-2 text-sm font-medium whitespace-nowrap ${filters.category === cat ? 'border-b-2 border-primary-500 text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-
-        {/* Compact Filter Bar */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-3 mb-6">
-          <div className="flex flex-wrap items-center gap-4 lg:gap-6">
-            {/* Platform Filters */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:inline">Platform</span>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <button
-                  onClick={() => handleFilterChange('platform', 'All')}
-                  className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-all ${
-                    filters.platform === 'All'
-                      ? 'bg-primary-600 text-white shadow-sm'
-                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                  }`}
-                >
-                  All
-                </button>
-                {(Object.keys(platformFilterIcons) as Platform[]).map(platform => (
-                  <button
-                    key={platform}
-                    onClick={() => handleFilterChange('platform', platform)}
-                    className={`p-1.5 rounded-lg transition-all ${
-                      filters.platform === platform
-                        ? 'bg-primary-600 text-white shadow-sm'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
-                    }`}
-                    title={platform}
-                  >
-                    <span className="scale-90">{platformFilterIcons[platform]}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Separator */}
-            <div className="hidden lg:block w-px h-6 bg-gray-200 dark:bg-gray-700" />
-
-            {/* Type Filters */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:inline">Type</span>
-              <div className="flex items-center gap-1.5">
-                {(['All', 'DM', 'Comment'] as const).map(type => (
-                  <button
-                    key={type}
-                    onClick={() => handleFilterChange('messageType', type === 'All' ? 'All' : type)}
-                    className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-all ${
-                      filters.messageType === (type === 'All' ? 'All' : type)
-                        ? 'bg-primary-600 text-white shadow-sm'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                    }`}
-                  >
-                    {type}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Separator */}
-            <div className="hidden lg:block w-px h-6 bg-gray-200 dark:bg-gray-700" />
-
-            {/* Status Filters */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:inline">Status</span>
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => handleFilterChange('status', 'All')}
-                  className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-all ${
-                    filters.status === 'All'
-                      ? 'bg-primary-600 text-white shadow-sm'
-                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                  }`}
-                >
-                  All
-                </button>
-                <button
-                  onClick={() => handleFilterChange('status', 'Flagged')}
-                  className={`p-1.5 rounded-lg transition-all ${
-                    filters.status === 'Flagged'
-                      ? 'bg-primary-600 text-white shadow-sm'
-                      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
-                  }`}
-                  title="Flagged"
-                >
-                  <FlagIcon className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => handleFilterChange('status', 'Favorite')}
-                  className={`p-1.5 rounded-lg transition-all ${
-                    filters.status === 'Favorite'
-                      ? 'bg-primary-600 text-white shadow-sm'
-                      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
-                  }`}
-                  title="Favorites"
-                >
-                  <StarIcon className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Separator */}
-            <div className="hidden lg:block w-px h-6 bg-gray-200 dark:bg-gray-700" />
-
-            {/* Sentiment Filters */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:inline">Sentiment</span>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {(['All', 'Positive', 'Neutral', 'Negative'] as const).map(sentiment => (
-                  <button
-                    key={sentiment}
-                    onClick={() => handleFilterChange('sentiment', sentiment === 'All' ? 'All' : sentiment)}
-                    className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-all ${
-                      filters.sentiment === (sentiment === 'All' ? 'All' : sentiment)
-                        ? sentiment === 'All'
-                          ? 'bg-primary-600 text-white shadow-sm'
-                          : sentiment === 'Positive'
-                          ? 'bg-green-500 text-white shadow-sm'
-                          : sentiment === 'Neutral'
-                          ? 'bg-blue-500 text-white shadow-sm'
-                          : 'bg-red-500 text-white shadow-sm'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                    }`}
-                  >
-                    {sentiment}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-      {isLoading ? (
-        <div className="text-center py-16"><p>Loading messages...</p></div>
-      ) : filteredMessages.length > 0 ? (
-        <div className="grid grid-cols-1 gap-6">
-            {filteredMessages.map(message => (<MessageCard key={message.id} id={`message-card-${message.id}`} message={message} isSelected={selectedMessageIds.has(message.id)} onSelect={handleSelectMessage} onToggleFlag={handleToggleFlag} onToggleFavorite={handleToggleFavorite} onDelete={handleDeleteMessage} />))}
-        </div>
-      ) : (
-        <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-xl shadow-md"><h3 className="text-xl font-semibold text-gray-900 dark:text-white">Inbox Zero!</h3><p className="mt-2 text-gray-500 dark:text-gray-400">There are no messages for this account or filter.</p></div>
-      )}
-
-      {selectedMessageIds.size > 0 && (
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-auto bg-white dark:bg-gray-800 shadow-2xl rounded-full p-3 flex items-center gap-4 border-2 border-primary-500">
-            <span className="font-semibold px-2 text-gray-900 dark:text-white">{selectedMessageIds.size} selected</span>
-            <button 
-              onClick={handleBulkArchive} 
-              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-200 dark:bg-gray-600 rounded-full hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
-            >
-              Archive Selected
-            </button>
-            <button 
-              onClick={handleBulkDelete} 
-              className="px-4 py-2 text-sm font-medium text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/50 rounded-full hover:bg-red-200 dark:hover:bg-red-900 transition-colors"
-            >
-              Delete Selected
-            </button>
-          </div>
-      )}
-    </div>
-  );
 
   return (
-    <div id="tour-step-1-dashboard" className="space-y-6">
-         <div className="flex justify-end mb-2">
-            <div className="bg-gray-100 dark:bg-gray-700 p-1 rounded-lg inline-flex">
-                <button onClick={() => setViewMode('Overview')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${viewMode === 'Overview' ? 'bg-white dark:bg-gray-600 text-primary-600 dark:text-white shadow' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900'}`}>{isBusiness ? 'Command Center' : 'Overview'}</button>
-                <button onClick={() => setViewMode('Inbox')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${viewMode === 'Inbox' ? 'bg-white dark:bg-gray-600 text-primary-600 dark:text-white shadow' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900'}`}>Full Inbox</button>
-            </div>
-         </div>
-         {viewMode === 'Overview' ? renderCommandCenter() : renderInbox()}
+    <div id="tour-step-1-dashboard" className="space-y-6 max-w-7xl mx-auto w-full">
+      {renderCommandCenter()}
     </div>
   );
 };

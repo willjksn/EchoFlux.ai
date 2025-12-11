@@ -171,6 +171,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     YouTube: null,
     LinkedIn: null,
     Facebook: null,
+    Pinterest: null,
+    Discord: null,
+    Telegram: null,
+    Reddit: null,
   });
 
   /*--------------------------------------------------------------------
@@ -458,9 +462,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const deletePost = async (postId: string) => {
     if (!user) return;
 
-    await deleteDoc(doc(db, "users", user.id, "posts", postId))
-      .then(() => showToast("Post deleted", "success"))
-      .catch(() => showToast("Failed to delete post", "error"));
+    try {
+      await deleteDoc(doc(db, "users", user.id, "posts", postId));
+      // Update local state immediately to reflect deletion in UI
+      setPosts(prev => prev.filter(p => p.id !== postId));
+      showToast("Post deleted", "success");
+    } catch (error) {
+      console.error("Failed to delete post:", error);
+      showToast("Failed to delete post", "error");
+    }
   };
 
   /*--------------------------------------------------------------------
@@ -469,9 +479,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const addCalendarEvent = async (event: CalendarEvent) => {
     if (!user) return;
 
-    await setDoc(doc(db, "users", user.id, "calendar_events", event.id), {
-      ...event,
-    }).catch(() => showToast("Failed to save event", "error"));
+    // Remove undefined values to prevent Firestore errors
+    const cleanEvent: any = {};
+    Object.keys(event).forEach(key => {
+      const value = (event as any)[key];
+      if (value !== undefined) {
+        cleanEvent[key] = value;
+      }
+    });
+
+    await setDoc(doc(db, "users", user.id, "calendar_events", event.id), cleanEvent)
+      .catch(() => showToast("Failed to save event", "error"));
   };
 
   /*--------------------------------------------------------------------

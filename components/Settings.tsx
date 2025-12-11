@@ -1,14 +1,15 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Settings as AppSettings, Platform, CustomVoice, SocialAccount } from '../types';
-import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
+import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon } from './icons/PlatformIcons';
 import { useAppContext } from './AppContext';
 import { UpgradePrompt } from './UpgradePrompt';
 import { UploadIcon, TrashIcon, SettingsIcon, LinkIcon, SparklesIcon, CreditCardIcon, CheckCircleIcon, XMarkIcon, ClockIcon, VoiceIcon } from './icons/UIIcons';
-import { db, storage } from '../firebaseConfig';
+import { db, storage, auth } from '../firebaseConfig';
 // @ts-ignore
 import { ref, uploadBytes, getDownloadURL, deleteObject, listAll, getMetadata } from 'firebase/storage';
 import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { connectSocialAccount, disconnectSocialAccount } from '../src/services/socialMediaService';
+import { PLATFORM_CAPABILITIES, hasCapability, getCapabilityDescription } from '../src/services/platformCapabilities';
 
 interface SettingsProps {}
 
@@ -81,6 +82,10 @@ const platformIcons: Record<Platform, React.ReactNode> = {
   YouTube: <YouTubeIcon />,
   LinkedIn: <LinkedInIcon />,
   Facebook: <FacebookIcon />,
+  Pinterest: <PinterestIcon />,
+  Discord: <DiscordIcon />,
+  Telegram: <TelegramIcon />,
+  Reddit: <RedditIcon />,
 };
 
 const AccountConnection: React.FC<{
@@ -89,37 +94,87 @@ const AccountConnection: React.FC<{
     isConnecting: boolean;
     onConnect: (platform: Platform) => Promise<void>;
     onDisconnect: (platform: Platform) => Promise<void>;
-}> = ({ platform, account, isConnecting, onConnect, onDisconnect }) => {
+    onConnectOAuth1?: () => Promise<void>;
+}> = ({ platform, account, isConnecting, onConnect, onDisconnect, onConnectOAuth1 }) => {
     const isConnected = account?.connected || false;
     const accountUsername = account?.accountUsername;
+    // Check if OAuth 1.0a is connected (for X media uploads)
+    const hasOAuth1 = platform === 'X' && account && (account as any).oauthToken && (account as any).oauthTokenSecret;
 
     return (
-        <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-            <div className="flex items-center space-x-3 flex-1">
-                <span className="text-gray-600 dark:text-gray-300">{platformIcons[platform]}</span>
-                <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                        <span className="font-medium text-gray-800 dark:text-gray-200">{platform}</span>
+        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+            <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center space-x-3 flex-1">
+                    <span className="text-gray-600 dark:text-gray-300">{platformIcons[platform]}</span>
+                    <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                            <span className="font-medium text-gray-800 dark:text-gray-200">{platform}</span>
+                            {isConnected && (
+                                <CheckCircleIcon className="w-4 h-4 text-green-500 dark:text-green-400" />
+                            )}
+                        </div>
+                        {accountUsername && (
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">@{accountUsername}</p>
+                        )}
+                        {/* Show available features for this platform */}
                         {isConnected && (
-                            <CheckCircleIcon className="w-4 h-4 text-green-500 dark:text-green-400" />
+                            <div className="mt-1.5 flex flex-wrap gap-1">
+                                {hasCapability(platform, 'publishing') && (
+                                    <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Posting</span>
+                                )}
+                                {hasCapability(platform, 'inbox') && (
+                                    <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Inbox</span>
+                                )}
+                                {hasCapability(platform, 'analytics') && (
+                                    <span className="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">Analytics</span>
+                                )}
+                            </div>
                         )}
                     </div>
-                    {accountUsername && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">@{accountUsername}</p>
-                    )}
                 </div>
+                <button
+                    onClick={() => isConnected ? onDisconnect(platform) : onConnect(platform)}
+                    disabled={isConnecting}
+                    className={`px-4 py-1.5 text-sm font-semibold rounded-full transition-colors whitespace-nowrap ${
+                        isConnected
+                            ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-300 dark:hover:bg-red-900'
+                            : 'bg-primary-100 text-primary-700 hover:bg-primary-200 dark:bg-primary-900/50 dark:text-primary-300 dark:hover:bg-primary-900'
+                    } ${isConnecting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                    {isConnecting ? 'Connecting...' : isConnected ? 'Disconnect' : 'Connect'}
+                </button>
             </div>
-            <button
-                onClick={() => isConnected ? onDisconnect(platform) : onConnect(platform)}
-                disabled={isConnecting}
-                className={`px-4 py-1.5 text-sm font-semibold rounded-full transition-colors whitespace-nowrap ${
-                    isConnected
-                        ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-300 dark:hover:bg-red-900'
-                        : 'bg-primary-100 text-primary-700 hover:bg-primary-200 dark:bg-primary-900/50 dark:text-primary-300 dark:hover:bg-primary-900'
-                } ${isConnecting ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-                {isConnecting ? 'Connecting...' : isConnected ? 'Disconnect' : 'Connect'}
-            </button>
+            {/* OAuth 1.0a connection for X (required for media uploads) */}
+            {platform === 'X' && isConnected && onConnectOAuth1 && (
+                <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                    <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                            <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Media Upload (OAuth 1.0a)
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {hasOAuth1 
+                                    ? '✓ Connected - Images and videos can be uploaded'
+                                    : 'Required for uploading images and videos to X'}
+                            </p>
+                        </div>
+                        {!hasOAuth1 && (
+                            <button
+                                onClick={onConnectOAuth1}
+                                disabled={isConnecting}
+                                className="ml-3 px-3 py-1.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/50 dark:text-blue-300 dark:hover:bg-blue-900 transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isConnecting ? 'Connecting...' : 'Connect OAuth 1.0a'}
+                            </button>
+                        )}
+                        {hasOAuth1 && (
+                            <span className="ml-3 px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300">
+                                ✓ Connected
+                            </span>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -132,6 +187,7 @@ export const Settings: React.FC = () => {
     const [fileName, setFileName] = useState<string | null>(null);
     const [isUploadingVoice, setIsUploadingVoice] = useState(false);
     const [connectingPlatform, setConnectingPlatform] = useState<Platform | null>(null);
+    const [showInstagramSetupModal, setShowInstagramSetupModal] = useState(false);
     const [showCancelModal, setShowCancelModal] = useState(false);
     const [isCancelling, setIsCancelling] = useState(false);
     const [storageUsage, setStorageUsage] = useState<{ used: number; total: number }>({ used: 0, total: 100 });
@@ -148,6 +204,10 @@ export const Settings: React.FC = () => {
         YouTube: null,
         LinkedIn: null,
         Facebook: null,
+        Pinterest: null,
+        Discord: null,
+        Telegram: null,
+        Reddit: null,
     };
     
     const isPremiumFeatureUnlocked = ['Elite', 'Agency'].includes(user?.plan || 'Free') || user?.role === 'Admin';
@@ -181,15 +241,48 @@ export const Settings: React.FC = () => {
         const oauthSuccess = params.get('oauth_success');
         const oauthError = params.get('error');
         const platform = params.get('platform');
+        const errorMessage = params.get('message');
+        const errorDetails = params.get('details');
 
         if (oauthSuccess) {
-            showToast(`${oauthSuccess.charAt(0).toUpperCase() + oauthSuccess.slice(1)} account connected successfully!`, 'success');
+            const oauthType = params.get('type');
+            const accountName = params.get('account');
+            if (oauthType === 'oauth1') {
+                showToast('OAuth 1.0a connected successfully! You can now upload images and videos to X.', 'success');
+            } else {
+                const platformName = oauthSuccess.charAt(0).toUpperCase() + oauthSuccess.slice(1);
+                const successMessage = accountName 
+                    ? `${platformName} account (${decodeURIComponent(accountName)}) connected successfully!`
+                    : `${platformName} account connected successfully!`;
+                showToast(successMessage, 'success');
+            }
             // Remove query params from URL
             window.history.replaceState({}, '', window.location.pathname);
             // Reload page to refresh social accounts
             window.location.reload();
         } else if (oauthError) {
-            showToast(`Failed to connect ${platform || 'account'}: ${oauthError}`, 'error');
+            // Show specific error messages based on error type
+            let errorMsg = '';
+            
+            if (oauthError === 'no_instagram_account') {
+                errorMsg = 'No Instagram Business Account found. Your Instagram account must be converted to a Business or Creator account and connected to a Facebook Page. See instructions below.';
+            } else if (oauthError === 'token_exchange_failed') {
+                errorMsg = `Token exchange failed. ${errorDetails ? decodeURIComponent(errorDetails).substring(0, 100) : 'Please try again.'}`;
+            } else if (oauthError === 'pages_fetch_failed') {
+                errorMsg = 'Failed to fetch Facebook Pages. Make sure you have at least one Facebook Page.';
+            } else if (oauthError === 'oauth_not_configured') {
+                const platformName = platform ? platform.charAt(0).toUpperCase() + platform.slice(1) : 'OAuth';
+                errorMsg = `${platformName} OAuth is not configured. Please contact support or check your environment variables.`;
+            } else if (oauthError === 'token_exchange_failed') {
+                const platformName = platform ? platform.charAt(0).toUpperCase() + platform.slice(1) : 'Account';
+                errorMsg = `${platformName} token exchange failed. ${errorDetails ? decodeURIComponent(errorDetails).substring(0, 150) : 'Please check your OAuth configuration and try again.'}`;
+            } else if (errorMessage) {
+                errorMsg = decodeURIComponent(errorMessage);
+            } else {
+                errorMsg = `Failed to connect ${platform || 'account'}. Please try again.`;
+            }
+            
+            showToast(errorMsg, 'error');
             // Remove query params from URL
             window.history.replaceState({}, '', window.location.pathname);
         }
@@ -297,6 +390,20 @@ export const Settings: React.FC = () => {
     };
 
     const handleConnectAccount = async (platform: Platform) => {
+        // Block Caption plan from connecting accounts
+        if (user.plan === 'Caption') {
+            showToast('Caption Pro plan does not include social account connections. Upgrade to Pro or higher to connect accounts.', 'error');
+            setPricingView(user.userType || 'Creator');
+            setActivePage('pricing');
+            return;
+        }
+        
+        // Show Instagram setup modal if Instagram is not connected
+        if (platform === 'Instagram' && !safeSocialAccounts?.Instagram?.connected) {
+            setShowInstagramSetupModal(true);
+            return;
+        }
+        
         // Check connection limit for Free plan (1 account max)
         if (user.plan === 'Free') {
             const connectedCount = Object.values(safeSocialAccounts).filter(acc => acc?.connected).length;
@@ -313,7 +420,138 @@ export const Settings: React.FC = () => {
             // The useEffect will handle the callback
         } catch (error: any) {
             console.error(`Failed to connect ${platform}:`, error);
-            showToast(`Failed to connect ${platform}. Please try again.`, 'error');
+            // Provide more specific error messages for X
+            let errorMessage = `Failed to connect ${platform}.`;
+            if (platform === 'X') {
+                if (error.message?.includes('not configured') || error.message?.includes('Missing')) {
+                    errorMessage = 'X OAuth is not configured. Please contact support or check your environment variables.';
+                } else if (error.message?.includes('Invalid authorization URL')) {
+                    errorMessage = 'Invalid X OAuth URL. Please try again or contact support.';
+                } else {
+                    errorMessage = `Failed to connect X: ${error.message || 'Please check your X Developer Portal settings and try again.'}`;
+                }
+            } else {
+                errorMessage = error.message || `Failed to connect ${platform}. Please try again.`;
+            }
+            showToast(errorMessage, 'error');
+            setConnectingPlatform(null);
+        }
+    };
+    
+    const handleProceedWithInstagramConnect = async () => {
+        setShowInstagramSetupModal(false);
+        // Check connection limit for Free plan (1 account max)
+        if (user.plan === 'Free') {
+            const connectedCount = Object.values(safeSocialAccounts).filter(acc => acc?.connected).length;
+            if (connectedCount >= 1) {
+                showToast('Free plan allows only 1 connected social media account. Upgrade to connect more accounts.', 'error');
+                return;
+            }
+        }
+        
+        setConnectingPlatform('Instagram');
+        try {
+            await connectSocialAccount('Instagram');
+            // OAuth flow will redirect
+        } catch (error: any) {
+            console.error('Failed to connect Instagram:', error);
+            showToast('Failed to connect Instagram. Please try again.', 'error');
+            setConnectingPlatform(null);
+        }
+    };
+
+    const handleConnectOAuth1 = async () => {
+        // Connect OAuth 1.0a for X media uploads
+        setConnectingPlatform('X');
+        try {
+            const token = auth.currentUser
+                ? await auth.currentUser.getIdToken(true)
+                : null;
+
+            if (!token) {
+                throw new Error('User must be logged in');
+            }
+
+            const response = await fetch('/api/oauth/x/authorize-oauth1', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
+
+            if (!response.ok) {
+                let errorData: any = {};
+                try {
+                    errorData = await response.json();
+                } catch {
+                    // If response is not JSON, try to get text
+                    const text = await response.text().catch(() => 'Unknown error');
+                    errorData = { error: 'Failed to connect OAuth 1.0a', details: text };
+                }
+                
+                // Build user-friendly error message
+                let errorMessage = errorData.error || 'Failed to connect OAuth 1.0a';
+                let errorDetails = errorData.details || errorData.twitterError || '';
+                
+                // Add help text if available
+                if (errorData.help) {
+                    errorDetails = errorDetails ? `${errorDetails}. ${errorData.help}` : errorData.help;
+                }
+                
+                // Special handling for callback URL errors
+                if (errorDetails.includes('callback URL') || errorDetails.includes('Callback URI') || errorDetails.includes('callback') || errorMessage.includes('callback')) {
+                    errorMessage = 'OAuth 1.0a Callback URL Not Registered';
+                    
+                    // Build comprehensive troubleshooting message
+                    let troubleshootingMsg = `The callback URL "${errorData.callbackUrl || 'https://echoflux.ai/api/oauth/x/callback-oauth1'}" is not recognized by X.\n\n`;
+                    troubleshootingMsg += `Common causes:\n`;
+                    troubleshootingMsg += `• URL registered in OAuth 2.0 section instead of OAuth 1.0a section\n`;
+                    troubleshootingMsg += `• OAuth 1.0a not enabled in Developer Portal\n`;
+                    troubleshootingMsg += `• URL format mismatch (trailing slash, case sensitivity, etc.)\n`;
+                    troubleshootingMsg += `• Changes not propagated yet (wait 2-3 minutes after saving)\n\n`;
+                    troubleshootingMsg += `Troubleshooting Steps:\n`;
+                    troubleshootingMsg += `1. Go to X Developer Portal → Your App → Settings → User authentication settings\n`;
+                    troubleshootingMsg += `2. Make sure OAuth 1.0a is ENABLED (separate toggle from OAuth 2.0)\n`;
+                    troubleshootingMsg += `3. Find the OAuth 1.0a Callback URLs section (NOT OAuth 2.0 section)\n`;
+                    troubleshootingMsg += `4. Verify the URL is registered exactly as: ${errorData.callbackUrl || 'https://echoflux.ai/api/oauth/x/callback-oauth1'}\n`;
+                    troubleshootingMsg += `5. Check for: no trailing slash, exact case, no extra spaces\n`;
+                    troubleshootingMsg += `6. If the URL is already there, DELETE it and RE-ADD it\n`;
+                    troubleshootingMsg += `7. Wait 2-3 minutes after saving before testing again\n`;
+                    troubleshootingMsg += `8. Make sure App permissions are set to "Read and write"`;
+                    
+                    if (errorData.troubleshootingSteps && Array.isArray(errorData.troubleshootingSteps)) {
+                        troubleshootingMsg += '\n\nAdditional steps from X:\n' + errorData.troubleshootingSteps.join('\n');
+                    }
+                    
+                    errorDetails = troubleshootingMsg;
+                } else if (errorDetails.includes('OAuth 1.0a not enabled')) {
+                    errorMessage = 'OAuth 1.0a Not Enabled';
+                    errorDetails = 'OAuth 1.0a must be enabled in your X Developer Portal. Go to your X App settings → User authentication settings and enable "OAuth 1.0a" authentication.';
+                }
+                
+                const fullMessage = errorDetails ? `${errorMessage}: ${errorDetails}` : errorMessage;
+                throw new Error(fullMessage);
+            }
+
+            const { authUrl } = await response.json();
+            if (!authUrl || typeof authUrl !== 'string') {
+                throw new Error('Invalid authorization URL');
+            }
+
+            // Redirect to OAuth 1.0a authorization
+            setTimeout(() => {
+                window.location.href = authUrl;
+            }, 0);
+        } catch (error: any) {
+            console.error('Failed to connect OAuth 1.0a:', error);
+            
+            // Show detailed error message
+            let errorMsg = error.message || 'Failed to connect OAuth 1.0a. Please try again.';
+            if (errorMsg.includes('callback URL') || errorMsg.includes('callback')) {
+                errorMsg = 'Callback URL not recognized. Check X Developer Portal:\n1. Enable OAuth 1.0a (separate from OAuth 2.0)\n2. Add URL to OAuth 1.0a section (not OAuth 2.0)\n3. URL: https://echoflux.ai/api/oauth/x/callback-oauth1\n4. Wait 2-3 minutes after saving';
+            }
+            showToast(errorMsg, 'error');
             setConnectingPlatform(null);
         }
     };
@@ -570,27 +808,41 @@ export const Settings: React.FC = () => {
                 <div className="space-y-6">
                 {activeTab === 'connections' && (
                     <SettingsSection title="Connected Accounts">
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Connect your social media accounts to allow EngageSuite.ai to fetch incoming messages and post replies.</p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {(Object.keys(settings.connectedAccounts || {}) as Platform[]).map(platform => {
-                                const account = safeSocialAccounts && safeSocialAccounts[platform] ? safeSocialAccounts[platform] : null;
-                                return (
-                                    <AccountConnection 
-                                        key={platform}
-                                        platform={platform}
-                                        account={account}
-                                        isConnecting={connectingPlatform === platform}
-                                        onConnect={handleConnectAccount}
-                                        onDisconnect={handleDisconnectAccount}
-                                    />
-                                );
-                            })}
-                        </div>
-                        <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                            <p className="text-sm text-blue-800 dark:text-blue-200">
-                                <strong>Note:</strong> Connecting accounts enables real-time stats and posting capabilities. You'll be redirected to authorize each platform.
-                            </p>
-                        </div>
+                        {user.plan === 'Caption' ? (
+                            <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                <p className="text-sm text-blue-800 dark:text-blue-200 mb-2">
+                                    <strong>Caption Pro Plan:</strong> This plan focuses on caption generation only. Social account connections are not included.
+                                </p>
+                                <p className="text-sm text-blue-700 dark:text-blue-300">
+                                    You can still select which platform you want hashtags for when generating captions, but you won't be able to connect accounts or post directly. Upgrade to Pro or higher to connect accounts and enable posting.
+                                </p>
+                            </div>
+                        ) : (
+                            <>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Connect your social media accounts to allow EngageSuite.ai to fetch incoming messages and post replies.</p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    {(Object.keys(settings.connectedAccounts || {}) as Platform[]).map(platform => {
+                                        const account = safeSocialAccounts && safeSocialAccounts[platform] ? safeSocialAccounts[platform] : null;
+                                        return (
+                                            <AccountConnection 
+                                                key={platform}
+                                                platform={platform}
+                                                account={account}
+                                                isConnecting={connectingPlatform === platform}
+                                                onConnect={handleConnectAccount}
+                                                onDisconnect={handleDisconnectAccount}
+                                                onConnectOAuth1={platform === 'X' ? handleConnectOAuth1 : undefined}
+                                            />
+                                        );
+                                    })}
+                                </div>
+                                <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                    <p className="text-sm text-blue-800 dark:text-blue-200">
+                                        <strong>Note:</strong> Connecting accounts enables real-time stats and posting capabilities. You'll be redirected to authorize each platform.
+                                    </p>
+                                </div>
+                            </>
+                        )}
                     </SettingsSection>
                 )}
 
@@ -610,7 +862,7 @@ export const Settings: React.FC = () => {
                             <ToggleSwitch label="Enable Voice Mode" enabled={settings.voiceMode} onChange={(val) => updateSetting('voiceMode', val)} />
                             <p className="text-sm text-gray-500 dark:text-gray-400">Enable the floating AI Voice Assistant button for hands-free control.</p>
                         </SettingsSection>
-                        {user.plan !== 'Free' && (
+                        {(user.plan !== 'Free' || user.plan === 'Caption') && (
                         <SettingsSection title="Goals & Milestones">
                             <div className="space-y-4">
                                 <div>
@@ -751,7 +1003,7 @@ export const Settings: React.FC = () => {
                             <ToneSlider label="Humor" value={settings.tone.humor} onChange={(val) => updateToneSetting('humor', val)} description="Low for serious, high for witty & funny replies."/>
                             <ToneSlider label="Empathy" value={settings.tone.empathy} onChange={(val) => updateToneSetting('empathy', val)} description="Low for direct, high for supportive & understanding."/>
                             
-                            {user && (user.plan === 'Free' || user.plan === 'Pro' || user.plan === 'Elite' || user.plan === 'Agency' || user.role === 'Admin' || !user.plan) && (
+                            {user && (user.plan === 'Free' || user.plan === 'Caption' || user.plan === 'Pro' || user.plan === 'Elite' || user.plan === 'Agency' || user.role === 'Admin' || !user.plan) && (
                                 <>
                                     <hr className="border-gray-200 dark:border-gray-700 my-4" />
                                     <ToneSlider 
@@ -946,11 +1198,11 @@ export const Settings: React.FC = () => {
                              <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">Usage this month</p>
                              <div className="space-y-2">
                                  <div className="flex justify-between text-sm text-gray-700 dark:text-gray-300">
-                                     <span>Image Generations</span>
+                                     <span>Image Generations <span className="text-xs text-gray-400">(Coming Soon)</span></span>
                                      <span className="font-mono">{user.monthlyImageGenerationsUsed} used</span>
                                  </div>
                                  <div className="flex justify-between text-sm text-gray-700 dark:text-gray-300">
-                                     <span>Video Generations</span>
+                                     <span>Video Generations <span className="text-xs text-gray-400">(Coming Soon)</span></span>
                                      <span className="font-mono">{user.monthlyVideoGenerationsUsed} used</span>
                                  </div>
                                  <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
@@ -1031,6 +1283,63 @@ export const Settings: React.FC = () => {
                 )}
             </div>
             </div>
+            
+            {/* Instagram Setup Modal */}
+            {showInstagramSetupModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                                📱 Instagram Setup Required
+                            </h3>
+                            <button
+                                onClick={() => setShowInstagramSetupModal(false)}
+                                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                            >
+                                <XMarkIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200 mb-2">
+                                    To connect Instagram, you need:
+                                </p>
+                                <ol className="text-sm text-amber-800 dark:text-amber-300 list-decimal list-inside space-y-1 ml-2">
+                                    <li>An Instagram Business or Creator account (not a personal account)</li>
+                                    <li>A Facebook Page connected to your Instagram account</li>
+                                </ol>
+                            </div>
+                            
+                            <div>
+                                <p className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                                    How to set up:
+                                </p>
+                                <ol className="text-sm text-gray-700 dark:text-gray-300 list-decimal list-inside space-y-2 ml-2">
+                                    <li>Open Instagram mobile app → Settings → Account → Switch to Professional Account</li>
+                                    <li>Choose "Business" or "Creator"</li>
+                                    <li>Connect to a Facebook Page (create one if needed)</li>
+                                    <li>Then come back here and click "Proceed" below</li>
+                                </ol>
+                            </div>
+                            
+                            <div className="flex gap-3 pt-4">
+                                <button
+                                    onClick={() => setShowInstagramSetupModal(false)}
+                                    className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleProceedWithInstagramConnect}
+                                    className="flex-1 px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
+                                >
+                                    Proceed to Connect
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

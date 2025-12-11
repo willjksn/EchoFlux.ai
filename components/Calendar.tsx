@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { CalendarEvent, Platform, Post } from '../types';
-import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
+import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon } from './icons/PlatformIcons';
 import { PlusIcon, SparklesIcon, XMarkIcon, TrashIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 import { db } from '../firebaseConfig';
@@ -15,6 +15,10 @@ const platformIcons: Record<Platform, React.ReactNode> = {
   YouTube: <YouTubeIcon />,
   LinkedIn: <LinkedInIcon />,
   Facebook: <FacebookIcon />,
+  Pinterest: <PinterestIcon />,
+  Discord: <DiscordIcon />,
+  Telegram: <TelegramIcon />,
+  Reddit: <RedditIcon />,
 };
 
 const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -37,28 +41,91 @@ export const Calendar: React.FC = () => {
     });
     const [isSaving, setIsSaving] = useState(false);
 
-    // Filter calendar events: show Scheduled AND Published posts with media
+    // Calendar should ONLY show posts with scheduledDate (Scheduled or Published status)
+    // Derive events directly from Posts, not from separate calendar_events collection
     const filteredEvents = useMemo(() => {
-        if (!calendarEvents || !Array.isArray(calendarEvents)) return [];
         if (!posts || !Array.isArray(posts)) return [];
         
-        return calendarEvents.filter(evt => {
-            // Show both Scheduled and Published events
-            if (evt.status !== 'Scheduled' && evt.status !== 'Published') return false;
+        // Get all posts that have scheduledDate (Scheduled, Published, or Draft)
+        // Include Draft posts - they should appear in Calendar if they have a scheduledDate
+        const scheduledPosts = posts.filter(p => 
+            p.scheduledDate && 
+            (p.status === 'Scheduled' || p.status === 'Published' || p.status === 'Draft')
+        );
+        
+        // Create calendar events from posts (Scheduled, Published, and Draft)
+        const eventsFromPosts: CalendarEvent[] = scheduledPosts.map(post => {
+            const platforms = post.platforms || [];
+            return platforms.map((platform, idx) => ({
+                id: `post-${post.id}-${platform}-${idx}`,
+                title: post.content?.substring(0, 30) + '...' || 'Post',
+                date: post.scheduledDate || new Date().toISOString(),
+                type: post.mediaType === 'video' ? 'Reel' : 'Post',
+                platform: platform,
+                status: post.status as 'Scheduled' | 'Published' | 'Draft',
+                thumbnail: post.mediaUrl || undefined,
+            }));
+        }).flat();
+        
+        // Also include existing calendar events that match posts (for backward compatibility)
+        const existingEvents = (calendarEvents || []).filter(evt => {
+            // Extract post ID from event ID
+            let postIdFromEvent: string | null = null;
+            if (evt.id.startsWith('cal-')) {
+                const parts = evt.id.replace('cal-', '').split('-');
+                postIdFromEvent = parts[0];
+            } else if (evt.id.startsWith('post-')) {
+                const parts = evt.id.replace('post-', '').split('-');
+                postIdFromEvent = parts[0];
+            }
+            
+            if (postIdFromEvent) {
+                const associatedPost = posts.find(p => p.id === postIdFromEvent);
+                // Only keep if post exists and has scheduledDate (including Drafts)
+                return associatedPost && associatedPost.scheduledDate && 
+                       (associatedPost.status === 'Scheduled' || associatedPost.status === 'Published' || 
+                        (associatedPost.status === 'Draft' && associatedPost.scheduledDate));
+            }
+            return false;
+        });
+        
+        // Combine and deduplicate (prefer events from posts)
+        const allEvents = [...eventsFromPosts, ...existingEvents];
+        const uniqueEvents = allEvents.filter((evt, idx, self) => 
+            idx === self.findIndex(e => e.id === evt.id)
+        );
+        
+        return uniqueEvents.filter(evt => {
+            // Show Scheduled, Published, and Draft events (Drafts should appear if they have scheduledDate)
+            if (evt.status !== 'Scheduled' && evt.status !== 'Published' && evt.status !== 'Draft') {
+                return false;
+            }
             
             // Find associated post
-            const associatedPost = posts.find(p => {
-                if (evt.id.includes(p.id) || p.id.includes(evt.id.replace('cal-', '').replace('-calendar', ''))) {
-                    return true;
-                }
-                if (p.content && evt.title && p.content.includes(evt.title.substring(0, 30))) {
-                    return true;
-                }
-                return false;
-            });
+            const postId = evt.id.replace('post-', '').replace('cal-', '').split('-')[0];
+            const associatedPost = posts.find(p => p.id === postId);
             
-            // Only show if post has media
-            return associatedPost ? !!associatedPost.mediaUrl : !!evt.thumbnail;
+            if (!associatedPost) {
+                return false;
+            }
+            
+            // Only show if post has scheduledDate
+            if (!associatedPost.scheduledDate) {
+                return false;
+            }
+            
+            // If Draft, only show if post is still Draft and has scheduledDate
+            if (evt.status === 'Draft' && associatedPost.status !== 'Draft') {
+                return false;
+            }
+            
+            // If Scheduled, only show if post is Scheduled (not Published)
+            if (evt.status === 'Scheduled' && associatedPost.status === 'Published') {
+                return false;
+            }
+            
+            // Show posts with or without media (text-only posts are allowed)
+            return true;
         });
     }, [calendarEvents, posts]);
 
@@ -181,12 +248,6 @@ export const Calendar: React.FC = () => {
                                     border: 'border-l-4 border-blue-500 dark:border-blue-400',
                                     dot: 'bg-blue-500 dark:bg-blue-400',
                                     text: 'text-blue-700 dark:text-blue-300'
-                                },
-                                Published: {
-                                    bg: 'bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30',
-                                    border: 'border-l-4 border-green-500 dark:border-green-400',
-                                    dot: 'bg-green-500 dark:bg-green-400',
-                                    text: 'text-green-700 dark:text-green-300'
                                 },
                                 Draft: {
                                     bg: 'bg-gray-100 dark:bg-gray-700/50',
@@ -367,17 +428,32 @@ export const Calendar: React.FC = () => {
         }
 
         try {
+            const postId = selectedEvent.post?.id;
+            
             // Delete the post from Firestore
-            if (selectedEvent.post) {
-                await deletePost(selectedEvent.post.id);
+            if (postId) {
+                await deletePost(postId);
             }
 
-            // Delete the calendar event from Firestore
-            const eventDocRef = doc(db, 'users', user.id, 'calendar_events', selectedEvent.event.id);
-            await deleteDoc(eventDocRef);
+            // Delete the calendar event from Firestore (if it exists as a separate document)
+            try {
+                const eventDocRef = doc(db, 'users', user.id, 'calendar_events', selectedEvent.event.id);
+                await deleteDoc(eventDocRef);
+            } catch (eventError) {
+                // Calendar event might not exist as separate document (it's derived from posts)
+                // This is fine, just log it
+                console.log('Calendar event not found as separate document (expected if using post-based events)');
+            }
 
+            // Close the modal
             setSelectedEvent(null);
+            
+            // Show success message
             showToast('Post deleted successfully!', 'success');
+            
+            // Note: The UI will automatically update because:
+            // 1. deletePost updates the posts state in DataContext
+            // 2. filteredEvents is derived from posts, so it will automatically refresh
         } catch (error) {
             console.error('Failed to delete post:', error);
             showToast('Failed to delete post. Please try again.', 'error');

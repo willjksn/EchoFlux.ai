@@ -6,7 +6,7 @@ import { generateContentStrategy, saveStrategy, getStrategies, updateStrategySta
 import { getAnalytics } from "../src/services/geminiService"
 import { AnalyticsData } from '../types'
 import { TargetIcon, SparklesIcon, CalendarIcon, CheckCircleIcon, RocketIcon, DownloadIcon, TrashIcon, ClockIcon, UploadIcon, ImageIcon, XMarkIcon } from './icons/UIIcons';
-import { InstagramIcon, TikTokIcon, XIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
+import { InstagramIcon, TikTokIcon, XIcon, LinkedInIcon, FacebookIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon } from './icons/PlatformIcons';
 import { UpgradePrompt } from './UpgradePrompt';
 import { storage } from '../firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -22,6 +22,10 @@ const platformIcons: Record<Platform, React.ReactElement> = {
     YouTube: <div className="w-4 h-4 text-xs">YT</div>,
     LinkedIn: <LinkedInIcon className="w-4 h-4" />,
     Facebook: <FacebookIcon className="w-4 h-4" />,
+    Pinterest: <PinterestIcon className="w-4 h-4" />,
+    Discord: <DiscordIcon className="w-4 h-4" />,
+    Telegram: <TelegramIcon className="w-4 h-4" />,
+    Reddit: <RedditIcon className="w-4 h-4" />,
 };
 
 export const Strategy: React.FC = () => {
@@ -425,11 +429,11 @@ export const Strategy: React.FC = () => {
             scheduledDate.setDate(today.getDate() + (weekIndex * 7) + updatedDay.dayOffset);
             scheduledDate.setHours(14, 0, 0, 0); // Default to 2 PM
 
-            // Auto-schedule the post
+            // Create Draft post first (will be scheduled through Workflow)
             const postId = `roadmap-${selectedStrategy?.id || 'temp'}-${weekIndex}-${dayIndex}-${Date.now()}`;
             const postTitle = updatedDay.topic.substring(0, 30) + (updatedDay.topic.length > 30 ? '...' : '');
 
-            // Create Post in Firestore and schedule
+            // Create Post in Firestore as Draft (user can schedule it through Workflow)
             if (user) {
                 const newPost: Post = {
                     id: postId,
@@ -437,28 +441,19 @@ export const Strategy: React.FC = () => {
                     mediaUrl: mediaUrl,
                     mediaType: fileType,
                     platforms: [updatedDay.platform],
-                    status: 'Scheduled',
+                    status: 'Draft', // Create as Draft, not Scheduled
                     author: { name: user.name, avatar: user.avatar },
                     comments: [],
-                    scheduledDate: scheduledDate.toISOString(),
-                    clientId: user.userType === 'Business' ? user.id : undefined
+                    scheduledDate: scheduledDate.toISOString(), // Store intended date, but status is Draft
+                    clientId: user.userType === 'Business' ? user.id : undefined,
+                    timestamp: new Date().toISOString(),
                 };
 
                 const safePost = JSON.parse(JSON.stringify(newPost));
                 await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
 
-                // Create calendar event
-                const newEvent: CalendarEvent = {
-                    id: `cal-${postId}`,
-                    title: postTitle,
-                    date: scheduledDate.toISOString(),
-                    type: updatedDay.format === 'Reel' ? 'Reel' : 'Post',
-                    platform: updatedDay.platform,
-                    status: 'Scheduled',
-                    thumbnail: mediaUrl,
-                };
-
-                await addCalendarEvent(newEvent);
+                // Note: Calendar event will be created automatically when post is scheduled through Workflow
+                // Don't create calendar event here - let it be created when status changes to Scheduled
 
                 // Update roadmap item status to scheduled and link post
                 const updatedPlanWithSchedule = {

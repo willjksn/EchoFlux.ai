@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useAppContext } from './AppContext';
 import { ApprovalStatus, Post, Platform } from '../types';
 import { CheckCircleIcon, MobileIcon, SendIcon, TrashIcon, EditIcon, ChatIcon, UserIcon, XMarkIcon, SparklesIcon } from './icons/UIIcons';
-import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
+import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon } from './icons/PlatformIcons';
 import { MobilePreviewModal } from './MobilePreviewModal';
 import { UpgradePrompt } from './UpgradePrompt';
 import { generateCritique } from "../src/services/geminiService";
@@ -27,6 +27,10 @@ const platformIcons: Record<Platform, React.ReactElement<{ className?: string }>
   YouTube: <YouTubeIcon />,
   LinkedIn: <LinkedInIcon />,
   Facebook: <FacebookIcon />,
+  Pinterest: <PinterestIcon />,
+  Discord: <DiscordIcon />,
+  Telegram: <TelegramIcon />,
+  Reddit: <RedditIcon />,
 };
 
 const statusColors: Record<ApprovalStatus, string> = {
@@ -126,8 +130,13 @@ export const Approvals: React.FC = () => {
         }
     };
 
-    // Filter posts by source
+    // Filter posts by source and exclude Published posts (they're done)
     const filteredPosts = posts.filter(post => {
+        // Exclude Published posts - they're done and shouldn't appear in workflow
+        if (post.status === 'Published') {
+            return false;
+        }
+        
         if (sourceFilter === 'all') return true;
         
         // Check if post is from Automation (workflowId indicates Automation)
@@ -146,14 +155,12 @@ export const Approvals: React.FC = () => {
     const columns = statusColumns.map(status => ({
         title: status,
         items: filteredPosts.filter(p => {
-            // Match exact status or handle variations
+            // Match exact status
             if (p.status === status) return true;
+            
             // Handle status variations
             if (status === 'In Review' && (p.status === 'Pending Review' || p.status === 'Review')) return true;
-            if (status === 'Draft' && p.status === 'Draft') return true;
-            if (status === 'Approved' && p.status === 'Approved') return true;
-            if (status === 'Scheduled' && p.status === 'Scheduled') return true;
-            // Published posts should NOT appear in workflow - they're done
+            
             return false;
         })
     }));
@@ -356,9 +363,8 @@ export const Approvals: React.FC = () => {
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation(); // Prevent card click
-                                                            if (window.confirm('Delete this draft?')) {
-                                                                handleDelete(post.id);
-                                                            }
+                                                            // Only show one confirmation - handleDelete will handle it
+                                                            handleDelete(post.id);
                                                         }}
                                                         className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
                                                         title="Delete draft"
