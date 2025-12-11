@@ -4,6 +4,7 @@ import { Platform, Message, DashboardFilters, MessageType, MessageCategory } fro
 import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon } from './icons/PlatformIcons';
 import { SearchIcon, FlagIcon, StarIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
+import { hasCapability, getPlatformsWithCapability } from '../src/services/platformCapabilities';
 
 const platformFilterIcons: { [key in Platform]: React.ReactNode } = {
   Instagram: <InstagramIcon />,
@@ -18,6 +19,9 @@ const platformFilterIcons: { [key in Platform]: React.ReactNode } = {
   Telegram: <TelegramIcon />,
   Reddit: <RedditIcon />,
 };
+
+// Get only platforms that support inbox/messaging
+const inboxSupportedPlatforms = getPlatformsWithCapability('inbox');
 
 export const Inbox: React.FC = () => {
   const { 
@@ -292,7 +296,9 @@ export const Inbox: React.FC = () => {
               >
                 All
               </button>
-              {(Object.keys(platformFilterIcons) as Platform[]).map(platform => (
+              {(Object.keys(platformFilterIcons) as Platform[])
+                .filter(platform => inboxSupportedPlatforms.includes(platform))
+                .map(platform => (
                 <button
                   key={platform}
                   onClick={() => handleFilterChange('platform', platform)}
