@@ -845,7 +845,7 @@ export const Settings: React.FC = () => {
                             <>
                                 <p className="text-sm text-gray-500 dark:text-gray-400">Connect your social media accounts to allow EngageSuite.ai to fetch incoming messages and post replies.</p>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    {(Object.keys(safeSocialAccounts) as Platform[]).map(platform => {
+                                    {(Object.keys(platformIcons) as Platform[]).map(platform => {
                                         const account = safeSocialAccounts && safeSocialAccounts[platform] ? safeSocialAccounts[platform] : null;
                                         return (
                                             <AccountConnection 
