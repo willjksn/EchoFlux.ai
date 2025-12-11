@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { ListeningIcon, RefreshIcon, CheckCircleIcon } from '../icons/UIIcons';
 import { Platform } from '../../types';
-import { XIcon, InstagramIcon, TikTokIcon, LinkedInIcon } from '../icons/PlatformIcons';
+import { XIcon, InstagramIcon, TikTokIcon, LinkedInIcon, FacebookIcon, ThreadsIcon, YouTubeIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon } from '../icons/PlatformIcons';
 
 const MockMentions = [
     { id: 1, user: '@tech_guru_99', platform: 'X', text: "Just tried EngageSuite.ai and it's a game changer for my workflow! #AI #SocialMedia", sentiment: 'Positive', time: '2h ago' },
@@ -15,7 +15,14 @@ const platformIcons: any = {
     X: <XIcon />,
     Instagram: <InstagramIcon />,
     TikTok: <TikTokIcon />,
-    LinkedIn: <span className="font-bold text-blue-700 text-xs">in</span>
+    Threads: <ThreadsIcon />,
+    YouTube: <YouTubeIcon />,
+    LinkedIn: <LinkedInIcon />,
+    Facebook: <FacebookIcon />,
+    Pinterest: <PinterestIcon />,
+    Discord: <DiscordIcon />,
+    Telegram: <TelegramIcon />,
+    Reddit: <RedditIcon />,
 };
 
 export const SocialListening: React.FC = () => {

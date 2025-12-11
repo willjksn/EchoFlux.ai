@@ -341,6 +341,10 @@ export const Analytics: React.FC = () => {
                         <option value="YouTube">YouTube</option>
                         <option value="LinkedIn">LinkedIn</option>
                         <option value="Facebook">Facebook</option>
+                        <option value="Pinterest">Pinterest</option>
+                        <option value="Discord">Discord</option>
+                        <option value="Telegram">Telegram</option>
+                        <option value="Reddit">Reddit</option>
                     </select>
                 </div>
             </div>

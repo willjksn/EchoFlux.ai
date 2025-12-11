@@ -766,9 +766,15 @@ export const Strategy: React.FC = () => {
                             <option>Mixed / All</option>
                             <option value="Instagram">Instagram Focus</option>
                             <option value="TikTok">TikTok Focus</option>
-                            <option value="LinkedIn">LinkedIn Focus</option>
                             <option value="X">X (Twitter) Focus</option>
+                            <option value="Threads">Threads Focus</option>
+                            <option value="YouTube">YouTube Focus</option>
+                            <option value="LinkedIn">LinkedIn Focus</option>
                             <option value="Facebook">Facebook Focus</option>
+                            <option value="Pinterest">Pinterest Focus</option>
+                            <option value="Discord">Discord Focus</option>
+                            <option value="Telegram">Telegram Focus</option>
+                            <option value="Reddit">Reddit Focus</option>
                         </select>
                     </div>
                 </div>
