@@ -188,6 +188,51 @@ export async function fetchRealSocialStats(): Promise<Record<Platform, {
 }
 
 /**
+ * Pinterest Board interface
+ */
+export interface PinterestBoard {
+  id: string;
+  name: string;
+  description?: string;
+  privacy?: 'PUBLIC' | 'SECRET';
+  owner?: string;
+}
+
+/**
+ * Fetch user's Pinterest boards
+ */
+export async function fetchPinterestBoards(): Promise<PinterestBoard[]> {
+  const token = auth.currentUser
+    ? await auth.currentUser.getIdToken(true)
+    : null;
+
+  if (!token) {
+    throw new Error('User must be logged in to fetch Pinterest boards');
+  }
+
+  try {
+    const response = await fetch('/api/platforms/pinterest/boards', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.details || error.error || 'Failed to fetch Pinterest boards');
+    }
+
+    const result = await response.json();
+    return result.boards || [];
+  } catch (error: any) {
+    console.error('Failed to fetch Pinterest boards:', error);
+    throw error;
+  }
+}
+
+/**
  * Publish a Pin to Pinterest
  * @param mediaUrl - Public HTTPS URL to image
  * @param title - Pin title (required, max 100 chars)

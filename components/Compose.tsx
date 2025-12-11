@@ -47,6 +47,7 @@ import { scheduleMultiplePosts, analyzeOptimalPostingTimes } from '../src/servic
 import { getAnalytics } from '../src/services/geminiService';
 import { MediaItemState } from '../types';
 import { publishInstagramPost, publishTweet, publishPinterestPin } from '../src/services/socialMediaService';
+import { PinterestBoardSelectionModal } from './PinterestBoardSelectionModal';
 
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -172,6 +173,16 @@ const CaptionGenerator: React.FC = () => {
   // Upgrade modal state
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [upgradeModalReason, setUpgradeModalReason] = useState<'limit' | 'feature'>('limit');
+  
+  // Pinterest board selection
+  const [isPinterestBoardModalOpen, setIsPinterestBoardModalOpen] = useState(false);
+  const [selectedPinterestBoardId, setSelectedPinterestBoardId] = useState<string | null>(null);
+  const [selectedPinterestBoardName, setSelectedPinterestBoardName] = useState<string | null>(null);
+  const [pendingPinterestPublish, setPendingPinterestPublish] = useState<{
+    mediaUrl: string;
+    title: string;
+    description: string;
+  } | null>(null);
 
   // Plan + role logic
   const isAgency = user?.plan === 'Agency' || user?.plan === 'Elite';
@@ -1029,35 +1040,28 @@ const CaptionGenerator: React.FC = () => {
       // Publish to Pinterest if selected
       const hasPinterest = platformsToPost.includes('Pinterest');
       if (hasPinterest && mediaUrl && item.type === 'image') {
-        try {
-          // For now, we'll need to get the board ID from user settings or prompt
-          // TODO: Add board selection UI in the future
-          // For now, we'll use a default board or the first board
-          // This requires fetching boards first - for MVP, we'll skip Pinterest if no board is available
-          // The user will need to set up their board ID in settings or we'll add board selection later
-          
-          // Extract title from caption (first line or first 100 chars)
-          const title = item.captionText.split('\n')[0].substring(0, 100) || 'New Pin';
-          const description = item.captionText.substring(0, 8000);
-          
-          // For now, we'll need the board ID - this should come from user settings or a board selection modal
-          // As a temporary solution, we'll show an error if board ID is not available
-          // In the future, we should:
-          // 1. Fetch user's boards on Pinterest connection
-          // 2. Store default board ID in user settings
-          // 3. Show board selection modal when publishing
-          
-          // For MVP, we'll skip Pinterest publishing with a helpful message
-          // TODO: Add board selection UI
-          console.log('Pinterest publishing skipped - board selection not yet implemented');
-          // Note: We'll add board selection in a future update
-        } catch (pinterestError: any) {
-          console.error('Failed to publish to Pinterest:', pinterestError);
-          showToast(`Failed to publish to Pinterest: ${pinterestError.message || 'Please check your connection'}. Other platforms published successfully.`, 'error');
+        // Extract title from caption (first line or first 100 chars)
+        const title = item.captionText.split('\n')[0].substring(0, 100) || 'New Pin';
+        const description = item.captionText.substring(0, 8000);
+        
+        // If board already selected, publish immediately
+        if (selectedPinterestBoardId) {
+          try {
+            await publishPinterestPin(mediaUrl, title, description, selectedPinterestBoardId);
+            showToast(`Successfully published to Pinterest!`, 'success');
+          } catch (pinterestError: any) {
+            console.error('Failed to publish to Pinterest:', pinterestError);
+            showToast(`Failed to publish to Pinterest: ${pinterestError.message || 'Please check your connection'}. Other platforms published successfully.`, 'error');
+          }
+        } else {
+          // Show board selection modal
+          setPendingPinterestPublish({ mediaUrl, title, description });
+          setIsPinterestBoardModalOpen(true);
+          // Note: Publishing will continue after board selection
         }
       } else if (hasPinterest && item.type !== 'image') {
         // Pinterest only supports images for now
-        console.log('Pinterest publishing skipped - video pins not yet supported');
+        showToast('Pinterest only supports image pins. Video pins are not yet supported.', 'error');
       }
 
       // Create calendar event for each platform
@@ -2984,6 +2988,37 @@ const CaptionGenerator: React.FC = () => {
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       {/* Preview Modal */}
+      {/* Pinterest Board Selection Modal */}
+      <PinterestBoardSelectionModal
+        isOpen={isPinterestBoardModalOpen}
+        onClose={() => {
+          setIsPinterestBoardModalOpen(false);
+          setPendingPinterestPublish(null);
+        }}
+        onSelect={async (boardId: string, boardName: string) => {
+          setSelectedPinterestBoardId(boardId);
+          setSelectedPinterestBoardName(boardName);
+          
+          // If there's pending publish, complete it
+          if (pendingPinterestPublish) {
+            try {
+              await publishPinterestPin(
+                pendingPinterestPublish.mediaUrl,
+                pendingPinterestPublish.title,
+                pendingPinterestPublish.description,
+                boardId
+              );
+              showToast(`Successfully published to Pinterest board "${boardName}"!`, 'success');
+              setPendingPinterestPublish(null);
+            } catch (pinterestError: any) {
+              console.error('Failed to publish to Pinterest:', pinterestError);
+              showToast(`Failed to publish to Pinterest: ${pinterestError.message || 'Please check your connection'}.`, 'error');
+            }
+          }
+        }}
+        currentBoardId={selectedPinterestBoardId || undefined}
+      />
+
       <MobilePreviewModal
         isOpen={isPreviewOpen}
         onClose={() => {
