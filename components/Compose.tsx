@@ -46,7 +46,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { scheduleMultiplePosts, analyzeOptimalPostingTimes } from '../src/services/smartSchedulingService';
 import { getAnalytics } from '../src/services/geminiService';
 import { MediaItemState } from '../types';
-import { publishInstagramPost, publishTweet } from '../src/services/socialMediaService';
+import { publishInstagramPost, publishTweet, publishPinterestPin } from '../src/services/socialMediaService';
 
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -1024,6 +1024,40 @@ const CaptionGenerator: React.FC = () => {
           // Continue with other platforms even if X fails
           showToast(`Failed to publish to X: ${xError.message || 'Please check your connection'}. Other platforms published successfully.`, 'error');
         }
+      }
+
+      // Publish to Pinterest if selected
+      const hasPinterest = platformsToPost.includes('Pinterest');
+      if (hasPinterest && mediaUrl && item.type === 'image') {
+        try {
+          // For now, we'll need to get the board ID from user settings or prompt
+          // TODO: Add board selection UI in the future
+          // For now, we'll use a default board or the first board
+          // This requires fetching boards first - for MVP, we'll skip Pinterest if no board is available
+          // The user will need to set up their board ID in settings or we'll add board selection later
+          
+          // Extract title from caption (first line or first 100 chars)
+          const title = item.captionText.split('\n')[0].substring(0, 100) || 'New Pin';
+          const description = item.captionText.substring(0, 8000);
+          
+          // For now, we'll need the board ID - this should come from user settings or a board selection modal
+          // As a temporary solution, we'll show an error if board ID is not available
+          // In the future, we should:
+          // 1. Fetch user's boards on Pinterest connection
+          // 2. Store default board ID in user settings
+          // 3. Show board selection modal when publishing
+          
+          // For MVP, we'll skip Pinterest publishing with a helpful message
+          // TODO: Add board selection UI
+          console.log('Pinterest publishing skipped - board selection not yet implemented');
+          // Note: We'll add board selection in a future update
+        } catch (pinterestError: any) {
+          console.error('Failed to publish to Pinterest:', pinterestError);
+          showToast(`Failed to publish to Pinterest: ${pinterestError.message || 'Please check your connection'}. Other platforms published successfully.`, 'error');
+        }
+      } else if (hasPinterest && item.type !== 'image') {
+        // Pinterest only supports images for now
+        console.log('Pinterest publishing skipped - video pins not yet supported');
       }
 
       // Create calendar event for each platform

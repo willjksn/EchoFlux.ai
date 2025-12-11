@@ -9,7 +9,7 @@ import { db, storage, auth } from '../firebaseConfig';
 import { ref, uploadBytes, getDownloadURL, deleteObject, listAll, getMetadata } from 'firebase/storage';
 import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { connectSocialAccount, disconnectSocialAccount } from '../src/services/socialMediaService';
-import { PLATFORM_CAPABILITIES, hasCapability, getCapabilityDescription } from '../src/services/platformCapabilities';
+import { PLATFORM_CAPABILITIES, hasCapability, getCapabilityDescription, getCapability, isFullySupported } from '../src/services/platformCapabilities';
 
 interface SettingsProps {}
 
@@ -120,13 +120,37 @@ const AccountConnection: React.FC<{
                         {isConnected && (
                             <div className="mt-1.5 flex flex-wrap gap-1">
                                 {hasCapability(platform, 'publishing') && (
-                                    <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Posting</span>
+                                    <span 
+                                        className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 cursor-help"
+                                        title={isFullySupported(platform, 'publishing') 
+                                            ? 'Posting: Fully supported' 
+                                            : `Posting: ${getCapabilityDescription(getCapability(platform, 'publishing') || false)}`}
+                                    >
+                                        Posting
+                                        {!isFullySupported(platform, 'publishing') && ' ⚠️'}
+                                    </span>
                                 )}
                                 {hasCapability(platform, 'inbox') && (
-                                    <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Inbox</span>
+                                    <span 
+                                        className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 cursor-help"
+                                        title={isFullySupported(platform, 'inbox') 
+                                            ? 'Inbox: Fully supported' 
+                                            : `Inbox: ${getCapabilityDescription(getCapability(platform, 'inbox') || false)}`}
+                                    >
+                                        Inbox
+                                        {!isFullySupported(platform, 'inbox') && ' ⚠️'}
+                                    </span>
                                 )}
                                 {hasCapability(platform, 'analytics') && (
-                                    <span className="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">Analytics</span>
+                                    <span 
+                                        className="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 cursor-help"
+                                        title={isFullySupported(platform, 'analytics') 
+                                            ? 'Analytics: Fully supported' 
+                                            : `Analytics: ${getCapabilityDescription(getCapability(platform, 'analytics') || false)}`}
+                                    >
+                                        Analytics
+                                        {!isFullySupported(platform, 'analytics') && ' ⚠️'}
+                                    </span>
                                 )}
                             </div>
                         )}

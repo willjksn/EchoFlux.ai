@@ -188,6 +188,60 @@ export async function fetchRealSocialStats(): Promise<Record<Platform, {
 }
 
 /**
+ * Publish a Pin to Pinterest
+ * @param mediaUrl - Public HTTPS URL to image
+ * @param title - Pin title (required, max 100 chars)
+ * @param description - Pin description/caption (max 8000 chars)
+ * @param boardId - Pinterest board ID where pin will be created
+ */
+export async function publishPinterestPin(
+  mediaUrl: string,
+  title: string,
+  description: string,
+  boardId: string
+): Promise<{ pinId: string; boardId: string; url: string; status: 'published' }> {
+  const token = auth.currentUser
+    ? await auth.currentUser.getIdToken(true)
+    : null;
+
+  if (!token) {
+    throw new Error('User must be logged in to publish pins');
+  }
+
+  try {
+    const response = await fetch('/api/platforms/pinterest/publish', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        mediaUrl,
+        title,
+        description,
+        boardId,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.details || error.error || 'Failed to publish to Pinterest');
+    }
+
+    const result = await response.json();
+    return {
+      pinId: result.pinId,
+      boardId: result.boardId,
+      url: result.url,
+      status: result.status,
+    };
+  } catch (error: any) {
+    console.error('Failed to publish to Pinterest:', error);
+    throw error;
+  }
+}
+
+/**
  * Publish content to Instagram
  * @param mediaUrl - Public HTTPS URL to image or video
  * @param caption - Post caption
