@@ -13,7 +13,7 @@ const categoryIcons: Record<string, React.ReactNode> = {
     LightbulbIcon: <LightbulbIcon className="w-5 h-5"/>,
     HeartIcon: <HeartIcon className="w-5 h-5"/>,
 };
-import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
+import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon } from './icons/PlatformIcons';
 import { db, storage } from '../firebaseConfig';
 import { collection, setDoc, doc, getDocs, query, where, deleteDoc } from 'firebase/firestore';
 // @ts-ignore
@@ -76,6 +76,10 @@ export const Automation: React.FC = () => {
     YouTube: false,
     LinkedIn: false,
     Facebook: false,
+    Pinterest: false,
+    Discord: false,
+    Telegram: false,
+    Reddit: false,
   });
     
     // Filter options for Business Starter/Growth plans
@@ -647,11 +651,11 @@ export const Automation: React.FC = () => {
         // Just log the error
         showToast('File removed from view, but deletion from storage failed', 'error');
       }
-    } else {
+        } else {
       // If no ID, it's a new file that hasn't been saved yet, so just remove from state
       showToast('File removed', 'success');
-    }
-  };
+        }
+    };
 
   const handleRegenerateCaptions = async (index: number) => {
     const media = uploadedFiles[index];
@@ -672,24 +676,24 @@ export const Automation: React.FC = () => {
   const handleBulkRegenerateCaptions = async () => {
     if (selectedIndices.size === 0) {
       showToast('Please select at least one image to regenerate captions', 'error');
-      return;
-    }
+            return;
+        }
 
     setIsProcessing(true);
-    try {
+            try {
       const indices = Array.from(selectedIndices);
       for (const index of indices) {
         await handleRegenerateCaptions(index);
       }
       showToast(`Regenerated captions for ${indices.length} image(s)`, 'success');
       setSelectedIndices(new Set());
-    } catch (error) {
+            } catch (error) {
       console.error('Failed to regenerate captions:', error);
       showToast('Failed to regenerate some captions', 'error');
     } finally {
       setIsProcessing(false);
-    }
-  };
+        }
+    };
 
   const handleToggleSelect = (index: number) => {
     setSelectedIndices(prev => {
@@ -701,7 +705,7 @@ export const Automation: React.FC = () => {
       }
       return newSet;
     });
-  };
+    };
 
   const handleEmojiSelect = (emoji: string, index: number) => {
     setUploadedFiles(prev => prev.map((m, idx) => 
@@ -744,7 +748,7 @@ export const Automation: React.FC = () => {
         <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Default Settings</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
+                        <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Goal of the Post
               </label>
@@ -809,7 +813,7 @@ export const Automation: React.FC = () => {
             >
               <SparklesIcon className="w-4 h-4" />
               {isProcessing ? 'Generating Captions...' : `Generate Captions for All (${uploadedFiles.length})`}
-            </button>
+                                </button>
           </div>
           <div className="mt-4">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -828,11 +832,11 @@ export const Automation: React.FC = () => {
                 >
                   <span className="w-4 h-4">{platformIcons[platform]}</span>
                   <span className="text-sm font-medium">{platform}</span>
-                </button>
+                                </button>
               ))}
-            </div>
-          </div>
-            </div>
+                            </div>
+                        </div>
+                            </div>
             
         {/* Upload Area - Center when no files, compact when files exist */}
         {uploadedFiles.length === 0 ? (
@@ -856,12 +860,12 @@ export const Automation: React.FC = () => {
                 onChange={(e) => handleFileSelect(e.target.files)}
                 className="hidden"
               />
-            </div>
-          </div>
+                        </div>
+                            </div>
         ) : (
           <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
             {/* Uploaded Files Preview */}
-            <div>
+                            <div>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                   Uploaded Files ({uploadedFiles.length})
@@ -878,21 +882,21 @@ export const Automation: React.FC = () => {
                         Processing...
                       </>
                     ) : (
-                      <>
+                                        <>
                         <SparklesIcon className="w-4 h-4" />
                         Start Automation
-                      </>
-                    )}
+                                        </>
+                                    )}
                     </button>
-                </div>
-            </div>
+                            </div>
+                        </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {uploadedFiles.map((media, index) => {
                   const isVideo = media.mimeType?.startsWith('video/') || (media.file && media.file.type.startsWith('video/'));
                   const fileName = media.fileName || media.file?.name || `Media ${index + 1}`;
                   const isSelected = selectedIndices.has(index);
-                  return (
+                                    return (
                   <div
                     key={media.id || index}
                     className="relative border-2 rounded-lg overflow-hidden bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
@@ -914,7 +918,7 @@ export const Automation: React.FC = () => {
                         {media.status === 'error' && (
                           <span className="text-xs text-red-600">Error</span>
                         )}
-                        <button
+                                        <button
                           onClick={(e) => {
                             e.stopPropagation();
                             handleDeleteMedia(index);
@@ -923,9 +927,9 @@ export const Automation: React.FC = () => {
                           title="Delete"
                         >
                           <XMarkIcon className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
+                                        </button>
+                            </div>
+                        </div>
 
                     {/* Media Preview */}
                     <div className="relative group">
@@ -953,7 +957,7 @@ export const Automation: React.FC = () => {
                     <div className="p-3 space-y-3">
                       {/* Goal and Tone Dropdowns */}
                       <div className="grid grid-cols-2 gap-2">
-                        <div>
+                             <div>
                           <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                             Goal
                           </label>
@@ -965,9 +969,9 @@ export const Automation: React.FC = () => {
                             {goalOptions.map(opt => (
                               <option key={opt.value} value={opt.value}>{opt.label}</option>
                             ))}
-                          </select>
-                                    </div>
-                                    <div>
+                                    </select>
+                            </div>
+                            <div>
                           <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                             Tone
                           </label>
@@ -979,17 +983,17 @@ export const Automation: React.FC = () => {
                             {toneOptions.map(opt => (
                               <option key={opt.value} value={opt.value}>{opt.label}</option>
                             ))}
-                          </select>
+                                </select>
+                            </div>
                         </div>
-                                    </div>
 
                       {/* Caption with Emoji Button */}
                                         <div>
                         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                           Caption
-                        </label>
+                                </label>
                         <div className="relative">
-                          <textarea
+                                                <textarea
                             value={media.caption}
                             onChange={(e) => handleUpdateMediaCaption(index, e.target.value)}
                             className="w-full p-2 text-xs border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white resize-y min-h-[100px] max-h-[300px] pr-8 overflow-y-auto"
@@ -1003,7 +1007,7 @@ export const Automation: React.FC = () => {
                             title="Add emoji"
                           >
                             <EmojiIcon className="w-4 h-4" />
-                          </button>
+                                                    </button>
                           {emojiPickerOpen === index && (
                             <div className="emoji-picker-container absolute z-20 right-0 top-full mt-1 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-2 flex flex-col border border-gray-200 dark:border-gray-600">
                               <div className="px-1 pb-2">
@@ -1014,7 +1018,7 @@ export const Automation: React.FC = () => {
                                   onChange={e => setEmojiSearchTerm(e.target.value)}
                                   className="w-full p-2 border rounded-md bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-sm"
                                 />
-                              </div>
+                                                </div>
                               <div className="grid grid-cols-8 gap-1 overflow-y-auto max-h-64 pr-1 scrollbar-thin min-h-[200px]">
                                 {filteredEmojis.length > 0 ? (
                                   filteredEmojis.map(({ emoji, description }) => (
@@ -1031,9 +1035,9 @@ export const Automation: React.FC = () => {
                                 ) : (
                                   <div className="col-span-8 text-center text-gray-500 dark:text-gray-400 py-4 text-sm">
                                     No emojis found
-                                        </div>
-                                    )}
-                                </div>
+                                                    </div>
+                                                )}
+                                            </div>
                               <div className="pt-2 border-t border-gray-200 dark:border-gray-700 grid grid-cols-7 gap-1">
                                 {EMOJI_CATEGORIES.map(({name, icon}) => (
                                   <button 
@@ -1049,9 +1053,9 @@ export const Automation: React.FC = () => {
                                 ))}
                                 </div>
                             </div>
-                          )}
-                        </div>
-                      </div>
+                        )}
+                    </div>
+                    </div>
 
                       {/* Regenerate Button */}
                       <button
@@ -1062,9 +1066,9 @@ export const Automation: React.FC = () => {
                         <SparklesIcon className="w-3 h-3" />
                         Regenerate Captions
                       </button>
-                    </div>
-                  </div>
-                  );
+            </div>
+        </div>
+    );
                 })}
                 
                 {/* Upload Box - Always visible after uploaded files */}
@@ -1087,11 +1091,11 @@ export const Automation: React.FC = () => {
                     onChange={(e) => handleFileSelect(e.target.files)}
                     className="hidden"
                   />
-                </div>
+            </div>
               </div>
             </div>
-                            </div>
-        )}
+                        </div>
+                    )}
 
         {/* Summary Modal */}
         {showSummary && scheduledPosts.length > 0 && (
@@ -1107,14 +1111,14 @@ export const Automation: React.FC = () => {
                     className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                   >
                     ✕
-                                    </button>
-                                </div>
+                    </button>
+            </div>
 
                 <p className="text-gray-600 dark:text-gray-400 mb-6">
                   Successfully created and scheduled {scheduledPosts.length} post{scheduledPosts.length !== 1 ? 's' : ''}:
                 </p>
 
-                <div className="space-y-4">
+                    <div className="space-y-4">
                   {scheduledPosts.map(({ media, post, event }, index) => {
                     const isVideo = media.mimeType?.startsWith('video/') || (media.file && media.file.type.startsWith('video/'));
                     return (
@@ -1137,15 +1141,15 @@ export const Automation: React.FC = () => {
                               className="w-full h-full object-contain rounded"
                             />
                           )}
-                        </div>
+                                    </div>
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
                             {post.platforms.map(platform => (
                               <div key={platform} className="text-gray-600 dark:text-gray-300" title={platform}>
                                 {platformIcons[platform]}
-                              </div>
-                            ))}
-                          </div>
+                                        </div>
+                                    ))}
+                                </div>
                           <p className="text-sm text-gray-700 dark:text-gray-300 mb-2 line-clamp-2">
                             {post.content.substring(0, 100)}...
                           </p>
@@ -1157,13 +1161,13 @@ export const Automation: React.FC = () => {
                                 timeStyle: 'short',
                               })}
                             </span>
-                            </div>
-                        </div>
-                      </div>
-                    </div>
+                                    </div>
+                                    </div>
+                                        </div>
+                                </div>
                     );
                   })}
-                </div>
+            </div>
 
                 <div className="mt-6 flex justify-end">
                   <button
@@ -1174,12 +1178,12 @@ export const Automation: React.FC = () => {
                     className="px-6 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
                   >
                     Done
-                  </button>
-                </div>
-            </div>
-            </div>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
           </div>
-        )}
+                    )}
             </div>
         </div>
     );
