@@ -113,7 +113,8 @@ export const PLATFORM_CAPABILITIES: Record<Platform, PlatformCapabilities> = {
     dm_auto_reply: false,
     analytics: true,
     trend_detection: "limited",
-    community_features: false
+    community_features: false,
+    notes: "Visual search engine - evergreen content strategy. Focus on SEO, keywords, and traffic metrics (saves/clicks). Optimal posting: 3-5 pins/week."
   },
   Discord: {
     publishing: true,
