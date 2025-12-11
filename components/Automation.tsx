@@ -30,6 +30,10 @@ const platformIcons: Record<Platform, React.ReactElement<{ className?: string }>
   YouTube: <YouTubeIcon />,
   LinkedIn: <LinkedInIcon />,
   Facebook: <FacebookIcon />,
+  Pinterest: <PinterestIcon />,
+  Discord: <DiscordIcon />,
+  Telegram: <TelegramIcon />,
+  Reddit: <RedditIcon />,
 };
 
 interface ProcessedMedia {
