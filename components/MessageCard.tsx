@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useMemo, useLayoutEffect, useCallback } from 'react';
 import { Message, Settings, TeamMember } from '../types';
 import { generateReply } from "../src/services/geminiService"
-import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
+import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon } from './icons/PlatformIcons';
 import { EditIcon, RedoIcon, CheckCircleIcon, VoiceIcon, FlagIcon, UserIcon, EmojiIcon, FaceSmileIcon, CatIcon, PizzaIcon, SoccerBallIcon, CarIcon, LightbulbIcon, HeartIcon, StarIcon, TrashIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 import { EMOJIS, EMOJI_CATEGORIES, Emoji } from './emojiData';
@@ -15,6 +15,10 @@ const platformIcons: { [key in Message['platform']]: React.ReactElement<{ classN
   YouTube: <YouTubeIcon />,
   LinkedIn: <LinkedInIcon />,
   Facebook: <FacebookIcon />,
+  Pinterest: <PinterestIcon />,
+  Discord: <DiscordIcon />,
+  Telegram: <TelegramIcon />,
+  Reddit: <RedditIcon />,
 };
 
 const categoryIcons: Record<string, React.ReactNode> = {
