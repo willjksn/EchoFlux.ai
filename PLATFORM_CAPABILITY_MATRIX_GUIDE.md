@@ -254,6 +254,16 @@ Posting  Analytics ⚠️
 - ⚠️ **DM Auto-Reply:** Requires bot setup
 - ⚠️ **Analytics:** Custom implementation
 
+### Pinterest
+- ✅ **Publishing:** Fully supported
+- ❌ **Inbox:** Not supported
+- ❌ **Comments:** Not supported
+- ❌ **DM Auto-Reply:** Not supported
+- ✅ **Analytics:** Fully supported (traffic-focused: saves, clicks, impressions)
+- ⚠️ **Trend Detection:** Limited
+- ❌ **Community Features:** Not supported
+- **🎯 Special Note:** Pinterest is a **visual search engine** (not social media). Content is evergreen, SEO-driven, and focuses on traffic metrics rather than engagement. Optimal posting: 3-5 pins/week. See `PINTEREST_STRATEGY_IMPLEMENTATION.md` for detailed strategy.
+
 ### Reddit
 - ✅ **Publishing:** Fully supported
 - ⚠️ **Inbox:** Only on your posts
