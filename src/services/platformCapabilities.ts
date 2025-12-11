@@ -63,13 +63,12 @@ export const PLATFORM_CAPABILITIES: Record<Platform, PlatformCapabilities> = {
   },
   X: {
     publishing: true,
-    inbox: "paid_api",
+    inbox: true,
     comments: true,
-    dm_auto_reply: "paid_api",
-    analytics: "paid_api",
+    dm_auto_reply: true,
+    analytics: true,
     trend_detection: "limited",
     community_features: false,
-    notes: "Features depend on user's X API plan (Basic/Pro/Enterprise)."
   },
   TikTok: {
     publishing: true,
