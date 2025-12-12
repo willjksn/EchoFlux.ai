@@ -62,6 +62,29 @@ Pinterest OAuth 2.0 integration allows users to connect their Pinterest accounts
    - **User Account API** - For reading profile (usually auto-approved)
 3. Most scopes are available immediately for approved apps
 
+**⚠️ App Status: Pending Trial Access**
+
+If your app shows "Pending" or "Trial Access" status:
+
+- **Trial Access**: Your app is in review. This is normal for new apps.
+- **Wait Time**: Usually 1-3 business days, but can take up to a week
+- **What You Can Do**:
+  1. Check your email for any requests from Pinterest
+  2. Ensure your app description is clear about intended use
+  3. Make sure your website URL is valid and accessible
+  4. Complete any required business verification
+  5. Wait for approval notification
+
+- **During Trial/Pending**:
+  - OAuth may work but API calls might be limited
+  - Some features may not be available until fully approved
+  - You can still test the OAuth flow, but publishing may be restricted
+
+- **After Approval**:
+  - Full API access will be enabled
+  - All scopes will work as expected
+  - Publishing and board management will be fully functional
+
 ### 6. Set Environment Variables in Vercel
 
 1. Go to your Vercel project dashboard
@@ -139,6 +162,19 @@ The following scopes are automatically requested:
 ### Business Account Required
 - **Error**: API access requires Pinterest Business account
 - **Solution**: Convert personal account to business account at business.pinterest.com
+
+### App Status: Pending/Trial Access
+- **Status**: App is in review or on trial access
+- **What This Means**:
+  - OAuth connection may work
+  - Some API calls may be limited or blocked
+  - Publishing may not work until fully approved
+- **Solution**: 
+  - Wait for approval (usually 1-3 business days)
+  - Check Pinterest Developer Portal for status updates
+  - Ensure all app information is complete
+  - Verify your business account is fully set up
+  - Check email for any requests from Pinterest team
 
 ## Testing
 
