@@ -595,7 +595,7 @@ const MediaItemCard: React.FC<{
     folders: MediaFolder[];
     isGeneratingTags: boolean;
     viewMode: 'grid' | 'list';
-}> = ({ item, isSelected, onSelect, onView, onEdit, onGenerateTags, viewMode }) => {
+}> = ({ item, isSelected, onSelect, onView, onEdit, onGenerateTags, isGeneratingTags, viewMode }) => {
     return (
         <div
             className={`relative group cursor-pointer rounded-lg overflow-hidden border-2 transition-all ${
