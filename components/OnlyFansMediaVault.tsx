@@ -810,16 +810,18 @@ const MediaViewModal: React.FC<{
 
                     {/* Actions */}
                     <div className="flex gap-2">
-                        <button
-                            onClick={() => {
-                                setShowEditor(true);
-                                onClose();
-                            }}
-                            className="px-4 py-2 text-sm border border-primary-300 dark:border-primary-700 text-primary-700 dark:text-primary-400 rounded-md hover:bg-primary-50 dark:hover:bg-primary-900/30 flex items-center gap-2"
-                        >
-                            <EditIcon className="w-4 h-4" />
-                            Edit Image
-                        </button>
+                        {item.type === 'image' && (
+                            <button
+                                onClick={() => {
+                                    onEdit();
+                                    onClose();
+                                }}
+                                className="px-4 py-2 text-sm border border-primary-300 dark:border-primary-700 text-primary-700 dark:text-primary-400 rounded-md hover:bg-primary-50 dark:hover:bg-primary-900/30 flex items-center gap-2"
+                            >
+                                <EditIcon className="w-4 h-4" />
+                                Edit Image
+                            </button>
+                        )}
                         <button
                             onClick={onDelete}
                             className="px-4 py-2 text-sm border border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-900/30"
