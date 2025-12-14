@@ -677,7 +677,99 @@ Format as a numbered list with detailed post concepts including captions and eng
     // Load saved items on mount and when tab changes
     useEffect(() => {
         loadSavedItems();
+        setShowSaved(false); // Reset show saved when switching tabs
     }, [user?.id, activeTab]);
+
+    // Load saved item functions
+    const handleLoadScenario = (savedItem: any) => {
+        setGeneratedScenario(savedItem);
+        if (savedItem.roleplayType && !roleplayTypes.includes(savedItem.roleplayType)) {
+            setUseCustomRoleplayType(true);
+            setCustomRoleplayType(savedItem.roleplayType);
+        } else {
+            setSelectedRoleplayType(savedItem.roleplayType || 'GFE (Girlfriend Experience)');
+        }
+        if (savedItem.tone && !['Soft', 'Teasing', 'Playful', 'Explicit'].includes(savedItem.tone)) {
+            setUseCustomTone(true);
+            setCustomTone(savedItem.tone);
+        } else {
+            setScenarioTone(savedItem.tone || 'Teasing');
+        }
+        setScenarioLength(savedItem.length || 'Extended');
+        setShowSaved(false);
+        showToast('Scenario loaded successfully!', 'success');
+    };
+
+    const handleLoadPersona = (savedItem: any) => {
+        setPersonaName(savedItem.name || '');
+        setPersonaDescription(savedItem.description || '');
+        setGeneratedPersona(savedItem.content || '');
+        setShowSaved(false);
+        showToast('Persona loaded successfully!', 'success');
+    };
+
+    const handleLoadRatings = (savedItem: any) => {
+        setRatingPrompt(savedItem.prompt || '');
+        setGeneratedRatings(savedItem.ratings || []);
+        setShowSaved(false);
+        showToast('Ratings loaded successfully!', 'success');
+    };
+
+    const handleLoadInteractive = (savedItem: any) => {
+        setInteractivePrompt(savedItem.prompt || '');
+        setGeneratedInteractive(savedItem.ideas || []);
+        setShowSaved(false);
+        showToast('Interactive posts loaded successfully!', 'success');
+    };
+
+    // Delete saved item functions
+    const handleDeleteScenario = async (id: string) => {
+        if (!user?.id) return;
+        try {
+            await deleteDoc(doc(db, 'users', user.id, 'onlyfans_saved_scenarios', id));
+            showToast('Scenario deleted', 'success');
+            loadSavedItems();
+        } catch (error) {
+            console.error('Error deleting scenario:', error);
+            showToast('Failed to delete scenario', 'error');
+        }
+    };
+
+    const handleDeletePersona = async (id: string) => {
+        if (!user?.id) return;
+        try {
+            await deleteDoc(doc(db, 'users', user.id, 'onlyfans_saved_personas', id));
+            showToast('Persona deleted', 'success');
+            loadSavedItems();
+        } catch (error) {
+            console.error('Error deleting persona:', error);
+            showToast('Failed to delete persona', 'error');
+        }
+    };
+
+    const handleDeleteRatings = async (id: string) => {
+        if (!user?.id) return;
+        try {
+            await deleteDoc(doc(db, 'users', user.id, 'onlyfans_saved_ratings', id));
+            showToast('Ratings deleted', 'success');
+            loadSavedItems();
+        } catch (error) {
+            console.error('Error deleting ratings:', error);
+            showToast('Failed to delete ratings', 'error');
+        }
+    };
+
+    const handleDeleteInteractive = async (id: string) => {
+        if (!user?.id) return;
+        try {
+            await deleteDoc(doc(db, 'users', user.id, 'onlyfans_saved_interactive', id));
+            showToast('Interactive posts deleted', 'success');
+            loadSavedItems();
+        } catch (error) {
+            console.error('Error deleting interactive posts:', error);
+            showToast('Failed to delete interactive posts', 'error');
+        }
+    };
 
     const tabs: { id: RoleplayTab; label: string }[] = [
         { id: 'scenarios', label: 'Roleplay Scenarios' },
@@ -728,6 +820,66 @@ Format as a numbered list with detailed post concepts including captions and eng
             {/* Roleplay Scenarios Tab */}
             {activeTab === 'scenarios' && (
                 <div className="space-y-6">
+                    {/* Saved Items Section */}
+                    {savedScenarios.length > 0 && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                                    Saved Scenarios ({savedScenarios.length})
+                                </h2>
+                                <button
+                                    onClick={() => setShowSaved(!showSaved)}
+                                    className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                >
+                                    {showSaved ? 'Hide' : 'Show'} Saved
+                                </button>
+                            </div>
+                            {showSaved && (
+                                <div className="space-y-3">
+                                    {savedScenarios.map((item) => (
+                                        <div key={item.id} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                            <div className="flex items-start justify-between">
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <span className="font-medium text-gray-900 dark:text-white">
+                                                            {item.roleplayType || 'Untitled Scenario'}
+                                                        </span>
+                                                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                                                            {item.tone && `• ${item.tone}`}
+                                                            {item.length && ` • ${item.length}`}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-2">
+                                                        {item.premise || 'No description'}
+                                                    </p>
+                                                    {item.savedAt && (
+                                                        <p className="text-xs text-gray-500 dark:text-gray-500">
+                                                            Saved {item.savedAt?.toDate ? new Date(item.savedAt.toDate()).toLocaleDateString() : 'Recently'}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <div className="flex gap-2 ml-4">
+                                                    <button
+                                                        onClick={() => handleLoadScenario(item)}
+                                                        className="px-3 py-1 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700"
+                                                    >
+                                                        Load
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeleteScenario(item.id)}
+                                                        className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700"
+                                                    >
+                                                        <TrashIcon className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                             Generate Roleplay Scenario
@@ -1032,6 +1184,60 @@ Format as a numbered list with detailed post concepts including captions and eng
             {/* Persona Builder Tab */}
             {activeTab === 'persona' && (
                 <div className="space-y-6">
+                    {/* Saved Personas Section */}
+                    {savedPersonas.length > 0 && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                                    Saved Personas ({savedPersonas.length})
+                                </h2>
+                                <button
+                                    onClick={() => setShowSaved(!showSaved)}
+                                    className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                >
+                                    {showSaved ? 'Hide' : 'Show'} Saved
+                                </button>
+                            </div>
+                            {showSaved && (
+                                <div className="space-y-3">
+                                    {savedPersonas.map((item) => (
+                                        <div key={item.id} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                            <div className="flex items-start justify-between">
+                                                <div className="flex-1">
+                                                    <h3 className="font-medium text-gray-900 dark:text-white mb-1">
+                                                        {item.name || 'Unnamed Persona'}
+                                                    </h3>
+                                                    <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-2">
+                                                        {item.description || 'No description'}
+                                                    </p>
+                                                    {item.savedAt && (
+                                                        <p className="text-xs text-gray-500 dark:text-gray-500">
+                                                            Saved {item.savedAt?.toDate ? new Date(item.savedAt.toDate()).toLocaleDateString() : 'Recently'}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <div className="flex gap-2 ml-4">
+                                                    <button
+                                                        onClick={() => handleLoadPersona(item)}
+                                                        className="px-3 py-1 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700"
+                                                    >
+                                                        Load
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeletePersona(item.id)}
+                                                        className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700"
+                                                    >
+                                                        <TrashIcon className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                             Build Your Persona
@@ -1119,6 +1325,60 @@ Format as a numbered list with detailed post concepts including captions and eng
             {/* Body Ratings Tab */}
             {activeTab === 'ratings' && (
                 <div className="space-y-6">
+                    {/* Saved Ratings Section */}
+                    {savedRatings.length > 0 && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                                    Saved Ratings ({savedRatings.length})
+                                </h2>
+                                <button
+                                    onClick={() => setShowSaved(!showSaved)}
+                                    className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                >
+                                    {showSaved ? 'Hide' : 'Show'} Saved
+                                </button>
+                            </div>
+                            {showSaved && (
+                                <div className="space-y-3">
+                                    {savedRatings.map((item) => (
+                                        <div key={item.id} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                            <div className="flex items-start justify-between">
+                                                <div className="flex-1">
+                                                    <p className="text-sm text-gray-900 dark:text-white mb-2 font-medium">
+                                                        {item.prompt || 'No prompt'}
+                                                    </p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                                                        {item.ratings?.length || 0} rating prompts
+                                                    </p>
+                                                    {item.savedAt && (
+                                                        <p className="text-xs text-gray-500 dark:text-gray-500">
+                                                            Saved {item.savedAt?.toDate ? new Date(item.savedAt.toDate()).toLocaleDateString() : 'Recently'}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <div className="flex gap-2 ml-4">
+                                                    <button
+                                                        onClick={() => handleLoadRatings(item)}
+                                                        className="px-3 py-1 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700"
+                                                    >
+                                                        Load
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeleteRatings(item.id)}
+                                                        className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700"
+                                                    >
+                                                        <TrashIcon className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                             Generate Body Rating Prompts
@@ -1196,6 +1456,60 @@ Format as a numbered list with detailed post concepts including captions and eng
             {/* Interactive Posts Tab */}
             {activeTab === 'interactive' && (
                 <div className="space-y-6">
+                    {/* Saved Interactive Posts Section */}
+                    {savedInteractive.length > 0 && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                                    Saved Interactive Posts ({savedInteractive.length})
+                                </h2>
+                                <button
+                                    onClick={() => setShowSaved(!showSaved)}
+                                    className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                >
+                                    {showSaved ? 'Hide' : 'Show'} Saved
+                                </button>
+                            </div>
+                            {showSaved && (
+                                <div className="space-y-3">
+                                    {savedInteractive.map((item) => (
+                                        <div key={item.id} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                            <div className="flex items-start justify-between">
+                                                <div className="flex-1">
+                                                    <p className="text-sm text-gray-900 dark:text-white mb-2 font-medium">
+                                                        {item.prompt || 'No prompt'}
+                                                    </p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                                                        {item.ideas?.length || 0} post ideas
+                                                    </p>
+                                                    {item.savedAt && (
+                                                        <p className="text-xs text-gray-500 dark:text-gray-500">
+                                                            Saved {item.savedAt?.toDate ? new Date(item.savedAt.toDate()).toLocaleDateString() : 'Recently'}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <div className="flex gap-2 ml-4">
+                                                    <button
+                                                        onClick={() => handleLoadInteractive(item)}
+                                                        className="px-3 py-1 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700"
+                                                    >
+                                                        Load
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeleteInteractive(item.id)}
+                                                        className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700"
+                                                    >
+                                                        <TrashIcon className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                             Generate Interactive Post Ideas
