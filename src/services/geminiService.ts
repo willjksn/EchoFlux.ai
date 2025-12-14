@@ -107,8 +107,9 @@ export async function generateCaptions(opts: {
   goal?: string | null;
   tone?: string | null;
   promptText?: string | null;
+  platforms?: string[] | null; // Selected platforms for platform-specific hashtags
 }) {
-  const { mediaUrl, mediaData, goal, tone, promptText } = opts;
+  const { mediaUrl, mediaData, goal, tone, promptText, platforms } = opts;
 
   return await callFunction("generateCaptions", {
     mediaUrl: mediaUrl || null,
@@ -116,6 +117,7 @@ export async function generateCaptions(opts: {
     goal: goal || null,
     tone: tone || null,
     promptText: promptText || null,
+    platforms: platforms || null, // Pass platforms for hashtag generation
   });
 }
 

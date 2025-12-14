@@ -2,6 +2,19 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getAdminApp } from '../../_firebaseAdmin.js';
 
 /**
+ * CRITICAL: Redirect URI Consistency
+ * 
+ * The redirect URI MUST be EXACTLY the same in all three places:
+ * 
+ * A) X Developer Portal: https://echoflux.ai/api/oauth/x/callback
+ * B) Authorization request (authorize.ts): https://echoflux.ai/api/oauth/x/callback
+ * C) Token exchange (this file): https://echoflux.ai/api/oauth/x/callback
+ * 
+ * No variations, no encoding mismatches, no trailing slashes.
+ * Any difference will cause OAuth to fail.
+ */
+
+/**
  * Handle Twitter/X OAuth callback
  * Exchanges authorization code for access token and stores it
  */
@@ -40,7 +53,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Exchange code for access token
-    const redirectUri = `${req.headers.origin || 'http://localhost:3000'}/api/oauth/x/callback`;
+    // CRITICAL: Use EXACT same redirect URI as authorization request and X Developer Portal
+    // Must be identical string: https://echoflux.ai/api/oauth/x/callback
+    // No trailing slash, no encoding variations, exact match required
+    const redirectUri = 'https://echoflux.ai/api/oauth/x/callback';
+    
+    console.log('X OAuth callback:', {
+      hasState: !!state,
+      redirectUri: redirectUri, // Exact same string used everywhere
+      origin: req.headers.origin,
+      host: req.headers.host,
+    });
     
     // Create basic auth header for Twitter API
     const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
@@ -54,7 +77,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       body: new URLSearchParams({
         code: code as string,
         grant_type: 'authorization_code',
-        redirect_uri: redirectUri,
+        redirect_uri: redirectUri, // Exact same string as X Developer Portal and authorization request
         code_verifier: codeVerifier, // PKCE verifier from state
       }),
     });

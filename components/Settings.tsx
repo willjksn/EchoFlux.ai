@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Settings as AppSettings, Platform, CustomVoice, SocialAccount } from '../types';
-import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon } from './icons/PlatformIcons';
+import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon, FanvueIcon } from './icons/PlatformIcons';
 import { useAppContext } from './AppContext';
 import { UpgradePrompt } from './UpgradePrompt';
 import { UploadIcon, TrashIcon, SettingsIcon, LinkIcon, SparklesIcon, CreditCardIcon, CheckCircleIcon, XMarkIcon, ClockIcon, VoiceIcon } from './icons/UIIcons';
@@ -86,6 +86,7 @@ const platformIcons: Record<Platform, React.ReactNode> = {
   Discord: <DiscordIcon />,
   Telegram: <TelegramIcon />,
   Reddit: <RedditIcon />,
+  Fanvue: <FanvueIcon />,
 };
 
 const AccountConnection: React.FC<{

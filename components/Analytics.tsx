@@ -345,6 +345,8 @@ export const Analytics: React.FC = () => {
                         <option value="Discord">Discord</option>
                         <option value="Telegram">Telegram</option>
                         <option value="Reddit">Reddit</option>
+                        <option value="Fanvue">Fanvue</option>
+                        <option value="OnlyFans">OnlyFans</option>
                     </select>
                 </div>
             </div>

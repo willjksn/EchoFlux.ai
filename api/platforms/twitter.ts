@@ -61,7 +61,7 @@ async function refreshTwitterToken(account: TwitterAccount): Promise<string | nu
         }
 
         // Exchange refresh token for new access token
-        const response = await fetch("https://api.twitter.com/2/oauth2/token", {
+        const response = await fetch("https://api.x.com/2/oauth2/token", {
           method: "POST",
           headers: {
             "Content-Type": "application/x-www-form-urlencoded",
@@ -99,9 +99,9 @@ export async function fetchTwitterDMs(
       throw new Error("No valid access token");
     }
 
-    // Twitter API v2: Get DMs
+    // X API v2: Get DMs
     // Note: Requires elevated access and DM permissions
-    const url = new URL("https://api.twitter.com/2/dm_events");
+    const url = new URL("https://api.x.com/2/dm_events");
     url.searchParams.set("dm_event.fields", "id,text,created_at,sender_id");
     url.searchParams.set("user.fields", "id,username,name,profile_image_url");
     url.searchParams.set("max_results", "100");
@@ -177,8 +177,8 @@ export async function fetchTwitterMentions(
       throw new Error("No valid access token");
     }
 
-    // Twitter API v2: Get mentions
-    const url = new URL(`https://api.twitter.com/2/users/${account.accountId}/mentions`);
+    // X API v2: Get mentions
+    const url = new URL(`https://api.x.com/2/users/${account.accountId}/mentions`);
     url.searchParams.set("tweet.fields", "id,text,created_at,author_id");
     url.searchParams.set("user.fields", "id,username,name,profile_image_url");
     url.searchParams.set("max_results", "100");

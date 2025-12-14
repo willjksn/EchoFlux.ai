@@ -8,11 +8,11 @@ export const Terms: React.FC = () => {
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Last updated: January 2025</p>
 
                 <div className="mt-6 prose prose-lg dark:prose-invert max-w-none text-gray-700 dark:text-gray-300">
-                    <p>Welcome to EngageSuite.ai. Our goal is to provide a powerful and sustainable AI toolkit to help you grow. This Fair Use Policy outlines the usage limits for our AI generation features to ensure service quality and prevent abuse for all our users. By using our service, you agree to these terms.</p>
+                    <p>Welcome to EchoFlux.AI. Our goal is to provide a powerful and sustainable AI toolkit to help you grow. This Fair Use Policy outlines the usage limits for our AI generation features to ensure service quality and prevent abuse for all our users. By using our service, you agree to these terms.</p>
 
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">1. Platform Support & Feature Availability</h3>
                     <p>
-                        EngageSuite.ai integrates with multiple third-party social networks and creator platforms. Because each external platform maintains its own API policies, rate limits, permissions, and compliance requirements, certain features may only be available on specific platforms. The following terms define the scope of supported functionality.
+                        EchoFlux.AI integrates with multiple third-party social networks and creator platforms. Because each external platform maintains its own API policies, rate limits, permissions, and compliance requirements, certain features may only be available on specific platforms. The following terms define the scope of supported functionality.
                     </p>
                     <p className="mt-4">
                         <strong>Users acknowledge and agree that:</strong>
@@ -30,7 +30,7 @@ export const Terms: React.FC = () => {
                     <h4 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-2">B. X (Twitter)</h4>
                     <ul className="list-disc pl-6 space-y-2">
                         <li>Features such as posting, analytics, DM handling, and search require a paid X API tier.</li>
-                        <li>EngageSuite.ai will not provide features that exceed X's automation rules.</li>
+                        <li>EchoFlux.AI will not provide features that exceed X's automation rules.</li>
                         <li>No scraping, unauthorized data collection, or competitor monitoring is performed.</li>
                         <li>Publishing & scheduling, AI replies (paid API tier required), smart analytics, and trend insights are supported.</li>
                     </ul>
@@ -40,7 +40,7 @@ export const Terms: React.FC = () => {
                         <li>Posting and limited scheduling are supported.</li>
                         <li>AI content creation, TikTok-optimized captions, hooks, and scripts are available.</li>
                         <li><strong>Inbox/DM tools, CRM features, and auto-replies are NOT supported</strong> due to TikTok's API restrictions.</li>
-                        <li>EngageSuite.ai does not access or automate private data or private interactions.</li>
+                        <li>EchoFlux.AI does not access or automate private data or private interactions.</li>
                     </ul>
 
                     <h4 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-2">D. YouTube</h4>
@@ -69,13 +69,13 @@ export const Terms: React.FC = () => {
                     <div className="mt-6 p-6 border-l-4 border-blue-400 bg-blue-50 dark:bg-blue-900/30 rounded-r-lg">
                         <h4 className="text-lg font-semibold text-blue-800 dark:text-blue-200 mb-2">Changes to Platform Availability</h4>
                         <p className="text-blue-900 dark:text-blue-100">
-                            Third-party platforms may modify or revoke API features without notice. EngageSuite.ai is not liable for platform outages, API deprecations, rate-limit restrictions, or third-party policy changes. We will make commercially reasonable efforts to maintain compatibility but cannot guarantee uninterrupted functionality.
+                            Third-party platforms may modify or revoke API features without notice. EchoFlux.AI is not liable for platform outages, API deprecations, rate-limit restrictions, or third-party policy changes. We will make commercially reasonable efforts to maintain compatibility but cannot guarantee uninterrupted functionality.
                         </p>
                     </div>
 
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">2. AI-Powered Services</h3>
                     <p>
-                        EngageSuite.ai offers advanced AI-powered content creation tools, including caption generation, content strategy, and automated post scheduling. These features use AI to analyze your media, generate captions and hashtags, and optimize posting times. This policy ensures we can offer these services sustainably.
+                        EchoFlux.AI offers advanced AI-powered content creation tools, including caption generation, content strategy, and automated post scheduling. These features use AI to analyze your media, generate captions and hashtags, and optimize posting times. This policy ensures we can offer these services sustainably.
                     </p>
 
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">3. Subscription Plans and Pricing</h3>
@@ -100,12 +100,30 @@ export const Terms: React.FC = () => {
                         Different subscription plans come with different allowances for AI generation. These are designed to provide ample creative freedom while maintaining service stability.
                     </p>
                     
+                    <h4>AI Caption Generation</h4>
+                    <p>
+                        All paid plans include AI-powered caption generation with trending hashtags. Monthly limits are as follows:
+                    </p>
+                    <ul>
+                        <li><strong>Free Plan:</strong> No AI Captions included.</li>
+                        <li><strong>Caption Pro Plan:</strong> 100 AI Captions per month.</li>
+                        <li><strong>Creator Pro Plan:</strong> 500 AI Captions per month.</li>
+                        <li><strong>Creator Elite Plan:</strong> 1,500 AI Captions per month.</li>
+                        <li><strong>Creator Agency Plan:</strong> 10,000 AI Captions per month (soft cap). Overage fees apply beyond this limit.</li>
+                        <li><strong>Business Starter Plan:</strong> 1,000 AI Captions per month.</li>
+                        <li><strong>Business Growth Plan:</strong> 2,500 AI Captions per month.</li>
+                    </ul>
+                    <p>
+                        Credits reset on your monthly billing date. Unused credits do not roll over to the next month.
+                    </p>
+
                     <h4>Media Storage Allowance</h4>
                      <p>
                         Users can upload their own media (images and videos) for use in features like caption generation, Quick Post Automation, and the Media Library. Each plan comes with a specific storage limit:
                     </p>
                     <ul>
                         <li><strong>Free Plan:</strong> 100 MB of media storage.</li>
+                        <li><strong>Caption Pro Plan:</strong> Basic Link-in-Bio only (no Media Library).</li>
                         <li><strong>Creator Pro Plan:</strong> 1 GB of media storage.</li>
                         <li><strong>Creator Elite Plan:</strong> 2 GB of media storage.</li>
                         <li><strong>Creator Agency Plan:</strong> 5 GB of media storage.</li>
@@ -121,7 +139,8 @@ export const Terms: React.FC = () => {
                         All plans include AI-powered reply generation for DMs and comments. Monthly limits are as follows:
                     </p>
                     <ul>
-                        <li><strong>Free Plan:</strong> 50 AI Replies per month.</li>
+                        <li><strong>Free Plan:</strong> 25 AI Replies per month.</li>
+                        <li><strong>Caption Pro Plan:</strong> Not included (caption generation only).</li>
                         <li><strong>Creator Pro Plan:</strong> 250 AI Replies per month.</li>
                         <li><strong>Creator Elite Plan:</strong> 750 AI Replies per month.</li>
                         <li><strong>Creator Agency Plan:</strong> 2,000 AI Replies per month.</li>
@@ -153,9 +172,28 @@ export const Terms: React.FC = () => {
                         </p>
                     </div>
 
+                    <div className="mt-8 p-6 border-l-4 border-red-400 bg-red-50 dark:bg-red-900/30 rounded-r-lg">
+                        <h4 className="text-xl font-bold text-red-800 dark:text-red-200">Agency Plan: Soft Cap & Overage Policy</h4>
+                        <p className="mt-2 text-red-900 dark:text-red-100">
+                            The Agency plan includes generous monthly allowances designed to cover typical usage across all managed clients. However, to ensure sustainable service for all users, we implement a <strong>soft cap</strong> system:
+                        </p>
+                        <ul className="list-disc pl-6 space-y-2 mt-3 text-red-900 dark:text-red-100">
+                            <li><strong>AI Captions:</strong> 10,000 captions/month included. Beyond this limit, overage fees of $0.01 per caption apply.</li>
+                            <li><strong>AI Replies:</strong> 2,000 replies/month included. Beyond this limit, overage fees of $0.05 per reply apply.</li>
+                            <li><strong>Image Generation:</strong> Coming soon. Unlimited* (subject to fair use). Excessive usage may trigger review.</li>
+                            <li><strong>Video Generation:</strong> Coming soon. 50 videos/month included. Beyond this limit, overage fees of $2.00 per video apply.</li>
+                        </ul>
+                        <p className="mt-3 text-red-900 dark:text-red-100">
+                            <strong>Fair Use:</strong> "Unlimited" features are subject to reasonable use. Usage that exceeds 10x the typical plan usage may be flagged for review. We reserve the right to contact Agency subscribers with unusually high usage to discuss custom pricing or usage optimization.
+                        </p>
+                        <p className="mt-3 text-red-900 dark:text-red-100">
+                            Overage fees are billed monthly and will appear on your next billing statement. You will receive email notifications when you approach (80%) and reach (100%) your included limits.
+                        </p>
+                    </div>
+
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">6. Prohibited Use</h3>
                     <p>
-                        You may not use EngageSuite.ai to:
+                        You may not use EchoFlux.AI to:
                     </p>
                     <ul className="list-disc pl-6 space-y-2 mt-2">
                         <li>Circumvent API limitations imposed by third-party platforms.</li>

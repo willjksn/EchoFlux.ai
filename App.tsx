@@ -22,19 +22,24 @@ import { Clients } from './components/Clients';
 import { FAQ } from './components/FAQ';
 import { Terms } from './components/Terms';
 import { Privacy } from './components/Privacy';
+import { DataDeletion } from './components/DataDeletion';
 import { AdminDashboard } from './components/AdminDashboard';
 import Automation from './components/Automation';
 import { Calendar } from './components/Calendar';
 import MediaLibrary from './components/MediaLibrary';
 import { Approvals } from './components/Approvals';
+import { Inbox } from './components/Inbox';
 import { OnboardingSelector } from './components/OnboardingSeledtor';
 import { CreatorOnboardingModal } from './components/CreatorOnboardingModal';
 import { BusinessOnboardingModal } from './components/BusinessOnboardingModal';
+import { PlanSelectorModal } from './components/PlanSelectorModal';
+import { MaintenancePage } from './components/MaintenancePage';
+import { isMaintenanceMode, getAllowedEmail, canBypassMaintenance } from './src/utils/maintenance';
 import { InteractiveTour } from './components/InteractiveTour';
 import { PaymentModal } from './components/PaymentModal';
 import { Toast } from './components/Toast';
 import { Chatbot } from './components/Chatbot';
-import { Page, UserType } from './types';
+import { Page, UserType, Plan } from './types';
 import { Pricing } from './components/Pricing';
 import { CRMSidebar } from './components/CRMSidebar';
 import { BioPageBuilder } from './components/BioPageBuilder';
@@ -42,6 +47,8 @@ import { Strategy } from './components/Strategy';
 import { AdGenerator } from './components/AdGenerator';
 import { VoiceAssistant } from './components/VoiceAssistant';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { OnlyFansStudio } from './components/OnlyFansStudio';
+import { BioPageView } from './components/BioPageView';
 
 const pageTitles: Record<Page, string> = {
     dashboard: 'Dashboard',
@@ -61,6 +68,7 @@ const pageTitles: Record<Page, string> = {
     faq: 'FAQs',
     terms: 'Terms of Service',
     privacy: 'Privacy Policy',
+    dataDeletion: 'Data Deletion',
     admin: 'Admin Dashboard',
     automation: 'Automation',
     bio: 'Link in Bio Builder',
@@ -68,6 +76,7 @@ const pageTitles: Record<Page, string> = {
     ads: 'AI Ad Generator',
     mediaLibrary: 'Media Library',
     autopilot: 'AI Autopilot',
+    onlyfansStudio: 'OnlyFans Studio',
 };
 
 const MainContent: React.FC = () => {
@@ -76,6 +85,7 @@ const MainContent: React.FC = () => {
 
         switch (activePage) {
             case 'dashboard': return <Dashboard />;
+            case 'inbox': return <Inbox />;
             case 'analytics': return <Analytics />;
             case 'settings': return <Settings />;
             case 'compose': return <Compose />;
@@ -91,12 +101,14 @@ const MainContent: React.FC = () => {
             case 'faq': return <FAQ />;
             case 'terms': return <Terms />;
             case 'privacy': return <Privacy />;
+            case 'dataDeletion': return <DataDeletion />;
             case 'admin': return user?.role === 'Admin' ? <AdminDashboard /> : <Dashboard />;
             case 'automation': return <Automation />;
             case 'bio': return <BioPageBuilder />;
             case 'strategy': return <Strategy />;
             case 'ads': return <AdGenerator />;
             case 'mediaLibrary': return <MediaLibrary />;
+            case 'onlyfansStudio': return <OnlyFansStudio />;
             default: return <Dashboard />;
         }
     } catch (error: any) {
@@ -119,20 +131,101 @@ const MainContent: React.FC = () => {
 }
 
 const AppContent: React.FC = () => {
+    // Check if this is a public bio page route (e.g., /u/username or /link/username)
+    // This should be checked BEFORE authentication to allow public access
+    const pathname = window.location.pathname;
+    const isPublicBioPage = /^\/(?:u|link)\/[^/]+$/.test(pathname);
+    
+    if (isPublicBioPage) {
+        return <BioPageView />;
+    }
+    
+    // Check maintenance mode FIRST - before any hooks or other logic
+    const maintenanceEnabled = isMaintenanceMode();
+    const allowedEmail = getAllowedEmail();
+    
     // Hooks must be called unconditionally at the top level
     const { isAuthenticated, isAuthLoading, user, setUser, activePage, setActivePage, startTour, isTourActive, toast, isCRMOpen, setPricingView } = useAppContext();
     
     const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-    const [onboardingStep, setOnboardingStep] = useState<'selector' | 'creator' | 'business' | 'none'>('none');
+    const [onboardingStep, setOnboardingStep] = useState<'selector' | 'plan-selector' | 'creator' | 'business' | 'none'>('none');
+    const [selectedUserType, setSelectedUserType] = useState<UserType | null>(null);
+    const [bypassMaintenance, setBypassMaintenance] = useState(false);
+
+    // Auto-bypass maintenance for whitelisted users
+    useEffect(() => {
+        if (isAuthenticated && user) {
+            const canBypass = canBypassMaintenance(user.email);
+            if (canBypass) {
+                setBypassMaintenance(true);
+            }
+        }
+    }, [isAuthenticated, user]);
+
+    // Sync URL with active page for direct access (e.g., /privacy, /terms)
+    useEffect(() => {
+        const path = window.location.pathname;
+        const hash = window.location.hash.replace('#', '');
+        
+        // Map URL paths to pages
+        const urlToPage: Record<string, Page> = {
+            '/privacy': 'privacy',
+            '/terms': 'terms',
+            '/data-deletion': 'dataDeletion',
+            '/about': 'about',
+            '/contact': 'contact',
+            '/pricing': 'pricing',
+            '/faq': 'faq',
+        };
+
+        // Check if URL path matches a page
+        if (path !== '/' && urlToPage[path]) {
+            setActivePage(urlToPage[path]);
+        } else if (hash && urlToPage[`/${hash}`]) {
+            // Support hash-based routing too
+            setActivePage(urlToPage[`/${hash}`]);
+        }
+    }, []); // Only run on mount
+
+    // Update URL when page changes (for privacy policy, terms, etc.)
+    useEffect(() => {
+        const pageToPath: Partial<Record<Page, string>> = {
+            privacy: '/privacy',
+            terms: '/terms',
+            dataDeletion: '/data-deletion',
+            about: '/about',
+            contact: '/contact',
+            pricing: '/pricing',
+            faq: '/faq',
+        };
+
+        const path = pageToPath[activePage];
+        if (path && window.location.pathname !== path) {
+            window.history.pushState({}, '', path);
+        }
+    }, [activePage]);
 
     useEffect(() => {
         if (isAuthenticated && user) {
             if (!user.userType) {
                 setOnboardingStep('selector');
-            } else if (!user.hasCompletedOnboarding) {
-                setOnboardingStep(user.userType === 'Business' ? 'business' : 'creator');
             } else {
-                setOnboardingStep('none');
+                // Check if user has a valid plan for their userType
+                const hasValidPlan = user.userType === 'Business' 
+                    ? (user.plan === 'Starter' || user.plan === 'Growth')
+                    : (user.plan === 'Free' || user.plan === 'Caption' || user.plan === 'OnlyFansStudio' || user.plan === 'Pro' || user.plan === 'Elite' || user.plan === 'Agency');
+                
+                // If user has completed onboarding, they're done
+                if (user.hasCompletedOnboarding) {
+                    setOnboardingStep('none');
+                } else if (!hasValidPlan) {
+                    // User has userType but invalid plan (e.g., Business with Free plan) - show plan selector
+                    setSelectedUserType(user.userType);
+                    setOnboardingStep('plan-selector');
+                } else {
+                    // User has valid plan but hasn't completed onboarding - proceed to onboarding
+                    setOnboardingStep(user.userType === 'Business' ? 'business' : 'creator');
+                }
             }
         }
     }, [isAuthenticated, user]);
@@ -157,9 +250,21 @@ const AppContent: React.FC = () => {
             localStorage.removeItem('pendingPricingView');
             setPricingView(pendingPricingView);
             setActivePage('pricing');
+            setOnboardingStep('none');
+            return;
         }
         
-        setOnboardingStep(type === 'Business' ? 'business' : 'creator');
+        // Always show plan selector after userType selection (for new signups)
+        // This ensures users explicitly choose their plan
+        setSelectedUserType(type);
+        setOnboardingStep('plan-selector');
+    };
+
+    const handlePlanSelected = async (plan: Plan) => {
+        // Plan is already saved in PlanSelectorModal, just proceed to onboarding
+        if (selectedUserType) {
+            setOnboardingStep(selectedUserType === 'Business' ? 'business' : 'creator');
+        }
     };
 
     const handleNavigateRequest = (page: Page) => {
@@ -170,15 +275,61 @@ const AppContent: React.FC = () => {
         }
     }
 
+    // Auto-bypass maintenance for whitelisted users (must happen before maintenance check)
+    useEffect(() => {
+        if (isAuthenticated && user) {
+            const userCanBypass = canBypassMaintenance(user.email);
+            if (userCanBypass && !bypassMaintenance) {
+                setBypassMaintenance(true);
+            }
+        }
+    }, [isAuthenticated, user, bypassMaintenance]);
+
+    // Calculate if user can bypass maintenance
+    // If user is authenticated and whitelisted, they can bypass
+    const canBypass = isAuthenticated && user && canBypassMaintenance(user.email);
+    
+    // Debug maintenance mode - always log to help troubleshoot
+    console.log('🔧 Maintenance Mode Check', { 
+        maintenanceEnabled, 
+        envValue: import.meta.env.VITE_MAINTENANCE_MODE,
+        envType: typeof import.meta.env.VITE_MAINTENANCE_MODE,
+        bypassMaintenance, 
+        canBypass, 
+        isAuthenticated, 
+        userEmail: user?.email,
+        allowedEmail,
+        willShowMaintenance: maintenanceEnabled && !canBypass && !bypassMaintenance
+    });
+    
+    // CRITICAL: Show maintenance page if enabled and user can't bypass
+    // This MUST happen BEFORE any other rendering logic, including auth loading and landing page
+    // This blocks ALL access including login when maintenance is enabled
+    if (maintenanceEnabled) {
+        // Only allow bypass if user is explicitly whitelisted and has bypassed
+        if (!canBypass && !bypassMaintenance) {
+            console.log('🔧 Showing Maintenance Page - blocking ALL access');
+            return (
+                <MaintenancePage 
+                    allowedEmail={allowedEmail}
+                    onBypass={allowedEmail ? () => setBypassMaintenance(true) : undefined}
+                />
+            );
+        }
+        // If maintenance is enabled but user can bypass, continue normally
+        console.log('🔧 Maintenance Mode Active but user can bypass');
+    }
+
     // Debug logging
     if (process.env.NODE_ENV === 'development') {
-        console.log('AppContent render:', { isAuthLoading, isAuthenticated, hasUser: !!user, activePage });
+        console.log('AppContent render:', { isAuthLoading, isAuthenticated, hasUser: !!user, activePage, maintenanceEnabled, bypassMaintenance, canBypass });
     }
 
     if (isAuthLoading) {
         return <div className="h-screen w-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900"><p className="text-gray-500 dark:text-gray-400">Loading...</p></div>;
     }
 
+    // Show landing page/login only if maintenance is NOT enabled OR user can bypass
     if (!isAuthenticated) {
         return (
             <>
@@ -217,6 +368,9 @@ const AppContent: React.FC = () => {
     return (
         <div className="flex h-screen bg-gray-100 dark:bg-gray-900 font-sans w-full overflow-x-hidden">
             {onboardingStep === 'selector' && <OnboardingSelector onSelect={handleUserTypeSelected} />}
+            {onboardingStep === 'plan-selector' && selectedUserType && (
+                <PlanSelectorModal userType={selectedUserType} onSelect={handlePlanSelected} />
+            )}
             {onboardingStep === 'creator' && <CreatorOnboardingModal onComplete={handleOnboardingComplete} />}
             {onboardingStep === 'business' && <BusinessOnboardingModal onComplete={handleOnboardingComplete} />}
 
@@ -224,7 +378,7 @@ const AppContent: React.FC = () => {
             <Sidebar />
             <div className="flex-1 flex flex-col overflow-hidden relative">
                 <Header pageTitle={pageTitle} />
-                <main className="flex-1 overflow-x-hidden overflow-y-auto p-6">
+                <main className="flex-1 overflow-x-hidden overflow-y-auto p-6 custom-scrollbar dark:custom-scrollbar">
                     <MainContent />
                 </main>
                 {isCRMOpen && <CRMSidebar />}

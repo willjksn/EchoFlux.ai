@@ -63,11 +63,13 @@ export const LockIcon: React.FC<{ className?: string }> = ({ className }) => (
 );
 
 
-export const LogoIcon: React.FC = () => (
-    <svg className="w-8 h-8" viewBox="0 0 32 32" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-      <path d="M12 6C12 4.89543 12.8954 4 14 4H18C19.1046 4 20 4.89543 20 6V26C20 27.1046 19.1046 28 18 28H14C12.8954 28 12 27.1046 12 26V6Z" />
-      <path d="M6 12C4.89543 12 4 12.8954 4 14V18C4 19.1046 4.89543 20 6 20H26C27.1046 20 28 19.1046 28 18V14C28 12.8954 27.1046 12 26 12H6Z" />
-    </svg>
+export const LogoIcon: React.FC<{ className?: string }> = ({ className = "w-8 h-8" }) => (
+    <img 
+        src="/logo.svg" 
+        alt="EchoFlux.AI Logo" 
+        className={className}
+        style={{ maxWidth: '100%', height: 'auto' }}
+    />
 );
 
 export const MenuIcon: React.FC = () => (
@@ -172,6 +174,10 @@ export const ChatIcon: React.FC<{ className?: string }> = ({ className }) => (
 
 export const ImageIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+);
+
+export const FolderIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className || "w-5 h-5"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
 );
 
 export const InfoIcon: React.FC = () => (
@@ -324,4 +330,8 @@ export const StopCircleIcon: React.FC<{ className?: string }> = ({ className }) 
 
 export const DownloadIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg className={className || "w-5 h-5"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+);
+
+export const FileIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className || "w-5 h-5"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
 );

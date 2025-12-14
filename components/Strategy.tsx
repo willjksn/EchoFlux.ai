@@ -6,7 +6,7 @@ import { generateContentStrategy, saveStrategy, getStrategies, updateStrategySta
 import { getAnalytics } from "../src/services/geminiService"
 import { AnalyticsData } from '../types'
 import { TargetIcon, SparklesIcon, CalendarIcon, CheckCircleIcon, RocketIcon, DownloadIcon, TrashIcon, ClockIcon, UploadIcon, ImageIcon, XMarkIcon } from './icons/UIIcons';
-import { InstagramIcon, TikTokIcon, XIcon, LinkedInIcon, FacebookIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon } from './icons/PlatformIcons';
+import { InstagramIcon, TikTokIcon, XIcon, LinkedInIcon, FacebookIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon, FanvueIcon, OnlyFansIcon } from './icons/PlatformIcons';
 import { UpgradePrompt } from './UpgradePrompt';
 import { storage } from '../firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -26,6 +26,8 @@ const platformIcons: Record<Platform, React.ReactElement> = {
     Discord: <DiscordIcon className="w-4 h-4" />,
     Telegram: <TelegramIcon className="w-4 h-4" />,
     Reddit: <RedditIcon className="w-4 h-4" />,
+    Fanvue: <FanvueIcon className="w-4 h-4" />,
+    OnlyFans: <OnlyFansIcon className="w-4 h-4" />,
 };
 
 export const Strategy: React.FC = () => {
@@ -51,6 +53,20 @@ export const Strategy: React.FC = () => {
     const [duration, setDuration] = useState('4 Weeks');
     const [tone, setTone] = useState('Professional');
     const [platformFocus, setPlatformFocus] = useState('Mixed / All');
+    
+    // Auto-set explicit tone when OnlyFans/Fanvue is selected
+    useEffect(() => {
+        if ((platformFocus === 'OnlyFans' || platformFocus === 'Fanvue') && 
+            tone !== 'Explicit/Adult Content' && 
+            tone !== 'Sexy / Explicit' && 
+            tone !== 'Sexy / Bold') {
+            setTone('Explicit/Adult Content');
+        } else if (platformFocus !== 'OnlyFans' && 
+                   platformFocus !== 'Fanvue' && 
+                   (tone === 'Explicit/Adult Content' || tone === 'Sexy / Explicit')) {
+            setTone('Professional');
+        }
+    }, [platformFocus, tone]);
     const [isLoading, setIsLoading] = useState(false);
     const [plan, setPlan] = useState<StrategyPlan | null>(null);
     const [savedStrategies, setSavedStrategies] = useState<any[]>([]);
@@ -748,6 +764,9 @@ export const Strategy: React.FC = () => {
                             <option>Edgy & Bold</option>
                             <option>Educational</option>
                             <option>Inspirational</option>
+                            {(platformFocus === 'OnlyFans' || platformFocus === 'Fanvue') && (
+                                <option value="Explicit/Adult Content">Explicit/Adult Content 🌶️</option>
+                            )}
                             {showAdvancedOptions && (
                                 <>
                             <option>Sexy / Bold</option>
@@ -775,6 +794,8 @@ export const Strategy: React.FC = () => {
                             <option value="Discord">Discord Focus</option>
                             <option value="Telegram">Telegram Focus</option>
                             <option value="Reddit">Reddit Focus</option>
+                            <option value="Fanvue">Fanvue Focus</option>
+                            <option value="OnlyFans">OnlyFans Focus</option>
                         </select>
                     </div>
                 </div>

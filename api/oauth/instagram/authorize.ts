@@ -28,18 +28,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Generate state parameter for security (include user ID)
+    // Generate state parameter for security (include user ID and redirectUri)
+    const finalRedirectUri = redirectUri || `${req.headers.origin || 'http://localhost:3000'}/api/oauth/instagram/callback`;
     const state = Buffer.from(JSON.stringify({
       userId: authUser.uid,
       timestamp: Date.now(),
+      redirectUri: finalRedirectUri, // Store redirectUri in state to ensure exact match
     })).toString('base64');
 
-    // Build authorization URL
-    const baseUrl = 'https://api.instagram.com/oauth/authorize';
+    // Build authorization URL - Using Facebook Login for Instagram Graph API
+    // Instagram Basic Display was deprecated Dec 2024, now using Graph API via Facebook Login
+    const baseUrl = 'https://www.facebook.com/v19.0/dialog/oauth';
+    
+    // Ensure redirectUri is normalized (no trailing slash, correct protocol)
+    const normalizedRedirectUri = finalRedirectUri.replace(/\/$/, ''); // Remove trailing slash
+    
+    console.log('Instagram OAuth authorize:', {
+      clientId: clientId?.substring(0, 10) + '...',
+      redirectUri: normalizedRedirectUri,
+      origin: req.headers.origin,
+      host: req.headers.host,
+    });
+    
     const params = new URLSearchParams({
       client_id: clientId,
-      redirect_uri: redirectUri || `${req.headers.origin || 'http://localhost:3000'}/api/oauth/instagram/callback`,
-      scope: 'user_profile,user_media',
+      redirect_uri: normalizedRedirectUri,
+      scope: 'pages_show_list,instagram_basic,instagram_content_publish,pages_read_engagement',
       response_type: 'code',
       state: state,
     });

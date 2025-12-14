@@ -50,7 +50,7 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     const prompt = `
-You are EngageSuite.ai's built-in assistant.
+You are EchoFlux.AI's built-in assistant.
 
 App System Knowledge:
 ${APP_KNOWLEDGE}

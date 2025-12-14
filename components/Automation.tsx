@@ -13,7 +13,7 @@ const categoryIcons: Record<string, React.ReactNode> = {
     LightbulbIcon: <LightbulbIcon className="w-5 h-5"/>,
     HeartIcon: <HeartIcon className="w-5 h-5"/>,
 };
-import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon } from './icons/PlatformIcons';
+import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon, FanvueIcon, OnlyFansIcon } from './icons/PlatformIcons';
 import { db, storage } from '../firebaseConfig';
 import { collection, setDoc, doc, getDocs, query, where, deleteDoc } from 'firebase/firestore';
 // @ts-ignore
@@ -34,6 +34,8 @@ const platformIcons: Record<Platform, React.ReactElement<{ className?: string }>
   Discord: <DiscordIcon />,
   Telegram: <TelegramIcon />,
   Reddit: <RedditIcon />,
+  Fanvue: <FanvueIcon />,
+  OnlyFans: <OnlyFansIcon />,
 };
 
 interface ProcessedMedia {
@@ -824,7 +826,7 @@ export const Automation: React.FC = () => {
               Platforms to Post To
             </label>
             <div className="flex flex-wrap gap-2">
-              {(Object.keys(platformIcons) as Platform[]).map((platform) => (
+              {(Object.keys(platformIcons) as Platform[]).filter(p => p !== 'OnlyFans').map((platform) => (
                 <button
                   key={platform}
                   onClick={() => setSelectedPlatforms(prev => ({ ...prev, [platform]: !prev[platform] }))}

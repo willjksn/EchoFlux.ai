@@ -17,30 +17,11 @@ const NavItem: React.FC<NavItemProps> = ({ page, icon, label, tourId }) => {
     <li id={tourId}>
       <button
         onClick={() => {
-          // If clicking Inbox, set localStorage flag and navigate to dashboard
-          if (page === 'inbox') {
-            localStorage.setItem('dashboardViewMode', 'Inbox');
-            // If already on dashboard, trigger viewMode update via custom event
-            if (activePage === 'dashboard') {
-              window.dispatchEvent(new CustomEvent('dashboardViewModeChanged'));
-            }
-            setActivePage('dashboard');
-          } else if (page === 'dashboard') {
-            // Clear Inbox flag when clicking Dashboard to show Overview
-            localStorage.removeItem('dashboardViewMode');
-            // If already on dashboard, trigger viewMode update
-            if (activePage === 'dashboard') {
-              window.dispatchEvent(new CustomEvent('dashboardViewModeChanged'));
-            }
-            setActivePage('dashboard');
-          } else {
-            setActivePage(page);
-          }
+          setActivePage(page);
           setIsSidebarOpen(false);
         }}
         className={`w-full text-left flex items-center p-3 my-1 rounded-lg transition-colors ${
-          (page === 'inbox' && activePage === 'dashboard' && localStorage.getItem('dashboardViewMode') === 'Inbox') ||
-          (page !== 'inbox' && activePage === page && !(page === 'dashboard' && localStorage.getItem('dashboardViewMode') === 'Inbox'))
+          activePage === page
             ? 'bg-primary-500 text-white'
             : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
         }`}
@@ -66,17 +47,18 @@ export const Sidebar: React.FC = () => {
     { page: 'dashboard', icon: <DashboardIcon />, label: 'Dashboard' },
     { page: 'inbox', icon: <ChatIcon />, label: 'Inbox' },
     { page: 'compose', icon: <ComposeIcon />, label: 'Compose', tourId: 'tour-step-3-compose-nav' },
-    { page: 'mediaLibrary', icon: <ImageIcon />, label: 'Media Library' },
     { page: 'automation', icon: <AutomationIcon />, label: 'Automation' },
-    { page: 'strategy', icon: <TargetIcon />, label: 'Strategy' },
-    { page: 'ads', icon: <SparklesIcon />, label: 'Ad Generator' },
-    { page: 'opportunities', icon: <TrendingIcon />, label: 'Opportunities', tourId: 'tour-step-opportunities-nav' },
-    { page: 'calendar', icon: <CalendarIcon />, label: 'Calendar' },
+    { page: 'mediaLibrary', icon: <ImageIcon />, label: 'Media Library' },
     { page: 'approvals', icon: <KanbanIcon />, label: 'Workflow' },
-    { page: 'bio', icon: <GlobeIcon />, label: 'Link in Bio' },
+    { page: 'calendar', icon: <CalendarIcon />, label: 'Calendar' },
+    { page: 'strategy', icon: <TargetIcon />, label: 'Strategy' },
     { page: 'analytics', icon: <AnalyticsIcon />, label: 'Analytics', tourId: 'tour-step-2-analytics-nav' },
+    { page: 'opportunities', icon: <TrendingIcon />, label: 'Opportunities', tourId: 'tour-step-opportunities-nav' },
+    { page: 'ads', icon: <SparklesIcon />, label: 'Ad Generator' },
     { page: 'team', icon: <TeamIcon />, label: 'Team', tourId: 'tour-step-team-nav' },
     { page: 'clients', icon: <BriefcaseIcon />, label: 'Clients', tourId: 'tour-step-clients-nav' },
+    { page: 'bio', icon: <GlobeIcon />, label: 'Link in Bio' },
+    { page: 'onlyfansStudio', icon: <SparklesIcon />, label: 'OnlyFans Studio' },
     { page: 'settings', icon: <SettingsIcon />, label: 'Settings' },
     { page: 'admin', icon: <AdminIcon />, label: 'Admin' },
   ];
@@ -85,6 +67,17 @@ export const Sidebar: React.FC = () => {
       if (user.role === 'Admin') {
           return true;
       }
+      
+      // Caption plan: Only Compose and Settings
+      if (user.plan === 'Caption') {
+          return item.page === 'compose' || item.page === 'settings';
+      }
+      
+      // OnlyFans Studio plan: Only OnlyFans Studio (Settings are within OnlyFans Studio)
+      if (user.plan === 'OnlyFansStudio') {
+          return item.page === 'onlyfansStudio';
+      }
+      
       switch (item.page) {
           case 'analytics':
           case 'automation':
@@ -112,6 +105,9 @@ export const Sidebar: React.FC = () => {
           case 'clients':
               // STRICT CHECK: Only Agency Plan
               return user.plan === 'Agency';
+          case 'onlyfansStudio':
+              // OnlyFans Studio: OnlyFansStudio, Elite, and Agency plans
+              return ['OnlyFansStudio', 'Elite', 'Agency'].includes(user.plan);
           case 'admin':
               return false;
           default:
@@ -133,9 +129,9 @@ export const Sidebar: React.FC = () => {
       <div className={`fixed inset-0 z-20 bg-black bg-opacity-50 transition-opacity lg:hidden ${isSidebarOpen ? 'block' : 'hidden'}`} onClick={() => setIsSidebarOpen(false)}></div>
       <aside className={`fixed top-0 left-0 z-30 w-64 h-full bg-white dark:bg-gray-800 shadow-xl transition-transform transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static lg:inset-0 flex flex-col`}>
         <div className="flex items-center justify-center h-20 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-          <div className="flex items-center text-primary-600 dark:text-primary-400">
+          <div className="flex items-center">
             <LogoIcon />
-            <span className="ml-2 text-xl font-bold">EngageSuite.ai</span>
+            <span className="ml-2 text-xl font-bold" style={{ color: '#2563eb' }}>EchoFlux.AI</span>
           </div>
         </div>
         <nav className="p-4 flex-grow overflow-y-auto custom-scrollbar">

@@ -6,6 +6,88 @@ body {
   @apply bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white;
 }
 
+/* Global scrollbar styling for body and html */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}
+
+.dark html,
+html.dark,
+[data-theme="dark"] html {
+  scrollbar-color: #4b5563 transparent !important;
+}
+
+html::-webkit-scrollbar {
+  width: 8px;
+}
+
+html::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+html::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+}
+
+html::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+.dark html::-webkit-scrollbar-thumb,
+html.dark::-webkit-scrollbar-thumb,
+[data-theme="dark"] html::-webkit-scrollbar-thumb {
+  background: #4b5563 !important;
+}
+
+.dark html::-webkit-scrollbar-thumb:hover,
+html.dark::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] html::-webkit-scrollbar-thumb:hover {
+  background: #6b7280 !important;
+}
+
+/* Body scrollbar */
+body {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}
+
+.dark body,
+html.dark body,
+[data-theme="dark"] body {
+  scrollbar-color: #4b5563 transparent !important;
+}
+
+body::-webkit-scrollbar {
+  width: 8px;
+}
+
+body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+body::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+}
+
+body::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+.dark body::-webkit-scrollbar-thumb,
+html.dark body::-webkit-scrollbar-thumb,
+[data-theme="dark"] body::-webkit-scrollbar-thumb {
+  background: #4b5563 !important;
+}
+
+.dark body::-webkit-scrollbar-thumb:hover,
+html.dark body::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] body::-webkit-scrollbar-thumb:hover {
+  background: #6b7280 !important;
+}
+
 /* Custom scrollbar hiding for clean UI */
 .scrollbar-hide::-webkit-scrollbar {
     display: none;
@@ -33,12 +115,17 @@ body {
     background: #9ca3af;
 }
 
-.dark .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #4b5563;
+/* Dark mode scrollbar - more specific selectors */
+.dark .custom-scrollbar::-webkit-scrollbar-thumb,
+html.dark .custom-scrollbar::-webkit-scrollbar-thumb,
+[data-theme="dark"] .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #4b5563 !important;
 }
 
-.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: #6b7280;
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover,
+html.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #6b7280 !important;
 }
 
 /* Firefox scrollbar */
@@ -47,8 +134,52 @@ body {
     scrollbar-color: #d1d5db transparent;
 }
 
-.dark .custom-scrollbar {
-    scrollbar-color: #4b5563 transparent;
+.dark .custom-scrollbar,
+html.dark .custom-scrollbar,
+[data-theme="dark"] .custom-scrollbar {
+    scrollbar-color: #4b5563 transparent !important;
+}
+
+/* Ensure main content area scrollbar is styled */
+main::-webkit-scrollbar {
+    width: 8px;
+}
+
+main::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+main::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 4px;
+}
+
+main::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+}
+
+.dark main::-webkit-scrollbar-thumb,
+html.dark main::-webkit-scrollbar-thumb,
+[data-theme="dark"] main::-webkit-scrollbar-thumb {
+    background: #4b5563 !important;
+}
+
+.dark main::-webkit-scrollbar-thumb:hover,
+html.dark main::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] main::-webkit-scrollbar-thumb:hover {
+    background: #6b7280 !important;
+}
+
+/* Firefox for main */
+main {
+    scrollbar-width: thin;
+    scrollbar-color: #d1d5db transparent;
+}
+
+.dark main,
+html.dark main,
+[data-theme="dark"] main {
+    scrollbar-color: #4b5563 transparent !important;
 }
 
 /* Animation utilities */

@@ -31,7 +31,9 @@ import {
   DiscordIcon,
   TelegramIcon,
   RedditIcon,
-  FacebookIcon
+  FacebookIcon,
+  FanvueIcon,
+  OnlyFansIcon
 } from './icons/PlatformIcons';
 import { ImageGenerator } from './ImageGenerator';
 import { VideoGenerator } from './VideoGenerator';
@@ -79,6 +81,8 @@ const platformIcons: Record<Platform, React.ReactNode> = {
   Discord: <DiscordIcon />,
   Telegram: <TelegramIcon />,
   Reddit: <RedditIcon />,
+  Fanvue: <FanvueIcon />,
+  OnlyFans: <OnlyFansIcon />,
 };
 
 const SpeechRecognition =
@@ -117,7 +121,7 @@ const CaptionGenerator: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [autoGenerateCaptions, setAutoGenerateCaptions] = useState(false); // Toggle for auto-generating captions (unchecked by default)
-  const [selectedPlatforms, setSelectedPlatforms] = useState<Record<Platform, boolean>>({
+  const [selectedPlatforms, setSelectedPlatforms] = useState<Partial<Record<Platform, boolean>>>({
     Instagram: false,
     TikTok: false,
     X: false,
@@ -128,7 +132,8 @@ const CaptionGenerator: React.FC = () => {
     Pinterest: false,
     Discord: false,
     Telegram: false,
-    Reddit: false
+    Reddit: false,
+    Fanvue: false
   });
   const [isPublished, setIsPublished] = useState(false);
 
@@ -318,7 +323,8 @@ const CaptionGenerator: React.FC = () => {
       Pinterest: false,
       Discord: false,
       Telegram: false,
-      Reddit: false
+      Reddit: false,
+      Fanvue: false
     });
   };
 
@@ -583,6 +589,8 @@ const CaptionGenerator: React.FC = () => {
                   Discord: false,
                   Telegram: false,
                   Reddit: false,
+                  Fanvue: false,
+                  OnlyFans: false,
                 },
               };
               // Always add to mediaItems array so it shows in a MediaBox
@@ -666,6 +674,8 @@ const CaptionGenerator: React.FC = () => {
         Discord: false,
         Telegram: false,
         Reddit: false,
+        Fanvue: false,
+        OnlyFans: false,
       },
     };
     setComposeState(prev => ({
@@ -1847,6 +1857,8 @@ const CaptionGenerator: React.FC = () => {
         Discord: false,
         Telegram: false,
         Reddit: false,
+        Fanvue: false,
+        OnlyFans: false,
       };
 
       topPlatforms.forEach((platform: Platform) => {
@@ -1998,6 +2010,8 @@ const CaptionGenerator: React.FC = () => {
           Discord: false,
           Telegram: false,
           Reddit: false,
+          Fanvue: false,
+          OnlyFans: false,
         };
 
         topPlatforms.forEach(platform => {
@@ -3421,6 +3435,8 @@ const CaptionGenerator: React.FC = () => {
                   Discord: false,
                   Telegram: false,
                   Reddit: false,
+                  Fanvue: false,
+                  OnlyFans: false,
                 },
               }}
               index={0}

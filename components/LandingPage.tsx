@@ -39,9 +39,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNaviga
         <nav className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div className="flex justify-start lg:w-0 lg:flex-1">
-               <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex items-center text-primary-600 dark:text-primary-400">
+               <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex items-center">
                   <LogoIcon />
-                  <span className="ml-2 text-xl font-bold">EngageSuite.ai</span>
+                  <span className="ml-2 text-xl font-bold" style={{ color: '#2563eb' }}>EchoFlux.AI</span>
                </button>
             </div>
             <div className="hidden md:flex items-center justify-end md:flex-1 lg:w-0 space-x-8">
@@ -271,7 +271,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNaviga
                            Turn followers into leads. Tag users, add notes, and track relationship history directly from your inbox.
                         </Feature>
                         <Feature icon={<SparklesIcon />} title="Generative Content Studio">
-                           Generate images, stunning videos (Veo), and captions in seconds. Clone your voice for audio.
+                           Generate captions in seconds. Image and video generation coming soon. Clone your voice for audio.
                         </Feature>
                         <Feature icon={<CalendarIcon />} title="Visual Content Calendar">
                            Visualize your strategy with a beautiful calendar view. Click any scheduled post to preview, edit date/time/platforms, or delete. See all your scheduled content in one place.
@@ -343,7 +343,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNaviga
                 <div className="space-y-8 xl:col-span-1">
                      <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex items-center text-primary-600 dark:text-primary-400">
                         <LogoIcon />
-                        <span className="ml-2 text-xl font-bold">EngageSuite.ai</span>
+                        <span className="ml-2 text-xl font-bold">EchoFlux.AI</span>
                      </button>
                     <p className="text-gray-500 dark:text-gray-400 text-base">The First AI Social & Marketing Operating System.</p>
                     <div className="flex space-x-6">

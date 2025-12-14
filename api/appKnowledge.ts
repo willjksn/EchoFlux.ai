@@ -1,8 +1,8 @@
 export const APP_KNOWLEDGE = `
-# EngageSuite.ai Knowledge Base
+# EchoFlux.AI Knowledge Base
 
 ## Core Concept
-EngageSuite.ai is an AI Social & Marketing Operating System. It offers two tailored experiences: one for "Creators" focused on brand growth and engagement, and one for "Businesses" focused on marketing, leads, and sales. The user selects their role during a mandatory onboarding process.
+EchoFlux.AI is an AI Social & Marketing Operating System. It offers two tailored experiences: one for "Creators" focused on brand growth and engagement, and one for "Businesses" focused on marketing, leads, and sales. The user selects their role during a mandatory onboarding process.
 
 ## Key Features
 

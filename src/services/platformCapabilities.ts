@@ -14,10 +14,10 @@
  * - "channels_only": Only works in channels (not DMs)
  */
 
-export type CapabilityValue = boolean | "limited" | "paid_api" | "bot_opt_in" | "own_posts_only" | "channels_only" | "basic" | "custom" | "external_only" | "moderator_features_optional";
+export type CapabilityValue = boolean | "limited" | "paid_api" | "bot_opt_in" | "own_posts_only" | "channels_only" | "basic" | "custom" | "external_only" | "moderator_features_optional" | "manual";
 
 export interface PlatformCapabilities {
-  publishing: boolean;
+  publishing: boolean | "manual";
   reels_publishing?: boolean;
   stories_publishing?: boolean;
   inbox: boolean | "limited" | "paid_api" | "bot_opt_in" | "own_posts_only" | "channels_only";
@@ -143,6 +143,26 @@ export const PLATFORM_CAPABILITIES: Record<Platform, PlatformCapabilities> = {
     analytics: "limited",
     trend_detection: "public_search",
     community_features: "moderator_features_optional"
+  },
+  Fanvue: {
+    publishing: true,
+    inbox: false,
+    comments: false,
+    dm_auto_reply: false,
+    analytics: "limited",
+    trend_detection: false,
+    community_features: false,
+    notes: "Creator monetization platform. Supports posting, scheduling, and basic analytics. Messaging not available via API. Requires API access approval from Fanvue."
+  },
+  OnlyFans: {
+    publishing: "manual", // Manual workflow - export content for manual upload
+    inbox: false,
+    comments: false,
+    dm_auto_reply: false,
+    analytics: false,
+    trend_detection: false,
+    community_features: false,
+    notes: "Manual workflow platform. No official API available. Provides AI captions, content planning, shoot ideas, content calendars, cross-platform teasers, media organization, export packages, and workflow guides. Users manually upload content to OnlyFans."
   }
 };
 
@@ -159,6 +179,8 @@ export function hasCapability(
   const value = caps[capability];
   // true means fully supported
   if (value === true) return true;
+  // "manual" means supported via manual workflow
+  if (value === "manual") return true;
   // false means not supported
   if (value === false) return false;
   // Any other value means partially/conditionally supported
@@ -219,5 +241,6 @@ export function getCapabilityDescription(
   if (value === "external_only") return "External tools required";
   if (value === "public_search") return "Public search only";
   if (value === "moderator_features_optional") return "Moderator features available";
+  if (value === "manual") return "Manual workflow";
   return "Unknown";
 }

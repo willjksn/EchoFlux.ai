@@ -8,7 +8,7 @@ export const Privacy: React.FC = () => {
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Last updated: January 2025</p>
 
                 <div className="mt-6 prose prose-lg dark:prose-invert max-w-none text-gray-700 dark:text-gray-300">
-                    <p>EngageSuite.ai ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how your personal information is collected, used, and disclosed by EngageSuite.ai.</p>
+                    <p>EchoFlux.ai ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how your personal information is collected, used, and disclosed by EchoFlux.ai.</p>
 
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">1. Information We Collect</h3>
                     <p>

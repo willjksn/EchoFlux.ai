@@ -22,6 +22,11 @@ async function callFunction(path: string, params?: Record<string, any>) {
 
     if (!res.ok) {
       const errorText = await res.text();
+      // Don't throw for 403 errors - they're expected for non-admin users
+      if (res.status === 403) {
+        console.warn(`API ${path} requires admin access`);
+        throw new Error(`Admin access required`);
+      }
       throw new Error(`API ${path} failed: ${res.status} - ${errorText}`);
     }
 

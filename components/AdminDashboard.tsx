@@ -42,6 +42,7 @@ const getUsageString = (plan: User['plan'], usage: number | undefined, type: 'im
 
 const planColorMap: Record<User['plan'], string> = {
     Free: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
+    Caption: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200',
     Pro: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200',
     Elite: 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-200',
     Agency: 'bg-primary-100 text-primary-800 dark:bg-primary-900/50 dark:text-primary-200',
@@ -51,6 +52,7 @@ const planColorMap: Record<User['plan'], string> = {
 
 const planPrices: Record<User['plan'], number> = { 
     'Free': 0, 
+    'Caption': 9,
     'Pro': 49, 
     'Elite': 199, 
     'Agency': 599, 
@@ -83,8 +85,16 @@ export const AdminDashboard: React.FC = () => {
                 if (stats && stats.totalRequests !== undefined) {
                     setModelUsageStats(stats);
                 }
-            } catch (error) {
-                console.error('Failed to fetch model usage stats:', error);
+            } catch (error: any) {
+                // Silently handle 403 errors (expected for non-admin users)
+                if (error?.message?.includes('Admin access required') || error?.message?.includes('403')) {
+                    // Expected - user is not admin, don't log error
+                    return;
+                }
+                // Only log unexpected errors
+                if (process.env.NODE_ENV === 'development') {
+                    console.warn('Failed to fetch model usage stats:', error);
+                }
                 // Don't show error to user - just log it
                 // setModelUsageStats will remain null, showing empty state
             } finally {
@@ -213,7 +223,7 @@ export const AdminDashboard: React.FC = () => {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-        const distribution: Record<User['plan'], number> = { Free: 0, Pro: 0, Elite: 0, Agency: 0, Growth: 0, Starter: 0 };
+        const distribution: Record<User['plan'], number> = { Free: 0, Caption: 0, Pro: 0, Elite: 0, Agency: 0, Growth: 0, Starter: 0 };
         
         users.forEach(user => {
             if (user.plan in distribution) {

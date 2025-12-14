@@ -9,15 +9,17 @@ interface PricingProps {
 }
 
 const creatorTiers = [
-    { name: 'Free', priceMonthly: 0, priceAnnually: 0, description: 'For individuals starting out.', features: ['1 Social Account', '50 AI Replies / month', 'Basic Link-in-Bio', '100 MB Storage', 'Basic Analytics'], isRecommended: false },
-    { name: 'Pro', priceMonthly: 29, priceAnnually: 23, description: 'For creators scaling their brand.', features: ['3 Social Accounts', '250 AI Replies / month', 'AI Content Strategist', 'Quick Post Automation', 'Media Library', '1 GB Storage', 'Advanced Analytics'], isRecommended: true },
-    { name: 'Elite', priceMonthly: 149, priceAnnually: 119, description: 'For professional creators.', features: ['5 Social Accounts', '750 AI Replies / month', 'Advanced CRM', 'Quick Post Automation', 'Media Library', '2 GB Storage', 'Social Listening', 'Competitor Analysis'], isRecommended: false },
-    { name: 'Agency', priceMonthly: 0, priceAnnually: 0, description: 'For agencies managing clients.', features: ['Unlimited Accounts', '2,000 AI Replies / month', 'AI Content Strategist', 'Quick Post Automation', 'Media Library', '5 GB Storage', 'Client Workflows', 'Team Management', 'White-labeling', 'Advanced Analytics'], isRecommended: false },
+    { name: 'Free', priceMonthly: 0, priceAnnually: 0, description: 'For individuals starting out.', features: ['1 Social Account', '25 AI Replies / month', 'Basic Link-in-Bio (1 link)', '100 MB Storage'], isRecommended: false },
+    { name: 'Caption', displayName: 'Caption Pro', priceMonthly: 9, priceAnnually: 7, description: 'Perfect for caption writing.', features: ['100 AI Captions / month', 'Trending hashtags (all platforms)', 'Tone & Goal customization', 'AI Training', 'Basic Link-in-Bio (1 link)'], isRecommended: false },
+    { name: 'OnlyFansStudio', displayName: 'OnlyFans Studio', priceMonthly: 24, priceAnnually: 19, description: 'AI content planning for premium creators.', features: ['OnlyFans Studio Access', 'AI Captions (OF-specific tones)', 'Content Planning & Calendars', 'Roleplay & Interactive Ideas', 'Body Rating Prompts', 'Media Organization', 'Export Content Packages', 'Cross-platform Teaser Generator'], isRecommended: false },
+    { name: 'Pro', priceMonthly: 29, priceAnnually: 23, description: 'For creators scaling their brand.', features: ['3 Social Accounts', '250 AI Replies / month', '500 AI Captions / month', 'AI Content Strategist', 'Quick Post Automation', 'Media Library', '1 GB Storage', 'Advanced Analytics'], isRecommended: true },
+    { name: 'Elite', priceMonthly: 149, priceAnnually: 119, description: 'For professional creators.', features: ['5 Social Accounts', '750 AI Replies / month', '1,500 AI Captions / month', 'Advanced CRM', 'Quick Post Automation', 'Media Library', '2 GB Storage', 'Social Listening', 'Competitor Analysis', 'OnlyFans Studio'], isRecommended: false },
+    { name: 'Agency', priceMonthly: 299, priceAnnually: 239, description: 'For agencies managing clients.', features: ['Unlimited Accounts', '2,000 AI Replies / month', '10,000 AI Captions / month*', 'AI Content Strategist', 'Quick Post Automation', 'Media Library', '5 GB Storage', 'Client Workflows', 'Team Management', 'White-labeling', 'Advanced Analytics', 'OnlyFans Studio'], isRecommended: false },
 ];
 
 const businessTiers = [
-    { name: 'Starter', priceMonthly: 99, priceAnnually: 79, description: 'For small businesses & startups.', features: ['3 Social Accounts', '500 AI Replies / month', 'AI Content Strategist', 'Quick Post Automation', 'Media Library', '1 GB Storage', 'Business Analytics', 'Social CRM & Lead Gen'], isRecommended: false },
-    { name: 'Growth', priceMonthly: 199, priceAnnually: 159, description: 'For growing businesses.', features: ['5 Social Accounts', '1,500 AI Replies / month', 'AI Content Strategist', 'Quick Post Automation', 'Media Library', '3 GB Storage', 'Marketing Campaign Ideas', 'Competitor Analysis', 'Social Listening'], isRecommended: true },
+    { name: 'Starter', priceMonthly: 99, priceAnnually: 79, description: 'For small businesses & startups.', features: ['3 Social Accounts', '500 AI Replies / month', '1,000 AI Captions / month', 'AI Content Strategist', 'Quick Post Automation', 'Media Library', '1 GB Storage', 'Business Analytics', 'Social CRM & Lead Gen'], isRecommended: false },
+    { name: 'Growth', priceMonthly: 199, priceAnnually: 159, description: 'For growing businesses.', features: ['5 Social Accounts', '1,500 AI Replies / month', '2,500 AI Captions / month', 'AI Content Strategist', 'Quick Post Automation', 'Media Library', '3 GB Storage', 'Marketing Campaign Ideas', 'Competitor Analysis', 'Social Listening'], isRecommended: true },
 ];
 
 
@@ -120,9 +122,9 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
                     )}
                 </div>
 
-                <div className={`mt-10 grid gap-8 ${
+                <div className={`mt-10 grid gap-4 ${
                     view === 'Creator' 
-                        ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4' 
+                        ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5' 
                         : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 max-w-4xl mx-auto'
                 }`}>
                     {pricingTiers.map((tier) => {
@@ -156,14 +158,17 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
                         if (isAgency) buttonText = 'Call for Quote';
 
                         return (
-                            <div key={tier.name} className={`relative flex flex-col p-8 rounded-2xl shadow-lg transition-transform hover:-translate-y-1 ${tier.isRecommended ? 'bg-white dark:bg-gray-800 ring-2 ring-primary-500' : 'bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700'}`}>
+                            <div key={tier.name} className={`relative flex flex-col p-6 rounded-2xl shadow-lg transition-transform hover:-translate-y-1 ${tier.isRecommended ? 'bg-white dark:bg-gray-800 ring-2 ring-primary-500' : 'bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700'}`}>
                                 {tier.isRecommended && !isCurrentPlan && (
                                     <div className="absolute top-0 -translate-y-1/2 w-full flex justify-center left-0">
                                         <span className="px-4 py-1 text-xs font-semibold tracking-wider text-white uppercase bg-primary-500 rounded-full shadow-sm">Most Popular</span>
                                     </div>
                                 )}
-                                <h3 className="text-xl font-bold text-gray-900 dark:text-white">{tier.name}</h3>
+                                <h3 className="text-xl font-bold text-gray-900 dark:text-white">{(tier as any).displayName || tier.name}</h3>
                                 <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 h-10">{tier.description}</p>
+                                {isAgency && (
+                                    <p className="mt-1 text-xs text-gray-400 dark:text-gray-500 italic">*10,000 captions/month included. Overage fees apply. See Terms for details.</p>
+                                )}
                                 <div className="mt-6">
                                     {isAgency ? (
                                         <span className="text-4xl font-extrabold text-gray-900 dark:text-white">Call for Quote</span>

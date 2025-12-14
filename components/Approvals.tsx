@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useAppContext } from './AppContext';
 import { ApprovalStatus, Post, Platform } from '../types';
 import { CheckCircleIcon, MobileIcon, SendIcon, TrashIcon, EditIcon, ChatIcon, UserIcon, XMarkIcon, SparklesIcon } from './icons/UIIcons';
-import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon } from './icons/PlatformIcons';
+import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon, FanvueIcon, OnlyFansIcon } from './icons/PlatformIcons';
 import { MobilePreviewModal } from './MobilePreviewModal';
 import { UpgradePrompt } from './UpgradePrompt';
 import { generateCritique } from "../src/services/geminiService";
@@ -31,6 +31,8 @@ const platformIcons: Record<Platform, React.ReactElement<{ className?: string }>
   Discord: <DiscordIcon />,
   Telegram: <TelegramIcon />,
   Reddit: <RedditIcon />,
+  Fanvue: <FanvueIcon />,
+  OnlyFans: <OnlyFansIcon />,
 };
 
 const statusColors: Record<ApprovalStatus, string> = {

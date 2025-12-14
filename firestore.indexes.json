@@ -31,6 +31,14 @@
         { "fieldPath": "createdAt", "order": "DESCENDING" },
         { "fieldPath": "progress", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "onlyfans_calendar_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "date", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

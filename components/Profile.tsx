@@ -690,14 +690,14 @@ export const Profile: React.FC = () => {
                         {usageTab === 'stats' && (
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Image Generations</p>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Image Generations <span className="text-xs">(Coming Soon)</span></p>
                                     <p className="text-2xl font-bold text-gray-900 dark:text-white">
                                         {user.monthlyImageGenerationsUsed || 0}
                                     </p>
                                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">This month</p>
                                 </div>
                                 <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Video Generations</p>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Video Generations <span className="text-xs">(Coming Soon)</span></p>
                                     <p className="text-2xl font-bold text-gray-900 dark:text-white">
                                         {user.monthlyVideoGenerationsUsed || 0}
                                     </p>

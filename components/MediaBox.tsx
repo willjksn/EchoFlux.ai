@@ -2,7 +2,21 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { MediaItemState, CaptionResult, Platform } from '../types';
 import { generateCaptions } from '../src/services/geminiService';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { storage } from '../firebaseConfig';
+import { storage, auth } from '../firebaseConfig';
+
+export interface TrendingSound {
+  id: string;
+  title: string;
+  artist?: string;
+  hashtags: string[];
+  trendStats: {
+    usageCount?: number;
+    growthRate?: number;
+    peakTime?: string;
+  };
+  instagramUrl: string;
+  thumbnail?: string;
+}
 import {
   UploadIcon,
   TrashIcon,
@@ -53,7 +67,9 @@ const categoryIcons: Record<string, React.ReactNode> = {
     HeartIcon: <HeartIcon className="w-5 h-5"/>,
 };
 
-const platformIcons: Record<Platform, React.ReactNode> = {
+// Local platformIcons constant (not used - prop shadows this)
+// Kept for potential future use, but currently MediaBox uses the platformIcons prop
+const localPlatformIcons: Partial<Record<Platform, React.ReactNode>> = {
   Instagram: <InstagramIcon />,
   TikTok: <TikTokIcon />,
   X: <XIcon />,
@@ -98,6 +114,7 @@ interface MediaBoxProps {
   onSaveToWorkflow: (index: number, status: 'Draft' | 'Approved') => void;
   onAIAutoSchedule?: (index: number) => void;
   platformIcons: Record<Platform, React.ReactNode>;
+  onUpgradeClick?: () => void; // Callback to show upgrade modal
 }
 
 export const MediaBox: React.FC<MediaBoxProps> = ({
@@ -117,6 +134,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   onSaveToWorkflow,
   onAIAutoSchedule,
   platformIcons,
+  onUpgradeClick,
 }) => {
   const { user, showToast, setActivePage } = useAppContext();
   const [isGenerating, setIsGenerating] = useState(false);
@@ -130,10 +148,17 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   const [musicSearchQuery, setMusicSearchQuery] = useState('');
   const [selectedMusicGenre, setSelectedMusicGenre] = useState<string>('');
   const [playingMusicId, setPlayingMusicId] = useState<string | null>(null);
+  const [trendingSounds, setTrendingSounds] = useState<TrendingSound[]>([]);
+  const [isLoadingTrendingSounds, setIsLoadingTrendingSounds] = useState(false);
+  const [showTrendingSounds, setShowTrendingSounds] = useState(false);
   const musicAudioRef = useRef<HTMLAudioElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const captionTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const aiHelpRef = useRef<HTMLDivElement>(null);
+  const [isAiHelpOpen, setIsAiHelpOpen] = useState(false);
+  const [aiHelpPrompt, setAiHelpPrompt] = useState('');
+  const [isAiHelpGenerating, setIsAiHelpGenerating] = useState(false);
 
   // Cleanup music playback on unmount or modal close
   useEffect(() => {
@@ -181,6 +206,46 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
     }
   }, [showMediaLibraryModal, user, showToast]);
 
+  const fetchTrendingSounds = async () => {
+    setIsLoadingTrendingSounds(true);
+    try {
+      // Get auth token for Instagram Graph API integration
+      let authHeader = '';
+      if (user) {
+        try {
+          const { auth } = await import('../firebaseConfig');
+          const currentUser = auth.currentUser;
+          if (currentUser) {
+            const token = await currentUser.getIdToken();
+            authHeader = `Bearer ${token}`;
+          }
+        } catch (authError) {
+          console.warn('Could not get auth token:', authError);
+        }
+      }
+
+      const url = user?.id 
+        ? `/api/getTrendingInstagramSounds?userId=${user.id}`
+        : '/api/getTrendingInstagramSounds';
+      
+      const response = await fetch(url, {
+        headers: authHeader ? { Authorization: authHeader } : {},
+      });
+      
+      const data = await response.json();
+      if (data.success && data.sounds) {
+        setTrendingSounds(data.sounds);
+      } else {
+        showToast('Failed to load trending sounds', 'error');
+      }
+    } catch (error) {
+      console.error('Error fetching trending sounds:', error);
+      showToast('Failed to load trending sounds', 'error');
+    } finally {
+      setIsLoadingTrendingSounds(false);
+    }
+  };
+
   const handleSelectFromLibrary = (item: MediaLibraryItem) => {
     onUpdate(index, {
       previewUrl: item.url,
@@ -195,11 +260,18 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
     showToast(`Selected ${item.name}`, 'success');
   };
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file || !user) return;
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, isAdditionalImage: boolean = false) => {
+    const files = event.target.files;
+    if (!files || files.length === 0 || !user) return;
 
+    const file = files[0];
     const fileType = file.type.startsWith('image') ? 'image' : 'video';
+
+    // Only allow images for additional images (multi-image posts)
+    if (isAdditionalImage && fileType !== 'image') {
+      showToast('Only images can be added to multi-image posts', 'error');
+      return;
+    }
 
     try {
       // Create temporary preview URL for immediate display
@@ -243,23 +315,60 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
       // Convert to base64 for storage (optional, but kept for compatibility)
       const base64 = await fileToBase64(file);
 
-      onUpdate(index, {
-        data: base64,
-        mimeType: file.type,
-        previewUrl: firebaseUrl, // Use Firebase URL instead of blob/data URL
-        type: fileType,
-        isGenerated: false,
-        results: [],
-        captionText: '',
-      });
+      if (isAdditionalImage) {
+        // Add as additional image to existing post
+        const currentAdditionalImages = mediaItem.additionalImages || [];
+        onUpdate(index, {
+          additionalImages: [
+            ...currentAdditionalImages,
+            {
+              id: timestamp.toString(),
+              previewUrl: firebaseUrl,
+              data: base64,
+              mimeType: file.type,
+            },
+          ],
+        });
+        showToast('Image added to post', 'success');
+      } else {
+        // Set as primary image
+        onUpdate(index, {
+          data: base64,
+          mimeType: file.type,
+          previewUrl: firebaseUrl, // Use Firebase URL instead of blob/data URL
+          type: fileType,
+          isGenerated: false,
+          results: [],
+          captionText: '',
+        });
+      }
     } catch (error) {
       showToast('Failed to upload file.', 'error');
       console.error(error);
     }
+    
+    // Reset file input
+    event.target.value = '';
+  };
+
+  const handleRemoveAdditionalImage = (imageId: string) => {
+    const currentAdditionalImages = mediaItem.additionalImages || [];
+    onUpdate(index, {
+      additionalImages: currentAdditionalImages.filter(img => img.id !== imageId),
+    });
+    showToast('Image removed', 'success');
   };
 
   const generateCaptionsForMedia = async (base64Data: string, mimeType: string) => {
-    if (!canGenerate || !user) return;
+    if (!canGenerate || !user) {
+      // Show upgrade modal if callback is provided
+      if (onUpgradeClick) {
+        onUpgradeClick();
+      } else {
+        showToast('You have reached your monthly caption generation limit. Upgrade to get more!', 'error');
+      }
+      return;
+    }
 
     setIsGenerating(true);
     try {
@@ -276,11 +385,17 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
 
       const mediaUrl = await getDownloadURL(storageRef);
 
+      // Get selected platforms for platform-specific hashtags
+      const selectedPlatforms = (Object.keys(mediaItem.selectedPlatforms || {}) as Platform[]).filter(
+        p => mediaItem.selectedPlatforms?.[p]
+      );
+      
       const res = await generateCaptions({
         mediaUrl,
         goal: mediaItem.postGoal,
         tone: mediaItem.postTone,
         promptText: undefined,
+        platforms: selectedPlatforms.length > 0 ? selectedPlatforms : undefined, // Pass platforms for hashtag generation
       });
 
       let generatedResults: CaptionResult[] = [];
@@ -379,15 +494,75 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
       if (!target.closest('.emoji-picker-container') && !target.closest('.emoji-button')) {
         setIsEmojiPickerOpen(false);
       }
+      if (aiHelpRef.current && !aiHelpRef.current.contains(target) && !target.closest('[title="AI Help - Tell AI what you want"]')) {
+        setIsAiHelpOpen(false);
+      }
     };
 
-    if (isEmojiPickerOpen) {
+    if (isEmojiPickerOpen || isAiHelpOpen) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => {
         document.removeEventListener('mousedown', handleClickOutside);
       };
     }
-  }, [isEmojiPickerOpen]);
+  }, [isEmojiPickerOpen, isAiHelpOpen]);
+
+  const handleAiHelpGenerate = async () => {
+    if (!aiHelpPrompt.trim()) return;
+
+    setIsAiHelpGenerating(true);
+    try {
+      // Get Firebase auth token
+      const token = auth.currentUser
+        ? await auth.currentUser.getIdToken(true)
+        : null;
+
+      const response = await fetch('/api/generateText', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          prompt: aiHelpPrompt,
+          context: {
+            goal: mediaItem.postGoal,
+            tone: mediaItem.postTone,
+            platforms: (Object.keys(mediaItem.selectedPlatforms || {}) as Platform[]).filter(
+              p => mediaItem.selectedPlatforms?.[p]
+            ),
+          },
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (data.error) {
+        throw new Error(data.error || data.note || 'Failed to generate text');
+      }
+
+      const generatedText = data.text || data.caption || '';
+      
+      if (generatedText) {
+        // Insert generated text into caption (replace if empty, append if not)
+        const currentText = mediaItem.captionText || '';
+        const newText = currentText.trim() 
+          ? currentText + '\n\n' + generatedText 
+          : generatedText;
+        onUpdate(index, { captionText: newText });
+        
+        setIsAiHelpOpen(false);
+        setAiHelpPrompt('');
+      } else {
+        throw new Error('No text generated');
+      }
+    } catch (error: any) {
+      console.error('AI Help generation error:', error);
+      alert(error?.message || 'Failed to generate text. Please try again.');
+    } finally {
+      setIsAiHelpGenerating(false);
+    }
+  };
 
   const hasContent = mediaItem.previewUrl && mediaItem.captionText.trim();
   const platformsToPost = (Object.keys(mediaItem.selectedPlatforms || {}) as Platform[]).filter(
@@ -424,14 +599,16 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
 
       {/* Media Preview */}
       {mediaItem.previewUrl ? (
-        <div className="relative w-full h-40 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden mb-3 flex items-center justify-center">
-          {mediaItem.type === 'image' ? (
-            <img
-              src={mediaItem.previewUrl}
-              alt={`Post ${index + 1}`}
-              className="w-full h-full object-contain"
-            />
-          ) : (
+        <div className="mb-3">
+          {/* Primary Image/Video */}
+          <div className="relative w-full h-40 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden mb-2 flex items-center justify-center">
+            {mediaItem.type === 'image' ? (
+              <img
+                src={mediaItem.previewUrl}
+                alt={`Post ${index + 1}`}
+                className="w-full h-full object-contain"
+              />
+            ) : (
             <>
               <video
                 src={mediaItem.previewUrl}
@@ -496,6 +673,54 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
             <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
               <RefreshIcon className="w-6 h-6 text-white animate-spin" />
             </div>
+          )}
+          </div>
+          
+          {/* Additional Images (Multi-image support) */}
+          {mediaItem.type === 'image' && mediaItem.additionalImages && mediaItem.additionalImages.length > 0 && (
+            <div className="grid grid-cols-3 gap-2 mb-2">
+              {mediaItem.additionalImages.map((additionalImg) => (
+                <div key={additionalImg.id} className="relative group aspect-square">
+                  <img
+                    src={additionalImg.previewUrl}
+                    alt="Additional image"
+                    className="w-full h-full object-contain rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800"
+                  />
+                  <button
+                    onClick={() => handleRemoveAdditionalImage(additionalImg.id)}
+                    className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Remove image"
+                  >
+                    <TrashIcon className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          
+          {/* Add More Images Button (only for image posts) */}
+          {mediaItem.type === 'image' && (
+            <button
+              onClick={() => {
+                const additionalInput = document.createElement('input');
+                additionalInput.type = 'file';
+                additionalInput.accept = 'image/*';
+                additionalInput.onchange = (e) => {
+                  const target = e.target as HTMLInputElement;
+                  if (target.files && target.files[0]) {
+                    const fakeEvent = {
+                      target: { files: target.files, value: '' },
+                    } as React.ChangeEvent<HTMLInputElement>;
+                    handleFileChange(fakeEvent, true);
+                  }
+                };
+                additionalInput.click();
+              }}
+              className="w-full py-2 px-3 text-xs border border-dashed border-primary-300 dark:border-primary-600 bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors flex items-center justify-center gap-2"
+            >
+              <PlusIcon className="w-4 h-4" />
+              Add More Images
+            </button>
           )}
         </div>
       ) : (
@@ -633,16 +858,72 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
           onChange={e => onUpdate(index, { captionText: e.target.value })}
           placeholder="Write caption or select AI suggestion..."
           rows={4}
-          className="w-full p-2.5 pr-8 text-sm border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 resize-y"
+          className="w-full p-2.5 pr-20 text-sm border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 resize-y"
         />
-        <button
-          type="button"
-          onClick={() => setIsEmojiPickerOpen(!isEmojiPickerOpen)}
-          className="emoji-button absolute right-2 top-2 p-1 text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
-          title="Add emoji"
-        >
-          <EmojiIcon className="w-4 h-4" />
-        </button>
+        <div className="absolute right-2 top-2 flex flex-col gap-1">
+          <button
+            type="button"
+            onClick={() => setIsAiHelpOpen(!isAiHelpOpen)}
+            className="p-1 text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
+            title="AI Help - Tell AI what you want"
+          >
+            <SparklesIcon className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsEmojiPickerOpen(!isEmojiPickerOpen)}
+            className="emoji-button p-1 text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
+            title="Add emoji"
+          >
+            <EmojiIcon className="w-4 h-4" />
+          </button>
+        </div>
+        {isAiHelpOpen && (
+          <div
+            ref={aiHelpRef}
+            className="absolute z-20 right-0 top-full mt-1 w-96 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 border border-gray-200 dark:border-gray-600"
+          >
+            <div className="mb-3">
+              <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">AI Help</h4>
+              <p className="text-xs text-gray-600 dark:text-gray-400">Describe what you want in your caption, and AI will write it for you.</p>
+            </div>
+            <textarea
+              value={aiHelpPrompt}
+              onChange={(e) => setAiHelpPrompt(e.target.value)}
+              placeholder="e.g., 'Write a fun caption about my new product launch', 'Create a motivational post about fitness', 'Write an engaging caption for my travel photo'"
+              rows={3}
+              className="w-full p-2 text-sm border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 resize-y mb-2"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={handleAiHelpGenerate}
+                disabled={!aiHelpPrompt.trim() || isAiHelpGenerating}
+                className="flex-1 px-3 py-2 text-xs font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+              >
+                {isAiHelpGenerating ? (
+                  <>
+                    <RefreshIcon className="w-3 h-3 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <SparklesIcon className="w-3 h-3" />
+                    Generate Text
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  setIsAiHelpOpen(false);
+                  setAiHelpPrompt('');
+                }}
+                className="px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
         {isEmojiPickerOpen && (
           <div
             ref={emojiPickerRef}
@@ -769,17 +1050,27 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
           Publish to
         </label>
         <div className="flex flex-wrap gap-1.5">
-          {(Object.keys(platformIcons) as Platform[]).map(platform => (
+          {(Object.keys(platformIcons) as Platform[]).filter(p => p !== 'OnlyFans').map(platform => (
             <button
               key={platform}
               onClick={() => {
                 const currentPlatforms = mediaItem.selectedPlatforms || {};
-                onUpdate(index, {
+                const newValue = !currentPlatforms[platform];
+                const updates: Partial<MediaItemState> = {
                   selectedPlatforms: {
                     ...currentPlatforms,
-                    [platform]: !currentPlatforms[platform],
+                    [platform]: newValue,
                   },
-                });
+                };
+                // Reset Instagram post type if Instagram is deselected
+                if (platform === 'Instagram' && !newValue) {
+                  updates.instagramPostType = undefined;
+                }
+                // Auto-set Instagram post type based on media type when Instagram is selected
+                if (platform === 'Instagram' && newValue && !mediaItem.instagramPostType) {
+                  updates.instagramPostType = mediaItem.type === 'video' ? 'Reel' : 'Post';
+                }
+                onUpdate(index, updates);
               }}
               className={`flex items-center justify-center gap-1 px-2 py-1 rounded text-xs border transition-colors ${
                 mediaItem.selectedPlatforms?.[platform]
@@ -793,6 +1084,119 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
           ))}
         </div>
       </div>
+
+      {/* Instagram Post Type Selection */}
+      {mediaItem.selectedPlatforms?.Instagram && (
+        <div className="mb-3">
+          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Instagram Post Type
+          </label>
+          <div className="flex gap-1.5">
+            {(['Post', 'Reel', 'Story'] as const).map(postType => (
+              <button
+                key={postType}
+                onClick={() => {
+                  onUpdate(index, { instagramPostType: postType });
+                  // Fetch trending sounds when Reel is selected
+                  if (postType === 'Reel') {
+                    fetchTrendingSounds();
+                  }
+                }}
+                className={`flex-1 px-2 py-1.5 rounded text-xs border transition-colors ${
+                  mediaItem.instagramPostType === postType
+                    ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 font-medium'
+                    : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+                }`}
+              >
+                {postType}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Trending Sounds for Instagram Reels */}
+      {mediaItem.selectedPlatforms?.Instagram && mediaItem.instagramPostType === 'Reel' && (
+        <div className="mb-3">
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
+              Trending Sounds
+            </label>
+            <button
+              onClick={() => {
+                setShowTrendingSounds(!showTrendingSounds);
+                if (!showTrendingSounds && trendingSounds.length === 0) {
+                  fetchTrendingSounds();
+                }
+              }}
+              className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+            >
+              {showTrendingSounds ? 'Hide' : 'Show'} Trending
+            </button>
+          </div>
+          {showTrendingSounds && (
+            <div className="max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-md p-2 space-y-2">
+              {isLoadingTrendingSounds ? (
+                <div className="flex items-center justify-center py-4">
+                  <RefreshIcon className="w-4 h-4 animate-spin text-primary-600" />
+                  <span className="ml-2 text-xs text-gray-600 dark:text-gray-400">Loading trending sounds...</span>
+                </div>
+              ) : trendingSounds.length === 0 ? (
+                <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-4">No trending sounds available</p>
+              ) : (
+                trendingSounds.map((sound) => (
+                  <div
+                    key={sound.id}
+                    className="p-2 bg-gray-50 dark:bg-gray-700/50 rounded-md border border-gray-200 dark:border-gray-600"
+                  >
+                    <div className="flex items-start justify-between mb-1">
+                      <div className="flex-1">
+                        <h4 className="text-xs font-semibold text-gray-900 dark:text-white">{sound.title}</h4>
+                        {sound.artist && (
+                          <p className="text-xs text-gray-600 dark:text-gray-400">{sound.artist}</p>
+                        )}
+                      </div>
+                      <a
+                        href={sound.instagramUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium ml-2"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Use on Instagram →
+                      </a>
+                    </div>
+                    {sound.hashtags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-1">
+                        {sound.hashtags.slice(0, 3).map((tag: string, idx: number) => (
+                          <span key={idx} className="text-xs text-primary-600 dark:text-primary-400">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {sound.trendStats && (
+                      <div className="flex items-center gap-3 text-xs text-gray-600 dark:text-gray-400 mt-1">
+                        {sound.trendStats.usageCount && (
+                          <span>{sound.trendStats.usageCount.toLocaleString()} uses</span>
+                        )}
+                        {sound.trendStats.growthRate && (
+                          <span className="text-green-600 dark:text-green-400">
+                            ↑ {sound.trendStats.growthRate}% growth
+                          </span>
+                        )}
+                        {sound.trendStats.peakTime && (
+                          <span>Peak: {sound.trendStats.peakTime}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Preview Button - Always visible if media exists */}
       {mediaItem.previewUrl && (
@@ -824,6 +1228,8 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
             <CheckCircleIcon className="w-3 h-3" /> Approved
           </button>
         </div>
+        {/* Hide Publish/Schedule buttons for Caption plan (caption generation only) */}
+        {user?.plan !== 'Caption' && (
         <div className="grid grid-cols-2 gap-2">
           <button
             onClick={() => onSchedule(index)}
@@ -842,6 +1248,14 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
             <SendIcon className="w-3 h-3" /> Publish
           </button>
         </div>
+        )}
+        {user?.plan === 'Caption' && (
+          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+            <p className="text-xs text-blue-800 dark:text-blue-200">
+              <strong>Caption Pro:</strong> This plan is for caption generation only. Select platforms to get platform-specific hashtags. Upgrade to publish/schedule posts.
+            </p>
+          </div>
+        )}
         {/* AI Auto Schedule button */}
         {onAIAutoSchedule && (
           <button

@@ -102,7 +102,7 @@ async function processVideoWithCloudinary(videoUrl: string, musicUrl: string): P
     // Step 1: Upload the video to Cloudinary
     const videoUpload = await cloudinary.uploader.upload(videoUrl, {
       resource_type: 'video',
-      folder: 'engagesuite/videos',
+      folder: 'echoflux/videos',
       use_filename: true,
       unique_filename: true,
       eager: [
@@ -118,7 +118,7 @@ async function processVideoWithCloudinary(videoUrl: string, musicUrl: string): P
     // Step 2: Upload the audio track to Cloudinary for storage/reference
     const audioUpload = await cloudinary.uploader.upload(musicUrl, {
       resource_type: 'video', // Cloudinary treats audio files as video resources
-      folder: 'engagesuite/audio',
+      folder: 'echoflux/audio',
       use_filename: true,
       unique_filename: true,
     });

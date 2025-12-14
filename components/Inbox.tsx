@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { MessageCard } from './MessageCard';
 import { Platform, Message, DashboardFilters, MessageType, MessageCategory } from '../types';
-import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon } from './icons/PlatformIcons';
+import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon, FanvueIcon, OnlyFansIcon } from './icons/PlatformIcons';
 import { SearchIcon, FlagIcon, StarIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 import { hasCapability, getPlatformsWithCapability } from '../src/services/platformCapabilities';
@@ -18,6 +18,8 @@ const platformFilterIcons: { [key in Platform]: React.ReactNode } = {
   Discord: <DiscordIcon />,
   Telegram: <TelegramIcon />,
   Reddit: <RedditIcon />,
+  Fanvue: <FanvueIcon />,
+  OnlyFans: <OnlyFansIcon />,
 };
 
 // Get only platforms that support inbox/messaging

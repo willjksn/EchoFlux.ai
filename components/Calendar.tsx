@@ -1,11 +1,12 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { CalendarEvent, Platform, Post } from '../types';
-import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon } from './icons/PlatformIcons';
+import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon, FanvueIcon, OnlyFansIcon } from './icons/PlatformIcons';
 import { PlusIcon, SparklesIcon, XMarkIcon, TrashIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 import { db } from '../firebaseConfig';
 import { doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { hasCapability } from '../src/services/platformCapabilities';
 
 const platformIcons: Record<Platform, React.ReactNode> = {
   Instagram: <InstagramIcon />,
@@ -19,6 +20,8 @@ const platformIcons: Record<Platform, React.ReactNode> = {
   Discord: <DiscordIcon />,
   Telegram: <TelegramIcon />,
   Reddit: <RedditIcon />,
+  Fanvue: <FanvueIcon />,
+  OnlyFans: <OnlyFansIcon />,
 };
 
 const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -600,7 +603,9 @@ export const Calendar: React.FC = () => {
                                 <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Platforms:</h4>
                                 {isEditing ? (
                                     <div className="flex flex-wrap gap-2">
-                                        {(Object.keys(platformIcons) as Platform[]).map((platform) => (
+                                        {(Object.keys(platformIcons) as Platform[])
+                                            .filter(platform => platform !== 'OnlyFans') // OnlyFans is manual workflow, not for scheduling
+                                            .map((platform) => (
                                             <button
                                                 key={platform}
                                                 onClick={() => setEditPlatforms(prev => ({ ...prev, [platform]: !prev[platform] }))}

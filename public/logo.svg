@@ -1,0 +1,12 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Chat bubble with rounded corners - EchoFlux.AI blue color (#2563eb) -->
+  <rect x="10" y="6" width="44" height="38" rx="10" ry="10" fill="#2563eb"/>
+  
+  <!-- Speech tail at bottom-left -->
+  <path d="M16 44L6 54L16 54L16 44Z" fill="#2563eb"/>
+  
+  <!-- Three horizontal lines inside (representing text/message) -->
+  <line x1="18" y1="18" x2="42" y2="18" stroke="white" stroke-width="4" stroke-linecap="round"/>
+  <line x1="18" y1="26" x2="34" y2="26" stroke="white" stroke-width="4" stroke-linecap="round"/>
+  <line x1="18" y1="34" x2="28" y2="34" stroke="white" stroke-width="4" stroke-linecap="round"/>
+</svg>

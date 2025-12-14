@@ -2,41 +2,12 @@
 <html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <link
-      rel="icon"
-      type="image/svg+xml"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%233B82F6'/%3E%3Cg fill='white'%3E%3Cpath d='M12 6C12 4.89543 12.8954 4 14 4H18C19.1046 4 20 4.89543 20 6V26C20 27.1046 19.1046 28 18 28H14C12.8954 28 12 27.1046 12 26V6Z' /%3E%3Cpath d='M6 12C4.89543 12 4 12.8954 4 14V18C4 19.1046 4.89543 20 6 20H26C27.1046 20 28 19.1046 28 18V14C28 12.8954 27.1046 12 26 12H6Z' /%3E%3C/g%3E%3C/svg%3E"
-    />
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/logo.svg" />
+    <link rel="icon" type="image/png" sizes="64x64" href="/logo.svg" />
+    <link rel="apple-touch-icon" href="/logo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>EngageSuite.ai</title>
-
-    <!-- Tailwind via CDN (development only - should use PostCSS in production) -->
-    <!-- TODO: Replace with PostCSS/Tailwind CLI build process for production -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        darkMode: "class",
-        theme: {
-          extend: {
-            colors: {
-              primary: {
-                50: "#eff6ff",
-                100: "#dbeafe",
-                200: "#bfdbfe",
-                300: "#93c5fd",
-                400: "#60a5fa",
-                500: "#3b82f6",
-                600: "#2563eb",
-                700: "#1d4ed8",
-                800: "#1e40af",
-                900: "#1e3a8a",
-                950: "#172554",
-              },
-            },
-          },
-        },
-      };
-    </script>
+    <title>EchoFlux.AI</title>
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -110,6 +81,73 @@
     <!-- ⚠️ IMPORTANT: removed importmap block.
          Vite already resolves React, Firebase, etc. from node_modules.
          Import maps pointing to CDNs would conflict and break your app. -->
+    <!-- Facebook SDK for JavaScript -->
+    <!-- Note: App ID will be injected from environment variable -->
+    <script>
+      window.fbAsyncInit = function() {
+        // Get App ID from meta tag or use placeholder
+        const appId = document.querySelector('meta[name="facebook-app-id"]')?.getAttribute('content') || '';
+        
+        if (appId) {
+          FB.init({
+            appId      : appId,
+            cookie     : true,
+            xfbml      : true,
+            version    : 'v19.0'
+          });
+          
+          FB.AppEvents.logPageView();
+          
+          // Check login status (optional - mainly for Meta compliance)
+          // Note: This app uses server-side OAuth, so this is primarily for status checks
+          FB.getLoginStatus(function(response) {
+            statusChangeCallback(response);
+          });
+        }
+      };
+
+      // Status change callback - processes Facebook SDK login response
+      function statusChangeCallback(response) {
+        // Response object structure:
+        // {
+        //   status: 'connected' | 'not_authorized' | 'unknown',
+        //   authResponse: {
+        //     accessToken: '...',
+        //     expiresIn: '...',
+        //     signedRequest: '...',
+        //     userID: '...'
+        //   }
+        // }
+        
+        if (response.status === 'connected') {
+          // User is logged in via Facebook SDK (if using client-side login)
+          console.log('Facebook SDK: User is connected', response.authResponse);
+          // Note: This app uses server-side OAuth, so this won't be used for actual login
+          // But it's here for Meta compliance and future use
+        } else {
+          // User is not logged in via Facebook SDK
+          // This is normal since we use server-side OAuth
+          console.log('Facebook SDK: User not connected (using server-side OAuth)');
+        }
+      }
+
+      // Login button callback - called when user clicks Facebook Login button
+      function checkLoginState() {
+        FB.getLoginStatus(function(response) {
+          statusChangeCallback(response);
+        });
+      }
+
+      (function(d, s, id){
+         var js, fjs = d.getElementsByTagName(s)[0];
+         if (d.getElementById(id)) {return;}
+         js = d.createElement(s); js.id = id;
+         js.src = "https://connect.facebook.net/en_US/sdk.js";
+         fjs.parentNode.insertBefore(js, fjs);
+       }(document, 'script', 'facebook-jssdk'));
+    </script>
+    <!-- Facebook App ID - Facebook Business Login App ID (separate from Instagram Client ID) -->
+    <meta name="facebook-app-id" content="875668391474933" />
   </head>
   <body>
     <div id="root"></div>

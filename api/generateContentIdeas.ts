@@ -119,7 +119,7 @@ async function fetchPublicTrendingSources(niche: string): Promise<string[]> {
     try {
       const redditResponse = await fetch(`https://www.reddit.com/r/${niche.toLowerCase().replace(/\s+/g, '')}/hot.json?limit=5`, {
         headers: {
-          'User-Agent': 'EngageSuite/1.0',
+          'User-Agent': 'EchoFluxAI/1.0',
         },
       });
       

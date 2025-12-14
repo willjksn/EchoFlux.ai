@@ -26,7 +26,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const durationWeeks = duration ? parseInt(duration.replace(/\D/g, '')) || 4 : 4;
     const platforms = platformFocus && platformFocus !== 'Mixed / All' 
       ? [platformFocus] 
-      : ['Instagram', 'TikTok', 'X', 'LinkedIn', 'Facebook', 'Threads', 'YouTube'];
+      : ['Instagram', 'TikTok', 'X', 'LinkedIn', 'Facebook', 'Threads', 'YouTube', 'Pinterest', 'Discord', 'Telegram', 'Reddit', 'Fanvue', 'OnlyFans'];
+    
+    // Detect explicit content context
+    const isExplicitContent = tone === 'Explicit/Adult Content' || 
+                             tone === 'Explicit' ||
+                             tone === 'Sexy / Explicit' ||
+                             tone === 'Sexy / Bold' ||
+                             platforms.includes('OnlyFans') || 
+                             platforms.includes('Fanvue');
 
     // Build analytics context for AI
     let analyticsContext = '';
@@ -54,15 +62,37 @@ Use this analytics data to inform your strategy:
 `;
     }
 
+    // Build explicit content context for AI
+    const explicitContentContext = isExplicitContent ? `
+CRITICAL CONTEXT - EXPLICIT/ADULT CONTENT PLATFORM:
+- This content strategy is for an adult content creator platform (creator monetization platform)
+- Content must be explicit, adult-oriented, and describe actual explicit/intimate content
+- Topics should be SPECIFIC explicit content ideas (not just "subscribe" prompts):
+  * Describe specific intimate scenes, poses, outfits, settings, moods
+  * Be explicit about what content will be shown (not generic subscription messages)
+  * Focus on specific explicit themes: intimate moments, behind-the-scenes of explicit shoots, specific content types
+- Captions should DESCRIBE the explicit content shown, not just promote subscriptions
+- Image/video ideas should suggest SPECIFIC explicit visual concepts:
+  * Describe specific poses, outfits, settings, lighting, moods for explicit content
+  * Be detailed about what explicit/intimate content will be created
+  * Focus on variety: different themes, settings, outfits, poses for explicit content
+- Content should focus on creating explicit, descriptive content that shows actual intimate/explicit moments
+- Use bold, direct language that describes explicit content in detail
+- Include themes like: specific intimate scenes, explicit photosets with details, behind-the-scenes of explicit content creation, specific explicit video concepts
+- Avoid generic "subscribe" topics - create specific, explicit content ideas that describe what will be shown
+` : '';
+
     const prompt = `
 You are an elite content strategist specializing in ${niche} for ${audience}.
+
+${explicitContentContext}
 
 ${analyticsContext ? analyticsContext : 'Note: No analytics data available. Use best practices for this niche and audience.'}
 
 Create a ${durationWeeks}-week content strategy with the following parameters:
 - Goal: ${goal}
-- Tone: ${tone}
-- Platform Focus: ${platformFocus || 'Mixed / All'}
+- Tone: ${tone}${isExplicitContent ? ' (EXPLICIT/ADULT CONTENT - Generate bold, sales-oriented, explicit content ideas)' : ''}
+- Platform Focus: ${platformFocus || 'Mixed / All'}${platforms.includes('OnlyFans') || platforms.includes('Fanvue') ? ' (ADULT CONTENT PLATFORM)' : ''}
 - Target Audience: ${audience}
 - Niche: ${niche}
 
@@ -78,7 +108,7 @@ Return ONLY valid JSON in this exact structure:
           "dayOffset": 0,
           "topic": "Specific content topic/idea (e.g., 'Behind the scenes of our process')",
           "format": "Post" | "Reel" | "Story",
-          "platform": "Instagram" | "TikTok" | "X" | "LinkedIn" | "Facebook" | "Threads" | "YouTube",
+          "platform": "Instagram" | "TikTok" | "X" | "LinkedIn" | "Facebook" | "Threads" | "YouTube" | "Pinterest" | "Discord" | "Telegram" | "Reddit" | "Fanvue" | "OnlyFans",
           "imageIdeas": ["Idea 1 for images", "Idea 2 for images", "Idea 3 for images"],
           "videoIdeas": ["Idea 1 for videos", "Idea 2 for videos"]
         }
@@ -107,13 +137,45 @@ Requirements:
 - Each week should have 5-7 content items (mix of Posts, Reels, and Stories)
 - Distribute content across platforms: ${platforms.join(', ')}
 - Content should align with goal: ${goal}
-- Use tone: ${tone}
-- Make topics specific and actionable
+- Use tone: ${tone}${isExplicitContent ? ' - EXPLICIT/ADULT CONTENT: Generate bold, explicit content ideas that describe specific explicit/intimate content to be created (not generic subscription prompts)' : ''}
+- Make topics specific and actionable${isExplicitContent ? ' - describe specific explicit scenes, intimate moments, explicit photoset concepts with details (outfits, settings, poses, moods) - NOT generic "subscribe for more" type topics' : ''}
 - Ensure variety in formats and platforms
 - dayOffset should be 0-6 for week 1, 7-13 for week 2, etc.
-- For each content item, provide 2-3 creative imageIdeas (specific visual concepts that would work well as images)
-- For each content item, provide 1-2 creative videoIdeas (specific video concepts that would work well as short-form videos)
-- Image and video ideas should be specific, actionable, and aligned with the topic and format
+- For each content item, provide 2-3 creative imageIdeas (specific visual concepts that would work well as images)${isExplicitContent ? ' - For explicit platforms: Describe SPECIFIC explicit photoset concepts with details like "Intimate photoset with [specific outfit], [specific setting/background], [specific pose/position], [lighting mood], [specific intimate details]" - be explicit and detailed about what will be shown' : ''}
+- For each content item, provide 1-2 creative videoIdeas (specific video concepts that would work well as short-form videos)${isExplicitContent ? ' - For explicit platforms: Describe SPECIFIC explicit video concepts like "Intimate video showing [specific scene/action], [specific setting], [specific mood/style], [explicit content details]" - be explicit and detailed about what will be shown' : ''}
+- Image and video ideas should be specific, actionable, and aligned with the topic and format${isExplicitContent ? ' - Explicit content ideas must describe SPECIFIC explicit/intimate content to be created with visual details - focus on what will be shown, not just "exclusive content"' : ''}
+${isExplicitContent ? `
+EXPLICIT CONTENT GUIDELINES:
+- Topics must be SPECIFIC explicit content ideas, not generic subscription prompts:
+  * Describe specific intimate scenes: "Intimate bedroom photoset with soft lighting and lingerie"
+  * Specific explicit concepts: "Behind-the-scenes of intimate video shoot - preparation and setup"
+  * Detailed explicit themes: "Boudoir photoset with specific outfit, setting, and mood descriptions"
+  * Variety: Different poses, outfits, settings, moods for explicit content each day
+  
+- Captions should DESCRIBE the explicit content shown in detail:
+  * Analyze what's in the media and describe it explicitly
+  * Use bold, direct language about what's visually shown
+  * Describe specific poses, outfits, settings, actions, moods
+  * Make it enticing through explicit, detailed description
+  * Natural monetization hints (don't make every caption a sales pitch)
+  * Do NOT mention platform name in captions
+  
+- Image ideas must be SPECIFIC explicit visual concepts:
+  * "Intimate photoset: [specific outfit], [specific setting], [specific pose/mood], [lighting details]"
+  * "Boudoir shoot: [specific theme], [specific props], [specific composition]"
+  * Be detailed about what explicit content will be created visually
+  
+- Video ideas must be SPECIFIC explicit video concepts:
+  * "Intimate video: [specific scene], [specific actions], [specific setting], [mood/style]"
+  * "Behind-the-scenes: [specific aspect of explicit content creation]"
+  * Describe what explicit content will be shown in the video
+  
+- Focus on CREATING explicit content, not just promoting subscriptions:
+  * Topics describe actual explicit/intimate content to be created
+  * Captions describe what's shown explicitly
+  * Image/video ideas are specific explicit concepts
+  * Natural monetization, but content-first approach
+` : ''}
 ${analyticsData ? `
 IMPORTANT: When generating imageIdeas and videoIdeas:
 - Base suggestions on what types of images/videos are getting high engagement according to the analytics
@@ -147,7 +209,9 @@ IMPORTANT: When generating imageIdeas and videoIdeas:
           dayOffset: day.dayOffset !== undefined ? day.dayOffset : (weekIndex * 7) + dayIndex,
           topic: day.topic || day.postIdea || `Content idea ${dayIndex + 1}`,
           format: day.format || (day.postType === 'Reel' ? 'Reel' : day.postType === 'Story' ? 'Story' : 'Post'),
-          platform: day.platform || (Array.isArray(day.platforms) ? day.platforms[0] : 'Instagram')
+          platform: day.platform || (Array.isArray(day.platforms) ? day.platforms[0] : platforms[0] || 'Instagram'),
+          imageIdeas: day.imageIdeas || [],
+          videoIdeas: day.videoIdeas || []
         }))
       }));
 

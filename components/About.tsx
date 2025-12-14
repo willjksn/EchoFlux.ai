@@ -7,9 +7,9 @@ export const About: React.FC = () => {
     return (
         <div className="max-w-4xl mx-auto space-y-8 text-gray-700 dark:text-gray-300">
             <div className="text-center">
-                 <div className="flex items-center justify-center text-primary-600 dark:text-primary-400">
+                 <div className="flex items-center justify-center">
                     <LogoIcon />
-                    <span className="ml-2 text-4xl font-bold">EngageSuite.ai</span>
+                    <span className="ml-2 text-4xl font-bold" style={{ color: '#2563eb' }}>EchoFlux.AI</span>
                  </div>
                 <h2 className="mt-4 text-3xl font-bold text-gray-900 dark:text-white">The First AI Social Operating System</h2>
                 <p className="mt-2 text-lg text-gray-500 dark:text-gray-400">From strategy to execution, we built the ultimate command center for modern brands and agencies.</p>

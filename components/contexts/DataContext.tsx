@@ -175,6 +175,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     Discord: null,
     Telegram: null,
     Reddit: null,
+    Fanvue: null,
+    OnlyFans: null,
   });
 
   /*--------------------------------------------------------------------
@@ -383,7 +385,29 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     BIO PAGE CONFIG
   --------------------------------------------------------------------*/
   const bioPageConfig: BioPageConfig = useMemo(() => {
-    if (bioPage) return bioPage;
+    if (bioPage) {
+      // Ensure backward compatibility: migrate legacy links to customLinks if needed
+      if (bioPage.links && !bioPage.customLinks) {
+        return {
+          ...bioPage,
+          customLinks: bioPage.links,
+          links: undefined,
+          username: bioPage.username || "",
+          verified: bioPage.verified !== undefined ? bioPage.verified : false,
+          socialLinks: bioPage.socialLinks || [],
+          totalFollowers: bioPage.totalFollowers || 0,
+        };
+      }
+      // Ensure all new fields exist
+      return {
+        ...bioPage,
+        username: bioPage.username || "",
+        verified: bioPage.verified !== undefined ? bioPage.verified : false,
+        socialLinks: bioPage.socialLinks || [],
+        customLinks: bioPage.customLinks || [],
+        totalFollowers: bioPage.totalFollowers || 0,
+      };
+    }
 
     const defaultEmail: EmailCaptureConfig = {
       enabled: false,
@@ -396,15 +420,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return {
       username: user?.name?.replace(/\s+/g, "").toLowerCase() || "user",
       displayName: user?.name || "My Name",
+      verified: false,
       avatar: user?.avatar || "",
       bio: "Welcome!",
+      totalFollowers: 0,
+      socialLinks: [],
+      customLinks: [],
       theme: {
         backgroundColor: "#ffffff",
         buttonColor: "#000000",
         textColor: "#000000",
         buttonStyle: "rounded",
       },
-      links: [],
       emailCapture: defaultEmail,
     };
   }, [bioPage, user]);

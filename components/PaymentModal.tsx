@@ -53,7 +53,7 @@ export const PaymentModal: React.FC = () => {
                 const planName = paymentPlan.name as User['plan'];
                 
                 // Determine which userType the new plan belongs to
-                const creatorPlans: User['plan'][] = ['Free', 'Pro', 'Elite'];
+                const creatorPlans: User['plan'][] = ['Free', 'Caption', 'OnlyFansStudio', 'Pro', 'Elite'];
                 const businessPlans: User['plan'][] = ['Starter', 'Growth'];
                 const isNewPlanCreator = creatorPlans.includes(planName);
                 const isNewPlanBusiness = businessPlans.includes(planName);
@@ -124,7 +124,8 @@ export const PaymentModal: React.FC = () => {
                 
                 // Update user plan, userType (if needed), and reset usage counters
                 const now = new Date().toISOString();
-                const updatedUser = {
+                
+                const updatedUser: any = {
                     id: user.id,
                     plan: planName,
                     userType: newUserType,
@@ -134,7 +135,7 @@ export const PaymentModal: React.FC = () => {
                     subscriptionStartDate: now, // Set subscription start date
                     billingCycle: paymentPlan.cycle, // Set billing cycle
                     cancelAtPeriodEnd: false, // Clear cancellation if resubscribing
-                    subscriptionEndDate: undefined, // Clear end date if resubscribing
+                    subscriptionEndDate: deleteField(), // Clear end date if resubscribing (use deleteField instead of undefined)
                 };
                 
                 // Save to Firestore first to ensure persistence
