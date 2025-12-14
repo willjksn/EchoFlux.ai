@@ -7,6 +7,7 @@ import { OnlyFansStudioSettings } from './OnlyFansStudioSettings';
 import { OnlyFansExportHub } from './OnlyFansExportHub';
 import { OnlyFansCalendar } from './OnlyFansCalendar';
 import { OnlyFansMediaVault } from './OnlyFansMediaVault';
+import { OnlyFansGuides } from './OnlyFansGuides';
 
 type ActiveView = 'dashboard' | 'contentBrain' | 'roleplay' | 'calendar' | 'mediaVault' | 'export' | 'guides' | 'settings';
 
@@ -128,6 +129,20 @@ export const OnlyFansStudio: React.FC = () => {
         );
     }
 
+    if (activeView === 'guides') {
+        return (
+            <div className="max-w-7xl mx-auto">
+                <button
+                    onClick={() => setActiveView('dashboard')}
+                    className="mb-4 text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
+                >
+                    ← Back to OnlyFans Studio
+                </button>
+                <OnlyFansGuides />
+            </div>
+        );
+    }
+
     return (
         <div className="max-w-7xl mx-auto">
             {/* Header */}
@@ -243,7 +258,7 @@ export const OnlyFansStudio: React.FC = () => {
                     </p>
                     <button
                         className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
-                        onClick={() => showToast('Guides & Tips coming soon!', 'info')}
+                        onClick={() => setActiveView('guides')}
                     >
                         View Guides
                     </button>

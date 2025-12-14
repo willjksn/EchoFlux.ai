@@ -608,14 +608,14 @@ const MediaItemCard: React.FC<{
             {item.type === 'video' ? (
                 <video
                     src={item.url}
-                    className={`${viewMode === 'grid' ? 'w-full h-full' : 'w-24 h-24'} object-cover`}
+                    className={`${viewMode === 'grid' ? 'w-full h-full' : 'w-24 h-24'} object-contain bg-gray-100 dark:bg-gray-700`}
                     controls={false}
                 />
             ) : (
                 <img
                     src={item.url}
                     alt={item.name}
-                    className={`${viewMode === 'grid' ? 'w-full h-full' : 'w-24 h-24'} object-cover`}
+                    className={`${viewMode === 'grid' ? 'w-full h-full' : 'w-24 h-24'} object-contain bg-gray-100 dark:bg-gray-700`}
                 />
             )}
             

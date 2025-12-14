@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from './AppContext';
-import { SparklesIcon, RefreshIcon, CheckIcon } from './icons/UIIcons';
+import { SparklesIcon, RefreshIcon, CheckIcon, CheckCircleIcon, TrashIcon } from './icons/UIIcons';
 import { auth, db } from '../firebaseConfig';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, addDoc, getDocs, query, orderBy, deleteDoc, Timestamp } from 'firebase/firestore';
 
 type RoleplayTab = 'scenarios' | 'persona' | 'ratings' | 'interactive';
 
@@ -55,6 +55,13 @@ export const OnlyFansRoleplay: React.FC = () => {
     // Gender settings (loaded from user settings)
     const [creatorGender, setCreatorGender] = useState('');
     const [targetAudienceGender, setTargetAudienceGender] = useState('');
+
+    // Saved items state
+    const [savedScenarios, setSavedScenarios] = useState<any[]>([]);
+    const [savedPersonas, setSavedPersonas] = useState<any[]>([]);
+    const [savedRatings, setSavedRatings] = useState<any[]>([]);
+    const [savedInteractive, setSavedInteractive] = useState<any[]>([]);
+    const [showSaved, setShowSaved] = useState(false);
 
     // Load gender settings
     useEffect(() => {
@@ -571,6 +578,107 @@ Format as a numbered list with detailed post concepts including captions and eng
         showToast('Copied to clipboard!', 'success');
     };
 
+    // Save functions
+    const handleSaveScenario = async () => {
+        if (!generatedScenario || !user?.id) return;
+        try {
+            const scenarioData = {
+                ...generatedScenario,
+                roleplayType: useCustomRoleplayType ? customRoleplayType : selectedRoleplayType,
+                tone: useCustomTone ? customTone : scenarioTone,
+                length: scenarioLength,
+                savedAt: Timestamp.now(),
+            };
+            await addDoc(collection(db, 'users', user.id, 'onlyfans_saved_scenarios'), scenarioData);
+            showToast('Scenario saved successfully!', 'success');
+            loadSavedItems();
+        } catch (error) {
+            console.error('Error saving scenario:', error);
+            showToast('Failed to save scenario', 'error');
+        }
+    };
+
+    const handleSavePersona = async () => {
+        if (!generatedPersona || !personaName.trim() || !user?.id) return;
+        try {
+            const personaData = {
+                name: personaName,
+                description: personaDescription,
+                content: generatedPersona,
+                savedAt: Timestamp.now(),
+            };
+            await addDoc(collection(db, 'users', user.id, 'onlyfans_saved_personas'), personaData);
+            showToast('Persona saved successfully!', 'success');
+            loadSavedItems();
+        } catch (error) {
+            console.error('Error saving persona:', error);
+            showToast('Failed to save persona', 'error');
+        }
+    };
+
+    const handleSaveRatings = async () => {
+        if (!generatedRatings.length || !user?.id) return;
+        try {
+            const ratingsData = {
+                prompt: ratingPrompt,
+                ratings: generatedRatings,
+                savedAt: Timestamp.now(),
+            };
+            await addDoc(collection(db, 'users', user.id, 'onlyfans_saved_ratings'), ratingsData);
+            showToast('Ratings saved successfully!', 'success');
+            loadSavedItems();
+        } catch (error) {
+            console.error('Error saving ratings:', error);
+            showToast('Failed to save ratings', 'error');
+        }
+    };
+
+    const handleSaveInteractive = async () => {
+        if (!generatedInteractive.length || !user?.id) return;
+        try {
+            const interactiveData = {
+                prompt: interactivePrompt,
+                ideas: generatedInteractive,
+                savedAt: Timestamp.now(),
+            };
+            await addDoc(collection(db, 'users', user.id, 'onlyfans_saved_interactive'), interactiveData);
+            showToast('Interactive posts saved successfully!', 'success');
+            loadSavedItems();
+        } catch (error) {
+            console.error('Error saving interactive posts:', error);
+            showToast('Failed to save interactive posts', 'error');
+        }
+    };
+
+    // Load saved items
+    const loadSavedItems = async () => {
+        if (!user?.id) return;
+        try {
+            // Load scenarios
+            const scenariosSnap = await getDocs(query(collection(db, 'users', user.id, 'onlyfans_saved_scenarios'), orderBy('savedAt', 'desc')));
+            setSavedScenarios(scenariosSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+
+            // Load personas
+            const personasSnap = await getDocs(query(collection(db, 'users', user.id, 'onlyfans_saved_personas'), orderBy('savedAt', 'desc')));
+            setSavedPersonas(personasSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+
+            // Load ratings
+            const ratingsSnap = await getDocs(query(collection(db, 'users', user.id, 'onlyfans_saved_ratings'), orderBy('savedAt', 'desc')));
+            setSavedRatings(ratingsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+
+            // Load interactive
+            const interactiveSnap = await getDocs(query(collection(db, 'users', user.id, 'onlyfans_saved_interactive'), orderBy('savedAt', 'desc')));
+            setSavedInteractive(interactiveSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        } catch (error) {
+            console.error('Error loading saved items:', error);
+        }
+    };
+
+    // Load saved items on mount and when tab changes
+    useEffect(() => {
+        loadSavedItems();
+    }, [user?.id, activeTab]);
+
     const tabs: { id: RoleplayTab; label: string }[] = [
         { id: 'scenarios', label: 'Roleplay Scenarios' },
         { id: 'persona', label: 'Persona Builder' },
@@ -783,12 +891,21 @@ Format as a numbered list with detailed post concepts including captions and eng
                                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                                     Generated Scenario
                                 </h3>
-                                <button
-                                    onClick={() => copyToClipboard(JSON.stringify(generatedScenario, null, 2))}
-                                    className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                >
-                                    Copy All
-                                </button>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={handleSaveScenario}
+                                        className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-1"
+                                    >
+                                        <CheckCircleIcon className="w-4 h-4" />
+                                        Save
+                                    </button>
+                                    <button
+                                        onClick={() => copyToClipboard(JSON.stringify(generatedScenario, null, 2))}
+                                        className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                    >
+                                        Copy All
+                                    </button>
+                                </div>
                             </div>
                             
                             <div className="space-y-4">
@@ -973,12 +1090,21 @@ Format as a numbered list with detailed post concepts including captions and eng
                                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                                     Persona Profile
                                 </h3>
-                                <button
-                                    onClick={() => copyToClipboard(generatedPersona)}
-                                    className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                >
-                                    Copy
-                                </button>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={handleSavePersona}
+                                        className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-1"
+                                    >
+                                        <CheckCircleIcon className="w-4 h-4" />
+                                        Save
+                                    </button>
+                                    <button
+                                        onClick={() => copyToClipboard(generatedPersona)}
+                                        className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                    >
+                                        Copy
+                                    </button>
+                                </div>
                             </div>
                             <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
                                 <pre className="text-gray-900 dark:text-white whitespace-pre-wrap font-sans">
@@ -1034,9 +1160,18 @@ Format as a numbered list with detailed post concepts including captions and eng
                     {/* Generated Ratings */}
                     {generatedRatings.length > 0 && (
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                                Rating Prompts
-                            </h3>
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                    Rating Prompts
+                                </h3>
+                                <button
+                                    onClick={handleSaveRatings}
+                                    className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-1"
+                                >
+                                    <CheckCircleIcon className="w-4 h-4" />
+                                    Save All
+                                </button>
+                            </div>
                             <div className="space-y-3">
                                 {generatedRatings.map((rating, index) => (
                                     <div
@@ -1102,9 +1237,18 @@ Format as a numbered list with detailed post concepts including captions and eng
                     {/* Generated Interactive Ideas */}
                     {generatedInteractive.length > 0 && (
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                                Interactive Post Ideas
-                            </h3>
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                    Interactive Post Ideas
+                                </h3>
+                                <button
+                                    onClick={handleSaveInteractive}
+                                    className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-1"
+                                >
+                                    <CheckCircleIcon className="w-4 h-4" />
+                                    Save All
+                                </button>
+                            </div>
                             <div className="space-y-3">
                                 {generatedInteractive.map((idea, index) => (
                                     <div
