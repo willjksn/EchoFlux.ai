@@ -678,21 +678,21 @@ const MediaItemCard: React.FC<{
                         e.stopPropagation();
                         onGenerateTags();
                     }}
-                    className="p-2 bg-white rounded-full hover:bg-gray-100"
+                    className="p-2 bg-white dark:bg-gray-800 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 shadow-md"
                     title="Generate AI Tags"
                     disabled={isGeneratingTags}
                 >
-                    <SparklesIcon className="w-4 h-4 text-primary-600" />
+                    <SparklesIcon className="w-4 h-4 text-primary-600 dark:text-primary-400" />
                 </button>
                 <button
                     onClick={(e) => {
                         e.stopPropagation();
                         onEdit();
                     }}
-                    className="p-2 bg-white rounded-full hover:bg-gray-100"
+                    className="p-2 bg-white dark:bg-gray-800 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 shadow-md"
                     title="Edit"
                 >
-                    <EditIcon className="w-4 h-4 text-gray-700" />
+                    <EditIcon className="w-4 h-4 text-gray-900 dark:text-gray-100" />
                 </button>
             </div>
 
