@@ -193,7 +193,7 @@ export const OnlyFansMediaVault: React.FC = () => {
                         usedInPosts: [],
                         tags: [],
                         folderId: selectedFolderId,
-                        aiTags: undefined,
+                        // aiTags is optional and will be added when AI tagging is generated
                     };
 
                     await setDoc(doc(db, 'users', user.id, 'onlyfans_media_library', mediaItem.id), mediaItem);
