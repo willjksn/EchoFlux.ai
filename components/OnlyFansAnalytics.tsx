@@ -204,7 +204,7 @@ export const OnlyFansAnalytics: React.FC = () => {
             <div className="mb-8">
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
-                        <ChartBarIcon className="w-8 h-8 text-primary-600 dark:text-primary-400" />
+                        <AnalyticsIcon />
                         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
                             Analytics & Insights
                         </h1>
