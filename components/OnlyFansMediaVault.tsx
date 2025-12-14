@@ -860,6 +860,7 @@ const MediaEditor: React.FC<{
     const [blurSelectionEnd, setBlurSelectionEnd] = useState<{ x: number; y: number } | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const originalImageRef = useRef<HTMLImageElement | null>(null);
+    const renderTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const [showFilters, setShowFilters] = useState(false);
     const [selectedFilter, setSelectedFilter] = useState<string | null>(null);
     const [hue, setHue] = useState(0);
@@ -891,23 +892,45 @@ const MediaEditor: React.FC<{
             const safeHeight = Math.min(height, canvas.height - safeY);
             
             if (safeWidth > 0 && safeHeight > 0) {
-                // Get the selected area
-                const imageData = ctx.getImageData(safeX, safeY, safeWidth, safeHeight);
-                
-                // Create a temporary canvas for the blurred area
-                const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = safeWidth;
-                tempCanvas.height = safeHeight;
-                const tempCtx = tempCanvas.getContext('2d');
-                if (tempCtx) {
-                    tempCtx.putImageData(imageData, 0, 0);
-                    // Apply blur to the temp canvas
-                    tempCtx.filter = `blur(${blur}px)`;
-                    tempCtx.drawImage(tempCanvas, 0, 0);
-                    tempCtx.filter = 'none';
+                try {
+                    // Get the selected area
+                    const imageData = ctx.getImageData(safeX, safeY, safeWidth, safeHeight);
                     
-                    // Draw the blurred area back onto the main canvas
-                    ctx.drawImage(tempCanvas, safeX, safeY);
+                    // Create a temporary canvas for the blurred area
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = safeWidth;
+                    tempCanvas.height = safeHeight;
+                    const tempCtx = tempCanvas.getContext('2d');
+                    if (tempCtx) {
+                        tempCtx.putImageData(imageData, 0, 0);
+                        // Apply blur to the temp canvas
+                        tempCtx.filter = `blur(${blur}px)`;
+                        tempCtx.drawImage(tempCanvas, 0, 0);
+                        tempCtx.filter = 'none';
+                        
+                        // Draw the blurred area back onto the main canvas
+                        ctx.drawImage(tempCanvas, safeX, safeY);
+                    }
+                } catch (error) {
+                    // If getImageData fails (CORS issue), use alternative approach
+                    // Draw a blurred version of the entire image in the selection area
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = safeWidth;
+                    tempCanvas.height = safeHeight;
+                    const tempCtx = tempCanvas.getContext('2d');
+                    if (tempCtx && originalImageRef.current) {
+                        // Draw the full image scaled to the selection area
+                        tempCtx.filter = `brightness(${100 + brightness}%) contrast(${100 + contrast}%) saturate(${100 + saturate}%) hue-rotate(${hue}deg) sepia(${sepia}%) grayscale(${grayscale}%) invert(${invert}%) blur(${blur}px)`;
+                        tempCtx.drawImage(
+                            originalImageRef.current,
+                            safeX, safeY, safeWidth, safeHeight,
+                            0, 0, safeWidth, safeHeight
+                        );
+                        tempCtx.filter = 'none';
+                        
+                        // Draw the blurred area back onto the main canvas
+                        ctx.drawImage(tempCanvas, safeX, safeY);
+                    }
                 }
             }
         }
@@ -981,51 +1004,79 @@ const MediaEditor: React.FC<{
     }, [brightness, contrast, saturate, blur, watermarkText, watermarkPosition, watermarkOpacity, isCropping, cropStart, cropEnd, isBlurSelecting, blurSelectionStart, blurSelectionEnd, blurSelection, hue, sepia, grayscale, invert]);
 
     useEffect(() => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-            if (canvasRef.current && imageRef.current) {
-                const canvas = canvasRef.current;
-                const ctx = canvas.getContext('2d');
-                if (!ctx) return;
+        // Fetch image as blob to avoid CORS issues
+        const loadImage = async () => {
+            try {
+                const response = await fetch(item.url);
+                if (!response.ok) throw new Error('Failed to fetch image');
+                const blob = await response.blob();
+                const objectUrl = URL.createObjectURL(blob);
                 
-                canvas.width = img.width;
-                canvas.height = img.height;
-                originalImageRef.current = img;
-                imageRef.current.src = item.url;
-                imageRef.current.onload = () => {
-                    applyFilters();
+                const img = new Image();
+                img.onload = () => {
+                    if (canvasRef.current && imageRef.current) {
+                        const canvas = canvasRef.current;
+                        const ctx = canvas.getContext('2d');
+                        if (!ctx) return;
+                        
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        originalImageRef.current = img;
+                        imageRef.current.src = objectUrl;
+                        imageRef.current.onload = () => {
+                            applyFilters();
+                        };
+                    }
                 };
+                img.onerror = () => {
+                    console.error('Failed to load image');
+                    URL.revokeObjectURL(objectUrl);
+                };
+                img.src = objectUrl;
+            } catch (error) {
+                console.error('Error loading image:', error);
+                // Fallback: try direct load without CORS
+                const img = new Image();
+                img.onload = () => {
+                    if (canvasRef.current && imageRef.current) {
+                        const canvas = canvasRef.current;
+                        const ctx = canvas.getContext('2d');
+                        if (!ctx) return;
+                        
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        originalImageRef.current = img;
+                        imageRef.current.src = item.url;
+                        imageRef.current.onload = () => {
+                            applyFilters();
+                        };
+                    }
+                };
+                img.src = item.url;
             }
         };
-        img.onerror = () => {
-            // If crossOrigin fails, try without it
-            const img2 = new Image();
-            img2.onload = () => {
-                if (canvasRef.current && imageRef.current) {
-                    const canvas = canvasRef.current;
-                    const ctx = canvas.getContext('2d');
-                    if (!ctx) return;
-                    
-                    canvas.width = img2.width;
-                    canvas.height = img2.height;
-                    originalImageRef.current = img2;
-                    imageRef.current.src = item.url;
-                    imageRef.current.onload = () => {
-                        applyFilters();
-                    };
-                }
-            };
-            img2.src = item.url;
-        };
-        img.src = item.url;
+        
+        loadImage();
     }, [item.url, applyFilters]);
 
     useEffect(() => {
-        if (imageRef.current?.complete) {
-            applyFilters();
+        // Debounce filter application to prevent excessive redraws
+        if (imageRef.current?.complete && canvasRef.current) {
+            if (renderTimeoutRef.current) {
+                clearTimeout(renderTimeoutRef.current);
+            }
+            renderTimeoutRef.current = setTimeout(() => {
+                requestAnimationFrame(() => {
+                    applyFilters();
+                });
+            }, 16); // ~60fps
+            return () => {
+                if (renderTimeoutRef.current) {
+                    clearTimeout(renderTimeoutRef.current);
+                }
+            };
         }
-    }, [applyFilters]);
+    }, [brightness, contrast, saturate, blur, watermarkText, watermarkPosition, watermarkOpacity, isCropping, cropStart, cropEnd, blurSelection, hue, sepia, grayscale, invert, isBlurSelecting, blurSelectionStart, blurSelectionEnd]);
 
     const getScaledCoordinates = (displayX: number, displayY: number) => {
         if (!canvasRef.current) return { x: 0, y: 0 };
@@ -1155,6 +1206,8 @@ const MediaEditor: React.FC<{
         if (isCropping && cropStart) {
             setCropEnd({ x, y });
         } else if (isBlurSelecting && blurSelectionStart) {
+            // Only update state during drag, don't apply filters yet
+            // This prevents flashing - filters will be applied on mouse up
             setBlurSelectionEnd({ x, y });
         }
     };
@@ -1179,7 +1232,8 @@ const MediaEditor: React.FC<{
             setBlurSelectionStart(null);
             setBlurSelectionEnd(null);
             setIsBlurSelecting(false);
-            applyFilters();
+            // Apply filters after selection is complete
+            setTimeout(() => applyFilters(), 0);
         }
     };
 
