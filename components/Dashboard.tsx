@@ -487,15 +487,13 @@ export const Dashboard: React.FC = () => {
           </div>
           
           
-          {/* Phase 2 Widgets Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Fixed Layout Row: Top Content This Week and Recent Activity - Always Together */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
             {/* Content Performance Widget - Creator & Agency Only */}
             {(() => {
               // Show for Creators OR Business Agency (since Agency manages creators)
               const shouldShowContentPerformance = !isBusiness || user?.plan === 'Agency';
-              if (!shouldShowContentPerformance) return null;
               
-              return (() => {
               // Get posts from this week (last 7 days)
               const oneWeekAgo = new Date();
               oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
@@ -541,41 +539,49 @@ export const Dashboard: React.FC = () => {
                 };
               };
               
-              return recentPosts.length > 0 ? (
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">Top Content This Week</h3>
-                    <button onClick={() => setActivePage('analytics')} className="text-sm text-primary-600 hover:underline">View Analytics</button>
-                  </div>
-                  <div className="space-y-3">
-                    {recentPosts.map(post => {
-                      const engagement = calculateMockEngagement(post.id, post.content || '');
-                      const totalEngagement = engagement.likes + engagement.comments + engagement.shares;
-                      return (
-                        <div key={post.id} className="p-3 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-lg border border-purple-200 dark:border-purple-700">
-                          <p className="text-sm font-medium text-gray-900 dark:text-white mb-2 truncate">{post.content?.substring(0, 60) || 'Post'}...</p>
-                          <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
-                            <div className="flex items-center gap-3">
-                              <span className="flex items-center gap-1">
-                                <HeartIcon className="w-4 h-4" /> {engagement.likes}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <ChatIcon className="w-4 h-4" /> {engagement.comments}
-                              </span>
-                              <span>{new Intl.NumberFormat('en-US', { notation: "compact" }).format(engagement.views)} views</span>
+              if (shouldShowContentPerformance) {
+                return (
+                  <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 h-full flex flex-col min-h-[400px]">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-bold text-gray-900 dark:text-white">Top Content This Week</h3>
+                      <button onClick={() => setActivePage('analytics')} className="text-sm text-primary-600 hover:underline">View Analytics</button>
+                    </div>
+                    {recentPosts.length > 0 ? (
+                      <div className="space-y-3 flex-1">
+                        {recentPosts.map(post => {
+                          const engagement = calculateMockEngagement(post.id, post.content || '');
+                          const totalEngagement = engagement.likes + engagement.comments + engagement.shares;
+                          return (
+                            <div key={post.id} className="p-3 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-lg border border-purple-200 dark:border-purple-700">
+                              <p className="text-sm font-medium text-gray-900 dark:text-white mb-2 truncate">{post.content?.substring(0, 60) || 'Post'}...</p>
+                              <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
+                                <div className="flex items-center gap-3">
+                                  <span className="flex items-center gap-1">
+                                    <HeartIcon className="w-4 h-4" /> {engagement.likes}
+                                  </span>
+                                  <span className="flex items-center gap-1">
+                                    <ChatIcon className="w-4 h-4" /> {engagement.comments}
+                                  </span>
+                                  <span>{new Intl.NumberFormat('en-US', { notation: "compact" }).format(engagement.views)} views</span>
+                                </div>
+                                <span className="text-primary-600 dark:text-primary-400 font-semibold">{totalEngagement} total</span>
+                              </div>
                             </div>
-                            <span className="text-primary-600 dark:text-primary-400 font-semibold">{totalEngagement} total</span>
-                          </div>
-                        </div>
-                      );
-                    })}
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="flex-1 flex items-center justify-center">
+                        <p className="text-sm text-gray-500 dark:text-gray-400">No posts this week</p>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ) : null;
-              })();
+                );
+              }
+              return null;
             })()}
             
-            {/* Campaign Performance Widget - Business Starter/Growth Only */}
+            {/* Campaign Performance Widget - Business Starter/Growth Only (replaces Top Content for Business) */}
             {isBusiness && user?.plan !== 'Agency' && (() => {
               // Show top performing campaigns/posts for business
               const recentPosts = posts
@@ -593,181 +599,192 @@ export const Dashboard: React.FC = () => {
                 };
               };
               
-              return recentPosts.length > 0 ? (
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+              return (
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 h-full flex flex-col min-h-[400px]">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white">Top Campaigns This Week</h3>
                     <button onClick={() => setActivePage('analytics')} className="text-sm text-primary-600 hover:underline">View Analytics</button>
                   </div>
-                  <div className="space-y-3">
-                    {recentPosts.map(post => {
-                      const metrics = calculateMockMetrics(post.id);
-                      return (
-                        <div key={post.id} className="p-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
-                          <p className="text-sm font-medium text-gray-900 dark:text-white mb-2 truncate">{post.content.substring(0, 60)}...</p>
-                          <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
-                            <div className="flex items-center gap-3">
-                              <span className="flex items-center gap-1">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg> {new Intl.NumberFormat('en-US', { notation: "compact" }).format(metrics.reach)} reach
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <LinkIcon className="w-4 h-4" /> {metrics.clicks} clicks
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <BriefcaseIcon className="w-4 h-4" /> {metrics.leads} leads
-                              </span>
+                  {recentPosts.length > 0 ? (
+                    <div className="space-y-3 flex-1">
+                      {recentPosts.map(post => {
+                        const metrics = calculateMockMetrics(post.id);
+                        return (
+                          <div key={post.id} className="p-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
+                            <p className="text-sm font-medium text-gray-900 dark:text-white mb-2 truncate">{post.content.substring(0, 60)}...</p>
+                            <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
+                              <div className="flex items-center gap-3">
+                                <span className="flex items-center gap-1">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg> {new Intl.NumberFormat('en-US', { notation: "compact" }).format(metrics.reach)} reach
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <LinkIcon className="w-4 h-4" /> {metrics.clicks} clicks
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <BriefcaseIcon className="w-4 h-4" /> {metrics.leads} leads
+                                </span>
+                              </div>
+                              <span className="text-primary-600 dark:text-primary-400 font-semibold">{metrics.engagement} engagement</span>
                             </div>
-                            <span className="text-primary-600 dark:text-primary-400 font-semibold">{metrics.engagement} engagement</span>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="flex-1 flex items-center justify-center">
+                      <p className="text-sm text-gray-500 dark:text-gray-400">No campaigns this week</p>
+                    </div>
+                  )}
                 </div>
-              ) : null;
+              );
             })()}
             
-            {/* Lead Pipeline Widget - Business Only */}
-            {isBusiness && (() => {
-              // Calculate lead pipeline stats from messages
-              const leadMessages = messages.filter(m => m.category === 'Lead' && !m.isArchived);
-              const totalLeads = leadMessages.length;
-              const newLeads = leadMessages.filter(m => {
-                const msgDate = new Date(m.timestamp);
-                const weekAgo = new Date();
-                weekAgo.setDate(weekAgo.getDate() - 7);
-                return msgDate > weekAgo;
-              }).length;
-              const qualifiedLeads = Math.floor(totalLeads * 0.4); // Mock: 40% qualified
-              const convertedLeads = Math.floor(totalLeads * 0.15); // Mock: 15% converted
+            {/* Recent Activity - Always in Same Row as Top Content/Campaigns */}
+            {(() => {
+              // Generate activity timeline from posts, messages, and campaigns
+              const activities: Array<{ id: string; type: string; message: string; timestamp: Date; icon: React.ReactNode }> = [];
+              
+              // Recent posts (include all Published posts, with or without media)
+              const recentPublishedPosts = posts
+                .filter(p => p.status === 'Published')
+                .sort((a, b) => {
+                  const dateA = new Date(a.timestamp || a.scheduledDate || a.createdAt || 0);
+                  const dateB = new Date(b.timestamp || b.scheduledDate || b.createdAt || 0);
+                  return dateB.getTime() - dateA.getTime();
+                })
+                .slice(0, 5);
+              
+              recentPublishedPosts.forEach(post => {
+                const postDate = new Date(post.timestamp || post.scheduledDate || post.createdAt || Date.now());
+                const platformNames = post.platforms && post.platforms.length > 0 
+                  ? post.platforms.join(', ') 
+                  : 'social media';
+                const isTextOnly = !post.mediaUrl;
+                activities.push({
+                  id: `post-${post.id}`,
+                  type: 'post',
+                  message: `Published ${isTextOnly ? 'text post' : 'post'} on ${platformNames}`,
+                  timestamp: postDate,
+                  icon: <SparklesIcon className="w-4 h-4" />
+                });
+              });
+              
+              // Recent messages
+              if (messages.length > 0) {
+                messages.slice(0, 1).forEach(msg => {
+                  activities.push({
+                    id: `message-${msg.id}`,
+                    type: 'message',
+                    message: `New ${isBusiness ? 'lead' : 'fan'} message from ${msg.user.name}`,
+                    timestamp: new Date(msg.timestamp),
+                    icon: <ChatIcon className="w-4 h-4" />
+                  });
+                });
+              }
+              
+              // Sort by timestamp (most recent first)
+              activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
               
               return (
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 h-full flex flex-col min-h-[400px]">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">Lead Pipeline</h3>
-                    <button onClick={() => setActivePage('analytics')} className="text-sm text-primary-600 hover:underline">View CRM</button>
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">Recent Activity</h3>
                   </div>
-                  <div className="space-y-4">
-                    {/* Funnel Visualization */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">New Leads</span>
-                        <span className="text-lg font-bold text-gray-900 dark:text-white">{newLeads}</span>
-                      </div>
-                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
-                        <div className="bg-gradient-to-r from-blue-500 to-blue-600 h-full" style={{ width: '100%' }}></div>
-                      </div>
+                  {activities.length > 0 ? (
+                    <div className="space-y-3 flex-1">
+                      {activities.slice(0, 5).map(activity => (
+                        <div key={activity.id} className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                          <div className="flex-shrink-0 mt-0.5 text-primary-600 dark:text-primary-400">
+                            {activity.icon}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 dark:text-white">{activity.message}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                              {activity.timestamp.toLocaleDateString()} at {activity.timestamp.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Qualified</span>
-                        <span className="text-lg font-bold text-gray-900 dark:text-white">{qualifiedLeads}</span>
-                      </div>
-                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
-                        <div className="bg-gradient-to-r from-yellow-500 to-orange-500 h-full" style={{ width: `${(qualifiedLeads / (newLeads || 1)) * 100}%` }}></div>
-                      </div>
+                  ) : (
+                    <div className="text-center py-8 flex-1 flex items-center justify-center">
+                      <p className="text-sm text-gray-500 dark:text-gray-400">No recent activity</p>
                     </div>
-                    
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Converted</span>
-                        <span className="text-lg font-bold text-green-600 dark:text-green-400">{convertedLeads}</span>
-                      </div>
-                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
-                        <div className="bg-gradient-to-r from-green-500 to-emerald-600 h-full" style={{ width: `${(convertedLeads / (qualifiedLeads || 1)) * 100}%` }}></div>
-                      </div>
-                    </div>
-                    
-                    <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-500 dark:text-gray-400">Conversion Rate</span>
-                        <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                          {totalLeads > 0 ? Math.round((convertedLeads / totalLeads) * 100) : 0}%
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                  )}
                 </div>
               );
             })()}
           </div>
           
-          {/* Recent Activity - Standalone Section */}
-          {(() => {
-            // Generate activity timeline from posts, messages, and campaigns
-            const activities: Array<{ id: string; type: string; message: string; timestamp: Date; icon: React.ReactNode }> = [];
-            
-            // Recent posts (include all Published posts, with or without media)
-            const recentPublishedPosts = posts
-              .filter(p => p.status === 'Published')
-              .sort((a, b) => {
-                const dateA = new Date(a.timestamp || a.scheduledDate || a.createdAt || 0);
-                const dateB = new Date(b.timestamp || b.scheduledDate || b.createdAt || 0);
-                return dateB.getTime() - dateA.getTime();
-              })
-              .slice(0, 5);
-            
-            recentPublishedPosts.forEach(post => {
-              const postDate = new Date(post.timestamp || post.scheduledDate || post.createdAt || Date.now());
-              const platformNames = post.platforms && post.platforms.length > 0 
-                ? post.platforms.join(', ') 
-                : 'social media';
-              const isTextOnly = !post.mediaUrl;
-              activities.push({
-                id: `post-${post.id}`,
-                type: 'post',
-                message: `Published ${isTextOnly ? 'text post' : 'post'} on ${platformNames}`,
-                timestamp: postDate,
-                icon: <SparklesIcon className="w-4 h-4" />
-              });
-            });
-            
-            // Recent messages
-            if (messages.length > 0) {
-              messages.slice(0, 1).forEach(msg => {
-                activities.push({
-                  id: `message-${msg.id}`,
-                  type: 'message',
-                  message: `New ${isBusiness ? 'lead' : 'fan'} message from ${msg.user.name}`,
-                  timestamp: new Date(msg.timestamp),
-                  icon: <ChatIcon className="w-4 h-4" />
-                });
-              });
-            }
-            
-            // Sort by timestamp (most recent first)
-            activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-            
-            return (
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">Recent Activity</h3>
-                </div>
-                {activities.length > 0 ? (
-                  <div className="space-y-3">
-                    {activities.slice(0, 5).map(activity => (
-                      <div key={activity.id} className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                        <div className="flex-shrink-0 mt-0.5 text-primary-600 dark:text-primary-400">
-                          {activity.icon}
+          {/* Additional Business Widgets - Separate Row */}
+          {isBusiness && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start mt-6">
+              {/* Lead Pipeline Widget - Business Only */}
+              {(() => {
+                // Calculate lead pipeline stats from messages
+                const leadMessages = messages.filter(m => m.category === 'Lead' && !m.isArchived);
+                const totalLeads = leadMessages.length;
+                const newLeads = leadMessages.filter(m => {
+                  const msgDate = new Date(m.timestamp);
+                  const weekAgo = new Date();
+                  weekAgo.setDate(weekAgo.getDate() - 7);
+                  return msgDate > weekAgo;
+                }).length;
+                const qualifiedLeads = Math.floor(totalLeads * 0.4); // Mock: 40% qualified
+                const convertedLeads = Math.floor(totalLeads * 0.15); // Mock: 15% converted
+                
+                return (
+                  <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-bold text-gray-900 dark:text-white">Lead Pipeline</h3>
+                      <button onClick={() => setActivePage('analytics')} className="text-sm text-primary-600 hover:underline">View CRM</button>
+                    </div>
+                    <div className="space-y-4">
+                      {/* Funnel Visualization */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">New Leads</span>
+                          <span className="text-lg font-bold text-gray-900 dark:text-white">{newLeads}</span>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">{activity.message}</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            {activity.timestamp.toLocaleDateString()} at {activity.timestamp.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                          </p>
+                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+                          <div className="bg-gradient-to-r from-blue-500 to-blue-600 h-full" style={{ width: '100%' }}></div>
                         </div>
                       </div>
-                    ))}
+                      
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Qualified</span>
+                          <span className="text-lg font-bold text-gray-900 dark:text-white">{qualifiedLeads}</span>
+                        </div>
+                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+                          <div className="bg-gradient-to-r from-yellow-500 to-orange-500 h-full" style={{ width: `${(qualifiedLeads / (newLeads || 1)) * 100}%` }}></div>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Converted</span>
+                          <span className="text-lg font-bold text-green-600 dark:text-green-400">{convertedLeads}</span>
+                        </div>
+                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+                          <div className="bg-gradient-to-r from-green-500 to-emerald-600 h-full" style={{ width: `${(convertedLeads / (qualifiedLeads || 1)) * 100}%` }}></div>
+                        </div>
+                      </div>
+                      
+                      <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-500 dark:text-gray-400">Conversion Rate</span>
+                          <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                            {totalLeads > 0 ? Math.round((convertedLeads / totalLeads) * 100) : 0}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">No recent activity</p>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
+                );
+              })()}
+            </div>
+          )}
           
           {/* First Row: Goals & Milestones, Best Posting Times, Quick Stats */}
           {user.plan !== 'Free' && (
