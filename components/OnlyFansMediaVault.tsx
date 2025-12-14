@@ -558,6 +558,10 @@ export const OnlyFansMediaVault: React.FC = () => {
                         handleMoveToFolder(viewingItem.id, folderId);
                         setViewingItem(null);
                     }}
+                    onEdit={() => {
+                        setEditorItem(viewingItem);
+                        setShowEditor(true);
+                    }}
                     folders={folders}
                     isGeneratingTags={isGeneratingTags}
                 />
@@ -725,9 +729,10 @@ const MediaViewModal: React.FC<{
     onDelete: () => void;
     onGenerateTags: () => void;
     onMoveToFolder: (folderId: string) => void;
+    onEdit: () => void;
     folders: MediaFolder[];
     isGeneratingTags: boolean;
-}> = ({ item, onClose, onDelete, onGenerateTags, onMoveToFolder, folders, isGeneratingTags }) => {
+}> = ({ item, onClose, onDelete, onGenerateTags, onMoveToFolder, onEdit, folders, isGeneratingTags }) => {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
