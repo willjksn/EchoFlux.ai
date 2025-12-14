@@ -43,7 +43,7 @@ export const OnlyFansMediaVault: React.FC = () => {
 
         const initializeFolders = async () => {
             try {
-                const foldersRef = collection(db, 'users', user.id, 'media_folders');
+                const foldersRef = collection(db, 'users', user.id, 'onlyfans_media_folders');
                 const snapshot = await getDocs(foldersRef);
                 
                 const existingFolders: MediaFolder[] = [];
@@ -70,7 +70,7 @@ export const OnlyFansMediaVault: React.FC = () => {
                             itemCount: 0,
                         };
                         foldersToCreate.push(newFolder);
-                        batch.set(doc(db, 'users', user.id, 'media_folders', folderId), newFolder);
+                        batch.set(doc(db, 'users', user.id, 'onlyfans_media_folders', folderId), newFolder);
                     }
                 });
 
@@ -122,7 +122,7 @@ export const OnlyFansMediaVault: React.FC = () => {
 
         const loadMedia = async () => {
             try {
-                const mediaRef = collection(db, 'users', user.id, 'media_library');
+                const mediaRef = collection(db, 'users', user.id, 'onlyfans_media_library');
                 const q = query(mediaRef, orderBy('uploadedAt', 'desc'));
                 const snapshot = await getDocs(q);
                 
@@ -196,7 +196,7 @@ export const OnlyFansMediaVault: React.FC = () => {
                         aiTags: undefined,
                     };
 
-                    await setDoc(doc(db, 'users', user.id, 'media_library', mediaItem.id), mediaItem);
+                    await setDoc(doc(db, 'users', user.id, 'onlyfans_media_library', mediaItem.id), mediaItem);
                     
                     setMediaItems(prev => [mediaItem, ...prev]);
                     showToast(`Uploaded ${file.name}`, 'success');
@@ -230,7 +230,7 @@ export const OnlyFansMediaVault: React.FC = () => {
         if (!user) return;
         
         try {
-            await deleteDoc(doc(db, 'users', user.id, 'media_library', id));
+            await deleteDoc(doc(db, 'users', user.id, 'onlyfans_media_library', id));
             setMediaItems(prev => prev.filter(m => m.id !== id));
             showToast('Media deleted', 'success');
         } catch (error) {
@@ -307,7 +307,7 @@ export const OnlyFansMediaVault: React.FC = () => {
             const aiTags = data.tags || { outfits: [], poses: [], vibes: [] };
 
             // Update item with AI tags
-            await updateDoc(doc(db, 'users', user.id, 'media_library', item.id), {
+            await updateDoc(doc(db, 'users', user.id, 'onlyfans_media_library', item.id), {
                 aiTags,
             });
 
@@ -571,7 +571,7 @@ export const OnlyFansMediaVault: React.FC = () => {
                             createdAt: new Date().toISOString(),
                             itemCount: 0,
                         };
-                        await setDoc(doc(db, 'users', user.id, 'media_folders', folderId), newFolder);
+                        await setDoc(doc(db, 'users', user.id, 'onlyfans_media_folders', folderId), newFolder);
                         setFolders(prev => [...prev, newFolder].sort((a, b) => a.name.localeCompare(b.name)));
                         setShowCreateFolderModal(false);
                         showToast(`Folder "${name}" created`, 'success');
