@@ -810,26 +810,7 @@ const CaptionGenerator: React.FC = () => {
           await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
         }
 
-        // Create calendar event for each platform
-        for (const platform of itemPlatforms) {
-          // Determine event type: use Instagram post type if Instagram, otherwise infer from media type
-          let eventType: 'Post' | 'Story' | 'Reel' = item.type === 'video' ? 'Reel' : 'Post';
-          if (platform === 'Instagram' && item.instagramPostType) {
-            eventType = item.instagramPostType;
-          }
-          
-          const newEvent: CalendarEvent = {
-            id: `cal-${postId}-${platform}`,
-            title: title,
-            date: scheduledDate,
-            type: eventType,
-            platform: platform,
-            status: 'Scheduled',
-            thumbnail: mediaUrl,
-          };
-
-          await addCalendarEvent(newEvent);
-        }
+        // Don't create calendar events manually - Calendar component auto-creates from posts with scheduledDate
 
         // Remove scheduled item from mediaItems
         setComposeState(prev => ({
@@ -936,6 +917,9 @@ const CaptionGenerator: React.FC = () => {
       const isDraftEdit = item.id && item.id.length > 0;
       const postId = isDraftEdit ? item.id : Date.now().toString();
       const publishDate = new Date().toISOString();
+      
+      // Ensure published posts have a scheduledDate so Calendar can create events from them
+      const postScheduledDate = item.scheduledDate || publishDate;
 
       if (user) {
         // If editing a draft, check if post exists and delete draft calendar events
@@ -1074,20 +1058,8 @@ const CaptionGenerator: React.FC = () => {
         showToast('Pinterest only supports image pins. Video pins are not yet supported.', 'error');
       }
 
-      // Create calendar event for each platform
-      for (const platform of platformsToPost) {
-        const newEvent: CalendarEvent = {
-          id: `cal-${postId}-${platform}`,
-          title: title,
-          date: publishDate,
-          type: platform === 'Instagram' && item.instagramPostType ? item.instagramPostType : (item.type === 'video' ? 'Reel' : 'Post'),
-          platform: platform,
-          status: 'Published',
-          ...(mediaUrl && { thumbnail: mediaUrl }), // Only include thumbnail if mediaUrl exists
-        };
-
-        await addCalendarEvent(newEvent);
-      }
+      // Don't create calendar events manually - Calendar component auto-creates from posts
+      // This prevents duplicate events in the calendar
 
       // Remove published item from compose page IMMEDIATELY
       // Use functional update to ensure we're working with latest state
@@ -2070,20 +2042,7 @@ const CaptionGenerator: React.FC = () => {
             await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
           }
 
-          // Create calendar event for each platform
-          for (const platform of platformsToPost) {
-            const newEvent: CalendarEvent = {
-              id: `cal-${postId}-${platform}`,
-              title: title,
-              date: scheduledDate,
-              type: platform === 'Instagram' && updatedItem.instagramPostType ? updatedItem.instagramPostType : (updatedItem.type === 'video' ? 'Reel' : 'Post'),
-              platform: platform,
-              status: 'Scheduled',
-              thumbnail: mediaUrl,
-            };
-
-            await addCalendarEvent(newEvent);
-          }
+          // Don't create calendar events manually - Calendar component auto-creates from posts
 
           scheduledItems.push(rec.index);
         } catch (err) {
@@ -2291,19 +2250,7 @@ const CaptionGenerator: React.FC = () => {
         await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
       }
 
-      // Create calendar event for each platform
-      for (const platform of platformsToPost) {
-        const newEvent: CalendarEvent = {
-          id: `cal-${postId}-${platform}`,
-          title: title,
-          date: publishDate.toISOString(),
-          type: composeState.media?.type === 'video' ? 'Reel' : 'Post',
-          platform: platform,
-          status: 'Published',
-          thumbnail: mediaUrl
-        };
-        await addCalendarEvent(newEvent);
-      }
+      // Don't create calendar events manually - Calendar component auto-creates from posts
 
       platformsToPost.forEach(platform => {
         showToast(`Caption published to ${platform}!`, 'success');
@@ -2380,17 +2327,7 @@ const CaptionGenerator: React.FC = () => {
         await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
       }
 
-      const newEvent: CalendarEvent = {
-        id: `cal-${postId}`,
-        title: title,
-        date: new Date(date).toISOString(),
-        type: composeState.media?.type === 'video' ? 'Reel' : 'Post',
-        platform: platformsToPost[0],
-        status: 'In Review',
-        thumbnail: mediaUrl
-      };
-
-      await addCalendarEvent(newEvent);
+      // Don't create calendar event manually - Calendar component auto-creates from posts
       showToast(
         `Post scheduled for review on ${new Date(date).toLocaleString([], {
           dateStyle: 'medium',
@@ -2466,7 +2403,7 @@ const CaptionGenerator: React.FC = () => {
         thumbnail: mediaUrl
       };
 
-      await addCalendarEvent(newEvent);
+      // Don't create calendar event manually - Calendar component auto-creates from posts
       showToast(
         `Post scheduled for ${new Date(date).toLocaleString([], {
           dateStyle: 'medium',

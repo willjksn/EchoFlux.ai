@@ -523,17 +523,7 @@ export const Approvals: React.FC = () => {
                                                         setPosts(prev => prev.map(p => p.id === activePost.id ? updatedPost : p));
                                                     }
                                                     
-                                                    // Create or update calendar event
-                                                    const calendarEvent = {
-                                                        id: `cal-${activePost.id}`,
-                                                        title: activePost.content.substring(0, 50) + (activePost.content.length > 50 ? '...' : ''),
-                                                        date: activePost.scheduledDate || publishDate,
-                                                        type: activePost.mediaType === 'video' ? 'Reel' : 'Post',
-                                                        platform: activePost.platforms[0] || 'Instagram',
-                                                        status: 'Published' as const,
-                                                        thumbnail: activePost.mediaUrl || undefined,
-                                                    };
-                                                    await addCalendarEvent(calendarEvent);
+                                                    // Don't create calendar event manually - Calendar component auto-creates from posts
                                                     
                                                     showToast('Post published!', 'success');
                                                     setActivePost(null);
@@ -557,17 +547,7 @@ export const Approvals: React.FC = () => {
                                                         setPosts(prev => prev.map(p => p.id === activePost.id ? updatedPost : p));
                                                     }
                                                     
-                                                    // Update calendar event status to Published
-                                                    const calendarEvent = {
-                                                        id: `cal-${activePost.id}`,
-                                                        title: activePost.content.substring(0, 50) + (activePost.content.length > 50 ? '...' : ''),
-                                                        date: activePost.scheduledDate || new Date().toISOString(),
-                                                        type: activePost.mediaType === 'video' ? 'Reel' : 'Post',
-                                                        platform: activePost.platforms[0] || 'Instagram',
-                                                        status: 'Published' as const,
-                                                        thumbnail: activePost.mediaUrl || undefined,
-                                                    };
-                                                    await addCalendarEvent(calendarEvent);
+                                                    // Don't create calendar event manually - Calendar component auto-creates from posts
                                                     
                                                     showToast('Post published!', 'success');
                                                     setActivePost(null);

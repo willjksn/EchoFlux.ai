@@ -67,6 +67,7 @@ export const OnlyFansAnalytics: React.FC = () => {
         if (!user?.id) return;
         setIsLoading(true);
         try {
+            console.log('Loading OnlyFans Analytics for user:', user.id, 'dateRange:', dateRange);
             // Calculate date filter
             const now = new Date();
             let startDate: Date | null = null;
@@ -79,11 +80,24 @@ export const OnlyFansAnalytics: React.FC = () => {
             }
 
             // Load content generation stats
+            const scenariosQuery = startDate 
+                ? query(collection(db, 'users', user.id, 'onlyfans_saved_scenarios'), where('savedAt', '>=', Timestamp.fromDate(startDate)))
+                : query(collection(db, 'users', user.id, 'onlyfans_saved_scenarios'));
+            const personasQuery = startDate 
+                ? query(collection(db, 'users', user.id, 'onlyfans_saved_personas'), where('savedAt', '>=', Timestamp.fromDate(startDate)))
+                : query(collection(db, 'users', user.id, 'onlyfans_saved_personas'));
+            const ratingsQuery = startDate 
+                ? query(collection(db, 'users', user.id, 'onlyfans_saved_ratings'), where('savedAt', '>=', Timestamp.fromDate(startDate)))
+                : query(collection(db, 'users', user.id, 'onlyfans_saved_ratings'));
+            const interactiveQuery = startDate 
+                ? query(collection(db, 'users', user.id, 'onlyfans_saved_interactive'), where('savedAt', '>=', Timestamp.fromDate(startDate)))
+                : query(collection(db, 'users', user.id, 'onlyfans_saved_interactive'));
+            
             const [scenarios, personas, ratings, interactive] = await Promise.all([
-                getDocs(query(collection(db, 'users', user.id, 'onlyfans_saved_scenarios'), startDate ? where('savedAt', '>=', Timestamp.fromDate(startDate)) : undefined)),
-                getDocs(query(collection(db, 'users', user.id, 'onlyfans_saved_personas'), startDate ? where('savedAt', '>=', Timestamp.fromDate(startDate)) : undefined)),
-                getDocs(query(collection(db, 'users', user.id, 'onlyfans_saved_ratings'), startDate ? where('savedAt', '>=', Timestamp.fromDate(startDate)) : undefined)),
-                getDocs(query(collection(db, 'users', user.id, 'onlyfans_saved_interactive'), startDate ? where('savedAt', '>=', Timestamp.fromDate(startDate)) : undefined)),
+                getDocs(scenariosQuery),
+                getDocs(personasQuery),
+                getDocs(ratingsQuery),
+                getDocs(interactiveQuery),
             ]);
 
             setContentStats(prev => ({
@@ -116,7 +130,10 @@ export const OnlyFansAnalytics: React.FC = () => {
             });
 
             // Load export packages
-            const packages = await getDocs(query(collection(db, 'users', user.id, 'onlyfans_export_packages'), startDate ? where('createdAt', '>=', Timestamp.fromDate(startDate)) : undefined));
+            const packagesQuery = startDate 
+                ? query(collection(db, 'users', user.id, 'onlyfans_export_packages'), where('createdAt', '>=', Timestamp.fromDate(startDate)))
+                : query(collection(db, 'users', user.id, 'onlyfans_export_packages'));
+            const packages = await getDocs(packagesQuery);
             setExportPackagesCount(packages.size);
 
             // Load calendar events
@@ -147,7 +164,25 @@ export const OnlyFansAnalytics: React.FC = () => {
 
         } catch (error) {
             console.error('Error loading analytics:', error);
-            showToast('Failed to load analytics data', 'error');
+            showToast('Failed to load analytics data. Please try again.', 'error');
+            // Set default values on error
+            setContentStats({
+                captionsGenerated: 0,
+                scenariosGenerated: 0,
+                personasGenerated: 0,
+                ratingsGenerated: 0,
+                interactivePostsGenerated: 0,
+            });
+            setMediaStats({
+                totalFiles: 0,
+                totalFolders: 0,
+                imagesCount: 0,
+                videosCount: 0,
+                aiTagsGenerated: 0,
+            });
+            setExportPackagesCount(0);
+            setCalendarEventsCount(0);
+            setPerformanceMetrics([]);
         } finally {
             setIsLoading(false);
         }
