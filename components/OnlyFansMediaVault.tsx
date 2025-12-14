@@ -860,6 +860,12 @@ const MediaEditor: React.FC<{
     const [blurSelectionEnd, setBlurSelectionEnd] = useState<{ x: number; y: number } | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const originalImageRef = useRef<HTMLImageElement | null>(null);
+    const [showFilters, setShowFilters] = useState(false);
+    const [selectedFilter, setSelectedFilter] = useState<string | null>(null);
+    const [hue, setHue] = useState(0);
+    const [sepia, setSepia] = useState(0);
+    const [grayscale, setGrayscale] = useState(0);
+    const [invert, setInvert] = useState(0);
 
     const applyFilters = useCallback(() => {
         if (!canvasRef.current) return;
@@ -871,7 +877,7 @@ const MediaEditor: React.FC<{
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
         // Draw base image with lighting filters (no blur yet)
-        ctx.filter = `brightness(${100 + brightness}%) contrast(${100 + contrast}%) saturate(${100 + saturate}%)`;
+        ctx.filter = `brightness(${100 + brightness}%) contrast(${100 + contrast}%) saturate(${100 + saturate}%) hue-rotate(${hue}deg) sepia(${sepia}%) grayscale(${grayscale}%) invert(${invert}%)`;
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         ctx.filter = 'none';
         
@@ -972,7 +978,7 @@ const MediaEditor: React.FC<{
             ctx.fillText(watermarkText, x, y);
             ctx.restore();
         }
-    }, [brightness, contrast, saturate, blur, watermarkText, watermarkPosition, watermarkOpacity, isCropping, cropStart, cropEnd, isBlurSelecting, blurSelectionStart, blurSelectionEnd, blurSelection]);
+    }, [brightness, contrast, saturate, blur, watermarkText, watermarkPosition, watermarkOpacity, isCropping, cropStart, cropEnd, isBlurSelecting, blurSelectionStart, blurSelectionEnd, blurSelection, hue, sepia, grayscale, invert]);
 
     useEffect(() => {
         const img = new Image();
@@ -1205,6 +1211,86 @@ const MediaEditor: React.FC<{
 
                         {/* Editing Controls */}
                         <div className="space-y-6">
+                            {/* Filters Section - Large Scrollable */}
+                            {showFilters && (
+                                <div className="mb-6">
+                                    <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Filters</h4>
+                                    <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 max-h-[400px] overflow-y-auto">
+                                        <div className="grid grid-cols-4 gap-3">
+                                            {[
+                                                { name: 'None', brightness: 0, contrast: 0, saturate: 0, hue: 0, sepia: 0, grayscale: 0, invert: 0 },
+                                                { name: 'Vintage', brightness: 5, contrast: 10, saturate: -20, hue: 15, sepia: 30, grayscale: 0, invert: 0 },
+                                                { name: 'B&W', brightness: 0, contrast: 15, saturate: -100, hue: 0, sepia: 0, grayscale: 100, invert: 0 },
+                                                { name: 'Sepia', brightness: 5, contrast: 10, saturate: -50, hue: 0, sepia: 80, grayscale: 0, invert: 0 },
+                                                { name: 'Cool', brightness: 5, contrast: 5, saturate: 20, hue: -15, sepia: 0, grayscale: 0, invert: 0 },
+                                                { name: 'Warm', brightness: 10, contrast: 5, saturate: 30, hue: 25, sepia: 10, grayscale: 0, invert: 0 },
+                                                { name: 'Dramatic', brightness: -10, contrast: 40, saturate: 30, hue: 0, sepia: 0, grayscale: 0, invert: 0 },
+                                                { name: 'Vibrant', brightness: 10, contrast: 20, saturate: 50, hue: 0, sepia: 0, grayscale: 0, invert: 0 },
+                                                { name: 'Soft', brightness: 15, contrast: -15, saturate: -10, hue: 0, sepia: 0, grayscale: 0, invert: 0 },
+                                                { name: 'Sharp', brightness: 5, contrast: 50, saturate: 10, hue: 0, sepia: 0, grayscale: 0, invert: 0 },
+                                                { name: 'Faded', brightness: 20, contrast: -30, saturate: -30, hue: 0, sepia: 0, grayscale: 0, invert: 0 },
+                                                { name: 'Moody', brightness: -20, contrast: 30, saturate: -20, hue: 0, sepia: 20, grayscale: 20, invert: 0 },
+                                                { name: 'Sunset', brightness: 15, contrast: 20, saturate: 40, hue: 30, sepia: 15, grayscale: 0, invert: 0 },
+                                                { name: 'Cinema', brightness: -5, contrast: 35, saturate: 25, hue: -5, sepia: 10, grayscale: 0, invert: 0 },
+                                                { name: 'Noir', brightness: -15, contrast: 50, saturate: -100, hue: 0, sepia: 0, grayscale: 100, invert: 0 },
+                                                { name: 'Pop', brightness: 20, contrast: 25, saturate: 60, hue: 5, sepia: 0, grayscale: 0, invert: 0 },
+                                                { name: 'Classic', brightness: 5, contrast: 15, saturate: -15, hue: 0, sepia: 50, grayscale: 0, invert: 0 },
+                                                { name: 'Bleach', brightness: 30, contrast: 15, saturate: -40, hue: 0, sepia: 0, grayscale: 0, invert: 0 },
+                                                { name: 'Invert', brightness: 0, contrast: 0, saturate: 0, hue: 0, sepia: 0, grayscale: 0, invert: 100 },
+                                                { name: 'Cool Blue', brightness: 5, contrast: 10, saturate: 25, hue: -30, sepia: 0, grayscale: 0, invert: 0 },
+                                                { name: 'Warm Gold', brightness: 15, contrast: 20, saturate: 40, hue: 40, sepia: 25, grayscale: 0, invert: 0 },
+                                                { name: 'Pink Dream', brightness: 15, contrast: 10, saturate: 35, hue: 10, sepia: 5, grayscale: 0, invert: 0 },
+                                                { name: 'Green Chill', brightness: 5, contrast: 15, saturate: 30, hue: -45, sepia: 0, grayscale: 0, invert: 0 },
+                                                { name: 'Purple Haze', brightness: 10, contrast: 15, saturate: 35, hue: 60, sepia: 0, grayscale: 0, invert: 0 },
+                                                { name: 'Orange Glow', brightness: 15, contrast: 25, saturate: 45, hue: 20, sepia: 15, grayscale: 0, invert: 0 },
+                                            ].map((filter) => (
+                                                <button
+                                                    key={filter.name}
+                                                    onClick={() => {
+                                                        setBrightness(filter.brightness);
+                                                        setContrast(filter.contrast);
+                                                        setSaturate(filter.saturate);
+                                                        setHue(filter.hue);
+                                                        setSepia(filter.sepia);
+                                                        setGrayscale(filter.grayscale);
+                                                        setInvert(filter.invert);
+                                                        setSelectedFilter(filter.name);
+                                                    }}
+                                                    className={`p-2 rounded-lg border-2 transition-all ${
+                                                        selectedFilter === filter.name
+                                                            ? 'border-purple-600 bg-purple-100 dark:bg-purple-900/30'
+                                                            : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
+                                                    }`}
+                                                >
+                                                    <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 truncate">
+                                                        {filter.name}
+                                                    </div>
+                                                    <div className="w-full h-16 rounded bg-gray-200 dark:bg-gray-700 overflow-hidden relative">
+                                                        {imageRef.current && imageRef.current.complete ? (
+                                                            <img
+                                                                src={imageRef.current.src}
+                                                                alt={filter.name}
+                                                                className="w-full h-full object-cover"
+                                                                style={{
+                                                                    filter: `brightness(${100 + filter.brightness}%) contrast(${100 + filter.contrast}%) saturate(${100 + filter.saturate}%) hue-rotate(${filter.hue}deg) sepia(${filter.sepia}%) grayscale(${filter.grayscale}%) invert(${filter.invert}%)`
+                                                                }}
+                                                            />
+                                                        ) : (
+                                                            <div 
+                                                                className="w-full h-full"
+                                                                style={{
+                                                                    filter: `brightness(${100 + filter.brightness}%) contrast(${100 + filter.contrast}%) saturate(${100 + filter.saturate}%) hue-rotate(${filter.hue}deg) sepia(${filter.sepia}%) grayscale(${filter.grayscale}%) invert(${filter.invert}%)`,
+                                                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                                                                }}
+                                                            />
+                                                        )}
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                             {/* Lighting */}
                             <div>
                                 <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Lighting</h4>
@@ -1380,6 +1466,20 @@ const MediaEditor: React.FC<{
                                 </button>
                             </div>
 
+                            {/* Filters */}
+                            <div>
+                                <button
+                                    onClick={() => setShowFilters(!showFilters)}
+                                    className={`w-full px-4 py-2 rounded-md text-sm font-medium ${
+                                        showFilters
+                                            ? 'bg-purple-600 text-white'
+                                            : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'
+                                    }`}
+                                >
+                                    {showFilters ? 'Hide Filters' : 'Show Filters'}
+                                </button>
+                            </div>
+
                             {/* Reset */}
                             <div>
                                 <button
@@ -1390,6 +1490,11 @@ const MediaEditor: React.FC<{
                                         setBlur(0);
                                         setWatermarkText('');
                                         setIsCropping(false);
+                                        setHue(0);
+                                        setSepia(0);
+                                        setGrayscale(0);
+                                        setInvert(0);
+                                        setSelectedFilter(null);
                                     }}
                                     className="w-full px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 text-sm font-medium"
                                 >
