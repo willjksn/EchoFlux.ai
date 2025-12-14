@@ -748,11 +748,13 @@ export const BioPageBuilder: React.FC = () => {
                         <div className="grid grid-cols-3 gap-3 mb-4">
                             {bioPage.teaserImages.map((imageUrl, index) => (
                                 <div key={index} className="relative group">
-                                    <img
-                                        src={imageUrl}
-                                        alt={`Teaser ${index + 1}`}
-                                        className="w-full h-32 object-cover rounded-lg border-2 border-gray-200 dark:border-gray-700"
-                                    />
+                                    <div className="w-full h-32 bg-gray-100 dark:bg-gray-700 rounded-lg border-2 border-gray-200 dark:border-gray-700 flex items-center justify-center overflow-hidden">
+                                        <img
+                                            src={imageUrl}
+                                            alt={`Teaser ${index + 1}`}
+                                            className="w-full h-full object-contain rounded-lg"
+                                        />
+                                    </div>
                                     <button
                                         onClick={() => handleRemoveTeaserImage(index)}
                                         className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
