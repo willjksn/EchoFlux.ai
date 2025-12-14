@@ -854,7 +854,12 @@ const MediaEditor: React.FC<{
     const [cropStart, setCropStart] = useState<{ x: number; y: number } | null>(null);
     const [cropEnd, setCropEnd] = useState<{ x: number; y: number } | null>(null);
     const [isCropping, setIsCropping] = useState(false);
+    const [isBlurSelecting, setIsBlurSelecting] = useState(false);
+    const [blurSelection, setBlurSelection] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+    const [blurSelectionStart, setBlurSelectionStart] = useState<{ x: number; y: number } | null>(null);
+    const [blurSelectionEnd, setBlurSelectionEnd] = useState<{ x: number; y: number } | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const originalImageRef = useRef<HTMLImageElement | null>(null);
 
     const applyFilters = useCallback(() => {
         if (!canvasRef.current) return;
@@ -865,12 +870,69 @@ const MediaEditor: React.FC<{
         const img = imageRef.current;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
-        // Apply filters
-        ctx.filter = `brightness(${100 + brightness}%) contrast(${100 + contrast}%) saturate(${100 + saturate}%) blur(${blur}px)`;
+        // Draw base image with lighting filters (no blur yet)
+        ctx.filter = `brightness(${100 + brightness}%) contrast(${100 + contrast}%) saturate(${100 + saturate}%)`;
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        
-        // Reset filter for watermark
         ctx.filter = 'none';
+        
+        // Apply selective blur if there's a blur selection
+        if (blurSelection && blur > 0) {
+            const { x, y, width, height } = blurSelection;
+            // Ensure coordinates are within canvas bounds
+            const safeX = Math.max(0, Math.min(x, canvas.width));
+            const safeY = Math.max(0, Math.min(y, canvas.height));
+            const safeWidth = Math.min(width, canvas.width - safeX);
+            const safeHeight = Math.min(height, canvas.height - safeY);
+            
+            if (safeWidth > 0 && safeHeight > 0) {
+                // Get the selected area
+                const imageData = ctx.getImageData(safeX, safeY, safeWidth, safeHeight);
+                
+                // Create a temporary canvas for the blurred area
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = safeWidth;
+                tempCanvas.height = safeHeight;
+                const tempCtx = tempCanvas.getContext('2d');
+                if (tempCtx) {
+                    tempCtx.putImageData(imageData, 0, 0);
+                    // Apply blur to the temp canvas
+                    tempCtx.filter = `blur(${blur}px)`;
+                    tempCtx.drawImage(tempCanvas, 0, 0);
+                    tempCtx.filter = 'none';
+                    
+                    // Draw the blurred area back onto the main canvas
+                    ctx.drawImage(tempCanvas, safeX, safeY);
+                }
+            }
+        }
+        
+        // Draw crop rectangle if cropping
+        if (isCropping && cropStart && cropEnd) {
+            const x = Math.min(cropStart.x, cropEnd.x);
+            const y = Math.min(cropStart.y, cropEnd.y);
+            const width = Math.abs(cropEnd.x - cropStart.x);
+            const height = Math.abs(cropEnd.y - cropStart.y);
+            
+            ctx.strokeStyle = '#3b82f6';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.strokeRect(x, y, width, height);
+            ctx.setLineDash([]);
+        }
+        
+        // Draw blur selection rectangle if selecting
+        if (isBlurSelecting && blurSelectionStart && blurSelectionEnd) {
+            const x = Math.min(blurSelectionStart.x, blurSelectionEnd.x);
+            const y = Math.min(blurSelectionStart.y, blurSelectionEnd.y);
+            const width = Math.abs(blurSelectionEnd.x - blurSelectionStart.x);
+            const height = Math.abs(blurSelectionEnd.y - blurSelectionStart.y);
+            
+            ctx.strokeStyle = '#ef4444';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.strokeRect(x, y, width, height);
+            ctx.setLineDash([]);
+        }
         
         // Apply watermark
         if (watermarkText) {
@@ -910,7 +972,7 @@ const MediaEditor: React.FC<{
             ctx.fillText(watermarkText, x, y);
             ctx.restore();
         }
-    }, [brightness, contrast, saturate, blur, watermarkText, watermarkPosition, watermarkOpacity]);
+    }, [brightness, contrast, saturate, blur, watermarkText, watermarkPosition, watermarkOpacity, isCropping, cropStart, cropEnd, isBlurSelecting, blurSelectionStart, blurSelectionEnd, blurSelection]);
 
     useEffect(() => {
         const img = new Image();
@@ -923,6 +985,7 @@ const MediaEditor: React.FC<{
                 
                 canvas.width = img.width;
                 canvas.height = img.height;
+                originalImageRef.current = img;
                 imageRef.current.src = item.url;
                 imageRef.current.onload = () => {
                     applyFilters();
@@ -940,6 +1003,7 @@ const MediaEditor: React.FC<{
                     
                     canvas.width = img2.width;
                     canvas.height = img2.height;
+                    originalImageRef.current = img2;
                     imageRef.current.src = item.url;
                     imageRef.current.onload = () => {
                         applyFilters();
@@ -957,21 +1021,69 @@ const MediaEditor: React.FC<{
         }
     }, [applyFilters]);
 
+    const getScaledCoordinates = (displayX: number, displayY: number) => {
+        if (!canvasRef.current) return { x: 0, y: 0 };
+        const canvas = canvasRef.current;
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        return {
+            x: displayX * scaleX,
+            y: displayY * scaleY
+        };
+    };
+
     const handleCrop = () => {
-        if (!canvasRef.current || !cropStart || !cropEnd) return;
+        if (!canvasRef.current || !cropStart || !cropEnd || !originalImageRef.current) return;
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        const x = Math.min(cropStart.x, cropEnd.x);
-        const y = Math.min(cropStart.y, cropEnd.y);
-        const width = Math.abs(cropEnd.x - cropStart.x);
-        const height = Math.abs(cropEnd.y - cropStart.y);
+        // Get actual canvas coordinates (scaled from display)
+        const start = getScaledCoordinates(cropStart.x, cropStart.y);
+        const end = getScaledCoordinates(cropEnd.x, cropEnd.y);
 
-        const imageData = ctx.getImageData(x, y, width, height);
+        const x = Math.min(start.x, end.x);
+        const y = Math.min(start.y, end.y);
+        const width = Math.abs(end.x - start.x);
+        const height = Math.abs(end.y - start.y);
+
+        if (width < 10 || height < 10) {
+            setCropStart(null);
+            setCropEnd(null);
+            setIsCropping(false);
+            return;
+        }
+
+        // Create a new canvas with the cropped dimensions
+        const croppedCanvas = document.createElement('canvas');
+        croppedCanvas.width = width;
+        croppedCanvas.height = height;
+        const croppedCtx = croppedCanvas.getContext('2d');
+        if (!croppedCtx) return;
+
+        // Draw the cropped portion from the original image
+        croppedCtx.drawImage(
+            originalImageRef.current,
+            x, y, width, height,
+            0, 0, width, height
+        );
+
+        // Resize the main canvas and draw the cropped image
         canvas.width = width;
         canvas.height = height;
-        ctx.putImageData(imageData, 0, 0);
+        ctx.drawImage(croppedCanvas, 0, 0);
+        
+        // Update the original image reference
+        const newImg = new Image();
+        newImg.onload = () => {
+            originalImageRef.current = newImg;
+            imageRef.current!.src = croppedCanvas.toDataURL();
+            imageRef.current!.onload = () => {
+                applyFilters();
+            };
+        };
+        newImg.src = croppedCanvas.toDataURL();
         
         setCropStart(null);
         setCropEnd(null);
@@ -1014,25 +1126,54 @@ const MediaEditor: React.FC<{
     };
 
     const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-        if (!isCropping || !canvasRef.current) return;
+        if (!canvasRef.current) return;
         const rect = canvasRef.current.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
-        setCropStart({ x, y });
-        setCropEnd({ x, y });
+        
+        if (isCropping) {
+            setCropStart({ x, y });
+            setCropEnd({ x, y });
+        } else if (isBlurSelecting) {
+            setBlurSelectionStart({ x, y });
+            setBlurSelectionEnd({ x, y });
+        }
     };
 
     const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-        if (!isCropping || !cropStart || !canvasRef.current) return;
+        if (!canvasRef.current) return;
         const rect = canvasRef.current.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
-        setCropEnd({ x, y });
+        
+        if (isCropping && cropStart) {
+            setCropEnd({ x, y });
+        } else if (isBlurSelecting && blurSelectionStart) {
+            setBlurSelectionEnd({ x, y });
+        }
     };
 
     const handleCanvasMouseUp = () => {
         if (isCropping && cropStart && cropEnd) {
             handleCrop();
+        } else if (isBlurSelecting && blurSelectionStart && blurSelectionEnd) {
+            // Calculate blur selection area (scaled to actual canvas size)
+            const start = getScaledCoordinates(blurSelectionStart.x, blurSelectionStart.y);
+            const end = getScaledCoordinates(blurSelectionEnd.x, blurSelectionEnd.y);
+            
+            const x = Math.min(start.x, end.x);
+            const y = Math.min(start.y, end.y);
+            const width = Math.abs(end.x - start.x);
+            const height = Math.abs(end.y - start.y);
+            
+            if (width > 10 && height > 10) {
+                setBlurSelection({ x, y, width, height });
+            }
+            
+            setBlurSelectionStart(null);
+            setBlurSelectionEnd(null);
+            setIsBlurSelecting(false);
+            applyFilters();
         }
     };
 
@@ -1113,18 +1254,47 @@ const MediaEditor: React.FC<{
                             {/* Blur */}
                             <div>
                                 <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Blur</h4>
-                                <div>
-                                    <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">
-                                        Blur Amount: {blur}px
-                                    </label>
-                                    <input
-                                        type="range"
-                                        min="0"
-                                        max="20"
-                                        value={blur}
-                                        onChange={(e) => setBlur(Number(e.target.value))}
-                                        className="w-full"
-                                    />
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">
+                                            Blur Amount: {blur}px
+                                        </label>
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="20"
+                                            value={blur}
+                                            onChange={(e) => setBlur(Number(e.target.value))}
+                                            className="w-full"
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            setIsBlurSelecting(!isBlurSelecting);
+                                            if (isBlurSelecting) {
+                                                setBlurSelection(null);
+                                            }
+                                            setIsCropping(false);
+                                        }}
+                                        className={`w-full px-4 py-2 rounded-md text-sm font-medium ${
+                                            isBlurSelecting
+                                                ? 'bg-red-600 text-white'
+                                                : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'
+                                        }`}
+                                    >
+                                        {isBlurSelecting ? 'Click and drag to select area' : 'Select Area to Blur'}
+                                    </button>
+                                    {blurSelection && (
+                                        <button
+                                            onClick={() => {
+                                                setBlurSelection(null);
+                                                applyFilters();
+                                            }}
+                                            className="w-full px-4 py-2 rounded-md text-sm font-medium bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600"
+                                        >
+                                            Clear Blur Selection
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 
@@ -1132,7 +1302,14 @@ const MediaEditor: React.FC<{
                             <div>
                                 <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Crop</h4>
                                 <button
-                                    onClick={() => setIsCropping(!isCropping)}
+                                    onClick={() => {
+                                        setIsCropping(!isCropping);
+                                        if (isCropping) {
+                                            setCropStart(null);
+                                            setCropEnd(null);
+                                        }
+                                        setIsBlurSelecting(false);
+                                    }}
                                     className={`w-full px-4 py-2 rounded-md text-sm font-medium ${
                                         isCropping
                                             ? 'bg-primary-600 text-white'
@@ -1141,6 +1318,17 @@ const MediaEditor: React.FC<{
                                 >
                                     {isCropping ? 'Click and drag to crop' : 'Enable Crop Tool'}
                                 </button>
+                                {isCropping && cropStart && cropEnd && (
+                                    <button
+                                        onClick={() => {
+                                            setCropStart(null);
+                                            setCropEnd(null);
+                                        }}
+                                        className="w-full mt-2 px-4 py-2 rounded-md text-sm font-medium bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600"
+                                    >
+                                        Cancel Crop
+                                    </button>
+                                )}
                             </div>
 
                             {/* Watermark */}
