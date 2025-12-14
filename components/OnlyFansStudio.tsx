@@ -114,6 +114,20 @@ export const OnlyFansStudio: React.FC = () => {
         );
     }
 
+    if (activeView === 'mediaVault') {
+        return (
+            <div className="max-w-7xl mx-auto">
+                <button
+                    onClick={() => setActiveView('dashboard')}
+                    className="mb-4 text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
+                >
+                    ← Back to OnlyFans Studio
+                </button>
+                <OnlyFansMediaVault />
+            </div>
+        );
+    }
+
     return (
         <div className="max-w-7xl mx-auto">
             {/* Header */}
