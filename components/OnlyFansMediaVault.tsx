@@ -33,6 +33,8 @@ export const OnlyFansMediaVault: React.FC = () => {
     const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
     const [editingItem, setEditingItem] = useState<OnlyFansMediaItem | null>(null);
     const [isGeneratingTags, setIsGeneratingTags] = useState(false);
+    const [showEditor, setShowEditor] = useState(false);
+    const [editorItem, setEditorItem] = useState<OnlyFansMediaItem | null>(null);
 
     // Initialize default OnlyFans folders
     useEffect(() => {
@@ -525,7 +527,11 @@ export const OnlyFansMediaVault: React.FC = () => {
                                     onSelect={() => handleSelectItem(item.id)}
                                     onDelete={() => handleDelete(item.id)}
                                     onView={() => setViewingItem(item)}
-                                    onEdit={() => setEditingItem(item)}
+                                    onEdit={() => {
+                                        setEditorItem(item);
+                                        setShowEditor(true);
+                                        setViewingItem(null);
+                                    }}
                                     onGenerateTags={() => handleGenerateAITags(item)}
                                     onMoveToFolder={(folderId) => handleMoveToFolder(item.id, folderId)}
                                     folders={folders}
@@ -539,7 +545,7 @@ export const OnlyFansMediaVault: React.FC = () => {
             </div>
 
             {/* View/Edit Modal */}
-            {viewingItem && (
+            {viewingItem && !showEditor && (
                 <MediaViewModal
                     item={viewingItem}
                     onClose={() => setViewingItem(null)}
@@ -554,6 +560,48 @@ export const OnlyFansMediaVault: React.FC = () => {
                     }}
                     folders={folders}
                     isGeneratingTags={isGeneratingTags}
+                />
+            )}
+
+            {/* Media Editor Modal */}
+            {showEditor && editorItem && editorItem.type === 'image' && (
+                <MediaEditor
+                    item={editorItem}
+                    onClose={() => {
+                        setShowEditor(false);
+                        setEditorItem(null);
+                    }}
+                    onSave={async (editedImageUrl: string) => {
+                        if (!user) return;
+                        try {
+                            // Upload edited image to Firebase Storage
+                            const response = await fetch(editedImageUrl);
+                            const blob = await response.blob();
+                            const timestamp = Date.now();
+                            const storagePath = `users/${user.id}/onlyfans_media_library/${timestamp}_edited_${editorItem.name}`;
+                            const storageRef = ref(storage, storagePath);
+                            await uploadBytes(storageRef, blob);
+                            const newUrl = await getDownloadURL(storageRef);
+                            
+                            // Update Firestore with new URL
+                            await updateDoc(doc(db, 'users', user.id, 'onlyfans_media_library', editorItem.id), {
+                                url: newUrl,
+                                editedAt: new Date().toISOString(),
+                            });
+                            
+                            // Update local state
+                            setMediaItems(prev => prev.map(m => 
+                                m.id === editorItem.id ? { ...m, url: newUrl } : m
+                            ));
+                            
+                            setShowEditor(false);
+                            setEditorItem(null);
+                            showToast('Image edited and saved successfully!', 'success');
+                        } catch (error) {
+                            console.error('Error saving edited image:', error);
+                            showToast('Failed to save edited image', 'error');
+                        }
+                    }}
                 />
             )}
 
@@ -758,11 +806,411 @@ const MediaViewModal: React.FC<{
                     {/* Actions */}
                     <div className="flex gap-2">
                         <button
+                            onClick={() => {
+                                setShowEditor(true);
+                                onClose();
+                            }}
+                            className="px-4 py-2 text-sm border border-primary-300 dark:border-primary-700 text-primary-700 dark:text-primary-400 rounded-md hover:bg-primary-50 dark:hover:bg-primary-900/30 flex items-center gap-2"
+                        >
+                            <EditIcon className="w-4 h-4" />
+                            Edit Image
+                        </button>
+                        <button
                             onClick={onDelete}
                             className="px-4 py-2 text-sm border border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-900/30"
                         >
                             Delete
                         </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Media Editor Component
+const MediaEditor: React.FC<{
+    item: OnlyFansMediaItem;
+    onClose: () => void;
+    onSave: (editedImageUrl: string) => Promise<void>;
+}> = ({ item, onClose, onSave }) => {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const imageRef = useRef<HTMLImageElement>(null);
+    const [brightness, setBrightness] = useState(0);
+    const [contrast, setContrast] = useState(0);
+    const [saturate, setSaturate] = useState(0);
+    const [blur, setBlur] = useState(0);
+    const [watermarkText, setWatermarkText] = useState('');
+    const [watermarkPosition, setWatermarkPosition] = useState<'bottom-right' | 'bottom-left' | 'top-right' | 'top-left'>('bottom-right');
+    const [watermarkOpacity, setWatermarkOpacity] = useState(0.7);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [cropStart, setCropStart] = useState<{ x: number; y: number } | null>(null);
+    const [cropEnd, setCropEnd] = useState<{ x: number; y: number } | null>(null);
+    const [isCropping, setIsCropping] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    const applyFilters = useCallback(() => {
+        if (!canvasRef.current) return;
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        if (!ctx || !imageRef.current || !imageRef.current.complete) return;
+
+        const img = imageRef.current;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Apply filters
+        ctx.filter = `brightness(${100 + brightness}%) contrast(${100 + contrast}%) saturate(${100 + saturate}%) blur(${blur}px)`;
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        
+        // Reset filter for watermark
+        ctx.filter = 'none';
+        
+        // Apply watermark
+        if (watermarkText) {
+            ctx.save();
+            ctx.globalAlpha = watermarkOpacity;
+            ctx.font = 'bold 24px Arial';
+            ctx.fillStyle = 'white';
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+            const metrics = ctx.measureText(watermarkText);
+            const textWidth = metrics.width;
+            const textHeight = 30;
+            
+            let x = 0;
+            let y = 0;
+            
+            switch (watermarkPosition) {
+                case 'bottom-right':
+                    x = canvas.width - textWidth - 20;
+                    y = canvas.height - 20;
+                    break;
+                case 'bottom-left':
+                    x = 20;
+                    y = canvas.height - 20;
+                    break;
+                case 'top-right':
+                    x = canvas.width - textWidth - 20;
+                    y = textHeight;
+                    break;
+                case 'top-left':
+                    x = 20;
+                    y = textHeight;
+                    break;
+            }
+            
+            ctx.strokeText(watermarkText, x, y);
+            ctx.fillText(watermarkText, x, y);
+            ctx.restore();
+        }
+    }, [brightness, contrast, saturate, blur, watermarkText, watermarkPosition, watermarkOpacity]);
+
+    useEffect(() => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+            if (canvasRef.current && imageRef.current) {
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return;
+                
+                canvas.width = img.width;
+                canvas.height = img.height;
+                imageRef.current.src = item.url;
+                imageRef.current.onload = () => {
+                    applyFilters();
+                };
+            }
+        };
+        img.onerror = () => {
+            // If crossOrigin fails, try without it
+            const img2 = new Image();
+            img2.onload = () => {
+                if (canvasRef.current && imageRef.current) {
+                    const canvas = canvasRef.current;
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) return;
+                    
+                    canvas.width = img2.width;
+                    canvas.height = img2.height;
+                    imageRef.current.src = item.url;
+                    imageRef.current.onload = () => {
+                        applyFilters();
+                    };
+                }
+            };
+            img2.src = item.url;
+        };
+        img.src = item.url;
+    }, [item.url, applyFilters]);
+
+    useEffect(() => {
+        if (imageRef.current?.complete) {
+            applyFilters();
+        }
+    }, [applyFilters]);
+
+    const handleCrop = () => {
+        if (!canvasRef.current || !cropStart || !cropEnd) return;
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const x = Math.min(cropStart.x, cropEnd.x);
+        const y = Math.min(cropStart.y, cropEnd.y);
+        const width = Math.abs(cropEnd.x - cropStart.x);
+        const height = Math.abs(cropEnd.y - cropStart.y);
+
+        const imageData = ctx.getImageData(x, y, width, height);
+        canvas.width = width;
+        canvas.height = height;
+        ctx.putImageData(imageData, 0, 0);
+        
+        setCropStart(null);
+        setCropEnd(null);
+        setIsCropping(false);
+    };
+
+    const handleGenerateThumbnail = () => {
+        if (!canvasRef.current) return;
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const thumbnailSize = 300;
+        const thumbnailCanvas = document.createElement('canvas');
+        thumbnailCanvas.width = thumbnailSize;
+        thumbnailCanvas.height = thumbnailSize;
+        const thumbnailCtx = thumbnailCanvas.getContext('2d');
+        if (!thumbnailCtx) return;
+
+        thumbnailCtx.drawImage(canvas, 0, 0, thumbnailSize, thumbnailSize);
+        const thumbnailUrl = thumbnailCanvas.toDataURL('image/jpeg', 0.9);
+        
+        const link = document.createElement('a');
+        link.download = `thumbnail_${item.name}`;
+        link.href = thumbnailUrl;
+        link.click();
+    };
+
+    const handleSave = async () => {
+        if (!canvasRef.current) return;
+        setIsProcessing(true);
+        try {
+            const dataUrl = canvasRef.current.toDataURL('image/jpeg', 0.9);
+            await onSave(dataUrl);
+        } catch (error) {
+            console.error('Error saving:', error);
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+        if (!isCropping || !canvasRef.current) return;
+        const rect = canvasRef.current.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        setCropStart({ x, y });
+        setCropEnd({ x, y });
+    };
+
+    const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+        if (!isCropping || !cropStart || !canvasRef.current) return;
+        const rect = canvasRef.current.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        setCropEnd({ x, y });
+    };
+
+    const handleCanvasMouseUp = () => {
+        if (isCropping && cropStart && cropEnd) {
+            handleCrop();
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Edit Image: {item.name}</h3>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                        <XMarkIcon className="w-6 h-6" />
+                    </button>
+                </div>
+                
+                <div className="p-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {/* Canvas Preview */}
+                        <div className="lg:col-span-2">
+                            <div className="bg-gray-100 dark:bg-gray-900 rounded-lg p-4 flex items-center justify-center" ref={containerRef}>
+                                <canvas
+                                    ref={canvasRef}
+                                    className="max-w-full max-h-[600px] cursor-crosshair"
+                                    onMouseDown={handleCanvasMouseDown}
+                                    onMouseMove={handleCanvasMouseMove}
+                                    onMouseUp={handleCanvasMouseUp}
+                                />
+                                <img ref={imageRef} className="hidden" alt="Source" />
+                            </div>
+                        </div>
+
+                        {/* Editing Controls */}
+                        <div className="space-y-6">
+                            {/* Lighting */}
+                            <div>
+                                <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Lighting</h4>
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">
+                                            Brightness: {brightness > 0 ? '+' : ''}{brightness}%
+                                        </label>
+                                        <input
+                                            type="range"
+                                            min="-100"
+                                            max="100"
+                                            value={brightness}
+                                            onChange={(e) => setBrightness(Number(e.target.value))}
+                                            className="w-full"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">
+                                            Contrast: {contrast > 0 ? '+' : ''}{contrast}%
+                                        </label>
+                                        <input
+                                            type="range"
+                                            min="-100"
+                                            max="100"
+                                            value={contrast}
+                                            onChange={(e) => setContrast(Number(e.target.value))}
+                                            className="w-full"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">
+                                            Saturation: {saturate > 0 ? '+' : ''}{saturate}%
+                                        </label>
+                                        <input
+                                            type="range"
+                                            min="-100"
+                                            max="100"
+                                            value={saturate}
+                                            onChange={(e) => setSaturate(Number(e.target.value))}
+                                            className="w-full"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Blur */}
+                            <div>
+                                <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Blur</h4>
+                                <div>
+                                    <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">
+                                        Blur Amount: {blur}px
+                                    </label>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="20"
+                                        value={blur}
+                                        onChange={(e) => setBlur(Number(e.target.value))}
+                                        className="w-full"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Crop */}
+                            <div>
+                                <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Crop</h4>
+                                <button
+                                    onClick={() => setIsCropping(!isCropping)}
+                                    className={`w-full px-4 py-2 rounded-md text-sm font-medium ${
+                                        isCropping
+                                            ? 'bg-primary-600 text-white'
+                                            : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'
+                                    }`}
+                                >
+                                    {isCropping ? 'Click and drag to crop' : 'Enable Crop Tool'}
+                                </button>
+                            </div>
+
+                            {/* Watermark */}
+                            <div>
+                                <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Watermark</h4>
+                                <div className="space-y-3">
+                                    <input
+                                        type="text"
+                                        value={watermarkText}
+                                        onChange={(e) => setWatermarkText(e.target.value)}
+                                        placeholder="Watermark text"
+                                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                                    />
+                                    <select
+                                        value={watermarkPosition}
+                                        onChange={(e) => setWatermarkPosition(e.target.value as any)}
+                                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                                    >
+                                        <option value="bottom-right">Bottom Right</option>
+                                        <option value="bottom-left">Bottom Left</option>
+                                        <option value="top-right">Top Right</option>
+                                        <option value="top-left">Top Left</option>
+                                    </select>
+                                    <div>
+                                        <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">
+                                            Opacity: {Math.round(watermarkOpacity * 100)}%
+                                        </label>
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="1"
+                                            step="0.1"
+                                            value={watermarkOpacity}
+                                            onChange={(e) => setWatermarkOpacity(Number(e.target.value))}
+                                            className="w-full"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Thumbnail */}
+                            <div>
+                                <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Thumbnail</h4>
+                                <button
+                                    onClick={handleGenerateThumbnail}
+                                    className="w-full px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 text-sm font-medium"
+                                >
+                                    Generate Thumbnail
+                                </button>
+                            </div>
+
+                            {/* Reset */}
+                            <div>
+                                <button
+                                    onClick={() => {
+                                        setBrightness(0);
+                                        setContrast(0);
+                                        setSaturate(0);
+                                        setBlur(0);
+                                        setWatermarkText('');
+                                        setIsCropping(false);
+                                    }}
+                                    className="w-full px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 text-sm font-medium"
+                                >
+                                    Reset All
+                                </button>
+                            </div>
+
+                            {/* Save Button */}
+                            <button
+                                onClick={handleSave}
+                                disabled={isProcessing}
+                                className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 font-medium"
+                            >
+                                {isProcessing ? 'Saving...' : 'Save Edited Image'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
