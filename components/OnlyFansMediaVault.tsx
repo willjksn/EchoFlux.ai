@@ -246,13 +246,14 @@ export const OnlyFansMediaVault: React.FC = () => {
 
         try {
             const deletePromises = Array.from(selectedItems).map(id => 
-                deleteDoc(doc(db, 'users', user.id, 'media_library', id))
+                deleteDoc(doc(db, 'users', user.id, 'onlyfans_media_library', id))
             );
             
             await Promise.all(deletePromises);
             setMediaItems(prev => prev.filter(m => !selectedItems.has(m.id)));
+            const count = selectedItems.size;
             setSelectedItems(new Set());
-            showToast(`Deleted ${selectedItems.size} item(s)`, 'success');
+            showToast(`Deleted ${count} item(s)`, 'success');
         } catch (error) {
             console.error('Failed to delete media:', error);
             showToast('Failed to delete media', 'error');
@@ -331,7 +332,7 @@ export const OnlyFansMediaVault: React.FC = () => {
         if (!user) return;
 
         try {
-            await updateDoc(doc(db, 'users', user.id, 'media_library', itemId), {
+            await updateDoc(doc(db, 'users', user.id, 'onlyfans_media_library', itemId), {
                 folderId,
             });
 
@@ -698,17 +699,22 @@ const MediaItemCard: React.FC<{
 
             {/* Selection checkbox */}
             <div
+                className="absolute top-2 left-2 z-10"
                 onClick={(e) => {
                     e.stopPropagation();
-                    onSelect();
                 }}
-                className="absolute top-2 left-2"
             >
                 <input
                     type="checkbox"
                     checked={isSelected}
-                    onChange={onSelect}
-                    className="w-4 h-4 text-primary-600 rounded"
+                    onChange={(e) => {
+                        e.stopPropagation();
+                        onSelect();
+                    }}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                    }}
+                    className="w-4 h-4 text-primary-600 rounded cursor-pointer"
                 />
             </div>
 
