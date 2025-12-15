@@ -874,7 +874,7 @@ const MediaEditor: React.FC<{
     const [grayscale, setGrayscale] = useState(0);
     const [invert, setInvert] = useState(0);
 
-    const applyFilters = useCallback(() => {
+    const applyFilters = useCallback((skipSelectionRendering = false) => {
         if (!canvasRef.current) return;
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
@@ -941,27 +941,27 @@ const MediaEditor: React.FC<{
             }
         }
         
-        // Draw crop rectangle if cropping
-        if (isCropping && cropStart && cropEnd) {
+        // Draw crop rectangle if cropping (only if not skipping selection rendering during drag)
+        if (!skipSelectionRendering && isCropping && cropStart && cropEnd) {
             const x = Math.min(cropStart.x, cropEnd.x);
             const y = Math.min(cropStart.y, cropEnd.y);
             const width = Math.abs(cropEnd.x - cropStart.x);
             const height = Math.abs(cropEnd.y - cropStart.y);
-            
+
             ctx.strokeStyle = '#3b82f6';
             ctx.lineWidth = 2;
             ctx.setLineDash([5, 5]);
             ctx.strokeRect(x, y, width, height);
             ctx.setLineDash([]);
         }
-        
-        // Draw blur selection rectangle if selecting
-        if (isBlurSelecting && blurSelectionStart && blurSelectionEnd) {
+
+        // Draw blur selection rectangle if selecting (only if not skipping selection rendering during drag)
+        if (!skipSelectionRendering && isBlurSelecting && blurSelectionStart && blurSelectionEnd) {
             const x = Math.min(blurSelectionStart.x, blurSelectionEnd.x);
             const y = Math.min(blurSelectionStart.y, blurSelectionEnd.y);
             const width = Math.abs(blurSelectionEnd.x - blurSelectionStart.x);
             const height = Math.abs(blurSelectionEnd.y - blurSelectionStart.y);
-            
+
             ctx.strokeStyle = '#ef4444';
             ctx.lineWidth = 2;
             ctx.setLineDash([5, 5]);
@@ -1030,7 +1030,13 @@ const MediaEditor: React.FC<{
                         originalImageRef.current = img;
                         imageRef.current.src = objectUrl;
                         imageRef.current.onload = () => {
-                            applyFilters();
+                            // Initialize base canvas
+                            if (!baseCanvasRef.current) {
+                                baseCanvasRef.current = document.createElement('canvas');
+                            }
+                            baseCanvasRef.current.width = img.width;
+                            baseCanvasRef.current.height = img.height;
+                            applyFilters(true);
                         };
                     }
                 };
@@ -1066,14 +1072,14 @@ const MediaEditor: React.FC<{
     }, [item.url, applyFilters]);
 
     useEffect(() => {
-        // Debounce filter application to prevent excessive redraws
+        // Debounce filter application to prevent excessive redraws during drag
         if (imageRef.current?.complete && canvasRef.current) {
             if (renderTimeoutRef.current) {
                 clearTimeout(renderTimeoutRef.current);
             }
             renderTimeoutRef.current = setTimeout(() => {
                 requestAnimationFrame(() => {
-                    applyFilters();
+                    applyFilters(true);
                 });
             }, 16); // ~60fps
             return () => {
@@ -1082,7 +1088,7 @@ const MediaEditor: React.FC<{
                 }
             };
         }
-    }, [brightness, contrast, saturate, blur, watermarkText, watermarkPosition, watermarkOpacity, isCropping, cropStart, cropEnd, blurSelection, hue, sepia, grayscale, invert, isBlurSelecting, blurSelectionStart, blurSelectionEnd]);
+    }, [brightness, contrast, saturate, blur, watermarkText, watermarkPosition, watermarkOpacity, blurSelection, hue, sepia, grayscale, invert, cropStart, cropEnd, blurSelectionStart, blurSelectionEnd, applyFilters]);
 
     const getScaledCoordinates = (displayX: number, displayY: number) => {
         if (!canvasRef.current) return { x: 0, y: 0 };
@@ -1139,18 +1145,30 @@ const MediaEditor: React.FC<{
         
         // Update the original image reference
         const newImg = new Image();
+        const croppedDataUrl = croppedCanvas.toDataURL();
         newImg.onload = () => {
             originalImageRef.current = newImg;
-            imageRef.current!.src = croppedCanvas.toDataURL();
-            imageRef.current!.onload = () => {
-                applyFilters();
-            };
+            if (imageRef.current) {
+                imageRef.current.src = croppedDataUrl;
+                imageRef.current.onload = () => {
+                    // Reset crop state
+                    setCropStart(null);
+                    setCropEnd(null);
+                    setIsCropping(false);
+                    // Reapply filters to the cropped image
+                    requestAnimationFrame(() => {
+                        applyFilters(true);
+                    });
+                };
+            }
         };
-        newImg.src = croppedCanvas.toDataURL();
-        
-        setCropStart(null);
-        setCropEnd(null);
-        setIsCropping(false);
+        newImg.onerror = () => {
+            console.error('Failed to load cropped image');
+            setCropStart(null);
+            setCropEnd(null);
+            setIsCropping(false);
+        };
+        newImg.src = croppedDataUrl;
     };
 
     const handleGenerateThumbnail = () => {
@@ -1212,8 +1230,6 @@ const MediaEditor: React.FC<{
         if (isCropping && cropStart) {
             setCropEnd({ x, y });
         } else if (isBlurSelecting && blurSelectionStart) {
-            // Only update state during drag, don't apply filters yet
-            // This prevents flashing - filters will be applied on mouse up
             setBlurSelectionEnd({ x, y });
         }
     };
