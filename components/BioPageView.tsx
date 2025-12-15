@@ -147,9 +147,49 @@ export const BioPageView: React.FC = () => {
         );
     }
 
-    // Ensure socialLinks and customLinks are always arrays
-    const socialLinks = Array.isArray(bioPage.socialLinks) ? bioPage.socialLinks : [];
-    const customLinks = Array.isArray(bioPage.customLinks) ? (bioPage.customLinks.length > 0 ? bioPage.customLinks : (Array.isArray(bioPage.links) ? bioPage.links : [])) : (Array.isArray(bioPage.links) ? bioPage.links : []);
+    // Ensure socialLinks and customLinks are always arrays - be very defensive
+    let socialLinks: SocialBioLink[] = [];
+    if (bioPage.socialLinks) {
+        if (Array.isArray(bioPage.socialLinks)) {
+            socialLinks = bioPage.socialLinks;
+        } else if (typeof bioPage.socialLinks === 'object') {
+            // If it's an object, try to convert to array
+            try {
+                socialLinks = Object.values(bioPage.socialLinks).filter((item): item is SocialBioLink => 
+                    typeof item === 'object' && item !== null && 'id' in item
+                );
+            } catch (e) {
+                socialLinks = [];
+            }
+        }
+    }
+    
+    let customLinks: BioLink[] = [];
+    if (bioPage.customLinks) {
+        if (Array.isArray(bioPage.customLinks)) {
+            customLinks = bioPage.customLinks;
+        } else if (typeof bioPage.customLinks === 'object') {
+            try {
+                customLinks = Object.values(bioPage.customLinks).filter((item): item is BioLink => 
+                    typeof item === 'object' && item !== null && 'id' in item
+                );
+            } catch (e) {
+                customLinks = [];
+            }
+        }
+    } else if (bioPage.links) {
+        if (Array.isArray(bioPage.links)) {
+            customLinks = bioPage.links;
+        } else if (typeof bioPage.links === 'object') {
+            try {
+                customLinks = Object.values(bioPage.links).filter((item): item is BioLink => 
+                    typeof item === 'object' && item !== null && 'id' in item
+                );
+            } catch (e) {
+                customLinks = [];
+            }
+        }
+    }
     const theme = bioPage.theme || { backgroundColor: '#ffffff', buttonColor: '#000000', textColor: '#000000', buttonStyle: 'rounded' };
 
     return (

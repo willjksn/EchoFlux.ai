@@ -1294,6 +1294,53 @@ export const Strategy: React.FC = () => {
                                                         {/* Delete/Replace button */}
                                                         <button
                                                             onClick={async () => {
+                                                                const currentDay = plan.weeks[weekIndex].content[dayIndex];
+                                                                const linkedPostId = currentDay.linkedPostId;
+                                                                
+                                                                // Delete calendar event if it exists
+                                                                if (linkedPostId && user) {
+                                                                    try {
+                                                                        const calendarEventId = `strategy-${linkedPostId}`;
+                                                                        await deleteDoc(doc(db, 'users', user.id, 'calendar_events', calendarEventId));
+                                                                    } catch (error) {
+                                                                        // Calendar event might not exist, ignore
+                                                                        console.warn('Calendar event not found or already deleted:', error);
+                                                                    }
+                                                                    
+                                                                    // Delete the post if it exists
+                                                                    try {
+                                                                        await deleteDoc(doc(db, 'users', user.id, 'posts', linkedPostId));
+                                                                    } catch (error) {
+                                                                        // Post might not exist, ignore
+                                                                        console.warn('Post not found or already deleted:', error);
+                                                                    }
+                                                                }
+                                                                
+                                                                // Helper function to remove undefined values from objects
+                                                                const removeUndefined = (obj: any): any => {
+                                                                    if (!obj || typeof obj !== "object" || Array.isArray(obj)) return obj;
+                                                                    const clean: any = {};
+                                                                    for (const key in obj) {
+                                                                        const value = obj[key];
+                                                                        if (value !== undefined) {
+                                                                            clean[key] = removeUndefined(value);
+                                                                        }
+                                                                    }
+                                                                    return clean;
+                                                                };
+                                                                
+                                                                // Create updated day without undefined fields
+                                                                const updatedDay = {
+                                                                    ...plan.weeks[weekIndex].content[dayIndex],
+                                                                    status: 'draft' as const
+                                                                };
+                                                                // Remove fields we want to delete
+                                                                delete updatedDay.mediaUrl;
+                                                                delete updatedDay.mediaType;
+                                                                delete updatedDay.caption;
+                                                                delete updatedDay.suggestedMediaType;
+                                                                delete updatedDay.linkedPostId;
+                                                                
                                                                 const updatedPlan = {
                                                                     ...plan,
                                                                     weeks: plan.weeks.map((w, wIdx) => {
@@ -1302,15 +1349,7 @@ export const Strategy: React.FC = () => {
                                                                             ...w,
                                                                             content: w.content.map((d, dIdx) => {
                                                                                 if (dIdx !== dayIndex) return d;
-                                                                                return {
-                                                                                    ...d,
-                                                                                    mediaUrl: undefined,
-                                                                                    mediaType: undefined,
-                                                                                    caption: undefined,
-                                                                                    suggestedMediaType: undefined,
-                                                                                    status: 'draft' as const,
-                                                                                    linkedPostId: undefined // Also remove linked post reference
-                                                                                };
+                                                                                return updatedDay;
                                                                             })
                                                                         };
                                                                     })
@@ -1319,7 +1358,8 @@ export const Strategy: React.FC = () => {
                                                                 if (selectedStrategy) {
                                                                     const updatedStrategy = {
                                                                         ...selectedStrategy,
-                                                                        plan: updatedPlan
+                                                                        plan: removeUndefined(updatedPlan),
+                                                                        linkedPostIds: (selectedStrategy.linkedPostIds || []).filter((id: string) => id !== linkedPostId)
                                                                     };
                                                                     setSelectedStrategy(updatedStrategy);
                                                                     if (user) {
