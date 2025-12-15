@@ -147,8 +147,9 @@ export const BioPageView: React.FC = () => {
         );
     }
 
-    const socialLinks = bioPage.socialLinks || [];
-    const customLinks = bioPage.customLinks || bioPage.links || [];
+    // Ensure socialLinks and customLinks are always arrays
+    const socialLinks = Array.isArray(bioPage.socialLinks) ? bioPage.socialLinks : [];
+    const customLinks = Array.isArray(bioPage.customLinks) ? (bioPage.customLinks.length > 0 ? bioPage.customLinks : (Array.isArray(bioPage.links) ? bioPage.links : [])) : (Array.isArray(bioPage.links) ? bioPage.links : []);
     const theme = bioPage.theme || { backgroundColor: '#ffffff', buttonColor: '#000000', textColor: '#000000', buttonStyle: 'rounded' };
 
     return (

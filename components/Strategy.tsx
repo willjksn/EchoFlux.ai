@@ -11,7 +11,7 @@ import { UpgradePrompt } from './UpgradePrompt';
 import { storage } from '../firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db } from '../firebaseConfig';
-import { doc, setDoc, getDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, getDocs, query, orderBy, deleteDoc } from 'firebase/firestore';
 import { MediaLibraryItem } from '../types';
 
 const platformIcons: Record<Platform, React.ReactElement> = {
@@ -450,6 +450,7 @@ export const Strategy: React.FC = () => {
             const postTitle = updatedDay.topic.substring(0, 30) + (updatedDay.topic.length > 30 ? '...' : '');
 
             // Create Post in Firestore as Draft (user can schedule it through Workflow)
+            // Also create a calendar event so it appears on the calendar
             if (user) {
                 const newPost: Post = {
                     id: postId,
@@ -468,8 +469,21 @@ export const Strategy: React.FC = () => {
                 const safePost = JSON.parse(JSON.stringify(newPost));
                 await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
 
-                // Note: Calendar event will be created automatically when post is scheduled through Workflow
-                // Don't create calendar event here - let it be created when status changes to Scheduled
+                // Create calendar event so it appears on the calendar (even though post is Draft)
+                try {
+                    await addCalendarEvent({
+                        id: `strategy-${postId}`,
+                        title: updatedDay.topic,
+                        date: scheduledDate.toISOString(),
+                        type: 'Post',
+                        platform: updatedDay.platform,
+                        status: 'Draft',
+                        thumbnail: mediaUrl
+                    } as CalendarEvent);
+                } catch (calendarError) {
+                    console.error('Failed to create calendar event:', calendarError);
+                    // Don't fail the whole operation if calendar event creation fails
+                }
 
                 // Update roadmap item status to scheduled and link post
                 const updatedPlanWithSchedule = {
@@ -1224,7 +1238,7 @@ export const Strategy: React.FC = () => {
                                                     {day.mediaUrl && (
                                                         <div className="p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
                                                             <p className="text-xs font-semibold text-green-800 dark:text-green-200">
-                                                                ✅ Media uploaded • Caption generated • Scheduled to calendar
+                                                                ✅ Media uploaded • Caption generated {day.status === 'scheduled' ? '• Post created (Draft)' : ''}
                                                             </p>
                                                         </div>
                                                     )}
@@ -1279,7 +1293,7 @@ export const Strategy: React.FC = () => {
                                                         </div>
                                                         {/* Delete/Replace button */}
                                                         <button
-                                                            onClick={() => {
+                                                            onClick={async () => {
                                                                 const updatedPlan = {
                                                                     ...plan,
                                                                     weeks: plan.weeks.map((w, wIdx) => {
@@ -1294,7 +1308,8 @@ export const Strategy: React.FC = () => {
                                                                                     mediaType: undefined,
                                                                                     caption: undefined,
                                                                                     suggestedMediaType: undefined,
-                                                                                    status: 'draft' as const
+                                                                                    status: 'draft' as const,
+                                                                                    linkedPostId: undefined // Also remove linked post reference
                                                                                 };
                                                                             })
                                                                         };
@@ -1308,10 +1323,20 @@ export const Strategy: React.FC = () => {
                                                                     };
                                                                     setSelectedStrategy(updatedStrategy);
                                                                     if (user) {
-                                                                        setDoc(doc(db, 'users', user.id, 'strategies', selectedStrategy.id), updatedStrategy).catch(console.error);
+                                                                        // Ensure the save completes before showing toast
+                                                                        try {
+                                                                            await setDoc(doc(db, 'users', user.id, 'strategies', selectedStrategy.id), updatedStrategy);
+                                                                            showToast('Media removed. You can upload a new one.', 'success');
+                                                                        } catch (error) {
+                                                                            console.error('Failed to save strategy after removing media:', error);
+                                                                            showToast('Media removed locally, but failed to save. Please refresh the page.', 'warning');
+                                                                        }
+                                                                    } else {
+                                                                        showToast('Media removed. You can upload a new one.', 'success');
                                                                     }
+                                                                } else {
+                                                                    showToast('Media removed. You can upload a new one.', 'success');
                                                                 }
-                                                                showToast('Media removed. You can upload a new one.', 'success');
                                                             }}
                                                             className="absolute -top-2 -right-2 w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700 shadow-lg"
                                                             title="Remove media"
