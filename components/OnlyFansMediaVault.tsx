@@ -867,6 +867,7 @@ const MediaEditor: React.FC<{
     const containerRef = useRef<HTMLDivElement>(null);
     const originalImageRef = useRef<HTMLImageElement | null>(null);
     const renderTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const isLoadingImageRef = useRef<boolean>(false);
     const [showFilters, setShowFilters] = useState(false);
     const [selectedFilter, setSelectedFilter] = useState<string | null>(null);
     const [hue, setHue] = useState(0);
@@ -1010,25 +1011,71 @@ const MediaEditor: React.FC<{
     }, [brightness, contrast, saturate, blur, watermarkText, watermarkPosition, watermarkOpacity, isCropping, cropStart, cropEnd, isBlurSelecting, blurSelectionStart, blurSelectionEnd, blurSelection, hue, sepia, grayscale, invert]);
 
     useEffect(() => {
-        // Fetch image as blob to avoid CORS issues
+        // Prevent multiple simultaneous image loads
+        if (isLoadingImageRef.current) return;
+        
+        // Load image with CORS handling - use proxy for Firebase Storage images
         const loadImage = async () => {
+            isLoadingImageRef.current = true;
+            
+            // Use proxy API for Firebase Storage images to bypass CORS
+            const isFirebaseStorage = item.url.includes('firebasestorage.googleapis.com');
+            
+            // For Firebase Storage, use proxy; otherwise use direct URL
+            let imageUrl = item.url;
+            let needsAuth = false;
+            
+            if (isFirebaseStorage) {
+                // Get auth token for proxy request
+                try {
+                    const { auth } = await import('../firebaseConfig');
+                    const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+                    if (token) {
+                        imageUrl = `/api/proxyImage?url=${encodeURIComponent(item.url)}`;
+                        needsAuth = true;
+                    }
+                } catch (err) {
+                    // If we can't get token, fall back to direct URL (may have CORS issues)
+                    console.warn('Could not get auth token for image proxy, using direct URL');
+                }
+            }
+            
+            // Try fetching as blob first (best for canvas operations)
             try {
-                const response = await fetch(item.url);
+                const headers: HeadersInit = {};
+                if (needsAuth) {
+                    const { auth } = await import('../firebaseConfig');
+                    const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+                    if (token) {
+                        headers['Authorization'] = `Bearer ${token}`;
+                    }
+                }
+                
+                const response = await fetch(imageUrl, { 
+                    credentials: 'include',
+                    headers
+                });
                 if (!response.ok) throw new Error('Failed to fetch image');
                 const blob = await response.blob();
                 const objectUrl = URL.createObjectURL(blob);
                 
                 const img = new Image();
+                img.crossOrigin = 'anonymous'; // Helps with canvas operations
                 img.onload = () => {
                     if (canvasRef.current && imageRef.current) {
                         const canvas = canvasRef.current;
                         const ctx = canvas.getContext('2d');
-                        if (!ctx) return;
+                        if (!ctx) {
+                            isLoadingImageRef.current = false;
+                            URL.revokeObjectURL(objectUrl);
+                            return;
+                        }
                         
                         canvas.width = img.width;
                         canvas.height = img.height;
                         originalImageRef.current = img;
                         imageRef.current.src = objectUrl;
+                        imageRef.current.crossOrigin = 'anonymous';
                         imageRef.current.onload = () => {
                             // Initialize base canvas
                             if (!baseCanvasRef.current) {
@@ -1036,39 +1083,66 @@ const MediaEditor: React.FC<{
                             }
                             baseCanvasRef.current.width = img.width;
                             baseCanvasRef.current.height = img.height;
+                            isLoadingImageRef.current = false;
                             applyFilters(true);
                         };
+                    } else {
+                        isLoadingImageRef.current = false;
                     }
+                    URL.revokeObjectURL(objectUrl);
                 };
                 img.onerror = () => {
-                    console.error('Failed to load image');
                     URL.revokeObjectURL(objectUrl);
+                    // Fall through to direct load
+                    loadDirect();
                 };
                 img.src = objectUrl;
             } catch (error) {
-                console.error('Error loading image:', error);
-                // Fallback: try direct load without CORS
-                const img = new Image();
-                img.onload = () => {
-                    if (canvasRef.current && imageRef.current) {
-                        const canvas = canvasRef.current;
-                        const ctx = canvas.getContext('2d');
-                        if (!ctx) return;
-                        
-                        canvas.width = img.width;
-                        canvas.height = img.height;
-                        originalImageRef.current = img;
-                        imageRef.current.src = item.url;
-                        imageRef.current.onload = () => {
-                            applyFilters();
-                        };
-                    }
-                };
-                img.src = item.url;
+                // CORS or other fetch error - fall back to direct image load
+                // This will still work for display, but canvas operations may be limited
+                loadDirect();
             }
+        };
+
+        // Fallback: direct image load (works for display even with CORS issues)
+        const loadDirect = () => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous'; // Try to enable CORS if available
+            img.onload = () => {
+                if (canvasRef.current && imageRef.current) {
+                    const canvas = canvasRef.current;
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) {
+                        isLoadingImageRef.current = false;
+                        return;
+                    }
+                    
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    originalImageRef.current = img;
+                    imageRef.current.src = item.url;
+                    imageRef.current.crossOrigin = 'anonymous';
+                    imageRef.current.onload = () => {
+                        isLoadingImageRef.current = false;
+                        applyFilters(true);
+                    };
+                } else {
+                    isLoadingImageRef.current = false;
+                }
+            };
+            img.onerror = () => {
+                console.error('Failed to load image from URL');
+                isLoadingImageRef.current = false;
+            };
+            img.src = item.url;
         };
         
         loadImage();
+        
+        // Cleanup function
+        return () => {
+            isLoadingImageRef.current = false;
+        };
     }, [item.url, applyFilters]);
 
     useEffect(() => {
