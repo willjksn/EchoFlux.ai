@@ -79,14 +79,54 @@ export const BioPageView: React.FC = () => {
                 }
                 
                 // Double-check that socialLinks and customLinks are arrays
+                // Normalize socialLinks
+                let normalizedSocialLinks: any[] = [];
+                if (data.bioPage.socialLinks) {
+                    if (Array.isArray(data.bioPage.socialLinks)) {
+                        normalizedSocialLinks = data.bioPage.socialLinks;
+                    } else if (typeof data.bioPage.socialLinks === 'object' && data.bioPage.socialLinks !== null) {
+                        try {
+                            normalizedSocialLinks = Object.values(data.bioPage.socialLinks).filter((item: any) => 
+                                item && typeof item === 'object'
+                            );
+                        } catch (e) {
+                            normalizedSocialLinks = [];
+                        }
+                    }
+                }
+                
+                // Normalize customLinks
+                let normalizedCustomLinks: any[] = [];
+                if (data.bioPage.customLinks) {
+                    if (Array.isArray(data.bioPage.customLinks)) {
+                        normalizedCustomLinks = data.bioPage.customLinks;
+                    } else if (typeof data.bioPage.customLinks === 'object' && data.bioPage.customLinks !== null) {
+                        try {
+                            normalizedCustomLinks = Object.values(data.bioPage.customLinks).filter((item: any) => 
+                                item && typeof item === 'object'
+                            );
+                        } catch (e) {
+                            normalizedCustomLinks = [];
+                        }
+                    }
+                } else if (data.bioPage.links) {
+                    if (Array.isArray(data.bioPage.links)) {
+                        normalizedCustomLinks = data.bioPage.links;
+                    } else if (typeof data.bioPage.links === 'object' && data.bioPage.links !== null) {
+                        try {
+                            normalizedCustomLinks = Object.values(data.bioPage.links).filter((item: any) => 
+                                item && typeof item === 'object'
+                            );
+                        } catch (e) {
+                            normalizedCustomLinks = [];
+                        }
+                    }
+                }
+                
                 const bioPageData = {
                     ...data.bioPage,
-                    socialLinks: Array.isArray(data.bioPage.socialLinks) 
-                        ? data.bioPage.socialLinks 
-                        : [],
-                    customLinks: Array.isArray(data.bioPage.customLinks) 
-                        ? data.bioPage.customLinks 
-                        : (Array.isArray(data.bioPage.links) ? data.bioPage.links : []),
+                    socialLinks: normalizedSocialLinks,
+                    customLinks: normalizedCustomLinks,
                 };
                 
                 setBioPage(bioPageData);
@@ -166,47 +206,78 @@ export const BioPageView: React.FC = () => {
     }
 
     // Ensure socialLinks and customLinks are always arrays - be very defensive
+    // First, ensure bioPage exists and has the expected structure
+    if (!bioPage || typeof bioPage !== 'object') {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+                <div className="text-center">
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Invalid Bio Page</h1>
+                    <p className="text-gray-600 dark:text-gray-400">The bio page data is invalid.</p>
+                </div>
+            </div>
+        );
+    }
+
     let socialLinks: SocialBioLink[] = [];
-    if (bioPage.socialLinks) {
-        if (Array.isArray(bioPage.socialLinks)) {
-            socialLinks = bioPage.socialLinks;
-        } else if (typeof bioPage.socialLinks === 'object') {
-            // If it's an object, try to convert to array
-            try {
-                socialLinks = Object.values(bioPage.socialLinks).filter((item): item is SocialBioLink => 
+    try {
+        if (bioPage.socialLinks) {
+            if (Array.isArray(bioPage.socialLinks)) {
+                socialLinks = bioPage.socialLinks.filter((item: any): item is SocialBioLink => 
+                    item && typeof item === 'object' && item !== null
+                );
+            } else if (typeof bioPage.socialLinks === 'object' && bioPage.socialLinks !== null) {
+                // If it's an object, try to convert to array
+                const values = Object.values(bioPage.socialLinks);
+                socialLinks = values.filter((item): item is SocialBioLink => 
                     typeof item === 'object' && item !== null && 'id' in item
                 );
-            } catch (e) {
-                socialLinks = [];
             }
         }
+    } catch (e) {
+        console.error('Error normalizing socialLinks:', e);
+        socialLinks = [];
+    }
+    
+    // Final safety check - ensure it's an array
+    if (!Array.isArray(socialLinks)) {
+        console.warn('socialLinks is not an array, forcing to array:', socialLinks);
+        socialLinks = [];
     }
     
     let customLinks: BioLink[] = [];
-    if (bioPage.customLinks) {
-        if (Array.isArray(bioPage.customLinks)) {
-            customLinks = bioPage.customLinks;
-        } else if (typeof bioPage.customLinks === 'object') {
-            try {
-                customLinks = Object.values(bioPage.customLinks).filter((item): item is BioLink => 
+    try {
+        if (bioPage.customLinks) {
+            if (Array.isArray(bioPage.customLinks)) {
+                customLinks = bioPage.customLinks.filter((item: any): item is BioLink => 
+                    item && typeof item === 'object' && item !== null
+                );
+            } else if (typeof bioPage.customLinks === 'object' && bioPage.customLinks !== null) {
+                const values = Object.values(bioPage.customLinks);
+                customLinks = values.filter((item): item is BioLink => 
                     typeof item === 'object' && item !== null && 'id' in item
                 );
-            } catch (e) {
-                customLinks = [];
             }
-        }
-    } else if (bioPage.links) {
-        if (Array.isArray(bioPage.links)) {
-            customLinks = bioPage.links;
-        } else if (typeof bioPage.links === 'object') {
-            try {
-                customLinks = Object.values(bioPage.links).filter((item): item is BioLink => 
+        } else if (bioPage.links) {
+            if (Array.isArray(bioPage.links)) {
+                customLinks = bioPage.links.filter((item: any): item is BioLink => 
+                    item && typeof item === 'object' && item !== null
+                );
+            } else if (typeof bioPage.links === 'object' && bioPage.links !== null) {
+                const values = Object.values(bioPage.links);
+                customLinks = values.filter((item): item is BioLink => 
                     typeof item === 'object' && item !== null && 'id' in item
                 );
-            } catch (e) {
-                customLinks = [];
             }
         }
+    } catch (e) {
+        console.error('Error normalizing customLinks:', e);
+        customLinks = [];
+    }
+    
+    // Final safety check - ensure it's an array
+    if (!Array.isArray(customLinks)) {
+        console.warn('customLinks is not an array, forcing to array:', customLinks);
+        customLinks = [];
     }
     const theme = bioPage.theme || { backgroundColor: '#ffffff', buttonColor: '#000000', textColor: '#000000', buttonStyle: 'rounded' };
 
@@ -258,7 +329,7 @@ export const BioPageView: React.FC = () => {
 
                         <div className="w-full space-y-3">
                             {/* Social Links */}
-                            {socialLinks.filter((l: SocialBioLink) => l?.isActive).map((link: SocialBioLink) => (
+                            {Array.isArray(socialLinks) && socialLinks.filter((l: SocialBioLink) => l?.isActive).map((link: SocialBioLink) => (
                                 <a 
                                     key={link.id}
                                     href={link.url}
