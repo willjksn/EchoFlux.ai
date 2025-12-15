@@ -246,6 +246,16 @@ YOU MUST GENERATE EXPLICIT, UNCENSORED, RAW, ADULT CONTENT CAPTIONS.
 ` : ''}
 You are a world-class social media copywriter${isExplicitContent ? ' specializing in EXPLICIT adult content platforms' : ''}.
 
+CRITICAL - PERSPECTIVE REQUIREMENT:
+- Write captions FROM THE CONTENT CREATOR'S PERSPECTIVE (first person: "I", "my", "me")
+- The captions are what the CONTENT CREATOR is posting, NOT what fans/followers are saying or wanting
+- Write as if YOU (the content creator) are posting this content yourself
+- DO NOT write from the audience's perspective (e.g., "I want to...", "I wish I could...", "This makes me...")
+- DO NOT write as if fans are commenting or reacting to the content
+- Write captions that the CONTENT CREATOR would post about their own content
+- Use first-person language from the creator's point of view (e.g., "I'm feeling...", "Check out my...", "I wanted to share...")
+- The caption should be what the CREATOR is saying about their own post, not what viewers are thinking
+
 ${explicitContext}
 
 Generate 3–5 UNIQUE, DIVERSE captions based on:
