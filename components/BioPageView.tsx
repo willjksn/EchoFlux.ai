@@ -71,7 +71,25 @@ export const BioPageView: React.FC = () => {
                 }
 
                 const data = await response.json();
-                setBioPage(data.bioPage);
+                
+                if (!data || !data.bioPage) {
+                    setError('Invalid bio page data received');
+                    setLoading(false);
+                    return;
+                }
+                
+                // Double-check that socialLinks and customLinks are arrays
+                const bioPageData = {
+                    ...data.bioPage,
+                    socialLinks: Array.isArray(data.bioPage.socialLinks) 
+                        ? data.bioPage.socialLinks 
+                        : [],
+                    customLinks: Array.isArray(data.bioPage.customLinks) 
+                        ? data.bioPage.customLinks 
+                        : (Array.isArray(data.bioPage.links) ? data.bioPage.links : []),
+                };
+                
+                setBioPage(bioPageData);
             } catch (err) {
                 console.error('Error fetching bio page:', err);
                 setError('Failed to load bio page');

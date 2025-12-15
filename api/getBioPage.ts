@@ -110,18 +110,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const userData = userDoc.data();
 
-    if (!userData.bioPage) {
+    if (!userData || !userData.bioPage) {
       return res.status(404).json({ error: "Bio page not found" });
     }
 
     // Normalize bioPage data to ensure socialLinks and customLinks are always arrays
     const normalizedBioPage = normalizeBioPage(userData.bioPage);
 
+    // Ensure we have a valid bioPage object
+    if (!normalizedBioPage || typeof normalizedBioPage !== 'object') {
+      console.error('Invalid bioPage data after normalization:', normalizedBioPage);
+      return res.status(500).json({ error: "Invalid bio page data" });
+    }
+
     return res.status(200).json({
       bioPage: normalizedBioPage,
     });
   } catch (error: any) {
     console.error("Error fetching bio page:", error);
-    return res.status(500).json({ error: "Failed to fetch bio page" });
+    console.error("Error details:", {
+      message: error?.message,
+      code: error?.code,
+      stack: error?.stack,
+    });
+    return res.status(500).json({ 
+      error: "Failed to fetch bio page",
+      details: process.env.NODE_ENV === 'development' ? error?.message : undefined
+    });
   }
 }
