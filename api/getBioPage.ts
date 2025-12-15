@@ -14,20 +14,100 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const db = getAdminDb();
-    const cleanUsername = username.replace("@", "");
+    const cleanUsername = username.replace("@", "").toLowerCase().trim();
+    
+    // Helper function to normalize bioPage data
+    const normalizeBioPage = (bioPage: any) => {
+      // Ensure socialLinks is an array
+      let socialLinks = [];
+      if (bioPage.socialLinks) {
+        if (Array.isArray(bioPage.socialLinks)) {
+          socialLinks = bioPage.socialLinks;
+        } else if (typeof bioPage.socialLinks === 'object') {
+          try {
+            socialLinks = Object.values(bioPage.socialLinks).filter((item: any) => 
+              item && typeof item === 'object' && 'id' in item
+            );
+          } catch (e) {
+            socialLinks = [];
+          }
+        }
+      }
+      
+      // Ensure customLinks is an array (check both customLinks and legacy links field)
+      let customLinks = [];
+      if (bioPage.customLinks) {
+        if (Array.isArray(bioPage.customLinks)) {
+          customLinks = bioPage.customLinks;
+        } else if (typeof bioPage.customLinks === 'object') {
+          try {
+            customLinks = Object.values(bioPage.customLinks).filter((item: any) => 
+              item && typeof item === 'object' && 'id' in item
+            );
+          } catch (e) {
+            customLinks = [];
+          }
+        }
+      } else if (bioPage.links) {
+        if (Array.isArray(bioPage.links)) {
+          customLinks = bioPage.links;
+        } else if (typeof bioPage.links === 'object') {
+          try {
+            customLinks = Object.values(bioPage.links).filter((item: any) => 
+              item && typeof item === 'object' && 'id' in item
+            );
+          } catch (e) {
+            customLinks = [];
+          }
+        }
+      }
+
+      return {
+        ...bioPage,
+        socialLinks,
+        customLinks,
+      };
+    };
     
     // Query users collection by username in bioPage
     const usersRef = db.collection("users");
-    const querySnapshot = await usersRef
-      .where("bioPage.username", "==", cleanUsername)
-      .limit(1)
-      .get();
+    
+    let userDoc;
+    try {
+      const querySnapshot = await usersRef
+        .where("bioPage.username", "==", cleanUsername)
+        .limit(1)
+        .get();
 
-    if (querySnapshot.empty) {
-      return res.status(404).json({ error: "Bio page not found" });
+      if (querySnapshot.empty) {
+        return res.status(404).json({ error: "Bio page not found" });
+      }
+
+      userDoc = querySnapshot.docs[0];
+    } catch (queryError: any) {
+      // Check if it's an index error
+      if (queryError?.code === 9 || queryError?.message?.includes("index")) {
+        console.error("Firestore index required for bioPage.username query:", queryError);
+        // Fallback: Try to get all users and filter (not recommended for production, but works as fallback)
+        console.warn("Falling back to full collection scan - this is inefficient. Please create a Firestore index for bioPage.username");
+        const allUsers = await usersRef.limit(1000).get(); // Limit to prevent huge scans
+        const matchingDocs = allUsers.docs.filter(doc => {
+          const data = doc.data();
+          const bioUsername = data?.bioPage?.username?.replace("@", "").toLowerCase().trim();
+          return bioUsername === cleanUsername;
+        });
+        
+        if (matchingDocs.length === 0) {
+          return res.status(404).json({ error: "Bio page not found" });
+        }
+        
+        userDoc = matchingDocs[0];
+      } else {
+        // Re-throw if it's not an index error
+        throw queryError;
+      }
     }
 
-    const userDoc = querySnapshot.docs[0];
     const userData = userDoc.data();
 
     if (!userData.bioPage) {
@@ -35,59 +115,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Normalize bioPage data to ensure socialLinks and customLinks are always arrays
-    const bioPage = userData.bioPage;
-    
-    // Ensure socialLinks is an array
-    let socialLinks = [];
-    if (bioPage.socialLinks) {
-      if (Array.isArray(bioPage.socialLinks)) {
-        socialLinks = bioPage.socialLinks;
-      } else if (typeof bioPage.socialLinks === 'object') {
-        // Convert object to array
-        try {
-          socialLinks = Object.values(bioPage.socialLinks).filter((item: any) => 
-            item && typeof item === 'object' && 'id' in item
-          );
-        } catch (e) {
-          socialLinks = [];
-        }
-      }
-    }
-    
-    // Ensure customLinks is an array (check both customLinks and legacy links field)
-    let customLinks = [];
-    if (bioPage.customLinks) {
-      if (Array.isArray(bioPage.customLinks)) {
-        customLinks = bioPage.customLinks;
-      } else if (typeof bioPage.customLinks === 'object') {
-        try {
-          customLinks = Object.values(bioPage.customLinks).filter((item: any) => 
-            item && typeof item === 'object' && 'id' in item
-          );
-        } catch (e) {
-          customLinks = [];
-        }
-      }
-    } else if (bioPage.links) {
-      if (Array.isArray(bioPage.links)) {
-        customLinks = bioPage.links;
-      } else if (typeof bioPage.links === 'object') {
-        try {
-          customLinks = Object.values(bioPage.links).filter((item: any) => 
-            item && typeof item === 'object' && 'id' in item
-          );
-        } catch (e) {
-          customLinks = [];
-        }
-      }
-    }
+    const normalizedBioPage = normalizeBioPage(userData.bioPage);
 
     return res.status(200).json({
-      bioPage: {
-        ...bioPage,
-        socialLinks,
-        customLinks,
-      },
+      bioPage: normalizedBioPage,
     });
   } catch (error: any) {
     console.error("Error fetching bio page:", error);
