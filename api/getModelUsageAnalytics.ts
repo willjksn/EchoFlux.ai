@@ -30,7 +30,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Auth required - Admin only
   const user = await verifyAuth(req);
-  if (!user || user.role !== 'Admin') {
+  if (!user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  // Check role from Firestore user document
+  const db = getAdminDb();
+  const userDoc = await db.collection("users").doc(user.uid).get();
+  const userData = userDoc.data();
+  if (!userData || userData.role !== "Admin") {
     return res.status(403).json({ error: "Admin access required" });
   }
 
@@ -42,7 +50,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     cutoffDate.setDate(cutoffDate.getDate() - daysNum);
 
     // Fetch usage logs
-    const db = getAdminDb();
     const logsSnapshot = await db
       .collection('model_usage_logs')
       .where('timestamp', '>=', cutoffDate.toISOString())
