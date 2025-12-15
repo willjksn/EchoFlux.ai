@@ -540,13 +540,18 @@ export const Dashboard: React.FC = () => {
               };
               
               if (shouldShowContentPerformance) {
+                const hasContent = recentPosts.length > 0;
                 return (
-                  <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 h-full flex flex-col min-h-[400px]">
-                    <div className="flex items-center justify-between mb-4">
+                  <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col transition-all duration-300 ${
+                    hasContent ? 'p-6 min-h-[400px]' : 'p-4 py-3'
+                  }`}>
+                    <div className={`flex items-center justify-between ${hasContent ? 'mb-4' : 'mb-0'}`}>
                       <h3 className="text-lg font-bold text-gray-900 dark:text-white">Top Content This Week</h3>
-                      <button onClick={() => setActivePage('analytics')} className="text-sm text-primary-600 hover:underline">View Analytics</button>
+                      {hasContent && (
+                        <button onClick={() => setActivePage('analytics')} className="text-sm text-primary-600 hover:underline">View Analytics</button>
+                      )}
                     </div>
-                    {recentPosts.length > 0 ? (
+                    {hasContent ? (
                       <div className="space-y-3 flex-1">
                         {recentPosts.map(post => {
                           const engagement = calculateMockEngagement(post.id, post.content || '');
@@ -571,7 +576,7 @@ export const Dashboard: React.FC = () => {
                         })}
                       </div>
                     ) : (
-                      <div className="flex-1 flex items-center justify-center">
+                      <div className="py-1">
                         <p className="text-sm text-gray-500 dark:text-gray-400">No posts this week</p>
                       </div>
                     )}
@@ -685,12 +690,16 @@ export const Dashboard: React.FC = () => {
               // Sort by timestamp (most recent first)
               activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
               
+              const hasContent = activities.length > 0;
+              
               return (
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 h-full flex flex-col min-h-[400px]">
-                  <div className="flex items-center justify-between mb-4">
+                <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col transition-all duration-300 ${
+                  hasContent ? 'p-6 min-h-[400px]' : 'p-4 py-3'
+                }`}>
+                  <div className={`flex items-center justify-between ${hasContent ? 'mb-4' : 'mb-0'}`}>
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white">Recent Activity</h3>
                   </div>
-                  {activities.length > 0 ? (
+                  {hasContent ? (
                     <div className="space-y-3 flex-1">
                       {activities.slice(0, 5).map(activity => (
                         <div key={activity.id} className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
@@ -707,7 +716,7 @@ export const Dashboard: React.FC = () => {
                       ))}
                     </div>
                   ) : (
-                    <div className="text-center py-8 flex-1 flex items-center justify-center">
+                    <div className="py-1">
                       <p className="text-sm text-gray-500 dark:text-gray-400">No recent activity</p>
                     </div>
                   )}
