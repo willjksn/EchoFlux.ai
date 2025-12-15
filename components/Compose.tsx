@@ -2204,7 +2204,9 @@ const CaptionGenerator: React.FC = () => {
     const platformsToPost = (Object.keys(selectedPlatforms) as Platform[]).filter(
       p => selectedPlatforms[p]
     );
-    if (!composeState.captionText.trim() && !composeState.media) {
+    // Check both single media and mediaItems array
+    const hasMedia = composeState.media || (composeState.mediaItems && composeState.mediaItems.length > 0);
+    if (!composeState.captionText.trim() && !hasMedia) {
       showToast('Please write or generate content to post.', 'error');
       return;
     }
@@ -2223,6 +2225,16 @@ const CaptionGenerator: React.FC = () => {
       ) {
         mediaUrl = await uploadMedia();
       }
+      
+      // If no media from single media, check mediaItems
+      if (!mediaUrl && composeState.mediaItems && composeState.mediaItems.length > 0) {
+        const firstItem = composeState.mediaItems[0];
+        if (firstItem.previewUrl) {
+          mediaUrl = firstItem.previewUrl.startsWith('http') 
+            ? firstItem.previewUrl 
+            : await uploadMediaItem(firstItem);
+        }
+      }
 
       const title = composeState.captionText.trim()
         ? composeState.captionText.substring(0, 30) + '...'
@@ -2232,11 +2244,14 @@ const CaptionGenerator: React.FC = () => {
       const publishDate = new Date();
 
       if (user) {
+        // Determine media type from either single media or first mediaItem
+        const mediaType = composeState.media?.type || (composeState.mediaItems && composeState.mediaItems.length > 0 ? composeState.mediaItems[0].type : undefined);
+        
         const newPost: Post = {
           id: postId,
           content: composeState.captionText,
           mediaUrl: mediaUrl,
-          mediaType: composeState.media?.type,
+          mediaType: mediaType,
           platforms: platformsToPost,
           status: 'Published',
           author: { name: user.name, avatar: user.avatar },
@@ -2282,7 +2297,9 @@ const CaptionGenerator: React.FC = () => {
     const platformsToPost = (Object.keys(selectedPlatforms) as Platform[]).filter(
       p => selectedPlatforms[p]
     );
-    if (!composeState.captionText.trim() && !composeState.media) {
+    // Check both single media and mediaItems array
+    const hasMedia = composeState.media || (composeState.mediaItems && composeState.mediaItems.length > 0);
+    if (!composeState.captionText.trim() && !hasMedia) {
       showToast('Please add content to schedule for review.', 'error');
       return;
     }
@@ -2301,6 +2318,16 @@ const CaptionGenerator: React.FC = () => {
       ) {
         mediaUrl = await uploadMedia();
       }
+      
+      // If no media from single media, check mediaItems
+      if (!mediaUrl && composeState.mediaItems && composeState.mediaItems.length > 0) {
+        const firstItem = composeState.mediaItems[0];
+        if (firstItem.previewUrl) {
+          mediaUrl = firstItem.previewUrl.startsWith('http') 
+            ? firstItem.previewUrl 
+            : await uploadMediaItem(firstItem);
+        }
+      }
 
       const title = composeState.captionText.trim()
         ? composeState.captionText.substring(0, 30) + '...'
@@ -2309,11 +2336,14 @@ const CaptionGenerator: React.FC = () => {
       const postId = Date.now().toString();
 
       if (user) {
+        // Determine media type from either single media or first mediaItem
+        const mediaType = composeState.media?.type || (composeState.mediaItems && composeState.mediaItems.length > 0 ? composeState.mediaItems[0].type : undefined);
+        
         const newPost: Post = {
           id: postId,
           content: composeState.captionText,
           mediaUrl: mediaUrl,
-          mediaType: composeState.media?.type,
+          mediaType: mediaType,
           platforms: platformsToPost,
           status: 'In Review',
           author: { name: user.name, avatar: user.avatar },
@@ -2348,7 +2378,9 @@ const CaptionGenerator: React.FC = () => {
     const platformsToPost = (Object.keys(selectedPlatforms) as Platform[]).filter(
       p => selectedPlatforms[p]
     );
-    if (!composeState.captionText.trim() && !composeState.media) {
+    // Check both single media and mediaItems array
+    const hasMedia = composeState.media || (composeState.mediaItems && composeState.mediaItems.length > 0);
+    if (!composeState.captionText.trim() && !hasMedia) {
       showToast('Please add content to schedule.', 'error');
       return;
     }
@@ -2367,6 +2399,16 @@ const CaptionGenerator: React.FC = () => {
       ) {
         mediaUrl = await uploadMedia();
       }
+      
+      // If no media from single media, check mediaItems
+      if (!mediaUrl && composeState.mediaItems && composeState.mediaItems.length > 0) {
+        const firstItem = composeState.mediaItems[0];
+        if (firstItem.previewUrl) {
+          mediaUrl = firstItem.previewUrl.startsWith('http') 
+            ? firstItem.previewUrl 
+            : await uploadMediaItem(firstItem);
+        }
+      }
 
       const title = composeState.captionText.trim()
         ? composeState.captionText.substring(0, 30) + '...'
@@ -2375,11 +2417,14 @@ const CaptionGenerator: React.FC = () => {
       const postId = Date.now().toString();
 
       if (user) {
+        // Determine media type from either single media or first mediaItem
+        const mediaType = composeState.media?.type || (composeState.mediaItems && composeState.mediaItems.length > 0 ? composeState.mediaItems[0].type : undefined);
+        
         const newPost: Post = {
           id: postId,
           content: composeState.captionText,
           mediaUrl: mediaUrl,
-          mediaType: composeState.media?.type,
+          mediaType: mediaType,
           platforms: platformsToPost,
           status: 'Scheduled',
           author: { name: user.name, avatar: user.avatar },
@@ -2393,11 +2438,14 @@ const CaptionGenerator: React.FC = () => {
         await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
       }
 
+      // Determine media type from either single media or first mediaItem
+      const mediaTypeForEvent = composeState.media?.type || (composeState.mediaItems && composeState.mediaItems.length > 0 ? composeState.mediaItems[0].type : undefined);
+      
       const newEvent: CalendarEvent = {
         id: `cal-${postId}`,
         title: title,
         date: convertLocalDateTimeToISO(date),
-        type: composeState.media?.type === 'video' ? 'Reel' : 'Post',
+        type: mediaTypeForEvent === 'video' ? 'Reel' : 'Post',
         platform: platformsToPost[0],
         status: 'Scheduled',
         thumbnail: mediaUrl
