@@ -131,10 +131,13 @@ const MainContent: React.FC = () => {
 }
 
 const AppContent: React.FC = () => {
-    // Check if this is a public bio page route (e.g., /u/username or /link/username)
+    // Check if this is a public bio page route (e.g., /username, /u/username, or /link/username for backward compatibility)
     // This should be checked BEFORE authentication to allow public access
     const pathname = window.location.pathname;
-    const isPublicBioPage = /^\/(?:u|link)\/[^/]+$/.test(pathname);
+    // Exclude known app routes to avoid conflicts
+    const knownRoutes = ['/', '/dashboard', '/inbox', '/analytics', '/settings', '/compose', '/calendar', '/approvals', '/team', '/opportunities', '/profile', '/about', '/contact', '/pricing', '/clients', '/faq', '/terms', '/privacy', '/dataDeletion', '/admin', '/automation', '/bio', '/strategy', '/ads', '/mediaLibrary', '/autopilot', '/onlyfansStudio'];
+    // Check if it's a direct username path (not a known route) or legacy /u/ or /link/ path
+    const isPublicBioPage = (!knownRoutes.includes(pathname) && /^\/[^/]+$/.test(pathname)) || /^\/(?:u|link)\/[^/]+$/.test(pathname);
     
     if (isPublicBioPage) {
         return <BioPageView />;

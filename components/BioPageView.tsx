@@ -31,10 +31,12 @@ const platformIcons: Record<Platform, React.ReactNode> = {
 };
 
 export const BioPageView: React.FC = () => {
-    // Extract username from URL path (e.g., /u/username or /link/username)
+    // Extract username from URL path (e.g., /username, /u/username, or /link/username for backward compatibility)
     const pathname = window.location.pathname;
-    const usernameMatch = pathname.match(/\/(?:u|link)\/([^/]+)/);
-    const username = usernameMatch ? usernameMatch[1] : null;
+    // Try direct username first (e.g., /will), then fallback to /u/username or /link/username
+    const directMatch = pathname.match(/^\/([^/]+)$/);
+    const legacyMatch = pathname.match(/\/(?:u|link)\/([^/]+)/);
+    const username = directMatch ? directMatch[1] : (legacyMatch ? legacyMatch[1] : null);
     const [bioPage, setBioPage] = useState<BioPageConfig | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);

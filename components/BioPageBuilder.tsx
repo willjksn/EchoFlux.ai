@@ -530,7 +530,7 @@ export const BioPageBuilder: React.FC = () => {
         try {
             await saveBioPage(bioPage);
             const username = bioPage.username.replace('@', '');
-            const bioPageUrl = `${window.location.origin}/u/${username}`;
+            const bioPageUrl = `${window.location.origin}/${username}`;
             
             // Copy URL to clipboard
             try {
@@ -555,7 +555,7 @@ export const BioPageBuilder: React.FC = () => {
                         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Link in Bio Builder</h2>
                         {bioPage.username && (
                             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                                Your bio page: <span className="font-mono text-primary-600 dark:text-primary-400">{window.location.origin}/u/{bioPage.username.replace('@', '')}</span>
+                                Your bio page: <span className="font-mono text-primary-600 dark:text-primary-400">{window.location.origin}/{bioPage.username.replace('@', '')}</span>
                             </p>
                         )}
                     </div>
