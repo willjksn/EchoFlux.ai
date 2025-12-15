@@ -5,7 +5,13 @@ import { db } from '../firebaseConfig';
 import { collection, addDoc, updateDoc, deleteDoc, doc, query, orderBy, onSnapshot, getDocs, where } from 'firebase/firestore';
 import { PlusIcon, TrashIcon, CheckCircleIcon } from './icons/UIIcons';
 
-const planOptions: Plan[] = ['Free', 'Pro', 'Elite', 'Agency', 'Starter', 'Growth'];
+const planOptions: Plan[] = ['Free', 'Caption', 'Pro', 'Elite', 'Agency', 'Starter', 'Growth', 'OnlyFansStudio'];
+
+// Helper function to format plan names for display
+const formatPlanName = (plan: Plan): string => {
+    if (plan === 'OnlyFansStudio') return 'OnlyFans Studio';
+    return plan;
+};
 
 export const PromotionsManagement: React.FC = () => {
     const { user, showToast } = useAppContext();
@@ -454,7 +460,7 @@ export const PromotionsManagement: React.FC = () => {
                                                         </span>
                                                         {promo.applicablePlans.length > 0 && (
                                                             <span>
-                                                                <strong>Plans:</strong> {promo.applicablePlans.join(', ')}
+                                                                <strong>Plans:</strong> {promo.applicablePlans.map(formatPlanName).join(', ')}
                                                             </span>
                                                         )}
                                                         <span>
