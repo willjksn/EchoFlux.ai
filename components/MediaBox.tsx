@@ -601,18 +601,18 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
       {mediaItem.previewUrl ? (
         <div className="mb-3">
           {/* Primary Image/Video */}
-          <div className="relative w-full h-40 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden mb-2 flex items-center justify-center">
+          <div className="relative w-full min-h-40 max-h-96 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden mb-2 flex items-center justify-center">
             {mediaItem.type === 'image' ? (
               <img
                 src={mediaItem.previewUrl}
                 alt={`Post ${index + 1}`}
-                className="w-full h-full object-contain"
+                className="max-w-full max-h-96 object-contain"
               />
             ) : (
             <>
               <video
                 src={mediaItem.previewUrl}
-                className="w-full h-full object-contain"
+                className="max-w-full max-h-96 object-contain"
                 preload="metadata"
                 controls
                 muted={false}
