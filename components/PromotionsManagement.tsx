@@ -357,8 +357,8 @@ export const PromotionsManagement: React.FC = () => {
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
+                                    <div className="grid grid-cols-2 gap-4 items-end">
+                                        <div className="flex flex-col">
                                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                 Max Uses (optional - leave empty for unlimited)
                                             </label>
@@ -371,7 +371,7 @@ export const PromotionsManagement: React.FC = () => {
                                                 className="w-full p-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
                                             />
                                         </div>
-                                        <div>
+                                        <div className="flex flex-col">
                                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                 Max Uses Per User
                                             </label>
