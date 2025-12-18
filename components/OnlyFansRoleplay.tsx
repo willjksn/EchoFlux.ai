@@ -47,6 +47,8 @@ export const OnlyFansRoleplay: React.FC = () => {
     // Body rating state
     const [ratingPrompt, setRatingPrompt] = useState('');
     const [generatedRatings, setGeneratedRatings] = useState<string[]>([]);
+    const [longRatingPrompt, setLongRatingPrompt] = useState('');
+    const [generatedLongRating, setGeneratedLongRating] = useState<string>('');
     
     // Interactive posts state
     const [interactivePrompt, setInteractivePrompt] = useState('');
@@ -504,6 +506,64 @@ Format as a numbered list with engaging, interactive, explicit prompts from the 
         }
     };
 
+    const handleGenerateLongRating = async () => {
+        if (!longRatingPrompt.trim()) {
+            showToast('Please describe the body or body part you want a detailed rating for', 'error');
+            return;
+        }
+
+        setIsGenerating(true);
+        try {
+            const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+
+            const response = await fetch('/api/generateText', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({
+                    prompt: `Write a long-form, explicit OnlyFans-style body rating from the creator's perspective.
+
+Context:
+- Creator gender: ${creatorGender || 'not specified'}
+- Fan/buyer gender: ${targetAudienceGender || 'not specified'}
+- Details the fan shared about their body or body part:
+${longRatingPrompt}
+
+Requirements:
+- Write as the CREATOR speaking directly to the FAN in first person ("I...") and second person ("you...").
+- The creator is leading, confident, and in control of the roleplay.
+- This is a paid rating: make it feel personal, detailed, and premium.
+- Describe what the creator sees, likes, and notices about the fan's body or body part.
+- Include both a clear 1–10 style rating and detailed feedback (what's hot, what stands out, what they'd do with that body in roleplay).
+- Keep it in one continuous long-form monologue (no bullet list), suitable to send as a DM or post caption.
+- Stay within platform-safe explicit language as configured in your AI policies, but make it bold and intimate.
+`,
+                    context: {
+                        goal: 'body-rating',
+                        tone: 'Explicit/Adult Content',
+                        platforms: ['OnlyFans'],
+                    },
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to generate detailed body rating');
+            }
+
+            const data = await response.json();
+            const text = data.text || data.caption || '';
+            setGeneratedLongRating(text);
+            showToast('Detailed body rating generated successfully!', 'success');
+        } catch (error: any) {
+            console.error('Error generating detailed rating:', error);
+            showToast(error.message || 'Failed to generate detailed rating. Please try again.', 'error');
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
     const handleGenerateInteractive = async () => {
         if (!interactivePrompt.trim()) {
             showToast('Please describe what kind of interactive post ideas you want', 'error');
@@ -633,6 +693,23 @@ Format as a numbered list with detailed post concepts including captions and eng
         }
     };
 
+    const handleSaveLongRating = async () => {
+        if (!generatedLongRating || !user?.id) return;
+        try {
+            const ratingData = {
+                prompt: longRatingPrompt,
+                longRating: generatedLongRating,
+                savedAt: Timestamp.now(),
+            };
+            await addDoc(collection(db, 'users', user.id, 'onlyfans_saved_ratings'), ratingData);
+            showToast('Detailed rating saved successfully!', 'success');
+            loadSavedItems();
+        } catch (error) {
+            console.error('Error saving detailed rating:', error);
+            showToast('Failed to save detailed rating', 'error');
+        }
+    };
+
     const handleSaveInteractive = async () => {
         if (!generatedInteractive.length || !user?.id) return;
         try {
@@ -711,6 +788,8 @@ Format as a numbered list with detailed post concepts including captions and eng
     const handleLoadRatings = (savedItem: any) => {
         setRatingPrompt(savedItem.prompt || '');
         setGeneratedRatings(savedItem.ratings || []);
+        setLongRatingPrompt(savedItem.prompt || '');
+        setGeneratedLongRating(savedItem.longRating || '');
         setShowSaved(false);
         showToast('Ratings loaded successfully!', 'success');
     };
@@ -1057,6 +1136,13 @@ Format as a numbered list with detailed post concepts including captions and eng
                                     >
                                         Copy All
                                     </button>
+                                    <button
+                                        onClick={() => setGeneratedScenario(null)}
+                                        className="text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 flex items-center gap-1"
+                                    >
+                                        <TrashIcon className="w-4 h-4" />
+                                        Clear
+                                    </button>
                                 </div>
                             </div>
                             
@@ -1310,6 +1396,17 @@ Format as a numbered list with detailed post concepts including captions and eng
                                     >
                                         Copy
                                     </button>
+                                    <button
+                                        onClick={() => {
+                                            setPersonaName('');
+                                            setPersonaDescription('');
+                                            setGeneratedPersona('');
+                                        }}
+                                        className="text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 flex items-center gap-1"
+                                    >
+                                        <TrashIcon className="w-4 h-4" />
+                                        Clear
+                                    </button>
                                 </div>
                             </div>
                             <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
@@ -1417,6 +1514,96 @@ Format as a numbered list with detailed post concepts including captions and eng
                         </div>
                     </div>
 
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                            Generate Detailed Body Rating (Long Form)
+                        </h2>
+                        
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Describe the body or body part you want to rate in detail
+                                </label>
+                                <textarea
+                                    value={longRatingPrompt}
+                                    onChange={(e) => setLongRatingPrompt(e.target.value)}
+                                    placeholder="e.g., 'Full body rating for a tall, muscular male fan with tattoos on his chest and arms' or 'Detailed booty rating for a curvy female fan in tight leggings'"
+                                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[120px]"
+                                />
+                            </div>
+
+                            <div className="space-y-3">
+                                <button
+                                    onClick={handleGenerateLongRating}
+                                    disabled={isGenerating}
+                                    className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    {isGenerating ? (
+                                        <>
+                                            <RefreshIcon className="w-5 h-5 animate-spin" />
+                                            Generating...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <SparklesIcon className="w-5 h-5" />
+                                            Generate Detailed Rating
+                                        </>
+                                    )}
+                                </button>
+                                {generatedLongRating && (
+                                    <button
+                                        onClick={() => {
+                                            setLongRatingPrompt('');
+                                            setGeneratedLongRating('');
+                                        }}
+                                        className="w-full px-3 py-2 text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md hover:bg-red-100 dark:hover:bg-red-900/40"
+                                    >
+                                        Clear
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {generatedLongRating && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                    Detailed Body Rating
+                                </h3>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={handleSaveLongRating}
+                                        className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-1"
+                                    >
+                                        <CheckCircleIcon className="w-4 h-4" />
+                                        Save
+                                    </button>
+                                    <button
+                                        onClick={() => copyToClipboard(generatedLongRating)}
+                                        className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-1"
+                                    >
+                                        Copy
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setGeneratedLongRating('');
+                                        }}
+                                        className="text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 flex items-center gap-1"
+                                    >
+                                        <TrashIcon className="w-4 h-4" />
+                                        Clear
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                <p className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">
+                                    {generatedLongRating}
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Generated Ratings */}
                     {generatedRatings.length > 0 && (
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
@@ -1424,13 +1611,22 @@ Format as a numbered list with detailed post concepts including captions and eng
                                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                                     Rating Prompts
                                 </h3>
-                                <button
-                                    onClick={handleSaveRatings}
-                                    className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-1"
-                                >
-                                    <CheckCircleIcon className="w-4 h-4" />
-                                    Save All
-                                </button>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={handleSaveRatings}
+                                        className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-1"
+                                    >
+                                        <CheckCircleIcon className="w-4 h-4" />
+                                        Save All
+                                    </button>
+                                    <button
+                                        onClick={() => setGeneratedRatings([])}
+                                        className="text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 flex items-center gap-1"
+                                    >
+                                        <TrashIcon className="w-4 h-4" />
+                                        Clear
+                                    </button>
+                                </div>
                             </div>
                             <div className="space-y-3">
                                 {generatedRatings.map((rating, index) => (

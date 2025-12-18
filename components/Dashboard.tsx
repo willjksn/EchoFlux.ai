@@ -957,29 +957,6 @@ export const Dashboard: React.FC = () => {
                     </button>
                   </div>
                   <div className="space-y-4">
-                    {/* Followers Goal - hidden in AI Content Studio mode */}
-                    {false && (
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                            {isBusiness ? 'Total Reach' : 'Total Followers'}
-                          </span>
-                          <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                            {new Intl.NumberFormat('en-US').format(currentFollowers)} / {new Intl.NumberFormat('en-US').format(goalFollowers)}
-                          </span>
-                        </div>
-                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
-                          <div 
-                            className="bg-gradient-to-r from-primary-500 to-primary-600 h-full transition-all duration-500" 
-                            style={{ width: `${followersProgress}%` }}
-                          ></div>
-                        </div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          {Math.round(followersProgress)}% complete
-                        </p>
-                      </div>
-                    )}
-                    
                     {/* Posts Goal */}
                     <div>
                       <div className="flex items-center justify-between mb-2">

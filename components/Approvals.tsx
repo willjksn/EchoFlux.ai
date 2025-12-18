@@ -8,7 +8,7 @@ import { MobilePreviewModal } from './MobilePreviewModal';
 import { UpgradePrompt } from './UpgradePrompt';
 import { generateCritique } from "../src/services/geminiService";
 import { db } from '../firebaseConfig';
-import { doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { OFFLINE_MODE } from '../constants';
 
 // Filter status columns based on plan - Agency gets 'In Review', others don't
@@ -48,6 +48,7 @@ export const Approvals: React.FC = () => {
     const [isGeneratingComment, setIsGeneratingComment] = useState(false);
     const [sourceFilter, setSourceFilter] = useState<'all' | 'automation' | 'manual'>('all');
     const [selectedApprovedIds, setSelectedApprovedIds] = useState<Set<string>>(new Set());
+    const [exportPreviewPosts, setExportPreviewPosts] = useState<Post[] | null>(null);
 
     if (!['Elite', 'Agency'].includes(user?.plan || "") && user?.role !== 'Admin')
  {
@@ -192,7 +193,7 @@ export const Approvals: React.FC = () => {
         });
     };
 
-    const handleExportApproved = () => {
+    const handleExportApproved = async () => {
         const approvedPosts = filteredPosts.filter(
             p => p.status === 'Approved' && selectedApprovedIds.has(p.id)
         );
@@ -205,7 +206,8 @@ export const Approvals: React.FC = () => {
         // Build a human-readable content pack for manual posting
         const lines: string[] = [];
 
-        approvedPosts.forEach((p, idx) => {
+        for (let idx = 0; idx < approvedPosts.length; idx++) {
+            const p = approvedPosts[idx];
             const num = idx + 1;
             const platforms = (p.platforms || []).join(', ') || 'No platforms set';
             const scheduled = p.scheduledDate
@@ -224,7 +226,53 @@ ${p.content}
 
 ----------------------------------------`
             );
-        });
+
+            // Mark media as "exported" in the Media Library (move to an Export folder and record usage)
+            if (user && p.mediaUrl) {
+                try {
+                    // Ensure an "Export" folder exists
+                    const exportFolderId = 'export';
+                    const exportFolderRef = doc(db, 'users', user.id, 'media_folders', exportFolderId);
+                    await setDoc(
+                        exportFolderRef,
+                        {
+                            id: exportFolderId,
+                            userId: user.id,
+                            name: 'Exported / Used',
+                            createdAt: new Date().toISOString(),
+                        },
+                        { merge: true }
+                    );
+
+                    // Find any media library items that match this mediaUrl
+                    const mediaRef = collection(db, 'users', user.id, 'media_library');
+                    const q = query(mediaRef, where('url', '==', p.mediaUrl));
+                    const snapshot = await getDocs(q);
+
+                    for (const docSnap of snapshot.docs) {
+                        const data = docSnap.data() as MediaLibraryItem;
+                        const usedInPosts = Array.isArray(data.usedInPosts) ? data.usedInPosts : [];
+                        if (!usedInPosts.includes(p.id)) {
+                            usedInPosts.push(p.id);
+                        }
+
+                        await setDoc(
+                            docSnap.ref,
+                            {
+                                folderId: exportFolderId,
+                                usedInPosts,
+                            },
+                            { merge: true }
+                        );
+                    }
+                } catch (err) {
+                    console.error('Failed to mark media as exported:', err);
+                }
+            }
+        }
+
+        // Also show an in-app "content pack" preview so mobile users can easily copy captions and save media
+        setExportPreviewPosts(approvedPosts);
 
         const blob = new Blob([lines.join('\n')], {
             type: 'text/plain',
@@ -248,6 +296,105 @@ ${p.content}
                 media={activePost?.mediaUrl ? { previewUrl: activePost.mediaUrl, type: activePost.mediaType || 'image' } : null}
                 user={activePost?.author ?? null}
             />
+
+            {/* Export Preview Modal: shows selected approved posts as easy-to-use cards */}
+            {exportPreviewPosts && (
+                <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-gray-200 dark:border-gray-700">
+                        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+                            <div>
+                                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Exported Content Pack</h2>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    On mobile: long‑press an image to save it, then tap and hold to copy the caption below.
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setExportPreviewPosts(null)}
+                                className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                                aria-label="Close export preview"
+                            >
+                                <XMarkIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+                            {exportPreviewPosts.map((p, idx) => {
+                                const platforms = (p.platforms || []).join(', ') || 'No platforms set';
+                                const scheduled = p.scheduledDate
+                                    ? new Date(p.scheduledDate).toLocaleString()
+                                    : 'No planned date';
+                                return (
+                                    <div
+                                        key={p.id}
+                                        className="bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex flex-col md:flex-row gap-4"
+                                    >
+                                        <div className="w-full md:w-40 flex-shrink-0">
+                                            {p.mediaUrl ? (
+                                                <div className="w-full aspect-square rounded-lg overflow-hidden bg-gray-200 dark:bg-gray-700">
+                                                    {p.mediaType === 'video' ? (
+                                                        <video
+                                                            src={p.mediaUrl}
+                                                            className="w-full h-full object-cover"
+                                                            controls
+                                                        />
+                                                    ) : (
+                                                        <img
+                                                            src={p.mediaUrl}
+                                                            alt={`Post ${idx + 1}`}
+                                                            className="w-full h-full object-cover"
+                                                        />
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div className="w-full aspect-square rounded-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs text-gray-500 dark:text-gray-400">
+                                                    No media
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="flex-1 flex flex-col gap-2">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300">
+                                                    Post {idx + 1}
+                                                </span>
+                                                <span className="text-[11px] text-gray-500 dark:text-gray-400">
+                                                    {scheduled}
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-gray-600 dark:text-gray-400">
+                                                <span className="font-semibold">Platforms:</span> {platforms}
+                                            </p>
+                                            <div className="mt-1 w-full">
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <p className="text-[11px] font-semibold text-gray-700 dark:text-gray-300">
+                                                        Caption
+                                                    </p>
+                                                    <button
+                                                        type="button"
+                                                        onClick={async () => {
+                                                            try {
+                                                                await navigator.clipboard.writeText(p.content || '');
+                                                                showToast('Caption copied to clipboard.', 'success');
+                                                            } catch {
+                                                                showToast('Unable to copy. Please select and copy the text manually.', 'error');
+                                                            }
+                                                        }}
+                                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium text-primary-700 dark:text-primary-300 bg-primary-50 dark:bg-primary-900/30"
+                                                    >
+                                                        <ClipboardCheckIcon className="w-3 h-3" />
+                                                        Copy
+                                                    </button>
+                                                </div>
+                                                <div className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+                                                    {p.content}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
                 <div>
@@ -406,6 +553,7 @@ ${p.content}
                                                             e.stopPropagation();
                                                             toggleApprovedSelection(post.id, e.target.checked);
                                                         }}
+                                                        onClick={e => e.stopPropagation()}
                                                         className="h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
                                                     />
                                                 )}

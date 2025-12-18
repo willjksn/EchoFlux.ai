@@ -67,14 +67,14 @@ const creatorTiers = [
             '500 AI captions / month',
             'Media Library',
             'Visual Content Calendar',
-            '1 GB Storage'
+            '5 GB Storage'
         ],
         isRecommended: true
     },
     {
         name: 'Elite',
-        priceMonthly: 149,
-        priceAnnually: 119,
+        priceMonthly: 59,
+        priceAnnually: 47,
         description: 'For professional & OF creators.',
         features: [
             'Unlimited active campaigns',
@@ -82,7 +82,7 @@ const creatorTiers = [
             '1,500 AI captions / month',
             'Workflow board & approvals',
             'Media Library',
-            '2 GB Storage',
+            '10 GB Storage',
             'OnlyFans Studio (included)'
         ],
         isRecommended: false
@@ -187,7 +187,7 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
                     )}
                 </div>
 
-                <div className="mt-10 grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+                <div className="mt-10 grid gap-6 grid-cols-1 md:grid-cols-3 max-w-4xl mx-auto">
                     {pricingTiers.map((tier) => {
                         const isCurrentPlan = currentPlan === tier.name;
                         const isAgency = tier.name === 'Agency';

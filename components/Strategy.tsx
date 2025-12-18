@@ -420,92 +420,90 @@ export const Strategy: React.FC = () => {
                 }
             }
 
-            // In offline "planning studio" mode, we do NOT auto-create posts or calendar events.
-            // We just attach the media and caption to the roadmap day.
-            if (!OFFLINE_MODE) {
-                // Get the updated day for scheduling
-                const updatedDay = updatedPlan.weeks[weekIndex].content[dayIndex];
+            // Create a scheduled post + calendar event so this day shows up on the planning calendar.
+            // This does NOT auto-post; it is for planning and manual posting later.
+            // Get the updated day for scheduling
+            const updatedDay = updatedPlan.weeks[weekIndex].content[dayIndex];
 
-                // Calculate scheduled date based on roadmap
-                const today = new Date();
-                const scheduledDate = new Date(today);
-                scheduledDate.setDate(today.getDate() + (weekIndex * 7) + updatedDay.dayOffset);
-                scheduledDate.setHours(14, 0, 0, 0); // Default to 2 PM
+            // Calculate scheduled date based on roadmap
+            const today = new Date();
+            const scheduledDate = new Date(today);
+            scheduledDate.setDate(today.getDate() + (weekIndex * 7) + updatedDay.dayOffset);
+            scheduledDate.setHours(14, 0, 0, 0); // Default to 2 PM
 
-                // Create a post + calendar event so it appears as scheduled content
-                const postId = `roadmap-${selectedStrategy?.id || 'temp'}-${weekIndex}-${dayIndex}-${Date.now()}`;
+            // Create a post + calendar event so it appears as scheduled content
+            const postId = `roadmap-${selectedStrategy?.id || 'temp'}-${weekIndex}-${dayIndex}-${Date.now()}`;
 
-                if (user) {
-                    const newPost: Post = {
-                        id: postId,
-                        content: updatedDay.caption || generatedCaption || updatedDay.topic, // Use generated caption
-                        mediaUrl: mediaUrl,
-                        mediaType: fileType,
-                        platforms: [updatedDay.platform],
+            if (user) {
+                const newPost: Post = {
+                    id: postId,
+                    content: updatedDay.caption || generatedCaption || updatedDay.topic, // Use generated caption
+                    mediaUrl: mediaUrl,
+                    mediaType: fileType,
+                    platforms: [updatedDay.platform],
+                    status: 'Scheduled',
+                    author: { name: user.name, avatar: user.avatar },
+                    comments: [],
+                    scheduledDate: scheduledDate.toISOString(),
+                    clientId: user.userType === 'Business' ? user.id : undefined,
+                    timestamp: new Date().toISOString(),
+                };
+
+                const safePost = JSON.parse(JSON.stringify(newPost));
+                await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
+
+                // Create calendar event so it appears on the calendar as Scheduled
+                try {
+                    await addCalendarEvent({
+                        id: `strategy-${postId}`,
+                        title: updatedDay.topic,
+                        date: scheduledDate.toISOString(),
+                        type: 'Post',
+                        platform: updatedDay.platform,
                         status: 'Scheduled',
-                        author: { name: user.name, avatar: user.avatar },
-                        comments: [],
-                        scheduledDate: scheduledDate.toISOString(),
-                        clientId: user.userType === 'Business' ? user.id : undefined,
-                        timestamp: new Date().toISOString(),
-                    };
+                        thumbnail: mediaUrl
+                    } as CalendarEvent);
+                } catch (calendarError) {
+                    console.error('Failed to create calendar event:', calendarError);
+                    // Don't fail the whole operation if calendar event creation fails
+                }
 
-                    const safePost = JSON.parse(JSON.stringify(newPost));
-                    await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
-
-                    // Create calendar event so it appears on the calendar as Scheduled
-                    try {
-                        await addCalendarEvent({
-                            id: `strategy-${postId}`,
-                            title: updatedDay.topic,
-                            date: scheduledDate.toISOString(),
-                            type: 'Post',
-                            platform: updatedDay.platform,
-                            status: 'Scheduled',
-                            thumbnail: mediaUrl
-                        } as CalendarEvent);
-                    } catch (calendarError) {
-                        console.error('Failed to create calendar event:', calendarError);
-                        // Don't fail the whole operation if calendar event creation fails
-                    }
-
-                    // Update roadmap item status to scheduled and link post
-                    const updatedPlanWithSchedule = {
-                        ...updatedPlan,
-                        weeks: updatedPlan.weeks.map((week, wIdx) => {
-                            if (wIdx !== weekIndex) return week;
-                            return {
-                                ...week,
-                                content: week.content.map((d, dIdx) => {
-                                    if (dIdx !== dayIndex) return d;
-                                    return {
-                                        ...d,
-                                        status: 'scheduled' as const,
-                                        linkedPostId: postId
-                                    };
-                                })
-                            };
-                        })
-                    };
-
-                    setPlan(updatedPlanWithSchedule);
-
-                    // Update selectedStrategy
-                    if (selectedStrategy) {
-                        const updatedStrategy = {
-                            ...selectedStrategy,
-                            plan: updatedPlanWithSchedule,
-                            linkedPostIds: [...(selectedStrategy.linkedPostIds || []), postId]
+                // Update roadmap item status to scheduled and link post
+                const updatedPlanWithSchedule = {
+                    ...updatedPlan,
+                    weeks: updatedPlan.weeks.map((week, wIdx) => {
+                        if (wIdx !== weekIndex) return week;
+                        return {
+                            ...week,
+                            content: week.content.map((d, dIdx) => {
+                                if (dIdx !== dayIndex) return d;
+                                return {
+                                    ...d,
+                                    status: 'scheduled' as const,
+                                    linkedPostId: postId
+                                };
+                            })
                         };
-                        setSelectedStrategy(updatedStrategy);
+                    })
+                };
 
-                        // Save to Firestore
-                        await setDoc(doc(db, 'users', user.id, 'strategies', selectedStrategy.id), updatedStrategy);
-                    }
+                setPlan(updatedPlanWithSchedule);
+
+                // Update selectedStrategy
+                if (selectedStrategy) {
+                    const updatedStrategy = {
+                        ...selectedStrategy,
+                        plan: updatedPlanWithSchedule,
+                        linkedPostIds: [...(selectedStrategy.linkedPostIds || []), postId]
+                    };
+                    setSelectedStrategy(updatedStrategy);
+
+                    // Save to Firestore
+                    await setDoc(doc(db, 'users', user.id, 'strategies', selectedStrategy.id), updatedStrategy);
                 }
             }
 
-            showToast('Media uploaded and attached to your roadmap day.', 'success');
+            showToast('Media uploaded, caption generated, and added to your calendar.', 'success');
         } catch (error) {
             console.error('Failed to upload media:', error);
             showToast('Failed to upload media. Please try again.', 'error');
@@ -524,7 +522,29 @@ export const Strategy: React.FC = () => {
                     ? 'video'
                     : 'image';
 
-            const updatedPlan: StrategyPlan = {
+            const currentDay = plan.weeks[weekIndex].content[dayIndex];
+
+            // Analyze media and generate caption using AI (similar to direct upload)
+            let generatedCaption = currentDay.caption || currentDay.topic;
+            let suggestedMediaType: 'image' | 'video' | undefined = mediaType;
+
+            try {
+                const analysis = await analyzeMediaForPost({
+                    mediaUrl: item.url,
+                    goal: goal,
+                    tone: tone,
+                });
+
+                generatedCaption = analysis.caption || generatedCaption;
+                if (analysis.hashtags && analysis.hashtags.length > 0) {
+                    generatedCaption += '\n\n' + analysis.hashtags.join(' ');
+                }
+            } catch (error) {
+                console.error('Failed to analyze media from library:', error);
+                // Fall back to topic / existing caption
+            }
+
+            const basePlan: StrategyPlan = {
                 ...plan,
                 weeks: plan.weeks.map((week, wIdx) => {
                     if (wIdx !== weekIndex) return week;
@@ -536,8 +556,8 @@ export const Strategy: React.FC = () => {
                                 ...day,
                                 mediaUrl: item.url,
                                 mediaType,
-                                // Keep existing caption if present; otherwise leave topic/caption as-is
-                                caption: day.caption || day.topic,
+                                caption: generatedCaption,
+                                suggestedMediaType,
                                 status: 'ready' as const,
                             };
                         }),
@@ -545,13 +565,75 @@ export const Strategy: React.FC = () => {
                 }),
             };
 
-            setPlan(updatedPlan);
+            // Calculate scheduled date for this roadmap day
+            const today = new Date();
+            const scheduledDate = new Date(today);
+            scheduledDate.setDate(today.getDate() + (weekIndex * 7) + currentDay.dayOffset);
+            scheduledDate.setHours(14, 0, 0, 0); // 2 PM by default
+
+            const postId = `roadmap-${selectedStrategy?.id || 'temp'}-${weekIndex}-${dayIndex}-${Date.now()}`;
+
+            // Create a scheduled Post + calendar event so this shows up on Calendar
+            if (user) {
+                const newPost: Post = {
+                    id: postId,
+                    content: generatedCaption || currentDay.topic,
+                    mediaUrl: item.url,
+                    mediaType,
+                    platforms: [currentDay.platform],
+                    status: 'Scheduled',
+                    author: { name: user.name, avatar: user.avatar },
+                    comments: [],
+                    scheduledDate: scheduledDate.toISOString(),
+                    clientId: user.userType === 'Business' ? user.id : undefined,
+                    timestamp: new Date().toISOString(),
+                };
+
+                const safePost = JSON.parse(JSON.stringify(newPost));
+                await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
+
+                try {
+                    await addCalendarEvent({
+                        id: `strategy-${postId}`,
+                        title: currentDay.topic,
+                        date: scheduledDate.toISOString(),
+                        type: 'Post',
+                        platform: currentDay.platform,
+                        status: 'Scheduled',
+                        thumbnail: item.url,
+                    } as CalendarEvent);
+                } catch (calendarError) {
+                    console.error('Failed to create calendar event from library media:', calendarError);
+                }
+            }
+
+            // Mark this roadmap day as scheduled and link the post
+            const updatedPlanWithSchedule: StrategyPlan = {
+                ...basePlan,
+                weeks: basePlan.weeks.map((week, wIdx) => {
+                    if (wIdx !== weekIndex) return week;
+                    return {
+                        ...week,
+                        content: week.content.map((day, dIdx) => {
+                            if (dIdx !== dayIndex) return day;
+                            return {
+                                ...day,
+                                status: 'scheduled' as const,
+                                linkedPostId: postId,
+                            };
+                        }),
+                    };
+                }),
+            };
+
+            setPlan(updatedPlanWithSchedule);
 
             // Persist into the selected strategy document if it exists
             if (selectedStrategy && user) {
                 const updatedStrategy = {
                     ...selectedStrategy,
-                    plan: updatedPlan,
+                    plan: updatedPlanWithSchedule,
+                    linkedPostIds: [...(selectedStrategy.linkedPostIds || []), postId],
                 };
                 setSelectedStrategy(updatedStrategy);
                 try {
@@ -562,7 +644,7 @@ export const Strategy: React.FC = () => {
             }
 
             setShowMediaLibrary(null);
-            showToast('Media attached from your library.', 'success');
+            showToast('Media attached from your library, caption generated, and added to your calendar.', 'success');
         } catch (error) {
             console.error('Failed to attach media from library:', error);
             showToast('Failed to attach media from your library. Please try again.', 'error');
@@ -887,24 +969,34 @@ export const Strategy: React.FC = () => {
                     <div className="flex justify-between items-center flex-wrap gap-4">
                         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Your Strategy Plan</h2>
                         <div className="flex items-center gap-3">
-                        <button 
-                            onClick={() => setShowSaveModal(true)}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-                        >
-                            <CheckCircleIcon className="w-5 h-5" /> Save Strategy
-                        </button>
-                        <button 
-                            onClick={handleExportStrategy}
-                            className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors shadow-sm"
-                        >
-                            <DownloadIcon className="w-5 h-5" /> Export
-                        </button>
-                        <button 
-                            onClick={handlePopulateCalendar}
-                            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm"
-                        >
-                            <CalendarIcon className="w-5 h-5" /> Populate Calendar
-                        </button>
+                            <button 
+                                onClick={() => setShowSaveModal(true)}
+                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                            >
+                                <CheckCircleIcon className="w-5 h-5" /> Save Strategy
+                            </button>
+                            <button 
+                                onClick={handleExportStrategy}
+                                className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors shadow-sm"
+                            >
+                                <DownloadIcon className="w-5 h-5" /> Export
+                            </button>
+                            <button 
+                                onClick={handlePopulateCalendar}
+                                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm"
+                            >
+                                <CalendarIcon className="w-5 h-5" /> Populate Calendar
+                            </button>
+                            <button 
+                                onClick={() => {
+                                    setPlan(null);
+                                    setSelectedStrategy(null);
+                                    showToast('Strategy cleared. You can generate a new roadmap anytime.', 'success');
+                                }}
+                                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors shadow-sm"
+                            >
+                                <TrashIcon className="w-5 h-5" /> Clear Plan
+                            </button>
                         </div>
                     </div>
 
@@ -916,84 +1008,35 @@ export const Strategy: React.FC = () => {
                         </div>
                         
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            {/* Primary KPI */}
+                            {/* Planning Focus */}
                             <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
-                                <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-2">Primary KPI</h4>
-                                <p className="text-2xl font-bold text-blue-700 dark:text-blue-400 mb-1">
-                                    {goal === 'Brand Awareness' ? 'Reach' : 
-                                     goal === 'Lead Generation' ? 'Leads Generated' :
-                                     goal === 'Sales Conversion' ? 'Revenue' :
-                                     goal === 'Community Engagement' || goal === 'Customer Engagement' || goal === 'Increase Engagement' ? 'Engagement Rate' :
-                                     goal === 'Increase Followers/Fans' ? 'Follower Growth' :
-                                     'Engagement Rate'}
+                                <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-2">Planning Focus</h4>
+                                <p className="text-sm text-blue-800 dark:text-blue-200">
+                                    {goal === 'Brand Awareness' && 'Show up consistently with recognizable, on-brand stories.'}
+                                    {goal === 'Lead Generation' && 'Make sure your posts clearly point people toward a next step (link in bio, offer, or DM).'}
+                                    {goal === 'Sales Conversion' && 'Connect your content to specific offers and make the path to buy obvious.'}
+                                    {(goal === 'Community Engagement' || goal === 'Increase Engagement' || goal === 'Customer Engagement') && 'Start real conversations, ask questions, and invite replies or DMs.'}
+                                    {goal === 'Increase Followers/Fans' && 'Focus on shareable, bingeable content that new people can discover and fall in love with.'}
+                                    {!goal && 'Stay consistent, keep your content organized, and regularly ship what you planned.'}
                                 </p>
-                                <p className="text-xs text-blue-600 dark:text-blue-400">Track this metric weekly to measure strategy success</p>
                             </div>
 
-                            {/* Success Criteria */}
+                            {/* What “success” looks like for this plan */}
                             <div className="p-4 bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-lg border border-emerald-100 dark:border-emerald-800">
-                                <h4 className="text-sm font-semibold text-emerald-900 dark:text-emerald-300 mb-2">Success Criteria</h4>
+                                <h4 className="text-sm font-semibold text-emerald-900 dark:text-emerald-300 mb-2">What “success” looks like for this plan</h4>
                                 <ul className="space-y-1">
-                                    {goal === 'Brand Awareness' && (
-                                        <>
-                                            <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
-                                                <CheckCircleIcon className="w-3 h-3" /> Reach 10K+ impressions per week
-                                            </li>
-                                            <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
-                                                <CheckCircleIcon className="w-3 h-3" /> 20%+ increase in profile visits
-                                            </li>
-                                        </>
-                                    )}
-                                    {goal === 'Lead Generation' && (
-                                        <>
-                                            <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
-                                                <CheckCircleIcon className="w-3 h-3" /> Generate 50+ qualified leads
-                                            </li>
-                                            <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
-                                                <CheckCircleIcon className="w-3 h-3" /> 5%+ conversion rate from traffic
-                                            </li>
-                                        </>
-                                    )}
-                                    {goal === 'Sales Conversion' && (
-                                        <>
-                                            <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
-                                                <CheckCircleIcon className="w-3 h-3" /> 15%+ increase in sales
-                                            </li>
-                                            <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
-                                                <CheckCircleIcon className="w-3 h-3" /> 10%+ improvement in ROI
-                                            </li>
-                                        </>
-                                    )}
-                                    {(goal === 'Community Engagement' || goal === 'Increase Engagement') && (
-                                        <>
-                                            <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
-                                                <CheckCircleIcon className="w-3 h-3" /> 25%+ increase in engagement rate
-                                            </li>
-                                            <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
-                                                <CheckCircleIcon className="w-3 h-3" /> 2x growth in comments/DMs
-                                            </li>
-                                        </>
-                                    )}
-                                    {goal === 'Customer Engagement' && (
-                                        <>
-                                            <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
-                                                <CheckCircleIcon className="w-3 h-3" /> 30%+ increase in customer interactions
-                                            </li>
-                                            <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
-                                                <CheckCircleIcon className="w-3 h-3" /> Higher customer satisfaction scores
-                                            </li>
-                                        </>
-                                    )}
-                                    {goal === 'Increase Followers/Fans' && (
-                                        <>
-                                            <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
-                                                <CheckCircleIcon className="w-3 h-3" /> 20%+ follower growth
-                                            </li>
-                                            <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
-                                                <CheckCircleIcon className="w-3 h-3" /> Improved follower quality (engagement ratio)
-                                            </li>
-                                        </>
-                                    )}
+                                    <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
+                                        <CheckCircleIcon className="w-3 h-3" /> You actually create and move most of the planned posts into Workflow.
+                                    </li>
+                                    <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
+                                        <CheckCircleIcon className="w-3 h-3" /> Each week has a clear mix of nurture, value, and soft promo content (not just back‑to‑back sales posts).
+                                    </li>
+                                    <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
+                                        <CheckCircleIcon className="w-3 h-3" /> You reuse or remix at least 1–2 ideas instead of starting from scratch every time.
+                                    </li>
+                                    <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
+                                        <CheckCircleIcon className="w-3 h-3" /> You keep light notes on what felt good or got strong reactions, so future plans get easier.
+                                    </li>
                                 </ul>
                             </div>
                         </div>
@@ -1060,29 +1103,20 @@ export const Strategy: React.FC = () => {
                             </p>
                         </div>
 
-                        {/* Expected Outcomes */}
+                        {/* Expected Outcomes (planning lens, not analytics) */}
                         <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
                             <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Expected Outcomes</h4>
                             <div className="space-y-3">
-                                {plan.weeks.map((week, idx) => {
-                                    const weekOutcomes: Record<string, string> = {
-                                        'Brand Awareness': `Week ${week.weekNumber}: Expected ${(idx + 1) * 15}% increase in reach and impressions`,
-                                        'Lead Generation': `Week ${week.weekNumber}: Target ${(idx + 1) * 10} qualified leads from content`,
-                                        'Sales Conversion': `Week ${week.weekNumber}: Aim for ${(idx + 1) * 5}% increase in conversion rate`,
-                                        'Community Engagement': `Week ${week.weekNumber}: Target ${(idx + 1) * 20}% boost in engagement rate`,
-                                        'Increase Engagement': `Week ${week.weekNumber}: Target ${(idx + 1) * 20}% boost in engagement rate`,
-                                        'Customer Engagement': `Week ${week.weekNumber}: Target ${(idx + 1) * 25}% increase in customer interactions`,
-                                        'Increase Followers/Fans': `Week ${week.weekNumber}: Goal of ${(idx + 1) * 50} new followers`
-                                    };
-                                    return (
-                                        <div key={idx} className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
-                                            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 flex items-center justify-center text-xs font-bold">
-                                                {week.weekNumber}
-                                            </div>
-                                            <p className="text-sm text-gray-700 dark:text-gray-300">{weekOutcomes[goal] || `Week ${week.weekNumber}: Track progress towards ${goal.toLowerCase()}`}</p>
+                                {plan.weeks.map((week) => (
+                                    <div key={week.weekNumber} className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
+                                        <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 flex items-center justify-center text-xs font-bold">
+                                            {week.weekNumber}
                                         </div>
-                                    );
-                                })}
+                                        <p className="text-sm text-gray-700 dark:text-gray-300">
+                                            Week {week.weekNumber}: Ship the content you planned, note which ideas felt strong, and mark 1–2 pieces you’d like to reuse or expand later.
+                                        </p>
+                                    </div>
+                                ))}
                             </div>
                         </div>
 
