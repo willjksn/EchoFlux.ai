@@ -1,9 +1,5 @@
 import { VercelRequest, VercelResponse } from "@vercel/node";
-import {
-  handleCors,
-  handleError,
-  handleMethodNotAllowed,
-} from "./_errorHandler.js";
+import { withErrorHandling } from "./_errorHandler.js";
 
 async function getGeminiShared() {
   try {
@@ -18,14 +14,13 @@ async function getGeminiShared() {
   }
 }
 
-export default async function handler(
+async function handler(
   req: VercelRequest,
   res: VercelResponse
 ): Promise<void> {
-  await handleCors(req, res);
-
   if (req.method !== "POST") {
-    return handleMethodNotAllowed(res);
+    res.status(405).json({ error: "Method not allowed" });
+    return;
   }
 
   try {
@@ -38,10 +33,12 @@ export default async function handler(
       return;
     }
 
-    const { getModel, parseJSON } = await getGeminiShared();
-    if (!getModel || !parseJSON) {
-      throw new Error("Failed to initialize Gemini model");
+    const shared = await getGeminiShared();
+    if (!shared?.getModel || !shared?.parseJSON) {
+      res.status(500).json({ error: "Failed to initialize Gemini model" });
+      return;
     }
+    const { getModel, parseJSON } = shared;
 
     const model = getModel();
 
@@ -123,7 +120,13 @@ Order recommendations by score (highest first). Include top 3-4 platforms.
     });
   } catch (error: any) {
     console.error("Error analyzing post for platforms:", error);
-    return handleError(res, error, "Failed to analyze post for platforms");
+    res.status(200).json({
+      error: "Failed to analyze post for platforms",
+      note: error?.message || "An unexpected error occurred.",
+      details: process.env.NODE_ENV === "development" ? error?.stack : undefined,
+    });
+    return;
   }
 }
 
+export default withErrorHandling(handler);

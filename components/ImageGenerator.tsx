@@ -11,12 +11,81 @@ import { MobilePreviewModal } from './MobilePreviewModal';
 // FIX: Use namespace import for firebase/storage to resolve module resolution issues.
 import * as storageApi from 'firebase/storage';
 
-const fileToBase64 = (file: File): Promise<string> => {
+// Compress and resize image to reduce payload size (prevents 413 errors)
+const compressImage = (file: File, maxWidth: number = 1024, maxHeight: number = 1024, quality: number = 0.85, maxBase64Size: number = 1500000): Promise<string> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result as string);
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                // Calculate new dimensions while maintaining aspect ratio
+                let width = img.width;
+                let height = img.height;
+                
+                if (width > maxWidth || height > maxHeight) {
+                    const ratio = Math.min(maxWidth / width, maxHeight / height);
+                    width = width * ratio;
+                    height = height * ratio;
+                }
+                
+                // Create canvas and resize
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                
+                if (!ctx) {
+                    reject(new Error('Failed to get canvas context'));
+                    return;
+                }
+                
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                // Try different quality levels until we get under the size limit
+                const tryCompress = (q: number): void => {
+                    const compressedDataUrl = canvas.toDataURL('image/jpeg', q);
+                    const base64Data = compressedDataUrl.split(',')[1];
+                    
+                    // Check if base64 size is acceptable (base64 is ~33% larger than binary)
+                    if (base64Data.length <= maxBase64Size || q <= 0.5) {
+                        resolve(compressedDataUrl);
+                    } else {
+                        // Reduce quality and try again
+                        tryCompress(Math.max(0.5, q - 0.1));
+                    }
+                };
+                
+                tryCompress(quality);
+            };
+            img.onerror = reject;
+            img.src = e.target?.result as string;
+        };
         reader.onerror = error => reject(error);
+    });
+};
+
+const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        // For large files, compress first to avoid 413 errors
+        // Use adaptive compression that ensures final size is under limit
+        if (file.size > 300000) { // > 300KB (more aggressive threshold)
+            compressImage(file, 1024, 1024, 0.85, 1500000).then(resolve).catch(reject);
+        } else {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => {
+                const result = reader.result as string;
+                const base64Data = result.split(',')[1];
+                // Even for smaller files, check if base64 exceeds limit and compress if needed
+                if (base64Data.length > 1500000) {
+                    compressImage(file, 1024, 1024, 0.85, 1500000).then(resolve).catch(reject);
+                } else {
+                    resolve(result);
+                }
+            };
+            reader.onerror = error => reject(error);
+        }
     });
 };
 
@@ -58,7 +127,7 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, usag
     const [caption, setCaption] = useState('');
     const [isCaptionLoading, setIsCaptionLoading] = useState(false);
     const [selectedPlatforms, setSelectedPlatforms] = useState<Record<Platform, boolean>>({
-        Instagram: false, TikTok: false, X: false, Threads: false, YouTube: false, LinkedIn: false, Facebook: false, Pinterest: false, Discord: false, Telegram: false, Reddit: false
+        Instagram: false, TikTok: false, X: false, Threads: false, YouTube: false, LinkedIn: false, Facebook: false, Pinterest: false
     });
     const [uploadedImage, setUploadedImage] = useState<{ data: string; mimeType: string; previewUrl: string } | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -66,6 +135,7 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, usag
     const [isScheduling, setIsScheduling] = useState(false);
     const [scheduleDate, setScheduleDate] = useState('');
     const abortControllerRef = useRef<AbortController | null>(null);
+    const [allowExplicit, setAllowExplicit] = useState(false);
 
     if (!user) return null;
 
@@ -118,7 +188,10 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, usag
     };
 
     const handleGenerate = async () => {
-        if (!prompt.trim() && !uploadedImage) return;
+        if (!prompt.trim() && !uploadedImage) {
+            showToast('Please enter a prompt or upload an image.', 'error');
+            return;
+        }
         setIsLoading(true);
         setGeneratedImage(null);
         setCaption('');
@@ -126,18 +199,22 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, usag
         // Create abort controller for cancellation
         abortControllerRef.current = new AbortController();
 
-        let finalPrompt = prompt;
+        // Ensure we always send a non-empty prompt (API requires it)
+        let finalPrompt = prompt.trim();
+        if (!finalPrompt && uploadedImage) {
+            finalPrompt = 'Enhance this photo to be photorealistic with natural lighting and sharp details.';
+        }
         if (selectedClientId) {
             const client = clients.find(c => c.id === selectedClientId);
             if (client) {
-                 finalPrompt = `For ${client.name}, create an image of: ${prompt}`;
+                 finalPrompt = `For ${client.name}, create an image of: ${finalPrompt || prompt}`;
             }
         }
         
         const imageToGenerateFrom = uploadedImage || (useBaseImage ? userBaseImage : undefined);
 
         try {
-            const imageData = await generateImage(finalPrompt, imageToGenerateFrom);
+            const imageData = await generateImage(finalPrompt, imageToGenerateFrom, allowExplicit);
             // Check if request was cancelled
             if (abortControllerRef.current?.signal.aborted) {
                 return;
@@ -149,7 +226,12 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, usag
             if (err?.name === 'AbortError' || abortControllerRef.current?.signal.aborted) {
                 return;
             }
-            showToast('Failed to generate image. Please try a different prompt.', 'error');
+            const msg = err?.message || '';
+            if (msg.toLowerCase().includes('missing or invalid')) {
+                showToast('Prompt is required. Please enter a prompt.', 'error');
+            } else {
+                showToast('Failed to generate image. Please try a different prompt.', 'error');
+            }
         } finally {
             setIsLoading(false);
             abortControllerRef.current = null;
@@ -390,7 +472,18 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, usag
                     )}
                 </div>
                 <div>
-                    <label htmlFor="image-prompt" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{uploadedImage ? "Describe your edits" : "Your Prompt"}</label>
+                    <div className="flex items-center justify-between mb-1">
+                        <label htmlFor="image-prompt" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{uploadedImage ? "Describe your edits" : "Your Prompt"}</label>
+                        <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={allowExplicit}
+                                onChange={(e) => setAllowExplicit(e.target.checked)}
+                                className="w-4 h-4 text-primary-600 rounded border-gray-300"
+                            />
+                            <span>Allow explicit content</span>
+                        </label>
+                    </div>
                     <div className="flex flex-col sm:flex-row gap-4">
                         <input id="image-prompt" type="text" value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder={uploadedImage ? "e.g., add a retro filter" : "e.g., A futuristic cityscape at sunset"} className="flex-grow p-3 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"/>
                         <button onClick={handleGenerate} disabled={isLoading || (!prompt.trim() && !uploadedImage)} className="flex items-center justify-center px-6 py-3 text-base font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50">
@@ -497,8 +590,8 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, usag
                             placeholder="Write a caption, or generate one with AI."
                         />
                     </div>
-                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Publish to</label>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Plan for platforms</label>
                         <div className="mt-2 flex flex-wrap gap-3">
                             {(Object.keys(platformIcons) as Platform[]).map(platform => (
                                 <button

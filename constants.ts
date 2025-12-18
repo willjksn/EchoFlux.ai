@@ -1,5 +1,9 @@
 import { Message, AnalyticsData, TeamMember, Client, Notification, TourStep, User, Activity, Settings, Post } from './types';
 
+// Global feature flag: run EchoFlux as an AI Content Studio
+// with planning and generation only, no live social posting.
+export const OFFLINE_MODE = true;
+
 export const defaultSettings: Settings = {
   autoReply: true,
   autoRespond: false,

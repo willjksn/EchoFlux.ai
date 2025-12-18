@@ -33,7 +33,7 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                 return (
                     <div className="text-center animate-fade-in">
                         <div className="flex justify-center items-center text-primary-600 dark:text-primary-400 mb-4">
-                            <LogoIcon /> <span className="text-2xl font-bold ml-2">EngageSuite.ai</span>
+                            <LogoIcon /> <span className="text-2xl font-bold ml-2">EchoFlux.ai</span>
                         </div>
                         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Welcome, Creator!</h2>
                         <p className="mt-2 text-gray-500 dark:text-gray-400">Let's set up your creative command center.</p>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BioPageConfig, SocialBioLink, BioLink } from '../types';
 import { MailIcon } from './icons/UIIcons';
-import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon, FanvueIcon, OnlyFansIcon, Platform } from './icons/PlatformIcons';
+import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon, Platform } from './icons/PlatformIcons';
 
 const formatFollowerCount = (count: number): string => {
     if (count >= 1000000) {
@@ -23,11 +23,6 @@ const platformIcons: Record<Platform, React.ReactNode> = {
     LinkedIn: <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#0077B5"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>,
     Facebook: <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>,
     Pinterest: <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#BD081C"><path d="M12 0C5.373 0 0 5.372 0 12c0 5.084 3.163 9.426 7.619 11.174-.105-.949-.2-2.403.041-3.439.219-.937 1.406-5.957 1.406-5.957s-.359-.72-.359-1.781c0-1.663.967-2.911 2.168-2.911 1.024 0 1.518.769 1.518 1.688 0 1.029-.653 2.567-.992 3.992-.285 1.193.6 2.165 1.775 2.165 2.128 0 3.768-2.245 3.768-5.487 0-2.861-2.063-4.869-5.008-4.869-3.41 0-5.409 2.562-5.409 5.199 0 1.033.394 2.143.889 2.741.099.12.112.225.085.345-.09.375-.293 1.199-.334 1.363-.053.225-.172.271-.402.165-1.495-.69-2.433-2.878-2.433-4.646 0-3.776 2.748-7.252 7.92-7.252 4.158 0 7.392 2.967 7.392 6.923 0 4.135-2.607 7.462-6.233 7.462-1.214 0-2.357-.629-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0z"/></svg>,
-    Discord: <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#5865F2"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>,
-    Telegram: <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#0088CC"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>,
-    Reddit: <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#FF4500"><path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z"/></svg>,
-    Fanvue: <FanvueIcon className="w-5 h-5" />,
-    OnlyFans: <OnlyFansIcon className="w-5 h-5" />,
 };
 
 export const BioPageView: React.FC = () => {
@@ -36,7 +31,17 @@ export const BioPageView: React.FC = () => {
     // Try direct username first (e.g., /will), then fallback to /u/username or /link/username
     const directMatch = pathname.match(/^\/([^/]+)$/);
     const legacyMatch = pathname.match(/\/(?:u|link)\/([^/]+)/);
-    const username = directMatch ? directMatch[1] : (legacyMatch ? legacyMatch[1] : null);
+    let username = directMatch ? directMatch[1] : (legacyMatch ? legacyMatch[1] : null);
+    
+    // Normalize username (decode URL encoding, remove @, lowercase, trim) to match how it's stored
+    if (username) {
+        try {
+            username = decodeURIComponent(username).replace('@', '').toLowerCase().trim();
+        } catch (e) {
+            // If decode fails, just normalize without decoding
+            username = username.replace('@', '').toLowerCase().trim();
+        }
+    }
     const [bioPage, setBioPage] = useState<BioPageConfig | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -52,25 +57,29 @@ export const BioPageView: React.FC = () => {
             }
 
             try {
+                console.log('Fetching bio page for username:', username);
                 // Query Firestore for user with matching username
-                // Note: We'll need to create an index or query by username
-                // For now, we'll fetch by user ID if username matches a pattern
-                // Or we can create an API endpoint to fetch by username
-                
                 // Since we need to query by username, let's use an API endpoint
+                // The username is already normalized, so we can use it directly
                 const response = await fetch(`/api/getBioPage?username=${encodeURIComponent(username)}`);
+                
+                console.log('Bio page API response status:', response.status);
                 
                 if (!response.ok) {
                     if (response.status === 404) {
-                        setError('Bio page not found');
+                        setError(`Bio page not found for username: ${username}`);
+                        console.error('Bio page not found. Username searched:', username);
                     } else {
-                        setError('Failed to load bio page');
+                        const errorData = await response.json().catch(() => ({}));
+                        setError(`Failed to load bio page: ${errorData.error || response.statusText}`);
+                        console.error('Failed to load bio page:', response.status, errorData);
                     }
                     setLoading(false);
                     return;
                 }
 
                 const data = await response.json();
+                console.log('Bio page data received:', data);
                 
                 if (!data || !data.bioPage) {
                     setError('Invalid bio page data received');
@@ -166,21 +175,24 @@ export const BioPageView: React.FC = () => {
     };
 
     const handleLinkClick = async (url: string, linkId?: string) => {
-        // Track click if linkId is provided
+        // Track click if linkId is provided (don't wait for it to complete)
         if (linkId && username) {
-            try {
-                await fetch('/api/trackBioLinkClick', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, linkId }),
-                });
-            } catch (err) {
+            fetch('/api/trackBioLinkClick', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, linkId }),
+            }).catch(err => {
                 console.error('Error tracking click:', err);
-            }
+            });
         }
         
-        // Open link in new tab
-        window.open(url, '_blank', 'noopener,noreferrer');
+        // Open link in new tab immediately
+        // Ensure URL is valid - if it doesn't start with http:// or https://, add https://
+        let finalUrl = url.trim();
+        if (!finalUrl.match(/^https?:\/\//i)) {
+            finalUrl = 'https://' + finalUrl;
+        }
+        window.open(finalUrl, '_blank', 'noopener,noreferrer');
     };
 
     if (loading) {
@@ -279,12 +291,27 @@ export const BioPageView: React.FC = () => {
         console.warn('customLinks is not an array, forcing to array:', customLinks);
         customLinks = [];
     }
-    const theme = bioPage.theme || { backgroundColor: '#ffffff', buttonColor: '#000000', textColor: '#000000', buttonStyle: 'rounded' };
+    const theme = {
+        backgroundColor: bioPage.theme?.backgroundColor || '#ffffff',
+        pageBackgroundColor: bioPage.theme?.pageBackgroundColor || bioPage.theme?.backgroundColor || '#f5f7fb',
+        cardBackgroundColor: bioPage.theme?.cardBackgroundColor || '#ffffff',
+        buttonColor: bioPage.theme?.buttonColor || '#000000',
+        textColor: bioPage.theme?.textColor || '#000000',
+        buttonStyle: bioPage.theme?.buttonStyle || 'rounded',
+    };
+    const emailTheme = {
+        formBackgroundColor: bioPage.emailCapture?.formBackgroundColor || '#ffffff',
+        titleColor: bioPage.emailCapture?.titleColor || theme.textColor,
+        inputBackgroundColor: bioPage.emailCapture?.inputBackgroundColor || '#f9fafb',
+        inputTextColor: bioPage.emailCapture?.inputTextColor || '#111827',
+        buttonBackgroundColor: bioPage.emailCapture?.buttonBackgroundColor || theme.buttonColor,
+        buttonTextColor: bioPage.emailCapture?.buttonTextColor || theme.textColor,
+    };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4" style={{ backgroundColor: theme.backgroundColor }}>
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4" style={{ backgroundColor: theme.pageBackgroundColor }}>
             <div className="w-full max-w-md">
-                <div className="bg-white rounded-3xl shadow-2xl overflow-hidden" style={{ backgroundColor: theme.backgroundColor }}>
+                <div className="bg-white rounded-3xl shadow-2xl overflow-hidden" style={{ backgroundColor: theme.cardBackgroundColor }}>
                     <div className="p-6 flex flex-col items-center text-center pt-8">
                         <img 
                             src={bioPage.avatar || 'https://via.placeholder.com/100'} 
@@ -316,12 +343,29 @@ export const BioPageView: React.FC = () => {
                             <div className="w-full mb-6 px-4">
                                 <div className="grid grid-cols-2 gap-2">
                                     {bioPage.teaserImages.map((imageUrl, index) => (
-                                        <img
-                                            key={index}
-                                            src={imageUrl}
-                                            alt={`Teaser ${index + 1}`}
-                                            className="w-full h-32 object-cover rounded-lg"
-                                        />
+                                        <div key={index} className="h-32 bg-gray-100 dark:bg-gray-700 rounded-lg border-2 border-gray-200 dark:border-gray-700 flex items-center justify-center overflow-hidden" style={{ width: 'auto', minWidth: 0 }}>
+                                            <img
+                                                src={imageUrl}
+                                                alt={`Teaser ${index + 1}`}
+                                                className="h-full w-auto max-w-full object-contain rounded-lg"
+                                                style={{ maxHeight: '100%' }}
+                                                onError={(e) => {
+                                                    console.error('Public view: Failed to load teaser image:', imageUrl, e);
+                                                }}
+                                                onLoad={(e) => {
+                                                    console.log('Public view: Teaser image loaded:', imageUrl);
+                                                    // Adjust container width to match image width
+                                                    const img = e.target as HTMLImageElement;
+                                                    const container = img.parentElement;
+                                                    if (container && img.naturalWidth > 0) {
+                                                        const aspectRatio = img.naturalWidth / img.naturalHeight;
+                                                        const displayHeight = 128; // h-32 = 128px
+                                                        const displayWidth = displayHeight * aspectRatio;
+                                                        container.style.width = `${Math.min(displayWidth, container.parentElement?.clientWidth || displayWidth)}px`;
+                                                    }
+                                                }}
+                                            />
+                                        </div>
                                     ))}
                                 </div>
                             </div>
@@ -329,52 +373,74 @@ export const BioPageView: React.FC = () => {
 
                         <div className="w-full space-y-3">
                             {/* Social Links */}
-                            {Array.isArray(socialLinks) && socialLinks.filter((l: SocialBioLink) => l?.isActive).map((link: SocialBioLink) => (
-                                <a 
-                                    key={link.id}
-                                    href={link.url}
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        handleLinkClick(link.url, link.id);
-                                    }}
-                                    className={`flex items-center justify-center gap-2 w-full py-3 px-4 text-center font-medium transition-transform active:scale-95 ${theme.buttonStyle === 'rounded' ? 'rounded-lg' : theme.buttonStyle === 'pill' ? 'rounded-full' : 'rounded-none'}`}
-                                    style={{ 
-                                        backgroundColor: theme.buttonColor, 
-                                        color: theme.backgroundColor === '#ffffff' && theme.buttonColor === '#ffffff' ? '#000000' : theme.backgroundColor 
-                                    }}
-                                >
-                                    <span className="flex-shrink-0">{platformIcons[link.platform] || <span>{link.platform}</span>}</span>
-                                    <span>{link.platform}</span>
-                                </a>
-                            ))}
+                            {Array.isArray(socialLinks) && socialLinks.filter((l: SocialBioLink) => l?.isActive).map((link: SocialBioLink) => {
+                                // Ensure URL is valid
+                                let linkUrl = link.url?.trim() || '';
+                                if (linkUrl && !linkUrl.match(/^https?:\/\//i)) {
+                                    linkUrl = 'https://' + linkUrl;
+                                }
+                                
+                                return (
+                                    <a 
+                                        key={link.id}
+                                        href={linkUrl}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            handleLinkClick(linkUrl, link.id);
+                                        }}
+                                        className={`flex items-center justify-center gap-2 w-full py-3 px-4 text-center font-medium transition-transform active:scale-95 ${theme.buttonStyle === 'rounded' ? 'rounded-lg' : theme.buttonStyle === 'pill' ? 'rounded-full' : 'rounded-none'}`}
+                                        style={{ 
+                                            backgroundColor: theme.buttonColor, 
+                                            color: theme.textColor 
+                                        }}
+                                    >
+                                        <span className="flex-shrink-0">{platformIcons[link.platform] || <span>{link.platform}</span>}</span>
+                                        <span>{link.platform}</span>
+                                    </a>
+                                );
+                            })}
                             
                             {/* Custom Links */}
-                            {customLinks.filter((l: BioLink) => l?.isActive).map((link: BioLink) => (
-                                <a 
-                                    key={link.id}
-                                    href={link.url}
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        handleLinkClick(link.url, link.id);
-                                    }}
-                                    className={`block w-full py-3 px-4 text-center font-medium transition-transform active:scale-95 ${theme.buttonStyle === 'rounded' ? 'rounded-lg' : theme.buttonStyle === 'pill' ? 'rounded-full' : 'rounded-none'}`}
-                                    style={{ 
-                                        backgroundColor: theme.buttonColor, 
-                                        color: theme.backgroundColor === '#ffffff' && theme.buttonColor === '#ffffff' ? '#000000' : theme.backgroundColor 
-                                    }}
-                                >
-                                    {link.title}
-                                </a>
-                            ))}
+                            {customLinks.filter((l: BioLink) => l?.isActive).map((link: BioLink) => {
+                                // Ensure URL is valid
+                                let linkUrl = link.url?.trim() || '';
+                                if (linkUrl && !linkUrl.match(/^https?:\/\//i)) {
+                                    linkUrl = 'https://' + linkUrl;
+                                }
+                                
+                                return (
+                                    <a 
+                                        key={link.id}
+                                        href={linkUrl}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            handleLinkClick(linkUrl, link.id);
+                                        }}
+                                        className={`block w-full py-3 px-4 text-center font-medium transition-transform active:scale-95 ${theme.buttonStyle === 'rounded' ? 'rounded-lg' : theme.buttonStyle === 'pill' ? 'rounded-full' : 'rounded-none'}`}
+                                        style={{ 
+                                            backgroundColor: theme.buttonColor, 
+                                            color: theme.textColor 
+                                        }}
+                                    >
+                                        {link.title}
+                                    </a>
+                                );
+                            })}
                         </div>
 
                         {/* Email Capture */}
                         {bioPage.emailCapture?.enabled && (
-                            <div className="w-full mt-8 p-4 rounded-xl bg-white shadow-lg border border-gray-100">
-                                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-600 mx-auto mb-2">
+                            <div
+                                className="w-full mt-8 p-4 rounded-xl shadow-lg border"
+                                style={{
+                                    backgroundColor: emailTheme.formBackgroundColor,
+                                    borderColor: 'rgba(0,0,0,0.06)',
+                                }}
+                            >
+                                <div className="flex items-center justify-center w-8 h-8 rounded-full mx-auto mb-2" style={{ backgroundColor: emailTheme.buttonBackgroundColor + '22', color: emailTheme.buttonBackgroundColor }}>
                                     <MailIcon className="w-4 h-4" />
                                 </div>
-                                <h4 className="font-bold text-gray-800 text-sm mb-1">{bioPage.emailCapture.title}</h4>
+                                <h4 className="font-bold text-sm mb-1" style={{ color: emailTheme.titleColor }}>{bioPage.emailCapture.title}</h4>
                                 {emailSubmitted ? (
                                     <p className="text-sm text-green-600 mt-2">{bioPage.emailCapture.successMessage || 'Thank you for subscribing!'}</p>
                                 ) : (
@@ -385,11 +451,20 @@ export const BioPageView: React.FC = () => {
                                             onChange={(e) => setEmail(e.target.value)}
                                             placeholder={bioPage.emailCapture.placeholder} 
                                             required
-                                            className="w-full p-2 text-xs border border-gray-300 rounded-md mb-2 bg-gray-50"
+                                            className="w-full p-2 text-xs border rounded-md mb-2"
+                                            style={{
+                                                backgroundColor: emailTheme.inputBackgroundColor,
+                                                color: emailTheme.inputTextColor,
+                                                borderColor: 'rgba(0,0,0,0.08)',
+                                            }}
                                         />
                                         <button 
                                             type="submit"
-                                            className="w-full py-2 text-xs font-bold text-white bg-gray-900 rounded-md hover:bg-gray-800"
+                                            className="w-full py-2 text-xs font-bold rounded-md hover:opacity-90"
+                                            style={{
+                                                backgroundColor: emailTheme.buttonBackgroundColor,
+                                                color: emailTheme.buttonTextColor,
+                                            }}
                                         >
                                             {bioPage.emailCapture.buttonText}
                                         </button>

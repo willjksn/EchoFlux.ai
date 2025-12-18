@@ -3,20 +3,23 @@ import { getModel, parseJSON } from "./_geminiShared.js";
 import { verifyAuth } from "./verifyAuth.js";
 import { getModelForTask } from "./_modelRouter.js";
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    res.status(405).json({ error: "Method not allowed" });
+    return;
   }
 
   const user = await verifyAuth(req);
   if (!user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    res.status(401).json({ error: "Unauthorized" });
+    return;
   }
 
   const { niche, audience, goal, duration, tone, platformFocus, analyticsData } = req.body || {};
 
   if (!niche || !audience || !goal) {
-    return res.status(400).json({ error: "Missing required fields: niche, audience, and goal are required" });
+    res.status(400).json({ error: "Missing required fields: niche, audience, and goal are required" });
+    return;
   }
 
   try {
@@ -26,22 +29,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const durationWeeks = duration ? parseInt(duration.replace(/\D/g, '')) || 4 : 4;
     const platforms = platformFocus && platformFocus !== 'Mixed / All' 
       ? [platformFocus] 
-      : ['Instagram', 'TikTok', 'X', 'LinkedIn', 'Facebook', 'Threads', 'YouTube', 'Pinterest', 'Discord', 'Telegram', 'Reddit', 'Fanvue', 'OnlyFans'];
+      : ['Instagram', 'TikTok', 'X', 'LinkedIn', 'Facebook', 'Threads', 'YouTube', 'Pinterest'];
     
     // Detect explicit content context
     const isExplicitContent = tone === 'Explicit/Adult Content' || 
                              tone === 'Explicit' ||
                              tone === 'Sexy / Explicit' ||
-                             tone === 'Sexy / Bold' ||
-                             platforms.includes('OnlyFans') || 
-                             platforms.includes('Fanvue');
+                             tone === 'Sexy / Bold';
 
     // Build analytics context for AI
     let analyticsContext = '';
     if (analyticsData) {
       const topTopics = analyticsData.topTopics?.slice(0, 5).join(', ') || 'No trending topics available';
-      const engagementInsights = analyticsData.engagementInsights?.map(insight => `- ${insight.title}: ${insight.description}`).join('\n') || 'No specific insights available';
-      const bestDays = analyticsData.responseRate?.sort((a, b) => b.value - a.value).slice(0, 3).map(d => d.name).join(', ') || 'No data';
+      const engagementInsights = analyticsData.engagementInsights?.map((insight: any) => `- ${insight.title}: ${insight.description}`).join('\n') || 'No specific insights available';
+      const bestDays = analyticsData.responseRate?.sort((a: any, b: any) => b.value - a.value).slice(0, 3).map((d: any) => d.name).join(', ') || 'No data';
       const engagementIncrease = analyticsData.engagementIncrease || 0;
       
       analyticsContext = `
@@ -92,7 +93,7 @@ ${analyticsContext ? analyticsContext : 'Note: No analytics data available. Use 
 Create a ${durationWeeks}-week content strategy with the following parameters:
 - Goal: ${goal}
 - Tone: ${tone}${isExplicitContent ? ' (EXPLICIT/ADULT CONTENT - Generate bold, sales-oriented, explicit content ideas)' : ''}
-- Platform Focus: ${platformFocus || 'Mixed / All'}${platforms.includes('OnlyFans') || platforms.includes('Fanvue') ? ' (ADULT CONTENT PLATFORM)' : ''}
+- Platform Focus: ${platformFocus || 'Mixed / All'}
 - Target Audience: ${audience}
 - Niche: ${niche}
 
@@ -232,21 +233,24 @@ IMPORTANT: When generating imageIdeas and videoIdeas:
     } catch (parseError: any) {
       console.error("Failed to parse strategy response:", parseError);
       console.error("Raw response:", raw);
-      return res.status(200).json({
+      res.status(200).json({
         error: "Failed to parse strategy response",
         note: "The AI generated a response but it wasn't in the expected format. Please try again.",
         details: process.env.NODE_ENV === "development" ? parseError?.message : undefined
       });
+      return;
     }
 
-    return res.status(200).json({ plan });
+    res.status(200).json({ plan });
+    return;
   } catch (error: any) {
     console.error("generateContentStrategy error:", error);
-    return res.status(200).json({
+    res.status(200).json({
       error: "Failed to generate content strategy",
       note: error?.message || "An unexpected error occurred. Please try again.",
       details: process.env.NODE_ENV === "development" ? error?.stack : undefined
     });
+    return;
   }
 }
 

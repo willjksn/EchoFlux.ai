@@ -3,18 +3,20 @@ import { checkApiKeys, getVerifyAuth, withErrorHandling } from "./_errorHandler.
 import { getModelForTask } from "./_modelRouter.js";
 import { getModel, parseJSON } from "./_geminiShared.js";
 
-async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    res.status(405).json({ error: "Method not allowed" });
+    return;
   }
 
   // Check API keys early
   const apiKeyCheck = checkApiKeys();
   if (!apiKeyCheck.hasKey) {
-    return res.status(200).json({
+    res.status(200).json({
       error: "AI not configured",
       note: apiKeyCheck.error,
     });
+    return;
   }
 
   // Dynamic import for auth
@@ -24,20 +26,23 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     user = await verifyAuth(req);
   } catch (authError: any) {
     console.error("verifyAuth error:", authError);
-    return res.status(200).json({
+    res.status(200).json({
       error: "Authentication error",
       note: authError?.message || "Failed to verify authentication. Please try logging in again.",
     });
+    return;
   }
 
   if (!user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    res.status(401).json({ error: "Unauthorized" });
+    return;
   }
 
   const { prompt, context } = req.body || {};
 
   if (!prompt || typeof prompt !== "string") {
-    return res.status(400).json({ error: "Missing or invalid 'prompt'" });
+    res.status(400).json({ error: "Missing or invalid 'prompt'" });
+    return;
   }
 
   try {
@@ -55,7 +60,7 @@ async function handler(req: VercelRequest, res: VercelResponse) {
                              tone === 'Explicit' ||
                              tone === 'Sexy / Explicit' ||
                              tone === 'Sexy / Bold' ||
-                             (Array.isArray(platforms) && (platforms.includes('OnlyFans') || platforms.includes('Fanvue')));
+                             (Array.isArray(platforms) && platforms.includes('OnlyFans'));
 
     const explicitContext = isExplicitContent ? `
 CRITICAL CONTEXT - EXPLICIT/ADULT CONTENT:
@@ -66,7 +71,7 @@ CRITICAL CONTEXT - EXPLICIT/ADULT CONTENT:
 - Be descriptive and explicit about intimate/explicit content when requested
 - If the user asks for explicit captions, write them with explicit, descriptive language
 - If the user asks for sales/monetization content, include CTAs for subscriptions/purchases
-- Platform mentions (OnlyFans/Fanvue) are optional in sales-focused content
+- Platform mentions are optional in sales-focused content
 ` : '';
 
     const aiPrompt = `
@@ -93,16 +98,18 @@ Return ONLY the generated text content, no explanations or meta-commentary.
 
     const generatedText = result.response.text().trim();
 
-    return res.status(200).json({
+    res.status(200).json({
       text: generatedText,
       caption: generatedText, // For backward compatibility
     });
+    return;
   } catch (error: any) {
     console.error("generateText error:", error);
-    return res.status(200).json({
+    res.status(200).json({
       error: "Failed to generate text",
       note: error?.message || "An unexpected error occurred. Please try again.",
     });
+    return;
   }
 }
 

@@ -149,18 +149,20 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   // Normalize tone value for consistent detection
   const normalizedTone = tone?.toLowerCase().trim();
   
-  // Detect explicit content context - check for various explicit tone values
+  // Detect explicit content context - ONLY for truly explicit tones, NOT "sexy/bold"
+  // "Sexy / Bold" should be suggestive but NOT explicit, and should NOT generate OnlyFans hashtags
   const isExplicitContent = normalizedTone === 'explicit/adult content' || 
                            normalizedTone === 'explicit' ||
                            normalizedTone === 'sexy / explicit' ||
                            normalizedTone === 'sexy-explicit' ||
                            normalizedTone === 'sex-explicit' ||
-                           normalizedTone === 'sexy / bold' ||
-                           normalizedTone === 'sexy-bold' ||
                            tone === 'Sexy / Explicit' || // Keep original case check for backwards compatibility
-                           tone === 'Explicit' ||
-                           tone === 'Sexy / Bold' ||
-                           (Array.isArray(platforms) && (platforms.includes('OnlyFans') || platforms.includes('Fanvue')));
+                           tone === 'Explicit';
+  
+  // NEVER generate OnlyFans hashtags in compose - OnlyFans has its own studio
+  // OnlyFans platform is hidden in compose, so it should never be selected here
+  // Even if somehow OnlyFans is in the platforms array, don't generate OnlyFans hashtags
+  const shouldGenerateOnlyFansHashtags = false; // Always false - OnlyFans content belongs in OnlyFans Studio, not compose
 
   // Model selection
   let model;
@@ -207,12 +209,11 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   // Detect if media is video or image (after finalMedia is determined)
   const isVideo = finalMedia?.mimeType?.startsWith('video/') || false;
 
-  // Determine platform for context (if OnlyFans or Fanvue)
+  // Determine platform for context (if OnlyFans)
   const targetPlatform = Array.isArray(platforms) && platforms.includes('OnlyFans') ? 'OnlyFans' 
-                        : Array.isArray(platforms) && platforms.includes('Fanvue') ? 'Fanvue' 
                         : null;
 
-  // Build explicit content context
+  // Build explicit content context - only for truly explicit content
   const explicitContext = isExplicitContent ? `
 CRITICAL CONTEXT - EXPLICIT/ADULT CONTENT PLATFORM:
 - This caption is for an adult content platform (creator monetization platform)${targetPlatform ? ` (${targetPlatform})` : ''}
@@ -228,7 +229,7 @@ CRITICAL CONTEXT - EXPLICIT/ADULT CONTENT PLATFORM:
 - Include subtle monetization hints naturally, but focus on describing the actual explicit content
 - Platform mentions: For descriptive captions, avoid platform names. For sales/monetization captions, can include ${targetPlatform || 'platform name'} when it makes sense naturally (e.g., "Join my ${targetPlatform || 'page'}", "Subscribe on ${targetPlatform || 'my platform'}")
 - Focus on creating desire through explicit, descriptive language about what's shown
-- HASHTAGS MUST BE EXPLICIT AND MATCH THE CAPTION: Use bold, adult-oriented hashtags that describe the explicit/intimate content shown (e.g., #intimate, #sensual, #boudoir, #explicit, #adultcontent, etc.)
+${shouldGenerateOnlyFansHashtags ? '- HASHTAGS MUST BE EXPLICIT AND MATCH THE CAPTION: Use bold, adult-oriented hashtags that describe the explicit/intimate content shown (e.g., #intimate, #sensual, #boudoir, #explicit, #adultcontent, etc.)' : '- HASHTAGS: Use appropriate hashtags for the content, but DO NOT use OnlyFans-specific hashtags, explicit adult content hashtags, or platform-specific adult content hashtags. Keep hashtags appropriate for general social media platforms.'}
 ` : '';
 
   // Build prompt
@@ -291,6 +292,7 @@ CAPTION VARIETY - MUST INCLUDE BOTH TYPES:
    - EXPLICIT DESCRIPTIONS REQUIRED: Be bold, direct, and explicit about sexual/explicit content viewers are seeing
    - Use EXPLICIT, ADULT LANGUAGE: Describe sexual/explicit content with clear, explicit terminology
    - NO PLATFORM MENTIONS: Don't mention "OnlyFans" or "Fanvue" - focus on explicit content description
+   ${shouldGenerateOnlyFansHashtags ? '' : '- NO ONLYFANS HASHTAGS: Do not use OnlyFans-specific hashtags or explicit adult content hashtags'}
    
 2. AT LEAST ONE SALES/MONETIZATION-FOCUSED CAPTION:
    - Focus on driving subscriptions, purchases, and monetization
@@ -299,8 +301,8 @@ CAPTION VARIETY - MUST INCLUDE BOTH TYPES:
    - Create urgency and desire for paid content or subscriptions
    - Promote exclusive content, subscriber benefits, and monetization opportunities
    - Can be more direct about monetization (but still natural, not spammy)
-   - Platform mentions OPTIONAL: Can include "OnlyFans" or "Fanvue" when it makes sense for sales/monetization (e.g., "Join my OnlyFans", "Subscribe on Fanvue", "Check my page")
-   - Use platform names naturally in sales context when appropriate - not forced or spammy, but helpful for direct CTAs
+   ${shouldGenerateOnlyFansHashtags ? '- Platform mentions OPTIONAL: Can include "OnlyFans" or "Fanvue" when it makes sense for sales/monetization (e.g., "Join my OnlyFans", "Subscribe on Fanvue", "Check my page")' : '- NO PLATFORM MENTIONS: Do not mention "OnlyFans" or "Fanvue" - keep content appropriate for general social media'}
+   ${shouldGenerateOnlyFansHashtags ? '- Use platform names naturally in sales context when appropriate - not forced or spammy, but helpful for direct CTAs' : ''}
 
 3. ADDITIONAL CAPTIONS (balance as needed):
    - Mix of explicit descriptions and sales-focused approaches
@@ -358,6 +360,7 @@ TYPE 1 - EXPLICIT DESCRIPTIVE CAPTIONS (at least 1 required):
 - EXPLICIT DETAILS REQUIRED: Be bold and explicit about sexual/explicit/intimate content shown in the media
 - Descriptive focus: The caption should make viewers want to see more by describing EXPLICIT/SEXUAL content with EXPLICIT language
 - No platform name: Don't mention "OnlyFans" or "Fanvue" - focus on EXPLICIT content description
+${shouldGenerateOnlyFansHashtags ? '' : '- NO ONLYFANS HASHTAGS: Do not use OnlyFans-specific hashtags or explicit adult content hashtags'}
 
 TYPE 2 - SALES/MONETIZATION CAPTIONS (at least 1 required):
 - Focus on driving subscriptions, purchases, and monetization
@@ -376,7 +379,7 @@ ADDITIONAL CAPTIONS:
 - Each caption offers something unique - COMPLETELY DIFFERENT from the others
 - No repetitive structures, phrases, or themes - generate fresh content every time
 
-CRITICAL - EXPLICIT HASHTAGS REQUIRED:
+${shouldGenerateOnlyFansHashtags ? `CRITICAL - EXPLICIT HASHTAGS REQUIRED:
 - HASHTAGS MUST MATCH THE EXPLICIT CONTENT: Use bold, adult-oriented hashtags that describe what's shown
 - Generate 5-10 explicit hashtags per caption that relate to the intimate/explicit content
 - Examples of appropriate explicit hashtags: #intimate #sensual #boudoir #explicit #adultcontent #nsfw #sexy #erotic #seductive #intimatephoto #sensualphotography #boudoirphotography #adult #mature #sexycontent #intimatecontent
@@ -384,7 +387,13 @@ CRITICAL - EXPLICIT HASHTAGS REQUIRED:
 - For sales-focused captions, hashtags can also include: #exclusive #subscriber #premium #customcontent
 - Vary hashtags across captions - don't repeat the same ones
 - Make hashtags specific to what's in the media (e.g., if lingerie shown: #lingerie #intimates #sexylingerie)
-- Do NOT use generic hashtags like #follow #subscribe - use explicit content-descriptive hashtags
+- Do NOT use generic hashtags like #follow #subscribe - use explicit content-descriptive hashtags` : `HASHTAG REQUIREMENTS:
+- Generate 5-10 appropriate hashtags per caption that match the content and tone
+- Use hashtags relevant to the content shown (e.g., fashion, lifestyle, beauty, etc.)
+- DO NOT use OnlyFans-specific hashtags, explicit adult content hashtags, or platform-specific adult content hashtags
+- Keep hashtags appropriate for general social media platforms
+- Vary hashtags across captions - don't repeat the same ones
+- Make hashtags specific to what's in the media`}
 ` : ''}
 
 Return ONLY strict JSON like:
@@ -405,14 +414,20 @@ CAPTION REQUIREMENTS:
 - Additional captions can be a mix of both approaches
 - All captions must be explicit and adult-oriented
 
-HASHTAG REQUIREMENTS:
+${shouldGenerateOnlyFansHashtags ? `HASHTAG REQUIREMENTS:
 - Each caption MUST include 5-10 explicit hashtags
 - Hashtags must be bold, adult-oriented, and match the explicit content shown
 - Use hashtags like: #intimate #sensual #boudoir #explicit #adultcontent #nsfw #sexy #erotic #seductive #intimatephoto #sensualphotography #boudoirphotography
 - For sales-focused captions, also include: #exclusive #subscriber #premium #customcontent
 - Hashtags should describe what's shown: poses, outfits, mood, setting, explicit/intimate aspects
 - Vary hashtags - don't use the same ones in every caption
-- Make hashtags specific to the media content
+- Make hashtags specific to the media content` : `HASHTAG REQUIREMENTS:
+- Each caption MUST include 5-10 appropriate hashtags
+- Hashtags must match the content and tone, but be appropriate for general social media
+- DO NOT use OnlyFans-specific hashtags, explicit adult content hashtags, or platform-specific adult content hashtags
+- Use hashtags relevant to the content (e.g., fashion, lifestyle, beauty, style, etc.)
+- Vary hashtags - don't use the same ones in every caption
+- Make hashtags specific to the media content`}
 ` : ''}
 `.trim();
 

@@ -185,7 +185,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Parse error message for better user feedback
       let errorMessage = 'Failed to get request token from X';
       let errorDetails = responseText || statusText;
-      let troubleshootingSteps = [];
+      let troubleshootingSteps: string[] = [];
       
       if (responseText.includes('Invalid callback URL') || 
           responseText.includes('callback') || 

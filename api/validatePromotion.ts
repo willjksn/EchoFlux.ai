@@ -1,7 +1,23 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { verifyAuth } from "./verifyAuth.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
-import { collection, query, where, getDocs, addDoc } from "firebase-admin/firestore";
+
+interface Promotion {
+  id: string;
+  code: string;
+  name: string;
+  type: "percentage" | "fixed" | "free";
+  discountValue: number;
+  startDate: string | Date;
+  endDate?: string | Date | null;
+  isActive: boolean;
+  applicablePlans?: string[];
+  maxUses?: number;
+  currentUses?: number;
+  maxUsesPerUser?: number;
+  freeDays?: number;
+  discountDurationDays?: number;
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
@@ -34,7 +50,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(404).json({ error: "Promotion code not found or inactive" });
     }
 
-    const promotion = { id: promoSnapshot.docs[0].id, ...promoSnapshot.docs[0].data() };
+    const promotionData = promoSnapshot.docs[0].data();
+    const promotion: Promotion = {
+      id: promoSnapshot.docs[0].id,
+      code: promotionData.code || "",
+      name: promotionData.name || "",
+      type: promotionData.type || "percentage",
+      discountValue: promotionData.discountValue || 0,
+      startDate: promotionData.startDate || new Date(),
+      endDate: promotionData.endDate || null,
+      isActive: promotionData.isActive !== false,
+      applicablePlans: promotionData.applicablePlans || [],
+      maxUses: promotionData.maxUses,
+      currentUses: promotionData.currentUses || 0,
+      maxUsesPerUser: promotionData.maxUsesPerUser || 1,
+      freeDays: promotionData.freeDays,
+      discountDurationDays: promotionData.discountDurationDays,
+    };
 
     // Check if promotion is within date range
     const now = new Date();
@@ -57,7 +89,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Check max uses
-    if (promotion.maxUses && promotion.currentUses >= promotion.maxUses) {
+    if (promotion.maxUses && (promotion.currentUses || 0) >= promotion.maxUses) {
       return res.status(400).json({ error: "Promotion has reached maximum uses" });
     }
 

@@ -6,7 +6,7 @@ import { TrashIcon, PlusIcon, UploadIcon, LinkIcon, CheckCircleIcon, MailIcon, C
 import { EMOJIS, EMOJI_CATEGORIES, Emoji } from './emojiData';
 import { storage } from '../firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon, FanvueIcon, OnlyFansIcon } from './icons/PlatformIcons';
+import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
 
 const categoryIcons: Record<string, React.ReactNode> = {
     FaceSmileIcon: <FaceSmileIcon className="w-5 h-5"/>,
@@ -28,11 +28,6 @@ const platformIcons: Record<Platform, React.ReactNode> = {
     LinkedIn: <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#0077B5"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>,
     Facebook: <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>,
     Pinterest: <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#BD081C"><path d="M12 0C5.373 0 0 5.372 0 12c0 5.084 3.163 9.426 7.619 11.174-.105-.949-.2-2.403.041-3.439.219-.937 1.406-5.957 1.406-5.957s-.359-.72-.359-1.781c0-1.663.967-2.911 2.168-2.911 1.024 0 1.518.769 1.518 1.688 0 1.029-.653 2.567-.992 3.992-.285 1.193.6 2.165 1.775 2.165 2.128 0 3.768-2.245 3.768-5.487 0-2.861-2.063-4.869-5.008-4.869-3.41 0-5.409 2.562-5.409 5.199 0 1.033.394 2.143.889 2.741.099.12.112.225.085.345-.09.375-.293 1.199-.334 1.363-.053.225-.172.271-.402.165-1.495-.69-2.433-2.878-2.433-4.646 0-3.776 2.748-7.252 7.92-7.252 4.158 0 7.392 2.967 7.392 6.923 0 4.135-2.607 7.462-6.233 7.462-1.214 0-2.357-.629-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0z"/></svg>,
-    Discord: <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#5865F2"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>,
-    Telegram: <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#0088CC"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>,
-    Reddit: <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#FF4500"><path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z"/></svg>,
-    Fanvue: <FanvueIcon className="w-5 h-5" />,
-    OnlyFans: <OnlyFansIcon className="w-5 h-5" />,
 };
 
 const getPlatformUrl = (platform: Platform, username: string): string => {
@@ -45,11 +40,6 @@ const getPlatformUrl = (platform: Platform, username: string): string => {
         LinkedIn: `https://linkedin.com/in/${username}`,
         Facebook: `https://facebook.com/${username}`,
         Pinterest: `https://pinterest.com/${username}`,
-        Discord: `https://discord.gg/${username}`, // May need custom handling
-        Telegram: `https://t.me/${username}`,
-        Reddit: `https://reddit.com/user/${username}`,
-        Fanvue: `https://fanvue.com/${username}`,
-        OnlyFans: `https://onlyfans.com/${username}`,
     };
     
     return urlMap[platform] || `https://${platform.toLowerCase()}.com/${username}`;
@@ -66,18 +56,78 @@ const formatFollowerCount = (count: number): string => {
 };
 
 const BioPreview: React.FC<{ config: any }> = ({ config }) => {
-    const socialLinks = config?.socialLinks || [];
-    const customLinks = config?.customLinks || config?.links || [];
-    const theme = config?.theme || { backgroundColor: '#ffffff', buttonColor: '#000000', textColor: '#000000', buttonStyle: 'rounded' };
+    // Normalize socialLinks to always be an array
+    let socialLinks: SocialBioLink[] = [];
+    if (config?.socialLinks) {
+        if (Array.isArray(config.socialLinks)) {
+            socialLinks = config.socialLinks;
+        } else if (typeof config.socialLinks === 'object' && config.socialLinks !== null) {
+            try {
+                const values = Object.values(config.socialLinks);
+                socialLinks = values.filter((item): item is SocialBioLink => 
+                    typeof item === 'object' && item !== null && 'id' in item
+                );
+            } catch (e) {
+                socialLinks = [];
+            }
+        }
+    }
+    
+    // Normalize customLinks to always be an array
+    let customLinks: BioLink[] = [];
+    if (config?.customLinks) {
+        if (Array.isArray(config.customLinks)) {
+            customLinks = config.customLinks;
+        } else if (typeof config.customLinks === 'object' && config.customLinks !== null) {
+            try {
+                const values = Object.values(config.customLinks);
+                customLinks = values.filter((item): item is BioLink => 
+                    typeof item === 'object' && item !== null && 'id' in item
+                );
+            } catch (e) {
+                customLinks = [];
+            }
+        }
+    } else if (config?.links) {
+        if (Array.isArray(config.links)) {
+            customLinks = config.links;
+        } else if (typeof config.links === 'object' && config.links !== null) {
+            try {
+                const values = Object.values(config.links);
+                customLinks = values.filter((item): item is BioLink => 
+                    typeof item === 'object' && item !== null && 'id' in item
+                );
+            } catch (e) {
+                customLinks = [];
+            }
+        }
+    }
+    
+    const theme = {
+        backgroundColor: config?.theme?.backgroundColor || '#ffffff',
+        pageBackgroundColor: config?.theme?.pageBackgroundColor || config?.theme?.backgroundColor || '#f5f7fb',
+        cardBackgroundColor: config?.theme?.cardBackgroundColor || '#ffffff',
+        buttonColor: config?.theme?.buttonColor || '#000000',
+        textColor: config?.theme?.textColor || '#000000',
+        buttonStyle: config?.theme?.buttonStyle || 'rounded',
+    };
+    const emailTheme = {
+        formBackgroundColor: config?.emailCapture?.formBackgroundColor || '#ffffff',
+        titleColor: config?.emailCapture?.titleColor || theme.textColor,
+        inputBackgroundColor: config?.emailCapture?.inputBackgroundColor || '#f9fafb',
+        inputTextColor: config?.emailCapture?.inputTextColor || '#111827',
+        buttonBackgroundColor: config?.emailCapture?.buttonBackgroundColor || theme.buttonColor,
+        buttonTextColor: config?.emailCapture?.buttonTextColor || theme.textColor,
+    };
     
     return (
-        <div className="bg-black p-2.5 rounded-[2.5rem] shadow-2xl border-[6px] border-gray-800 w-[300px] h-[600px] relative overflow-hidden flex-shrink-0">
+        <div className="bg-black p-2.5 rounded-[2.5rem] shadow-2xl border-[6px] border-gray-800 w-[300px] h-[600px] relative overflow-hidden flex-shrink-0" style={{ backgroundColor: theme.pageBackgroundColor }}>
              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-5 bg-black rounded-b-lg z-20"></div>
              <div 
-                className="w-full h-full bg-white overflow-y-auto rounded-[2rem] scrollbar-hide"
-                style={{ backgroundColor: theme.backgroundColor }}
+                className="w-full h-full bg-white rounded-[2rem] overflow-y-auto"
+                style={{ backgroundColor: theme.cardBackgroundColor }}
              >
-                 <div className="p-4 flex flex-col items-center min-h-full text-center pt-8">
+                 <div className="p-4 flex flex-col items-center text-center pt-8">
                      <img 
                         src={config?.avatar || 'https://via.placeholder.com/100'} 
                         alt="Profile" 
@@ -111,6 +161,12 @@ const BioPreview: React.FC<{ config: any }> = ({ config }) => {
                                         src={imageUrl}
                                         alt={`Teaser ${index + 1}`}
                                         className="w-full h-32 object-cover rounded-lg"
+                                        onError={(e) => {
+                                            console.error('Preview: Failed to load teaser image:', imageUrl, e);
+                                        }}
+                                        onLoad={() => {
+                                            console.log('Preview: Teaser image loaded:', imageUrl);
+                                        }}
                                     />
                                 ))}
                             </div>
@@ -127,7 +183,7 @@ const BioPreview: React.FC<{ config: any }> = ({ config }) => {
                                 className={`flex items-center justify-center gap-2 w-full py-3 px-4 text-center font-medium transition-transform active:scale-95 ${theme.buttonStyle === 'rounded' ? 'rounded-lg' : theme.buttonStyle === 'pill' ? 'rounded-full' : 'rounded-none'}`}
                                 style={{ 
                                     backgroundColor: theme.buttonColor, 
-                                    color: theme.backgroundColor === '#ffffff' && theme.buttonColor === '#ffffff' ? '#000000' : theme.backgroundColor 
+                                    color: theme.textColor 
                                 }}
                             >
                                 <span className="flex-shrink-0">{platformIcons[link.platform] || <span>{link.platform}</span>}</span>
@@ -144,7 +200,7 @@ const BioPreview: React.FC<{ config: any }> = ({ config }) => {
                                 className={`block w-full py-3 px-4 text-center font-medium transition-transform active:scale-95 ${theme.buttonStyle === 'rounded' ? 'rounded-lg' : theme.buttonStyle === 'pill' ? 'rounded-full' : 'rounded-none'}`}
                                 style={{ 
                                     backgroundColor: theme.buttonColor, 
-                                    color: theme.backgroundColor === '#ffffff' && theme.buttonColor === '#ffffff' ? '#000000' : theme.backgroundColor 
+                                    color: theme.textColor 
                                 }}
                             >
                                 {link.title}
@@ -154,20 +210,35 @@ const BioPreview: React.FC<{ config: any }> = ({ config }) => {
 
                     {/* Email Capture Preview */}
                     {config.emailCapture?.enabled && (
-                        <div className="w-full mt-8 p-4 rounded-xl bg-white shadow-lg border border-gray-100">
-                            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-600 mx-auto mb-2">
+                        <div
+                            className="w-full mt-8 p-4 rounded-xl shadow-lg border"
+                            style={{
+                                backgroundColor: emailTheme.formBackgroundColor,
+                                borderColor: 'rgba(0,0,0,0.06)',
+                            }}
+                        >
+                            <div className="flex items-center justify-center w-8 h-8 rounded-full mx-auto mb-2" style={{ backgroundColor: emailTheme.buttonBackgroundColor + '22', color: emailTheme.buttonBackgroundColor }}>
                                 <MailIcon className="w-4 h-4" />
                             </div>
-                            <h4 className="font-bold text-gray-800 text-sm mb-1">{config.emailCapture.title}</h4>
+                            <h4 className="font-bold text-sm mb-1" style={{ color: emailTheme.titleColor }}>{config.emailCapture.title}</h4>
                             <div className="mt-2">
                                 <input 
                                     type="email" 
                                     placeholder={config.emailCapture.placeholder} 
                                     disabled
-                                    className="w-full p-2 text-xs border border-gray-300 rounded-md mb-2 bg-gray-50"
+                                    className="w-full p-2 text-xs border rounded-md mb-2"
+                                    style={{
+                                        backgroundColor: emailTheme.inputBackgroundColor,
+                                        color: emailTheme.inputTextColor,
+                                        borderColor: 'rgba(0,0,0,0.08)',
+                                    }}
                                 />
                                 <button 
-                                    className="w-full py-2 text-xs font-bold text-white bg-gray-900 rounded-md"
+                                    className="w-full py-2 text-xs font-bold rounded-md"
+                                    style={{
+                                        backgroundColor: emailTheme.buttonBackgroundColor,
+                                        color: emailTheme.buttonTextColor,
+                                    }}
                                 >
                                     {config.emailCapture.buttonText}
                                 </button>
@@ -438,6 +509,7 @@ export const BioPageBuilder: React.FC = () => {
 
     const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
+        e.target.value = '';
         if (file && user) {
             try {
                 // Upload to Firebase Storage
@@ -464,36 +536,120 @@ export const BioPageBuilder: React.FC = () => {
     };
 
     const handleTeaserImagesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(e.target.files || []);
-        if (files.length > 0 && user) {
-            try {
-                const uploadedUrls: string[] = [];
-                
-                // Upload all files to Firebase Storage
-                for (const file of files) {
+        console.log('=== handleTeaserImagesUpload START ===');
+        console.log('Event:', e);
+        console.log('Files:', e.target.files);
+        console.log('User:', user?.id);
+        console.log('Storage:', storage ? 'available' : 'MISSING');
+        
+        const fileList = e.target.files;
+        
+        if (!fileList || fileList.length === 0) {
+            console.log('No files selected - aborting');
+            e.target.value = '';
+            return;
+        }
+        
+        if (!user) {
+            console.log('No user found - aborting');
+            showToast('Please log in to upload images', 'error');
+            e.target.value = '';
+            return;
+        }
+        
+        if (!storage) {
+            console.error('Firebase Storage is not initialized!');
+            showToast('Storage service unavailable. Please refresh the page.', 'error');
+            e.target.value = '';
+            return;
+        }
+        
+        // Reset input value after getting files (but keep files in memory)
+        const filesToUpload: File[] = [];
+        for (let i = 0; i < fileList.length; i++) {
+            const file = fileList.item(i);
+            if (file) {
+                filesToUpload.push(file);
+            }
+        }
+        e.target.value = '';
+        
+        if (filesToUpload.length === 0) {
+            console.log('No valid files after extraction');
+            showToast('No valid files selected', 'error');
+            return;
+        }
+        
+        console.log(`Processing ${filesToUpload.length} file(s):`, filesToUpload.map(f => ({ name: f.name, type: f.type, size: f.size })));
+        showToast(`Uploading ${filesToUpload.length} image(s)...`, 'info');
+        
+        try {
+            const uploadedUrls: string[] = [];
+            
+            // Upload all files to Firebase Storage
+            for (let i = 0; i < filesToUpload.length; i++) {
+                const file = filesToUpload[i];
+                try {
                     const timestamp = Date.now();
                     const randomId = Math.random().toString(36).substring(2, 9);
-                    const extension = file.type.split('/')[1] || 'jpg';
+                    const extension = file.type.split('/')[1] || (file.name.split('.').pop() || 'jpg');
                     const storagePath = `users/${user.id}/bio_teasers/${timestamp}-${randomId}.${extension}`;
                     const storageRef = ref(storage, storagePath);
                     
+                    console.log(`[${i + 1}/${filesToUpload.length}] Uploading:`, { name: file.name, path: storagePath });
                     await uploadBytes(storageRef, file, { contentType: file.type });
                     const downloadURL = await getDownloadURL(storageRef);
+                    console.log(`[${i + 1}/${filesToUpload.length}] Upload successful:`, downloadURL);
                     uploadedUrls.push(downloadURL);
+                } catch (fileError: any) {
+                    console.error(`[${i + 1}/${filesToUpload.length}] Upload failed:`, fileError);
+                    console.error('File error details:', { message: fileError?.message, code: fileError?.code, stack: fileError?.stack });
+                    showToast(`Failed to upload ${file.name}: ${fileError?.message || 'Unknown error'}`, 'error');
                 }
-                
-                // Update bio page with new teaser images
-                const existingImages = bioPage.teaserImages || [];
-                const updatedBioPage = { ...bioPage, teaserImages: [...existingImages, ...uploadedUrls] };
-                setBioPage(updatedBioPage);
-                
-                // Auto-save to Firestore
-                await saveBioPage(updatedBioPage);
-                showToast(`${uploadedUrls.length} teaser image(s) uploaded and saved!`, 'success');
-            } catch (error) {
-                console.error('Failed to upload teaser images:', error);
-                showToast('Failed to upload teaser images', 'error');
             }
+            
+            if (uploadedUrls.length === 0) {
+                console.error('All uploads failed');
+                showToast('Failed to upload any images. Check console for details.', 'error');
+                return;
+            }
+            
+            console.log(`Successfully uploaded ${uploadedUrls.length}/${filesToUpload.length} files:`, uploadedUrls);
+            
+            // Update bio page with new teaser images
+            // Ensure existingImages is always an array
+            let existingImages: string[] = [];
+            if (bioPage.teaserImages) {
+                if (Array.isArray(bioPage.teaserImages)) {
+                    existingImages = bioPage.teaserImages;
+                } else {
+                    console.warn('teaserImages is not an array, converting:', bioPage.teaserImages);
+                    existingImages = [];
+                }
+            }
+            
+            const updatedBioPage = { 
+                ...bioPage, 
+                teaserImages: [...existingImages, ...uploadedUrls] 
+            };
+            console.log('Updated bio page:', { existingCount: existingImages.length, newCount: uploadedUrls.length, total: updatedBioPage.teaserImages.length });
+            setBioPage(updatedBioPage);
+            
+            // Auto-save to Firestore
+            console.log('Saving to Firestore...');
+            await saveBioPage(updatedBioPage);
+            console.log('=== handleTeaserImagesUpload SUCCESS ===');
+            showToast(`${uploadedUrls.length} teaser image(s) uploaded and saved!`, 'success');
+        } catch (error: any) {
+            console.error('=== handleTeaserImagesUpload ERROR ===');
+            console.error('Error:', error);
+            console.error('Error details:', { 
+                message: error?.message, 
+                name: error?.name,
+                code: error?.code,
+                stack: error?.stack?.split('\n').slice(0, 10) 
+            });
+            showToast(`Failed to upload teaser images: ${error?.message || 'Unknown error'}`, 'error');
         }
     };
 
@@ -528,9 +684,15 @@ export const BioPageBuilder: React.FC = () => {
         
         setIsSaving(true);
         try {
-            await saveBioPage(bioPage);
-            const username = bioPage.username.replace('@', '');
-            const bioPageUrl = `${window.location.origin}/${username}`;
+            // Normalize username before saving (remove @, lowercase, trim)
+            const normalizedUsername = bioPage.username.replace('@', '').toLowerCase().trim();
+            const normalizedBioPage = {
+                ...bioPage,
+                username: normalizedUsername,
+            };
+            
+            await saveBioPage(normalizedBioPage);
+            const bioPageUrl = `${window.location.origin}/${normalizedUsername}`;
             
             // Copy URL to clipboard
             try {
@@ -540,6 +702,7 @@ export const BioPageBuilder: React.FC = () => {
                 showToast(`Bio page published! Your URL: ${bioPageUrl}`, 'success');
             }
         } catch (e) {
+            console.error('Error publishing bio page:', e);
             showToast('Failed to publish bio page', 'error');
         } finally {
             setIsSaving(false);
@@ -753,6 +916,13 @@ export const BioPageBuilder: React.FC = () => {
                                             src={imageUrl}
                                             alt={`Teaser ${index + 1}`}
                                             className="w-full h-full object-contain rounded-lg"
+                                            onError={(e) => {
+                                                console.error('Failed to load teaser image:', imageUrl, e);
+                                                showToast(`Failed to load image ${index + 1}`, 'error');
+                                            }}
+                                            onLoad={() => {
+                                                console.log('Teaser image loaded successfully:', imageUrl);
+                                            }}
                                         />
                                     </div>
                                     <button
@@ -779,6 +949,10 @@ export const BioPageBuilder: React.FC = () => {
                         type="file"
                         ref={teaserImagesInputRef}
                         onChange={handleTeaserImagesUpload}
+                        onClick={(e) => {
+                            // Reset value on click to allow re-selecting same file
+                            (e.target as HTMLInputElement).value = '';
+                        }}
                         className="hidden"
                         accept="image/*"
                         multiple
@@ -914,6 +1088,32 @@ export const BioPageBuilder: React.FC = () => {
                                     />
                                 </div>
                             </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Form Background</label>
+                                    <input type="color" value={bioPage.emailCapture.formBackgroundColor || '#ffffff'} onChange={e => updateEmailCapture('formBackgroundColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Title Color</label>
+                                    <input type="color" value={bioPage.emailCapture.titleColor || '#111827'} onChange={e => updateEmailCapture('titleColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Input Background</label>
+                                    <input type="color" value={bioPage.emailCapture.inputBackgroundColor || '#f9fafb'} onChange={e => updateEmailCapture('inputBackgroundColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Input Text</label>
+                                    <input type="color" value={bioPage.emailCapture.inputTextColor || '#111827'} onChange={e => updateEmailCapture('inputTextColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Button Background</label>
+                                    <input type="color" value={bioPage.emailCapture.buttonBackgroundColor || bioPage.theme.buttonColor} onChange={e => updateEmailCapture('buttonBackgroundColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Button Text</label>
+                                    <input type="color" value={bioPage.emailCapture.buttonTextColor || bioPage.theme.textColor} onChange={e => updateEmailCapture('buttonTextColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent" />
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -923,18 +1123,39 @@ export const BioPageBuilder: React.FC = () => {
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Appearance</h3>
                     <div className="grid grid-cols-2 gap-4 mb-4">
                         <div>
-                            <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">Background Color</label>
+                            <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">Page Background</label>
                             <div className="flex gap-2 items-center">
                                 <input 
                                     type="color" 
-                                    value={bioPage.theme.backgroundColor} 
-                                    onChange={e => updateTheme('backgroundColor', e.target.value)} 
+                                    value={bioPage.theme.pageBackgroundColor || bioPage.theme.backgroundColor} 
+                                    onChange={e => {
+                                        updateTheme('pageBackgroundColor', e.target.value);
+                                        if (!bioPage.theme.backgroundColor) updateTheme('backgroundColor', e.target.value);
+                                    }} 
                                     className="h-10 w-20 rounded cursor-pointer border border-gray-300 dark:border-gray-600" 
                                 />
                                 <input
                                     type="text"
-                                    value={bioPage.theme.backgroundColor}
-                                    onChange={e => updateTheme('backgroundColor', e.target.value)}
+                                    value={bioPage.theme.pageBackgroundColor || bioPage.theme.backgroundColor}
+                                    onChange={e => updateTheme('pageBackgroundColor', e.target.value)}
+                                    placeholder="#f5f7fb"
+                                    className="flex-1 p-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white text-sm"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">Card Background</label>
+                            <div className="flex gap-2 items-center">
+                                <input 
+                                    type="color" 
+                                    value={bioPage.theme.cardBackgroundColor || '#ffffff'} 
+                                    onChange={e => updateTheme('cardBackgroundColor', e.target.value)} 
+                                    className="h-10 w-20 rounded cursor-pointer border border-gray-300 dark:border-gray-600" 
+                                />
+                                <input
+                                    type="text"
+                                    value={bioPage.theme.cardBackgroundColor || '#ffffff'}
+                                    onChange={e => updateTheme('cardBackgroundColor', e.target.value)}
                                     placeholder="#ffffff"
                                     className="flex-1 p-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white text-sm"
                                 />
@@ -971,7 +1192,7 @@ export const BioPageBuilder: React.FC = () => {
             </div>
 
             {/* Right Preview */}
-            <div className="hidden lg:flex items-start justify-center pt-4 px-6 pb-6 bg-gray-100 dark:bg-gray-900 rounded-2xl">
+            <div className="hidden lg:flex items-start justify-center pt-4 px-6 pb-6 bg-gray-100 dark:bg-gray-900 rounded-2xl sticky top-4 self-start">
                  <BioPreview config={bioPage} />
             </div>
         </div>

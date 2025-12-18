@@ -9,6 +9,7 @@ import { OnlyFansCalendar } from './OnlyFansCalendar';
 import { OnlyFansMediaVault } from './OnlyFansMediaVault';
 import { OnlyFansGuides } from './OnlyFansGuides';
 import { OnlyFansAnalytics } from './OnlyFansAnalytics';
+import { ErrorBoundary } from './ErrorBoundary';
 
 type ActiveView = 'dashboard' | 'contentBrain' | 'roleplay' | 'calendar' | 'mediaVault' | 'export' | 'guides' | 'settings' | 'analytics';
 
@@ -153,7 +154,9 @@ export const OnlyFansStudio: React.FC = () => {
                 >
                     ← Back to OnlyFans Studio
                 </button>
-                <OnlyFansAnalytics />
+                <ErrorBoundary>
+                    <OnlyFansAnalytics />
+                </ErrorBoundary>
             </div>
         );
     }

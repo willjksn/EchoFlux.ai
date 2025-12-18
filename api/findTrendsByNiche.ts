@@ -1,6 +1,8 @@
 // api/findTrendsByNiche.ts
 // Find trending opportunities by niche/topic
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { searchWeb } from "./_webSearch.js";
+import { trackModelUsage } from "./trackModelUsage.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Ultra-defensive error handling - catch everything
@@ -65,6 +67,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
+      // ----------------------------------------------------
+      // 1) Fetch live web context via Tavily (if configured)
+      // ----------------------------------------------------
+      let webContextText = "";
+      let webSearchSuccess = false;
+
+      try {
+        const webResult = await searchWeb(niche);
+        if (webResult.success && Array.isArray(webResult.results) && webResult.results.length > 0) {
+          const lines = webResult.results.map((r, idx) => {
+            const title = r.title || "Result";
+            const snippet = r.snippet || "";
+            const link = r.link || "";
+            return `${idx + 1}. ${title}\n${snippet}\n${link}`;
+          });
+          webContextText = lines.join("\n\n");
+          webSearchSuccess = true;
+        } else if (webResult.note) {
+          webContextText = `Web search note: ${webResult.note}`;
+        }
+      } catch (webErr: any) {
+        console.error("findTrendsByNiche web search error:", webErr);
+        // Non-fatal: continue without web context
+      }
+
+      // Track Tavily usage for admin analytics
+      try {
+        await trackModelUsage({
+          userId: user.uid,
+          taskType: "trends",
+          modelName: "tavily-web-search",
+          costTier: "low",
+          // Approximate small per-query cost
+          estimatedCost: webSearchSuccess ? 0.0005 : 0,
+          success: webSearchSuccess,
+        });
+      } catch (trackErr) {
+        console.error("Failed to track Tavily usage in findTrendsByNiche:", trackErr);
+      }
+
       // Use trends task type for better model routing
       let getModelForTask: any;
       try {
@@ -99,6 +141,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 You are an expert social media trend analyst specializing in identifying engagement opportunities.
 
 Analyze the niche/topic: "${niche}"
+
+${webContextText
+  ? `Here is some live web context about this niche from recent search results. Use it as a signal for what's currently relevant, but do NOT copy wording verbatim:
+
+${webContextText}
+`
+  : "No external web context is available. Rely on your general knowledge of current social media trends."}
 
 Find 5-8 trending opportunities across different platforms (Instagram, TikTok, X/Twitter, LinkedIn, YouTube, Facebook, Threads).
 

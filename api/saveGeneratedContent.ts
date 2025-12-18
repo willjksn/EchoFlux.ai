@@ -23,11 +23,11 @@ interface SaveContentRequest {
     // For ads
     adType?: "text" | "video";
     adCopy?: string;
-    videoPrompt?: string;
+    adVideoPrompt?: string;
     headline?: string;
     description?: string;
     callToAction?: string;
-    hashtags?: string[];
+    adHashtags?: string[];
     platformRecommendations?: string[];
     sceneBreakdown?: Array<{ time: string; description: string }>;
     

@@ -13,39 +13,43 @@ const creatorPlans = [
         name: 'Free' as Plan, 
         price: 0, 
         description: 'Perfect for getting started',
-        features: ['1 Social Account', '50 AI Replies / month', 'Basic Link-in-Bio', '100 MB Storage', 'Basic Analytics'],
+        features: [
+            '1 active campaign',
+            'Basic Strategy & Autopilot access',
+            '25 AI captions / month',
+            'Basic Link-in-Bio',
+            '100 MB storage'
+        ],
         isRecommended: false
     },
     { 
         name: 'Pro' as Plan, 
         price: 29, 
         description: 'For creators scaling their brand',
-        features: ['3 Social Accounts', '250 AI Replies / month', 'AI Content Strategist', 'Quick Post Automation', 'Media Library', '1 GB Storage', 'Advanced Analytics'],
+        features: [
+            'Up to 3 active campaigns',
+            'Full Strategy + Autopilot content packs',
+            'Workflow board & calendar',
+            '500 AI captions / month',
+            'Media Library',
+            '1 GB storage'
+        ],
         isRecommended: true
     },
     { 
         name: 'Elite' as Plan, 
         price: 149, 
-        description: 'For professional creators',
-        features: ['5 Social Accounts', '750 AI Replies / month', 'Advanced CRM', 'Quick Post Automation', 'Media Library', '2 GB Storage', 'Social Listening', 'Competitor Analysis'],
+        description: 'For professional & OF creators',
+        features: [
+            'Unlimited active campaigns',
+            'Advanced Strategy & Autopilot options',
+            'Workflow board & calendar',
+            '1,500 AI captions / month',
+            'Media Library',
+            '2 GB storage',
+            'OnlyFans Studio (included)'
+        ],
         isRecommended: false
-    },
-];
-
-const businessPlans = [
-    { 
-        name: 'Starter' as Plan, 
-        price: 99, 
-        description: 'For small businesses & startups',
-        features: ['3 Social Accounts', '500 AI Replies / month', 'AI Content Strategist', 'Quick Post Automation', 'Media Library', '1 GB Storage', 'Business Analytics', 'Social CRM & Lead Gen'],
-        isRecommended: false
-    },
-    { 
-        name: 'Growth' as Plan, 
-        price: 199, 
-        description: 'For growing businesses',
-        features: ['5 Social Accounts', '1,500 AI Replies / month', 'AI Content Strategist', 'Quick Post Automation', 'Media Library', '3 GB Storage', 'Marketing Campaign Ideas', 'Competitor Analysis', 'Social Listening'],
-        isRecommended: true
     },
 ];
 
@@ -54,7 +58,8 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
     const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
     const [isLoading, setIsLoading] = useState(false);
 
-    const plans = userType === 'Business' ? businessPlans : creatorPlans;
+    // Creator-focused: always show creator plans
+    const plans = creatorPlans;
 
     const handleContinue = async () => {
         if (!selectedPlan || !user) return;
@@ -79,15 +84,11 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
                         Choose Your Plan
                     </h2>
                     <p className="mt-2 text-gray-500 dark:text-gray-400">
-                        Select the {userType === 'Business' ? 'business' : 'creator'} plan that fits your needs.
+                        Select the creator plan that fits your needs.
                     </p>
                 </div>
 
-                <div className={`grid gap-6 ${
-                    userType === 'Business' 
-                        ? 'grid-cols-1 sm:grid-cols-2' 
-                        : 'grid-cols-1 sm:grid-cols-3'
-                }`}>
+                <div className="grid gap-6 grid-cols-1 sm:grid-cols-3">
                     {plans.map((plan) => {
                         const isSelected = selectedPlan === plan.name;
                         return (
@@ -154,6 +155,7 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
         </div>
     );
 };
+
 
 
 

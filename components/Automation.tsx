@@ -13,7 +13,7 @@ const categoryIcons: Record<string, React.ReactNode> = {
     LightbulbIcon: <LightbulbIcon className="w-5 h-5"/>,
     HeartIcon: <HeartIcon className="w-5 h-5"/>,
 };
-import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon, FanvueIcon, OnlyFansIcon } from './icons/PlatformIcons';
+import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
 import { db, storage } from '../firebaseConfig';
 import { collection, setDoc, doc, getDocs, query, where, deleteDoc } from 'firebase/firestore';
 // @ts-ignore
@@ -31,11 +31,6 @@ const platformIcons: Record<Platform, React.ReactElement<{ className?: string }>
   LinkedIn: <LinkedInIcon />,
   Facebook: <FacebookIcon />,
   Pinterest: <PinterestIcon />,
-  Discord: <DiscordIcon />,
-  Telegram: <TelegramIcon />,
-  Reddit: <RedditIcon />,
-  Fanvue: <FanvueIcon />,
-  OnlyFans: <OnlyFansIcon />,
 };
 
 interface ProcessedMedia {

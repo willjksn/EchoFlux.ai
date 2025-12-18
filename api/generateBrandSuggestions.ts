@@ -2,18 +2,20 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { checkApiKeys, getVerifyAuth, getModelRouter, withErrorHandling } from "./_errorHandler.js";
 
-async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    res.status(405).json({ error: "Method not allowed" });
+    return;
   }
 
   const apiKeyCheck = checkApiKeys();
   if (!apiKeyCheck.hasKey) {
-    return res.status(200).json({
+    res.status(200).json({
       success: false,
       error: "AI not configured",
       note: apiKeyCheck.error,
     });
+    return;
   }
 
   let user;
@@ -21,15 +23,17 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     const verifyAuth = await getVerifyAuth();
     user = await verifyAuth(req);
   } catch (authError: any) {
-    return res.status(200).json({
+    res.status(200).json({
       success: false,
       error: "Authentication error",
       note: authError?.message || "Failed to verify authentication.",
     });
+    return;
   }
 
   if (!user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    res.status(401).json({ error: "Unauthorized" });
+    return;
   }
 
   // 🔥 Support both {data:{...}} and direct body
@@ -37,7 +41,8 @@ async function handler(req: VercelRequest, res: VercelResponse) {
   const { niche, audience, userType } = body;
 
   if (!niche || !audience || !userType) {
-    return res.status(400).json({ error: "Missing required fields" });
+    res.status(400).json({ error: "Missing required fields" });
+    return;
   }
 
   try {
@@ -99,15 +104,17 @@ Each brand should:
       matchScore: typeof s.matchScore === 'number' ? s.matchScore : (s.score || 80)
     }));
 
-    return res.status(200).json({ suggestions });
+    res.status(200).json({ suggestions });
+    return;
   } catch (err: any) {
     console.error("generateBrandSuggestions error:", err);
-    return res.status(200).json({
+    res.status(200).json({
       success: false,
       error: "Failed to generate brand suggestions",
       note: err?.message || "An unexpected error occurred. Please try again.",
       details: process.env.NODE_ENV === "development" ? err?.stack : undefined,
     });
+    return;
   }
 }
 

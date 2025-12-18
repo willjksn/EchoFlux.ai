@@ -29,7 +29,7 @@ const AddClientModal: React.FC<AddClientModalProps> = ({ isOpen, onClose, onSave
     const [email, setEmail] = useState('');
     const [plan, setPlan] = useState<'Free' | 'Pro' | 'Elite'>('Pro');
     const [connectedAccounts, setConnectedAccounts] = useState<Record<Platform, boolean>>({
-        Instagram: false, TikTok: false, X: false, Threads: false, YouTube: false, LinkedIn: false, Facebook: false, Pinterest: false, Discord: false, Telegram: false, Reddit: false
+        Instagram: false, TikTok: false, X: false, Threads: false, YouTube: false, LinkedIn: false, Facebook: false, Pinterest: false
     });
     
     if (!isOpen) return null;
@@ -143,7 +143,7 @@ export const Clients: React.FC<ClientsProps> = () => {
     };
 
     const generateApprovalLink = (clientId: string) => {
-        const link = `https://engagesuite.ai/review/${clientId}/${Date.now().toString(36)}`;
+        const link = `${window.location.origin}/review/${clientId}/${Date.now().toString(36)}`;
         navigator.clipboard.writeText(link);
         showToast('Approval link copied to clipboard!', 'success');
         

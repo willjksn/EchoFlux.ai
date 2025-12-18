@@ -2,13 +2,13 @@
 import React, { useState } from 'react';
 import { ListeningIcon, RefreshIcon, CheckCircleIcon } from '../icons/UIIcons';
 import { Platform } from '../../types';
-import { XIcon, InstagramIcon, TikTokIcon, LinkedInIcon, FacebookIcon, ThreadsIcon, YouTubeIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon } from '../icons/PlatformIcons';
+import { XIcon, InstagramIcon, TikTokIcon, LinkedInIcon, FacebookIcon, ThreadsIcon, YouTubeIcon, PinterestIcon } from '../icons/PlatformIcons';
 
 const MockMentions = [
-    { id: 1, user: '@tech_guru_99', platform: 'X', text: "Just tried EngageSuite.ai and it's a game changer for my workflow! #AI #SocialMedia", sentiment: 'Positive', time: '2h ago' },
-    { id: 2, user: '@sarah_marketing', platform: 'Instagram', text: "Comparing tools today. EngageSuite vs Buffer. Thoughts?", sentiment: 'Neutral', time: '4h ago' },
-    { id: 3, user: '@angry_customer', platform: 'X', text: "Why is the API down again? @EngageSuiteSupport", sentiment: 'Negative', time: '1d ago' },
-    { id: 4, user: '@startup_daily', platform: 'LinkedIn', text: "Top 10 tools for founders in 2025. #1 EngageSuite.ai", sentiment: 'Positive', time: '1d ago' },
+    { id: 1, user: '@tech_guru_99', platform: 'X', text: "Just tried EchoFlux.ai and it's a game changer for my workflow! #AI #SocialMedia", sentiment: 'Positive', time: '2h ago' },
+    { id: 2, user: '@sarah_marketing', platform: 'Instagram', text: "Comparing tools today. EchoFlux vs Buffer. Thoughts?", sentiment: 'Neutral', time: '4h ago' },
+    { id: 3, user: '@angry_customer', platform: 'X', text: "Why is the API down again? @EchoFluxSupport", sentiment: 'Negative', time: '1d ago' },
+    { id: 4, user: '@startup_daily', platform: 'LinkedIn', text: "Top 10 tools for founders in 2025. #1 EchoFlux.ai", sentiment: 'Positive', time: '1d ago' },
 ];
 
 const platformIcons: any = {
@@ -20,13 +20,10 @@ const platformIcons: any = {
     LinkedIn: <LinkedInIcon />,
     Facebook: <FacebookIcon />,
     Pinterest: <PinterestIcon />,
-    Discord: <DiscordIcon />,
-    Telegram: <TelegramIcon />,
-    Reddit: <RedditIcon />,
 };
 
 export const SocialListening: React.FC = () => {
-    const [keywords, setKeywords] = useState<string[]>(['EngageSuite', 'EngageSuite.ai']);
+    const [keywords, setKeywords] = useState<string[]>(['EchoFlux', 'EchoFlux.ai']);
     const [newKeyword, setNewKeyword] = useState('');
 
     const handleAddKeyword = () => {

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useAppContext } from "./AppContext";
 import { AutopilotStatus, Post, Platform, AutopilotCampaign } from "../types";
 import { RocketIcon, BriefcaseIcon, RefreshIcon, SparklesIcon } from "./icons/UIIcons";
+import { OFFLINE_MODE } from "../constants";
 import {
   generateAutopilotSuggestions,
   generateAutopilotPlan,
@@ -66,6 +67,27 @@ const Autopilot: React.FC = () => {
   const [generationProgress, setGenerationProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
   const [selectedCampaignForDetail, setSelectedCampaignForDetail] = useState<AutopilotCampaign | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
+
+  // Check for pending strategy from Strategy page
+  useEffect(() => {
+    const pendingStrategy = localStorage.getItem('pendingStrategyForAutopilot');
+    if (pendingStrategy) {
+      try {
+        const strategy = JSON.parse(pendingStrategy);
+        // Pre-fill form with strategy data
+        if (strategy.goal) {
+          setCustomGoal(strategy.goal);
+        }
+        // Show toast notification
+        showToast(`Strategy "${strategy.strategyName}" loaded! You can use it to inform your campaign.`, 'success');
+        // Clear the pending strategy
+        localStorage.removeItem('pendingStrategyForAutopilot');
+      } catch (error) {
+        console.error('Failed to parse pending strategy:', error);
+        localStorage.removeItem('pendingStrategyForAutopilot');
+      }
+    }
+  }, []); // Only run on mount
 
   if (!user) return null;
 
@@ -380,13 +402,13 @@ const Autopilot: React.FC = () => {
       case "Strategizing":
         return {
           color: "bg-gradient-to-r from-blue-500 to-blue-600",
-          text: "AI is building your content plan...",
+          text: "AI is building your campaign content plan...",
           icon: <SparklesIcon className="w-4 h-4" />,
         };
       case "Generating Content":
         const progressText = campaign.totalPosts > 0
-          ? `Generating content... ${campaign.generatedPosts || 0} / ${campaign.totalPosts} posts`
-          : "AI is creating posts...";
+          ? `Generating your content pack... ${campaign.generatedPosts || 0} / ${campaign.totalPosts} posts`
+          : "AI is creating posts for your campaign...";
         return {
           color: "bg-gradient-to-r from-purple-500 to-pink-600",
           text: progressText,
@@ -395,7 +417,7 @@ const Autopilot: React.FC = () => {
       case "Complete":
         return {
           color: "bg-gradient-to-r from-green-500 to-emerald-600",
-          text: `Campaign complete! ${campaign.generatedPosts || 0} posts ready for review.`,
+          text: `Content pack ready! ${campaign.generatedPosts || 0} posts ready to review, edit, and copy.`,
           icon: <SparklesIcon className="w-4 h-4" />,
         };
       case "Failed":
@@ -419,12 +441,12 @@ const Autopilot: React.FC = () => {
             {isBusiness ? <BriefcaseIcon className="w-8 h-8 text-white" /> : <RocketIcon />}
           </div>
           <h1 className="text-2xl md:text-3xl font-extrabold text-white mb-2">
-            {isBusiness ? "AI Marketing Manager" : "AI Content Autopilot"}
+            {isBusiness ? "AI Campaign Studio" : "AI Content Autopilot"}
           </h1>
           <p className="mt-1 text-base text-white/90 max-w-lg mx-auto">
             {isBusiness
-              ? "Launch intelligent marketing campaigns. Our AI handles strategy, content creation, and scheduling—all automatically."
-              : "Set your content goals and watch as AI generates your entire campaign strategy and creates all posts for you."}
+              ? "Launch intelligent marketing campaigns. Our AI handles the strategy and content pack so your team can post where it matters."
+              : "Set your content goals and let AI generate a complete campaign plan and content pack you can post anywhere."}
           </p>
         </div>
       </div>

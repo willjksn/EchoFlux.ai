@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { AutopilotCampaign, Post, Platform } from '../types';
-import { XMarkIcon, CalendarIcon, CheckCircleIcon, SparklesIcon } from './icons/UIIcons';
+import { XMarkIcon, CalendarIcon, CheckCircleIcon, SparklesIcon, ClipboardCheckIcon } from './icons/UIIcons';
 import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
 import { generateMockPerformance } from '../src/services/campaignPerformanceService';
 import { useAppContext } from './AppContext';
@@ -430,14 +430,27 @@ export const AutopilotCampaignDetailModal: React.FC<AutopilotCampaignDetailModal
                             {post.status}
                           </span>
                         </div>
-                        <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-3">
+                        <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
                           {post.content}
                         </p>
-                        {post.scheduledDate && (
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                            Scheduled: {new Date(post.scheduledDate).toLocaleString()}
-                          </p>
-                        )}
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigator.clipboard.writeText(post.content || '').catch(() => {});
+                            }}
+                            className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium rounded-full bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 hover:bg-primary-100 dark:hover:bg-primary-800 transition-colors"
+                          >
+                            <ClipboardCheckIcon className="w-3 h-3" />
+                            Copy caption
+                          </button>
+                          {post.scheduledDate && (
+                            <span className="inline-flex items-center px-2 py-1 text-[11px] font-medium rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                              Planned: {new Date(post.scheduledDate).toLocaleString()}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       {post.mediaUrl && (
                         <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700 flex-shrink-0">
@@ -476,18 +489,44 @@ export const AutopilotCampaignDetailModal: React.FC<AutopilotCampaignDetailModal
 
         {/* Footer */}
         <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-4 bg-gray-50 dark:bg-gray-900/50">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="text-sm text-gray-600 dark:text-gray-400">
               <span className="font-medium">
                 {campaign.generatedPosts || 0} / {campaign.totalPosts || 0} posts generated
               </span>
+              <p className="text-xs text-gray-500 dark:text-gray-500 mt-0.5">
+                Copy everything into your scheduler or notes tool and post wherever you like.
+              </p>
             </div>
-            <button
-              onClick={onClose}
-              className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors font-medium"
-            >
-              Close
-            </button>
+            <div className="flex flex-wrap gap-2 justify-end">
+              {campaignPosts.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const pack = campaignPosts
+                      .map((p, idx) => {
+                        const date = p.scheduledDate
+                          ? new Date(p.scheduledDate).toLocaleString()
+                          : 'No planned date';
+                        const platforms = p.platforms.join(', ');
+                        return `#${idx + 1} [${platforms}] – ${date}\n${p.content}\n`;
+                      })
+                      .join('\n-------------------------\n\n');
+                    navigator.clipboard.writeText(pack).catch(() => {});
+                  }}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-primary-600 text-white hover:bg-primary-700 transition-colors"
+                >
+                  <ClipboardCheckIcon className="w-3 h-3" />
+                  Copy campaign pack
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors font-medium"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       </div>

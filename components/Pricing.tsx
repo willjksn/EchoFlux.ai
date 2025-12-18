@@ -9,42 +9,132 @@ interface PricingProps {
 }
 
 const creatorTiers = [
-    { name: 'Free', priceMonthly: 0, priceAnnually: 0, description: 'For individuals starting out.', features: ['1 Social Account', '25 AI Replies / month', 'Basic Link-in-Bio (1 link)', '100 MB Storage'], isRecommended: false },
-    { name: 'Caption', displayName: 'Caption Pro', priceMonthly: 9, priceAnnually: 7, description: 'Perfect for caption writing.', features: ['100 AI Captions / month', 'Trending hashtags (all platforms)', 'Tone & Goal customization', 'AI Training', 'Basic Link-in-Bio (1 link)'], isRecommended: false },
-    { name: 'OnlyFansStudio', displayName: 'OnlyFans Studio', priceMonthly: 24, priceAnnually: 19, description: 'AI content planning for premium creators.', features: ['OnlyFans Studio Access', 'AI Captions (OF-specific tones)', 'Content Planning & Calendars', 'Roleplay & Interactive Ideas', 'Body Rating Prompts', 'Media Organization', 'Export Content Packages', 'Cross-platform Teaser Generator'], isRecommended: false },
-    { name: 'Pro', priceMonthly: 29, priceAnnually: 23, description: 'For creators scaling their brand.', features: ['3 Social Accounts', '250 AI Replies / month', '500 AI Captions / month', 'AI Content Strategist', 'Quick Post Automation', 'Media Library', '1 GB Storage', 'Advanced Analytics'], isRecommended: true },
-    { name: 'Elite', priceMonthly: 149, priceAnnually: 119, description: 'For professional creators.', features: ['5 Social Accounts', '750 AI Replies / month', '1,500 AI Captions / month', 'Advanced CRM', 'Quick Post Automation', 'Media Library', '2 GB Storage', 'Social Listening', 'Competitor Analysis', 'OnlyFans Studio'], isRecommended: false },
-    { name: 'Agency', priceMonthly: 299, priceAnnually: 239, description: 'For agencies managing clients.', features: ['Unlimited Accounts', '2,000 AI Replies / month', '10,000 AI Captions / month*', 'AI Content Strategist', 'Quick Post Automation', 'Media Library', '5 GB Storage', 'Client Workflows', 'Team Management', 'White-labeling', 'Advanced Analytics', 'OnlyFans Studio'], isRecommended: false },
+    {
+        name: 'Free',
+        priceMonthly: 0,
+        priceAnnually: 0,
+        description: 'For individuals testing the studio.',
+        features: [
+            '1 active campaign',
+            'Basic Strategy & Autopilot access',
+            '25 AI captions / month',
+            'Basic Link-in-Bio (1 link)',
+            '100 MB Storage'
+        ],
+        isRecommended: false
+    },
+    {
+        name: 'Caption',
+        displayName: 'Caption Pro',
+        priceMonthly: 9,
+        priceAnnually: 7,
+        description: 'Perfect for caption writing.',
+        features: [
+            '100 AI captions / month',
+            'Trending hashtags (all platforms)',
+            'Tone & goal customization',
+            'AI Training',
+            'Basic Link-in-Bio (1 link)'
+        ],
+        isRecommended: false
+    },
+    {
+        name: 'OnlyFansStudio',
+        displayName: 'OnlyFans Studio',
+        priceMonthly: 24,
+        priceAnnually: 19,
+        description: 'AI content planning for premium creators.',
+        features: [
+            'OnlyFans Studio access',
+            'OF-specific AI captions & prompts',
+            'Content planning & calendars',
+            'Roleplay & interactive ideas',
+            'Media organization',
+            'Export content packages',
+            'Cross-platform teaser generator'
+        ],
+        isRecommended: false
+    },
+    {
+        name: 'Pro',
+        priceMonthly: 29,
+        priceAnnually: 23,
+        description: 'For creators scaling their brand.',
+        features: [
+            'Up to 3 active campaigns',
+            'AI Content Strategist',
+            'Autopilot content packs',
+            '500 AI captions / month',
+            'Media Library',
+            'Visual Content Calendar',
+            '1 GB Storage'
+        ],
+        isRecommended: true
+    },
+    {
+        name: 'Elite',
+        priceMonthly: 149,
+        priceAnnually: 119,
+        description: 'For professional & OF creators.',
+        features: [
+            'Unlimited active campaigns',
+            'Advanced Strategy & Autopilot options',
+            '1,500 AI captions / month',
+            'Workflow board & approvals',
+            'Media Library',
+            '2 GB Storage',
+            'OnlyFans Studio (included)'
+        ],
+        isRecommended: false
+    },
+    {
+        name: 'Agency',
+        priceMonthly: 299,
+        priceAnnually: 239,
+        description: 'For agencies managing clients.',
+        features: [
+            'Unlimited Accounts',
+            '2,000 AI Replies / month',
+            '10,000 AI Captions / month*',
+            'AI Content Strategist',
+            'Quick Post Automation',
+            'Media Library',
+            '5 GB Storage',
+            'Client Workflows',
+            'Team Management',
+            'White-labeling',
+            'Advanced Analytics',
+            'OnlyFans Studio'
+        ],
+        isRecommended: false
+    },
 ];
-
-const businessTiers = [
-    { name: 'Starter', priceMonthly: 99, priceAnnually: 79, description: 'For small businesses & startups.', features: ['3 Social Accounts', '500 AI Replies / month', '1,000 AI Captions / month', 'AI Content Strategist', 'Quick Post Automation', 'Media Library', '1 GB Storage', 'Business Analytics', 'Social CRM & Lead Gen'], isRecommended: false },
-    { name: 'Growth', priceMonthly: 199, priceAnnually: 159, description: 'For growing businesses.', features: ['5 Social Accounts', '1,500 AI Replies / month', '2,500 AI Captions / month', 'AI Content Strategist', 'Quick Post Automation', 'Media Library', '3 GB Storage', 'Marketing Campaign Ideas', 'Competitor Analysis', 'Social Listening'], isRecommended: true },
-];
-
 
 export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateRequest }) => {
     const { user, openPaymentModal, setActivePage, isAuthenticated, pricingView, setPricingView, showToast } = useAppContext();
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'annually'>('monthly');
     const [promoCode, setPromoCode] = useState('');
     // Initialize view from context or userType, default to Creator
-    const initialView = pricingView || (user?.userType === 'Business' ? 'Business' : 'Creator');
-    const [view, setView] = useState<'Creator' | 'Business'>(initialView);
+    const initialView = 'Creator';
+    // Business view is hidden for now; keep type simple to avoid toggles.
+    const [view, setView] = useState<'Creator'>(initialView);
     
     // Update view when pricingView changes (e.g., from Settings)
     useEffect(() => {
         if (pricingView) {
-            setView(pricingView);
+            setView('Creator');
             // Clear pricingView after using it
             setPricingView(null);
         } else if (user?.userType) {
             // Fallback to userType if no pricingView is set
-            setView(user.userType === 'Business' ? 'Business' : 'Creator');
+            setView('Creator');
         }
     }, [pricingView, user?.userType, setPricingView]);
     
     const currentPlan = user?.plan;
-    const pricingTiers = view === 'Creator' ? creatorTiers : businessTiers;
+    // Show only the three focused creator plans in the UI
+    const visibleTierNames: Array<string> = ['Free', 'Pro', 'Elite'];
+    const pricingTiers = creatorTiers.filter((tier) => visibleTierNames.includes(tier.name));
 
     return (
         <div id="pricing" className="bg-gray-100 dark:bg-gray-800 py-24">
@@ -54,33 +144,8 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
                         Choose the plan that's right for you
                     </h2>
                     <p className="mt-4 text-lg text-gray-500 dark:text-gray-400">
-                        Whether you're building a personal brand or scaling a business, we have a plan for you.
+                        Built for creators first. Upgrade when you’re ready.
                     </p>
-                </div>
-
-                <div className="mt-8 flex justify-center">
-                    <div className="p-1 bg-gray-200 dark:bg-gray-700 rounded-lg flex gap-1">
-                        <button 
-                            onClick={() => setView('Creator')} 
-                            className={`px-6 py-2 text-sm font-bold rounded-md transition-all ${
-                                view === 'Creator' 
-                                ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm' 
-                                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                            }`}
-                        >
-                            For Creators
-                        </button>
-                        <button 
-                            onClick={() => setView('Business')} 
-                            className={`px-6 py-2 text-sm font-bold rounded-md transition-all ${
-                                view === 'Business' 
-                                ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm' 
-                                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                            }`}
-                        >
-                            For Business
-                        </button>
-                    </div>
                 </div>
 
                 <div className="mt-8 flex flex-col items-center gap-4">
@@ -122,11 +187,7 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
                     )}
                 </div>
 
-                <div className={`mt-10 grid gap-4 ${
-                    view === 'Creator' 
-                        ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5' 
-                        : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 max-w-4xl mx-auto'
-                }`}>
+                <div className="mt-10 grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
                     {pricingTiers.map((tier) => {
                         const isCurrentPlan = currentPlan === tier.name;
                         const isAgency = tier.name === 'Agency';

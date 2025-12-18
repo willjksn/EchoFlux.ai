@@ -12,7 +12,7 @@ declare global {
   }
 }
 
-export type Platform = 'Instagram' | 'TikTok' | 'X' | 'Threads' | 'YouTube' | 'LinkedIn' | 'Facebook' | 'Pinterest' | 'Discord' | 'Telegram' | 'Reddit' | 'Fanvue' | 'OnlyFans';
+export type Platform = 'Instagram' | 'TikTok' | 'X' | 'Threads' | 'YouTube' | 'LinkedIn' | 'Facebook' | 'Pinterest';
 
 export type MessageType = 'DM' | 'Comment';
 // Business categories: Lead, Support, Opportunity, General
@@ -139,6 +139,12 @@ export interface EmailCaptureConfig {
     placeholder: string;
     buttonText: string;
     successMessage: string;
+    formBackgroundColor?: string;
+    titleColor?: string;
+    inputBackgroundColor?: string;
+    inputTextColor?: string;
+    buttonBackgroundColor?: string;
+    buttonTextColor?: string;
 }
 
 export interface BioPageConfig {
@@ -153,7 +159,9 @@ export interface BioPageConfig {
     links?: BioLink[]; // Legacy support
     teaserImages?: string[]; // Array of image URLs for teaser pics
     theme: {
-        backgroundColor: string;
+        backgroundColor: string; // legacy field for backward compatibility
+        pageBackgroundColor?: string;
+        cardBackgroundColor?: string;
         buttonColor: string;
         textColor: string;
         buttonStyle: 'rounded' | 'square' | 'pill';

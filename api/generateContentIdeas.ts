@@ -115,27 +115,7 @@ async function fetchPublicTrendingSources(niche: string): Promise<string[]> {
     // Option 1: Google Trends RSS (public, no API key needed)
     // Note: This would require parsing RSS feeds or using a service
     
-    // Option 2: Reddit trending (public API, no auth needed)
-    try {
-      const redditResponse = await fetch(`https://www.reddit.com/r/${niche.toLowerCase().replace(/\s+/g, '')}/hot.json?limit=5`, {
-        headers: {
-          'User-Agent': 'EchoFluxAI/1.0',
-        },
-      });
-      
-      if (redditResponse.ok) {
-        const redditData = await redditResponse.json();
-        if (redditData?.data?.children) {
-          const redditTrends = redditData.data.children
-            .slice(0, 5)
-            .map((post: any) => post.data?.title)
-            .filter(Boolean);
-          trends.push(...redditTrends);
-        }
-      }
-    } catch (redditError) {
-      console.warn('Reddit API error:', redditError);
-    }
+    // Reddit removed - no longer supported
 
     // Option 3: News API (if key available)
     if (process.env.NEWS_API_KEY) {
@@ -166,19 +146,21 @@ async function fetchPublicTrendingSources(niche: string): Promise<string[]> {
   return trends;
 }
 
-async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    res.status(405).json({ error: "Method not allowed" });
+    return;
   }
 
   const apiKeyCheck = checkApiKeys();
   if (!apiKeyCheck.hasKey) {
-    return res.status(200).json({
+    res.status(200).json({
       success: false,
       error: "AI not configured",
       note: apiKeyCheck.error,
       ideas: [],
     });
+    return;
   }
 
   let user;
@@ -186,28 +168,31 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     const verifyAuth = await getVerifyAuth();
     user = await verifyAuth(req);
   } catch (authError: any) {
-    return res.status(200).json({
+    res.status(200).json({
       success: false,
       error: "Authentication error",
       note: authError?.message || "Failed to verify authentication.",
       ideas: [],
     });
+    return;
   }
 
   if (!user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    res.status(401).json({ error: "Unauthorized" });
+    return;
   }
 
   const { niche, category, userType } = req.body || {};
   // category: 'high-engagement' | 'niche' | 'trending'
 
   if (!niche || !category) {
-    return res.status(400).json({ 
+    res.status(400).json({ 
       success: false,
       error: "Missing required fields",
       note: "niche and category are required",
       ideas: []
     });
+    return;
   }
 
   try {
@@ -284,21 +269,23 @@ Requirements:
           ideas = JSON.parse(jsonMatch[1].trim());
         } catch {
           console.error("Failed to parse extracted JSON");
-          return res.status(200).json({
+          res.status(200).json({
             success: false,
             error: "Failed to parse AI response",
             note: "The AI model returned an invalid JSON response. Please try again.",
             ideas: [],
           });
+          return;
         }
       } else {
         console.error("Failed to parse JSON response. Raw output:", raw.substring(0, 200));
-        return res.status(200).json({
+        res.status(200).json({
           success: false,
           error: "Failed to parse AI response",
           note: "The AI model returned an invalid JSON response. Please try again.",
           ideas: [],
         });
+        return;
       }
     }
 
@@ -319,18 +306,20 @@ Requirements:
       category: category
     }));
 
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       ideas: validatedIdeas,
     });
+    return;
   } catch (error: any) {
     console.error("generateContentIdeas error:", error);
-    return res.status(200).json({
+    res.status(200).json({
       success: false,
       error: "Failed to generate content ideas",
       note: error?.message || "AI generation failed. Please try again.",
       ideas: [],
     });
+    return;
   }
 }
 

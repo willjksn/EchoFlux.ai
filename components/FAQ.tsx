@@ -2,32 +2,32 @@ import React, { useState } from 'react';
 
 const faqData = [
     {
-        question: "What's the difference between Creator and Business mode?",
-        answer: "Creator mode is tailored for personal brand building, focusing on metrics like follower growth and engagement. Business mode transforms the app into a marketing command center, focusing on ROI metrics like website clicks, leads, and sales. The AI tools, like the Autopilot/Marketing Manager, also adapt to offer you more relevant campaign ideas."
+        question: "Who is EchoFlux.ai for right now?",
+        answer: "We’re focused on creators. Everything is tuned for personal brands: follower growth, engagement, and fast publishing. Business/agency modes are paused until the creator experience is perfect."
+    },
+    {
+        question: "Do you support businesses or agencies?",
+        answer: "Not right now. We’ve hidden business and agency features to perfect the creator experience. We’ll bring them back later after creator launch and testing."
     },
     {
         question: "What is Quick Post Automation?",
-        answer: "Quick Post Automation is our time-saving feature that lets you upload multiple images or videos at once. Simply select your platforms, set your goal and tone, and our AI will automatically analyze each piece of media, generate captions and hashtags, and schedule posts at optimal times. Perfect for busy creators and businesses who need to maintain a consistent social media presence."
+        answer: "Upload multiple images or videos, set your goal and tone, and our AI generates captions/hashtags plus suggested best times and a calendar plan. You then post on your social platforms manually when you’re ready."
     },
     {
         question: "How does the AI Content Strategist work?",
-        answer: "The AI Content Strategist takes your brand niche (for Creators) or business type (for Businesses) and your goals, then generates a comprehensive multi-week content roadmap. It suggests topics, formats (Reels, Posts), platforms, and provides specific image and video ideas for each post. You can upload media directly to roadmap items, and the AI will auto-generate captions and schedule posts to your calendar. The roadmap stays on the page until you create a new one or posts are used."
+        answer: "Tell us your niche and goals, and it builds a multi-week content roadmap with post ideas. Upload media directly to roadmap items, and it adds them as planned content on your calendar so you always know what to post next."
     },
     {
-        question: "Can I replace Linktree with EngageSuite?",
-        answer: "Yes! Our 'Smart Link-in-Bio' builder allows you to create a beautiful, branded mobile landing page. It also includes a built-in Email Capture form, letting you grow your newsletter list directly from Instagram or TikTok without needing a separate website."
+        question: "Can I replace Linktree with EchoFlux?",
+        answer: "Yes. Our Smart Link-in-Bio gives you a branded mobile page with optional email capture so you can grow owned audience directly from Instagram or TikTok."
     },
     {
-        question: "What is the Media Library?",
-        answer: "The Media Library is your personal storage for images and videos. Upload media once and reuse it across multiple posts. When composing, you can select from your library instead of uploading new files each time. Media stays in your library until you delete it, making it easy to maintain a consistent brand aesthetic and save time."
+        question: "Do you offer social listening or competitor tracking?",
+        answer: "We’ve removed social listening and competitor tracking for now. Current focus: AI content creation, campaign planning, inbox/CRM, analytics-style insights, link-in-bio, and OnlyFans Studio."
     },
     {
-        question: "How does the Calendar work?",
-        answer: "The Calendar shows all your scheduled posts in a beautiful monthly view. Click any scheduled post to see a preview with the image/video, caption, hashtags, and scheduled date/time. You can edit the date, time, and platforms directly from the preview, or delete posts if needed. Only posts that are fully ready (with media, captions, and scheduling details) appear on the calendar."
-    },
-    {
-        question: "Is my data safe when connecting accounts?",
-        answer: "Absolutely. We use official APIs and secure OAuth authentication for all social platforms. We never see or store your passwords, and you can revoke our access at any time from your social media account settings."
+        question: "Can I use EchoFlux.ai without connecting social accounts?",
+        answer: "Yes. Right now EchoFlux.ai is designed as an AI Content Studio & Campaign Planner—you plan campaigns, generate content, and organize everything in a calendar, then copy and post to your social platforms manually. Direct posting and deep analytics will come in a future version."
     }
 ];
 

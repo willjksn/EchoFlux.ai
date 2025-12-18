@@ -19,7 +19,7 @@ async function getAdminAppFunction() {
   return getAdminApp;
 }
 
-async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   // Create empty stats structure for error fallback
   const createEmptyStats = (): Record<string, { followers: number; following: number }> => {
     const emptyStats: Record<string, { followers: number; following: number }> = {};
@@ -31,7 +31,8 @@ async function handler(req: VercelRequest, res: VercelResponse) {
   };
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
   }
 
   try {
@@ -43,12 +44,14 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     } catch (authError: any) {
       console.error('Auth verification error:', authError);
       // Return empty stats instead of 401 since this is non-critical
-      return res.status(200).json(createEmptyStats());
+      res.status(200).json(createEmptyStats());
+      return;
     }
 
     if (!authUser || !authUser.uid) {
       // Return empty stats instead of 401 since this is non-critical
-      return res.status(200).json(createEmptyStats());
+      res.status(200).json(createEmptyStats());
+      return;
     }
 
     const userId = authUser.uid;
@@ -61,7 +64,8 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     } catch (firebaseError: any) {
       console.error('Firebase Admin initialization error:', firebaseError);
       // Return empty stats instead of error so UI doesn't break
-      return res.status(200).json(createEmptyStats());
+      res.status(200).json(createEmptyStats());
+      return;
     }
 
     // Fetch posts to aggregate stats
@@ -69,7 +73,7 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const postsRef = db.collection('users').doc(userId).collection('posts');
       const postsSnapshot = await postsRef.get();
-      allPosts = postsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      allPosts = postsSnapshot.docs.map((doc: any) => ({ id: doc.id, ...(doc.data() as any) }));
     } catch (postsError: any) {
       console.error('Error fetching posts:', postsError);
       allPosts = [];
@@ -144,7 +148,8 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     // Return social stats in the format expected by the frontend
-    return res.status(200).json(socialStats);
+    res.status(200).json(socialStats);
+    return;
   } catch (error: any) {
     console.error('getSocialStats error:', error);
     console.error('Error stack:', error?.stack);
@@ -152,7 +157,8 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     // Always return 200 with empty stats so UI doesn't break
     // This endpoint is non-critical - if it fails, we just return zeros
     try {
-      return res.status(200).json(createEmptyStats());
+      res.status(200).json(createEmptyStats());
+      return;
     } catch (responseError: any) {
       // If response already sent or another error, just log
       console.error('Failed to send error response in getSocialStats:', responseError);
@@ -166,7 +172,7 @@ async function handler(req: VercelRequest, res: VercelResponse) {
   }
 }
 
-export default async function wrappedHandler(req: VercelRequest, res: VercelResponse) {
+export default async function wrappedHandler(req: VercelRequest, res: VercelResponse): Promise<void> {
   try {
     await handler(req, res);
   } catch (err: any) {
@@ -181,7 +187,8 @@ export default async function wrappedHandler(req: VercelRequest, res: VercelResp
         });
         return emptyStats;
       };
-      return res.status(200).json(createEmptyStats());
+      res.status(200).json(createEmptyStats());
+      return;
     }
   }
 }

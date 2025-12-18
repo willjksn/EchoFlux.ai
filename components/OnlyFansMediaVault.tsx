@@ -847,8 +847,10 @@ const MediaEditor: React.FC<{
     onClose: () => void;
     onSave: (editedImageUrl: string) => Promise<void>;
 }> = ({ item, onClose, onSave }) => {
+    const { showToast } = useAppContext();
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const imageRef = useRef<HTMLImageElement>(null);
+    const baseCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const [brightness, setBrightness] = useState(0);
     const [contrast, setContrast] = useState(0);
     const [saturate, setSaturate] = useState(0);
@@ -856,14 +858,21 @@ const MediaEditor: React.FC<{
     const [watermarkText, setWatermarkText] = useState('');
     const [watermarkPosition, setWatermarkPosition] = useState<'bottom-right' | 'bottom-left' | 'top-right' | 'top-left'>('bottom-right');
     const [watermarkOpacity, setWatermarkOpacity] = useState(0.7);
+    const [watermarkSize, setWatermarkSize] = useState(100);
+    const [watermarkTextColor, setWatermarkTextColor] = useState('#ffffff');
+    const [watermarkImage, setWatermarkImage] = useState<string | null>(null);
+    const watermarkImageInputRef = useRef<HTMLInputElement>(null);
+    const watermarkImageRef = useRef<HTMLImageElement | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
-    const [cropStart, setCropStart] = useState<{ x: number; y: number } | null>(null);
-    const [cropEnd, setCropEnd] = useState<{ x: number; y: number } | null>(null);
-    const [isCropping, setIsCropping] = useState(false);
     const [isBlurSelecting, setIsBlurSelecting] = useState(false);
     const [blurSelection, setBlurSelection] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
     const [blurSelectionStart, setBlurSelectionStart] = useState<{ x: number; y: number } | null>(null);
     const [blurSelectionEnd, setBlurSelectionEnd] = useState<{ x: number; y: number } | null>(null);
+    const [blurSelections, setBlurSelections] = useState<{ x: number; y: number; width: number; height: number }[]>([]);
+    const [isEraseSelecting, setIsEraseSelecting] = useState(false);
+    const [eraseSelectionStart, setEraseSelectionStart] = useState<{ x: number; y: number } | null>(null);
+    const [eraseSelectionEnd, setEraseSelectionEnd] = useState<{ x: number; y: number } | null>(null);
+    const [eraseSelections, setEraseSelections] = useState<{ x: number; y: number; width: number; height: number }[]>([]);
     const containerRef = useRef<HTMLDivElement>(null);
     const originalImageRef = useRef<HTMLImageElement | null>(null);
     const renderTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -875,13 +884,28 @@ const MediaEditor: React.FC<{
     const [grayscale, setGrayscale] = useState(0);
     const [invert, setInvert] = useState(0);
 
+    const getScaledCoordinates = (displayX: number, displayY: number) => {
+        if (!canvasRef.current) return { x: 0, y: 0 };
+        const canvas = canvasRef.current;
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        return {
+            x: displayX * scaleX,
+            y: displayY * scaleY
+        };
+    };
+
     const applyFilters = useCallback((skipSelectionRendering = false) => {
         if (!canvasRef.current) return;
         const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
-        if (!ctx || !imageRef.current || !imageRef.current.complete) return;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) return;
+        
+        // Use originalImageRef if available, otherwise use imageRef
+        const img = originalImageRef.current || imageRef.current;
+        if (!img || !img.complete) return;
 
-        const img = imageRef.current;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
         // Draw base image with lighting filters (no blur yet)
@@ -889,126 +913,408 @@ const MediaEditor: React.FC<{
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         ctx.filter = 'none';
         
-        // Apply selective blur if there's a blur selection
-        if (blurSelection && blur > 0) {
-            const { x, y, width, height } = blurSelection;
-            // Ensure coordinates are within canvas bounds
-            const safeX = Math.max(0, Math.min(x, canvas.width));
-            const safeY = Math.max(0, Math.min(y, canvas.height));
-            const safeWidth = Math.min(width, canvas.width - safeX);
-            const safeHeight = Math.min(height, canvas.height - safeY);
-            
-            if (safeWidth > 0 && safeHeight > 0) {
-                try {
-                    // Get the selected area
-                    const imageData = ctx.getImageData(safeX, safeY, safeWidth, safeHeight);
-                    
-                    // Create a temporary canvas for the blurred area
-                    const tempCanvas = document.createElement('canvas');
-                    tempCanvas.width = safeWidth;
-                    tempCanvas.height = safeHeight;
-                    const tempCtx = tempCanvas.getContext('2d');
-                    if (tempCtx) {
-                        tempCtx.putImageData(imageData, 0, 0);
-                        // Apply blur to the temp canvas
-                        tempCtx.filter = `blur(${blur}px)`;
-                        tempCtx.drawImage(tempCanvas, 0, 0);
-                        tempCtx.filter = 'none';
-                        
-                        // Draw the blurred area back onto the main canvas
-                        ctx.drawImage(tempCanvas, safeX, safeY);
-                    }
-                } catch (error) {
-                    // If getImageData fails (CORS issue), use alternative approach
-                    // Draw a blurred version of the entire image in the selection area
-                    const tempCanvas = document.createElement('canvas');
-                    tempCanvas.width = safeWidth;
-                    tempCanvas.height = safeHeight;
-                    const tempCtx = tempCanvas.getContext('2d');
-                    if (tempCtx && originalImageRef.current) {
-                        // Draw the full image scaled to the selection area
-                        tempCtx.filter = `brightness(${100 + brightness}%) contrast(${100 + contrast}%) saturate(${100 + saturate}%) hue-rotate(${hue}deg) sepia(${sepia}%) grayscale(${grayscale}%) invert(${invert}%) blur(${blur}px)`;
-                        tempCtx.drawImage(
-                            originalImageRef.current,
-                            safeX, safeY, safeWidth, safeHeight,
-                            0, 0, safeWidth, safeHeight
-                        );
-                        tempCtx.filter = 'none';
-                        
-                        // Draw the blurred area back onto the main canvas
-                        ctx.drawImage(tempCanvas, safeX, safeY);
+        // Apply selective blur:
+        // - Always apply committed blur selections
+        // - Apply active drag preview only when not skipping selection rendering
+        const committedBlurs = blurSelections;
+        const activeBlur = !skipSelectionRendering && blurSelection ? [blurSelection] : [];
+        const allBlurSelections = [...committedBlurs, ...activeBlur];
+        if (allBlurSelections.length && blur > 0) {
+            for (const sel of allBlurSelections) {
+                const { x, y, width, height } = sel;
+                const safeX = Math.max(0, Math.min(x, canvas.width));
+                const safeY = Math.max(0, Math.min(y, canvas.height));
+                const safeWidth = Math.max(0, Math.min(width, canvas.width - safeX));
+                const safeHeight = Math.max(0, Math.min(height, canvas.height - safeY));
+                
+                if (safeWidth > 0 && safeHeight > 0) {
+                    try {
+                        const imageData = ctx.getImageData(safeX, safeY, safeWidth, safeHeight);
+                        const tempCanvas = document.createElement('canvas');
+                        tempCanvas.width = safeWidth;
+                        tempCanvas.height = safeHeight;
+                        const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
+                        if (tempCtx) {
+                            tempCtx.putImageData(imageData, 0, 0);
+                            const blurIntensity = blur * 2.5; // heavier blur
+                            tempCtx.filter = `blur(${blurIntensity}px)`;
+                            tempCtx.drawImage(tempCanvas, 0, 0);
+                            tempCtx.filter = 'none';
+                            ctx.drawImage(tempCanvas, safeX, safeY);
+                        }
+                    } catch (error) {
+                        const tempCanvas = document.createElement('canvas');
+                        tempCanvas.width = safeWidth;
+                        tempCanvas.height = safeHeight;
+                        const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
+                        if (tempCtx && originalImageRef.current) {
+                            const blurIntensity = blur * 2.5;
+                            tempCtx.filter = `brightness(${100 + brightness}%) contrast(${100 + contrast}%) saturate(${100 + saturate}%) hue-rotate(${hue}deg) sepia(${sepia}%) grayscale(${grayscale}%) invert(${invert}%) blur(${blurIntensity}px)`;
+                            tempCtx.drawImage(
+                                originalImageRef.current,
+                                safeX, safeY, safeWidth, safeHeight,
+                                0, 0, safeWidth, safeHeight
+                            );
+                            tempCtx.filter = 'none';
+                            ctx.drawImage(tempCanvas, safeX, safeY);
+                        }
                     }
                 }
             }
         }
         
-        // Draw crop rectangle if cropping (only if not skipping selection rendering during drag)
-        if (!skipSelectionRendering && isCropping && cropStart && cropEnd) {
-            const x = Math.min(cropStart.x, cropEnd.x);
-            const y = Math.min(cropStart.y, cropEnd.y);
-            const width = Math.abs(cropEnd.x - cropStart.x);
-            const height = Math.abs(cropEnd.y - cropStart.y);
+        // Draw blur selection rectangle and preview blur if selecting (always show during drag for visual feedback)
+        if (isBlurSelecting && blurSelectionStart && blurSelectionEnd) {
+            // Convert display coordinates to actual canvas coordinates
+            const start = getScaledCoordinates(blurSelectionStart.x, blurSelectionStart.y);
+            const end = getScaledCoordinates(blurSelectionEnd.x, blurSelectionEnd.y);
+            
+            const x = Math.min(start.x, end.x);
+            const y = Math.min(start.y, end.y);
+            const width = Math.abs(end.x - start.x);
+            const height = Math.abs(end.y - start.y);
 
-            ctx.strokeStyle = '#3b82f6';
-            ctx.lineWidth = 2;
-            ctx.setLineDash([5, 5]);
-            ctx.strokeRect(x, y, width, height);
-            ctx.setLineDash([]);
-        }
+            // Safeguard coordinates within canvas bounds for preview + overlay drawing
+            const safeX = Math.max(0, Math.min(x, canvas.width));
+            const safeY = Math.max(0, Math.min(y, canvas.height));
+            const safeWidth = Math.max(0, Math.min(width, canvas.width - safeX));
+            const safeHeight = Math.max(0, Math.min(height, canvas.height - safeY));
 
-        // Draw blur selection rectangle if selecting (only if not skipping selection rendering during drag)
-        if (!skipSelectionRendering && isBlurSelecting && blurSelectionStart && blurSelectionEnd) {
-            const x = Math.min(blurSelectionStart.x, blurSelectionEnd.x);
-            const y = Math.min(blurSelectionStart.y, blurSelectionEnd.y);
-            const width = Math.abs(blurSelectionEnd.x - blurSelectionStart.x);
-            const height = Math.abs(blurSelectionEnd.y - blurSelectionStart.y);
+            // Only show preview if selection is large enough
+            if (width > 10 && height > 10 && blur > 0) {
+                if (safeWidth > 0 && safeHeight > 0) {
+                    try {
+                        // Get the selected area from the current canvas (using actual canvas coordinates)
+                        const imageData = ctx.getImageData(safeX, safeY, safeWidth, safeHeight);
+                        
+                        // Create a temporary canvas for the blurred preview
+                        const previewCanvas = document.createElement('canvas');
+                        previewCanvas.width = safeWidth;
+                        previewCanvas.height = safeHeight;
+                        const previewCtx = previewCanvas.getContext('2d', { willReadFrequently: true });
+                        if (previewCtx) {
+                            previewCtx.putImageData(imageData, 0, 0);
+                            // Apply blur preview - multiply blur intensity for heavier effect
+                            const blurIntensity = blur * 2.5;
+                            previewCtx.filter = `blur(${blurIntensity}px)`;
+                            previewCtx.drawImage(previewCanvas, 0, 0);
+                            previewCtx.filter = 'none';
+                            
+                            // Draw the blurred preview back onto the main canvas (using actual canvas coordinates)
+                            ctx.drawImage(previewCanvas, safeX, safeY);
+                        }
+                    } catch (error) {
+                        // If getImageData fails, skip preview blur
+                        console.warn('Could not create blur preview:', error);
+                    }
+                }
+            }
 
+            // Draw semi-transparent red fill overlay using canvas coordinates
+            ctx.fillStyle = 'rgba(239, 68, 68, 0.1)';
+            ctx.fillRect(safeX, safeY, safeWidth, safeHeight);
+            
+            // Draw red border (using canvas coordinates so overlay matches blur area)
             ctx.strokeStyle = '#ef4444';
-            ctx.lineWidth = 2;
-            ctx.setLineDash([5, 5]);
-            ctx.strokeRect(x, y, width, height);
+            ctx.lineWidth = 3;
+            ctx.setLineDash([8, 4]);
+            ctx.strokeRect(safeX, safeY, safeWidth, safeHeight);
+            
+            // Draw inner border for better definition
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1;
             ctx.setLineDash([]);
+            ctx.strokeRect(safeX + 1, safeY + 1, Math.max(0, safeWidth - 2), Math.max(0, safeHeight - 2));
         }
         
-        // Apply watermark
-        if (watermarkText) {
-            ctx.save();
-            ctx.globalAlpha = watermarkOpacity;
-            ctx.font = 'bold 24px Arial';
-            ctx.fillStyle = 'white';
-            ctx.strokeStyle = 'black';
-            ctx.lineWidth = 2;
-            const metrics = ctx.measureText(watermarkText);
-            const textWidth = metrics.width;
-            const textHeight = 30;
-            
-            let x = 0;
-            let y = 0;
-            
-            switch (watermarkPosition) {
-                case 'bottom-right':
-                    x = canvas.width - textWidth - 20;
-                    y = canvas.height - 20;
-                    break;
-                case 'bottom-left':
-                    x = 20;
-                    y = canvas.height - 20;
-                    break;
-                case 'top-right':
-                    x = canvas.width - textWidth - 20;
-                    y = textHeight;
-                    break;
-                case 'top-left':
-                    x = 20;
-                    y = textHeight;
-                    break;
+        // Draw magic eraser selection overlay while dragging
+        if (isEraseSelecting && eraseSelectionStart && eraseSelectionEnd) {
+            const start = getScaledCoordinates(eraseSelectionStart.x, eraseSelectionStart.y);
+            const end = getScaledCoordinates(eraseSelectionEnd.x, eraseSelectionEnd.y);
+
+            const x = Math.min(start.x, end.x);
+            const y = Math.min(start.y, end.y);
+            const width = Math.abs(end.x - start.x);
+            const height = Math.abs(end.y - start.y);
+
+            const safeX = Math.max(0, Math.min(x, canvas.width));
+            const safeY = Math.max(0, Math.min(y, canvas.height));
+            const safeWidth = Math.max(0, Math.min(width, canvas.width - safeX));
+            const safeHeight = Math.max(0, Math.min(height, canvas.height - safeY));
+
+            if (safeWidth > 0 && safeHeight > 0) {
+                ctx.fillStyle = 'rgba(59, 130, 246, 0.12)';
+                ctx.fillRect(safeX, safeY, safeWidth, safeHeight);
+
+                ctx.strokeStyle = '#2563eb';
+                ctx.lineWidth = 3;
+                ctx.setLineDash([8, 4]);
+                ctx.strokeRect(safeX, safeY, safeWidth, safeHeight);
+
+                ctx.strokeStyle = '#e0f2fe';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([]);
+                ctx.strokeRect(safeX + 1, safeY + 1, Math.max(0, safeWidth - 2), Math.max(0, safeHeight - 2));
             }
-            
-            ctx.strokeText(watermarkText, x, y);
-            ctx.fillText(watermarkText, x, y);
+        }
+
+        // Existing blur selections overlay (so users see queued areas)
+        if (blurSelections.length && blur > 0) {
+            ctx.save();
+            ctx.strokeStyle = '#f97316';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 4]);
+            ctx.fillStyle = 'rgba(249, 115, 22, 0.08)';
+            for (const sel of blurSelections) {
+                const safeX = Math.max(0, Math.min(sel.x, canvas.width));
+                const safeY = Math.max(0, Math.min(sel.y, canvas.height));
+                const safeWidth = Math.max(0, Math.min(sel.width, canvas.width - safeX));
+                const safeHeight = Math.max(0, Math.min(sel.height, canvas.height - safeY));
+                if (safeWidth > 0 && safeHeight > 0) {
+                    ctx.fillRect(safeX, safeY, safeWidth, safeHeight);
+                    ctx.strokeRect(safeX, safeY, safeWidth, safeHeight);
+                }
+            }
             ctx.restore();
         }
-    }, [brightness, contrast, saturate, blur, watermarkText, watermarkPosition, watermarkOpacity, isCropping, cropStart, cropEnd, isBlurSelecting, blurSelectionStart, blurSelectionEnd, blurSelection, hue, sepia, grayscale, invert]);
+        
+        // Apply watermark (text or image)
+        if (watermarkText || watermarkImage) {
+            ctx.save();
+            ctx.globalAlpha = watermarkOpacity;
+            
+            if (watermarkImage && watermarkImageRef.current && watermarkImageRef.current.complete) {
+                // Draw image watermark (only if already loaded)
+                const img = watermarkImageRef.current;
+                const imgSize = watermarkSize; // Use size slider for image scale
+                const aspectRatio = img.width / img.height;
+                const displayWidth = imgSize;
+                const displayHeight = imgSize / aspectRatio;
+                
+                let x = 0;
+                let y = 0;
+                
+                switch (watermarkPosition) {
+                    case 'bottom-right':
+                        x = canvas.width - displayWidth - 20;
+                        y = canvas.height - displayHeight - 20;
+                        break;
+                    case 'bottom-left':
+                        x = 20;
+                        y = canvas.height - displayHeight - 20;
+                        break;
+                    case 'top-right':
+                        x = canvas.width - displayWidth - 20;
+                        y = 20;
+                        break;
+                    case 'top-left':
+                        x = 20;
+                        y = 20;
+                        break;
+                }
+                
+                ctx.drawImage(img, x, y, displayWidth, displayHeight);
+            } else if (watermarkText) {
+                // Draw text watermark
+                ctx.font = `bold ${watermarkSize}px Arial`;
+                ctx.fillStyle = watermarkTextColor;
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 2;
+                const metrics = ctx.measureText(watermarkText);
+                const textWidth = metrics.width;
+                const textHeight = watermarkSize + 6;
+                
+                let x = 0;
+                let y = 0;
+                
+                switch (watermarkPosition) {
+                    case 'bottom-right':
+                        x = canvas.width - textWidth - 20;
+                        y = canvas.height - 20;
+                        break;
+                    case 'bottom-left':
+                        x = 20;
+                        y = canvas.height - 20;
+                        break;
+                    case 'top-right':
+                        x = canvas.width - textWidth - 20;
+                        y = textHeight;
+                        break;
+                    case 'top-left':
+                        x = 20;
+                        y = textHeight;
+                        break;
+                }
+                
+                ctx.strokeText(watermarkText, x, y);
+                ctx.fillText(watermarkText, x, y);
+            }
+            
+            ctx.restore();
+        }
+    }, [brightness, contrast, saturate, blur, watermarkText, watermarkPosition, watermarkOpacity, watermarkSize, watermarkTextColor, watermarkImage, isBlurSelecting, blurSelectionStart, blurSelectionEnd, blurSelection, blurSelections, hue, sepia, grayscale, invert, isEraseSelecting, eraseSelectionStart, eraseSelectionEnd]);
+
+    const applyMagicErase = useCallback(
+        async (selections: { x: number; y: number; width: number; height: number }[]) => {
+            if (!canvasRef.current || !originalImageRef.current || !selections.length) return;
+            setIsProcessing(true);
+
+            try {
+                const workCanvas = document.createElement('canvas');
+                workCanvas.width = canvasRef.current.width;
+                workCanvas.height = canvasRef.current.height;
+                const workCtx = workCanvas.getContext('2d', { willReadFrequently: true });
+                if (!workCtx) throw new Error('Canvas not available for eraser');
+
+                workCtx.drawImage(originalImageRef.current, 0, 0, workCanvas.width, workCanvas.height);
+
+                for (const selection of selections) {
+                    const { x, y, width, height } = selection;
+                    const margin = Math.max(10, Math.min(40, Math.round(Math.min(width, height) / 1.5)));
+                    const sampleX = Math.max(0, x - margin);
+                    const sampleY = Math.max(0, y - margin);
+                    const sampleWidth = Math.min(width + margin * 2, workCanvas.width - sampleX);
+                    const sampleHeight = Math.min(height + margin * 2, workCanvas.height - sampleY);
+
+                    const sampleCanvas = document.createElement('canvas');
+                    sampleCanvas.width = sampleWidth;
+                    sampleCanvas.height = sampleHeight;
+                    const sampleCtx = sampleCanvas.getContext('2d', { willReadFrequently: true });
+
+                    if (!sampleCtx) continue;
+
+                    sampleCtx.filter = 'blur(25px)';
+                    sampleCtx.drawImage(
+                        originalImageRef.current,
+                        sampleX,
+                        sampleY,
+                        sampleWidth,
+                        sampleHeight,
+                        0,
+                        0,
+                        sampleWidth,
+                        sampleHeight
+                    );
+                    sampleCtx.filter = 'none';
+
+                    const offsetX = Math.max(0, Math.min(margin, sampleWidth - width));
+                    const offsetY = Math.max(0, Math.min(margin, sampleHeight - height));
+
+                    workCtx.drawImage(
+                        sampleCanvas,
+                        offsetX,
+                        offsetY,
+                        Math.max(1, width),
+                        Math.max(1, height),
+                        x,
+                        y,
+                        Math.max(1, width),
+                        Math.max(1, height)
+                    );
+                }
+
+                const dataUrl = workCanvas.toDataURL('image/png');
+                // Update visible canvas immediately to avoid flicker/revert perception
+                const mainCtx = canvasRef.current.getContext('2d');
+                if (mainCtx) {
+                    mainCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+                    mainCtx.drawImage(workCanvas, 0, 0);
+                }
+
+                const newImg = new Image();
+                newImg.crossOrigin = 'anonymous';
+                newImg.onload = () => {
+                    originalImageRef.current = newImg;
+                    if (imageRef.current) {
+                        imageRef.current.src = dataUrl;
+                    }
+                    setEraseSelections([]);
+                    applyFilters();
+                    showToast('Magic eraser applied', 'success');
+                };
+                newImg.onerror = () => {
+                    showToast('Magic eraser failed to update image', 'error');
+                };
+                newImg.src = dataUrl;
+            } catch (error) {
+                console.error('Magic eraser failed', error);
+                showToast('Magic eraser failed. Try a smaller area.', 'error');
+            } finally {
+                setIsProcessing(false);
+            }
+        },
+        [applyFilters, showToast]
+    );
+
+    const applyBlurToImage = useCallback(
+        async (selections: { x: number; y: number; width: number; height: number }[]) => {
+            if (!canvasRef.current || !originalImageRef.current || !selections.length || blur <= 0) return;
+            setIsProcessing(true);
+
+            try {
+                const workCanvas = document.createElement('canvas');
+                workCanvas.width = canvasRef.current.width;
+                workCanvas.height = canvasRef.current.height;
+                const workCtx = workCanvas.getContext('2d', { willReadFrequently: true });
+                if (!workCtx) throw new Error('Canvas not available for blur apply');
+
+                workCtx.drawImage(originalImageRef.current, 0, 0, workCanvas.width, workCanvas.height);
+
+                for (const sel of selections) {
+                    const { x, y, width, height } = sel;
+                    const safeX = Math.max(0, Math.min(x, workCanvas.width));
+                    const safeY = Math.max(0, Math.min(y, workCanvas.height));
+                    const safeWidth = Math.max(0, Math.min(width, workCanvas.width - safeX));
+                    const safeHeight = Math.max(0, Math.min(height, workCanvas.height - safeY));
+                    if (safeWidth <= 0 || safeHeight <= 0) continue;
+
+                    const imageData = workCtx.getImageData(safeX, safeY, safeWidth, safeHeight);
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = safeWidth;
+                    tempCanvas.height = safeHeight;
+                    const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
+                    if (!tempCtx) continue;
+                    tempCtx.putImageData(imageData, 0, 0);
+                    const blurIntensity = Math.max(1, blur) * 2.5;
+                    tempCtx.filter = `blur(${blurIntensity}px)`;
+                    tempCtx.drawImage(tempCanvas, 0, 0);
+                    tempCtx.filter = 'none';
+                    workCtx.drawImage(tempCanvas, safeX, safeY);
+                }
+
+                const dataUrl = workCanvas.toDataURL('image/png');
+                // Update visible canvas immediately so it doesn't appear to revert
+                const mainCtx = canvasRef.current.getContext('2d');
+                if (mainCtx) {
+                    mainCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+                    mainCtx.drawImage(workCanvas, 0, 0);
+                }
+
+                const newImg = new Image();
+                newImg.crossOrigin = 'anonymous';
+                newImg.onload = () => {
+                    originalImageRef.current = newImg;
+                    if (imageRef.current) {
+                        imageRef.current.src = dataUrl;
+                    }
+                    setBlurSelections([]);
+                    setBlurSelection(null);
+                    applyFilters();
+                    showToast('Blur applied to image', 'success');
+                };
+                newImg.onerror = () => {
+                    showToast('Failed to update image with blur', 'error');
+                };
+                newImg.src = dataUrl;
+            } catch (error) {
+                console.error('Blur apply failed', error);
+                showToast('Blur apply failed. Try again.', 'error');
+            } finally {
+                setIsProcessing(false);
+            }
+        },
+        [applyFilters, showToast, blur]
+    );
 
     useEffect(() => {
         // Prevent multiple simultaneous image loads
@@ -1031,7 +1337,30 @@ const MediaEditor: React.FC<{
                     const { auth } = await import('../firebaseConfig');
                     const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
                     if (token) {
-                        imageUrl = `/api/proxyImage?url=${encodeURIComponent(item.url)}`;
+                        // Firebase Storage URLs may already be encoded, so we need to decode first
+                        // then encode properly for the query parameter to avoid double encoding
+                        let urlToEncode = item.url;
+                        try {
+                            // Try to decode multiple times if it's already encoded (contains %)
+                            // This handles cases where the URL is already encoded
+                            let previousUrl = urlToEncode;
+                            for (let i = 0; i < 3; i++) {
+                                if (urlToEncode.includes('%')) {
+                                    const decoded = decodeURIComponent(urlToEncode);
+                                    if (decoded === previousUrl) break; // No more decoding possible
+                                    urlToEncode = decoded;
+                                    previousUrl = decoded;
+                                } else {
+                                    break; // Not encoded, no need to decode
+                                }
+                            }
+                        } catch (e) {
+                            // If decode fails, use original URL
+                            console.warn('Could not decode URL, using as-is:', item.url);
+                            urlToEncode = item.url;
+                        }
+                        // Now encode it properly for the query parameter
+                        imageUrl = `/api/proxyImage?url=${encodeURIComponent(urlToEncode)}`;
                         needsAuth = true;
                     }
                 } catch (err) {
@@ -1051,11 +1380,25 @@ const MediaEditor: React.FC<{
                     }
                 }
                 
+                console.log('Fetching image from proxy:', imageUrl.substring(0, 200));
                 const response = await fetch(imageUrl, { 
                     credentials: 'include',
                     headers
                 });
-                if (!response.ok) throw new Error('Failed to fetch image');
+                
+                if (!response.ok) {
+                    const errorText = await response.text().catch(() => 'Unknown error');
+                    console.error('Proxy returned error:', response.status, errorText);
+                    throw new Error(`Proxy failed: ${response.status} - ${errorText.substring(0, 100)}`);
+                }
+                
+                // Check if response is actually an image
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.startsWith('image/')) {
+                    console.error('Proxy returned non-image content:', contentType);
+                    throw new Error('Proxy returned non-image content');
+                }
+                
                 const blob = await response.blob();
                 const objectUrl = URL.createObjectURL(blob);
                 
@@ -1068,6 +1411,7 @@ const MediaEditor: React.FC<{
                         if (!ctx) {
                             isLoadingImageRef.current = false;
                             URL.revokeObjectURL(objectUrl);
+                            showToast('Failed to initialize canvas', 'error');
                             return;
                         }
                         
@@ -1086,56 +1430,33 @@ const MediaEditor: React.FC<{
                             isLoadingImageRef.current = false;
                             applyFilters(true);
                         };
+                        imageRef.current.onerror = () => {
+                            URL.revokeObjectURL(objectUrl);
+                            isLoadingImageRef.current = false;
+                            showToast('Failed to load image for editing', 'error');
+                        };
                     } else {
                         isLoadingImageRef.current = false;
+                        URL.revokeObjectURL(objectUrl);
                     }
-                    URL.revokeObjectURL(objectUrl);
                 };
                 img.onerror = () => {
                     URL.revokeObjectURL(objectUrl);
-                    // Fall through to direct load
-                    loadDirect();
+                    console.error('Image load error after blob fetch');
+                    isLoadingImageRef.current = false;
+                    showToast('Failed to load image. Please try again.', 'error');
                 };
                 img.src = objectUrl;
-            } catch (error) {
-                // CORS or other fetch error - fall back to direct image load
-                // This will still work for display, but canvas operations may be limited
-                loadDirect();
+            } catch (error: any) {
+                console.error('Error fetching image from proxy:', error);
+                isLoadingImageRef.current = false;
+                // Show error to user instead of silently failing
+                showToast(`Failed to load image: ${error?.message || 'Unknown error'}. Please try again.`, 'error');
             }
         };
 
-        // Fallback: direct image load (works for display even with CORS issues)
-        const loadDirect = () => {
-            const img = new Image();
-            img.crossOrigin = 'anonymous'; // Try to enable CORS if available
-            img.onload = () => {
-                if (canvasRef.current && imageRef.current) {
-                    const canvas = canvasRef.current;
-                    const ctx = canvas.getContext('2d');
-                    if (!ctx) {
-                        isLoadingImageRef.current = false;
-                        return;
-                    }
-                    
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    originalImageRef.current = img;
-                    imageRef.current.src = item.url;
-                    imageRef.current.crossOrigin = 'anonymous';
-                    imageRef.current.onload = () => {
-                        isLoadingImageRef.current = false;
-                        applyFilters(true);
-                    };
-                } else {
-                    isLoadingImageRef.current = false;
-                }
-            };
-            img.onerror = () => {
-                console.error('Failed to load image from URL');
-                isLoadingImageRef.current = false;
-            };
-            img.src = item.url;
-        };
+        // Note: Removed loadDirect fallback since it won't work with CORS
+        // If proxy fails, we show an error message instead
         
         loadImage();
         
@@ -1151,99 +1472,111 @@ const MediaEditor: React.FC<{
             if (renderTimeoutRef.current) {
                 clearTimeout(renderTimeoutRef.current);
             }
+            // During blur selection, render with selection rectangles visible (skipSelectionRendering = false)
+            // Otherwise, skip selection rendering for performance
+            const skipSelection = !isBlurSelecting;
             renderTimeoutRef.current = setTimeout(() => {
                 requestAnimationFrame(() => {
-                    applyFilters(true);
+                    applyFilters(skipSelection);
                 });
-            }, 16); // ~60fps
+            }, 50); // slightly slower to reduce flashing during drags
             return () => {
                 if (renderTimeoutRef.current) {
                     clearTimeout(renderTimeoutRef.current);
                 }
             };
         }
-    }, [brightness, contrast, saturate, blur, watermarkText, watermarkPosition, watermarkOpacity, blurSelection, hue, sepia, grayscale, invert, cropStart, cropEnd, blurSelectionStart, blurSelectionEnd, applyFilters]);
+    }, [brightness, contrast, saturate, blur, watermarkText, watermarkPosition, watermarkOpacity, watermarkSize, watermarkTextColor, watermarkImage, blurSelection, blurSelections, hue, sepia, grayscale, invert, blurSelectionStart, blurSelectionEnd, isBlurSelecting, applyFilters]);
 
-    const getScaledCoordinates = (displayX: number, displayY: number) => {
-        if (!canvasRef.current) return { x: 0, y: 0 };
-        const canvas = canvasRef.current;
-        const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
-        return {
-            x: displayX * scaleX,
-            y: displayY * scaleY
-        };
-    };
-
-    const handleCrop = () => {
-        if (!canvasRef.current || !cropStart || !cropEnd || !originalImageRef.current) return;
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        // Get actual canvas coordinates (scaled from display)
-        const start = getScaledCoordinates(cropStart.x, cropStart.y);
-        const end = getScaledCoordinates(cropEnd.x, cropEnd.y);
-
-        const x = Math.min(start.x, end.x);
-        const y = Math.min(start.y, end.y);
-        const width = Math.abs(end.x - start.x);
-        const height = Math.abs(end.y - start.y);
-
-        if (width < 10 || height < 10) {
-            setCropStart(null);
-            setCropEnd(null);
-            setIsCropping(false);
-            return;
+    // Preload watermark image when it changes
+    useEffect(() => {
+        if (watermarkImage) {
+            const img = new Image();
+            img.onload = () => {
+                watermarkImageRef.current = img;
+                applyFilters();
+            };
+            img.onerror = () => {
+                console.error('Failed to load watermark image');
+                watermarkImageRef.current = null;
+            };
+            img.src = watermarkImage;
+        } else {
+            watermarkImageRef.current = null;
         }
+    }, [watermarkImage, applyFilters]);
 
-        // Create a new canvas with the cropped dimensions
-        const croppedCanvas = document.createElement('canvas');
-        croppedCanvas.width = width;
-        croppedCanvas.height = height;
-        const croppedCtx = croppedCanvas.getContext('2d');
-        if (!croppedCtx) return;
-
-        // Draw the cropped portion from the original image
-        croppedCtx.drawImage(
-            originalImageRef.current,
-            x, y, width, height,
-            0, 0, width, height
-        );
-
-        // Resize the main canvas and draw the cropped image
-        canvas.width = width;
-        canvas.height = height;
-        ctx.drawImage(croppedCanvas, 0, 0);
-        
-        // Update the original image reference
-        const newImg = new Image();
-        const croppedDataUrl = croppedCanvas.toDataURL();
-        newImg.onload = () => {
-            originalImageRef.current = newImg;
-            if (imageRef.current) {
-                imageRef.current.src = croppedDataUrl;
-                imageRef.current.onload = () => {
-                    // Reset crop state
-                    setCropStart(null);
-                    setCropEnd(null);
-                    setIsCropping(false);
-                    // Reapply filters to the cropped image
-                    requestAnimationFrame(() => {
-                        applyFilters(true);
-                    });
-                };
+    // Global mouse event listeners for drag operations (blur + magic eraser)
+    useEffect(() => {
+        const handleGlobalMouseMove = (e: MouseEvent) => {
+            if (isBlurSelecting && blurSelectionStart) {
+                const coords = getCanvasCoordinates(e.clientX, e.clientY);
+                if (!coords) return;
+                
+                setBlurSelectionEnd(coords);
+            }
+            if (isEraseSelecting && eraseSelectionStart) {
+                const coords = getCanvasCoordinates(e.clientX, e.clientY);
+                if (!coords) return;
+                setEraseSelectionEnd(coords);
             }
         };
-        newImg.onerror = () => {
-            console.error('Failed to load cropped image');
-            setCropStart(null);
-            setCropEnd(null);
-            setIsCropping(false);
+
+        const handleGlobalMouseUp = (e: MouseEvent) => {
+            if (isBlurSelecting && blurSelectionStart && blurSelectionEnd) {
+                const start = getScaledCoordinates(blurSelectionStart.x, blurSelectionStart.y);
+                const end = getScaledCoordinates(blurSelectionEnd.x, blurSelectionEnd.y);
+                
+                const x = Math.min(start.x, end.x);
+                const y = Math.min(start.y, end.y);
+                const width = Math.abs(end.x - start.x);
+                const height = Math.abs(end.y - start.y);
+                
+                if (width > 10 && height > 10) {
+                    const selection = { x, y, width, height };
+                    setBlurSelection(selection);
+                    // Auto-apply blur so it persists when switching tools
+                    applyBlurToImage([selection]);
+                }
+                
+                setBlurSelectionStart(null);
+                setBlurSelectionEnd(null);
+                setIsBlurSelecting(false);
+                setTimeout(() => applyFilters(), 0);
+            }
+            if (isEraseSelecting && eraseSelectionStart && eraseSelectionEnd) {
+                const start = getScaledCoordinates(eraseSelectionStart.x, eraseSelectionStart.y);
+                const end = getScaledCoordinates(eraseSelectionEnd.x, eraseSelectionEnd.y);
+
+                const x = Math.min(start.x, end.x);
+                const y = Math.min(start.y, end.y);
+                const width = Math.abs(end.x - start.x);
+                const height = Math.abs(end.y - start.y);
+
+                if (width > 10 && height > 10) {
+                    const selection = { x, y, width, height };
+                    setEraseSelections([selection]);
+                    // Auto-apply magic erase so the removal persists
+                    applyMagicErase([selection]);
+                }
+
+                setEraseSelectionStart(null);
+                setEraseSelectionEnd(null);
+                setIsEraseSelecting(false);
+            }
         };
-        newImg.src = croppedDataUrl;
-    };
+
+        if (isBlurSelecting || isEraseSelecting) {
+            window.addEventListener('mousemove', handleGlobalMouseMove);
+            window.addEventListener('mouseup', handleGlobalMouseUp);
+            
+            return () => {
+                window.removeEventListener('mousemove', handleGlobalMouseMove);
+                window.removeEventListener('mouseup', handleGlobalMouseUp);
+            };
+        }
+    }, [isBlurSelecting, blurSelectionStart, blurSelectionEnd, isEraseSelecting, eraseSelectionStart, eraseSelectionEnd, applyFilters, applyMagicErase, applyBlurToImage]);
+
 
     const handleGenerateThumbnail = () => {
         if (!canvasRef.current) return;
@@ -1280,38 +1613,47 @@ const MediaEditor: React.FC<{
         }
     };
 
-    const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-        if (!canvasRef.current) return;
+    const getCanvasCoordinates = (clientX: number, clientY: number) => {
+        if (!canvasRef.current) return null;
         const rect = canvasRef.current.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        return {
+            x: clientX - rect.left,
+            y: clientY - rect.top
+        };
+    };
+
+    const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const coords = getCanvasCoordinates(e.clientX, e.clientY);
+        if (!coords) return;
         
-        if (isCropping) {
-            setCropStart({ x, y });
-            setCropEnd({ x, y });
-        } else if (isBlurSelecting) {
-            setBlurSelectionStart({ x, y });
-            setBlurSelectionEnd({ x, y });
+        if (isBlurSelecting) {
+            setBlurSelectionStart(coords);
+            setBlurSelectionEnd(coords);
+        } else if (isEraseSelecting) {
+            setEraseSelectionStart(coords);
+            setEraseSelectionEnd(coords);
         }
     };
 
     const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-        if (!canvasRef.current) return;
-        const rect = canvasRef.current.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        e.preventDefault();
+        const coords = getCanvasCoordinates(e.clientX, e.clientY);
+        if (!coords) return;
         
-        if (isCropping && cropStart) {
-            setCropEnd({ x, y });
-        } else if (isBlurSelecting && blurSelectionStart) {
-            setBlurSelectionEnd({ x, y });
+        if (isBlurSelecting && blurSelectionStart) {
+            setBlurSelectionEnd(coords);
+        } else if (isEraseSelecting && eraseSelectionStart) {
+            setEraseSelectionEnd(coords);
         }
     };
 
-    const handleCanvasMouseUp = () => {
-        if (isCropping && cropStart && cropEnd) {
-            handleCrop();
-        } else if (isBlurSelecting && blurSelectionStart && blurSelectionEnd) {
+    const handleCanvasMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        if (isBlurSelecting && blurSelectionStart && blurSelectionEnd) {
             // Calculate blur selection area (scaled to actual canvas size)
             const start = getScaledCoordinates(blurSelectionStart.x, blurSelectionStart.y);
             const end = getScaledCoordinates(blurSelectionEnd.x, blurSelectionEnd.y);
@@ -1321,8 +1663,13 @@ const MediaEditor: React.FC<{
             const width = Math.abs(end.x - start.x);
             const height = Math.abs(end.y - start.y);
             
+            console.log('Blur selection:', { x, y, width, height });
+            
             if (width > 10 && height > 10) {
-                setBlurSelection({ x, y, width, height });
+                const selection = { x, y, width, height };
+                setBlurSelection(selection);
+                setBlurSelections([selection]);
+                applyBlurToImage([selection]);
             }
             
             setBlurSelectionStart(null);
@@ -1330,6 +1677,25 @@ const MediaEditor: React.FC<{
             setIsBlurSelecting(false);
             // Apply filters after selection is complete
             setTimeout(() => applyFilters(), 0);
+        }
+        if (isEraseSelecting && eraseSelectionStart && eraseSelectionEnd) {
+            const start = getScaledCoordinates(eraseSelectionStart.x, eraseSelectionStart.y);
+            const end = getScaledCoordinates(eraseSelectionEnd.x, eraseSelectionEnd.y);
+
+            const x = Math.min(start.x, end.x);
+            const y = Math.min(start.y, end.y);
+            const width = Math.abs(end.x - start.x);
+            const height = Math.abs(end.y - start.y);
+
+            if (width > 10 && height > 10) {
+                const selection = { x, y, width, height };
+                setEraseSelections([selection]);
+                applyMagicErase([selection]);
+            }
+
+            setEraseSelectionStart(null);
+            setEraseSelectionEnd(null);
+            setIsEraseSelecting(false);
         }
     };
 
@@ -1351,9 +1717,16 @@ const MediaEditor: React.FC<{
                                 <canvas
                                     ref={canvasRef}
                                     className="max-w-full max-h-[600px] cursor-crosshair"
+                                    style={{ touchAction: 'none', userSelect: 'none' }}
                                     onMouseDown={handleCanvasMouseDown}
                                     onMouseMove={handleCanvasMouseMove}
                                     onMouseUp={handleCanvasMouseUp}
+                                    onMouseLeave={(e) => {
+                                        // If dragging and mouse leaves canvas, still track it
+                                        if (isBlurSelecting && blurSelectionStart) {
+                                            // Let global handlers take over
+                                        }
+                                    }}
                                 />
                                 <img ref={imageRef} className="hidden" alt="Source" />
                             </div>
@@ -1378,6 +1751,12 @@ const MediaEditor: React.FC<{
                                                 { name: 'Vibrant', brightness: 10, contrast: 20, saturate: 50, hue: 0, sepia: 0, grayscale: 0, invert: 0 },
                                                 { name: 'Soft', brightness: 15, contrast: -15, saturate: -10, hue: 0, sepia: 0, grayscale: 0, invert: 0 },
                                                 { name: 'Sharp', brightness: 5, contrast: 50, saturate: 10, hue: 0, sepia: 0, grayscale: 0, invert: 0 },
+                                            { name: 'Skin Smooth', brightness: 8, contrast: -12, saturate: 12, hue: 6, sepia: 6, grayscale: 0, invert: 0 },
+                                            { name: 'Blemish Soft', brightness: 6, contrast: -8, saturate: -5, hue: 0, sepia: 8, grayscale: 0, invert: 0 },
+                                            { name: 'Warm Glow (Makeup)', brightness: 10, contrast: 8, saturate: 22, hue: 8, sepia: 15, grayscale: 0, invert: 0 },
+                                            { name: 'Rosy Lips', brightness: 5, contrast: 10, saturate: 35, hue: 12, sepia: 5, grayscale: 0, invert: 0 },
+                                            { name: 'Eye Bright', brightness: 12, contrast: 18, saturate: -5, hue: -6, sepia: 0, grayscale: 0, invert: 0 },
+                                            { name: 'Bronzed', brightness: 8, contrast: 14, saturate: 28, hue: 18, sepia: 18, grayscale: 0, invert: 0 },
                                                 { name: 'Faded', brightness: 20, contrast: -30, saturate: -30, hue: 0, sepia: 0, grayscale: 0, invert: 0 },
                                                 { name: 'Moody', brightness: -20, contrast: 30, saturate: -20, hue: 0, sepia: 20, grayscale: 20, invert: 0 },
                                                 { name: 'Sunset', brightness: 15, contrast: 20, saturate: 40, hue: 30, sepia: 15, grayscale: 0, invert: 0 },
@@ -1487,84 +1866,12 @@ const MediaEditor: React.FC<{
                                 </div>
                             </div>
 
-                            {/* Blur */}
-                            <div>
-                                <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Blur</h4>
-                                <div className="space-y-3">
-                                    <div>
-                                        <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">
-                                            Blur Amount: {blur}px
-                                        </label>
-                                        <input
-                                            type="range"
-                                            min="0"
-                                            max="20"
-                                            value={blur}
-                                            onChange={(e) => setBlur(Number(e.target.value))}
-                                            className="w-full"
-                                        />
-                                    </div>
-                                    <button
-                                        onClick={() => {
-                                            setIsBlurSelecting(!isBlurSelecting);
-                                            if (isBlurSelecting) {
-                                                setBlurSelection(null);
-                                            }
-                                            setIsCropping(false);
-                                        }}
-                                        className={`w-full px-4 py-2 rounded-md text-sm font-medium ${
-                                            isBlurSelecting
-                                                ? 'bg-red-600 text-white'
-                                                : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'
-                                        }`}
-                                    >
-                                        {isBlurSelecting ? 'Click and drag to select area' : 'Select Area to Blur'}
-                                    </button>
-                                    {blurSelection && (
-                                        <button
-                                            onClick={() => {
-                                                setBlurSelection(null);
-                                                applyFilters();
-                                            }}
-                                            className="w-full px-4 py-2 rounded-md text-sm font-medium bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600"
-                                        >
-                                            Clear Blur Selection
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Crop */}
-                            <div>
-                                <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Crop</h4>
-                                <button
-                                    onClick={() => {
-                                        setIsCropping(!isCropping);
-                                        if (isCropping) {
-                                            setCropStart(null);
-                                            setCropEnd(null);
-                                        }
-                                        setIsBlurSelecting(false);
-                                    }}
-                                    className={`w-full px-4 py-2 rounded-md text-sm font-medium ${
-                                        isCropping
-                                            ? 'bg-primary-600 text-white'
-                                            : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'
-                                    }`}
-                                >
-                                    {isCropping ? 'Click and drag to crop' : 'Enable Crop Tool'}
-                                </button>
-                                {isCropping && cropStart && cropEnd && (
-                                    <button
-                                        onClick={() => {
-                                            setCropStart(null);
-                                            setCropEnd(null);
-                                        }}
-                                        className="w-full mt-2 px-4 py-2 rounded-md text-sm font-medium bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600"
-                                    >
-                                        Cancel Crop
-                                    </button>
-                                )}
+                            {/* Blur & Magic Eraser disabled */}
+                            <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                                <h4 className="font-semibold text-gray-900 dark:text-white mb-2">Blur & Magic Eraser</h4>
+                                <p className="text-sm text-gray-600 dark:text-gray-400">
+                                    These tools are temporarily disabled. You can still adjust other filters and add watermarks.
+                                </p>
                             </div>
 
                             {/* Watermark */}
@@ -1601,6 +1908,88 @@ const MediaEditor: React.FC<{
                                             onChange={(e) => setWatermarkOpacity(Number(e.target.value))}
                                             className="w-full"
                                         />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">
+                                            Size: {watermarkSize}px
+                                        </label>
+                                        <input
+                                            type="range"
+                                            min="50"
+                                            max="300"
+                                            step="5"
+                                            value={watermarkSize}
+                                            onChange={(e) => setWatermarkSize(Number(e.target.value))}
+                                            className="w-full"
+                                        />
+                                    </div>
+                                    {watermarkText && (
+                                        <div>
+                                            <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">
+                                                Text Color
+                                            </label>
+                                            <input
+                                                type="color"
+                                                value={watermarkTextColor}
+                                                onChange={(e) => setWatermarkTextColor(e.target.value)}
+                                                className="w-full h-10 rounded cursor-pointer"
+                                            />
+                                        </div>
+                                    )}
+                                    <div>
+                                        <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">
+                                            Or Upload Image/Logo
+                                        </label>
+                                        <input
+                                            ref={watermarkImageInputRef}
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={(e) => {
+                                                const file = e.target.files?.[0];
+                                                if (file) {
+                                                    const reader = new FileReader();
+                                                    reader.onload = (event) => {
+                                                        const result = event.target?.result;
+                                                        if (typeof result === 'string') {
+                                                            setWatermarkImage(result);
+                                                            setWatermarkText(''); // Clear text if image is set
+                                                            // Preload the image
+                                                            const img = new Image();
+                                                            img.onload = () => {
+                                                                watermarkImageRef.current = img;
+                                                                applyFilters();
+                                                            };
+                                                            img.src = result;
+                                                        }
+                                                    };
+                                                    reader.readAsDataURL(file);
+                                                }
+                                                e.target.value = '';
+                                            }}
+                                            className="hidden"
+                                        />
+                                        <button
+                                            onClick={() => watermarkImageInputRef.current?.click()}
+                                            className="w-full px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 text-sm font-medium"
+                                        >
+                                            {watermarkImage ? 'Change Image' : 'Upload Image'}
+                                        </button>
+                                        {watermarkImage && (
+                                            <div className="mt-2 relative">
+                                                <img src={watermarkImage} alt="Watermark" className="w-full h-20 object-contain bg-gray-100 dark:bg-gray-800 rounded" />
+                                                <button
+                                                    onClick={() => {
+                                                        setWatermarkImage(null);
+                                                        watermarkImageRef.current = null;
+                                                        watermarkImageInputRef.current && (watermarkImageInputRef.current.value = '');
+                                                        applyFilters();
+                                                    }}
+                                                    className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded text-xs hover:bg-red-600"
+                                                >
+                                                    Remove
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -1639,6 +2028,12 @@ const MediaEditor: React.FC<{
                                         setSaturate(0);
                                         setBlur(0);
                                         setWatermarkText('');
+                                        setWatermarkSize(100);
+                                        setWatermarkTextColor('#ffffff');
+                                        setWatermarkImage(null);
+                                        if (watermarkImageInputRef.current) {
+                                            watermarkImageInputRef.current.value = '';
+                                        }
                                         setIsCropping(false);
                                         setHue(0);
                                         setSepia(0);

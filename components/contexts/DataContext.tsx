@@ -172,11 +172,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     LinkedIn: null,
     Facebook: null,
     Pinterest: null,
-    Discord: null,
-    Telegram: null,
-    Reddit: null,
-    Fanvue: null,
-    OnlyFans: null,
   });
 
   /*--------------------------------------------------------------------
@@ -387,14 +382,58 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const bioPageConfig: BioPageConfig = useMemo(() => {
     if (bioPage) {
       // Ensure backward compatibility: migrate legacy links to customLinks if needed
+      // Normalize socialLinks to always be an array
+      let normalizedSocialLinks: any[] = [];
+      if (bioPage.socialLinks) {
+        if (Array.isArray(bioPage.socialLinks)) {
+          normalizedSocialLinks = bioPage.socialLinks;
+        } else if (typeof bioPage.socialLinks === 'object' && bioPage.socialLinks !== null) {
+          try {
+            normalizedSocialLinks = Object.values(bioPage.socialLinks).filter((item: any) => 
+              item && typeof item === 'object' && 'id' in item
+            );
+          } catch (e) {
+            normalizedSocialLinks = [];
+          }
+        }
+      }
+      
+      // Normalize customLinks to always be an array
+      let normalizedCustomLinks: any[] = [];
+      if (bioPage.customLinks) {
+        if (Array.isArray(bioPage.customLinks)) {
+          normalizedCustomLinks = bioPage.customLinks;
+        } else if (typeof bioPage.customLinks === 'object' && bioPage.customLinks !== null) {
+          try {
+            normalizedCustomLinks = Object.values(bioPage.customLinks).filter((item: any) => 
+              item && typeof item === 'object' && 'id' in item
+            );
+          } catch (e) {
+            normalizedCustomLinks = [];
+          }
+        }
+      } else if (bioPage.links) {
+        if (Array.isArray(bioPage.links)) {
+          normalizedCustomLinks = bioPage.links;
+        } else if (typeof bioPage.links === 'object' && bioPage.links !== null) {
+          try {
+            normalizedCustomLinks = Object.values(bioPage.links).filter((item: any) => 
+              item && typeof item === 'object' && 'id' in item
+            );
+          } catch (e) {
+            normalizedCustomLinks = [];
+          }
+        }
+      }
+      
       if (bioPage.links && !bioPage.customLinks) {
         return {
           ...bioPage,
-          customLinks: bioPage.links,
+          customLinks: normalizedCustomLinks,
           links: undefined,
           username: bioPage.username || "",
           verified: bioPage.verified !== undefined ? bioPage.verified : false,
-          socialLinks: bioPage.socialLinks || [],
+          socialLinks: normalizedSocialLinks,
           totalFollowers: bioPage.totalFollowers || 0,
         };
       }
@@ -403,8 +442,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         ...bioPage,
         username: bioPage.username || "",
         verified: bioPage.verified !== undefined ? bioPage.verified : false,
-        socialLinks: bioPage.socialLinks || [],
-        customLinks: bioPage.customLinks || [],
+        socialLinks: normalizedSocialLinks,
+        customLinks: normalizedCustomLinks,
         totalFollowers: bioPage.totalFollowers || 0,
       };
     }
@@ -415,6 +454,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       placeholder: "Enter your email",
       buttonText: "Submit",
       successMessage: "Thank you for subscribing!",
+      formBackgroundColor: "#ffffff",
+      titleColor: "#111827",
+      inputBackgroundColor: "#f9fafb",
+      inputTextColor: "#111827",
+      buttonBackgroundColor: "#111827",
+      buttonTextColor: "#ffffff",
     };
 
     return {
@@ -428,6 +473,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       customLinks: [],
       theme: {
         backgroundColor: "#ffffff",
+        pageBackgroundColor: "#f9fafb",
+        cardBackgroundColor: "#ffffff",
         buttonColor: "#000000",
         textColor: "#000000",
         buttonStyle: "rounded",
@@ -525,9 +572,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const saveBioPage = async (config: BioPageConfig) => {
     if (!user) return;
 
-    await updateDoc(doc(db, "users", user.id), { bioPage: config });
+    // Normalize username to ensure consistency (remove @, lowercase, trim)
+    const normalizedConfig = {
+      ...config,
+      username: config.username ? config.username.replace("@", "").toLowerCase().trim() : config.username,
+    };
 
-    setBioPageState(config);
+    await updateDoc(doc(db, "users", user.id), { bioPage: normalizedConfig });
+
+    setBioPageState(normalizedConfig);
     showToast("Bio Page Saved!", "success");
   };
 

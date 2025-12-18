@@ -1,6 +1,7 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Settings as AppSettings, Platform, CustomVoice, SocialAccount } from '../types';
-import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon, FanvueIcon } from './icons/PlatformIcons';
+import { OFFLINE_MODE } from '../constants';
+import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
 import { useAppContext } from './AppContext';
 import { UpgradePrompt } from './UpgradePrompt';
 import { UploadIcon, TrashIcon, SettingsIcon, LinkIcon, SparklesIcon, CreditCardIcon, CheckCircleIcon, XMarkIcon, ClockIcon, VoiceIcon } from './icons/UIIcons';
@@ -83,10 +84,6 @@ const platformIcons: Record<Platform, React.ReactNode> = {
   LinkedIn: <LinkedInIcon />,
   Facebook: <FacebookIcon />,
   Pinterest: <PinterestIcon />,
-  Discord: <DiscordIcon />,
-  Telegram: <TelegramIcon />,
-  Reddit: <RedditIcon />,
-  Fanvue: <FanvueIcon />,
 };
 
 const AccountConnection: React.FC<{
@@ -415,6 +412,10 @@ export const Settings: React.FC = () => {
     };
 
     const handleConnectAccount = async (platform: Platform) => {
+        if (OFFLINE_MODE) {
+            showToast('Account connections are disabled in this version. EchoFlux.ai is currently focused on planning and content creation. You can still plan campaigns and copy content to post manually.', 'info');
+            return;
+        }
         // Block Caption plan from connecting accounts
         if (user.plan === 'Caption') {
             showToast('Caption Pro plan does not include social account connections. Upgrade to Pro or higher to connect accounts.', 'error');
@@ -486,6 +487,10 @@ export const Settings: React.FC = () => {
     };
 
     const handleConnectOAuth1 = async () => {
+        if (OFFLINE_MODE) {
+            showToast('X OAuth is disabled in this version. EchoFlux.ai is currently focused on offline planning and content creation.', 'info');
+            return;
+        }
         // Connect OAuth 1.0a for X media uploads
         setConnectingPlatform('X');
         try {
@@ -582,6 +587,10 @@ export const Settings: React.FC = () => {
     };
 
     const handleDisconnectAccount = async (platform: Platform) => {
+        if (OFFLINE_MODE) {
+            showToast('Account connections are disabled in this version.', 'info');
+            return;
+        }
         setConnectingPlatform(platform);
         try {
             await disconnectSocialAccount(platform);
@@ -798,7 +807,8 @@ export const Settings: React.FC = () => {
 
     const tabs: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
         { id: 'general', label: 'General', icon: <SettingsIcon /> },
-        { id: 'connections', label: 'Connections', icon: <LinkIcon /> },
+        // Hide live connections tab entirely in offline mode to avoid confusion
+        ...(!OFFLINE_MODE ? [{ id: 'connections', label: 'Connections', icon: <LinkIcon /> } as const] : []),
         { id: 'ai-training', label: 'AI Training', icon: <SparklesIcon /> },
         { id: 'billing', label: 'Billing', icon: <CreditCardIcon /> },
     ];
@@ -844,7 +854,7 @@ export const Settings: React.FC = () => {
                             </div>
                         ) : (
                             <>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">Connect your social media accounts to allow EngageSuite.ai to fetch incoming messages and post replies.</p>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Connect your social media accounts to allow EchoFlux.ai to fetch incoming messages and post replies.</p>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     {(Object.keys(platformIcons) as Platform[]).map(platform => {
                                         const account = safeSocialAccounts && safeSocialAccounts[platform] ? safeSocialAccounts[platform] : null;
@@ -875,10 +885,15 @@ export const Settings: React.FC = () => {
                     <>
                         <SettingsSection title="General Automation">
                             <ToggleSwitch label="Enable Auto-Suggest" enabled={settings.autoReply} onChange={(val) => updateSetting('autoReply', val)} />
-                            <p className="text-sm text-gray-500 dark:text-gray-400">When enabled, EngageSuite.ai will automatically generate a suggested reply for incoming messages.</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">When enabled, EchoFlux.ai will automatically generate a suggested reply for incoming messages.</p>
                             <hr className="border-gray-200 dark:border-gray-700" />
-                            <ToggleSwitch label="Enable Auto-Respond" enabled={settings.autoRespond} onChange={(val) => updateSetting('autoRespond', val)} />
-                            <p className="text-sm text-gray-500 dark:text-gray-400">When enabled, EngageSuite.ai will automatically send the generated reply without manual approval. Use with caution.</p>
+                            {/* Auto-Respond is disabled in AI Content Studio mode */}
+                            {false && (
+                              <>
+                                <ToggleSwitch label="Enable Auto-Respond" enabled={settings.autoRespond} onChange={(val) => updateSetting('autoRespond', val)} />
+                                <p className="text-sm text-gray-500 dark:text-gray-400">When enabled, EchoFlux.ai will automatically send the generated reply without manual approval. Use with caution.</p>
+                              </>
+                            )}
                         </SettingsSection>
                         <SettingsSection title="Safety & Accessibility">
                             <ToggleSwitch label="Safe Mode" enabled={settings.safeMode} onChange={(val) => updateSetting('safeMode', val)} />
@@ -890,34 +905,6 @@ export const Settings: React.FC = () => {
                         {(user.plan !== 'Free' || user.plan === 'Caption') && (
                         <SettingsSection title="Goals & Milestones">
                             <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        {user.userType === 'Business' ? 'Total Reach Goal' : 'Total Followers Goal'}
-                                    </label>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        value={user.goals?.followerGoal || ''}
-                                        onChange={(e) => {
-                                            const value = e.target.value ? parseInt(e.target.value, 10) : undefined;
-                                            if (user) {
-                                                setUser({
-                                                    ...user,
-                                                    goals: {
-                                                        ...user.goals,
-                                                        followerGoal: value,
-                                                    }
-                                                });
-                                            }
-                                        }}
-                                        placeholder="Set your goal..."
-                                        className="w-full p-3 border rounded-lg bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:text-white"
-                                    />
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                        Set your target {user.userType === 'Business' ? 'total reach' : 'total followers'} across all platforms.
-                                    </p>
-                                </div>
-                                <hr className="border-gray-200 dark:border-gray-700" />
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                         Monthly Posts Goal
@@ -938,77 +925,48 @@ export const Settings: React.FC = () => {
                                                 });
                                             }
                                         }}
-                                        placeholder="Set your goal..."
+                                        placeholder="Set your monthly content goal..."
                                         className="w-full p-3 border rounded-lg bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:text-white"
                                     />
                                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                        Set your target number of posts to publish per month.
+                                        Set how many pieces of content you want to create per month.
                                     </p>
                                 </div>
-                                {user.userType === 'Business' && (
-                                    <>
-                                        <hr className="border-gray-200 dark:border-gray-700" />
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                                Monthly Leads Goal
-                                            </label>
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                value={user.goals?.monthlyLeadsGoal || ''}
-                                                onChange={(e) => {
-                                                    const value = e.target.value ? parseInt(e.target.value, 10) : undefined;
-                                                    if (user) {
-                                                        setUser({
-                                                            ...user,
-                                                            goals: {
-                                                                ...user.goals,
-                                                                monthlyLeadsGoal: value,
-                                                            }
-                                                        });
-                                                    }
-                                                }}
-                                                placeholder="Set your goal..."
-                                                className="w-full p-3 border rounded-lg bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:text-white"
-                                            />
-                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                                Set your target number of leads to generate per month.
-                                            </p>
-                                        </div>
-                                    </>
-                                )}
                             </div>
                         </SettingsSection>
                         )}
-                        <SettingsSection title="Account Type">
-                            <div className="space-y-3">
-                                <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Current Account Type</p>
-                                    <p className="text-lg font-bold text-primary-600 dark:text-primary-400">
-                                        {user.userType === 'Business' ? 'Business' : user.userType === 'Creator' ? 'Creator' : 'Not Set'}
-                                    </p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                        Your plan: <span className="font-semibold">{user.plan}</span>
-                                    </p>
-                                </div>
-                                {user.userType === 'Business' && (
-                                    <button 
-                                        onClick={handleSwitchToCreator} 
-                                        className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
-                                    >
-                                        Switch to Creator Mode
-                                    </button>
-                                )}
-                                {user.userType === 'Creator' && (
-                                    <button 
-                                        onClick={handleSwitchToBusiness} 
-                                        className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
-                                    >
-                                        Switch to Business Mode
-                                    </button>
-                                )}
-                            </div>
-                        </SettingsSection>
+                        {/* Account Type section hidden in AI Content Studio mode */}
+                        {false && (
+                          <SettingsSection title="Account Type">
+                              <div className="space-y-3">
+                                  <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Current Account Type</p>
+                                      <p className="text-lg font-bold text-primary-600 dark:text-primary-400">
+                                          {user.userType === 'Business' ? 'Business' : user.userType === 'Creator' ? 'Creator' : 'Not Set'}
+                                      </p>
+                                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                          Your plan: <span className="font-semibold">{user.plan}</span>
+                                      </p>
+                                  </div>
+                                  {user.userType === 'Business' && (
+                                      <button 
+                                          onClick={handleSwitchToCreator} 
+                                          className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
+                                      >
+                                          Switch to Creator Mode
+                                      </button>
+                                  )}
+                                  {user.userType === 'Creator' && (
+                                      <button 
+                                          onClick={handleSwitchToBusiness} 
+                                          className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
+                                      >
+                                          Switch to Business Mode
+                                      </button>
+                                  )}
+                              </div>
+                          </SettingsSection>
+                        )}
                         <SettingsSection title="Advanced">
                             <button onClick={handleRestartOnboarding} className="px-4 py-2 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded-md hover:bg-red-200 transition-colors text-sm font-medium">
                                 Restart Onboarding
@@ -1056,100 +1014,29 @@ export const Settings: React.FC = () => {
                             )}
                         </SettingsSection>
 
-                        <SettingsSection title="Voice Clones" id="voice-clones">
-                            <div className="mb-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-                                <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                                    ⏳ Coming Soon: Voice cloning feature is currently under development. Check back soon!
-                                </p>
-                            </div>
-                            {!isVoiceFeatureUnlocked ? (
-                                <UpgradePrompt 
-                                    featureName="Voice Cloning" 
-                                    onUpgradeClick={() => setActivePage('pricing')}
-                                    description={`Upload audio samples to create AI clones of your voice for video voiceovers. Plan limits: Pro (1), Elite (3), Agency (Unlimited).`}
-                                />
-                            ) : (
-                                <>
-                                    <div className="space-y-4">
-                                        <div>
-                                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-                                                Upload an audio sample (MP3, WAV, etc.) to create a clone of your voice. This cloned voice can be used in AI-generated videos to speak any text you provide.
-                                            </p>
-                                            <div className="flex items-center gap-3">
-                                                <input
-                                                    type="file"
-                                                    ref={voiceFileInputRef}
-                                                    onChange={handleVoiceFileChange}
-                                                    className="hidden"
-                                                    accept="audio/*,.mp3,.wav,.m4a,.ogg"
-                                                />
-                                                <button
-                                                    onClick={() => voiceFileInputRef.current?.click()}
-                                                    disabled={isUploadingVoice || userCustomVoices.length >= voiceLimit}
-                                                    className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                                >
-                                                    <UploadIcon className="w-4 h-4" />
-                                                    {isUploadingVoice ? 'Uploading & Cloning...' : 'Upload Voice Sample'}
-                                                </button>
-                                                <span className="text-sm text-gray-500 dark:text-gray-400">
-                                                    {userCustomVoices.length} / {voiceLimit === Infinity ? '∞' : voiceLimit} voices
-                                                </span>
-                                            </div>
-                                            {isUploadingVoice && (
-                                                <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
-                                                    ⏳ Uploading and cloning your voice... This may take a minute.
-                                                </p>
-                                            )}
-                                        </div>
-
-                                        {userCustomVoices.length > 0 && (
-                                            <div className="mt-4">
-                                                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                                                    Your Cloned Voices:
-                                                </h4>
-                                                <div className="space-y-2">
-                                                    {userCustomVoices.map((voice) => (
-                                                        <div
-                                                            key={voice.id}
-                                                            className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
-                                                        >
-                                                            <div className="flex items-center gap-3">
-                                                                <VoiceIcon className="w-5 h-5 text-primary-600" />
-                                                                <div>
-                                                                    <p className="text-sm font-medium text-gray-900 dark:text-white">
-                                                                        {voice.name}
-                                                                    </p>
-                                                                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                                        {voice.isCloned ? (
-                                                                            <span className="text-green-600 dark:text-green-400">✓ Cloned & Ready</span>
-                                                                        ) : (
-                                                                            <span className="text-amber-600 dark:text-amber-400">⚠ Uploaded (cloning failed)</span>
-                                                                        )}
-                                                                    </p>
-                                                                </div>
-                                                            </div>
-                                                            <button
-                                                                onClick={() => handleDeleteVoice(voice.id)}
-                                                                className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                                                                title="Delete voice"
-                                                            >
-                                                                <TrashIcon className="w-4 h-4" />
-                                                            </button>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                                            <p className="text-xs text-blue-800 dark:text-blue-200">
-                                                <strong>Tip:</strong> For best results, upload a clear audio sample (at least 30 seconds) of you speaking naturally. The cloned voice will be used in video generation to speak any text you provide.
-                                            </p>
-                                        </div>
-                                    </div>
-                                </>
-                            )}
-                        </SettingsSection>
+                        {/* Voice Clones section hidden in AI Content Studio mode */}
+                        {false && (
+                          <SettingsSection title="Voice Clones" id="voice-clones">
+                              <div className="mb-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                                  <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                                      ⏳ Coming Soon: Voice cloning feature is currently under development. Check back soon!
+                                  </p>
+                              </div>
+                              {!isVoiceFeatureUnlocked ? (
+                                  <UpgradePrompt 
+                                      featureName="Voice Cloning" 
+                                      onUpgradeClick={() => setActivePage('pricing')}
+                                      description={`Upload audio samples to create AI clones of your voice for video voiceovers. Plan limits: Pro (1), Elite (3), Agency (Unlimited).`}
+                                  />
+                              ) : (
+                                  <>
+                                      <div className="space-y-4">
+                                          {/* Voice cloning UI hidden for now */}
+                                      </div>
+                                  </>
+                              )}
+                          </SettingsSection>
+                        )}
                     </>
                 )}
 
@@ -1219,39 +1106,29 @@ export const Settings: React.FC = () => {
                              </div>
                          )}
 
-                         <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                             <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">Usage this month</p>
+                        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                             {/* Hide per-feature usage; only show storage usage in AI Content Studio mode */}
                              <div className="space-y-2">
-                                 <div className="flex justify-between text-sm text-gray-700 dark:text-gray-300">
-                                     <span>Image Generations <span className="text-xs text-gray-400">(Coming Soon)</span></span>
-                                     <span className="font-mono">{user.monthlyImageGenerationsUsed} used</span>
+                                 <div className="flex justify-between text-sm text-gray-700 dark:text-gray-300 mb-2">
+                                     <span>Storage Usage</span>
+                                     <span className="font-mono">
+                                         {isLoadingStorage ? 'Calculating...' : `${storageUsage.used.toFixed(2)} MB / ${storageUsage.total === Infinity ? '∞' : `${storageUsage.total.toFixed(0)} MB`}`}
+                                     </span>
                                  </div>
-                                 <div className="flex justify-between text-sm text-gray-700 dark:text-gray-300">
-                                     <span>Video Generations <span className="text-xs text-gray-400">(Coming Soon)</span></span>
-                                     <span className="font-mono">{user.monthlyVideoGenerationsUsed} used</span>
-                                 </div>
-                                 <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                                     <div className="flex justify-between text-sm text-gray-700 dark:text-gray-300 mb-2">
-                                         <span>Storage Usage</span>
-                                         <span className="font-mono">
-                                             {isLoadingStorage ? 'Calculating...' : `${storageUsage.used.toFixed(2)} MB / ${storageUsage.total === Infinity ? '∞' : `${storageUsage.total.toFixed(0)} MB`}`}
-                                         </span>
+                                 {!isLoadingStorage && storageUsage.total > 0 && (
+                                     <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                         <div 
+                                             className={`h-2 rounded-full transition-all ${
+                                                 storageUsage.total === Infinity ? 'bg-primary-600' :
+                                                 (storageUsage.used / storageUsage.total) > 0.9 ? 'bg-red-500' :
+                                                 (storageUsage.used / storageUsage.total) > 0.7 ? 'bg-yellow-500' : 'bg-primary-600'
+                                             }`}
+                                             style={{ 
+                                                 width: `${storageUsage.total === Infinity ? 50 : Math.min((storageUsage.used / storageUsage.total) * 100, 100)}%` 
+                                             }}
+                                         ></div>
                                      </div>
-                                     {!isLoadingStorage && storageUsage.total > 0 && (
-                                         <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                                             <div 
-                                                 className={`h-2 rounded-full transition-all ${
-                                                     storageUsage.total === Infinity ? 'bg-primary-600' :
-                                                     (storageUsage.used / storageUsage.total) > 0.9 ? 'bg-red-500' :
-                                                     (storageUsage.used / storageUsage.total) > 0.7 ? 'bg-yellow-500' : 'bg-primary-600'
-                                                 }`}
-                                                 style={{ 
-                                                     width: `${storageUsage.total === Infinity ? 50 : Math.min((storageUsage.used / storageUsage.total) * 100, 100)}%` 
-                                                 }}
-                                             ></div>
-                                         </div>
-                                     )}
-                                 </div>
+                                 )}
                              </div>
                          </div>
                      </SettingsSection>

@@ -19,15 +19,17 @@ async function getAdminDbFunction() {
   return getAdminDb;
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "GET") {
-    return res.status(405).json({ error: "Method not allowed" });
+    res.status(405).json({ error: "Method not allowed" });
+    return;
   }
 
   try {
     const user = await verifyAuth(req);
     if (!user) {
-      return res.status(401).json({ error: "Unauthorized" });
+      res.status(401).json({ error: "Unauthorized" });
+      return;
     }
 
     try {
@@ -40,34 +42,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .orderBy("createdAt", "desc")
         .get();
 
-      const strategies = strategiesSnapshot.docs.map(doc => ({
+      const strategies = strategiesSnapshot.docs.map((doc: any) => ({
         id: doc.id,
-        ...doc.data()
+        ...(doc.data() as any)
       }));
 
-      return res.status(200).json({
+      res.status(200).json({
         success: true,
         strategies
       });
+      return;
     } catch (dbError: any) {
       console.error("Database error:", dbError);
-      return res.status(200).json({
+      res.status(200).json({
         success: false,
         error: "Database error",
         note: "Failed to fetch strategies. Please try again.",
         strategies: [],
         details: process.env.NODE_ENV === "development" ? dbError?.message : undefined
       });
+      return;
     }
   } catch (err: any) {
     console.error("getStrategies error:", err);
-    return res.status(200).json({
+    res.status(200).json({
       success: false,
       error: "Failed to fetch strategies",
       note: err?.message || "An unexpected error occurred. Please try again.",
       strategies: [],
       details: process.env.NODE_ENV === "development" ? err?.stack : undefined
     });
+    return;
   }
 }
 

@@ -85,8 +85,8 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
   };
 
   const ClientSwitcher: React.FC = () => {
-    // STRICT CHECK: Only show for Agency Plan or Admin
-    if (user.plan !== 'Agency' && user.role !== 'Admin') {
+    // Hide agency/client switching for now; leave available only for Admin
+    if (user.role !== 'Admin') {
       return null;
     }
 
@@ -138,7 +138,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
             </button>
             <div className="flex items-center gap-4">
               <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white whitespace-nowrap overflow-hidden text-ellipsis">{pageTitle.split(':')[0]}</h1>
-              <ClientSwitcher />
+              {/* Client switcher hidden while agency features are paused */}
             </div>
         </div>
         <div className="flex items-center space-x-4">

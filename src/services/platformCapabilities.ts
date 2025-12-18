@@ -116,54 +116,6 @@ export const PLATFORM_CAPABILITIES: Record<Platform, PlatformCapabilities> = {
     community_features: false,
     notes: "Visual search engine - evergreen content strategy. Focus on SEO, keywords, and traffic metrics (saves/clicks). Optimal posting: 3-5 pins/week."
   },
-  Discord: {
-    publishing: true,
-    inbox: true,
-    comments: "channels_only",
-    dm_auto_reply: "bot_opt_in",
-    analytics: "custom",
-    trend_detection: false,
-    community_features: true,
-    notes: "Discord bots allow deep conversational automation."
-  },
-  Telegram: {
-    publishing: true,
-    inbox: true,
-    comments: false,
-    dm_auto_reply: "bot_opt_in",
-    analytics: "limited",
-    trend_detection: false,
-    community_features: true
-  },
-  Reddit: {
-    publishing: true,
-    inbox: "own_posts_only",
-    comments: "own_posts_only",
-    dm_auto_reply: false,
-    analytics: "limited",
-    trend_detection: "public_search",
-    community_features: "moderator_features_optional"
-  },
-  Fanvue: {
-    publishing: true,
-    inbox: false,
-    comments: false,
-    dm_auto_reply: false,
-    analytics: "limited",
-    trend_detection: false,
-    community_features: false,
-    notes: "Creator monetization platform. Supports posting, scheduling, and basic analytics. Messaging not available via API. Requires API access approval from Fanvue."
-  },
-  OnlyFans: {
-    publishing: "manual", // Manual workflow - export content for manual upload
-    inbox: false,
-    comments: false,
-    dm_auto_reply: false,
-    analytics: false,
-    trend_detection: false,
-    community_features: false,
-    notes: "Manual workflow platform. No official API available. Provides AI captions, content planning, shoot ideas, content calendars, cross-platform teasers, media organization, export packages, and workflow guides. Users manually upload content to OnlyFans."
-  }
 };
 
 /**

@@ -4,6 +4,11 @@ import { db } from '../firebaseConfig';
 import { collection, getDocs, query, orderBy, where, Timestamp, addDoc } from 'firebase/firestore';
 import { AnalyticsIcon, TrendingIcon, SparklesIcon, ImageIcon, VideoIcon, FolderIcon, CalendarIcon } from './icons/UIIcons';
 
+// PhotoIcon alias for ImageIcon
+const PhotoIcon = ImageIcon;
+// TrendingUpIcon alias for TrendingIcon
+const TrendingUpIcon = TrendingIcon;
+
 interface ContentStats {
     captionsGenerated: number;
     scenariosGenerated: number;
@@ -29,7 +34,29 @@ interface PerformanceMetrics {
 }
 
 export const OnlyFansAnalytics: React.FC = () => {
-    const { user, showToast } = useAppContext();
+    let user, showToast;
+    
+    try {
+        const context = useAppContext();
+        user = context?.user;
+        showToast = context?.showToast;
+    } catch (error: any) {
+        console.error('Error accessing AppContext in OnlyFansAnalytics:', error);
+        return (
+            <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full flex items-center justify-center">
+                <div className="text-center">
+                    <p className="text-red-600 dark:text-red-400 mb-2">Failed to load Analytics.</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">Please refresh the page.</p>
+                    <button 
+                        onClick={() => window.location.reload()} 
+                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+                    >
+                        Reload Page
+                    </button>
+                </div>
+            </div>
+        );
+    }
     const [contentStats, setContentStats] = useState<ContentStats>({
         captionsGenerated: 0,
         scenariosGenerated: 0,

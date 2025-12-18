@@ -3,19 +3,21 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { checkApiKeys, getVerifyAuth, withErrorHandling } from "./_errorHandler.js";
 import { APP_KNOWLEDGE } from "./appKnowledge.js";
 
-async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    res.status(405).json({ error: "Method not allowed" });
+    return;
   }
 
   // Check API keys early
   const apiKeyCheck = checkApiKeys();
   if (!apiKeyCheck.hasKey) {
-    return res.status(200).json({
+    res.status(200).json({
       success: false,
       error: "AI not configured",
       note: apiKeyCheck.error,
     });
+    return;
   }
 
   // Dynamic import for auth
@@ -25,21 +27,24 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     user = await verifyAuth(req);
   } catch (authError: any) {
     console.error("verifyAuth error:", authError);
-    return res.status(200).json({
+    res.status(200).json({
       success: false,
       error: "Authentication error",
       note: authError?.message || "Failed to verify authentication. Please try logging in again.",
     });
+    return;
   }
 
   if (!user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    res.status(401).json({ error: "Unauthorized" });
+    return;
   }
 
   const { question } = (req.body as any) || {};
 
   if (!question || typeof question !== "string") {
-    return res.status(400).json({ error: "Missing or invalid 'question'" });
+    res.status(400).json({ error: "Missing or invalid 'question'" });
+    return;
   }
 
   try {
@@ -50,7 +55,7 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     const prompt = `
-You are EchoFlux.AI's built-in assistant.
+You are EchoFlux.ai's built-in assistant.
 
 App System Knowledge:
 ${APP_KNOWLEDGE}
@@ -61,6 +66,8 @@ User question:
 ${question}
 
 Answer clearly. Friendly tone. Keep responses concise and helpful.
+If the user asks about \"latest\" or \"current\" external trends, you may answer based on your general knowledge, but you do NOT have direct live web access.
+If something is time-sensitive (like today's exact algorithm changes), be honest about uncertainty and give generally reliable best practices instead.
 `;
 
     const result = await model.generateContent({
@@ -74,17 +81,19 @@ Answer clearly. Friendly tone. Keep responses concise and helpful.
 
     const text = result.response.text().trim();
 
-    return res.status(200).json({
+    res.status(200).json({
       answer: text,
     });
+    return;
   } catch (err: any) {
     console.error("askChatbot error:", err);
-    return res.status(200).json({
+    res.status(200).json({
       success: false,
       error: "Failed to answer chatbot question",
       note: err?.message || "An unexpected error occurred. Please try again.",
       details: process.env.NODE_ENV === "development" ? err?.stack : undefined,
     });
+    return;
   }
 }
 

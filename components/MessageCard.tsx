@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useMemo, useLayoutEffect, useCallback } from 'react';
 import { Message, Settings, TeamMember } from '../types';
 import { generateReply } from "../src/services/geminiService"
-import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon } from './icons/PlatformIcons';
+import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
 import { EditIcon, RedoIcon, CheckCircleIcon, VoiceIcon, FlagIcon, UserIcon, EmojiIcon, FaceSmileIcon, CatIcon, PizzaIcon, SoccerBallIcon, CarIcon, LightbulbIcon, HeartIcon, StarIcon, TrashIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 import { EMOJIS, EMOJI_CATEGORIES, Emoji } from './emojiData';
@@ -16,9 +16,6 @@ const platformIcons: { [key in Message['platform']]: React.ReactElement<{ classN
   LinkedIn: <LinkedInIcon />,
   Facebook: <FacebookIcon />,
   Pinterest: <PinterestIcon />,
-  Discord: <DiscordIcon />,
-  Telegram: <TelegramIcon />,
-  Reddit: <RedditIcon />,
 };
 
 const categoryIcons: Record<string, React.ReactNode> = {
@@ -327,7 +324,7 @@ export const MessageCard: React.FC<MessageCardProps> = ({ message, id, isSelecte
                     ref={textareaRef}
                     value={reply}
                     onChange={(e) => setReply(e.target.value)}
-                    placeholder={isLoading ? "EngageSuite.ai is thinking..." : "Write a reply, or click the mic to use your voice..."}
+                    placeholder={isLoading ? "EchoFlux.ai is thinking..." : "Write a reply, or click the mic to use your voice..."}
                     className={`w-full p-3 pr-24 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-primary-500 focus:border-primary-500 transition-colors ${!isEditing && reply ? 'text-gray-800 dark:text-gray-200 font-medium' : ''}`}
                     rows={3}
                     readOnly={!isEditing && !!reply}

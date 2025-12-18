@@ -126,9 +126,10 @@ export async function generateCaptions(opts: {
 ---------------------------------------------------- */
 export async function generateImage(
   prompt: string,
-  baseImage?: { data: string; mimeType: string }
+  baseImage?: { data: string; mimeType: string } | null,
+  allowExplicit: boolean = false
 ): Promise<string> {
-  const res = await callFunction("generateImage", { prompt, baseImage });
+  const res = await callFunction("generateImage", { prompt, baseImage, allowExplicit });
   
   // Handle different response formats
   if (res.imageData) {
@@ -176,13 +177,15 @@ export async function generateAd(opts: {
 
 export async function generateVideo(
   prompt: string,
-  baseImage?: { data: string; mimeType: string },
-  aspectRatio?: "16:9" | "9:16" | string
+  baseImage?: { data: string; mimeType: string } | null,
+  aspectRatio?: "16:9" | "9:16" | string,
+  allowExplicit: boolean = false
 ): Promise<{ videoUrl?: string; operationId?: string; status?: string; error?: string }> {
   const res = await callFunction("generateVideo", {
     prompt,
     baseImage,
     aspectRatio,
+    allowExplicit,
   });
   
   // Check for errors in response

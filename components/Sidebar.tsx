@@ -45,7 +45,8 @@ export const Sidebar: React.FC = () => {
 
   const allNavItems: (Omit<NavItemProps, 'page' | 'label'> & { page: Page | 'admin', label: string })[] = [
     { page: 'dashboard', icon: <DashboardIcon />, label: 'Dashboard' },
-    { page: 'inbox', icon: <ChatIcon />, label: 'Inbox' },
+  // Inbox hidden in studio/offline mode (can be re-enabled later)
+  { page: 'inbox', icon: <ChatIcon />, label: 'Inbox' },
     { page: 'compose', icon: <ComposeIcon />, label: 'Compose', tourId: 'tour-step-3-compose-nav' },
     { page: 'automation', icon: <AutomationIcon />, label: 'Automation' },
     { page: 'mediaLibrary', icon: <ImageIcon />, label: 'Media Library' },
@@ -64,10 +65,6 @@ export const Sidebar: React.FC = () => {
   ];
 
   const navItems = allNavItems.filter(item => {
-      if (user.role === 'Admin') {
-          return true;
-      }
-      
       // Caption plan: Only Compose and Settings
       if (user.plan === 'Caption') {
           return item.page === 'compose' || item.page === 'settings';
@@ -80,6 +77,8 @@ export const Sidebar: React.FC = () => {
       
       switch (item.page) {
           case 'analytics':
+              // Hide Analytics in offline studio mode (depends on live social data)
+              return false;
           case 'automation':
           case 'calendar':
           case 'bio':
@@ -93,23 +92,23 @@ export const Sidebar: React.FC = () => {
               // Creator users OR Agency plan: Pro, Elite, Agency plans
               return ['Pro', 'Elite', 'Agency'].includes(user.plan);
           case 'ads':
-              // Available on Pro, Elite, Growth, Starter, and Agency plans
-              // NOT available on Free plan
-              const userPlan = user.plan || 'Free';
-              return userPlan !== 'Free' && ['Pro', 'Elite', 'Growth', 'Starter', 'Agency'].includes(userPlan);
+              // Hide Ad Generator for now while focusing on studio mode
+              return false;
           case 'approvals':
               return ['Elite', 'Agency'].includes(user.plan);
+          case 'inbox':
+              // Hide Inbox entirely for now (offline studio mode)
+              return false;
           case 'team':
-              // STRICT CHECK: Only Agency Plan for Business users
-              return user.plan === 'Agency' && user.userType === 'Business';
           case 'clients':
-              // STRICT CHECK: Only Agency Plan
-              return user.plan === 'Agency';
+              // Hide team/clients for now (creator focus); admins handled above
+              return false;
           case 'onlyfansStudio':
               // OnlyFans Studio: OnlyFansStudio, Elite, and Agency plans
               return ['OnlyFansStudio', 'Elite', 'Agency'].includes(user.plan);
           case 'admin':
-              return false;
+              // Admin page is only visible to Admin users
+              return user.role === 'Admin';
           default:
               return true; 
       }

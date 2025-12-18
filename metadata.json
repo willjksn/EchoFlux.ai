@@ -1,5 +1,5 @@
 {
-  "name": "EngageSuite.ai",
+  "name": "EchoFlux.ai",
   "description": "An AI-powered assistant to automate replies to DMs, comments, and messages across social media platforms, boosting engagement. Features a dashboard for managing conversations, customizing AI personality, and tracking analytics.",
   "requestFramePermissions": [
     "microphone",

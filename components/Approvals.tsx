@@ -2,13 +2,14 @@
 import React, { useState } from 'react';
 import { useAppContext } from './AppContext';
 import { ApprovalStatus, Post, Platform } from '../types';
-import { CheckCircleIcon, MobileIcon, SendIcon, TrashIcon, EditIcon, ChatIcon, UserIcon, XMarkIcon, SparklesIcon } from './icons/UIIcons';
-import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon, FanvueIcon, OnlyFansIcon } from './icons/PlatformIcons';
+import { CheckCircleIcon, MobileIcon, SendIcon, TrashIcon, EditIcon, ChatIcon, UserIcon, XMarkIcon, SparklesIcon, ClipboardCheckIcon } from './icons/UIIcons';
+import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
 import { MobilePreviewModal } from './MobilePreviewModal';
 import { UpgradePrompt } from './UpgradePrompt';
 import { generateCritique } from "../src/services/geminiService";
 import { db } from '../firebaseConfig';
 import { doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { OFFLINE_MODE } from '../constants';
 
 // Filter status columns based on plan - Agency gets 'In Review', others don't
 const getStatusColumns = (userPlan?: string): ApprovalStatus[] => {
@@ -28,11 +29,6 @@ const platformIcons: Record<Platform, React.ReactElement<{ className?: string }>
   LinkedIn: <LinkedInIcon />,
   Facebook: <FacebookIcon />,
   Pinterest: <PinterestIcon />,
-  Discord: <DiscordIcon />,
-  Telegram: <TelegramIcon />,
-  Reddit: <RedditIcon />,
-  Fanvue: <FanvueIcon />,
-  OnlyFans: <OnlyFansIcon />,
 };
 
 const statusColors: Record<ApprovalStatus, string> = {
@@ -51,6 +47,7 @@ export const Approvals: React.FC = () => {
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [isGeneratingComment, setIsGeneratingComment] = useState(false);
     const [sourceFilter, setSourceFilter] = useState<'all' | 'automation' | 'manual'>('all');
+    const [selectedApprovedIds, setSelectedApprovedIds] = useState<Set<string>>(new Set());
 
     if (!['Elite', 'Agency'].includes(user?.plan || "") && user?.role !== 'Admin')
  {
@@ -182,6 +179,65 @@ export const Approvals: React.FC = () => {
 
     // Check if there are any posts at all
     const hasAnyPosts = filteredPosts.length > 0;
+
+    const toggleApprovedSelection = (postId: string, checked: boolean) => {
+        setSelectedApprovedIds(prev => {
+            const next = new Set(prev);
+            if (checked) {
+                next.add(postId);
+            } else {
+                next.delete(postId);
+            }
+            return next;
+        });
+    };
+
+    const handleExportApproved = () => {
+        const approvedPosts = filteredPosts.filter(
+            p => p.status === 'Approved' && selectedApprovedIds.has(p.id)
+        );
+
+        if (approvedPosts.length === 0) {
+            showToast('Select at least one approved post to export.', 'error');
+            return;
+        }
+
+        // Build a human-readable content pack for manual posting
+        const lines: string[] = [];
+
+        approvedPosts.forEach((p, idx) => {
+            const num = idx + 1;
+            const platforms = (p.platforms || []).join(', ') || 'No platforms set';
+            const scheduled = p.scheduledDate
+                ? new Date(p.scheduledDate).toLocaleString()
+                : 'No planned date';
+            const mediaUrl = p.mediaUrl || 'No media URL (text-only post)';
+
+            lines.push(
+`Post ${num}
+Platforms: ${platforms}
+Planned Date/Time: ${scheduled}
+Media: ${mediaUrl}
+
+Caption:
+${p.content}
+
+----------------------------------------`
+            );
+        });
+
+        const blob = new Blob([lines.join('\n')], {
+            type: 'text/plain',
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `approved-posts-export-${new Date().toISOString().slice(0, 10)}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        showToast('Exported approved posts as a ready-to-use content pack.', 'success');
+    };
     
     return (
         <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full flex flex-col">
@@ -194,9 +250,9 @@ export const Approvals: React.FC = () => {
             />
 
             <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
-                 <div>
+                <div>
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Workflow</h1>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Manage content pipeline from draft to publication.</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Manage your content pipeline from draft to “ready to post” content packs.</p>
                     {!hasAnyPosts && (
                         <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">Posts appear here when you save drafts or create content from Compose or Automation.</p>
                     )}
@@ -235,9 +291,30 @@ export const Approvals: React.FC = () => {
                             Manual
                         </button>
                     </div>
+                    {hasAnyPosts && (
+                        <button 
+                            onClick={() => {
+                                const pack = filteredPosts
+                                  .map((p, idx) => {
+                                      const date = p.scheduledDate
+                                        ? new Date(p.scheduledDate).toLocaleString()
+                                        : 'No planned date';
+                                      const platforms = p.platforms.join(', ');
+                                      return `#${idx + 1} [${platforms}] – ${date}\n${p.content}\n`;
+                                  })
+                                  .join('\n-------------------------\n\n');
+                                navigator.clipboard.writeText(pack).catch(() => {});
+                                showToast('Copied current workflow captions to clipboard.', 'success');
+                            }} 
+                            className="px-5 py-2.5 bg-gradient-to-r from-primary-600 to-primary-500 text-white rounded-lg hover:from-primary-700 hover:to-primary-600 text-sm font-semibold flex items-center gap-2 shadow-md transition-all"
+                        >
+                            <ClipboardCheckIcon className="w-4 h-4" />
+                            Copy all captions
+                        </button>
+                    )}
                     <button 
                         onClick={() => setActivePage('compose')} 
-                        className="px-5 py-2.5 bg-gradient-to-r from-primary-600 to-primary-500 text-white rounded-lg hover:from-primary-700 hover:to-primary-600 text-sm font-semibold flex items-center gap-2 shadow-md transition-all"
+                        className="px-5 py-2.5 bg-gradient-to-r from-gray-800 to-gray-700 text-white rounded-lg hover:from-gray-900 hover:to-gray-800 text-sm font-semibold flex items-center gap-2 shadow-md transition-all"
                     >
                         + Create Post
                     </button>
@@ -273,11 +350,22 @@ export const Approvals: React.FC = () => {
                         
                         const gradientClass = columnStyles[col.title] || 'from-gray-100 to-gray-50 dark:from-gray-800 dark:to-gray-800/50';
                         
+                        const isApprovedColumn = col.title === 'Approved';
                         return (
                         <div key={col.title} className={`flex-1 flex flex-col min-w-[300px] bg-gradient-to-br ${gradientClass} rounded-xl shadow-sm border border-gray-200 dark:border-gray-700`}>
-                            <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-t-xl flex justify-between items-center">
-                                <h3 className="font-bold text-gray-800 dark:text-gray-200 text-lg">{col.title}</h3>
-                                <span className="bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-3 py-1 rounded-full text-xs font-bold shadow-sm border border-gray-200 dark:border-gray-600">{col.items.length}</span>
+                            <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-t-xl flex justify-between items-center gap-3">
+                                <div className="flex items-center gap-2">
+                                    <h3 className="font-bold text-gray-800 dark:text-gray-200 text-lg">{col.title}</h3>
+                                    <span className="bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-3 py-1 rounded-full text-xs font-bold shadow-sm border border-gray-200 dark:border-gray-600">{col.items.length}</span>
+                                </div>
+                                {isApprovedColumn && col.items.length > 0 && (
+                                    <button
+                                        onClick={handleExportApproved}
+                                        className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-gradient-to-r from-primary-600 to-primary-500 text-white hover:from-primary-700 hover:to-primary-600 shadow-sm"
+                                    >
+                                        Export selected
+                                    </button>
+                                )}
                             </div>
                             <div className="p-4 flex-1 overflow-y-auto space-y-3 custom-scrollbar">
                                 {col.items.length === 0 ? (
@@ -285,7 +373,7 @@ export const Approvals: React.FC = () => {
                                         No {col.title.toLowerCase()} posts
                                     </div>
                                 ) : (
-                                    col.items.map(post => (
+                                col.items.map(post => (
                                     <div 
                                         key={post.id} 
                                         onClick={() => {
@@ -309,7 +397,19 @@ export const Approvals: React.FC = () => {
                                         className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all group"
                                     >
                                         <div className="flex items-center justify-between mb-2">
-                                            <div className="flex gap-1 items-center">
+                                            <div className="flex gap-2 items-center">
+                                                {isApprovedColumn && (
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedApprovedIds.has(post.id)}
+                                                        onChange={e => {
+                                                            e.stopPropagation();
+                                                            toggleApprovedSelection(post.id, e.target.checked);
+                                                        }}
+                                                        className="h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                                                    />
+                                                )}
+                                                <div className="flex gap-1 items-center">
                                                 {post.platforms.map(p => (
                                                     <span key={p} className="text-gray-500 dark:text-gray-400 w-4 h-4">
                                                         {platformIcons[p] ? React.cloneElement(platformIcons[p], { className: "w-4 h-4" }) : null}
@@ -328,6 +428,7 @@ export const Approvals: React.FC = () => {
                                                     }
                                                     return null;
                                                 })()}
+                                                </div>
                                             </div>
                                             {post.mediaType && (
                                                 <span className="text-xs bg-gray-100 dark:bg-gray-700 px-1.5 rounded text-gray-500 capitalize">{post.mediaType}</span>
@@ -476,65 +577,69 @@ export const Approvals: React.FC = () => {
                                     {activePost.status === 'Approved' && (
                                         <>
                                             {user?.plan === 'Agency' && (
-                                                <button 
-                                                    onClick={() => handleMoveStatus(activePost.id, 'In Review')} 
-                                                    className="px-5 py-2.5 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 text-sm font-semibold transition-all"
-                                                >
-                                                    Re-open Review
-                                                </button>
+                                            <button 
+                                                onClick={() => handleMoveStatus(activePost.id, 'In Review')} 
+                                                className="px-5 py-2.5 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 text-sm font-semibold transition-all"
+                                            >
+                                                Re-open Review
+                                            </button>
                                             )}
-                                            <button 
-                                                onClick={async () => {
-                                                    // Schedule the post
-                                                    const scheduledDate = new Date();
-                                                    scheduledDate.setDate(scheduledDate.getDate() + 1);
-                                                    scheduledDate.setHours(12, 0, 0, 0);
-                                                    const scheduledDateISO = scheduledDate.toISOString();
-                                                    await updatePostInDb({ ...activePost, status: 'Scheduled', scheduledDate: scheduledDateISO });
-                                                    
-                                                    // Create calendar event
-                                                    const calendarEvent = {
-                                                        id: `cal-${activePost.id}`,
-                                                        title: activePost.content.substring(0, 50) + (activePost.content.length > 50 ? '...' : ''),
-                                                        date: scheduledDateISO,
-                                                        type: activePost.mediaType === 'video' ? 'Reel' : 'Post',
-                                                        platform: activePost.platforms[0] || 'Instagram',
-                                                        status: 'Scheduled' as const,
-                                                        thumbnail: activePost.mediaUrl || undefined,
-                                                    };
-                                                    await addCalendarEvent(calendarEvent);
-                                                    
-                                                    showToast('Post scheduled!', 'success');
-                                                    setActivePost(null);
-                                                }}
-                                                className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-lg hover:from-purple-700 hover:to-purple-600 text-sm font-semibold shadow-md transition-all"
-                                            >
-                                                Schedule
-                                            </button>
-                                            <button 
-                                                onClick={async () => {
-                                                    // Publish immediately
-                                                    const publishDate = new Date().toISOString();
-                                                    const updatedPost = { ...activePost, status: 'Published' as const, scheduledDate: activePost.scheduledDate || publishDate };
-                                                    await updatePostInDb(updatedPost);
-                                                    
-                                                    // Update local state immediately to remove from workflow
-                                                    if (setPosts) {
-                                                        setPosts(prev => prev.map(p => p.id === activePost.id ? updatedPost : p));
-                                                    }
-                                                    
-                                                    // Don't create calendar event manually - Calendar component auto-creates from posts
-                                                    
-                                                    showToast('Post published!', 'success');
-                                                    setActivePost(null);
-                                                }}
-                                                className="px-5 py-2.5 bg-gradient-to-r from-green-600 to-emerald-500 text-white rounded-lg hover:from-green-700 hover:to-emerald-600 text-sm font-semibold shadow-md transition-all"
-                                            >
-                                                Publish
-                                            </button>
+                                            {!OFFLINE_MODE && (
+                                                <>
+                                                    <button 
+                                                        onClick={async () => {
+                                                            // Schedule the post
+                                                            const scheduledDate = new Date();
+                                                            scheduledDate.setDate(scheduledDate.getDate() + 1);
+                                                            scheduledDate.setHours(12, 0, 0, 0);
+                                                            const scheduledDateISO = scheduledDate.toISOString();
+                                                            await updatePostInDb({ ...activePost, status: 'Scheduled', scheduledDate: scheduledDateISO });
+                                                            
+                                                            // Create calendar event
+                                                            const calendarEvent = {
+                                                                id: `cal-${activePost.id}`,
+                                                                title: activePost.content.substring(0, 50) + (activePost.content.length > 50 ? '...' : ''),
+                                                                date: scheduledDateISO,
+                                                                type: activePost.mediaType === 'video' ? 'Reel' : 'Post',
+                                                                platform: activePost.platforms[0] || 'Instagram',
+                                                                status: 'Scheduled' as const,
+                                                                thumbnail: activePost.mediaUrl || undefined,
+                                                            };
+                                                            await addCalendarEvent(calendarEvent);
+                                                            
+                                                            showToast('Post scheduled!', 'success');
+                                                            setActivePost(null);
+                                                        }}
+                                                        className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-lg hover:from-purple-700 hover:to-purple-600 text-sm font-semibold shadow-md transition-all"
+                                                    >
+                                                        Schedule
+                                                    </button>
+                                                    <button 
+                                                        onClick={async () => {
+                                                            // Publish immediately
+                                                            const publishDate = new Date().toISOString();
+                                                            const updatedPost = { ...activePost, status: 'Published' as const, scheduledDate: activePost.scheduledDate || publishDate };
+                                                            await updatePostInDb(updatedPost);
+                                                            
+                                                            // Update local state immediately to remove from workflow
+                                                            if (setPosts) {
+                                                                setPosts(prev => prev.map(p => p.id === activePost.id ? updatedPost : p));
+                                                            }
+                                                            
+                                                            // Don't create calendar event manually - Calendar component auto-creates from posts
+                                                            
+                                                            showToast('Post published!', 'success');
+                                                            setActivePost(null);
+                                                        }}
+                                                        className="px-5 py-2.5 bg-gradient-to-r from-green-600 to-emerald-500 text-white rounded-lg hover:from-green-700 hover:to-emerald-600 text-sm font-semibold shadow-md transition-all"
+                                                    >
+                                                        Publish
+                                                    </button>
+                                                </>
+                                            )}
                                         </>
                                     )}
-                                    {activePost.status === 'Scheduled' && (
+                                    {activePost.status === 'Scheduled' && !OFFLINE_MODE && (
                                         <>
                                             <button 
                                                 onClick={async () => {

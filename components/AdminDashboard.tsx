@@ -125,7 +125,7 @@ export const AdminDashboard: React.FC = () => {
                         id: user.id,
                         type: 'New User',
                         user: { name: user.name, avatar: user.avatar },
-                        details: 'joined EngageSuite.ai',
+                        details: 'joined EchoFlux.ai',
                         timestamp: new Date(user.signupDate).toLocaleString(),
                     }));
                     setActivityFeed(activity);
@@ -161,7 +161,7 @@ export const AdminDashboard: React.FC = () => {
                     id: `act-${u.id}`,
                     type: Math.random() > 0.5 ? 'New User' : 'Plan Upgrade',
                     user: { name: u.name, avatar: u.avatar },
-                    details: Math.random() > 0.5 ? 'joined EngageSuite.ai' : `upgraded to ${u.plan}`,
+                    details: Math.random() > 0.5 ? 'joined EchoFlux.ai' : `upgraded to ${u.plan}`,
                     timestamp: 'Just now'
                 }));
                 setActivityFeed(mockActivity);

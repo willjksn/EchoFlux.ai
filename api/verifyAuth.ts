@@ -9,7 +9,7 @@ export async function verifyAuth(req: VercelRequest) {
 
   try {
     const decoded = await verifyIdToken(header);
-    return { uid: decoded.uid, ...decoded };
+    return decoded;
   } catch (err) {
     console.error("verifyAuth failed:", err);
     return null;

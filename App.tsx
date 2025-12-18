@@ -43,12 +43,16 @@ import { Page, UserType, Plan } from './types';
 import { Pricing } from './components/Pricing';
 import { CRMSidebar } from './components/CRMSidebar';
 import { BioPageBuilder } from './components/BioPageBuilder';
-import { Strategy } from './components/Strategy';
 import { AdGenerator } from './components/AdGenerator';
 import { VoiceAssistant } from './components/VoiceAssistant';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { OnlyFansStudio } from './components/OnlyFansStudio';
 import { BioPageView } from './components/BioPageView';
+import { lazy, Suspense } from 'react';
+
+// Lazy load heavy components for code splitting
+const Strategy = lazy(() => import('./components/Strategy').then(module => ({ default: module.Strategy })));
+const OnlyFansStudio = lazy(() => import('./components/OnlyFansStudio').then(module => ({ default: module.OnlyFansStudio })));
+const Autopilot = lazy(() => import('./components/Autopilot').then(module => ({ default: module.default || module.Autopilot })));
 
 const pageTitles: Record<Page, string> = {
     dashboard: 'Dashboard',
@@ -80,13 +84,39 @@ const pageTitles: Record<Page, string> = {
 };
 
 const MainContent: React.FC = () => {
+    let user, activePage;
+    
     try {
-        const { user, activePage } = useAppContext();
+        const context = useAppContext();
+        user = context?.user;
+        activePage = context?.activePage || 'dashboard';
+    } catch (error: any) {
+        console.error('Error accessing AppContext in MainContent:', error);
+        return (
+            <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full flex items-center justify-center">
+                <div className="text-center">
+                    <p className="text-red-600 dark:text-red-400 mb-2">An error occurred loading the page.</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-2">Context error: {error?.message || 'Unknown error'}</p>
+                    <button 
+                        onClick={() => window.location.reload()} 
+                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+                    >
+                        Reload Page
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
+    try {
         switch (activePage) {
             case 'dashboard': return <Dashboard />;
             case 'inbox': return <Inbox />;
-            case 'analytics': return <Analytics />;
+            case 'analytics': return (
+                <ErrorBoundary>
+                    <Analytics />
+                </ErrorBoundary>
+            );
             case 'settings': return <Settings />;
             case 'compose': return <Compose />;
             case 'calendar': return <Calendar />;
@@ -105,10 +135,23 @@ const MainContent: React.FC = () => {
             case 'admin': return user?.role === 'Admin' ? <AdminDashboard /> : <Dashboard />;
             case 'automation': return <Automation />;
             case 'bio': return <BioPageBuilder />;
-            case 'strategy': return <Strategy />;
+            case 'strategy': return (
+                <Suspense fallback={<div className="p-6 text-center text-gray-500 dark:text-gray-400">Loading Strategy...</div>}>
+                    <Strategy />
+                </Suspense>
+            );
             case 'ads': return <AdGenerator />;
             case 'mediaLibrary': return <MediaLibrary />;
-            case 'onlyfansStudio': return <OnlyFansStudio />;
+            case 'autopilot': return (
+                <Suspense fallback={<div className="p-6 text-center text-gray-500 dark:text-gray-400">Loading Autopilot...</div>}>
+                    <Autopilot />
+                </Suspense>
+            );
+            case 'onlyfansStudio': return (
+                <Suspense fallback={<div className="p-6 text-center text-gray-500 dark:text-gray-400">Loading OnlyFans Studio...</div>}>
+                    <OnlyFansStudio />
+                </Suspense>
+            );
             default: return <Dashboard />;
         }
     } catch (error: any) {
@@ -134,10 +177,17 @@ const AppContent: React.FC = () => {
     // Check if this is a public bio page route (e.g., /username, /u/username, or /link/username for backward compatibility)
     // This should be checked BEFORE authentication to allow public access
     const pathname = window.location.pathname;
-    // Exclude known app routes to avoid conflicts
+    
+    // Exclude known app routes and API routes to avoid conflicts
     const knownRoutes = ['/', '/dashboard', '/inbox', '/analytics', '/settings', '/compose', '/calendar', '/approvals', '/team', '/opportunities', '/profile', '/about', '/contact', '/pricing', '/clients', '/faq', '/terms', '/privacy', '/dataDeletion', '/admin', '/automation', '/bio', '/strategy', '/ads', '/mediaLibrary', '/autopilot', '/onlyfansStudio'];
+    
     // Check if it's a direct username path (not a known route) or legacy /u/ or /link/ path
-    const isPublicBioPage = (!knownRoutes.includes(pathname) && /^\/[^/]+$/.test(pathname)) || /^\/(?:u|link)\/[^/]+$/.test(pathname);
+    // Also exclude paths that start with /api or contain dots (likely static files)
+    const isPublicBioPage = (
+        !pathname.startsWith('/api') && 
+        !pathname.includes('.') && 
+        (!knownRoutes.includes(pathname) && /^\/[^/]+$/.test(pathname))
+    ) || /^\/(?:u|link)\/[^/]+$/.test(pathname);
     
     if (isPublicBioPage) {
         return <BioPageView />;
@@ -167,6 +217,9 @@ const AppContent: React.FC = () => {
 
     // Sync URL with active page for direct access (e.g., /privacy, /terms)
     useEffect(() => {
+        // Only map URL to page when not authenticated (public pages)
+        if (isAuthenticated) return;
+
         const path = window.location.pathname;
         const hash = window.location.hash.replace('#', '');
         
@@ -188,7 +241,7 @@ const AppContent: React.FC = () => {
             // Support hash-based routing too
             setActivePage(urlToPage[`/${hash}`]);
         }
-    }, []); // Only run on mount
+    }, [isAuthenticated]); // Only run when auth state changes
 
     // Update URL when page changes (for privacy policy, terms, etc.)
     useEffect(() => {

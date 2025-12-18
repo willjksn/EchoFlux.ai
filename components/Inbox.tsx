@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { MessageCard } from './MessageCard';
 import { Platform, Message, DashboardFilters, MessageType, MessageCategory } from '../types';
-import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon, FanvueIcon, OnlyFansIcon } from './icons/PlatformIcons';
+import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
 import { SearchIcon, FlagIcon, StarIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 import { hasCapability, getPlatformsWithCapability } from '../src/services/platformCapabilities';
@@ -15,11 +15,6 @@ const platformFilterIcons: { [key in Platform]: React.ReactNode } = {
   LinkedIn: <LinkedInIcon />,
   Facebook: <FacebookIcon />,
   Pinterest: <PinterestIcon />,
-  Discord: <DiscordIcon />,
-  Telegram: <TelegramIcon />,
-  Reddit: <RedditIcon />,
-  Fanvue: <FanvueIcon />,
-  OnlyFans: <OnlyFansIcon />,
 };
 
 // Get only platforms that support inbox/messaging
@@ -102,8 +97,14 @@ export const Inbox: React.FC = () => {
   };
 
   const handleAutoRespondToggle = () => {
+    // In studio mode, treat this as "auto-generate reply drafts", not sending.
     setSettings({ ...settings, autoRespond: !settings.autoRespond });
-    showToast(settings.autoRespond ? 'Auto-respond disabled' : 'Auto-respond enabled', 'success');
+    showToast(
+      settings.autoRespond
+        ? 'Auto-draft replies disabled'
+        : 'Auto-draft replies enabled. EchoFlux.ai will prepare suggested replies for new messages.',
+      'success'
+    );
   };
 
   const filteredMessages = useMemo(() => {
@@ -248,8 +249,8 @@ export const Inbox: React.FC = () => {
             Categorize Inbox
           </button>
           <div className="flex items-center gap-2 p-1.5 bg-gray-200 dark:bg-gray-700 rounded-full">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300 pl-3 pr-1 truncate max-w-[200px]">
-              Auto-Respond{user?.role === 'Admin' || user?.plan === 'Agency' ? ` (${accountName})` : ''}
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300 pl-3 pr-1 truncate max-w-[220px]">
+              Auto-draft replies
             </span>
             <button 
               onClick={handleAutoRespondToggle} 

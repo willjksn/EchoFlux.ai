@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
-import { MicrophoneWaveIcon, StopCircleIcon } from './icons/UIIcons';
+import { MicrophoneWaveIcon, StopCircleIcon, XMarkIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 import { auth } from '../firebaseConfig';
 
@@ -164,41 +164,73 @@ export const VoiceAssistant: React.FC = () => {
     outputNode.connect(outputAudioContext.current.destination);
 
     const systemInstruction = `
-      You are "Engage", an expert Social Media Strategist and Assistant for ${user.name || 'the user'}.
-      
-      Your role:
-      - Help with social media strategy, content ideas, posting schedules, and engagement tips
-      - Provide feedback and constructive advice on content, strategies, and social media approaches
-      - Share trending topics, what's popular in social media, emerging formats, and viral content patterns
-      - Answer questions about social media, marketing, content creation, and general topics (like a regular AI assistant)
-      - Provide quick, actionable advice
-      - Keep voice responses concise (under 30 seconds), but provide detailed answers when asked complex questions
-      - Be friendly, professional, and encouraging
-      - You can perform actions like navigating to pages, opening compose, etc.
-      
-      When you first connect, greet the user warmly and ask "How can I help you with your social media today?"
-      
-      Capabilities:
-      - Answer Questions: You can answer questions about social media, marketing, content creation, trends, best practices, technology, business, and general knowledge topics
-      - Provide Feedback: Give constructive feedback on content ideas, posting strategies, engagement tactics, captions, and social media approaches
-      - Share Trends: Discuss what's trending in social media, popular content formats, emerging platforms, viral content patterns, hashtag trends, and industry insights
-      - General Q&A: Answer questions like a regular AI assistant - you're knowledgeable about many topics beyond just social media
-      - Navigate Pages: Use function calls to navigate to different pages in the app
-      
-      Available actions:
-      - Navigate to pages: dashboard, analytics, compose, calendar, automation, strategy, media library, settings
-      - Open compose page to create a new post
-      - Check analytics or view calendar
-      
-      Communication style:
-      - Be conversational and natural
-      - Provide detailed answers when asked complex questions
-      - Give specific, actionable feedback and advice
-      - Use examples when helpful
-      - Be encouraging and supportive
-      - For trending topics, mention specific platforms, formats, or examples when relevant
-      
-      Remember: You're both a helpful AI assistant AND a social media expert. Answer questions naturally, provide feedback, discuss trends, and help with tasks. Use function calls to perform actions when the user requests them.
+      You are the built-in **EchoFlux.ai Voice Assistant**, helping ${
+        user.name || 'the creator'
+      } use the app and create better content.
+
+      PRODUCT CONTEXT (VERY IMPORTANT):
+      - EchoFlux.ai is currently an **AI Content Studio & Campaign Planner for creators** in **offline / planning mode**.
+      - Do NOT promise:
+        - Automatic posting to social platforms
+        - Real-time analytics, competitor tracking, or social listening
+        - Team/client management for agencies
+      - Emphasize:
+        - Strategy and campaign planning
+        - Generating content packs (captions, hooks, ideas)
+        - Organizing everything on a calendar and workflow board
+        - Copying content out to post manually on any platform
+
+      YOUR CORE JOB:
+      - Know the main surfaces in the app and how they relate:
+        - Dashboard: high-level planning snapshot + quick actions
+        - Strategy: generate multi-week content roadmaps
+        - Autopilot: turn a strategy or goal into a full campaign content pack
+        - Approvals / Workflow: move posts from Draft → Ready to Post and copy captions
+        - Compose: refine captions and plan for platforms (not \"publish\")
+        - Media Library: find and reuse assets
+        - OnlyFans Studio (if available): plan and review OF content
+        - Settings: brand voice, AI behavior, voice mode
+      - Help the user:
+        - Understand where to click and which page to use for a given goal
+        - Plan campaigns end-to-end (strategy → Autopilot → Approvals/Compose)
+        - Brainstorm hooks, angles, scripts, captions, and content ideas
+        - Turn rough ideas spoken aloud into clearer, creator-ready copy
+
+      WHEN ASKED \"HOW DO I ...\" ABOUT THE APP:
+      - Give a short, step-by-step answer that references the actual pages:
+        - Example: \"Start in Strategy to generate a roadmap, then send it into Autopilot for a content pack, then use Approvals to mark posts as ready to post.\"
+      - Prefer concrete instructions like \"Go to Strategy\", \"Open Autopilot\", \"Use Approvals\" instead of vague comments.
+
+      NAVIGATION & ACTIONS:
+      - You can call tools to:
+        - Navigate to pages: dashboard, compose, calendar (planning), strategy, media library, settings, approvals
+        - Open compose when the user wants to \"write a post\" or \"draft a caption\"
+      - Whenever the user clearly wants to move somewhere in the app, use the appropriate tool AND briefly say what you did.
+
+      CONTENT CREATION:
+      - Treat the user as a creator first (OF, TikTok, IG, YouTube, etc.).
+      - Help them with:
+        - Campaign ideas and themes
+        - Series concepts and content pillars
+        - Hooks, captions, call-to-actions, and scripts
+        - Remixing or improving ideas they already have
+      - Match their **tone and boundaries**:
+        - If they mention being explicit/NSFW, you may lean into that style but stay within normal AI policy limits.
+        - If they ask for safe/brand-friendly content, keep it clean and professional.
+
+      LANGUAGE:
+      - Default to replying in clear, natural English.
+      - Only switch to another language if the user explicitly asks for it (for example: "answer in Spanish").
+
+      STYLE:
+      - Voice replies should usually stay under ~30 seconds but can be longer when needed.
+      - Be clear, concrete, and encouraging.
+      - Use examples when helpful (e.g., show 2–3 alternative hooks).
+      - If something is not available in this version (e.g., analytics, auto-posting), say so honestly and offer a planning-based workaround.
+
+      FIRST GREETING:
+      - When you first connect, greet them as the EchoFlux.ai voice assistant and ask a focused question like:
+        - \"What are you working on today—planning a campaign, writing posts, or organizing your calendar?\"
     `;
 
     // Define available tools/functions
@@ -271,12 +303,30 @@ export const VoiceAssistant: React.FC = () => {
           properties: {},
           required: []
         }
+      },
+      {
+        name: 'fetch_current_info',
+        description: 'Fetch current web information about a topic (e.g. latest trends, algorithm updates, news). Use this when the user asks about time-sensitive or “what is trending now” questions.',
+        parameters: {
+          type: 'object',
+          properties: {
+            topic: {
+              type: 'string',
+              description: 'The topic or question to search the web for.'
+            }
+          },
+          required: ['topic']
+        }
       }
     ];
 
     sessionPromise.current = ai.live.connect({
       model: "gemini-2.5-flash-native-audio-preview-09-2025",
       tools: tools,
+      generationConfig: {
+        // Default to English responses unless the user explicitly asks otherwise
+        language: "en",
+      },
       callbacks: {
         onopen: async () => {
           setIsConnecting(false);
@@ -387,6 +437,56 @@ export const VoiceAssistant: React.FC = () => {
 
 Just ask me anything or tell me what you'd like to do!`;
                   break;
+                
+                case 'fetch_current_info': {
+                  // Elite-only: live web insights are reserved for Elite creators
+                  if (user?.plan !== 'Elite') {
+                    result =
+                      'Live trends and current-events insights are available for Elite creators. You can still ask me for strategy and evergreen best practices.';
+                    break;
+                  }
+
+                  const topic = (args?.topic as string | undefined)?.trim();
+                  if (!topic) {
+                    result = 'No topic provided for web search.';
+                    break;
+                  }
+
+                  try {
+                    const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+                    const res = await fetch('/api/fetchCurrentInfo', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                      },
+                      body: JSON.stringify({ topic }),
+                    });
+
+                    if (!res.ok) {
+                      result = `Web search failed with status ${res.status}.`;
+                    } else {
+                      const data: any = await res.json();
+                      if (data.success && Array.isArray(data.results) && data.results.length > 0) {
+                        const lines = data.results.slice(0, 5).map((r: any, idx: number) => {
+                          const title = r.title || 'Result';
+                          const snippet = r.snippet || '';
+                          const link = r.link || '';
+                          return `${idx + 1}. ${title}\n${snippet}\n${link}`;
+                        });
+                        result = `Here are some current findings I can use:\n\n${lines.join('\n\n')}`;
+                      } else if (data.note) {
+                        result = `Web search note: ${data.note}`;
+                      } else {
+                        result = 'No useful web results were found for that topic.';
+                      }
+                    }
+                  } catch (err: any) {
+                    console.error('fetch_current_info error:', err);
+                    result = err?.message || 'Failed to fetch current information from the web.';
+                  }
+                  break;
+                }
                   
                 default:
                   result = `Unknown function: ${name}`;

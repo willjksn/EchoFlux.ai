@@ -13,8 +13,6 @@ import { collection, setDoc, doc, getDocs, query, orderBy, deleteDoc } from 'fir
 const StatCardGrid = lazy(() => import('./analytics/StatCardGrid'));
 const AnalyticsCharts = lazy(() => import('./analytics/AnalyticsCharts'));
 const AIPoweredInsights = lazy(() => import('./analytics/AIPoweredInsights'));
-const SocialListening = lazy(() => import('./analytics/SocialListening').then(module => ({ default: module.SocialListening })));
-const CompetitorAnalysis = lazy(() => import('./analytics/CompetitorAnalysis').then(module => ({ default: module.CompetitorAnalysis })));
 
 const AnalyticsSkeleton = () => (
     <div className="space-y-6 animate-pulse">
@@ -51,10 +49,35 @@ const EMPTY_ANALYTICS_DATA: AnalyticsData = {
     engagementInsights: [],
 };
 
-type Tab = 'Overview' | 'Listening' | 'Competitors';
+type Tab = 'Overview';
 
 export const Analytics: React.FC = () => {
-    const { selectedClient, user, setActivePage, showToast } = useAppContext();
+    let selectedClient, user, setActivePage, showToast;
+    
+    try {
+        const context = useAppContext();
+        selectedClient = context?.selectedClient;
+        user = context?.user;
+        setActivePage = context?.setActivePage;
+        showToast = context?.showToast;
+    } catch (error: any) {
+        console.error('Error accessing AppContext in Analytics:', error);
+        return (
+            <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full flex items-center justify-center">
+                <div className="text-center">
+                    <p className="text-red-600 dark:text-red-400 mb-2">Failed to load Analytics.</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">Please refresh the page.</p>
+                    <button 
+                        onClick={() => window.location.reload()} 
+                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+                    >
+                        Reload Page
+                    </button>
+                </div>
+            </div>
+        );
+    }
+    
     const [data, setData] = useState<AnalyticsData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [dateRange, setDateRange] = useState<'7d' | '30d' | '90d'>('30d');
@@ -232,53 +255,6 @@ export const Analytics: React.FC = () => {
     };
 
     const renderTabContent = () => {
-        if (activeTab === 'Listening') {
-            // For Business users: Only Growth and Agency plans
-            // For Creator users: Pro, Elite, Agency plans
-            const hasAccess = (() => {
-                if (user?.role === 'Admin') return true;
-                if (user?.userType === 'Business') {
-                    return ['Growth', 'Agency'].includes(user.plan || '');
-                }
-                // Creator users
-                return ['Pro', 'Elite', 'Agency'].includes(user?.plan || '');
-            })();
-            
-            if (!hasAccess) {
-                return (
-                    <UpgradePrompt 
-                        featureName="Social Listening" 
-                        onUpgradeClick={() => setActivePage('pricing')}
-                        userType={user?.userType === 'Business' ? 'Business' : 'Creator'}
-                    />
-                );
-            }
-            return <SocialListening />;
-        }
-        if (activeTab === 'Competitors') {
-            // For Business users: Only Growth and Agency plans
-            // For Creator users: Pro, Elite, Agency plans
-            const hasAccess = (() => {
-                if (user?.role === 'Admin') return true;
-                if (user?.userType === 'Business') {
-                    return ['Growth', 'Agency'].includes(user.plan || '');
-                }
-                // Creator users
-                return ['Pro', 'Elite', 'Agency'].includes(user?.plan || '');
-            })();
-            
-            if (!hasAccess) {
-                return (
-                    <UpgradePrompt 
-                        featureName="Competitor Analysis" 
-                        onUpgradeClick={() => setActivePage('pricing')}
-                        userType={user?.userType === 'Business' ? 'Business' : 'Creator'}
-                    />
-                );
-            }
-            return <CompetitorAnalysis />;
-        }
-
         return (
              <>
                 <StatCardGrid data={data || EMPTY_ANALYTICS_DATA} />
@@ -342,26 +318,10 @@ export const Analytics: React.FC = () => {
                         <option value="LinkedIn">LinkedIn</option>
                         <option value="Facebook">Facebook</option>
                         <option value="Pinterest">Pinterest</option>
-                        <option value="Discord">Discord</option>
-                        <option value="Telegram">Telegram</option>
-                        <option value="Reddit">Reddit</option>
-                        <option value="Fanvue">Fanvue</option>
-                        <option value="OnlyFans">OnlyFans</option>
                     </select>
                 </div>
             </div>
 
-            <div className="flex space-x-1 bg-gray-100 dark:bg-gray-700 p-1 rounded-lg w-fit">
-                {(['Overview', 'Listening', 'Competitors'] as Tab[]).map(tab => (
-                    <button
-                        key={tab}
-                        onClick={() => setActiveTab(tab)}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === tab ? 'bg-white dark:bg-gray-600 shadow text-primary-600 dark:text-white' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'}`}
-                    >
-                        {tab}
-                    </button>
-                ))}
-            </div>
 
             {/* Report History View */}
             {showHistory && (

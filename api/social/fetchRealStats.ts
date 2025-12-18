@@ -31,8 +31,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const accountsSnapshot = await accountsRef.get();
     const accounts = accountsSnapshot.docs.map(doc => ({
       id: doc.id,
-      ...doc.data()
-    }));
+      ...(doc.data() as any)
+    })) as Array<{
+      id: string;
+      platform?: string;
+      connected?: boolean;
+      accessToken?: string;
+      accountUsername?: string;
+    }>;
 
     const stats: Record<string, {
       followers: number;
@@ -83,11 +89,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           
           default:
             // Platform not yet implemented
-            stats[account.platform] = {
-              followers: 0,
-              following: 0,
-              connected: true,
-            };
+            if (account.platform) {
+              stats[account.platform] = {
+                followers: 0,
+                following: 0,
+                connected: true,
+              };
+            }
         }
       } catch (error) {
         console.error(`Error fetching stats for ${account.platform}:`, error);

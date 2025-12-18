@@ -45,7 +45,7 @@ const removeUndefined = (obj: any): any => {
 
 const generateMockSocialStats = (): Record<Platform, SocialStats> => {
     const stats: any = {};
-    const platforms: Platform[] = ['Instagram','TikTok','X','Threads','YouTube','LinkedIn','Facebook','Pinterest','Discord','Telegram','Reddit'];
+    const platforms: Platform[] = ['Instagram','TikTok','X','Threads','YouTube','LinkedIn','Facebook','Pinterest'];
     platforms.forEach(p => {
         stats[p] = {
             followers: Math.floor(Math.random() * 15000) + 50,
@@ -70,11 +70,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 if (snap.exists()) {
                     const loaded = snap.data() as User;
 
-                    // Admins default to Creator dashboard unless they have a userType set
-                    // If Admin has no userType, set it to Creator and persist to Firestore
-                    if (loaded.role === 'Admin' && !loaded.userType) {
+                    // Default everyone to Creator while business/agency is hidden
+                    if (loaded.userType !== 'Creator') {
                         loaded.userType = 'Creator';
-                        // Persist to Firestore
                         await setDoc(ref, { userType: 'Creator' }, { merge: true });
                     }
 
@@ -114,9 +112,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         name: fbUser.displayName || "New User",
                         email: fbUser.email || "",
                         avatar: fbUser.photoURL || `https://picsum.photos/seed/${fbUser.uid}/100/100`,
-                        bio: "Welcome to EngageSuite.ai!",
+                        bio: "Welcome to EchoFlux.ai!",
                         plan: defaultPlan,
                         role: "User",
+                        userType: 'Creator',
                         signupDate: new Date().toISOString(),
                         hasCompletedOnboarding: false,
                         notifications: {

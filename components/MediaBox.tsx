@@ -1047,10 +1047,10 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
       {/* Platform Selection */}
       <div className="mb-3">
         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-          Publish to
+          Plan for platforms
         </label>
         <div className="flex flex-wrap gap-1.5">
-          {(Object.keys(platformIcons) as Platform[]).filter(p => p !== 'OnlyFans').map(platform => (
+          {(Object.keys(platformIcons) as Platform[]).map(platform => (
             <button
               key={platform}
               onClick={() => {
@@ -1228,39 +1228,39 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
             <CheckCircleIcon className="w-3 h-3" /> Approved
           </button>
         </div>
-        {/* Hide Publish/Schedule buttons for Caption plan (caption generation only) */}
-        {user?.plan !== 'Caption' && (
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={() => onSchedule(index)}
-            disabled={platformsToPost.length === 0}
-            className="flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-50"
-            title={platformsToPost.length === 0 ? 'Select at least one platform' : ''}
-          >
-            <CalendarIcon className="w-3 h-3" /> Schedule
-          </button>
-          <button
-            onClick={() => onPublish(index)}
-            disabled={platformsToPost.length === 0}
-            className="flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50"
-            title={platformsToPost.length === 0 ? 'Select at least one platform' : ''}
-          >
-            <SendIcon className="w-3 h-3" /> Publish
-          </button>
-        </div>
+        {/* In offline AI Studio mode, we don't show in-compose publish/schedule controls */}
+        {false && user?.plan !== 'Caption' && (
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => onSchedule(index)}
+              disabled={platformsToPost.length === 0}
+              className="flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-50"
+              title={platformsToPost.length === 0 ? 'Select at least one platform' : ''}
+            >
+              <CalendarIcon className="w-3 h-3" /> Schedule
+            </button>
+            <button
+              onClick={() => onPublish(index)}
+              disabled={platformsToPost.length === 0}
+              className="flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50"
+              title={platformsToPost.length === 0 ? 'Select at least one platform' : ''}
+            >
+              <SendIcon className="w-3 h-3" /> Publish
+            </button>
+          </div>
         )}
-        {user?.plan === 'Caption' && (
+        {false && user?.plan === 'Caption' && (
           <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
             <p className="text-xs text-blue-800 dark:text-blue-200">
               <strong>Caption Pro:</strong> This plan is for caption generation only. Select platforms to get platform-specific hashtags. Upgrade to publish/schedule posts.
             </p>
           </div>
         )}
-        {/* AI Auto Schedule button */}
-        {onAIAutoSchedule && (
+        {/* AI Auto Schedule button (hidden in offline AI Studio mode) */}
+        {false && onAIAutoSchedule && (
           <button
             onClick={() => {
-              onAIAutoSchedule(index);
+              onAIAutoSchedule?.(index);
             }}
             disabled={!mediaItem.previewUrl || !mediaItem.captionText.trim() || platformsToPost.length === 0}
             className="w-full flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors disabled:opacity-50"

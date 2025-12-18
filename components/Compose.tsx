@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { generateCaptions, generateReply, saveGeneratedContent, analyzePostForPlatforms } from "../src/services/geminiService";
 import { CaptionResult, Platform, MediaItem, Client, User, HashtagSet, Post, CalendarEvent } from '../types';
+import { OFFLINE_MODE } from '../constants';
 import {
   SparklesIcon,
   UploadIcon,
@@ -28,15 +29,13 @@ import {
   YouTubeIcon,
   LinkedInIcon,
   PinterestIcon,
-  DiscordIcon,
-  TelegramIcon,
-  RedditIcon,
-  FacebookIcon,
-  FanvueIcon,
-  OnlyFansIcon
+  FacebookIcon
 } from './icons/PlatformIcons';
-import { ImageGenerator } from './ImageGenerator';
-import { VideoGenerator } from './VideoGenerator';
+import { lazy, Suspense } from 'react';
+
+// Lazy load heavy generators for code splitting
+const ImageGenerator = lazy(() => import('./ImageGenerator').then(module => ({ default: module.ImageGenerator })));
+const VideoGenerator = lazy(() => import('./VideoGenerator').then(module => ({ default: module.VideoGenerator })));
 import { UpgradePrompt } from './UpgradePrompt';
 import { useAppContext } from './AppContext';
 import { MobilePreviewModal } from './MobilePreviewModal';
@@ -78,11 +77,17 @@ const platformIcons: Record<Platform, React.ReactNode> = {
   LinkedIn: <LinkedInIcon />,
   Facebook: <FacebookIcon />,
   Pinterest: <PinterestIcon />,
-  Discord: <DiscordIcon />,
-  Telegram: <TelegramIcon />,
-  Reddit: <RedditIcon />,
-  Fanvue: <FanvueIcon />,
-  OnlyFans: <OnlyFansIcon />,
+};
+
+const emptyPlatforms: Record<Platform, boolean> = {
+  Instagram: false,
+  TikTok: false,
+  X: false,
+  Threads: false,
+  YouTube: false,
+  LinkedIn: false,
+  Facebook: false,
+  Pinterest: false,
 };
 
 const SpeechRecognition =
@@ -122,18 +127,7 @@ const CaptionGenerator: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [autoGenerateCaptions, setAutoGenerateCaptions] = useState(false); // Toggle for auto-generating captions (unchecked by default)
   const [selectedPlatforms, setSelectedPlatforms] = useState<Partial<Record<Platform, boolean>>>({
-    Instagram: false,
-    TikTok: false,
-    X: false,
-    Threads: false,
-    YouTube: false,
-    LinkedIn: false,
-    Facebook: false,
-    Pinterest: false,
-    Discord: false,
-    Telegram: false,
-    Reddit: false,
-    Fanvue: false
+    ...emptyPlatforms
   });
   const [isPublished, setIsPublished] = useState(false);
 
@@ -163,6 +157,8 @@ const CaptionGenerator: React.FC = () => {
 
   // Selected checkboxes for bulk actions
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+
+  const userId = user.id;
 
   // AI Auto-Schedule state
   const [isAIAutoScheduleModalOpen, setIsAIAutoScheduleModalOpen] = useState(false);
@@ -320,11 +316,7 @@ const CaptionGenerator: React.FC = () => {
       YouTube: false,
       LinkedIn: false,
       Facebook: false,
-      Pinterest: false,
-      Discord: false,
-      Telegram: false,
-      Reddit: false,
-      Fanvue: false
+      Pinterest: false
     });
   };
 
@@ -418,31 +410,7 @@ const CaptionGenerator: React.FC = () => {
             selectedPlatforms: draftPost.platforms?.reduce((acc: Record<Platform, boolean>, p: Platform) => {
               acc[p] = true;
               return acc;
-            }, {
-              Instagram: false,
-              TikTok: false,
-              X: false,
-              Threads: false,
-              YouTube: false,
-              LinkedIn: false,
-              Facebook: false,
-              Pinterest: false,
-              Discord: false,
-              Telegram: false,
-              Reddit: false,
-            } as Record<Platform, boolean>) || {
-              Instagram: false,
-              TikTok: false,
-              X: false,
-              Threads: false,
-              YouTube: false,
-              LinkedIn: false,
-              Facebook: false,
-              Pinterest: false,
-              Discord: false,
-              Telegram: false,
-              Reddit: false,
-            },
+            }, { ...emptyPlatforms }) || { ...emptyPlatforms },
           };
           setComposeState(prev => ({
             ...prev,
@@ -577,21 +545,7 @@ const CaptionGenerator: React.FC = () => {
                 captionText: '',
                 postGoal: prev.postGoal,
                 postTone: prev.postTone,
-                selectedPlatforms: {
-                  Instagram: false,
-                  TikTok: false,
-                  X: false,
-                  Threads: false,
-                  YouTube: false,
-                  LinkedIn: false,
-                  Facebook: false,
-                  Pinterest: false,
-                  Discord: false,
-                  Telegram: false,
-                  Reddit: false,
-                  Fanvue: false,
-                  OnlyFans: false,
-                },
+                selectedPlatforms: { ...emptyPlatforms },
               };
               // Always add to mediaItems array so it shows in a MediaBox
               setTimeout(() => {
@@ -662,21 +616,7 @@ const CaptionGenerator: React.FC = () => {
       captionText: '',
       postGoal: composeState.postGoal,
       postTone: composeState.postTone,
-      selectedPlatforms: {
-        Instagram: false,
-        TikTok: false,
-        X: false,
-        Threads: false,
-        YouTube: false,
-        LinkedIn: false,
-        Facebook: false,
-        Pinterest: false,
-        Discord: false,
-        Telegram: false,
-        Reddit: false,
-        Fanvue: false,
-        OnlyFans: false,
-      },
+      selectedPlatforms: { ...emptyPlatforms },
     };
     setComposeState(prev => ({
       ...prev,
@@ -773,7 +713,7 @@ const CaptionGenerator: React.FC = () => {
       for (let i = 0; i < selectedItems.length; i++) {
         const item = selectedItems[i];
         const originalIndex = composeState.mediaItems.findIndex(m => m.id === item.id);
-        const mediaUrl = item.previewUrl.startsWith('http')
+        let mediaUrl = item.previewUrl.startsWith('http')
           ? item.previewUrl
           : await uploadMediaItem(item);
 
@@ -850,6 +790,10 @@ const CaptionGenerator: React.FC = () => {
   };
 
   const handlePublishMedia = async (index: number) => {
+    if (OFFLINE_MODE) {
+      showToast('Publishing directly to social platforms is disabled in this version. Use EchoFlux.ai to plan and generate content, then copy captions and post manually.', 'info');
+      return;
+    }
     const item = composeState.mediaItems[index];
     
     // Prevent double-publishing
@@ -1110,6 +1054,10 @@ const CaptionGenerator: React.FC = () => {
   };
 
   const handleScheduleMedia = async (index: number) => {
+    if (OFFLINE_MODE) {
+      showToast('Scheduling to social platforms is disabled in this version. You can still use the calendar and campaigns to plan content, then post manually.', 'info');
+      return;
+    }
     const item = composeState.mediaItems[index];
     
     // Block Caption plan from scheduling (caption generation only)
@@ -1598,7 +1546,7 @@ const CaptionGenerator: React.FC = () => {
         contentType: item.mimeType,
       });
 
-      const mediaUrl = await getDownloadURL(storageRef);
+      let mediaUrl = await getDownloadURL(storageRef);
       
       // Validate the URL is correct and doesn't contain unexpected domains
       if (!mediaUrl || !mediaUrl.startsWith('http')) {
@@ -1615,7 +1563,7 @@ const CaptionGenerator: React.FC = () => {
 
       // Process video with music if music is selected and it's a video
       // Only for TikTok and YouTube (not Instagram)
-      if (item.type === 'video' && item.selectedMusic) {
+      if (item.type === 'video' && item.selectedMusic?.url) {
         const platformsToPost = (Object.keys(item.selectedPlatforms || {}) as Platform[]).filter(
           p => item.selectedPlatforms?.[p]
         );
@@ -1636,7 +1584,7 @@ const CaptionGenerator: React.FC = () => {
               },
               body: JSON.stringify({
                 videoUrl: mediaUrl,
-                musicUrl: item.selectedMusic.url,
+                  musicUrl: item.selectedMusic?.url || '',
                 platforms: platformsToPost,
               }),
             });
@@ -1665,7 +1613,7 @@ const CaptionGenerator: React.FC = () => {
       try {
         const mediaLibraryItem = {
           id: timestamp.toString(),
-          userId: user.id,
+          userId: userId,
           url: mediaUrl,
           name: `Compose Media ${new Date().toLocaleDateString()}`,
           type: item.type || (item.mimeType.startsWith('image') ? 'image' : 'video'),
@@ -1675,7 +1623,7 @@ const CaptionGenerator: React.FC = () => {
           usedInPosts: [],
           tags: [],
         };
-        await setDoc(doc(db, 'users', user.id, 'media_library', mediaLibraryItem.id), mediaLibraryItem);
+        await setDoc(doc(db, 'users', userId, 'media_library', mediaLibraryItem.id), mediaLibraryItem);
       } catch (libraryError) {
         // Don't fail the upload if media library save fails
         console.error('Failed to save to media library:', libraryError);
@@ -1826,11 +1774,6 @@ const CaptionGenerator: React.FC = () => {
         LinkedIn: false,
         Facebook: false,
         Pinterest: false,
-        Discord: false,
-        Telegram: false,
-        Reddit: false,
-        Fanvue: false,
-        OnlyFans: false,
       };
 
       topPlatforms.forEach((platform: Platform) => {
@@ -1970,21 +1913,7 @@ const CaptionGenerator: React.FC = () => {
           .slice(0, 3)
           .map(p => p.platform);
 
-        const updatedPlatforms: Record<Platform, boolean> = {
-          Instagram: false,
-          TikTok: false,
-          X: false,
-          Threads: false,
-          YouTube: false,
-          LinkedIn: false,
-          Facebook: false,
-          Pinterest: false,
-          Discord: false,
-          Telegram: false,
-          Reddit: false,
-          Fanvue: false,
-          OnlyFans: false,
-        };
+        const updatedPlatforms: Record<Platform, boolean> = { ...emptyPlatforms };
 
         topPlatforms.forEach(platform => {
           updatedPlatforms[platform] = true;
@@ -3408,21 +3337,7 @@ const CaptionGenerator: React.FC = () => {
                 captionText: '',
                 postGoal: composeState.postGoal,
                 postTone: composeState.postTone,
-                selectedPlatforms: {
-                  Instagram: false,
-                  TikTok: false,
-                  X: false,
-                  Threads: false,
-                  YouTube: false,
-                  LinkedIn: false,
-                  Facebook: false,
-                  Pinterest: false,
-                  Discord: false,
-                  Telegram: false,
-                  Reddit: false,
-                  Fanvue: false,
-                  OnlyFans: false,
-                },
+                selectedPlatforms: { ...emptyPlatforms },
               }}
               index={0}
               onUpdate={(idx, updates) => {
@@ -3898,30 +3813,16 @@ export const Compose: React.FC = () => {
     switch (activeTab) {
       case 'captions':
         return <CaptionGenerator />;
-      case 'image':
-            return (
-          <div className="text-center p-12 bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-100 dark:border-gray-700">
-            <ImageIcon className="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-500" />
-            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Coming Soon</h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
-              AI Image Generation is coming soon.
-            </p>
-            <p className="text-sm text-gray-500 dark:text-gray-500">
-              Use the Captions tab to upload images and generate captions.
-            </p>
+    case 'image':
+        return (
+          <div className="p-6 text-center text-gray-500 dark:text-gray-400">
+            Image generation is temporarily disabled while we focus on stability.
           </div>
         );
-      case 'video':
-            return (
-          <div className="text-center p-12 bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-100 dark:border-gray-700">
-            <VideoIcon className="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-500" />
-            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Coming Soon</h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
-              AI Video Generation is coming soon.
-            </p>
-            <p className="text-sm text-gray-500 dark:text-gray-500">
-              Use the Captions tab to upload videos and generate captions.
-            </p>
+    case 'video':
+        return (
+          <div className="p-6 text-center text-gray-500 dark:text-gray-400">
+            Video generation is temporarily disabled while we focus on stability.
           </div>
         );
       default:

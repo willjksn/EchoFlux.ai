@@ -1,5 +1,5 @@
 import React from 'react';
-import { LogoIcon, SparklesIcon, TeamIcon, AutomationIcon, ChatIcon, AnalyticsIcon, CalendarIcon, ListeningIcon, RefreshIcon, GlobeIcon, UserIcon, TargetIcon, DashboardIcon, FilmIcon, MicrophoneWaveIcon, RocketIcon, BriefcaseIcon, TrendingIcon, ImageIcon } from './icons/UIIcons';
+import { LogoIcon, SparklesIcon, AutomationIcon, ChatIcon, AnalyticsIcon, CalendarIcon, RefreshIcon, GlobeIcon, UserIcon, TargetIcon, DashboardIcon, FilmIcon, MicrophoneWaveIcon, RocketIcon, TrendingIcon, ImageIcon, KanbanIcon } from './icons/UIIcons';
 import { InstagramIcon, TikTokIcon, XIcon, FacebookIcon } from './icons/PlatformIcons';
 import { Pricing } from './Pricing';
 import { Page } from '../types';
@@ -41,7 +41,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNaviga
             <div className="flex justify-start lg:w-0 lg:flex-1">
                <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex items-center">
                   <LogoIcon />
-                  <span className="ml-2 text-xl font-bold" style={{ color: '#2563eb' }}>EchoFlux.AI</span>
+                        <span className="ml-2 text-xl font-bold" style={{ color: '#2563eb' }}>EchoFlux.ai</span>
                </button>
             </div>
             <div className="hidden md:flex items-center justify-end md:flex-1 lg:w-0 space-x-8">
@@ -79,19 +79,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNaviga
                   <div>
                     <div className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-primary-100 ring-1 ring-inset ring-white/20 backdrop-blur">
                       <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      Live AI operating system for social & marketing teams
+                      Live AI operating system for creators
                     </div>
 
                     <h1 className="mt-6 text-4xl font-extrabold tracking-tight text-white sm:text-5xl lg:text-6xl">
-                      <span className="block">The First AI</span>
+                      <span className="block">Creator-First AI</span>
                       <span className="block text-primary-200">
-                        Social &amp; Marketing Operating System
+                        Social Operating System
                       </span>
                     </h1>
 
                     <p className="mt-6 max-w-xl text-lg text-primary-100 sm:text-xl">
-                      Replace your maze of tools with one intelligent command center to
-                      strategize, create, schedule, and convert—without adding headcount.
+                      Replace scattered tools with one creator command center to
+                      strategize, batch-create campaigns, and organize everything on a calendar—then post anywhere you like.
                     </p>
 
                     <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -124,7 +124,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNaviga
                         </div>
                       </div>
                       <div className="text-sm text-primary-100">
-                        <span>Trusted by creators &amp; teams scaling their social presence</span>
+                        <span>Trusted by creators scaling their social presence</span>
                       </div>
                     </div>
                   </div>
@@ -175,14 +175,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNaviga
                           </div>
                           <ul className="mt-2 space-y-1 text-[0.7rem] text-gray-300">
                             <li>• AI-generated content roadmap with image/video ideas</li>
-                            <li>• Quick Post Automation scheduled 12 posts</li>
+                            <li>• Quick Post Automation created 12 ready-to-use posts</li>
                             <li>• Media Library with reusable assets</li>
-                            <li>• Analytics insights driving content decisions</li>
+                            <li>• Analytics-style insights guiding content decisions</li>
                           </ul>
                         </div>
 
                         <div className="flex items-center justify-between border-t border-white/10 pt-3 text-[0.7rem] text-gray-300">
-                          <span>Connect your channels</span>
+                          <span>Plan here · post to your favorite platforms</span>
                           <div className="flex items-center space-x-2 text-white/80">
                             <InstagramIcon className="h-4 w-4" />
                             <TikTokIcon className="h-4 w-4" />
@@ -203,10 +203,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNaviga
         <div className="bg-gray-100 dark:bg-gray-800 py-16">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="text-center mb-12">
-                    <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white">One Platform, Two Powerful Modes</h2>
-                    <p className="mt-4 text-xl text-gray-500 dark:text-gray-400">Tailored experiences for your specific goals.</p>
+                    <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white">Built for Creators</h2>
+                    <p className="mt-4 text-xl text-gray-500 dark:text-gray-400">Everything you need to launch, grow, and monetize with confidence.</p>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="grid grid-cols-1 md:grid-cols-1 gap-8">
                     <div className="bg-white dark:bg-gray-900 p-8 rounded-2xl shadow-lg border-t-4 border-purple-500 hover:-translate-y-1 transition-transform">
                         <div className="flex items-center justify-center w-16 h-16 bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400 rounded-full mb-6 mx-auto">
                             <UserIcon className="w-8 h-8" />
@@ -221,20 +221,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNaviga
                             <li className="flex items-center"><SparklesIcon className="w-4 h-4 mr-2 text-purple-500" /> Brand Partnership Finder</li>
                         </ul>
                     </div>
-                    <div className="bg-white dark:bg-gray-900 p-8 rounded-2xl shadow-lg border-t-4 border-blue-500 hover:-translate-y-1 transition-transform">
-                        <div className="flex items-center justify-center w-16 h-16 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-full mb-6 mx-auto">
-                            <BriefcaseIcon className="w-8 h-8" />
-                        </div>
-                        <h3 className="text-2xl font-bold text-center text-gray-900 dark:text-white mb-4">For Businesses</h3>
-                        <p className="text-gray-600 dark:text-gray-300 text-center mb-6">
-                            Automate marketing, generate leads, and drive sales with a virtual AI marketing team.
-                        </p>
-                        <ul className="space-y-3 text-sm text-gray-500 dark:text-gray-400">
-                            <li className="flex items-center"><SparklesIcon className="w-4 h-4 mr-2 text-blue-500" /> AI Marketing Manager & Playbooks</li>
-                            <li className="flex items-center"><SparklesIcon className="w-4 h-4 mr-2 text-blue-500" /> ROI & Conversion Tracking</li>
-                            <li className="flex items-center"><SparklesIcon className="w-4 h-4 mr-2 text-blue-500" /> Social CRM & Lead Capture</li>
-                        </ul>
-                    </div>
                 </div>
             </div>
         </div>
@@ -244,52 +230,36 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNaviga
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="lg:text-center">
                     <h2 className="text-base text-primary-600 font-semibold tracking-wide uppercase">Features</h2>
-                    <p className="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-4xl">Your New Command Center</p>
+                    <p className="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-4xl">Your AI Content Studio</p>
                     <p className="mt-4 max-w-2xl text-xl text-gray-500 dark:text-gray-400 lg:mx-auto">
-                        Replace your fragmented stack of apps. EngageSuite.ai unifies Strategy, Content, and CRM into one powerful workflow.
+                        Turn ideas into full content campaigns, organize them on a calendar, and copy captions/scripts to post anywhere.
                     </p>
                 </div>
                 <div className="mt-12">
                     <dl className="space-y-10 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-x-8 md:gap-y-10">
-                        <Feature icon={<AutomationIcon />} title="Quick Post Automation">
-                           Upload multiple images or videos, select your platforms, and let AI automatically create captions, hashtags, and schedule posts at optimal times. Perfect for busy creators and businesses.
+                        <Feature icon={<RocketIcon />} title="AI Campaign Studio (Autopilot)">
+                           Define a goal and let EchoFlux.ai generate a complete multi-week content campaign with ready-to-use posts, captions, and prompts.
                         </Feature>
-                        <Feature icon={<MicrophoneWaveIcon />} title="AI Voice Assistant">
-                           Plan, guide, and run your social media hands-free. Talk to your AI strategist in real-time to discover trends and draft content instantly.
+                        <Feature icon={<TargetIcon />} title="AI Content Strategist">
+                           Generate multi-week content roadmaps tailored to your niche and goals. Push ideas into campaigns and see them as planned content on your calendar.
                         </Feature>
-                        <Feature icon={<FilmIcon />} title="AI Director Mode">
-                           <span className="inline-flex items-center rounded-full bg-yellow-100 dark:bg-yellow-900/30 px-2 py-0.5 text-xs font-medium text-yellow-800 dark:text-yellow-200 mr-2">Coming Soon</span>
-                           Direct multi-scene short films. Our AI creates storyboards and generates sequential clips, maintaining character consistency with your Avatar.
-                        </Feature>
-                         <Feature icon={<TargetIcon />} title="AI Content Strategist">
-                           Generate multi-week content roadmaps with image and video ideas tailored to your niche and goals. Upload media directly to roadmap items and auto-schedule posts to your calendar.
-                        </Feature>
-                        <Feature icon={<GlobeIcon />} title="Smart Link-in-Bio">
-                           Build a beautiful bio page that captures emails and syncs with your latest content automatically.
-                        </Feature>
-                        <Feature icon={<UserIcon />} title="Social CRM">
-                           Turn followers into leads. Tag users, add notes, and track relationship history directly from your inbox.
-                        </Feature>
-                        <Feature icon={<SparklesIcon />} title="Generative Content Studio">
-                           Generate captions in seconds. Image and video generation coming soon. Clone your voice for audio.
+                        <Feature icon={<KanbanIcon />} title="Workflow Board">
+                           Move posts from Draft to Ready-to-Post in a simple kanban view. Review, edit, and copy content packs before you publish on your platforms.
                         </Feature>
                         <Feature icon={<CalendarIcon />} title="Visual Content Calendar">
-                           Visualize your strategy with a beautiful calendar view. Click any scheduled post to preview, edit date/time/platforms, or delete. See all your scheduled content in one place.
-                        </Feature>
-                        <Feature icon={<ListeningIcon />} title="Social Listening">
-                           Track mentions of your brand or competitors across the web. Never miss a conversation.
-                        </Feature>
-                         <Feature icon={<RefreshIcon />} title="Content Remixing">
-                           Turn a TikTok script into a LinkedIn post with one click. Repurpose content instantly.
-                        </Feature>
-                        <Feature icon={<ChatIcon />} title="AI-Powered Inbox">
-                           Manage every DM and comment in one smart feed. Our AI drafts replies in your unique voice.
-                        </Feature>
-                        <Feature icon={<AnalyticsIcon />} title="AI-Powered Analytics">
-                           Get insights on what's working, trending topics, competitor analysis, and social listening to optimize your strategy.
+                           See every planned post on a beautiful calendar. Click any slot to open the content, adjust timing, and copy captions/scripts.
                         </Feature>
                         <Feature icon={<ImageIcon />} title="Media Library">
-                           Upload and organize images and videos in your personal media library. Reuse assets across posts, select from library when composing, and keep your content organized.
+                           Upload and organize images and videos in your personal media library. Reuse assets across campaigns and keep everything in one place.
+                        </Feature>
+                        <Feature icon={<SparklesIcon />} title="OnlyFans Studio (Elite)">
+                           For Elite creators, unlock a dedicated OnlyFans Studio with spicy content ideas, roleplay flows, OF calendar, and vault-style media tools.
+                        </Feature>
+                        <Feature icon={<GlobeIcon />} title="Smart Link-in-Bio">
+                           Build a beautiful, creator-branded bio page with links and optional email capture to grow your owned audience.
+                        </Feature>
+                        <Feature icon={<ChatIcon />} title="Creator Assistant & Ideas">
+                           Ask questions, generate new content angles, and brainstorm campaigns with a creator-focused AI assistant inside the app.
                         </Feature>
                     </dl>
                 </div>
@@ -304,8 +274,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNaviga
                 </div>
                 <div className="relative mt-12 lg:mt-24 lg:grid lg:grid-cols-3 lg:gap-8 lg:items-center">
                     <div className="relative">
-                        <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">1. Connect Accounts</h3>
-                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Securely link your social media profiles in seconds. It's fast, safe, and we never store your passwords.</p>
+                        <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">1. Set Up Your Creator Profile</h3>
+                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Tell EchoFlux.ai about your niche, audience, and offers so your campaigns and content are tailored to you.</p>
                     </div>
 
                     <div className="mt-10 -mx-4 relative lg:mt-0" aria-hidden="true">
@@ -315,7 +285,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNaviga
 
                     <div className="relative">
                         <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">2. Train Your AI</h3>
-                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Upload documents to match your writing style, an image for your AI Avatar, and a voice sample for custom voice-overs.</p>
+                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Upload past content or notes to match your writing style, and optionally add media and voice samples for richer ideas.</p>
                     </div>
 
                      <div className="mt-10 -mx-4 relative lg:mt-0" aria-hidden="true">
@@ -324,8 +294,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNaviga
                     </div>
 
                     <div className="relative">
-                        <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">3. Automate & Convert</h3>
-                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Launch your Link-in-Bio page, schedule your workflows, and watch your engagement and email list grow automatically.</p>
+                        <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">3. Generate & Plan Campaigns</h3>
+                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Use Autopilot and Strategy to create full content packs and a visual calendar. Copy captions and scripts to post on any platform you choose.</p>
                     </div>
                 </div>
             </div>
@@ -345,7 +315,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNaviga
                         <LogoIcon />
                         <span className="ml-2 text-xl font-bold">EchoFlux.AI</span>
                      </button>
-                    <p className="text-gray-500 dark:text-gray-400 text-base">The First AI Social & Marketing Operating System.</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-base">AI Content Studio & Campaign Planner for creators.</p>
                     <div className="flex space-x-6">
                         <button className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"><span className="sr-only">X</span><XIcon /></button>
                         <button className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"><span className="sr-only">Instagram</span><InstagramIcon /></button>
@@ -377,7 +347,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNaviga
                 </div>
             </div>
             <div className="mt-12 border-t border-gray-200 dark:border-gray-700 pt-8 md:flex md:items-center md:justify-between">
-                <p className="text-base text-gray-400 md:order-1">&copy; 2025 EngageSuite.ai. All rights reserved.</p>
+                <p className="text-base text-gray-400 md:order-1">&copy; 2025 EchoFlux.ai. All rights reserved.</p>
                 <div className="mt-8 md:mt-0 md:order-2 flex space-x-6">
                     <a href="#" onClick={(e) => { e.preventDefault(); onNavigateRequest('terms'); }} className="text-base text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">Terms</a>
                     <a href="#" onClick={(e) => { e.preventDefault(); onNavigateRequest('privacy'); }} className="text-base text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">Privacy</a>

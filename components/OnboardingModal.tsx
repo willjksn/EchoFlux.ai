@@ -10,9 +10,6 @@ import {
   LinkedInIcon,
   FacebookIcon,
   PinterestIcon,
-  DiscordIcon,
-  TelegramIcon,
-  RedditIcon,
 } from "./icons/PlatformIcons";
 import { LogoIcon } from "./icons/UIIcons";
 
@@ -46,9 +43,6 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
     LinkedIn: false,
     Facebook: false,
     Pinterest: false,
-    Discord: false,
-    Telegram: false,
-    Reddit: false,
   };
 
   const toggleAccountConnection = (platform: Platform) => {
@@ -68,7 +62,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
           <div className="text-center">
             <div className="flex justify-center items-center text-primary-600 dark:text-primary-400 mb-4">
               <LogoIcon />
-              <span className="text-2xl font-bold ml-2">EngageSuite.ai</span>
+              <span className="text-2xl font-bold ml-2">EchoFlux.ai</span>
             </div>
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
               Welcome to your new dashboard!
@@ -85,7 +79,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
               Connect Your First Account
             </h2>
             <p className="mt-2 text-center text-gray-500 dark:text-gray-400">
-              Select which accounts you'd like to manage with EngageSuite.ai.
+              Select which accounts you'd like to manage with EchoFlux.ai.
               You can always change this later in Settings.
             </p>
             <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">

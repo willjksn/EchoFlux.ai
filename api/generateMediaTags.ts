@@ -3,18 +3,20 @@ import { checkApiKeys, getVerifyAuth, getModelRouter, withErrorHandling } from "
 
 async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    res.status(405).json({ error: "Method not allowed" });
+    return;
   }
 
   // Check API keys
   const apiKeyCheck = checkApiKeys();
   if (!apiKeyCheck.hasKey) {
-    return res.status(200).json({
+    res.status(200).json({
       success: false,
       error: "AI not configured",
       note: apiKeyCheck.error,
       tags: { outfits: [], poses: [], vibes: [] },
     });
+    return;
   }
 
   // Verify auth
@@ -24,28 +26,31 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     user = await verifyAuth(req);
   } catch (authError: any) {
     console.error("verifyAuth error:", authError);
-    return res.status(200).json({
+    res.status(200).json({
       success: false,
       error: "Authentication error",
       note: authError?.message || "Failed to verify authentication.",
       tags: { outfits: [], poses: [], vibes: [] },
     });
+    return;
   }
 
   if (!user) {
-    return res.status(401).json({ error: "Unauthorized" });
+    res.status(401).json({ error: "Unauthorized" });
+    return;
   }
 
   try {
     const { mediaUrl, mediaType } = req.body || {};
 
     if (!mediaUrl) {
-      return res.status(400).json({ error: "Missing mediaUrl" });
+      res.status(400).json({ error: "Missing mediaUrl" });
+      return;
     }
 
-    // Use model router for image analysis
+    // Use model router for image analysis (use 'caption' task type for image-related tasks)
     const getModelForTask = await getModelRouter();
-    const model = await getModelForTask('image-analysis', user.uid);
+    const model = await getModelForTask('caption', user.uid);
 
     const prompt = `Analyze this ${mediaType || 'image'} and generate relevant tags for OnlyFans content organization.
 
@@ -108,18 +113,20 @@ Image URL: ${mediaUrl}`;
       vibes: Array.isArray(parsed.vibes) ? parsed.vibes.slice(0, 8) : [],
     };
 
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       tags,
     });
+    return;
   } catch (error: any) {
     console.error("Error generating media tags:", error);
-    return res.status(200).json({
+    res.status(200).json({
       success: false,
       error: "Failed to generate tags",
       note: error?.message || "An error occurred while analyzing the media.",
       tags: { outfits: [], poses: [], vibes: [] },
     });
+    return;
   }
 }
 

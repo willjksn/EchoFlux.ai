@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { MessageCard } from './MessageCard';
 import { Platform, Message, DashboardFilters, MessageType, CalendarEvent, MessageCategory } from '../types';
-import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon } from './icons/PlatformIcons';
+import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
 import { DashboardIcon, FlagIcon, SearchIcon, StarIcon, CalendarIcon, SparklesIcon, TrendingIcon, CheckCircleIcon, UserIcon, ArrowUpCircleIcon, KanbanIcon, BriefcaseIcon, LinkIcon, RocketIcon, ArrowUpIcon, ChatIcon, DollarSignIcon, HeartIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 import { updateUserSocialStats } from '../src/services/socialStatsService';
+import { auth } from '../firebaseConfig';
 
 const platformFilterIcons: { [key in Platform]: React.ReactNode } = {
   Instagram: <InstagramIcon />,
@@ -15,9 +16,6 @@ const platformFilterIcons: { [key in Platform]: React.ReactNode } = {
   LinkedIn: <LinkedInIcon />,
   Facebook: <FacebookIcon />,
   Pinterest: <PinterestIcon />,
-  Discord: <DiscordIcon />,
-  Telegram: <TelegramIcon />,
-  Reddit: <RedditIcon />,
 };
 
 // ... (Keep helper components FilterButton, QuickAction, UpcomingEventCard unchanged) ...
@@ -35,7 +33,19 @@ export const Dashboard: React.FC = () => {
   const { messages, selectedClient, user, dashboardNavState, clearDashboardNavState, settings, setSettings, setActivePage, calendarEvents, posts, setComposeContext, updateMessage, deleteMessage, categorizeAllMessages, openCRM, ensureCRMProfile, setUser, socialAccounts, showToast } = useAppContext();
   const [comparisonView, setComparisonView] = useState<'WoW' | 'MoM'>('WoW');
   const [isUpdatingStats, setIsUpdatingStats] = useState(false);
-  
+  const [isPlanningWeek, setIsPlanningWeek] = useState(false);
+  const [weeklySuggestions, setWeeklySuggestions] = useState<
+    Array<{
+      date: string;
+      dayLabel: string;
+      theme: string;
+      postIdea: string;
+      captionOutline: string;
+      recommendedPlatforms: string[];
+      suggestedTimeWindow?: string;
+      notes?: string;
+    }>
+  >([]);
   // Content Ideas state - moved to top level
   const [isGeneratingIdeas, setIsGeneratingIdeas] = useState(false);
   const [generatedIdeas, setGeneratedIdeas] = useState<any[]>([]);
@@ -171,6 +181,44 @@ export const Dashboard: React.FC = () => {
       return result;
     };
   }, []);
+
+  // Plan My Week - uses new /api/planMyWeek endpoint (requires auth)
+  const handlePlanMyWeek = async () => {
+    if (!user) {
+      showToast('Please sign in again to plan your week.', 'error');
+      return;
+    }
+
+    setIsPlanningWeek(true);
+    try {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+
+      const res = await fetch('/api/planMyWeek', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          posts,
+          events: filteredCalendarEvents,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && Array.isArray(data.suggestions)) {
+        setWeeklySuggestions(data.suggestions);
+        showToast?.('Weekly plan generated. Review your suggested content pack below.', 'success');
+      } else {
+        showToast?.(data.note || data.error || 'Could not generate your weekly plan. Please try again.', 'error');
+      }
+    } catch (err: any) {
+      console.error('Error generating weekly plan:', err);
+      showToast?.(err?.message || 'Failed to generate weekly plan. Please try again.', 'error');
+    } finally {
+      setIsPlanningWeek(false);
+    }
+  };
   
   const [filters] = useState<DashboardFilters>({ platform: 'All', messageType: 'All', sentiment: 'All', status: 'All', category: 'All' });
   const [searchTerm] = useState('');
@@ -295,28 +343,42 @@ export const Dashboard: React.FC = () => {
 
   const renderCommandCenter = () => (
       <div className="space-y-6 animate-fade-in">
-          {/* Today's Highlights Banner */}
+          {/* Studio Mode Banner */}
+          <div className="bg-gradient-to-r from-primary-600 to-purple-600 dark:from-primary-600 dark:to-purple-700 p-4 rounded-xl shadow-lg text-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold">AI Content Studio mode</h2>
+              <p className="text-sm text-primary-100/90">
+                Plan campaigns, generate content packs, and organize everything on your calendar. Post to social manually—one‑click posting will come in a future version.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-primary-100/80">
+              <SparklesIcon className="w-4 h-4" />
+              <span>Best flow: Strategy → Autopilot → Workflow → Calendar</span>
+            </div>
+          </div>
+
+          {/* Planning Highlights */}
           <div className="bg-gradient-to-r from-primary-500 to-primary-600 dark:from-primary-600 dark:to-primary-700 p-6 rounded-xl shadow-lg text-white">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-2xl font-bold">Today's Highlights</h2>
+              <h2 className="text-2xl font-bold">Today’s Planning Snapshot</h2>
               <span className="text-sm opacity-90">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
-                <p className="text-sm opacity-90 mb-1">{isBusiness ? 'Posts Published' : 'Posts Published'}</p>
+                <p className="text-sm opacity-90 mb-1">New posts created</p>
                 <p className="text-3xl font-bold">{todaysHighlights.postsPublished}</p>
               </div>
               <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
-                <p className="text-sm opacity-90 mb-1">{isBusiness ? 'Unread Messages' : 'Fan Messages'}</p>
+                <p className="text-sm opacity-90 mb-1">Messages to review</p>
                 <p className="text-3xl font-bold">{todaysHighlights.unreadMessages}</p>
               </div>
               <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
-                <p className="text-sm opacity-90 mb-1">Scheduled Posts</p>
+                <p className="text-sm opacity-90 mb-1">Planned slots today</p>
                 <p className="text-3xl font-bold">{todaysHighlights.scheduledPosts}</p>
               </div>
               {user.plan !== 'Free' && (
                 <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
-                  <p className="text-sm opacity-90 mb-1">Response Rate</p>
+                  <p className="text-sm opacity-90 mb-1">Inbox handled</p>
                   <p className="text-3xl font-bold">{todaysHighlights.responseRate}%</p>
                 </div>
               )}
@@ -325,21 +387,51 @@ export const Dashboard: React.FC = () => {
 
           {/* Quick Actions - Enhanced */}
           <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Quick Actions</h3>
-             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4">
-                  <QuickAction label="Create Post" icon={<SparklesIcon className="w-6 h-6" />} color="bg-gradient-to-br from-purple-500 to-indigo-600" onClick={() => setActivePage('compose')} />
+             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Plan your day</h3>
+             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                  <QuickAction
+                    label="Create Post"
+                    icon={<SparklesIcon className="w-6 h-6" />}
+                    color="bg-gradient-to-br from-purple-500 to-indigo-600"
+                    onClick={() => setActivePage('compose')}
+                  />
                   {user?.plan !== 'Free' && (
                     <>
-                      <QuickAction label={isBusiness ? 'Marketing Plan' : 'Content Strategy'} icon={<TrendingIcon className="w-6 h-6" />} color="bg-gradient-to-br from-blue-500 to-cyan-500" onClick={() => setActivePage('strategy')} />
-                      <QuickAction label="View Calendar" icon={<CalendarIcon className="w-6 h-6" />} color="bg-gradient-to-br from-orange-400 to-red-500" onClick={() => setActivePage('calendar')} />
-                      <QuickAction label={isBusiness ? 'Business Insights' : 'Check Analytics'} icon={<CheckCircleIcon className="w-6 h-6" />} color="bg-gradient-to-br from-emerald-400 to-green-600" onClick={() => setActivePage('analytics')} />
+                      <QuickAction
+                        label={isBusiness ? 'Marketing Plan' : 'Content Strategy'}
+                        icon={<TrendingIcon className="w-6 h-6" />}
+                        color="bg-gradient-to-br from-blue-500 to-cyan-500"
+                        onClick={() => setActivePage('strategy')}
+                      />
+                      <QuickAction
+                        label="View Calendar"
+                        icon={<CalendarIcon className="w-6 h-6" />}
+                        color="bg-gradient-to-br from-orange-400 to-red-500"
+                        onClick={() => setActivePage('calendar')}
+                      />
+                      <QuickAction
+                        label={isPlanningWeek ? 'Planning…' : 'Plan My Week'}
+                        icon={<KanbanIcon className="w-6 h-6" />}
+                        color="bg-gradient-to-br from-emerald-500 to-teal-500"
+                        onClick={handlePlanMyWeek}
+                      />
                       {(!isBusiness || user?.plan === 'Agency') && (
-                        <QuickAction label="Opportunities" icon={<TrendingIcon className="w-6 h-6" />} color="bg-gradient-to-br from-pink-500 to-rose-500" onClick={() => setActivePage('opportunities')} />
+                        <QuickAction
+                          label="Opportunities"
+                          icon={<TrendingIcon className="w-6 h-6" />}
+                          color="bg-gradient-to-br from-pink-500 to-rose-500"
+                          onClick={() => setActivePage('opportunities')}
+                        />
                       )}
-                      <QuickAction label="Automation" icon={<RocketIcon />} color="bg-gradient-to-br from-amber-500 to-orange-500" onClick={() => setActivePage('automation')} />
+                      <QuickAction
+                        label="Automation"
+                        icon={<RocketIcon />}
+                        color="bg-gradient-to-br from-amber-500 to-orange-500"
+                        onClick={() => setActivePage('automation')}
+                      />
                     </>
                   )}
-              </div>
+             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -354,137 +446,163 @@ export const Dashboard: React.FC = () => {
                             upcomingEvents.map(event => <UpcomingEventCard key={event.id} event={event} onClick={() => handleEventClick(event)} />)
                         ) : (
                             <div className="text-center py-8 bg-gray-50 dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
-                                <p className="text-gray-500 text-sm">No upcoming posts.</p>
-                                <button onClick={() => setActivePage('compose')} className="mt-2 text-primary-600 text-sm font-medium">Schedule one now</button>
+                                <p className="text-gray-500 text-sm">No upcoming planned content.</p>
+                                <button onClick={() => setActivePage('strategy')} className="mt-2 text-primary-600 text-sm font-medium">Start a content plan</button>
                             </div>
                         )}
                    </div>
               </div>
               
-              {/* Urgent Messages */}
-              {(() => {
-                // Get urgent messages: flagged messages or messages with negative sentiment
-                const urgentMessages = messages
-                  .filter(msg => {
-                    const clientMatch = selectedClient ? msg.clientId === selectedClient.id : !msg.clientId;
-                    return (msg.isFlagged || msg.sentiment === 'Negative') && !msg.isArchived && clientMatch;
-                  })
-                  .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-                  .slice(0, 3);
-                
-                return (
-                  <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-lg font-bold text-gray-900 dark:text-white">Urgent Messages</h3>
-                      <button onClick={() => setActivePage('inbox')} className="text-sm text-primary-600 hover:underline">Go to Inbox</button>
-                    </div>
-                    <div className="space-y-3">
-                      {urgentMessages.length > 0 ? (
-                        urgentMessages.map(msg => (
-                          <div key={msg.id} className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700 shadow-sm flex gap-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700" onClick={async (e) => {
-                            e.stopPropagation();
-                            await ensureCRMProfile(msg.user);
-                            openCRM(msg.user);
-                          }}>
-                            <div className="flex-shrink-0 pt-1">
-                              <img src={msg.user.avatar} className="w-8 h-8 rounded-full" alt={msg.user.name} />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex justify-between">
-                                <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{msg.user.name}</p>
-                                <span className="text-xs text-gray-400">{platformFilterIcons[msg.platform]}</span>
+              {/* Weekly Plan Suggestions */}
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                   <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">AI Weekly Plan</h3>
+                        <button
+                          onClick={handlePlanMyWeek}
+                          disabled={isPlanningWeek}
+                          className="text-sm text-primary-600 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isPlanningWeek ? 'Planning…' : 'Regenerate'}
+                        </button>
+                   </div>
+                   <div className="space-y-3">
+                        {isPlanningWeek && (
+                          <p className="text-sm text-gray-500 dark:text-gray-400">EchoFlux.ai is planning your week…</p>
+                        )}
+                        {!isPlanningWeek && weeklySuggestions.length === 0 && (
+                          <div className="text-center py-8 bg-gray-50 dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
+                              <p className="text-gray-500 text-sm">Let the assistant suggest a content pack for the next 7 days.</p>
+                              <button
+                                onClick={handlePlanMyWeek}
+                                className="mt-2 inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700"
+                              >
+                                Plan my week
+                              </button>
+                          </div>
+                        )}
+                        {!isPlanningWeek && weeklySuggestions.length > 0 && (
+                          <div className="space-y-3">
+                            {weeklySuggestions.map((s, idx) => (
+                              <div
+                                key={`${s.date}-${idx}`}
+                                className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700"
+                              >
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                                    {s.dayLabel} · {s.date}
+                                  </span>
+                                  {s.suggestedTimeWindow && (
+                                    <span className="text-xs text-primary-600 dark:text-primary-400">
+                                      {s.suggestedTimeWindow}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                                  {s.theme}
+                                </p>
+                                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                                  {s.postIdea}
+                                </p>
+                                {s.captionOutline && (
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    {s.captionOutline}
+                                  </p>
+                                )}
+                                {Array.isArray(s.recommendedPlatforms) && s.recommendedPlatforms.length > 0 && (
+                                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                                    Platforms: {s.recommendedPlatforms.join(', ')}
+                                  </p>
+                                )}
+                                {s.notes && (
+                                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1 italic">
+                                    {s.notes}
+                                  </p>
+                                )}
                               </div>
-                              <p className="text-sm text-gray-600 dark:text-gray-300 truncate">{msg.content}</p>
-                            </div>
+                            ))}
                           </div>
-                        ))
-                      ) : (
-                        <div className="text-center py-8 bg-gray-50 dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
-                          <p className="text-green-600 font-medium text-sm">Inbox Zero! 🎉</p>
-                          <p className="text-gray-400 text-xs mt-1">You're all caught up.</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()}
-          </div>
-
-          {/* Enhanced Metrics Section */}
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">{isBusiness ? 'Business Metrics' : 'Audience Stats'}</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                  {currentStats && Object.entries(currentStats)
-                    // For Free plan, only show the first connected social account
-                    .filter(([platform, stats], index) => {
-                      if (user?.plan === 'Free') {
-                        // Only show the first connected account
-                        return index === 0;
-                      }
-                      return true;
-                    })
-                    .map(([platform, stats]) => {
-                    const trend = calculateTrend(stats.followers, platform);
-                    return (
-                     <div key={platform} className="relative overflow-hidden p-4 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700/50 dark:to-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-600 hover:shadow-md transition-all">
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="text-gray-600 dark:text-gray-300">
-                           {platformFilterIcons[platform as Platform]}
-                          </div>
-                          {trend.changePercent !== 0 ? (
-                            <div className={`flex items-center text-xs font-semibold ${trend.isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                              <ArrowUpIcon className={`w-3 h-3 mr-0.5 ${!trend.isPositive ? 'rotate-180' : ''}`} />
-                              {Math.abs(trend.changePercent)}%
-                            </div>
-                          ) : null}
-                        </div>
-                        <div>
-                           <p className="text-2xl font-bold text-gray-900 dark:text-white">{new Intl.NumberFormat('en-US', { notation: "compact" }).format(stats.followers)}</p>
-                           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{isBusiness ? 'Potential Reach' : 'Followers'}</p>
-                        </div>
-                     </div>
-                    );
-                  })}
-                   {isBusiness && (() => {
-                     const websiteClicksTrend = calculateTrend(1204);
-                     const leadsTrend = calculateTrend(88);
-                     return (
-                     <>
-                        <div className="relative overflow-hidden p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 rounded-xl border border-blue-200 dark:border-blue-700 hover:shadow-md transition-all">
-                            <div className="flex items-start justify-between mb-2">
-                              <div className="text-blue-600 dark:text-blue-400"><LinkIcon className="w-5 h-5" /></div>
-                              {websiteClicksTrend.changePercent !== 0 && (
-                                <div className={`flex items-center text-xs font-semibold ${websiteClicksTrend.isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                                  <ArrowUpIcon className={`w-3 h-3 mr-0.5 ${!websiteClicksTrend.isPositive ? 'rotate-180' : ''}`} />
-                                  {Math.abs(websiteClicksTrend.changePercent)}%
-                                </div>
-                              )}
-                            </div>
-                            <div>
-                               <p className="text-2xl font-bold text-gray-900 dark:text-white">1,204</p>
-                               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Website Clicks</p>
-                            </div>
-                        </div>
-                         <div className="relative overflow-hidden p-4 bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/30 dark:to-emerald-800/30 rounded-xl border border-emerald-200 dark:border-emerald-700 hover:shadow-md transition-all">
-                            <div className="flex items-start justify-between mb-2">
-                              <div className="text-emerald-600 dark:text-emerald-400"><BriefcaseIcon className="w-5 h-5" /></div>
-                              {leadsTrend.changePercent !== 0 && (
-                                <div className={`flex items-center text-xs font-semibold ${leadsTrend.isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                                  <ArrowUpIcon className={`w-3 h-3 mr-0.5 ${!leadsTrend.isPositive ? 'rotate-180' : ''}`} />
-                                  {Math.abs(leadsTrend.changePercent)}%
-                                </div>
-                              )}
-                            </div>
-                            <div>
-                               <p className="text-2xl font-bold text-gray-900 dark:text-white">88</p>
-                               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Leads Generated</p>
-                            </div>
-                        </div>
-                       </>
-                     );
-                   })()}
+                        )}
+                   </div>
               </div>
           </div>
+
+          {/* Enhanced Metrics Section - hidden in AI Content Studio mode */}
+          {false && (
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">{isBusiness ? 'Business Metrics' : 'Audience Stats'}</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                    {currentStats && Object.entries(currentStats)
+                      // For Free plan, only show the first connected social account
+                      .filter(([platform, stats], index) => {
+                        if (user?.plan === 'Free') {
+                          // Only show the first connected account
+                          return index === 0;
+                        }
+                        return true;
+                      })
+                      .map(([platform, stats]) => {
+                      const trend = calculateTrend(stats.followers, platform);
+                      return (
+                       <div key={platform} className="relative overflow-hidden p-4 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700/50 dark:to-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-600 hover:shadow-md transition-all">
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="text-gray-600 dark:text-gray-300">
+                             {platformFilterIcons[platform as Platform]}
+                            </div>
+                            {trend.changePercent !== 0 ? (
+                              <div className={`flex items-center text-xs font-semibold ${trend.isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                <ArrowUpIcon className={`w-3 h-3 mr-0.5 ${!trend.isPositive ? 'rotate-180' : ''}`} />
+                                {Math.abs(trend.changePercent)}%
+                              </div>
+                            ) : null}
+                          </div>
+                          <div>
+                             <p className="text-2xl font-bold text-gray-900 dark:text-white">{new Intl.NumberFormat('en-US', { notation: "compact" }).format(stats.followers)}</p>
+                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{isBusiness ? 'Potential Reach' : 'Followers'}</p>
+                          </div>
+                       </div>
+                      );
+                    })}
+                     {isBusiness && (() => {
+                       const websiteClicksTrend = calculateTrend(1204);
+                       const leadsTrend = calculateTrend(88);
+                       return (
+                       <>
+                          <div className="relative overflow-hidden p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 rounded-xl border border-blue-200 dark:border-blue-700 hover:shadow-md transition-all">
+                              <div className="flex items-start justify-between mb-2">
+                                <div className="text-blue-600 dark:text-blue-400"><LinkIcon className="w-5 h-5" /></div>
+                                {websiteClicksTrend.changePercent !== 0 && (
+                                  <div className={`flex items-center text-xs font-semibold ${websiteClicksTrend.isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                    <ArrowUpIcon className={`w-3 h-3 mr-0.5 ${!websiteClicksTrend.isPositive ? 'rotate-180' : ''}`} />
+                                    {Math.abs(websiteClicksTrend.changePercent)}%
+                                  </div>
+                                )}
+                              </div>
+                              <div>
+                                 <p className="text-2xl font-bold text-gray-900 dark:text-white">1,204</p>
+                                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Website Clicks</p>
+                              </div>
+                          </div>
+                           <div className="relative overflow-hidden p-4 bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/30 dark:to-emerald-800/30 rounded-xl border border-emerald-200 dark:border-emerald-700 hover:shadow-md transition-all">
+                              <div className="flex items-start justify-between mb-2">
+                                <div className="text-emerald-600 dark:text-emerald-400"><BriefcaseIcon className="w-5 h-5" /></div>
+                                {leadsTrend.changePercent !== 0 && (
+                                  <div className={`flex items-center text-xs font-semibold ${leadsTrend.isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                    <ArrowUpIcon className={`w-3 h-3 mr-0.5 ${!leadsTrend.isPositive ? 'rotate-180' : ''}`} />
+                                    {Math.abs(leadsTrend.changePercent)}%
+                                  </div>
+                                )}
+                              </div>
+                              <div>
+                                 <p className="text-2xl font-bold text-gray-900 dark:text-white">88</p>
+                                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Leads Generated</p>
+                              </div>
+                          </div>
+                         </>
+                       );
+                     })()}
+                </div>
+            </div>
+          )}
           
           
           {/* Fixed Layout Row: Top Content This Week and Recent Activity - Always Together */}
@@ -802,7 +920,7 @@ export const Dashboard: React.FC = () => {
               {(() => {
               // Calculate goals progress using user-defined goals or defaults
               const currentFollowers = currentStats ? Object.values(currentStats).reduce((sum, stats) => sum + stats.followers, 0) : 0;
-              const goalFollowers = user?.goals?.followerGoal || Math.ceil(currentFollowers * 1.5); // Use user goal or default to 50% more
+              const goalFollowers = user?.goals?.followerGoal || Math.ceil(currentFollowers * 1.5); // kept for future analytics-focused mode
               const followersProgress = goalFollowers > 0 ? Math.min((currentFollowers / goalFollowers) * 100, 100) : 0;
               
               // Count ALL posts created this month (use timestamp, scheduledDate, or createdAt)
@@ -839,26 +957,28 @@ export const Dashboard: React.FC = () => {
                     </button>
                   </div>
                   <div className="space-y-4">
-                    {/* Followers Goal */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          {isBusiness ? 'Total Reach' : 'Total Followers'}
-                        </span>
-                        <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                          {new Intl.NumberFormat('en-US').format(currentFollowers)} / {new Intl.NumberFormat('en-US').format(goalFollowers)}
-                        </span>
+                    {/* Followers Goal - hidden in AI Content Studio mode */}
+                    {false && (
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {isBusiness ? 'Total Reach' : 'Total Followers'}
+                          </span>
+                          <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                            {new Intl.NumberFormat('en-US').format(currentFollowers)} / {new Intl.NumberFormat('en-US').format(goalFollowers)}
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
+                          <div 
+                            className="bg-gradient-to-r from-primary-500 to-primary-600 h-full transition-all duration-500" 
+                            style={{ width: `${followersProgress}%` }}
+                          ></div>
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          {Math.round(followersProgress)}% complete
+                        </p>
                       </div>
-                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
-                        <div 
-                          className="bg-gradient-to-r from-primary-500 to-primary-600 h-full transition-all duration-500" 
-                          style={{ width: `${followersProgress}%` }}
-                        ></div>
-                      </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        {Math.round(followersProgress)}% complete
-                      </p>
-                    </div>
+                    )}
                     
                     {/* Posts Goal */}
                     <div>
@@ -879,8 +999,8 @@ export const Dashboard: React.FC = () => {
                       </p>
                     </div>
                     
-                    {/* Monthly Leads Goal - Business Only */}
-                    {isBusiness && (() => {
+                    {/* Monthly Leads Goal - Business Only (hidden in AI Content Studio mode) */}
+                    {false && isBusiness && (() => {
                       const leadMessages = messages.filter(m => m.category === 'Lead' && !m.isArchived);
                       const currentLeads = leadMessages.filter(m => {
                         const msgDate = new Date(m.timestamp);
@@ -911,17 +1031,8 @@ export const Dashboard: React.FC = () => {
                       );
                     })()}
                     
-                    {/* Milestone badges */}
-                    {(followersProgress >= 100 || postsProgress >= 100 || (isBusiness && (() => {
-                      const leadMessages = messages.filter(m => m.category === 'Lead' && !m.isArchived);
-                      const currentLeads = leadMessages.filter(m => {
-                        const msgDate = new Date(m.timestamp);
-                        const now = new Date();
-                        return msgDate.getMonth() === now.getMonth() && msgDate.getFullYear() === now.getFullYear();
-                      }).length;
-                      const goalLeads = user?.goals?.monthlyLeadsGoal || 50;
-                      return goalLeads > 0 && (currentLeads / goalLeads) * 100 >= 100;
-                    })())) && (
+                    {/* Milestone badges - only based on content goal in studio mode */}
+                    {(postsProgress >= 100) && (
                       <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
                         <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
                           <CheckCircleIcon className="w-5 h-5" />
@@ -936,18 +1047,11 @@ export const Dashboard: React.FC = () => {
                 
                 {/* Quick Stats Widget - Always shows next to Goals & Milestones for paid users */}
                 {(() => {
-              // Calculate quick stats
+              // Calculate quick stats (content-focused)
               const totalPosts = posts.length;
               const publishedPosts = posts.filter(p => p.status === 'Published').length;
               const scheduledPosts = posts.filter(p => p.status === 'Scheduled').length;
               const draftPosts = posts.filter(p => p.status === 'Draft').length;
-              
-              // Calculate engagement rate (mock calculation)
-              const totalEngagement = currentStats ? Object.values(currentStats).reduce((sum, stats) => 
-                sum + (stats.likes || 0) + (stats.comments || 0) + (stats.shares || 0), 0) : 0;
-              const totalReach = currentStats ? Object.values(currentStats).reduce((sum, stats) => 
-                sum + (stats.followers || 0), 0) : 0;
-              const engagementRate = totalReach > 0 ? ((totalEngagement / totalReach) * 100).toFixed(1) : '0.0';
               
               return (
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
@@ -975,17 +1079,6 @@ export const Dashboard: React.FC = () => {
                           <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">{draftPosts}</span>
                         </div>
                       </div>
-                    </div>
-                    
-                    {/* Engagement Rate */}
-                    <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Engagement Rate</span>
-                        <span className="text-lg font-bold text-primary-600 dark:text-primary-400">{engagementRate}%</span>
-                      </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        Based on {new Intl.NumberFormat('en-US').format(totalReach)} total {isBusiness ? 'reach' : 'followers'}
-                      </p>
                     </div>
                     
                     {/* Total Posts */}

@@ -8,96 +8,84 @@ export const Terms: React.FC = () => {
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Last updated: January 2025</p>
 
                 <div className="mt-6 prose prose-lg dark:prose-invert max-w-none text-gray-700 dark:text-gray-300">
-                    <p>Welcome to EchoFlux.AI. Our goal is to provide a powerful and sustainable AI toolkit to help you grow. This Fair Use Policy outlines the usage limits for our AI generation features to ensure service quality and prevent abuse for all our users. By using our service, you agree to these terms.</p>
-
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">1. Platform Support & Feature Availability</h3>
                     <p>
-                        EchoFlux.AI integrates with multiple third-party social networks and creator platforms. Because each external platform maintains its own API policies, rate limits, permissions, and compliance requirements, certain features may only be available on specific platforms. The following terms define the scope of supported functionality.
-                    </p>
-                    <p className="mt-4">
-                        <strong>Users acknowledge and agree that:</strong>
+                        Welcome to EchoFlux.ai. Our goal is to provide a focused, offline-first AI content studio and campaign
+                        planner for creators. These Terms of Service and Fair Use guidelines explain how you may use the app
+                        today, in its creator–planning mode, without relying on live platform integrations or automated posting.
+                        By using EchoFlux.ai, you agree to these terms.
                     </p>
 
-                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-2">A. Instagram & Facebook (Meta Platforms)</h4>
-                    <ul className="list-disc pl-6 space-y-2">
-                        <li>Most features, including scheduling, analytics, AI-assisted messaging, and comments, are available for Business Accounts.</li>
-                        <li>Auto-messaging features are limited by Meta's 24-hour messaging window.</li>
-                        <li>Social listening is limited to direct mentions of the user's account.</li>
-                        <li>Full scheduling suite, unified AI inbox, auto-smart replies, AI content planning, and deep analytics are supported.</li>
-                        <li>Creator and Business account support is available.</li>
-                    </ul>
-
-                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-2">B. X (Twitter)</h4>
-                    <ul className="list-disc pl-6 space-y-2">
-                        <li>Features such as posting, analytics, DM handling, and search require a paid X API tier.</li>
-                        <li>EchoFlux.AI will not provide features that exceed X's automation rules.</li>
-                        <li>No scraping, unauthorized data collection, or competitor monitoring is performed.</li>
-                        <li>Publishing & scheduling, AI replies (paid API tier required), smart analytics, and trend insights are supported.</li>
-                    </ul>
-
-                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-2">C. TikTok</h4>
-                    <ul className="list-disc pl-6 space-y-2">
-                        <li>Posting and limited scheduling are supported.</li>
-                        <li>AI content creation, TikTok-optimized captions, hooks, and scripts are available.</li>
-                        <li><strong>Inbox/DM tools, CRM features, and auto-replies are NOT supported</strong> due to TikTok's API restrictions.</li>
-                        <li>EchoFlux.AI does not access or automate private data or private interactions.</li>
-                    </ul>
-
-                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-2">D. YouTube</h4>
-                    <ul className="list-disc pl-6 space-y-2">
-                        <li>Posting, scheduling, and analytics for the user's own channel are supported.</li>
-                        <li>Publish Shorts or long-form content with AI Titles, Descriptions & Tags.</li>
-                        <li>Channel analytics are available.</li>
-                        <li><strong>DM automation and bulk comment automation are NOT available.</strong></li>
-                        <li>Competitor analysis is limited to publicly accessible data.</li>
-                    </ul>
-
-                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-2">E. LinkedIn</h4>
-                    <ul className="list-disc pl-6 space-y-2">
-                        <li>Post publishing and analytics are supported via LinkedIn's UGC APIs.</li>
-                        <li>Professional post publishing, brand analytics, and AI thought-leadership writing engine are available.</li>
-                        <li><strong>Messaging automation, scraping, or growth-hacking behaviors are NOT supported.</strong></li>
-                    </ul>
-
-                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-2">F. Threads</h4>
-                    <ul className="list-disc pl-6 space-y-2">
-                        <li>Publishing support is offered as available through Meta APIs.</li>
-                        <li>Smart posting and AI content tailored for community-driven discussions are supported.</li>
-                        <li><strong>Messaging, inbox features, analytics, and competitor analysis are NOT available at this time.</strong></li>
-                    </ul>
-
-                    <div className="mt-6 p-6 border-l-4 border-blue-400 bg-blue-50 dark:bg-blue-900/30 rounded-r-lg">
-                        <h4 className="text-lg font-semibold text-blue-800 dark:text-blue-200 mb-2">Changes to Platform Availability</h4>
-                        <p className="text-blue-900 dark:text-blue-100">
-                            Third-party platforms may modify or revoke API features without notice. EchoFlux.AI is not liable for platform outages, API deprecations, rate-limit restrictions, or third-party policy changes. We will make commercially reasonable efforts to maintain compatibility but cannot guarantee uninterrupted functionality.
-                        </p>
-                    </div>
-
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">2. AI-Powered Services</h3>
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">
+                        1. Service Overview (Offline / Planning Mode)
+                    </h3>
                     <p>
-                        EchoFlux.AI offers advanced AI-powered content creation tools, including caption generation, content strategy, and automated post scheduling. These features use AI to analyze your media, generate captions and hashtags, and optimize posting times. This policy ensures we can offer these services sustainably.
+                        EchoFlux.ai currently operates as an <strong>AI Content Studio & Campaign Planner</strong>. The product is designed
+                        to help you plan, brainstorm, and organize your content, not to replace your social platforms or post on your
+                        behalf.
                     </p>
-
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">3. Subscription Plans and Pricing</h3>
-                    <p>
-                        Our pricing is available on our website's pricing section. All prices are listed in USD. The Agency plan is offered on a custom basis for users with extensive needs, and interested parties should contact our sales team for a quote. We reserve the right to change our pricing at any time, with notice provided to existing subscribers.
-                    </p>
-                    
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">4. Quick Post Automation Feature</h3>
-                    <p>
-                        Quick Post Automation is available on all paid plans. It automates the content creation workflow by analyzing uploaded media and generating captions, hashtags, and optimal posting schedules.
-                    </p>
-                     <ul>
-                        <li><strong>Functionality:</strong> Upload multiple images or videos, select your target platforms, set your goal and tone, and our AI will analyze each piece of media to generate captions, hashtags, and schedule posts at optimal times.</li>
-                        <li><strong>Platform Selection:</strong> You can select which social media platforms each post should be published to. The AI will optimize content and scheduling for each selected platform.</li>
-                        <li><strong>Media Library Integration:</strong> Uploaded media is stored in your Media Library for future reuse. Media remains in your library until you delete it.</li>
-                        <li><strong>Control:</strong> All automated posts are scheduled and can be reviewed, edited, or deleted from your Calendar before they go live. You retain full control over your brand's voice and output.</li>
+                    <ul className="list-disc pl-6 space-y-2 mt-2">
+                        <li>
+                            The app focuses on strategy, content ideas, captions, content packs, calendars, and workflow boards
+                            so you can manually post on the platforms you choose.
+                        </li>
+                        <li>
+                            Any references in the UI to “publish”, “schedule”, or “platforms” are for planning purposes only
+                            and do <strong>not</strong> guarantee live integrations, posting, analytics, or inbox tooling.
+                        </li>
+                        <li>
+                            We may add, change, or remove integrations and features over time. EchoFlux.ai does not guarantee
+                            support for any specific social network or third‑party platform.
+                        </li>
                     </ul>
 
-
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">5. Fair Use Policy & Monthly Allowances</h3>
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">
+                        2. AI‑Powered Services
+                    </h3>
                     <p>
-                        Different subscription plans come with different allowances for AI generation. These are designed to provide ample creative freedom while maintaining service stability.
+                        EchoFlux.ai offers AI‑powered tools for captions, hooks, content ideas, planning roadmaps, and campaign
+                        structures. In some plans these tools may also suggest time windows, content pillars, and calendar
+                        placements.
+                    </p>
+                    <ul className="list-disc pl-6 space-y-2 mt-2">
+                        <li>
+                            AI outputs are suggestions only. You are responsible for reviewing, editing, and deciding what
+                            to actually post on your social accounts or platforms.
+                        </li>
+                        <li>
+                            We do not guarantee that AI suggestions will perform in any particular way (e.g. reach, revenue,
+                            engagement, or follower growth).
+                        </li>
+                        <li>
+                            You are responsible for ensuring your final content complies with the terms and policies of any
+                            platforms where you post.
+                        </li>
+                    </ul>
+
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">
+                        3. Subscription Plans and Pricing
+                    </h3>
+                    <p>
+                        Plan names, limits, and prices are shown in the Pricing section of the app or on our website. We are
+                        currently focused on creator‑oriented plans; agency/business features may be paused or hidden in this
+                        version.
+                    </p>
+                    <ul className="list-disc pl-6 space-y-2 mt-2">
+                        <li>
+                            We may change plan features, limits, or pricing in the future. If you are a paying subscriber, we
+                            will make reasonable efforts to notify you before material changes take effect.
+                        </li>
+                        <li>
+                            Any promotional or beta features may be modified or discontinued at any time.
+                        </li>
+                    </ul>
+
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">
+                        4. Fair Use Policy & Monthly Allowances
+                    </h3>
+                    <p>
+                        Different subscription tiers may include different soft limits or allowances for AI generation, media
+                        storage, or usage of specific tools (for example: number of AI captions per month). These limits are
+                        designed to provide room for serious creators while keeping the service stable and sustainable.
                     </p>
                     
                     <h4>AI Caption Generation</h4>
@@ -109,9 +97,6 @@ export const Terms: React.FC = () => {
                         <li><strong>Caption Pro Plan:</strong> 100 AI Captions per month.</li>
                         <li><strong>Creator Pro Plan:</strong> 500 AI Captions per month.</li>
                         <li><strong>Creator Elite Plan:</strong> 1,500 AI Captions per month.</li>
-                        <li><strong>Creator Agency Plan:</strong> 10,000 AI Captions per month (soft cap). Overage fees apply beyond this limit.</li>
-                        <li><strong>Business Starter Plan:</strong> 1,000 AI Captions per month.</li>
-                        <li><strong>Business Growth Plan:</strong> 2,500 AI Captions per month.</li>
                     </ul>
                     <p>
                         Credits reset on your monthly billing date. Unused credits do not roll over to the next month.
@@ -126,9 +111,6 @@ export const Terms: React.FC = () => {
                         <li><strong>Caption Pro Plan:</strong> Basic Link-in-Bio only (no Media Library).</li>
                         <li><strong>Creator Pro Plan:</strong> 1 GB of media storage.</li>
                         <li><strong>Creator Elite Plan:</strong> 2 GB of media storage.</li>
-                        <li><strong>Creator Agency Plan:</strong> 5 GB of media storage.</li>
-                        <li><strong>Business Starter Plan:</strong> 1 GB of media storage.</li>
-                        <li><strong>Business Growth Plan:</strong> 3 GB of media storage.</li>
                     </ul>
                     <p>
                         Media uploaded to your Media Library remains stored until you delete it. Storage usage is calculated across all uploaded media including profile pictures, link-in-bio images, and media library items.
@@ -143,9 +125,6 @@ export const Terms: React.FC = () => {
                         <li><strong>Caption Pro Plan:</strong> Not included (caption generation only).</li>
                         <li><strong>Creator Pro Plan:</strong> 250 AI Replies per month.</li>
                         <li><strong>Creator Elite Plan:</strong> 750 AI Replies per month.</li>
-                        <li><strong>Creator Agency Plan:</strong> 2,000 AI Replies per month.</li>
-                        <li><strong>Business Starter Plan:</strong> 500 AI Replies per month.</li>
-                        <li><strong>Business Growth Plan:</strong> 1,500 AI Replies per month.</li>
                     </ul>
                     <p>
                         Credits reset on your monthly billing date. Unused credits do not roll over to the next month.
@@ -162,36 +141,8 @@ export const Terms: React.FC = () => {
                         <li><strong>Usage:</strong> You can select media from your library when composing posts or adding media to strategy roadmap items.</li>
                     </ul>
 
-                    <div className="mt-8 p-6 border-l-4 border-yellow-400 bg-yellow-50 dark:bg-yellow-900/30 rounded-r-lg">
-                        <h4 className="text-xl font-bold text-yellow-800 dark:text-yellow-200">Important: Policy on Client Usage (Elite & Agency Plans)</h4>
-                        <p className="mt-2 text-yellow-900 dark:text-yellow-100">
-                           The monthly allowances for all AI generation features are allocated to the <strong>primary subscriber's account only</strong>. These allowances are intended to be used across all managed clients and are <strong>not provided on a per-client basis.</strong>
-                        </p>
-                        <p className="mt-2 text-yellow-900 dark:text-yellow-100">
-                            <strong>Example:</strong> An Agency subscriber managing 10 clients has a total monthly allowance of 50 video generations to use for any of their clients' needs. It is not an allowance of 50 video generations for <em>each</em> of the 10 clients.
-                        </p>
-                    </div>
 
-                    <div className="mt-8 p-6 border-l-4 border-red-400 bg-red-50 dark:bg-red-900/30 rounded-r-lg">
-                        <h4 className="text-xl font-bold text-red-800 dark:text-red-200">Agency Plan: Soft Cap & Overage Policy</h4>
-                        <p className="mt-2 text-red-900 dark:text-red-100">
-                            The Agency plan includes generous monthly allowances designed to cover typical usage across all managed clients. However, to ensure sustainable service for all users, we implement a <strong>soft cap</strong> system:
-                        </p>
-                        <ul className="list-disc pl-6 space-y-2 mt-3 text-red-900 dark:text-red-100">
-                            <li><strong>AI Captions:</strong> 10,000 captions/month included. Beyond this limit, overage fees of $0.01 per caption apply.</li>
-                            <li><strong>AI Replies:</strong> 2,000 replies/month included. Beyond this limit, overage fees of $0.05 per reply apply.</li>
-                            <li><strong>Image Generation:</strong> Coming soon. Unlimited* (subject to fair use). Excessive usage may trigger review.</li>
-                            <li><strong>Video Generation:</strong> Coming soon. 50 videos/month included. Beyond this limit, overage fees of $2.00 per video apply.</li>
-                        </ul>
-                        <p className="mt-3 text-red-900 dark:text-red-100">
-                            <strong>Fair Use:</strong> "Unlimited" features are subject to reasonable use. Usage that exceeds 10x the typical plan usage may be flagged for review. We reserve the right to contact Agency subscribers with unusually high usage to discuss custom pricing or usage optimization.
-                        </p>
-                        <p className="mt-3 text-red-900 dark:text-red-100">
-                            Overage fees are billed monthly and will appear on your next billing statement. You will receive email notifications when you approach (80%) and reach (100%) your included limits.
-                        </p>
-                    </div>
-
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">6. Prohibited Use</h3>
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">5. Prohibited Use</h3>
                     <p>
                         You may not use EchoFlux.AI to:
                     </p>
@@ -205,9 +156,11 @@ export const Terms: React.FC = () => {
                         Violating this policy may result in immediate account suspension or termination.
                     </p>
 
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">7. Changes to This Policy</h3>
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">6. Changes to These Terms</h3>
                     <p>
-                        We may update this Fair Use Policy from time to time. If we make any changes, we will notify you by revising the "Last updated" date at the top of this policy and, in some cases, we may provide you with additional notice.
+                        We may update these Terms of Service and Fair Use guidelines from time to time. If we make any changes,
+                        we will update the “Last updated” date at the top of the page and, where appropriate, provide additional
+                        notice in the app or by email.
                     </p>
                 </div>
             </div>

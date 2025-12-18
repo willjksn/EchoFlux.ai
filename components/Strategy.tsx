@@ -2,33 +2,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from './AppContext';
 import { StrategyPlan, Platform, WeekPlan, DayPlan, Post, CalendarEvent, MediaLibraryItem } from '../types';
-import { generateContentStrategy, saveStrategy, getStrategies, updateStrategyStatus, analyzeMediaForPost, generateCaptions } from "../src/services/geminiService"
-import { getAnalytics } from "../src/services/geminiService"
-import { AnalyticsData } from '../types'
+import { generateContentStrategy, saveStrategy, getStrategies, updateStrategyStatus, analyzeMediaForPost, generateCaptions } from "../src/services/geminiService";
+import { getAnalytics } from "../src/services/geminiService";
+import { AnalyticsData } from '../types';
 import { TargetIcon, SparklesIcon, CalendarIcon, CheckCircleIcon, RocketIcon, DownloadIcon, TrashIcon, ClockIcon, UploadIcon, ImageIcon, XMarkIcon } from './icons/UIIcons';
-import { InstagramIcon, TikTokIcon, XIcon, LinkedInIcon, FacebookIcon, PinterestIcon, DiscordIcon, TelegramIcon, RedditIcon, FanvueIcon, OnlyFansIcon } from './icons/PlatformIcons';
 import { UpgradePrompt } from './UpgradePrompt';
 import { storage } from '../firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db } from '../firebaseConfig';
 import { doc, setDoc, getDoc, collection, getDocs, query, orderBy, deleteDoc } from 'firebase/firestore';
 import { MediaLibraryItem } from '../types';
-
-const platformIcons: Record<Platform, React.ReactElement> = {
-    Instagram: <InstagramIcon className="w-4 h-4" />,
-    TikTok: <TikTokIcon className="w-4 h-4" />,
-    X: <XIcon className="w-4 h-4" />,
-    Threads: <div className="w-4 h-4 text-xs">Th</div>,
-    YouTube: <div className="w-4 h-4 text-xs">YT</div>,
-    LinkedIn: <LinkedInIcon className="w-4 h-4" />,
-    Facebook: <FacebookIcon className="w-4 h-4" />,
-    Pinterest: <PinterestIcon className="w-4 h-4" />,
-    Discord: <DiscordIcon className="w-4 h-4" />,
-    Telegram: <TelegramIcon className="w-4 h-4" />,
-    Reddit: <RedditIcon className="w-4 h-4" />,
-    Fanvue: <FanvueIcon className="w-4 h-4" />,
-    OnlyFans: <OnlyFansIcon className="w-4 h-4" />,
-};
+import { OFFLINE_MODE } from '../constants';
 
 export const Strategy: React.FC = () => {
     const { 
@@ -436,112 +420,152 @@ export const Strategy: React.FC = () => {
                 }
             }
 
-            // Get the updated day for scheduling
-            const updatedDay = updatedPlan.weeks[weekIndex].content[dayIndex];
+            // In offline "planning studio" mode, we do NOT auto-create posts or calendar events.
+            // We just attach the media and caption to the roadmap day.
+            if (!OFFLINE_MODE) {
+                // Get the updated day for scheduling
+                const updatedDay = updatedPlan.weeks[weekIndex].content[dayIndex];
 
-            // Calculate scheduled date based on roadmap
-            const today = new Date();
-            const scheduledDate = new Date(today);
-            scheduledDate.setDate(today.getDate() + (weekIndex * 7) + updatedDay.dayOffset);
-            scheduledDate.setHours(14, 0, 0, 0); // Default to 2 PM
+                // Calculate scheduled date based on roadmap
+                const today = new Date();
+                const scheduledDate = new Date(today);
+                scheduledDate.setDate(today.getDate() + (weekIndex * 7) + updatedDay.dayOffset);
+                scheduledDate.setHours(14, 0, 0, 0); // Default to 2 PM
 
-            // Create Draft post first (will be scheduled through Workflow)
-            const postId = `roadmap-${selectedStrategy?.id || 'temp'}-${weekIndex}-${dayIndex}-${Date.now()}`;
-            const postTitle = updatedDay.topic.substring(0, 30) + (updatedDay.topic.length > 30 ? '...' : '');
+                // Create a post + calendar event so it appears as scheduled content
+                const postId = `roadmap-${selectedStrategy?.id || 'temp'}-${weekIndex}-${dayIndex}-${Date.now()}`;
 
-            // Create Post in Firestore as Draft (user can schedule it through Workflow)
-            // Also create a calendar event so it appears on the calendar
-            if (user) {
-                const newPost: Post = {
-                    id: postId,
-                    content: updatedDay.caption || generatedCaption || updatedDay.topic, // Use generated caption
-                    mediaUrl: mediaUrl,
-                    mediaType: fileType,
-                    platforms: [updatedDay.platform],
-                    status: 'Draft', // Create as Draft, not Scheduled
-                    author: { name: user.name, avatar: user.avatar },
-                    comments: [],
-                    scheduledDate: scheduledDate.toISOString(), // Store intended date, but status is Draft
-                    clientId: user.userType === 'Business' ? user.id : undefined,
-                    timestamp: new Date().toISOString(),
-                };
+                if (user) {
+                    const newPost: Post = {
+                        id: postId,
+                        content: updatedDay.caption || generatedCaption || updatedDay.topic, // Use generated caption
+                        mediaUrl: mediaUrl,
+                        mediaType: fileType,
+                        platforms: [updatedDay.platform],
+                        status: 'Scheduled',
+                        author: { name: user.name, avatar: user.avatar },
+                        comments: [],
+                        scheduledDate: scheduledDate.toISOString(),
+                        clientId: user.userType === 'Business' ? user.id : undefined,
+                        timestamp: new Date().toISOString(),
+                    };
 
-                const safePost = JSON.parse(JSON.stringify(newPost));
-                await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
+                    const safePost = JSON.parse(JSON.stringify(newPost));
+                    await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
 
-                // Create calendar event so it appears on the calendar (even though post is Draft)
-                try {
-                    await addCalendarEvent({
-                        id: `strategy-${postId}`,
-                        title: updatedDay.topic,
-                        date: scheduledDate.toISOString(),
-                        type: 'Post',
-                        platform: updatedDay.platform,
-                        status: 'Draft',
-                        thumbnail: mediaUrl
-                    } as CalendarEvent);
-                } catch (calendarError) {
-                    console.error('Failed to create calendar event:', calendarError);
-                    // Don't fail the whole operation if calendar event creation fails
-                }
+                    // Create calendar event so it appears on the calendar as Scheduled
+                    try {
+                        await addCalendarEvent({
+                            id: `strategy-${postId}`,
+                            title: updatedDay.topic,
+                            date: scheduledDate.toISOString(),
+                            type: 'Post',
+                            platform: updatedDay.platform,
+                            status: 'Scheduled',
+                            thumbnail: mediaUrl
+                        } as CalendarEvent);
+                    } catch (calendarError) {
+                        console.error('Failed to create calendar event:', calendarError);
+                        // Don't fail the whole operation if calendar event creation fails
+                    }
 
-                // Update roadmap item status to scheduled and link post
-                const updatedPlanWithSchedule = {
-                    ...updatedPlan,
-                    weeks: updatedPlan.weeks.map((week, wIdx) => {
-                        if (wIdx !== weekIndex) return week;
-                        return {
-                            ...week,
-                            content: week.content.map((d, dIdx) => {
-                                if (dIdx !== dayIndex) return d;
-                                return {
-                                    ...d,
-                                    status: 'scheduled' as const,
-                                    linkedPostId: postId
-                                };
-                            })
+                    // Update roadmap item status to scheduled and link post
+                    const updatedPlanWithSchedule = {
+                        ...updatedPlan,
+                        weeks: updatedPlan.weeks.map((week, wIdx) => {
+                            if (wIdx !== weekIndex) return week;
+                            return {
+                                ...week,
+                                content: week.content.map((d, dIdx) => {
+                                    if (dIdx !== dayIndex) return d;
+                                    return {
+                                        ...d,
+                                        status: 'scheduled' as const,
+                                        linkedPostId: postId
+                                    };
+                                })
+                            };
+                        })
+                    };
+
+                    setPlan(updatedPlanWithSchedule);
+
+                    // Update selectedStrategy
+                    if (selectedStrategy) {
+                        const updatedStrategy = {
+                            ...selectedStrategy,
+                            plan: updatedPlanWithSchedule,
+                            linkedPostIds: [...(selectedStrategy.linkedPostIds || []), postId]
                         };
-                    })
-                };
+                        setSelectedStrategy(updatedStrategy);
 
-                setPlan(updatedPlanWithSchedule);
-
-                // Update selectedStrategy
-                if (selectedStrategy) {
-                    const updatedStrategy = {
-                        ...selectedStrategy,
-                        plan: updatedPlanWithSchedule,
-                        linkedPostIds: [...(selectedStrategy.linkedPostIds || []), postId]
-                    };
-                    setSelectedStrategy(updatedStrategy);
-
-                    // Save to Firestore
-                    await setDoc(doc(db, 'users', user.id, 'strategies', selectedStrategy.id), updatedStrategy);
-                }
-            } else {
-                setPlan(updatedPlan);
-                
-                // Update selectedStrategy without scheduling
-                if (selectedStrategy) {
-                    const updatedStrategy = {
-                        ...selectedStrategy,
-                        plan: updatedPlan
-                    };
-                    setSelectedStrategy(updatedStrategy);
-
-                    // Save to Firestore
-                    if (user) {
+                        // Save to Firestore
                         await setDoc(doc(db, 'users', user.id, 'strategies', selectedStrategy.id), updatedStrategy);
                     }
                 }
             }
 
-            showToast('Media uploaded and post scheduled!', 'success');
+            showToast('Media uploaded and attached to your roadmap day.', 'success');
         } catch (error) {
             console.error('Failed to upload media:', error);
             showToast('Failed to upload media. Please try again.', 'error');
         } finally {
             setUploadingMedia(null);
+        }
+    };
+
+    // Attach an existing media library item to a specific roadmap day
+    const handleSelectFromMediaLibrary = async (weekIndex: number, dayIndex: number, item: MediaLibraryItem) => {
+        if (!plan) return;
+
+        try {
+            const mediaType: 'image' | 'video' =
+                item.type === 'video' || item.mimeType?.startsWith('video')
+                    ? 'video'
+                    : 'image';
+
+            const updatedPlan: StrategyPlan = {
+                ...plan,
+                weeks: plan.weeks.map((week, wIdx) => {
+                    if (wIdx !== weekIndex) return week;
+                    return {
+                        ...week,
+                        content: week.content.map((day, dIdx) => {
+                            if (dIdx !== dayIndex) return day;
+                            return {
+                                ...day,
+                                mediaUrl: item.url,
+                                mediaType,
+                                // Keep existing caption if present; otherwise leave topic/caption as-is
+                                caption: day.caption || day.topic,
+                                status: 'ready' as const,
+                            };
+                        }),
+                    };
+                }),
+            };
+
+            setPlan(updatedPlan);
+
+            // Persist into the selected strategy document if it exists
+            if (selectedStrategy && user) {
+                const updatedStrategy = {
+                    ...selectedStrategy,
+                    plan: updatedPlan,
+                };
+                setSelectedStrategy(updatedStrategy);
+                try {
+                    await setDoc(doc(db, 'users', user.id, 'strategies', selectedStrategy.id), updatedStrategy);
+                } catch (err) {
+                    console.error('Failed to save updated strategy after selecting media from library:', err);
+                }
+            }
+
+            setShowMediaLibrary(null);
+            showToast('Media attached from your library.', 'success');
+        } catch (error) {
+            console.error('Failed to attach media from library:', error);
+            showToast('Failed to attach media from your library. Please try again.', 'error');
         }
     };
 
@@ -633,6 +657,29 @@ export const Strategy: React.FC = () => {
                     <p className="mt-2 text-gray-500 dark:text-gray-400">Stop guessing. Let AI build a data-driven roadmap for your growth.</p>
                 </div>
                 <div className="flex gap-2">
+                    {false && plan && (
+                        <button
+                            onClick={() => {
+                                // Legacy: Store strategy plan for Autopilot to use (disabled in offline AI Studio mode)
+                                if (plan && selectedStrategy) {
+                                    localStorage.setItem('pendingStrategyForAutopilot', JSON.stringify({
+                                        strategyId: selectedStrategy.id,
+                                        strategyName: selectedStrategy.name,
+                                        goal: selectedStrategy.goal || plan.goal,
+                                        niche: selectedStrategy.niche || niche,
+                                        audience: selectedStrategy.audience || audience,
+                                        plan: plan
+                                    }));
+                                    showToast('Strategy saved! Navigate to Autopilot to use it.', 'success');
+                                    setActivePage('autopilot');
+                                }
+                            }}
+                            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"
+                        >
+                            <RocketIcon className="w-4 h-4" />
+                            Use in Autopilot
+                        </button>
+                    )}
                     <button
                         onClick={() => setShowHistory(!showHistory)}
                         className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
@@ -865,7 +912,7 @@ export const Strategy: React.FC = () => {
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                         <div className="flex items-center gap-2 mb-4">
                             <SparklesIcon className="w-5 h-5 text-primary-600 dark:text-primary-400" />
-                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Data Roadmap & Success Metrics</h3>
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Content Roadmap & Success Checkpoints</h3>
                         </div>
                         
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -994,13 +1041,13 @@ export const Strategy: React.FC = () => {
 
                         {/* Key Metrics to Track */}
                         <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-                            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Key Metrics to Track</h4>
+                            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Key Things to Review Each Week</h4>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 {[
-                                    { label: 'Impressions', icon: '👁️' },
-                                    { label: 'Engagement', icon: '💬' },
-                                    { label: 'Click-Through', icon: '🔗' },
-                                    { label: 'Conversions', icon: '💰' }
+                                    { label: 'Posts Created', icon: '📝' },
+                                    { label: 'Planned Posts', icon: '📅' },
+                                    { label: 'Pillars Covered', icon: '📚' },
+                                    { label: 'Ideas Used', icon: '💡' }
                                 ].map((metric, idx) => (
                                     <div key={idx} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-center">
                                         <div className="text-2xl mb-1">{metric.icon}</div>
@@ -1009,7 +1056,7 @@ export const Strategy: React.FC = () => {
                                 ))}
                             </div>
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-4">
-                                💡 Monitor these metrics weekly in Analytics to track your roadmap progress
+                                💡 Use this as a simple checklist when you review your calendar and content library each week.
                             </p>
                         </div>
 
@@ -1157,9 +1204,6 @@ export const Strategy: React.FC = () => {
                                     <div key={dayIndex} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
                                         <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                                             <div className="flex items-center gap-3 min-w-[120px]">
-                                                <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-500 dark:text-gray-300">
-                                                    {platformIcons[day.platform]}
-                                                </div>
                                                 <div>
                                                     <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Day {day.dayOffset + 1}</p>
                                                     <p className="text-xs font-medium text-primary-600 dark:text-primary-400">{day.format}</p>

@@ -13,7 +13,8 @@ export default async function handler(
 ): Promise<void> {
   // Allow GET for cron jobs, POST for manual triggers
   if (req.method !== "GET" && req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    res.status(405).json({ error: "Method not allowed" });
+    return;
   }
 
   try {
@@ -51,10 +52,11 @@ export default async function handler(
     });
   } catch (error: any) {
     console.error("Auto-post error:", error);
-    return res.status(500).json({
+    res.status(500).json({
       error: "Failed to process scheduled posts",
       message: error?.message || String(error)
     });
+    return;
   }
 }
 

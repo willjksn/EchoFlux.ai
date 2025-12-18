@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getAdminDb } from "./_firebaseAdmin";
+// Important: use .js extension so Vercel ESM resolver finds the compiled file
+import { getAdminDb } from "./_firebaseAdmin.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") {
@@ -13,8 +14,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const db = getAdminDb();
-    const cleanUsername = username.replace("@", "").toLowerCase().trim();
+    // Initialize Firebase Admin with error handling
+    let db;
+    try {
+      db = getAdminDb();
+      if (!db) {
+        throw new Error('Failed to initialize Firebase Admin database');
+      }
+    } catch (dbError: any) {
+      console.error('Error initializing Firebase Admin:', dbError);
+      return res.status(500).json({ 
+        error: "Database initialization failed",
+        details: process.env.NODE_ENV === 'development' ? dbError?.message : undefined
+      });
+    }
+    
+    // Decode URL encoding and normalize username
+    let decodedUsername = username;
+    try {
+      decodedUsername = decodeURIComponent(username);
+    } catch (e) {
+      // If decode fails, use original
+      console.warn('Failed to decode username, using as-is:', username);
+    }
+    const cleanUsername = decodedUsername.replace("@", "").toLowerCase().trim();
+    
+    console.log('Looking for bio page with username:', cleanUsername);
     
     // Helper function to normalize bioPage data
     const normalizeBioPage = (bioPage: any) => {
@@ -80,8 +105,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .get();
 
       if (querySnapshot.empty) {
+        console.log('No bio page found for username:', cleanUsername);
         return res.status(404).json({ error: "Bio page not found" });
       }
+      
+      console.log('Found bio page for username:', cleanUsername);
 
       userDoc = querySnapshot.docs[0];
     } catch (queryError: any) {
@@ -130,12 +158,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.error("Error fetching bio page:", error);
     console.error("Error details:", {
       message: error?.message,
+      name: error?.name,
       code: error?.code,
-      stack: error?.stack,
+      stack: error?.stack?.split('\n').slice(0, 10),
     });
+    
+    // Check if response has already been sent
+    if (res.headersSent) {
+      console.error('Response already sent, cannot send error response');
+      return;
+    }
+    
     return res.status(500).json({ 
       error: "Failed to fetch bio page",
-      details: process.env.NODE_ENV === 'development' ? error?.message : undefined
+      details: process.env.NODE_ENV === 'development' ? {
+        message: error?.message,
+        name: error?.name,
+        code: error?.code,
+      } : undefined
     });
   }
 }

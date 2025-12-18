@@ -26,6 +26,7 @@ import {
   CheckCircleIcon,
   CalendarIcon,
   DownloadIcon,
+  RefreshIcon,
 } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 import { CustomVoice, Platform, VideoScene, CalendarEvent } from '../types';
@@ -53,21 +54,86 @@ const SpeechRecognition =
   (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 const isSpeechRecognitionSupported = !!SpeechRecognition;
 
+// Compress and resize image to reduce payload size (prevents 413 errors)
+// For video generation, we use aggressive compression (smaller size, lower quality)
+const compressImage = (
+  file: File,
+  maxWidth: number = 640,
+  maxHeight: number = 640,
+  quality: number = 0.7,
+  maxBase64Size: number = 1000000 // ~0.75 MB binary
+): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        // Calculate new dimensions while maintaining aspect ratio
+        let width = img.width;
+        let height = img.height;
+        
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width = width * ratio;
+          height = height * ratio;
+        }
+        
+        // Create canvas and resize
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        
+        if (!ctx) {
+          reject(new Error('Failed to get canvas context'));
+          return;
+        }
+        
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Try different quality levels until we get under the size limit
+        const tryCompress = (q: number): void => {
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', q);
+          const base64Data = compressedDataUrl.split(',')[1];
+          
+          // Check if base64 size is acceptable (base64 is ~33% larger than binary)
+          if (base64Data.length <= maxBase64Size || q <= 0.4) {
+            resolve(compressedDataUrl);
+          } else {
+            // Reduce quality and try again
+            tryCompress(Math.max(0.4, q - 0.1));
+          }
+        };
+        
+        tryCompress(quality);
+      };
+      img.onerror = reject;
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = error => reject(error);
+  });
+};
+
 const fileToBase64 = (
   file: File
 ): Promise<{ data: string; mimeType: string; dataUrl: string }> => {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => {
-      const result = reader.result as string;
-      resolve({
-        data: result.split(',')[1],
-        mimeType: file.type,
-        dataUrl: result,
-      });
-    };
-    reader.onerror = (error) => reject(error);
+    // Always compress images for video generation to prevent 413 errors
+    compressImage(file, 640, 640, 0.7, 1000000)
+      .then((compressedDataUrl) => {
+        const data = compressedDataUrl.split(',')[1];
+        if (data.length > 1000000) {
+          reject(new Error('Compressed image still too large (>1MB). Please upload a smaller image.'));
+          return;
+        }
+        resolve({
+          data,
+          mimeType: 'image/jpeg', // Compressed images are JPEG
+          dataUrl: compressedDataUrl,
+        });
+      })
+      .catch(reject);
   });
 };
 
@@ -150,6 +216,7 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
 
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isScheduling, setIsScheduling] = useState(false);
+  const [allowExplicit, setAllowExplicit] = useState(false);
   const [scheduleDate, setScheduleDate] = useState('');
 
   // Director Mode
@@ -227,8 +294,16 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
   ) => {
     const file = event.target.files?.[0];
     if (file) {
-      const { data, mimeType, dataUrl } = await fileToBase64(file);
-      setUploadedImage({ data, mimeType, previewUrl: dataUrl });
+      try {
+        const { data, mimeType, dataUrl } = await fileToBase64(file);
+        if (data.length > 1000000) {
+          showToast('Image too large even after compression. Please upload a smaller image or crop it.', 'error');
+          return;
+        }
+        setUploadedImage({ data, mimeType, previewUrl: dataUrl });
+      } catch (err: any) {
+        showToast(err?.message || 'Failed to load image. Please try a smaller file.', 'error');
+      }
     }
   };
 
@@ -285,7 +360,7 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
     ));
 
     try {
-      const result = await generateVideo(scene.prompt, undefined, aspectRatio);
+      const result = await generateVideo(scene.prompt, undefined, aspectRatio, allowExplicit);
       
       if (result.operationId) {
         // Poll for this specific scene
@@ -342,6 +417,10 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
       showToast('Please enter a video prompt', 'error');
       return;
     }
+    if (uploadedImage && uploadedImage.data.length > 1000000) {
+      showToast('Image is too large even after compression. Please upload a smaller image (under ~1MB after compression).', 'error');
+      return;
+    }
 
     setIsLoading(true);
     setGeneratedVideoUrl(null);
@@ -352,7 +431,8 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
       const result = await generateVideo(
         prompt,
         uploadedImage || undefined,
-        aspectRatio
+        aspectRatio,
+        allowExplicit
       );
 
       if (result.operationId) {
@@ -666,9 +746,20 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
         // Simple Mode
         <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Video Prompt
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Video Prompt
+              </label>
+              <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={allowExplicit}
+                  onChange={(e) => setAllowExplicit(e.target.checked)}
+                  className="w-4 h-4 text-primary-600 rounded border-gray-300"
+                />
+                <span>Allow explicit content</span>
+              </label>
+            </div>
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}

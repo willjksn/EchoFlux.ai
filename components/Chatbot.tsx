@@ -6,7 +6,7 @@ import { askChatbot } from '../src/services/geminiService'
 export const Chatbot: React.FC = () => {
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState<ChatMessage[]>([
-        { role: 'bot', content: "Hi there! I'm the EngageSuite.ai assistant. How can I help you today?" }
+        { role: 'bot', content: "Hi there! I'm the EchoFlux.ai assistant. How can I help you today?" }
     ]);
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -57,7 +57,7 @@ export const Chatbot: React.FC = () => {
             <div className={`fixed bottom-24 right-6 z-50 w-[calc(100%-3rem)] max-w-sm h-[60vh] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col transition-all duration-300 ease-in-out ${isOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'}`}>
                 {/* Header */}
                 <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">EngageSuite.ai Assistant</h3>
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">EchoFlux.ai Assistant</h3>
                     <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
                         <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>

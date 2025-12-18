@@ -6,11 +6,16 @@ export function getAdminApp(): admin.app.App {
   if (app) return app;
 
   // Fix for ESM: check existing apps
-  const existingApps = admin.apps?.length ? admin.apps : [];
+  try {
+    const existingApps = admin.apps && admin.apps.length > 0 ? admin.apps : [];
 
-  if (existingApps.length > 0) {
-    app = existingApps[0];
-    return app;
+    if (existingApps.length > 0) {
+      app = existingApps[0] as admin.app.App;
+      if (app) return app;
+    }
+  } catch (e) {
+    console.warn('Error checking existing apps:', e);
+    // Continue to initialize new app
   }
 
   // Load base64 key
@@ -36,11 +41,28 @@ export function getAdminApp(): admin.app.App {
   }
 
   // Initialize Admin SDK
-  app = admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
-
-  return app;
+  try {
+    app = admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+    
+    if (!app) {
+      throw new Error("Failed to initialize Firebase Admin app");
+    }
+    
+    return app;
+  } catch (initError: any) {
+    console.error("Firebase Admin initialization error:", initError);
+    // If app already exists error, try to get it
+    if (initError?.code === 'app/duplicate-app' || initError?.message?.includes('already exists')) {
+      const existingApps = admin.apps;
+      if (existingApps && existingApps.length > 0) {
+        app = existingApps[0] as admin.app.App;
+        return app;
+      }
+    }
+    throw initError;
+  }
 }
 
 export async function verifyIdToken(authHeader?: string) {
@@ -55,7 +77,20 @@ export async function verifyIdToken(authHeader?: string) {
 }
 
 export function getAdminDb() {
-  return getAdminApp().firestore();
+  try {
+    const adminApp = getAdminApp();
+    if (!adminApp) {
+      throw new Error("Firebase Admin app is not initialized");
+    }
+    const db = adminApp.firestore();
+    if (!db) {
+      throw new Error("Failed to get Firestore instance");
+    }
+    return db;
+  } catch (error: any) {
+    console.error("Error getting admin database:", error);
+    throw error;
+  }
 }
 
 // Lazy export for backward compatibility - use getAdminDb() instead
@@ -70,4 +105,4 @@ export const adminDb = {
   FieldValue: admin.firestore.FieldValue,
   Timestamp: admin.firestore.Timestamp,
   GeoPoint: admin.firestore.GeoPoint,
-} as admin.firestore.Firestore;
+} as unknown;
