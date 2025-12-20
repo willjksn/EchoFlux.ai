@@ -231,6 +231,23 @@ const CaptionGenerator: React.FC = () => {
     description: string;
   } | null>(null);
 
+  // Load history on mount and when history is updated
+  useEffect(() => {
+    if (user?.id) {
+      loadHistory();
+    }
+    
+    // Listen for history reload events from MediaBox
+    const handleHistoryReload = () => {
+      loadHistory();
+    };
+    window.addEventListener('composeHistoryReload', handleHistoryReload);
+    
+    return () => {
+      window.removeEventListener('composeHistoryReload', handleHistoryReload);
+    };
+  }, [user?.id]);
+
   // Plan + role logic
   const isAgency = user?.plan === 'Agency' || user?.plan === 'Elite';
   const isBusiness = user?.userType === 'Business';
@@ -3362,18 +3379,24 @@ const CaptionGenerator: React.FC = () => {
       </div>
 
       {/* Predict & Repurpose History */}
-      {(predictHistory.length > 0 || repurposeHistory.length > 0) && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Predictions & Repurposes</h3>
-            <button
-              onClick={() => setShowHistory(!showHistory)}
-              className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-            >
-              {showHistory ? 'Hide' : 'Show'} History
-            </button>
-          </div>
-          {showHistory && (
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Predictions & Repurposes</h3>
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+          >
+            {showHistory ? 'Hide' : 'Show'} History
+          </button>
+        </div>
+        {showHistory && (
+          <>
+            {(predictHistory.length === 0 && repurposeHistory.length === 0) ? (
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                <p className="text-sm">No predictions or repurposes yet.</p>
+                <p className="text-xs mt-1">Use the Predict or Repurpose buttons on your posts to see history here.</p>
+              </div>
+            ) : (
             <div className="space-y-3 max-h-64 overflow-y-auto">
               {/* Predict History */}
               {predictHistory.map((item) => {
@@ -3455,9 +3478,10 @@ const CaptionGenerator: React.FC = () => {
                 );
               })}
             </div>
-          )}
-        </div>
-      )}
+            )}
+          </>
+        )}
+      </div>
 
       {/* Tone & Goal Controls - Only show for Caption plan */}
       {user?.plan === 'Caption' && (
