@@ -51,8 +51,8 @@ import { lazy, Suspense } from 'react';
 
 // Lazy load heavy components for code splitting
 const Strategy = lazy(() => import('./components/Strategy').then(module => ({ default: module.Strategy })));
-const OnlyFansStudio = lazy(() => import('./components/OnlyFansStudio'));
-const Autopilot = lazy(() => import('./components/Autopilot'));
+const OnlyFansStudio = lazy(() => import('./components/OnlyFansStudio').then(module => ({ default: module.OnlyFansStudio })));
+const Autopilot = lazy(() => import('./components/Autopilot').then(module => ({ default: module.default || module.Autopilot })));
 
 const pageTitles: Record<Page, string> = {
     dashboard: 'Dashboard',
@@ -84,7 +84,7 @@ const pageTitles: Record<Page, string> = {
 };
 
 const MainContent: React.FC = () => {
-    // Hooks must be called unconditionally - ErrorBoundary will catch any errors
+    // Hooks must be called unconditionally; rely on ErrorBoundary to catch render errors
     const context = useAppContext();
     const user = context?.user;
     const activePage = context?.activePage || 'dashboard';
@@ -129,11 +129,9 @@ const MainContent: React.FC = () => {
                 </Suspense>
             );
             case 'onlyfansStudio': return (
-                <ErrorBoundary>
-                    <Suspense fallback={<div className="p-6 text-center text-gray-500 dark:text-gray-400">Loading OnlyFans Studio...</div>}>
-                        <OnlyFansStudio />
-                    </Suspense>
-                </ErrorBoundary>
+                <Suspense fallback={<div className="p-6 text-center text-gray-500 dark:text-gray-400">Loading OnlyFans Studio...</div>}>
+                    <OnlyFansStudio />
+                </Suspense>
             );
             default: return <Dashboard />;
         }
@@ -418,9 +416,7 @@ const AppContent: React.FC = () => {
             <div className="flex-1 flex flex-col overflow-hidden relative">
                 <Header pageTitle={pageTitle} />
                 <main className="flex-1 overflow-x-hidden overflow-y-auto p-6 custom-scrollbar dark:custom-scrollbar">
-                    <ErrorBoundary>
-                        <MainContent />
-                    </ErrorBoundary>
+                    <MainContent />
                 </main>
                 {isCRMOpen && <CRMSidebar />}
             </div>
