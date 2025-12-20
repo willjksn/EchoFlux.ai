@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from './AppContext';
-import { SparklesIcon, RefreshIcon, DownloadIcon, CheckIcon, UploadIcon, ImageIcon, VideoIcon, XMarkIcon, CopyIcon } from './icons/UIIcons';
+import { SparklesIcon, RefreshIcon, DownloadIcon, UploadIcon, XMarkIcon, CopyIcon } from './icons/UIIcons';
 import { auth, storage, db } from '../firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
@@ -8,37 +8,14 @@ import { collection, addDoc, Timestamp } from 'firebase/firestore';
 type ContentType = 'captions' | 'mediaCaptions' | 'postIdeas' | 'shootConcepts' | 'weeklyPlan';
 
 export const OnlyFansContentBrain: React.FC = () => {
+    // All hooks must be called unconditionally at the top
+    const context = useAppContext();
+    const user = context?.user;
+    const showToast = context?.showToast;
+    
+    // State management
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    
-    let user, showToast;
-    try {
-        const context = useAppContext();
-        user = context?.user;
-        showToast = context?.showToast;
-    } catch (err: any) {
-        console.error('Error accessing AppContext in OnlyFansContentBrain:', err);
-        return (
-            <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full flex items-center justify-center">
-                <div className="text-center">
-                    <p className="text-red-600 dark:text-red-400 mb-2">Failed to load Content Brain</p>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-2">{err?.message || 'Context error'}</p>
-                    <button 
-                        onClick={() => window.location.reload()} 
-                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
-                    >
-                        Reload Page
-                    </button>
-                </div>
-            </div>
-        );
-    }
-
-    useEffect(() => {
-        // Component mounted successfully
-        setIsLoading(false);
-        console.log('OnlyFansContentBrain component loaded successfully');
-    }, []);
     const [activeTab, setActiveTab] = useState<ContentType>('captions');
     const [isGenerating, setIsGenerating] = useState(false);
     
@@ -75,7 +52,37 @@ export const OnlyFansContentBrain: React.FC = () => {
     const [showOptimizeModal, setShowOptimizeModal] = useState(false);
     const [showPredictModal, setShowPredictModal] = useState(false);
     const [showRepurposeModal, setShowRepurposeModal] = useState(false);
-    const [currentCaptionForAI, setCurrentCaptionForAI] = useState<{caption: string; index: number; type: 'plain' | 'media'}> | null>(null);
+    const [currentCaptionForAI, setCurrentCaptionForAI] = useState<{caption: string; index: number; type: 'plain' | 'media'} | null>(null);
+
+    // Initialize component
+    useEffect(() => {
+        try {
+            setIsLoading(false);
+            console.log('OnlyFansContentBrain component loaded successfully');
+        } catch (err: any) {
+            console.error('Error initializing OnlyFansContentBrain:', err);
+            setError(err?.message || 'Failed to initialize component');
+            setIsLoading(false);
+        }
+    }, []);
+
+    // Show error state if context is not available
+    if (!context || !user) {
+        return (
+            <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full flex items-center justify-center">
+                <div className="text-center">
+                    <p className="text-red-600 dark:text-red-400 mb-2">Failed to load Content Brain</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-2">Please ensure you are logged in</p>
+                    <button 
+                        onClick={() => window.location.reload()} 
+                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+                    >
+                        Reload Page
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     const handleGenerateCaptions = async () => {
         if (!captionPrompt.trim()) {
@@ -84,6 +91,7 @@ export const OnlyFansContentBrain: React.FC = () => {
         }
 
         setIsGenerating(true);
+        setError(null);
         try {
             console.log('Generating captions...');
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
@@ -145,6 +153,7 @@ export const OnlyFansContentBrain: React.FC = () => {
         }
 
         setIsGenerating(true);
+        setError(null);
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             
@@ -190,11 +199,12 @@ export const OnlyFansContentBrain: React.FC = () => {
 
     const handleGenerateShootConcepts = async () => {
         if (!shootConceptPrompt.trim()) {
-            showToast('Please describe the type of shoot concept you\'re looking for', 'error');
+            showToast?.('Please describe the type of shoot concept you\'re looking for', 'error');
             return;
         }
 
         setIsGenerating(true);
+        setError(null);
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             
@@ -251,6 +261,7 @@ export const OnlyFansContentBrain: React.FC = () => {
         }
 
         setIsGenerating(true);
+        setError(null);
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             
@@ -289,7 +300,7 @@ export const OnlyFansContentBrain: React.FC = () => {
 
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text);
-        showToast('Copied to clipboard!', 'success');
+        showToast?.('Copied to clipboard!', 'success');
     };
 
     const saveToHistory = async (type: 'optimize' | 'predict' | 'repurpose', title: string, data: any) => {
@@ -326,6 +337,7 @@ export const OnlyFansContentBrain: React.FC = () => {
         }
 
         setIsGenerating(true);
+        setError(null);
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             
@@ -403,124 +415,10 @@ export const OnlyFansContentBrain: React.FC = () => {
         }
     };
 
-    // Compress image to reduce file size (aggressive compression to account for base64 overhead)
-    // Base64 encoding adds ~33% overhead, so we target ~2.5MB to stay under 4MB after encoding
-    const compressImage = (file: File, maxWidth = 1400, maxHeight = 1400, targetSizeMB = 2.5): Promise<File> => {
-        return new Promise((resolve, reject) => {
-            // Only compress images, not videos
-            if (!file.type.startsWith('image/')) {
-                resolve(file);
-                return;
-            }
-
-            // Check initial file size - if already small enough (accounting for base64 overhead), skip compression
-            const fileSizeMB = file.size / 1024 / 1024;
-            // Account for base64 overhead (33% increase)
-            const estimatedEncodedSizeMB = fileSizeMB * 1.33;
-            if (estimatedEncodedSizeMB <= 3.8) {
-                resolve(file);
-                return;
-            }
-
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    let width = img.width;
-                    let height = img.height;
-
-                    // Calculate new dimensions
-                    if (width > height) {
-                        if (width > maxWidth) {
-                            height = Math.round((height * maxWidth) / width);
-                            width = maxWidth;
-                        }
-                    } else {
-                        if (height > maxHeight) {
-                            width = Math.round((width * maxHeight) / height);
-                            height = maxHeight;
-                        }
-                    }
-
-                    canvas.width = width;
-                    canvas.height = height;
-
-                    const ctx = canvas.getContext('2d');
-                    if (!ctx) {
-                        reject(new Error('Failed to get canvas context'));
-                        return;
-                    }
-
-                    ctx.drawImage(img, 0, 0, width, height);
-
-                    // Progressive compression - aggressively reduce quality until target size is reached
-                    const tryCompress = (q: number, attempt: number = 0): void => {
-                        if (attempt > 10) {
-                            // Prevent infinite loops - if we've tried 10 times, use the last result
-                            reject(new Error('Unable to compress image to target size. Please use a smaller image.'));
-                            return;
-                        }
-
-                        canvas.toBlob(
-                            (blob) => {
-                                if (!blob) {
-                                    reject(new Error('Failed to compress image'));
-                                    return;
-                                }
-                                
-                                const blobSizeMB = blob.size / 1024 / 1024;
-                                // Account for base64 overhead when checking size
-                                const estimatedEncodedSizeMB = blobSizeMB * 1.33;
-                                
-                                // If still too large and we can reduce quality further, try again
-                                if (estimatedEncodedSizeMB > 3.8 && q > 0.4) {
-                                    // Reduce quality more aggressively
-                                    const newQuality = Math.max(0.4, q - 0.15);
-                                    tryCompress(newQuality, attempt + 1);
-                                    return;
-                                }
-                                
-                                // If still too large even at minimum quality, reduce dimensions
-                                if (estimatedEncodedSizeMB > 3.8 && width > 800) {
-                                    const newWidth = Math.floor(width * 0.8);
-                                    const newHeight = Math.floor(height * 0.8);
-                                    canvas.width = newWidth;
-                                    canvas.height = newHeight;
-                                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                                    ctx.drawImage(img, 0, 0, newWidth, newHeight);
-                                    tryCompress(0.6, attempt + 1);
-                                    return;
-                                }
-                                
-                                const compressedFile = new File([blob], file.name, {
-                                    type: file.type,
-                                    lastModified: Date.now(),
-                                });
-                                resolve(compressedFile);
-                            },
-                            file.type,
-                            Math.max(0.4, q) // Ensure minimum quality of 0.4
-                        );
-                    };
-
-                    // Start with 0.65 quality (more aggressive)
-                    tryCompress(0.65);
-                };
-                img.onerror = () => reject(new Error('Failed to load image'));
-                img.src = e.target?.result as string;
-            };
-            reader.onerror = () => reject(new Error('Failed to read file'));
-            reader.readAsDataURL(file);
-        });
-    };
-
     const handleMediaFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        // Since we're using Firebase Storage, we can accept larger files
-        // No need for compression - Firebase Storage handles large files
         setMediaFile(file);
         const previewUrl = URL.createObjectURL(file);
         setMediaPreview(previewUrl);
@@ -549,7 +447,7 @@ export const OnlyFansContentBrain: React.FC = () => {
     }
 
     // Show error state
-    if (error) {
+    if (error && !isGenerating) {
         return (
             <div className="max-w-5xl mx-auto p-6">
                 <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 text-center">
@@ -584,6 +482,19 @@ export const OnlyFansContentBrain: React.FC = () => {
                     Generate AI-powered captions, ideas, shoot concepts, and content plans for OnlyFans.
                 </p>
             </div>
+
+            {/* Error banner (non-blocking) */}
+            {error && (
+                <div className="mb-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                    <p className="text-yellow-800 dark:text-yellow-200 text-sm">{error}</p>
+                    <button 
+                        onClick={() => setError(null)}
+                        className="mt-2 text-sm text-yellow-700 dark:text-yellow-300 hover:underline"
+                    >
+                        Dismiss
+                    </button>
+                </div>
+            )}
 
             {/* Tabs */}
             <div className="flex gap-2 mb-6 border-b border-gray-200 dark:border-gray-700">
@@ -701,124 +612,6 @@ export const OnlyFansContentBrain: React.FC = () => {
                                                 className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
                                             >
                                                 Copy
-                                            </button>
-                                            <button
-                                                onClick={async () => {
-                                                    setCurrentCaptionForAI({ caption, index, type: 'plain' });
-                                                    setIsGenerating(true);
-                                                    try {
-                                                        const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
-                                                        const response = await fetch('/api/optimizeCaption', {
-                                                            method: 'POST',
-                                                            headers: {
-                                                                'Content-Type': 'application/json',
-                                                                ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                                                            },
-                                                            body: JSON.stringify({
-                                                                originalCaption: caption,
-                                                                platform: 'OnlyFans',
-                                                                niche: 'Adult Content Creator (OnlyFans)',
-                                                                tone: captionTone,
-                                                                goal: captionGoal,
-                                                            }),
-                                                        });
-                                                        if (!response.ok) throw new Error('Failed to optimize');
-                                                        const data = await response.json();
-                                                        if (data.success) {
-                                                            setOptimizeResult(data);
-                                                            setShowOptimizeModal(true);
-                                                            await saveToHistory('optimize', `Caption Optimization - OnlyFans`, data);
-                                                            showToast('Caption optimized!', 'success');
-                                                        }
-                                                    } catch (error: any) {
-                                                        showToast(error.message || 'Failed to optimize', 'error');
-                                                    } finally {
-                                                        setIsGenerating(false);
-                                                    }
-                                                }}
-                                                disabled={isGenerating}
-                                                className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 disabled:opacity-50"
-                                            >
-                                                Optimize
-                                            </button>
-                                            <button
-                                                onClick={async () => {
-                                                    setCurrentCaptionForAI({ caption, index, type: 'plain' });
-                                                    setIsGenerating(true);
-                                                    try {
-                                                        const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
-                                                        const response = await fetch('/api/predictContentPerformance', {
-                                                            method: 'POST',
-                                                            headers: {
-                                                                'Content-Type': 'application/json',
-                                                                ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                                                            },
-                                                            body: JSON.stringify({
-                                                                caption: caption,
-                                                                platform: 'OnlyFans',
-                                                                niche: 'Adult Content Creator (OnlyFans)',
-                                                                tone: captionTone,
-                                                                goal: captionGoal,
-                                                            }),
-                                                        });
-                                                        if (!response.ok) throw new Error('Failed to predict');
-                                                        const data = await response.json();
-                                                        if (data.success) {
-                                                            setPredictResult(data);
-                                                            setShowPredictModal(true);
-                                                            await saveToHistory('predict', `Performance Prediction - OnlyFans`, data);
-                                                            showToast?.('Performance predicted!', 'success');
-                                                        }
-                                                    } catch (error: any) {
-                                                        showToast?.(error.message || 'Failed to predict', 'error');
-                                                    } finally {
-                                                        setIsGenerating(false);
-                                                    }
-                                                }}
-                                                disabled={isGenerating}
-                                                className="text-sm text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 disabled:opacity-50"
-                                            >
-                                                Predict
-                                            </button>
-                                            <button
-                                                onClick={async () => {
-                                                    setCurrentCaptionForAI({ caption, index, type: 'plain' });
-                                                    setIsGenerating(true);
-                                                    try {
-                                                        const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
-                                                        const response = await fetch('/api/repurposeContent', {
-                                                            method: 'POST',
-                                                            headers: {
-                                                                'Content-Type': 'application/json',
-                                                                ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                                                            },
-                                                            body: JSON.stringify({
-                                                                originalContent: caption,
-                                                                originalPlatform: 'OnlyFans',
-                                                                targetPlatforms: ['Instagram', 'TikTok', 'X', 'LinkedIn'],
-                                                                niche: 'Adult Content Creator (OnlyFans)',
-                                                                tone: captionTone,
-                                                                goal: captionGoal,
-                                                            }),
-                                                        });
-                                                        if (!response.ok) throw new Error('Failed to repurpose');
-                                                        const data = await response.json();
-                                                        if (data.success) {
-                                                            setRepurposeResult(data);
-                                                            setShowRepurposeModal(true);
-                                                            await saveToHistory('repurpose', `Content Repurposing - OnlyFans`, data);
-                                                            showToast?.('Content repurposed!', 'success');
-                                                        }
-                                                    } catch (error: any) {
-                                                        showToast?.(error.message || 'Failed to repurpose', 'error');
-                                                    } finally {
-                                                        setIsGenerating(false);
-                                                    }
-                                                }}
-                                                disabled={isGenerating}
-                                                className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 disabled:opacity-50"
-                                            >
-                                                Repurpose
                                             </button>
                                         </div>
                                     </div>
@@ -987,124 +780,6 @@ export const OnlyFansContentBrain: React.FC = () => {
                                                 className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
                                             >
                                                 Copy
-                                            </button>
-                                            <button
-                                                onClick={async () => {
-                                                    setCurrentCaptionForAI({ caption: result.caption, index, type: 'media' });
-                                                    setIsGenerating(true);
-                                                    try {
-                                                        const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
-                                                        const response = await fetch('/api/optimizeCaption', {
-                                                            method: 'POST',
-                                                            headers: {
-                                                                'Content-Type': 'application/json',
-                                                                ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                                                            },
-                                                            body: JSON.stringify({
-                                                                originalCaption: result.caption,
-                                                                platform: 'OnlyFans',
-                                                                niche: 'Adult Content Creator (OnlyFans)',
-                                                                tone: mediaCaptionTone,
-                                                                goal: mediaCaptionGoal,
-                                                            }),
-                                                        });
-                                                        if (!response.ok) throw new Error('Failed to optimize');
-                                                        const data = await response.json();
-                                                        if (data.success) {
-                                                            setOptimizeResult(data);
-                                                            setShowOptimizeModal(true);
-                                                            await saveToHistory('optimize', `Caption Optimization - OnlyFans`, data);
-                                                            showToast('Caption optimized!', 'success');
-                                                        }
-                                                    } catch (error: any) {
-                                                        showToast(error.message || 'Failed to optimize', 'error');
-                                                    } finally {
-                                                        setIsGenerating(false);
-                                                    }
-                                                }}
-                                                disabled={isGenerating}
-                                                className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 disabled:opacity-50"
-                                            >
-                                                Optimize
-                                            </button>
-                                            <button
-                                                onClick={async () => {
-                                                    setCurrentCaptionForAI({ caption: result.caption, index, type: 'media' });
-                                                    setIsGenerating(true);
-                                                    try {
-                                                        const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
-                                                        const response = await fetch('/api/predictContentPerformance', {
-                                                            method: 'POST',
-                                                            headers: {
-                                                                'Content-Type': 'application/json',
-                                                                ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                                                            },
-                                                            body: JSON.stringify({
-                                                                caption: result.caption,
-                                                                platform: 'OnlyFans',
-                                                                niche: 'Adult Content Creator (OnlyFans)',
-                                                                tone: mediaCaptionTone,
-                                                                goal: mediaCaptionGoal,
-                                                            }),
-                                                        });
-                                                        if (!response.ok) throw new Error('Failed to predict');
-                                                        const data = await response.json();
-                                                        if (data.success) {
-                                                            setPredictResult(data);
-                                                            setShowPredictModal(true);
-                                                            await saveToHistory('predict', `Performance Prediction - OnlyFans`, data);
-                                                            showToast?.('Performance predicted!', 'success');
-                                                        }
-                                                    } catch (error: any) {
-                                                        showToast?.(error.message || 'Failed to predict', 'error');
-                                                    } finally {
-                                                        setIsGenerating(false);
-                                                    }
-                                                }}
-                                                disabled={isGenerating}
-                                                className="text-sm text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 disabled:opacity-50"
-                                            >
-                                                Predict
-                                            </button>
-                                            <button
-                                                onClick={async () => {
-                                                    setCurrentCaptionForAI({ caption: result.caption, index, type: 'media' });
-                                                    setIsGenerating(true);
-                                                    try {
-                                                        const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
-                                                        const response = await fetch('/api/repurposeContent', {
-                                                            method: 'POST',
-                                                            headers: {
-                                                                'Content-Type': 'application/json',
-                                                                ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                                                            },
-                                                            body: JSON.stringify({
-                                                                originalContent: result.caption,
-                                                                originalPlatform: 'OnlyFans',
-                                                                targetPlatforms: ['Instagram', 'TikTok', 'X', 'LinkedIn'],
-                                                                niche: 'Adult Content Creator (OnlyFans)',
-                                                                tone: mediaCaptionTone,
-                                                                goal: mediaCaptionGoal,
-                                                            }),
-                                                        });
-                                                        if (!response.ok) throw new Error('Failed to repurpose');
-                                                        const data = await response.json();
-                                                        if (data.success) {
-                                                            setRepurposeResult(data);
-                                                            setShowRepurposeModal(true);
-                                                            await saveToHistory('repurpose', `Content Repurposing - OnlyFans`, data);
-                                                            showToast?.('Content repurposed!', 'success');
-                                                        }
-                                                    } catch (error: any) {
-                                                        showToast?.(error.message || 'Failed to repurpose', 'error');
-                                                    } finally {
-                                                        setIsGenerating(false);
-                                                    }
-                                                }}
-                                                disabled={isGenerating}
-                                                className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 disabled:opacity-50"
-                                            >
-                                                Repurpose
                                             </button>
                                         </div>
                                     </div>
@@ -1316,398 +991,6 @@ export const OnlyFansContentBrain: React.FC = () => {
                     )}
                 </div>
             )}
-
-            {/* Optimize Modal */}
-            {showOptimizeModal && optimizeResult && (
-                <OptimizeModal
-                    result={optimizeResult}
-                    onClose={() => setShowOptimizeModal(false)}
-                    onCopy={(text) => {
-                        navigator.clipboard.writeText(text);
-                        showToast?.('Copied to clipboard!', 'success');
-                    }}
-                />
-            )}
-
-            {/* Predict Modal */}
-            {showPredictModal && predictResult && (
-                <PredictModal
-                    result={predictResult}
-                    onClose={() => setShowPredictModal(false)}
-                    onCopy={(text) => {
-                        navigator.clipboard.writeText(text);
-                        showToast?.('Copied to clipboard!', 'success');
-                    }}
-                />
-            )}
-
-            {/* Repurpose Modal */}
-            {showRepurposeModal && repurposeResult && (
-                <RepurposeModal
-                    result={repurposeResult}
-                    onClose={() => setShowRepurposeModal(false)}
-                    onCopy={(text) => {
-                        navigator.clipboard.writeText(text);
-                        showToast?.('Copied to clipboard!', 'success');
-                    }}
-                />
-            )}
-        </div>
-    );
-};
-
-// Optimize Modal Component
-const OptimizeModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: string) => void }> = ({ result, onClose, onCopy }) => {
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-                <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Caption Optimization</h2>
-                    <button
-                        onClick={onClose}
-                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                    >
-                        <XMarkIcon className="w-6 h-6" />
-                    </button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                    {/* Original vs Optimized */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Original</h3>
-                            <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                                <p className="text-gray-900 dark:text-white whitespace-pre-wrap">{result.originalCaption}</p>
-                            </div>
-                        </div>
-                        <div>
-                            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Optimized</h3>
-                            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                                <p className="text-blue-900 dark:text-blue-200 whitespace-pre-wrap">{result.optimizedCaption}</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Scores */}
-                    {result.scores && (
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Quality Scores</h3>
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                {Object.entries(result.scores).map(([key, value]: [string, any]) => (
-                                    <div key={key} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</p>
-                                        <p className="text-2xl font-bold text-primary-600 dark:text-primary-400">{value}/10</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Improvements */}
-                    {result.improvements && result.improvements.length > 0 && (
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Improvements Made</h3>
-                            <div className="space-y-2">
-                                {result.improvements.map((imp: any, idx: number) => (
-                                    <div key={idx} className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                                        <p className="text-sm font-medium text-gray-900 dark:text-white mb-1 capitalize">{imp.area}</p>
-                                        <p className="text-xs text-gray-600 dark:text-gray-400">{imp.fix}</p>
-                                        <p className="text-xs text-gray-500 dark:text-gray-500 mt-1 italic">{imp.impact}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Hashtag Suggestions */}
-                    {result.hashtagSuggestions && result.hashtagSuggestions.length > 0 && (
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Hashtag Suggestions</h3>
-                            <div className="flex flex-wrap gap-2">
-                                {result.hashtagSuggestions.map((tag: any, idx: number) => (
-                                    <span
-                                        key={idx}
-                                        className="px-3 py-1 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-full text-sm"
-                                    >
-                                        #{tag.hashtag}
-                                    </span>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
-                    <button
-                        onClick={() => onCopy(result.optimizedCaption)}
-                        className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
-                    >
-                        <CopyIcon className="w-4 h-4" />
-                        Copy Optimized
-                    </button>
-                    <button
-                        onClick={onClose}
-                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
-                    >
-                        Close
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-// Predict Modal Component
-const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: string) => void }> = ({ result, onClose, onCopy }) => {
-    const prediction = result.prediction || {};
-    const level = prediction.level || 'Medium';
-    const score = prediction.score || 50;
-    const confidence = prediction.confidence || 50;
-
-    const getLevelColor = (level: string) => {
-        if (level === 'High') return 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800';
-        if (level === 'Medium') return 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800';
-        return 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800';
-    };
-
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-                <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Performance Prediction</h2>
-                    <button
-                        onClick={onClose}
-                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                    >
-                        <XMarkIcon className="w-6 h-6" />
-                    </button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                    {/* Prediction Summary */}
-                    <div className={`p-6 rounded-lg border-2 ${getLevelColor(level)}`}>
-                        <div className="text-center">
-                            <p className="text-sm font-medium mb-2">Predicted Performance</p>
-                            <p className="text-4xl font-bold mb-2">{level}</p>
-                            <div className="flex items-center justify-center gap-4 mt-4">
-                                <div>
-                                    <p className="text-xs opacity-75">Score</p>
-                                    <p className="text-2xl font-bold">{score}/100</p>
-                                </div>
-                                <div>
-                                    <p className="text-xs opacity-75">Confidence</p>
-                                    <p className="text-2xl font-bold">{confidence}%</p>
-                                </div>
-                            </div>
-                            {prediction.reasoning && (
-                                <p className="text-sm mt-4 opacity-90">{prediction.reasoning}</p>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Factor Breakdown */}
-                    {result.factors && (
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Factor Analysis</h3>
-                            <div className="space-y-3">
-                                {Object.entries(result.factors).map(([key, value]: [string, any]) => (
-                                    <div key={key} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <p className="text-sm font-medium text-gray-900 dark:text-white capitalize">
-                                                {key.replace(/([A-Z])/g, ' $1').trim()}
-                                            </p>
-                                            <p className="text-lg font-bold text-primary-600 dark:text-primary-400">
-                                                {value.score || 0}/100
-                                            </p>
-                                        </div>
-                                        {value.analysis && (
-                                            <p className="text-xs text-gray-600 dark:text-gray-400">{value.analysis}</p>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Improvements */}
-                    {result.improvements && result.improvements.length > 0 && (
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Improvement Suggestions</h3>
-                            <div className="space-y-2">
-                                {result.improvements.map((imp: any, idx: number) => (
-                                    <div key={idx} className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                                        <div className="flex items-start justify-between mb-1">
-                                            <p className="text-sm font-medium text-gray-900 dark:text-white capitalize">{imp.factor}</p>
-                                            <span className={`text-xs px-2 py-1 rounded ${
-                                                imp.priority === 'high' ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300' :
-                                                imp.priority === 'medium' ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300' :
-                                                'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                                            }`}>
-                                                {imp.priority}
-                                            </span>
-                                        </div>
-                                        <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">{imp.currentIssue}</p>
-                                        <p className="text-xs text-gray-700 dark:text-gray-300 font-medium">{imp.suggestion}</p>
-                                        <p className="text-xs text-primary-600 dark:text-primary-400 mt-1">{imp.expectedImpact}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Optimized Version */}
-                    {result.optimizedVersion && (
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Optimized Version</h3>
-                            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                                <p className="text-gray-900 dark:text-white whitespace-pre-wrap mb-2">{result.optimizedVersion.caption}</p>
-                                {result.optimizedVersion.expectedBoost && (
-                                    <p className="text-xs text-green-700 dark:text-green-300 font-medium">
-                                        Expected Boost: {result.optimizedVersion.expectedBoost}
-                                    </p>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Summary */}
-                    {result.summary && (
-                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                            <p className="text-blue-900 dark:text-blue-200 text-sm">{result.summary}</p>
-                        </div>
-                    )}
-                </div>
-
-                <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
-                    {result.optimizedVersion && (
-                        <button
-                            onClick={() => onCopy(result.optimizedVersion.caption)}
-                            className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
-                        >
-                            <CopyIcon className="w-4 h-4" />
-                            Copy Optimized
-                        </button>
-                    )}
-                    <button
-                        onClick={onClose}
-                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
-                    >
-                        Close
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-// Repurpose Modal Component
-const RepurposeModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: string) => void }> = ({ result, onClose, onCopy }) => {
-    const repurposedContent = result.repurposedContent || [];
-
-    const copyPlatformContent = (item: any) => {
-        const text = `${item.platform} (${item.format})\n\n${item.caption}\n\nHashtags: ${(item.hashtags || []).join(' ')}\n\nOptimizations:\n${(item.optimizations || []).map((opt: string) => `• ${opt}`).join('\n')}`;
-        onCopy(text);
-    };
-
-    const copyAllContent = () => {
-        const text = repurposedContent.map((item: any) => 
-            `--- ${item.platform} (${item.format}) ---\n${item.caption}\n\nHashtags: ${(item.hashtags || []).join(' ')}\n\nOptimizations:\n${(item.optimizations || []).map((opt: string) => `• ${opt}`).join('\n')}`
-        ).join('\n\n');
-        onCopy(text);
-    };
-
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-                <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Repurposed Content</h2>
-                    <button
-                        onClick={onClose}
-                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                    >
-                        <XMarkIcon className="w-6 h-6" />
-                    </button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                    {result.summary && (
-                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                            <p className="text-blue-900 dark:text-blue-200 text-sm">{result.summary}</p>
-                        </div>
-                    )}
-
-                    {Array.isArray(repurposedContent) && repurposedContent.map((item: any, idx: number) => (
-                        <div key={idx} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                            <div className="flex items-start justify-between mb-3">
-                                <div>
-                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{item.platform}</h3>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">{item.format}</p>
-                                </div>
-                                <button
-                                    onClick={() => copyPlatformContent(item)}
-                                    className="px-3 py-1 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm flex items-center gap-1"
-                                >
-                                    <CopyIcon className="w-4 h-4" />
-                                    Copy
-                                </button>
-                            </div>
-
-                            <div className="mb-3">
-                                <p className="text-gray-900 dark:text-white whitespace-pre-wrap">{item.caption}</p>
-                            </div>
-
-                            {Array.isArray(item.hashtags) && item.hashtags.length > 0 && (
-                                <div className="mb-3">
-                                    <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Hashtags:</p>
-                                    <div className="flex flex-wrap gap-2">
-                                        {item.hashtags.map((tag: string, tagIdx: number) => (
-                                            <span
-                                                key={tagIdx}
-                                                className="px-2 py-1 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded text-xs"
-                                            >
-                                                #{tag}
-                                            </span>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {Array.isArray(item.optimizations) && item.optimizations.length > 0 && (
-                                <div>
-                                    <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Optimizations:</p>
-                                    <ul className="list-disc list-inside space-y-1">
-                                        {item.optimizations.map((opt: string, optIdx: number) => (
-                                            <li key={optIdx} className="text-xs text-gray-600 dark:text-gray-400">{opt}</li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
-
-                            {item.suggestedPostingTime && (
-                                <p className="text-xs text-primary-600 dark:text-primary-400 mt-2">
-                                    💡 Best posting time: {item.suggestedPostingTime}
-                                </p>
-                            )}
-                        </div>
-                    ))}
-                </div>
-
-                <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
-                    <button
-                        onClick={copyAllContent}
-                        className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
-                    >
-                        <CopyIcon className="w-4 h-4" />
-                        Copy All
-                    </button>
-                    <button
-                        onClick={onClose}
-                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
-                    >
-                        Close
-                    </button>
-                </div>
-            </div>
         </div>
     );
 };
