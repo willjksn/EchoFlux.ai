@@ -131,6 +131,11 @@ export const OnlyFansMediaVault: React.FC = () => {
                 const items: OnlyFansMediaItem[] = [];
                 snapshot.forEach((docSnap) => {
                     const data = docSnap.data();
+                    // Skip corrupted documents that are not plain objects
+                    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+                        console.warn('Skipping non-object media doc', docSnap.id, data);
+                        return;
+                    }
                     // Ensure aiTags arrays are actually arrays (defensive check for corrupted data)
                     let aiTags = data.aiTags;
                     if (aiTags && typeof aiTags === 'object' && !Array.isArray(aiTags) && aiTags !== null) {
