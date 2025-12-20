@@ -5,7 +5,7 @@ import { auth, storage, db } from '../firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
 
-type ContentType = 'captions' | 'mediaCaptions' | 'postIdeas' | 'shootConcepts' | 'weeklyPlan';
+type ContentType = 'captions' | 'mediaCaptions' | 'postIdeas' | 'shootConcepts' | 'weeklyPlan' | 'monetizationPlanner';
 
 export const OnlyFansContentBrain: React.FC = () => {
     // All hooks must be called unconditionally at the top
@@ -44,6 +44,16 @@ export const OnlyFansContentBrain: React.FC = () => {
     // Weekly plan state
     const [weeklyPlanPrompt, setWeeklyPlanPrompt] = useState('');
     const [generatedWeeklyPlan, setGeneratedWeeklyPlan] = useState<string>('');
+    
+    // Monetization planner state
+    const [monetizationGoals, setMonetizationGoals] = useState<string[]>([]);
+    const [monetizationPreferences, setMonetizationPreferences] = useState('');
+    const [subscriberCount, setSubscriberCount] = useState<number | ''>('');
+    const [balanceEngagement, setBalanceEngagement] = useState(40);
+    const [balanceUpsell, setBalanceUpsell] = useState(30);
+    const [balanceRetention, setBalanceRetention] = useState(20);
+    const [balanceConversion, setBalanceConversion] = useState(10);
+    const [generatedMonetizationPlan, setGeneratedMonetizationPlan] = useState<any>(null);
 
     // Modal state for AI features
     const [optimizeResult, setOptimizeResult] = useState<any>(null);
@@ -189,7 +199,10 @@ export const OnlyFansContentBrain: React.FC = () => {
             const ideas = typeof text === 'string' 
                 ? text.split(/\d+\./).filter(item => item.trim()).map(item => item.trim())
                 : [];
-            setGeneratedPostIdeas(Array.isArray(ideas) && ideas.length > 0 ? ideas : (typeof text === 'string' ? [text] : []));
+            const finalIdeas = Array.isArray(ideas) && ideas.length > 0 ? ideas : (typeof text === 'string' ? [text] : []);
+            setGeneratedPostIdeas(finalIdeas);
+            // Save to history
+            await saveToHistory('post_ideas', `Post Ideas - ${new Date().toLocaleDateString()}`, { ideas: finalIdeas, prompt: postIdeaPrompt });
             showToast?.('Post ideas generated successfully!', 'success');
         } catch (error: any) {
             console.error('Error generating post ideas:', error);
@@ -246,7 +259,10 @@ export const OnlyFansContentBrain: React.FC = () => {
             const concepts = typeof text === 'string'
                 ? text.split(/\d+\./).filter(item => item.trim()).map(item => item.trim())
                 : [];
-            setGeneratedShootConcepts(Array.isArray(concepts) && concepts.length > 0 ? concepts : (typeof text === 'string' ? [text] : []));
+            const finalConcepts = Array.isArray(concepts) && concepts.length > 0 ? concepts : (typeof text === 'string' ? [text] : []);
+            setGeneratedShootConcepts(finalConcepts);
+            // Save to history
+            await saveToHistory('shoot_concepts', `Shoot Concepts - ${new Date().toLocaleDateString()}`, { concepts: finalConcepts, prompt: shootConceptPrompt });
             showToast?.('Shoot concepts generated successfully!', 'success');
         } catch (error: any) {
             console.error('Error generating shoot concepts:', error);
@@ -290,7 +306,10 @@ export const OnlyFansContentBrain: React.FC = () => {
             }
 
             const data = await response.json();
-            setGeneratedWeeklyPlan(data.plan || JSON.stringify(data, null, 2));
+            const plan = data.plan || JSON.stringify(data, null, 2);
+            setGeneratedWeeklyPlan(plan);
+            // Save to history
+            await saveToHistory('weekly_plan', `Weekly Plan - ${new Date().toLocaleDateString()}`, { plan, prompt: weeklyPlanPrompt });
             showToast?.('Weekly plan generated successfully!', 'success');
         } catch (error: any) {
             console.error('Error generating weekly plan:', error);
@@ -307,7 +326,68 @@ export const OnlyFansContentBrain: React.FC = () => {
         showToast?.('Copied to clipboard!', 'success');
     };
 
-    const saveToHistory = async (type: 'optimize' | 'predict' | 'repurpose', title: string, data: any) => {
+    const handleGenerateMonetizationPlan = async () => {
+        if (monetizationGoals.length === 0) {
+            showToast?.('Please add at least one goal', 'error');
+            return;
+        }
+
+        // Validate balance totals to 100
+        const totalBalance = balanceEngagement + balanceUpsell + balanceRetention + balanceConversion;
+        if (Math.abs(totalBalance - 100) > 1) {
+            showToast?.('Balance percentages must total 100%', 'error');
+            return;
+        }
+
+        setIsGenerating(true);
+        setError(null);
+        try {
+            const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+            
+            const response = await fetch('/api/generateMonetizationPlan', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({
+                    goals: monetizationGoals,
+                    contentPreferences: monetizationPreferences,
+                    subscriberCount: subscriberCount || undefined,
+                    balance: {
+                        engagement: balanceEngagement,
+                        upsell: balanceUpsell,
+                        retention: balanceRetention,
+                        conversion: balanceConversion,
+                    },
+                    niche: user?.niche || 'Adult Content Creator',
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to generate monetization plan');
+            }
+
+            const data = await response.json();
+            if (data.success && data.plan) {
+                setGeneratedMonetizationPlan(data.plan);
+                // Save to history
+                await saveToHistory('monetization_plan', `Monetization Plan - ${new Date().toLocaleDateString()}`, data.plan);
+                showToast?.('Monetization plan generated successfully!', 'success');
+            } else {
+                throw new Error(data.error || 'Failed to generate monetization plan');
+            }
+        } catch (error: any) {
+            console.error('Error generating monetization plan:', error);
+            const errorMsg = error.message || 'Failed to generate monetization plan. Please try again.';
+            showToast?.(errorMsg, 'error');
+            setError(errorMsg);
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    const saveToHistory = async (type: 'optimize' | 'predict' | 'repurpose' | 'monetization_plan' | 'post_ideas' | 'shoot_concepts' | 'weekly_plan', title: string, data: any) => {
         if (!user?.id) return;
         try {
             await addDoc(collection(db, 'users', user.id, 'content_intelligence_history'), {
@@ -434,6 +514,7 @@ export const OnlyFansContentBrain: React.FC = () => {
         { id: 'postIdeas', label: 'Post Ideas' },
         { id: 'shootConcepts', label: 'Shoot Concepts' },
         { id: 'weeklyPlan', label: 'Weekly Plan' },
+        { id: 'monetizationPlanner', label: 'Monetization Planner' },
     ];
     // Filter out mediaCaptions tab (hidden but code kept for stability)
     const tabs = allTabs.filter(tab => tab.id !== 'mediaCaptions') as { id: ContentType; label: string }[];
@@ -993,6 +1074,390 @@ export const OnlyFansContentBrain: React.FC = () => {
                                     {generatedWeeklyPlan}
                                 </pre>
                             </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Monetization Planner Tab */}
+            {activeTab === 'monetizationPlanner' && (
+                <div className="space-y-6">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                            AI Monetization Planner
+                        </h2>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                            Generate a balanced content strategy that labels each idea as Engagement, Upsell, Retention, or Conversion. 
+                            Automatically balances your content mix to prevent over-selling.
+                        </p>
+                        
+                        <div className="space-y-4">
+                            {/* Goals Input */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Your Monetization Goals (add multiple):
+                                </label>
+                                <div className="flex flex-wrap gap-2 mb-2">
+                                    {monetizationGoals.map((goal, index) => (
+                                        <span
+                                            key={index}
+                                            className="px-3 py-1 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-full text-sm flex items-center gap-2"
+                                        >
+                                            {goal}
+                                            <button
+                                                onClick={() => setMonetizationGoals(monetizationGoals.filter((_, i) => i !== index))}
+                                                className="text-primary-500 hover:text-primary-700 dark:hover:text-primary-200"
+                                            >
+                                                <XMarkIcon className="w-4 h-4" />
+                                            </button>
+                                        </span>
+                                    ))}
+                                </div>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        placeholder="e.g., Increase paid subscribers, Retain existing fans, Upsell premium content"
+                                        className="flex-1 p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                        onKeyPress={(e) => {
+                                            if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                                                setMonetizationGoals([...monetizationGoals, e.currentTarget.value.trim()]);
+                                                e.currentTarget.value = '';
+                                            }
+                                        }}
+                                    />
+                                    <button
+                                        onClick={(e) => {
+                                            const input = e.currentTarget.previousElementSibling as HTMLInputElement;
+                                            if (input.value.trim()) {
+                                                setMonetizationGoals([...monetizationGoals, input.value.trim()]);
+                                                input.value = '';
+                                            }
+                                        }}
+                                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+                                    >
+                                        Add
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Content Preferences */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Content Preferences (Optional):
+                                </label>
+                                <textarea
+                                    value={monetizationPreferences}
+                                    onChange={(e) => setMonetizationPreferences(e.target.value)}
+                                    placeholder="e.g., 'Intimate content', 'Behind-the-scenes', 'Interactive posts'"
+                                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[80px]"
+                                />
+                            </div>
+
+                            {/* Subscriber Count */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Current Subscriber Count (Optional):
+                                </label>
+                                <input
+                                    type="number"
+                                    value={subscriberCount}
+                                    onChange={(e) => setSubscriberCount(e.target.value ? parseInt(e.target.value) : '')}
+                                    placeholder="e.g., 500"
+                                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                />
+                            </div>
+
+                            {/* Balance Sliders */}
+                            <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                <div className="flex items-center justify-between mb-4">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Content Balance (%):
+                                    </label>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => {
+                                                setBalanceEngagement(40);
+                                                setBalanceUpsell(30);
+                                                setBalanceRetention(20);
+                                                setBalanceConversion(10);
+                                            }}
+                                            className="text-xs px-2 py-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                                        >
+                                            Reset to Default
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="mb-3 flex flex-wrap gap-2">
+                                    <button
+                                        onClick={() => {
+                                            setBalanceEngagement(50);
+                                            setBalanceUpsell(25);
+                                            setBalanceRetention(20);
+                                            setBalanceConversion(5);
+                                        }}
+                                        className="text-xs px-2 py-1 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded hover:bg-primary-200 dark:hover:bg-primary-900/50"
+                                    >
+                                        Engagement Focus (50/25/20/5)
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setBalanceEngagement(35);
+                                            setBalanceUpsell(35);
+                                            setBalanceRetention(20);
+                                            setBalanceConversion(10);
+                                        }}
+                                        className="text-xs px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 rounded hover:bg-orange-200 dark:hover:bg-orange-900/50"
+                                    >
+                                        Balanced (35/35/20/10)
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setBalanceEngagement(30);
+                                            setBalanceUpsell(30);
+                                            setBalanceRetention(30);
+                                            setBalanceConversion(10);
+                                        }}
+                                        className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50"
+                                    >
+                                        Retention Focus (30/30/30/10)
+                                    </button>
+                                </div>
+                                <div className="space-y-4">
+                                    {/* Engagement */}
+                                    <div>
+                                        <div className="flex justify-between mb-1">
+                                            <span className="text-sm text-gray-700 dark:text-gray-300">Engagement (Free Content)</span>
+                                            <span className="text-sm font-semibold text-primary-600 dark:text-primary-400">{balanceEngagement}%</span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="100"
+                                            value={balanceEngagement}
+                                            onChange={(e) => setBalanceEngagement(parseInt(e.target.value))}
+                                            className="w-full"
+                                        />
+                                    </div>
+                                    {/* Upsell */}
+                                    <div>
+                                        <div className="flex justify-between mb-1">
+                                            <span className="text-sm text-gray-700 dark:text-gray-300">Upsell (Tease Premium)</span>
+                                            <span className="text-sm font-semibold text-orange-600 dark:text-orange-400">{balanceUpsell}%</span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="100"
+                                            value={balanceUpsell}
+                                            onChange={(e) => setBalanceUpsell(parseInt(e.target.value))}
+                                            className="w-full"
+                                        />
+                                    </div>
+                                    {/* Retention */}
+                                    <div>
+                                        <div className="flex justify-between mb-1">
+                                            <span className="text-sm text-gray-700 dark:text-gray-300">Retention (Keep Subscribers)</span>
+                                            <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">{balanceRetention}%</span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="100"
+                                            value={balanceRetention}
+                                            onChange={(e) => setBalanceRetention(parseInt(e.target.value))}
+                                            className="w-full"
+                                        />
+                                    </div>
+                                    {/* Conversion */}
+                                    <div>
+                                        <div className="flex justify-between mb-1">
+                                            <span className="text-sm text-gray-700 dark:text-gray-300">Conversion (Direct Sales)</span>
+                                            <span className="text-sm font-semibold text-green-600 dark:text-green-400">{balanceConversion}%</span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="100"
+                                            value={balanceConversion}
+                                            onChange={(e) => setBalanceConversion(parseInt(e.target.value))}
+                                            className="w-full"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm text-gray-600 dark:text-gray-400">Total:</span>
+                                        <span className={`text-sm font-bold ${Math.abs((balanceEngagement + balanceUpsell + balanceRetention + balanceConversion) - 100) <= 1 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                            {balanceEngagement + balanceUpsell + balanceRetention + balanceConversion}%
+                                        </span>
+                                    </div>
+                                    {Math.abs((balanceEngagement + balanceUpsell + balanceRetention + balanceConversion) - 100) > 1 && (
+                                        <p className="text-xs text-red-600 dark:text-red-400 mt-1">Balance must total 100%</p>
+                                    )}
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={handleGenerateMonetizationPlan}
+                                disabled={isGenerating || monetizationGoals.length === 0 || Math.abs((balanceEngagement + balanceUpsell + balanceRetention + balanceConversion) - 100) > 1}
+                                className="w-full px-4 py-3 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium transition-all shadow-md hover:shadow-lg"
+                            >
+                                {isGenerating ? (
+                                    <>
+                                        <RefreshIcon className="w-5 h-5 animate-spin" />
+                                        Generating Monetization Plan...
+                                    </>
+                                ) : (
+                                    <>
+                                        <SparklesIcon className="w-5 h-5" />
+                                        Generate Monetization Plan
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Generated Monetization Plan */}
+                    {generatedMonetizationPlan && (
+                        <div className="space-y-6">
+                            {/* Summary */}
+                            {generatedMonetizationPlan.summary && (
+                                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                                    <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-200 mb-2">Strategy Summary</h3>
+                                    <p className="text-blue-800 dark:text-blue-300">{generatedMonetizationPlan.summary}</p>
+                                </div>
+                            )}
+
+                            {/* Balance Visualization */}
+                            {generatedMonetizationPlan.balance && (
+                                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Content Balance</h3>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                        <div className="text-center p-3 bg-primary-50 dark:bg-primary-900/20 rounded-lg">
+                                            <p className="text-2xl font-bold text-primary-600 dark:text-primary-400">{generatedMonetizationPlan.balance.engagement}</p>
+                                            <p className="text-xs text-gray-600 dark:text-gray-400">Engagement</p>
+                                        </div>
+                                        <div className="text-center p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+                                            <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{generatedMonetizationPlan.balance.upsell}</p>
+                                            <p className="text-xs text-gray-600 dark:text-gray-400">Upsell</p>
+                                        </div>
+                                        <div className="text-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                                            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{generatedMonetizationPlan.balance.retention}</p>
+                                            <p className="text-xs text-gray-600 dark:text-gray-400">Retention</p>
+                                        </div>
+                                        <div className="text-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                                            <p className="text-2xl font-bold text-green-600 dark:text-green-400">{generatedMonetizationPlan.balance.conversion}</p>
+                                            <p className="text-xs text-gray-600 dark:text-gray-400">Conversion</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Warnings */}
+                            {generatedMonetizationPlan.warnings && generatedMonetizationPlan.warnings.length > 0 && (
+                                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                                    <h4 className="font-semibold text-yellow-900 dark:text-yellow-200 mb-2">⚠️ Warnings</h4>
+                                    <ul className="list-disc list-inside space-y-1 text-yellow-800 dark:text-yellow-300 text-sm">
+                                        {generatedMonetizationPlan.warnings.map((warning: string, index: number) => (
+                                            <li key={index}>{warning}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+
+                            {/* Tips */}
+                            {generatedMonetizationPlan.tips && generatedMonetizationPlan.tips.length > 0 && (
+                                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                                    <h4 className="font-semibold text-green-900 dark:text-green-200 mb-2">💡 Tips</h4>
+                                    <ul className="list-disc list-inside space-y-1 text-green-800 dark:text-green-300 text-sm">
+                                        {generatedMonetizationPlan.tips.map((tip: string, index: number) => (
+                                            <li key={index}>{tip}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+
+                            {/* Ideas by Category */}
+                            {generatedMonetizationPlan.ideas && generatedMonetizationPlan.ideas.length > 0 && (
+                                <div className="space-y-4">
+                                    {/* Group ideas by label */}
+                                    {['engagement', 'upsell', 'retention', 'conversion'].map((label) => {
+                                        const categoryIdeas = generatedMonetizationPlan.ideas.filter((idea: any) => idea.label === label);
+                                        if (categoryIdeas.length === 0) return null;
+
+                                        const labelColors: Record<string, { bg: string; text: string; border: string }> = {
+                                            engagement: { bg: 'bg-primary-50 dark:bg-primary-900/20', text: 'text-primary-700 dark:text-primary-300', border: 'border-primary-200 dark:border-primary-800' },
+                                            upsell: { bg: 'bg-orange-50 dark:bg-orange-900/20', text: 'text-orange-700 dark:text-orange-300', border: 'border-orange-200 dark:border-orange-800' },
+                                            retention: { bg: 'bg-blue-50 dark:bg-blue-900/20', text: 'text-blue-700 dark:text-blue-300', border: 'border-blue-200 dark:border-blue-800' },
+                                            conversion: { bg: 'bg-green-50 dark:bg-green-900/20', text: 'text-green-700 dark:text-green-300', border: 'border-green-200 dark:border-green-800' },
+                                        };
+
+                                        const colors = labelColors[label] || labelColors.engagement;
+
+                                        return (
+                                            <div key={label} className={`${colors.bg} border ${colors.border} rounded-lg p-4`}>
+                                                <h4 className={`text-lg font-semibold ${colors.text} mb-3 capitalize`}>
+                                                    {label} Ideas ({categoryIdeas.length})
+                                                </h4>
+                                                <div className="space-y-3">
+                                                    {categoryIdeas.map((idea: any, index: number) => (
+                                                        <div key={index} className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                                                            <div className="flex items-start justify-between mb-2">
+                                                                <h5 className="font-semibold text-gray-900 dark:text-white">{idea.idea}</h5>
+                                                                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                                                    idea.pricing === 'free' ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' :
+                                                                    idea.pricing === 'teaser' ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300' :
+                                                                    'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
+                                                                }`}>
+                                                                    {idea.pricing === 'free' ? 'FREE' : idea.pricing === 'teaser' ? 'TEASER' : 'PAID'}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{idea.description}</p>
+                                                            <div className="flex flex-wrap gap-2 text-xs">
+                                                                <span className="text-gray-500 dark:text-gray-400">📅 {idea.suggestedTiming}</span>
+                                                                {idea.cta && (
+                                                                    <span className="text-primary-600 dark:text-primary-400">💬 CTA: {idea.cta}</span>
+                                                                )}
+                                                                {idea.priority && (
+                                                                    <span className="text-gray-500 dark:text-gray-400">⭐ Priority: {idea.priority}/5</span>
+                                                                )}
+                                                            </div>
+                                                            <button
+                                                                onClick={() => copyToClipboard(`${idea.idea}\n\n${idea.description}\n\nPricing: ${idea.pricing}\nTiming: ${idea.suggestedTiming}\nCTA: ${idea.cta}`)}
+                                                                className="mt-2 text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                                            >
+                                                                Copy Details
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+
+                            {/* Weekly Distribution */}
+                            {generatedMonetizationPlan.weeklyDistribution && generatedMonetizationPlan.weeklyDistribution.length > 0 && (
+                                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Weekly Distribution</h3>
+                                    <div className="space-y-3">
+                                        {generatedMonetizationPlan.weeklyDistribution.map((day: any, index: number) => (
+                                            <div key={index} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                                <div className="flex items-start justify-between mb-2">
+                                                    <h4 className="font-semibold text-gray-900 dark:text-white">{day.day}</h4>
+                                                    <span className="text-xs text-primary-600 dark:text-primary-400">{day.focus}</span>
+                                                </div>
+                                                <ul className="list-disc list-inside space-y-1 text-sm text-gray-600 dark:text-gray-400">
+                                                    {day.ideas.map((idea: string, ideaIndex: number) => (
+                                                        <li key={ideaIndex}>{idea}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

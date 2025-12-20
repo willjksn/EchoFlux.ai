@@ -18,13 +18,16 @@ interface HistoryItem {
 }
 
 export const ContentIntelligence: React.FC = () => {
-    const { user, showToast } = useAppContext();
+    const { user, showToast, activePage } = useAppContext();
     const [activeTab, setActiveTab] = useState<'tools' | 'history'>('tools');
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [isOptimizing, setIsOptimizing] = useState(false);
     const [isPredicting, setIsPredicting] = useState(false);
     const [isRepurposing, setIsRepurposing] = useState(false);
     const [isGeneratingMediaCaptions, setIsGeneratingMediaCaptions] = useState(false);
+    
+    // Detect if we're in OnlyFans Studio context
+    const isOnlyFansStudio = activePage === 'onlyfansStudio' || window.location.pathname.includes('onlyfansStudio');
     
     // Results state
     const [gapAnalysis, setGapAnalysis] = useState<any>(null);
@@ -39,7 +42,7 @@ export const ContentIntelligence: React.FC = () => {
     const [showPredictModal, setShowPredictModal] = useState(false);
     const [showRepurposeModal, setShowRepurposeModal] = useState(false);
     
-    // Inputs
+    // Inputs - default to OnlyFans if in OnlyFans Studio context
     const [captionInput, setCaptionInput] = useState('');
     const [platformInput, setPlatformInput] = useState<Platform>('Instagram');
     
@@ -148,7 +151,73 @@ export const ContentIntelligence: React.FC = () => {
     };
 
     const handleOptimize = async () => {
-        if (!captionInput.trim()) {
+        // If media is uploaded but no caption, generate caption from media first
+        let captionToUse = captionInput.trim();
+        
+        if (mediaFile && !captionToUse) {
+            showToast('Generating caption from media first...', 'info');
+            try {
+                // Generate caption from media
+                const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+                if (!user?.id) {
+                    throw new Error('User not authenticated');
+                }
+
+                // Upload media to Firebase Storage
+                const timestamp = Date.now();
+                const fileExtension = mediaFile.name.split('.').pop() || (mediaFile.type.startsWith('video/') ? 'mp4' : 'jpg');
+                const storagePath = `users/${user.id}/content-intelligence-uploads/${timestamp}.${fileExtension}`;
+                const storageRef = ref(storage, storagePath);
+                await uploadBytes(storageRef, mediaFile, { contentType: mediaFile.type });
+                const mediaUrl = await getDownloadURL(storageRef);
+                
+                // Generate caption
+                const response = await fetch('/api/generateCaptions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                    body: JSON.stringify({
+                        mediaUrl: mediaUrl,
+                        tone: mediaCaptionTone === 'Explicit' ? 'Sexy / Explicit' : mediaCaptionTone,
+                        goal: mediaCaptionGoal,
+                        platforms: isOnlyFansStudio ? ['OnlyFans'] : [platformInput],
+                        promptText: `${mediaCaptionPrompt || ''} [Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}]`.trim(),
+                    }),
+                });
+
+                if (!response.ok) throw new Error('Failed to generate caption');
+                const data = await response.json();
+                let captions: {caption: string; hashtags: string[]}[] = [];
+                if (Array.isArray(data)) {
+                    captions = data.map((item: any) => ({
+                        caption: item.caption || '',
+                        hashtags: Array.isArray(item.hashtags) ? item.hashtags : [],
+                    }));
+                } else if (data && typeof data === 'object' && Array.isArray(data.captions)) {
+                    captions = data.captions.map((item: any) => ({
+                        caption: item.caption || '',
+                        hashtags: Array.isArray(item.hashtags) ? item.hashtags : [],
+                    }));
+                }
+                
+                if (captions.length > 0) {
+                    captionToUse = captions[0].caption;
+                    setCaptionInput(captionToUse);
+                    setGeneratedMediaCaptions(captions);
+                    showToast('Caption generated from media. Optimizing...', 'success');
+                } else {
+                    showToast('Failed to generate caption from media. Please enter a caption manually.', 'error');
+                    return;
+                }
+            } catch (error: any) {
+                showToast('Failed to generate caption from media. Please enter a caption manually.', 'error');
+                return;
+            }
+        }
+        
+        if (!captionToUse) {
             showToast('Please enter a caption to optimize', 'error');
             return;
         }
@@ -164,8 +233,8 @@ export const ContentIntelligence: React.FC = () => {
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
                 body: JSON.stringify({
-                    originalCaption: captionInput,
-                    platform: platformInput,
+                    originalCaption: captionToUse,
+                    platform: isOnlyFansStudio ? 'OnlyFans' : platformInput,
                     niche: user?.niche || '',
                 }),
             });
@@ -176,7 +245,7 @@ export const ContentIntelligence: React.FC = () => {
 
             const data = await response.json();
             // Save to history regardless of success flag
-            await saveToHistory('optimize', `Caption Optimization - ${platformInput}`, { ...data, originalCaption: captionInput, platform: platformInput });
+            await saveToHistory('optimize', `Caption Optimization - ${isOnlyFansStudio ? 'OnlyFans' : platformInput}`, { ...data, originalCaption: captionToUse, platform: isOnlyFansStudio ? 'OnlyFans' : platformInput });
             if (data.success) {
                 setOptimizeResult(data);
                 setShowOptimizeModal(true);
@@ -193,7 +262,71 @@ export const ContentIntelligence: React.FC = () => {
     };
 
     const handlePredict = async () => {
-        if (!captionInput.trim()) {
+        // If media is uploaded but no caption, generate caption from media first
+        let captionToUse = captionInput.trim();
+        
+        if (mediaFile && !captionToUse) {
+            showToast('Generating caption from media first...', 'info');
+            try {
+                // Generate caption from media (same logic as handleOptimize)
+                const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+                if (!user?.id) {
+                    throw new Error('User not authenticated');
+                }
+
+                const timestamp = Date.now();
+                const fileExtension = mediaFile.name.split('.').pop() || (mediaFile.type.startsWith('video/') ? 'mp4' : 'jpg');
+                const storagePath = `users/${user.id}/content-intelligence-uploads/${timestamp}.${fileExtension}`;
+                const storageRef = ref(storage, storagePath);
+                await uploadBytes(storageRef, mediaFile, { contentType: mediaFile.type });
+                const mediaUrl = await getDownloadURL(storageRef);
+                
+                const response = await fetch('/api/generateCaptions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                    body: JSON.stringify({
+                        mediaUrl: mediaUrl,
+                        tone: mediaCaptionTone === 'Explicit' ? 'Sexy / Explicit' : mediaCaptionTone,
+                        goal: mediaCaptionGoal,
+                        platforms: isOnlyFansStudio ? ['OnlyFans'] : [platformInput],
+                        promptText: `${mediaCaptionPrompt || ''} [Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}]`.trim(),
+                    }),
+                });
+
+                if (!response.ok) throw new Error('Failed to generate caption');
+                const data = await response.json();
+                let captions: {caption: string; hashtags: string[]}[] = [];
+                if (Array.isArray(data)) {
+                    captions = data.map((item: any) => ({
+                        caption: item.caption || '',
+                        hashtags: Array.isArray(item.hashtags) ? item.hashtags : [],
+                    }));
+                } else if (data && typeof data === 'object' && Array.isArray(data.captions)) {
+                    captions = data.captions.map((item: any) => ({
+                        caption: item.caption || '',
+                        hashtags: Array.isArray(item.hashtags) ? item.hashtags : [],
+                    }));
+                }
+                
+                if (captions.length > 0) {
+                    captionToUse = captions[0].caption;
+                    setCaptionInput(captionToUse);
+                    setGeneratedMediaCaptions(captions);
+                    showToast('Caption generated from media. Predicting...', 'success');
+                } else {
+                    showToast('Failed to generate caption from media. Please enter a caption manually.', 'error');
+                    return;
+                }
+            } catch (error: any) {
+                showToast('Failed to generate caption from media. Please enter a caption manually.', 'error');
+                return;
+            }
+        }
+        
+        if (!captionToUse) {
             showToast('Please enter a caption to predict', 'error');
             return;
         }
@@ -209,8 +342,8 @@ export const ContentIntelligence: React.FC = () => {
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
                 body: JSON.stringify({
-                    caption: captionInput,
-                    platform: platformInput,
+                    caption: captionToUse,
+                    platform: isOnlyFansStudio ? 'OnlyFans' : platformInput,
                     niche: user?.niche || '',
                 }),
             });
@@ -221,7 +354,7 @@ export const ContentIntelligence: React.FC = () => {
 
             const data = await response.json();
             // Save to history regardless of success flag
-            await saveToHistory('predict', `Performance Prediction - ${platformInput}`, { ...data, originalCaption: captionInput, platform: platformInput });
+            await saveToHistory('predict', `Performance Prediction - ${isOnlyFansStudio ? 'OnlyFans' : platformInput}`, { ...data, originalCaption: captionToUse, platform: isOnlyFansStudio ? 'OnlyFans' : platformInput });
             if (data.success) {
                 setPredictResult(data);
                 setShowPredictModal(true);
@@ -238,12 +371,76 @@ export const ContentIntelligence: React.FC = () => {
     };
 
     const handleRepurpose = async () => {
-        if (!captionInput.trim()) {
+        // If media is uploaded but no caption, generate caption from media first
+        let captionToUse = captionInput.trim();
+        
+        if (mediaFile && !captionToUse) {
+            showToast('Generating caption from media first...', 'info');
+            try {
+                // Generate caption from media (same logic as handleOptimize)
+                const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+                if (!user?.id) {
+                    throw new Error('User not authenticated');
+                }
+
+                const timestamp = Date.now();
+                const fileExtension = mediaFile.name.split('.').pop() || (mediaFile.type.startsWith('video/') ? 'mp4' : 'jpg');
+                const storagePath = `users/${user.id}/content-intelligence-uploads/${timestamp}.${fileExtension}`;
+                const storageRef = ref(storage, storagePath);
+                await uploadBytes(storageRef, mediaFile, { contentType: mediaFile.type });
+                const mediaUrl = await getDownloadURL(storageRef);
+                
+                const response = await fetch('/api/generateCaptions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                    body: JSON.stringify({
+                        mediaUrl: mediaUrl,
+                        tone: mediaCaptionTone === 'Explicit' ? 'Sexy / Explicit' : mediaCaptionTone,
+                        goal: mediaCaptionGoal,
+                        platforms: isOnlyFansStudio ? ['OnlyFans'] : [platformInput],
+                        promptText: `${mediaCaptionPrompt || ''} [Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}]`.trim(),
+                    }),
+                });
+
+                if (!response.ok) throw new Error('Failed to generate caption');
+                const data = await response.json();
+                let captions: {caption: string; hashtags: string[]}[] = [];
+                if (Array.isArray(data)) {
+                    captions = data.map((item: any) => ({
+                        caption: item.caption || '',
+                        hashtags: Array.isArray(item.hashtags) ? item.hashtags : [],
+                    }));
+                } else if (data && typeof data === 'object' && Array.isArray(data.captions)) {
+                    captions = data.captions.map((item: any) => ({
+                        caption: item.caption || '',
+                        hashtags: Array.isArray(item.hashtags) ? item.hashtags : [],
+                    }));
+                }
+                
+                if (captions.length > 0) {
+                    captionToUse = captions[0].caption;
+                    setCaptionInput(captionToUse);
+                    setGeneratedMediaCaptions(captions);
+                    showToast('Caption generated from media. Repurposing...', 'success');
+                } else {
+                    showToast('Failed to generate caption from media. Please enter a caption manually.', 'error');
+                    return;
+                }
+            } catch (error: any) {
+                showToast('Failed to generate caption from media. Please enter a caption manually.', 'error');
+                return;
+            }
+        }
+        
+        if (!captionToUse) {
             showToast('Please enter content to repurpose', 'error');
             return;
         }
 
-        if (!platformInput) {
+        if (!platformInput && !isOnlyFansStudio) {
             showToast('Please select a platform first', 'error');
             return;
         }
@@ -252,8 +449,9 @@ export const ContentIntelligence: React.FC = () => {
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             
-            // For repurpose, target all other platforms
-            const allTargetPlatforms = safePlatforms.filter(p => p !== platformInput);
+            // For repurpose, target all other platforms (if in OnlyFans Studio, repurpose from OnlyFans to other platforms)
+            const originalPlatform = isOnlyFansStudio ? 'OnlyFans' : platformInput;
+            const allTargetPlatforms = safePlatforms.filter(p => p !== originalPlatform);
             
             const response = await fetch('/api/repurposeContent', {
                 method: 'POST',
@@ -262,8 +460,8 @@ export const ContentIntelligence: React.FC = () => {
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
                 body: JSON.stringify({
-                    originalContent: captionInput,
-                    originalPlatform: platformInput,
+                    originalContent: captionToUse,
+                    originalPlatform: isOnlyFansStudio ? 'OnlyFans' : platformInput,
                     targetPlatforms: allTargetPlatforms,
                     niche: user?.niche || '',
                 }),
@@ -275,7 +473,7 @@ export const ContentIntelligence: React.FC = () => {
 
             const data = await response.json();
             // Save to history regardless of success flag
-            await saveToHistory('repurpose', `Content Repurposing - ${allTargetPlatforms.join(', ')}`, { ...data, originalContent: captionInput, originalPlatform: platformInput, targetPlatforms: allTargetPlatforms });
+            await saveToHistory('repurpose', `Content Repurposing - ${allTargetPlatforms.join(', ')}`, { ...data, originalContent: captionToUse, originalPlatform: isOnlyFansStudio ? 'OnlyFans' : platformInput, targetPlatforms: allTargetPlatforms });
             if (data.success) {
                 setRepurposeResult(data);
                 setShowRepurposeModal(true);
@@ -578,33 +776,63 @@ export const ContentIntelligence: React.FC = () => {
                                 </>
                             )}
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Plan for Platform (Select One):
-                                </label>
-                                <div className="flex flex-wrap gap-1.5">
-                                    {platforms.map(platform => {
-                                        const isSelected = platformInput === platform;
-                                        return (
-                                            <button
-                                                key={platform}
-                                                onClick={() => setPlatformInput(platform)}
-                                                className={`flex items-center justify-center gap-1 px-2 py-1 rounded text-xs border transition-colors ${
-                                                    isSelected
-                                                        ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 font-medium'
-                                                        : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
-                                                }`}
-                                            >
-                                                <span className="w-3 h-3 flex items-center justify-center flex-shrink-0">{platformIcons[platform]}</span>
-                                                <span className="hidden sm:inline">{platform}</span>
-                                            </button>
-                                        );
-                                    })}
+                            {isOnlyFansStudio ? (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Target Platform (for Repurpose Content only):
+                                    </label>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                                        Content is optimized for OnlyFans by default. Select a platform below only if you want to repurpose content to other platforms.
+                                    </p>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {platforms.map(platform => {
+                                            const isSelected = platformInput === platform;
+                                            return (
+                                                <button
+                                                    key={platform}
+                                                    onClick={() => setPlatformInput(platform)}
+                                                    className={`flex items-center justify-center gap-1 px-2 py-1 rounded text-xs border transition-colors ${
+                                                        isSelected
+                                                            ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 font-medium'
+                                                            : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                                    }`}
+                                                >
+                                                    <span className="w-3 h-3 flex items-center justify-center flex-shrink-0">{platformIcons[platform]}</span>
+                                                    <span className="hidden sm:inline">{platform}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
-                                {!platformInput && (
-                                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Please select a platform</p>
-                                )}
-                            </div>
+                            ) : (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Plan for Platform (Select One):
+                                    </label>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {platforms.map(platform => {
+                                            const isSelected = platformInput === platform;
+                                            return (
+                                                <button
+                                                    key={platform}
+                                                    onClick={() => setPlatformInput(platform)}
+                                                    className={`flex items-center justify-center gap-1 px-2 py-1 rounded text-xs border transition-colors ${
+                                                        isSelected
+                                                            ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 font-medium'
+                                                            : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                                    }`}
+                                                >
+                                                    <span className="w-3 h-3 flex items-center justify-center flex-shrink-0">{platformIcons[platform]}</span>
+                                                    <span className="hidden sm:inline">{platform}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    {!platformInput && (
+                                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Please select a platform</p>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
 
