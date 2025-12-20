@@ -59,12 +59,16 @@ export const OnlyFansContentBrain: React.FC = () => {
         try {
             setIsLoading(false);
             console.log('OnlyFansContentBrain component loaded successfully');
+            // If mediaCaptions tab is somehow selected, reset to captions
+            if (activeTab === 'mediaCaptions') {
+                setActiveTab('captions');
+            }
         } catch (err: any) {
             console.error('Error initializing OnlyFansContentBrain:', err);
             setError(err?.message || 'Failed to initialize component');
             setIsLoading(false);
         }
-    }, []);
+    }, [activeTab]);
 
     // Show error state if context is not available
     if (!context || !user) {
@@ -424,13 +428,15 @@ export const OnlyFansContentBrain: React.FC = () => {
         setMediaPreview(previewUrl);
     };
 
-    const tabs: { id: ContentType; label: string }[] = [
+    const allTabs: { id: ContentType; label: string }[] = [
         { id: 'captions', label: 'AI Captions' },
-        { id: 'mediaCaptions', label: 'Image/Video Captions' },
+        { id: 'mediaCaptions', label: 'Image/Video Captions' }, // Hidden but kept for stability
         { id: 'postIdeas', label: 'Post Ideas' },
         { id: 'shootConcepts', label: 'Shoot Concepts' },
         { id: 'weeklyPlan', label: 'Weekly Plan' },
     ];
+    // Filter out mediaCaptions tab (hidden but code kept for stability)
+    const tabs = allTabs.filter(tab => tab.id !== 'mediaCaptions') as { id: ContentType; label: string }[];
 
     // Show loading state
     if (isLoading) {
@@ -622,8 +628,8 @@ export const OnlyFansContentBrain: React.FC = () => {
                 </div>
             )}
 
-            {/* Media Captions Tab */}
-            {activeTab === 'mediaCaptions' && (
+            {/* Media Captions Tab - Hidden but kept for stability */}
+            {false && activeTab === 'mediaCaptions' && (
                 <div className="space-y-6">
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
@@ -661,13 +667,13 @@ export const OnlyFansContentBrain: React.FC = () => {
                                     <div className="relative">
                                         {mediaFile?.type.startsWith('video/') ? (
                                             <video
-                                                src={mediaPreview}
+                                                src={mediaPreview || undefined}
                                                 controls
                                                 className="w-full max-h-96 rounded-lg"
                                             />
                                         ) : (
                                             <img
-                                                src={mediaPreview}
+                                                src={mediaPreview || undefined}
                                                 alt="Preview"
                                                 className="w-full max-h-96 object-contain rounded-lg"
                                             />

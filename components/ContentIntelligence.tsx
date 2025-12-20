@@ -7,7 +7,7 @@ import { collection, addDoc, query, getDocs, deleteDoc, doc, orderBy, Timestamp 
 import { Platform } from '../types';
 import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
 
-type IntelligenceType = 'gap_analysis' | 'predict' | 'optimize' | 'repurpose' | 'media_captions' | 'post_ideas' | 'shoot_concepts' | 'weekly_plan';
+type IntelligenceType = 'gap_analysis' | 'predict' | 'optimize' | 'repurpose' | 'media_captions';
 
 interface HistoryItem {
     id: string;
@@ -25,9 +25,6 @@ export const ContentIntelligence: React.FC = () => {
     const [isPredicting, setIsPredicting] = useState(false);
     const [isRepurposing, setIsRepurposing] = useState(false);
     const [isGeneratingMediaCaptions, setIsGeneratingMediaCaptions] = useState(false);
-    const [isGeneratingPostIdeas, setIsGeneratingPostIdeas] = useState(false);
-    const [isGeneratingShootConcepts, setIsGeneratingShootConcepts] = useState(false);
-    const [isGeneratingWeeklyPlan, setIsGeneratingWeeklyPlan] = useState(false);
     
     // Results state
     const [gapAnalysis, setGapAnalysis] = useState<any>(null);
@@ -35,9 +32,6 @@ export const ContentIntelligence: React.FC = () => {
     const [predictResult, setPredictResult] = useState<any>(null);
     const [repurposeResult, setRepurposeResult] = useState<any>(null);
     const [generatedMediaCaptions, setGeneratedMediaCaptions] = useState<{caption: string; hashtags: string[]}[]>([]);
-    const [generatedPostIdeas, setGeneratedPostIdeas] = useState<string[]>([]);
-    const [generatedShootConcepts, setGeneratedShootConcepts] = useState<string[]>([]);
-    const [generatedWeeklyPlan, setGeneratedWeeklyPlan] = useState<string>('');
     
     // Modals
     const [showGapModal, setShowGapModal] = useState(false);
@@ -49,21 +43,12 @@ export const ContentIntelligence: React.FC = () => {
     const [captionInput, setCaptionInput] = useState('');
     const [platformInput, setPlatformInput] = useState<Platform>('Instagram');
     
-    // Media captions inputs
+    // Media captions inputs (integrated into Content Input)
     const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
     const [mediaCaptionTone, setMediaCaptionTone] = useState<'Playful' | 'Flirty' | 'Confident' | 'Teasing' | 'Intimate' | 'Explicit'>('Teasing');
     const [mediaCaptionGoal, setMediaCaptionGoal] = useState('engagement');
     const [mediaCaptionPrompt, setMediaCaptionPrompt] = useState('');
-    
-    // Post ideas input
-    const [postIdeaPrompt, setPostIdeaPrompt] = useState('');
-    
-    // Shoot concepts input
-    const [shootConceptPrompt, setShootConceptPrompt] = useState('');
-    
-    // Weekly plan input
-    const [weeklyPlanPrompt, setWeeklyPlanPrompt] = useState('');
     
     // History
     const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -96,7 +81,10 @@ export const ContentIntelligence: React.FC = () => {
     };
 
     const saveToHistory = async (type: IntelligenceType, title: string, data: any) => {
-        if (!user?.id) return;
+        if (!user?.id) {
+            console.warn('Cannot save to history: user not logged in');
+            return;
+        }
         try {
             await addDoc(collection(db, 'users', user.id, 'content_intelligence_history'), {
                 type,
@@ -104,11 +92,13 @@ export const ContentIntelligence: React.FC = () => {
                 data,
                 createdAt: Timestamp.now(),
             });
+            console.log('Saved to history:', type, title);
             if (activeTab === 'history') {
                 loadHistory();
             }
         } catch (error: any) {
             console.error('Error saving to history:', error);
+            showToast('Failed to save to history. Results may be lost if you leave the page.', 'error');
         }
     };
 
@@ -140,11 +130,14 @@ export const ContentIntelligence: React.FC = () => {
             }
 
             const data = await response.json();
+            // Save to history regardless of success flag
+            await saveToHistory('gap_analysis', `Content Gap Analysis - ${new Date().toLocaleDateString()}`, data);
             if (data.success) {
                 setGapAnalysis(data);
                 setShowGapModal(true);
-                await saveToHistory('gap_analysis', `Content Gap Analysis - ${new Date().toLocaleDateString()}`, data);
                 showToast('Content gap analysis complete!', 'success');
+            } else {
+                showToast('Analysis completed but may have issues. Check history for details.', 'warning');
             }
         } catch (error: any) {
             console.error('Error analyzing content gaps:', error);
@@ -182,11 +175,14 @@ export const ContentIntelligence: React.FC = () => {
             }
 
             const data = await response.json();
+            // Save to history regardless of success flag
+            await saveToHistory('optimize', `Caption Optimization - ${platformInput}`, { ...data, originalCaption: captionInput, platform: platformInput });
             if (data.success) {
                 setOptimizeResult(data);
                 setShowOptimizeModal(true);
-                await saveToHistory('optimize', `Caption Optimization - ${platformInput}`, data);
                 showToast('Caption optimized!', 'success');
+            } else {
+                showToast('Optimization completed but may have issues. Check history for details.', 'warning');
             }
         } catch (error: any) {
             console.error('Error optimizing caption:', error);
@@ -224,11 +220,14 @@ export const ContentIntelligence: React.FC = () => {
             }
 
             const data = await response.json();
+            // Save to history regardless of success flag
+            await saveToHistory('predict', `Performance Prediction - ${platformInput}`, { ...data, originalCaption: captionInput, platform: platformInput });
             if (data.success) {
                 setPredictResult(data);
                 setShowPredictModal(true);
-                await saveToHistory('predict', `Performance Prediction - ${platformInput}`, data);
                 showToast('Performance predicted!', 'success');
+            } else {
+                showToast('Prediction completed but may have issues. Check history for details.', 'warning');
             }
         } catch (error: any) {
             console.error('Error predicting performance:', error);
@@ -275,11 +274,14 @@ export const ContentIntelligence: React.FC = () => {
             }
 
             const data = await response.json();
+            // Save to history regardless of success flag
+            await saveToHistory('repurpose', `Content Repurposing - ${allTargetPlatforms.join(', ')}`, { ...data, originalContent: captionInput, originalPlatform: platformInput, targetPlatforms: allTargetPlatforms });
             if (data.success) {
                 setRepurposeResult(data);
                 setShowRepurposeModal(true);
-                await saveToHistory('repurpose', `Content Repurposing - ${allTargetPlatforms.join(', ')}`, data);
                 showToast('Content repurposed!', 'success');
+            } else {
+                showToast('Repurposing completed but may have issues. Check history for details.', 'warning');
             }
         } catch (error: any) {
             console.error('Error repurposing content:', error);
@@ -398,152 +400,6 @@ export const ContentIntelligence: React.FC = () => {
         setMediaPreview(previewUrl);
     };
 
-    // Post Ideas Generation
-    const handleGeneratePostIdeas = async () => {
-        if (!postIdeaPrompt.trim()) {
-            showToast('Please enter what kind of post ideas you\'re looking for', 'error');
-            return;
-        }
-
-        setIsGeneratingPostIdeas(true);
-        try {
-            const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
-            
-            const response = await fetch('/api/generateText', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                },
-                body: JSON.stringify({
-                    prompt: `Generate 10 creative post ideas for ${platformInput} based on: ${postIdeaPrompt}. 
-                    Each idea should be specific, engaging, and tailored for content creators. 
-                    Format as a numbered list with brief descriptions.`,
-                    context: {
-                        goal: 'content-ideas',
-                        tone: 'Engaging',
-                        platforms: [platformInput],
-                    },
-                }),
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to generate post ideas');
-            }
-
-            const data = await response.json();
-            const text = data.text || data.caption || '';
-            const ideas = typeof text === 'string' 
-                ? text.split(/\d+\./).filter(item => item.trim()).map(item => item.trim())
-                : [];
-            setGeneratedPostIdeas(Array.isArray(ideas) && ideas.length > 0 ? ideas : (typeof text === 'string' ? [text] : []));
-            await saveToHistory('post_ideas', `Post Ideas - ${platformInput}`, { ideas, platform: platformInput });
-            showToast('Post ideas generated successfully!', 'success');
-        } catch (error: any) {
-            console.error('Error generating post ideas:', error);
-            showToast(error.message || 'Failed to generate post ideas. Please try again.', 'error');
-        } finally {
-            setIsGeneratingPostIdeas(false);
-        }
-    };
-
-    // Shoot Concepts Generation
-    const handleGenerateShootConcepts = async () => {
-        if (!shootConceptPrompt.trim()) {
-            showToast('Please describe the type of shoot concept you\'re looking for', 'error');
-            return;
-        }
-
-        setIsGeneratingShootConcepts(true);
-        try {
-            const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
-            
-            const response = await fetch('/api/generateText', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                },
-                body: JSON.stringify({
-                    prompt: `Generate 8 detailed shoot concepts for ${platformInput} based on: ${shootConceptPrompt}.
-                    Each concept should include:
-                    - Theme/Setting
-                    - Outfit suggestions
-                    - Lighting style
-                    - Poses/angles
-                    - Mood/energy
-                    
-                    Format as a numbered list with detailed descriptions. Make it creative and tailored for content creation.`,
-                    context: {
-                        goal: 'shoot-planning',
-                        tone: 'Creative',
-                        platforms: [platformInput],
-                    },
-                }),
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to generate shoot concepts');
-            }
-
-            const data = await response.json();
-            const text = data.text || data.caption || '';
-            const concepts = typeof text === 'string'
-                ? text.split(/\d+\./).filter(item => item.trim()).map(item => item.trim())
-                : [];
-            setGeneratedShootConcepts(Array.isArray(concepts) && concepts.length > 0 ? concepts : (typeof text === 'string' ? [text] : []));
-            await saveToHistory('shoot_concepts', `Shoot Concepts - ${platformInput}`, { concepts, platform: platformInput });
-            showToast('Shoot concepts generated successfully!', 'success');
-        } catch (error: any) {
-            console.error('Error generating shoot concepts:', error);
-            showToast(error.message || 'Failed to generate shoot concepts. Please try again.', 'error');
-        } finally {
-            setIsGeneratingShootConcepts(false);
-        }
-    };
-
-    // Weekly Plan Generation
-    const handleGenerateWeeklyPlan = async () => {
-        if (!weeklyPlanPrompt.trim()) {
-            showToast('Please describe your goals or preferences for the week', 'error');
-            return;
-        }
-
-        setIsGeneratingWeeklyPlan(true);
-        try {
-            const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
-            
-            const response = await fetch('/api/generateContentStrategy', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                },
-                body: JSON.stringify({
-                    niche: user?.niche || 'Content Creator',
-                    audience: 'Followers and fans',
-                    goals: weeklyPlanPrompt,
-                    duration: 1, // 1 week
-                    platforms: [platformInput],
-                    explicitContent: false,
-                }),
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to generate weekly plan');
-            }
-
-            const data = await response.json();
-            setGeneratedWeeklyPlan(data.plan || JSON.stringify(data, null, 2));
-            await saveToHistory('weekly_plan', `Weekly Plan - ${platformInput}`, { plan: data.plan || data, platform: platformInput });
-            showToast('Weekly plan generated successfully!', 'success');
-        } catch (error: any) {
-            console.error('Error generating weekly plan:', error);
-            showToast(error.message || 'Failed to generate weekly plan. Please try again.', 'error');
-        } finally {
-            setIsGeneratingWeeklyPlan(false);
-        }
-    };
 
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text);
@@ -600,17 +456,128 @@ export const ContentIntelligence: React.FC = () => {
                             Content Input
                         </h3>
                         <div className="space-y-4">
+                            {/* Image/Video Upload */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Caption/Content:
+                                    Upload Image/Video (Optional):
+                                </label>
+                                {!mediaPreview ? (
+                                    <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center">
+                                        <input
+                                            type="file"
+                                            accept="image/*,video/*"
+                                            onChange={handleMediaFileChange}
+                                            className="hidden"
+                                            id="media-upload"
+                                        />
+                                        <label
+                                            htmlFor="media-upload"
+                                            className="cursor-pointer flex flex-col items-center gap-2"
+                                        >
+                                            <UploadIcon className="w-8 h-8 text-gray-400" />
+                                            <span className="text-sm text-gray-600 dark:text-gray-400">
+                                                Click to upload image or video
+                                            </span>
+                                            <span className="text-xs text-gray-500 dark:text-gray-500">
+                                                Max 20MB
+                                            </span>
+                                        </label>
+                                    </div>
+                                ) : (
+                                    <div className="relative">
+                                        {mediaFile?.type.startsWith('video/') ? (
+                                            <video
+                                                src={mediaPreview}
+                                                controls
+                                                className="w-full max-h-64 rounded-lg"
+                                            />
+                                        ) : (
+                                            <img
+                                                src={mediaPreview}
+                                                alt="Preview"
+                                                className="w-full max-h-64 object-contain rounded-lg"
+                                            />
+                                        )}
+                                        <button
+                                            onClick={() => {
+                                                setMediaFile(null);
+                                                setMediaPreview(null);
+                                            }}
+                                            className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600"
+                                        >
+                                            <XMarkIcon className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Caption/Content/Context:
                                 </label>
                                 <textarea
                                     value={captionInput}
                                     onChange={(e) => setCaptionInput(e.target.value)}
-                                    placeholder="Enter your caption or content to analyze, optimize, predict, or repurpose..."
+                                    placeholder={mediaFile ? "Enter your caption or content to analyze, optimize, predict, or repurpose..." : "Enter your caption or content to analyze, optimize, predict, or repurpose..."}
                                     className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[120px]"
                                 />
                             </div>
+
+                            {/* Media Caption Options (only show if media is uploaded) */}
+                            {mediaFile && (
+                                <>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Additional Context (Optional):
+                                        </label>
+                                        <textarea
+                                            value={mediaCaptionPrompt}
+                                            onChange={(e) => setMediaCaptionPrompt(e.target.value)}
+                                            placeholder="Add any specific details or focus you want for the caption..."
+                                            className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[80px]"
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                Goal:
+                                            </label>
+                                            <select
+                                                value={mediaCaptionGoal}
+                                                onChange={(e) => setMediaCaptionGoal(e.target.value)}
+                                                className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                            >
+                                                <option value="engagement">Engagement</option>
+                                                <option value="sales">Sales/Monetization</option>
+                                                <option value="brand">Brand Awareness</option>
+                                                <option value="followers">Increase Followers</option>
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                Tone:
+                                            </label>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                {(['Playful', 'Flirty', 'Confident', 'Teasing', 'Intimate', 'Explicit'] as const).map((tone) => (
+                                                    <button
+                                                        key={tone}
+                                                        onClick={() => setMediaCaptionTone(tone)}
+                                                        className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+                                                            mediaCaptionTone === tone
+                                                                ? 'bg-primary-600 text-white'
+                                                                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                                        }`}
+                                                    >
+                                                        {tone}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Plan for Platform (Select One):
@@ -640,6 +607,55 @@ export const ContentIntelligence: React.FC = () => {
                             </div>
                         </div>
                     </div>
+
+                    {/* Generate Media Captions Button (only show if media is uploaded) */}
+                    {mediaFile && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                            <button
+                                onClick={handleGenerateMediaCaptions}
+                                disabled={isGeneratingMediaCaptions}
+                                className="w-full px-4 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium transition-all shadow-md hover:shadow-lg"
+                            >
+                                {isGeneratingMediaCaptions ? (
+                                    <>
+                                        <RefreshIcon className="w-5 h-5 animate-spin" />
+                                        Analyzing media and generating captions...
+                                    </>
+                                ) : (
+                                    <>
+                                        <SparklesIcon className="w-5 h-5" />
+                                        Generate Captions from Image/Video
+                                    </>
+                                )}
+                            </button>
+
+                            {/* Generated Media Captions */}
+                            {Array.isArray(generatedMediaCaptions) && generatedMediaCaptions.length > 0 && (
+                                <div className="mt-6 space-y-3">
+                                    <h4 className="text-md font-semibold text-gray-900 dark:text-white">Generated Captions</h4>
+                                    {generatedMediaCaptions.map((result, index) => (
+                                        <div
+                                            key={index}
+                                            className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
+                                        >
+                                            <p className="text-gray-900 dark:text-white mb-2">{result.caption}</p>
+                                            {result.hashtags && result.hashtags.length > 0 && (
+                                                <p className="text-primary-600 dark:text-primary-400 text-sm mb-3">
+                                                    {result.hashtags.join(' ')}
+                                                </p>
+                                            )}
+                                            <button
+                                                onClick={() => copyToClipboard(`${result.caption} ${(result.hashtags || []).join(' ')}`.trim())}
+                                                className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                            >
+                                                Copy
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* Action Buttons */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -720,341 +736,6 @@ export const ContentIntelligence: React.FC = () => {
                         </button>
                     </div>
 
-                    {/* Media Captions Section */}
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                            Generate Captions from Image/Video
-                        </h3>
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Upload Image or Video:
-                                </label>
-                                {!mediaPreview ? (
-                                    <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center">
-                                        <input
-                                            type="file"
-                                            accept="image/*,video/*"
-                                            onChange={handleMediaFileChange}
-                                            className="hidden"
-                                            id="media-upload"
-                                        />
-                                        <label
-                                            htmlFor="media-upload"
-                                            className="cursor-pointer flex flex-col items-center gap-2"
-                                        >
-                                            <UploadIcon className="w-12 h-12 text-gray-400" />
-                                            <span className="text-sm text-gray-600 dark:text-gray-400">
-                                                Click to upload or drag and drop
-                                            </span>
-                                            <span className="text-xs text-gray-500 dark:text-gray-500">
-                                                Images or Videos (max 20MB)
-                                            </span>
-                                        </label>
-                                    </div>
-                                ) : (
-                                    <div className="relative">
-                                        {mediaFile?.type.startsWith('video/') ? (
-                                            <video
-                                                src={mediaPreview}
-                                                controls
-                                                className="w-full max-h-96 rounded-lg"
-                                            />
-                                        ) : (
-                                            <img
-                                                src={mediaPreview}
-                                                alt="Preview"
-                                                className="w-full max-h-96 object-contain rounded-lg"
-                                            />
-                                        )}
-                                        <button
-                                            onClick={() => {
-                                                setMediaFile(null);
-                                                setMediaPreview(null);
-                                            }}
-                                            className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600"
-                                        >
-                                            <XMarkIcon className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Additional Context (Optional):
-                                </label>
-                                <textarea
-                                    value={mediaCaptionPrompt}
-                                    onChange={(e) => setMediaCaptionPrompt(e.target.value)}
-                                    placeholder="Add any specific details or focus you want for the caption..."
-                                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[80px]"
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        Goal:
-                                    </label>
-                                    <select
-                                        value={mediaCaptionGoal}
-                                        onChange={(e) => setMediaCaptionGoal(e.target.value)}
-                                        className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                    >
-                                        <option value="engagement">Engagement</option>
-                                        <option value="sales">Sales/Monetization</option>
-                                        <option value="brand">Brand Awareness</option>
-                                        <option value="followers">Increase Followers</option>
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        Tone:
-                                    </label>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {(['Playful', 'Flirty', 'Confident', 'Teasing', 'Intimate', 'Explicit'] as const).map((tone) => (
-                                            <button
-                                                key={tone}
-                                                onClick={() => setMediaCaptionTone(tone)}
-                                                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                                                    mediaCaptionTone === tone
-                                                        ? 'bg-primary-600 text-white'
-                                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                                                }`}
-                                            >
-                                                {tone}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <button
-                                onClick={handleGenerateMediaCaptions}
-                                disabled={isGeneratingMediaCaptions || !mediaFile}
-                                className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                            >
-                                {isGeneratingMediaCaptions ? (
-                                    <>
-                                        <RefreshIcon className="w-5 h-5 animate-spin" />
-                                        Analyzing media and generating...
-                                    </>
-                                ) : (
-                                    <>
-                                        <SparklesIcon className="w-5 h-5" />
-                                        Generate Captions
-                                    </>
-                                )}
-                            </button>
-                        </div>
-
-                        {/* Generated Media Captions */}
-                        {Array.isArray(generatedMediaCaptions) && generatedMediaCaptions.length > 0 && (
-                            <div className="mt-6 space-y-3">
-                                <h4 className="text-md font-semibold text-gray-900 dark:text-white">Generated Captions</h4>
-                                {generatedMediaCaptions.map((result, index) => (
-                                    <div
-                                        key={index}
-                                        className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
-                                    >
-                                        <p className="text-gray-900 dark:text-white mb-2">{result.caption}</p>
-                                        {result.hashtags && result.hashtags.length > 0 && (
-                                            <p className="text-primary-600 dark:text-primary-400 text-sm mb-3">
-                                                {result.hashtags.join(' ')}
-                                            </p>
-                                        )}
-                                        <button
-                                            onClick={() => copyToClipboard(`${result.caption} ${(result.hashtags || []).join(' ')}`.trim())}
-                                            className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                        >
-                                            Copy
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Post Ideas Section */}
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                            Generate Post Ideas
-                        </h3>
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    What kind of post ideas are you looking for?
-                                </label>
-                                <textarea
-                                    value={postIdeaPrompt}
-                                    onChange={(e) => setPostIdeaPrompt(e.target.value)}
-                                    placeholder="e.g., 'Interactive content to boost engagement' or 'Behind-the-scenes content ideas'"
-                                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[100px]"
-                                />
-                            </div>
-
-                            <button
-                                onClick={handleGeneratePostIdeas}
-                                disabled={isGeneratingPostIdeas}
-                                className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                            >
-                                {isGeneratingPostIdeas ? (
-                                    <>
-                                        <RefreshIcon className="w-5 h-5 animate-spin" />
-                                        Generating...
-                                    </>
-                                ) : (
-                                    <>
-                                        <SparklesIcon className="w-5 h-5" />
-                                        Generate Post Ideas
-                                    </>
-                                )}
-                            </button>
-                        </div>
-
-                        {/* Generated Post Ideas */}
-                        {Array.isArray(generatedPostIdeas) && generatedPostIdeas.length > 0 && (
-                            <div className="mt-6 space-y-3">
-                                <h4 className="text-md font-semibold text-gray-900 dark:text-white">Post Ideas</h4>
-                                {generatedPostIdeas.map((idea, index) => (
-                                    <div
-                                        key={index}
-                                        className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
-                                    >
-                                        <p className="text-gray-900 dark:text-white">{idea}</p>
-                                        <button
-                                            onClick={() => copyToClipboard(idea)}
-                                            className="mt-2 text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                        >
-                                            Copy
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Shoot Concepts Section */}
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                            Generate Shoot Concepts
-                        </h3>
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Describe the type of shoot concept you want:
-                                </label>
-                                <textarea
-                                    value={shootConceptPrompt}
-                                    onChange={(e) => setShootConceptPrompt(e.target.value)}
-                                    placeholder="e.g., 'Boudoir photoset with vintage vibes' or 'Intimate bedroom scene with natural lighting'"
-                                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[100px]"
-                                />
-                            </div>
-
-                            <button
-                                onClick={handleGenerateShootConcepts}
-                                disabled={isGeneratingShootConcepts}
-                                className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                            >
-                                {isGeneratingShootConcepts ? (
-                                    <>
-                                        <RefreshIcon className="w-5 h-5 animate-spin" />
-                                        Generating...
-                                    </>
-                                ) : (
-                                    <>
-                                        <SparklesIcon className="w-5 h-5" />
-                                        Generate Shoot Concepts
-                                    </>
-                                )}
-                            </button>
-                        </div>
-
-                        {/* Generated Shoot Concepts */}
-                        {Array.isArray(generatedShootConcepts) && generatedShootConcepts.length > 0 && (
-                            <div className="mt-6 space-y-4">
-                                <h4 className="text-md font-semibold text-gray-900 dark:text-white">Shoot Concepts</h4>
-                                {generatedShootConcepts.map((concept, index) => (
-                                    <div
-                                        key={index}
-                                        className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
-                                    >
-                                        <p className="text-gray-900 dark:text-white whitespace-pre-line">{concept}</p>
-                                        <button
-                                            onClick={() => copyToClipboard(concept)}
-                                            className="mt-2 text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                        >
-                                            Copy
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Weekly Plan Section */}
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                            Generate Weekly Content Plan
-                        </h3>
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Your goals or preferences for the week:
-                                </label>
-                                <textarea
-                                    value={weeklyPlanPrompt}
-                                    onChange={(e) => setWeeklyPlanPrompt(e.target.value)}
-                                    placeholder="e.g., 'Focus on engagement content and behind-the-scenes this week' or 'Mix of photosets, videos, and interactive posts'"
-                                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[100px]"
-                                />
-                            </div>
-
-                            <button
-                                onClick={handleGenerateWeeklyPlan}
-                                disabled={isGeneratingWeeklyPlan}
-                                className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                            >
-                                {isGeneratingWeeklyPlan ? (
-                                    <>
-                                        <RefreshIcon className="w-5 h-5 animate-spin" />
-                                        Generating...
-                                    </>
-                                ) : (
-                                    <>
-                                        <SparklesIcon className="w-5 h-5" />
-                                        Generate Weekly Plan
-                                    </>
-                                )}
-                            </button>
-                        </div>
-
-                        {/* Generated Weekly Plan */}
-                        {generatedWeeklyPlan && (
-                            <div className="mt-6">
-                                <div className="flex items-center justify-between mb-4">
-                                    <h4 className="text-md font-semibold text-gray-900 dark:text-white">
-                                        Weekly Content Plan
-                                    </h4>
-                                    <button
-                                        onClick={() => copyToClipboard(generatedWeeklyPlan)}
-                                        className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-1"
-                                    >
-                                        <DownloadIcon className="w-4 h-4" />
-                                        Copy
-                                    </button>
-                                </div>
-                                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                                    <pre className="text-gray-900 dark:text-white whitespace-pre-wrap font-sans">
-                                        {generatedWeeklyPlan}
-                                    </pre>
-                                </div>
-                            </div>
-                        )}
-                    </div>
                 </div>
             )}
 
@@ -1101,15 +782,6 @@ export const ContentIntelligence: React.FC = () => {
                                                     } else if (item.type === 'media_captions') {
                                                         setGeneratedMediaCaptions(item.data.captions || []);
                                                         showToast('Media captions loaded', 'success');
-                                                    } else if (item.type === 'post_ideas') {
-                                                        setGeneratedPostIdeas(item.data.ideas || []);
-                                                        showToast('Post ideas loaded', 'success');
-                                                    } else if (item.type === 'shoot_concepts') {
-                                                        setGeneratedShootConcepts(item.data.concepts || []);
-                                                        showToast('Shoot concepts loaded', 'success');
-                                                    } else if (item.type === 'weekly_plan') {
-                                                        setGeneratedWeeklyPlan(item.data.plan || JSON.stringify(item.data, null, 2));
-                                                        showToast('Weekly plan loaded', 'success');
                                                     }
                                                 }}
                                                 className="p-2 text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded"
