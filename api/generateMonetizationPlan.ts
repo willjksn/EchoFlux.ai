@@ -150,32 +150,36 @@ IMPORTANT:
       plan = parseJSON(raw);
     } catch (err) {
       console.error("Failed to parse JSON from model:", raw);
-      return res.status(500).json({
+      res.status(500).json({
         success: false,
         error: "Model returned invalid JSON",
         raw: raw.substring(0, 500),
       });
+      return;
     }
 
     // Validate structure
     if (!plan.ideas || !Array.isArray(plan.ideas)) {
-      return res.status(500).json({
+      res.status(500).json({
         success: false,
         error: "Invalid plan structure: missing ideas array",
       });
+      return;
     }
 
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       plan,
     });
+    return;
   } catch (err: any) {
     console.error("generateMonetizationPlan error:", err);
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
       error: "Failed to generate monetization plan",
       details: err?.message ?? String(err),
     });
+    return;
   }
 }
 
