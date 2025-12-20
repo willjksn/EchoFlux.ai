@@ -51,8 +51,8 @@ import { lazy, Suspense } from 'react';
 
 // Lazy load heavy components for code splitting
 const Strategy = lazy(() => import('./components/Strategy').then(module => ({ default: module.Strategy })));
-const OnlyFansStudio = lazy(() => import('./components/OnlyFansStudio').then(module => ({ default: module.OnlyFansStudio })));
-const Autopilot = lazy(() => import('./components/Autopilot').then(module => ({ default: module.default || module.Autopilot })));
+const OnlyFansStudio = lazy(() => import('./components/OnlyFansStudio'));
+const Autopilot = lazy(() => import('./components/Autopilot'));
 
 const pageTitles: Record<Page, string> = {
     dashboard: 'Dashboard',
@@ -84,29 +84,10 @@ const pageTitles: Record<Page, string> = {
 };
 
 const MainContent: React.FC = () => {
-    let user, activePage;
-    
-    try {
-        const context = useAppContext();
-        user = context?.user;
-        activePage = context?.activePage || 'dashboard';
-    } catch (error: any) {
-        console.error('Error accessing AppContext in MainContent:', error);
-        return (
-            <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full flex items-center justify-center">
-                <div className="text-center">
-                    <p className="text-red-600 dark:text-red-400 mb-2">An error occurred loading the page.</p>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-2">Context error: {error?.message || 'Unknown error'}</p>
-                    <button 
-                        onClick={() => window.location.reload()} 
-                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
-                    >
-                        Reload Page
-                    </button>
-                </div>
-            </div>
-        );
-    }
+    // Hooks must be called unconditionally - ErrorBoundary will catch any errors
+    const context = useAppContext();
+    const user = context?.user;
+    const activePage = context?.activePage || 'dashboard';
 
     try {
         switch (activePage) {
@@ -148,9 +129,11 @@ const MainContent: React.FC = () => {
                 </Suspense>
             );
             case 'onlyfansStudio': return (
-                <Suspense fallback={<div className="p-6 text-center text-gray-500 dark:text-gray-400">Loading OnlyFans Studio...</div>}>
-                    <OnlyFansStudio />
-                </Suspense>
+                <ErrorBoundary>
+                    <Suspense fallback={<div className="p-6 text-center text-gray-500 dark:text-gray-400">Loading OnlyFans Studio...</div>}>
+                        <OnlyFansStudio />
+                    </Suspense>
+                </ErrorBoundary>
             );
             default: return <Dashboard />;
         }
@@ -435,7 +418,9 @@ const AppContent: React.FC = () => {
             <div className="flex-1 flex flex-col overflow-hidden relative">
                 <Header pageTitle={pageTitle} />
                 <main className="flex-1 overflow-x-hidden overflow-y-auto p-6 custom-scrollbar dark:custom-scrollbar">
-                    <MainContent />
+                    <ErrorBoundary>
+                        <MainContent />
+                    </ErrorBoundary>
                 </main>
                 {isCRMOpen && <CRMSidebar />}
             </div>

@@ -1,15 +1,31 @@
 import React, { useState } from 'react';
 import { useAppContext } from './AppContext';
-import { SparklesIcon, RefreshIcon, DownloadIcon, CheckIcon, UploadIcon, ImageIcon, VideoIcon, XMarkIcon } from './icons/UIIcons';
-import { auth, storage } from '../firebaseConfig';
+import { SparklesIcon, RefreshIcon, DownloadIcon, CheckIcon, UploadIcon, ImageIcon, VideoIcon, XMarkIcon, CopyIcon } from './icons/UIIcons';
+import { auth, storage, db } from '../firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { collection, addDoc, Timestamp } from 'firebase/firestore';
 
 type ContentType = 'captions' | 'mediaCaptions' | 'postIdeas' | 'shootConcepts' | 'weeklyPlan';
 
 export const OnlyFansContentBrain: React.FC = () => {
-    const { user, showToast } = useAppContext();
+    // Hooks must be called unconditionally - ErrorBoundary will catch any errors
+    const context = useAppContext();
+    const user = context?.user;
+    const showToast = context?.showToast || (() => {});
+    
     const [activeTab, setActiveTab] = useState<ContentType>('captions');
     const [isGenerating, setIsGenerating] = useState(false);
+    
+    // Show loading/error state if user is not available
+    if (!user) {
+        return (
+            <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full flex items-center justify-center">
+                <div className="text-center">
+                    <p className="text-gray-500 dark:text-gray-400 mb-4">Loading Content Brain...</p>
+                </div>
+            </div>
+        );
+    }
     
     // Caption generation state
     const [captionPrompt, setCaptionPrompt] = useState('');
@@ -36,6 +52,15 @@ export const OnlyFansContentBrain: React.FC = () => {
     // Weekly plan state
     const [weeklyPlanPrompt, setWeeklyPlanPrompt] = useState('');
     const [generatedWeeklyPlan, setGeneratedWeeklyPlan] = useState<string>('');
+
+    // Modal state for AI features
+    const [optimizeResult, setOptimizeResult] = useState<any>(null);
+    const [predictResult, setPredictResult] = useState<any>(null);
+    const [repurposeResult, setRepurposeResult] = useState<any>(null);
+    const [showOptimizeModal, setShowOptimizeModal] = useState(false);
+    const [showPredictModal, setShowPredictModal] = useState(false);
+    const [showRepurposeModal, setShowRepurposeModal] = useState(false);
+    const [currentCaptionForAI, setCurrentCaptionForAI] = useState<{caption: string; index: number; type: 'plain' | 'media'}> | null>(null);
 
     const handleGenerateCaptions = async () => {
         if (!captionPrompt.trim()) {
@@ -71,14 +96,21 @@ export const OnlyFansContentBrain: React.FC = () => {
 
             const data = await response.json();
             // API returns array of {caption: string, hashtags: string[]}
-            const captions = Array.isArray(data) 
-                ? data.map((item: any) => {
+            let captions: string[] = [];
+            if (Array.isArray(data)) {
+                captions = data.map((item: any) => {
                     const caption = item.caption || '';
-                    const hashtags = item.hashtags || [];
+                    const hashtags = Array.isArray(item.hashtags) ? item.hashtags : [];
                     return hashtags.length > 0 ? `${caption} ${hashtags.join(' ')}` : caption;
-                })
-                : [];
-            setGeneratedCaptions(captions);
+                });
+            } else if (data && typeof data === 'object' && Array.isArray(data.captions)) {
+                captions = data.captions.map((item: any) => {
+                    const caption = item.caption || '';
+                    const hashtags = Array.isArray(item.hashtags) ? item.hashtags : [];
+                    return hashtags.length > 0 ? `${caption} ${hashtags.join(' ')}` : caption;
+                });
+            }
+            setGeneratedCaptions(Array.isArray(captions) ? captions : []);
             showToast('Captions generated successfully!', 'success');
         } catch (error: any) {
             console.error('Error generating captions:', error);
@@ -123,8 +155,10 @@ export const OnlyFansContentBrain: React.FC = () => {
             const data = await response.json();
             const text = data.text || data.caption || '';
             // Parse the numbered list into array
-            const ideas = text.split(/\d+\./).filter(item => item.trim()).map(item => item.trim());
-            setGeneratedPostIdeas(ideas.length > 0 ? ideas : [text]);
+            const ideas = typeof text === 'string' 
+                ? text.split(/\d+\./).filter(item => item.trim()).map(item => item.trim())
+                : [];
+            setGeneratedPostIdeas(Array.isArray(ideas) && ideas.length > 0 ? ideas : (typeof text === 'string' ? [text] : []));
             showToast('Post ideas generated successfully!', 'success');
         } catch (error: any) {
             console.error('Error generating post ideas:', error);
@@ -175,8 +209,10 @@ export const OnlyFansContentBrain: React.FC = () => {
             const data = await response.json();
             const text = data.text || data.caption || '';
             // Parse the numbered list into array
-            const concepts = text.split(/\d+\./).filter(item => item.trim()).map(item => item.trim());
-            setGeneratedShootConcepts(concepts.length > 0 ? concepts : [text]);
+            const concepts = typeof text === 'string'
+                ? text.split(/\d+\./).filter(item => item.trim()).map(item => item.trim())
+                : [];
+            setGeneratedShootConcepts(Array.isArray(concepts) && concepts.length > 0 ? concepts : (typeof text === 'string' ? [text] : []));
             showToast('Shoot concepts generated successfully!', 'success');
         } catch (error: any) {
             console.error('Error generating shoot concepts:', error);
@@ -230,6 +266,20 @@ export const OnlyFansContentBrain: React.FC = () => {
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text);
         showToast('Copied to clipboard!', 'success');
+    };
+
+    const saveToHistory = async (type: 'optimize' | 'predict' | 'repurpose', title: string, data: any) => {
+        if (!user?.id) return;
+        try {
+            await addDoc(collection(db, 'users', user.id, 'content_intelligence_history'), {
+                type,
+                title,
+                data,
+                createdAt: Timestamp.now(),
+            });
+        } catch (error: any) {
+            console.error('Error saving to history:', error);
+        }
     };
 
     const handleGenerateMediaCaptions = async () => {
@@ -305,8 +355,19 @@ export const OnlyFansContentBrain: React.FC = () => {
 
             const data = await response.json();
             // API returns array of {caption: string, hashtags: string[]}
-            const captions = Array.isArray(data) ? data : [];
-            setGeneratedMediaCaptions(captions);
+            let captions: {caption: string; hashtags: string[]}[] = [];
+            if (Array.isArray(data)) {
+                captions = data.map((item: any) => ({
+                    caption: item.caption || '',
+                    hashtags: Array.isArray(item.hashtags) ? item.hashtags : [],
+                }));
+            } else if (data && typeof data === 'object' && Array.isArray(data.captions)) {
+                captions = data.captions.map((item: any) => ({
+                    caption: item.caption || '',
+                    hashtags: Array.isArray(item.hashtags) ? item.hashtags : [],
+                }));
+            }
+            setGeneratedMediaCaptions(Array.isArray(captions) ? captions : []);
             showToast('Captions generated successfully!', 'success');
         } catch (error: any) {
             console.error('Error generating media captions:', error);
@@ -439,6 +500,12 @@ export const OnlyFansContentBrain: React.FC = () => {
         setMediaPreview(previewUrl);
     };
 
+    // Guard against any unexpected non-array values that may slip in from API responses
+    const captionsList = Array.isArray(generatedCaptions) ? generatedCaptions : [];
+    const mediaCaptionsList = Array.isArray(generatedMediaCaptions) ? generatedMediaCaptions : [];
+    const postIdeasList = Array.isArray(generatedPostIdeas) ? generatedPostIdeas : [];
+    const shootConceptsList = Array.isArray(generatedShootConcepts) ? generatedShootConcepts : [];
+
     const tabs: { id: ContentType; label: string }[] = [
         { id: 'captions', label: 'AI Captions' },
         { id: 'mediaCaptions', label: 'Image/Video Captions' },
@@ -560,24 +627,144 @@ export const OnlyFansContentBrain: React.FC = () => {
                     </div>
 
                     {/* Generated Captions */}
-                    {generatedCaptions.length > 0 && (
+                    {captionsList.length > 0 && (
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                                 Generated Captions
                             </h3>
                             <div className="space-y-3">
-                                {generatedCaptions.map((caption, index) => (
+                                {captionsList.map((caption, index) => (
                                     <div
                                         key={index}
                                         className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
                                     >
                                         <p className="text-gray-900 dark:text-white mb-3">{caption}</p>
-                                        <button
-                                            onClick={() => copyToClipboard(caption)}
-                                            className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                        >
-                                            Copy
-                                        </button>
+                                        <div className="flex flex-wrap gap-2">
+                                            <button
+                                                onClick={() => copyToClipboard(caption)}
+                                                className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                            >
+                                                Copy
+                                            </button>
+                                            <button
+                                                onClick={async () => {
+                                                    setCurrentCaptionForAI({ caption, index, type: 'plain' });
+                                                    setIsGenerating(true);
+                                                    try {
+                                                        const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+                                                        const response = await fetch('/api/optimizeCaption', {
+                                                            method: 'POST',
+                                                            headers: {
+                                                                'Content-Type': 'application/json',
+                                                                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                                                            },
+                                                            body: JSON.stringify({
+                                                                originalCaption: caption,
+                                                                platform: 'OnlyFans',
+                                                                niche: 'Adult Content Creator (OnlyFans)',
+                                                                tone: captionTone,
+                                                                goal: captionGoal,
+                                                            }),
+                                                        });
+                                                        if (!response.ok) throw new Error('Failed to optimize');
+                                                        const data = await response.json();
+                                                        if (data.success) {
+                                                            setOptimizeResult(data);
+                                                            setShowOptimizeModal(true);
+                                                            await saveToHistory('optimize', `Caption Optimization - OnlyFans`, data);
+                                                            showToast('Caption optimized!', 'success');
+                                                        }
+                                                    } catch (error: any) {
+                                                        showToast(error.message || 'Failed to optimize', 'error');
+                                                    } finally {
+                                                        setIsGenerating(false);
+                                                    }
+                                                }}
+                                                disabled={isGenerating}
+                                                className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 disabled:opacity-50"
+                                            >
+                                                Optimize
+                                            </button>
+                                            <button
+                                                onClick={async () => {
+                                                    setCurrentCaptionForAI({ caption, index, type: 'plain' });
+                                                    setIsGenerating(true);
+                                                    try {
+                                                        const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+                                                        const response = await fetch('/api/predictContentPerformance', {
+                                                            method: 'POST',
+                                                            headers: {
+                                                                'Content-Type': 'application/json',
+                                                                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                                                            },
+                                                            body: JSON.stringify({
+                                                                caption: caption,
+                                                                platform: 'OnlyFans',
+                                                                niche: 'Adult Content Creator (OnlyFans)',
+                                                                tone: captionTone,
+                                                                goal: captionGoal,
+                                                            }),
+                                                        });
+                                                        if (!response.ok) throw new Error('Failed to predict');
+                                                        const data = await response.json();
+                                                        if (data.success) {
+                                                            setPredictResult(data);
+                                                            setShowPredictModal(true);
+                                                            await saveToHistory('predict', `Performance Prediction - OnlyFans`, data);
+                                                            showToast('Performance predicted!', 'success');
+                                                        }
+                                                    } catch (error: any) {
+                                                        showToast(error.message || 'Failed to predict', 'error');
+                                                    } finally {
+                                                        setIsGenerating(false);
+                                                    }
+                                                }}
+                                                disabled={isGenerating}
+                                                className="text-sm text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 disabled:opacity-50"
+                                            >
+                                                Predict
+                                            </button>
+                                            <button
+                                                onClick={async () => {
+                                                    setCurrentCaptionForAI({ caption, index, type: 'plain' });
+                                                    setIsGenerating(true);
+                                                    try {
+                                                        const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+                                                        const response = await fetch('/api/repurposeContent', {
+                                                            method: 'POST',
+                                                            headers: {
+                                                                'Content-Type': 'application/json',
+                                                                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                                                            },
+                                                            body: JSON.stringify({
+                                                                originalContent: caption,
+                                                                originalPlatform: 'OnlyFans',
+                                                                targetPlatforms: ['Instagram', 'TikTok', 'X', 'LinkedIn'],
+                                                                niche: 'Adult Content Creator (OnlyFans)',
+                                                                tone: captionTone,
+                                                                goal: captionGoal,
+                                                            }),
+                                                        });
+                                                        if (!response.ok) throw new Error('Failed to repurpose');
+                                                        const data = await response.json();
+                                                        if (data.success) {
+                                                            setRepurposeResult(data);
+                                                            setShowRepurposeModal(true);
+                                                            await saveToHistory('repurpose', `Content Repurposing - OnlyFans`, data);
+                                                            showToast('Content repurposed!', 'success');
+                                                        }
+                                                    } catch (error: any) {
+                                                        showToast(error.message || 'Failed to repurpose', 'error');
+                                                    } finally {
+                                                        setIsGenerating(false);
+                                                    }
+                                                }}
+                                                disabled={isGenerating}
+                                                className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 disabled:opacity-50"
+                                            >
+                                                Repurpose
+                                            </button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -721,13 +908,13 @@ export const OnlyFansContentBrain: React.FC = () => {
                     </div>
 
                     {/* Generated Media Captions */}
-                    {generatedMediaCaptions.length > 0 && (
+                    {mediaCaptionsList.length > 0 && (
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                                 Generated Captions
                             </h3>
                             <div className="space-y-3">
-                                {generatedMediaCaptions.map((result, index) => (
+                                {mediaCaptionsList.map((result, index) => (
                                     <div
                                         key={index}
                                         className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
@@ -738,12 +925,132 @@ export const OnlyFansContentBrain: React.FC = () => {
                                                 {result.hashtags.join(' ')}
                                             </p>
                                         )}
-                                        <button
-                                            onClick={() => copyToClipboard(`${result.caption} ${(result.hashtags || []).join(' ')}`.trim())}
-                                            className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                        >
-                                            Copy Full Caption
-                                        </button>
+                                        <div className="flex flex-wrap gap-2">
+                                            <button
+                                                onClick={() => copyToClipboard(`${result.caption} ${(result.hashtags || []).join(' ')}`.trim())}
+                                                className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                            >
+                                                Copy
+                                            </button>
+                                            <button
+                                                onClick={async () => {
+                                                    setCurrentCaptionForAI({ caption: result.caption, index, type: 'media' });
+                                                    setIsGenerating(true);
+                                                    try {
+                                                        const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+                                                        const response = await fetch('/api/optimizeCaption', {
+                                                            method: 'POST',
+                                                            headers: {
+                                                                'Content-Type': 'application/json',
+                                                                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                                                            },
+                                                            body: JSON.stringify({
+                                                                originalCaption: result.caption,
+                                                                platform: 'OnlyFans',
+                                                                niche: 'Adult Content Creator (OnlyFans)',
+                                                                tone: mediaCaptionTone,
+                                                                goal: mediaCaptionGoal,
+                                                            }),
+                                                        });
+                                                        if (!response.ok) throw new Error('Failed to optimize');
+                                                        const data = await response.json();
+                                                        if (data.success) {
+                                                            setOptimizeResult(data);
+                                                            setShowOptimizeModal(true);
+                                                            await saveToHistory('optimize', `Caption Optimization - OnlyFans`, data);
+                                                            showToast('Caption optimized!', 'success');
+                                                        }
+                                                    } catch (error: any) {
+                                                        showToast(error.message || 'Failed to optimize', 'error');
+                                                    } finally {
+                                                        setIsGenerating(false);
+                                                    }
+                                                }}
+                                                disabled={isGenerating}
+                                                className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 disabled:opacity-50"
+                                            >
+                                                Optimize
+                                            </button>
+                                            <button
+                                                onClick={async () => {
+                                                    setCurrentCaptionForAI({ caption: result.caption, index, type: 'media' });
+                                                    setIsGenerating(true);
+                                                    try {
+                                                        const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+                                                        const response = await fetch('/api/predictContentPerformance', {
+                                                            method: 'POST',
+                                                            headers: {
+                                                                'Content-Type': 'application/json',
+                                                                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                                                            },
+                                                            body: JSON.stringify({
+                                                                caption: result.caption,
+                                                                platform: 'OnlyFans',
+                                                                niche: 'Adult Content Creator (OnlyFans)',
+                                                                tone: mediaCaptionTone,
+                                                                goal: mediaCaptionGoal,
+                                                            }),
+                                                        });
+                                                        if (!response.ok) throw new Error('Failed to predict');
+                                                        const data = await response.json();
+                                                        if (data.success) {
+                                                            setPredictResult(data);
+                                                            setShowPredictModal(true);
+                                                            await saveToHistory('predict', `Performance Prediction - OnlyFans`, data);
+                                                            showToast('Performance predicted!', 'success');
+                                                        }
+                                                    } catch (error: any) {
+                                                        showToast(error.message || 'Failed to predict', 'error');
+                                                    } finally {
+                                                        setIsGenerating(false);
+                                                    }
+                                                }}
+                                                disabled={isGenerating}
+                                                className="text-sm text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 disabled:opacity-50"
+                                            >
+                                                Predict
+                                            </button>
+                                            <button
+                                                onClick={async () => {
+                                                    setCurrentCaptionForAI({ caption: result.caption, index, type: 'media' });
+                                                    setIsGenerating(true);
+                                                    try {
+                                                        const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+                                                        const response = await fetch('/api/repurposeContent', {
+                                                            method: 'POST',
+                                                            headers: {
+                                                                'Content-Type': 'application/json',
+                                                                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                                                            },
+                                                            body: JSON.stringify({
+                                                                originalContent: result.caption,
+                                                                originalPlatform: 'OnlyFans',
+                                                                targetPlatforms: ['Instagram', 'TikTok', 'X', 'LinkedIn'],
+                                                                niche: 'Adult Content Creator (OnlyFans)',
+                                                                tone: mediaCaptionTone,
+                                                                goal: mediaCaptionGoal,
+                                                            }),
+                                                        });
+                                                        if (!response.ok) throw new Error('Failed to repurpose');
+                                                        const data = await response.json();
+                                                        if (data.success) {
+                                                            setRepurposeResult(data);
+                                                            setShowRepurposeModal(true);
+                                                            await saveToHistory('repurpose', `Content Repurposing - OnlyFans`, data);
+                                                            showToast('Content repurposed!', 'success');
+                                                        }
+                                                    } catch (error: any) {
+                                                        showToast(error.message || 'Failed to repurpose', 'error');
+                                                    } finally {
+                                                        setIsGenerating(false);
+                                                    }
+                                                }}
+                                                disabled={isGenerating}
+                                                className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 disabled:opacity-50"
+                                            >
+                                                Repurpose
+                                            </button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -794,13 +1101,13 @@ export const OnlyFansContentBrain: React.FC = () => {
                     </div>
 
                     {/* Generated Post Ideas */}
-                    {generatedPostIdeas.length > 0 && (
+                    {postIdeasList.length > 0 && (
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                                 Post Ideas
                             </h3>
                             <div className="space-y-3">
-                                {generatedPostIdeas.map((idea, index) => (
+                                {postIdeasList.map((idea, index) => (
                                     <div
                                         key={index}
                                         className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
@@ -862,13 +1169,13 @@ export const OnlyFansContentBrain: React.FC = () => {
                     </div>
 
                     {/* Generated Shoot Concepts */}
-                    {generatedShootConcepts.length > 0 && (
+                    {shootConceptsList.length > 0 && (
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                                 Shoot Concepts
                             </h3>
                             <div className="space-y-4">
-                                {generatedShootConcepts.map((concept, index) => (
+                                {shootConceptsList.map((concept, index) => (
                                     <div
                                         key={index}
                                         className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
@@ -953,6 +1260,434 @@ export const OnlyFansContentBrain: React.FC = () => {
                     )}
                 </div>
             )}
+
+            {/* Optimize Modal */}
+            {showOptimizeModal && optimizeResult && (
+                <OptimizeModal
+                    result={optimizeResult}
+                    onClose={() => setShowOptimizeModal(false)}
+                    onCopy={(text) => {
+                        navigator.clipboard.writeText(text);
+                        showToast('Copied to clipboard!', 'success');
+                    }}
+                />
+            )}
+
+            {/* Predict Modal */}
+            {showPredictModal && predictResult && (
+                <PredictModal
+                    result={predictResult}
+                    onClose={() => setShowPredictModal(false)}
+                    onCopy={(text) => {
+                        navigator.clipboard.writeText(text);
+                        showToast('Copied to clipboard!', 'success');
+                    }}
+                />
+            )}
+
+            {/* Repurpose Modal */}
+            {showRepurposeModal && repurposeResult && repurposeResult.repurposedContent !== undefined && (
+                <RepurposeModal
+                    result={repurposeResult}
+                    onClose={() => setShowRepurposeModal(false)}
+                    onCopy={(text) => {
+                        navigator.clipboard.writeText(text);
+                        showToast('Copied to clipboard!', 'success');
+                    }}
+                />
+            )}
+        </div>
+    );
+};
+
+// Optimize Modal Component
+const OptimizeModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: string) => void }> = ({ result, onClose, onCopy }) => {
+    // Safety check: ensure result is valid
+    if (!result || typeof result !== 'object' || Array.isArray(result)) {
+        return null;
+    }
+    
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+                <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Caption Optimization</h2>
+                    <button
+                        onClick={onClose}
+                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    >
+                        <XMarkIcon className="w-6 h-6" />
+                    </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                    {/* Original vs Optimized */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Original</h3>
+                            <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                <p className="text-gray-900 dark:text-white whitespace-pre-wrap">{result.originalCaption}</p>
+                            </div>
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Optimized</h3>
+                            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                <p className="text-blue-900 dark:text-blue-200 whitespace-pre-wrap">{result.optimizedCaption}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Scores */}
+                    {result.scores && typeof result.scores === 'object' && !Array.isArray(result.scores) && result.scores !== null && (
+                        <div>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Quality Scores</h3>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                {result.scores && typeof result.scores === 'object' && result.scores !== null
+                                    ? Object.entries(result.scores).map(([key, value]: [string, any]) => (
+                                        <div key={key} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</p>
+                                            <p className="text-2xl font-bold text-primary-600 dark:text-primary-400">{value}/10</p>
+                                        </div>
+                                    ))
+                                    : null}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Improvements */}
+                    {Array.isArray(result.improvements) && result.improvements.length > 0 && (
+                        <div>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Improvements Made</h3>
+                            <div className="space-y-2">
+                                {result.improvements.map((imp: any, idx: number) => (
+                                    <div key={idx} className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                                        <p className="text-sm font-medium text-gray-900 dark:text-white mb-1 capitalize">{imp.area}</p>
+                                        <p className="text-xs text-gray-600 dark:text-gray-400">{imp.fix}</p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-500 mt-1 italic">{imp.impact}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Hashtag Suggestions */}
+                    {Array.isArray(result.hashtagSuggestions) && result.hashtagSuggestions.length > 0 && (
+                        <div>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Hashtag Suggestions</h3>
+                            <div className="flex flex-wrap gap-2">
+                                {result.hashtagSuggestions.map((tag: any, idx: number) => (
+                                    <span
+                                        key={idx}
+                                        className="px-3 py-1 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-full text-sm"
+                                    >
+                                        #{tag.hashtag}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
+                    <button
+                        onClick={() => onCopy(result.optimizedCaption)}
+                        className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
+                    >
+                        <CopyIcon className="w-4 h-4" />
+                        Copy Optimized
+                    </button>
+                    <button
+                        onClick={onClose}
+                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+                    >
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Predict Modal Component
+const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: string) => void }> = ({ result, onClose, onCopy }) => {
+    // Safety check: ensure result is valid
+    if (!result || typeof result !== 'object' || Array.isArray(result)) {
+        return null;
+    }
+    
+    const prediction = result.prediction || {};
+    const level = prediction.level || 'Medium';
+    const score = prediction.score || 50;
+    const confidence = prediction.confidence || 50;
+
+    const getLevelColor = (level: string) => {
+        if (level === 'High') return 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800';
+        if (level === 'Medium') return 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800';
+        return 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800';
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+                <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Performance Prediction</h2>
+                    <button
+                        onClick={onClose}
+                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    >
+                        <XMarkIcon className="w-6 h-6" />
+                    </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                    {/* Prediction Summary */}
+                    <div className={`p-6 rounded-lg border-2 ${getLevelColor(level)}`}>
+                        <div className="text-center">
+                            <p className="text-sm font-medium mb-2">Predicted Performance</p>
+                            <p className="text-4xl font-bold mb-2">{level}</p>
+                            <div className="flex items-center justify-center gap-4 mt-4">
+                                <div>
+                                    <p className="text-xs opacity-75">Score</p>
+                                    <p className="text-2xl font-bold">{score}/100</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs opacity-75">Confidence</p>
+                                    <p className="text-2xl font-bold">{confidence}%</p>
+                                </div>
+                            </div>
+                            {prediction.reasoning && (
+                                <p className="text-sm mt-4 opacity-90">{prediction.reasoning}</p>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Factor Breakdown */}
+                    {result.factors && typeof result.factors === 'object' && !Array.isArray(result.factors) && result.factors !== null && (
+                        <div>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Factor Analysis</h3>
+                            <div className="space-y-3">
+                                {result.factors && typeof result.factors === 'object' && result.factors !== null
+                                    ? Object.entries(result.factors).map(([key, value]: [string, any]) => (
+                                        <div key={key} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <p className="text-sm font-medium text-gray-900 dark:text-white capitalize">
+                                                {key.replace(/([A-Z])/g, ' $1').trim()}
+                                            </p>
+                                            <p className="text-lg font-bold text-primary-600 dark:text-primary-400">
+                                                {value.score || 0}/100
+                                            </p>
+                                        </div>
+                                        {value.analysis && (
+                                            <p className="text-xs text-gray-600 dark:text-gray-400">{value.analysis}</p>
+                                        )}
+                                    </div>
+                                    ))
+                                    : null}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Improvements */}
+                    {Array.isArray(result.improvements) && result.improvements.length > 0 ? (
+                        <div>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Improvement Suggestions</h3>
+                            <div className="space-y-2">
+                                {result.improvements.map((imp: any, idx: number) => (
+                                    <div key={idx} className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                        <div className="flex items-start justify-between mb-1">
+                                            <p className="text-sm font-medium text-gray-900 dark:text-white capitalize">{imp.factor}</p>
+                                            <span className={`text-xs px-2 py-1 rounded ${
+                                                imp.priority === 'high' ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300' :
+                                                imp.priority === 'medium' ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300' :
+                                                'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                            }`}>
+                                                {imp.priority}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">{imp.currentIssue}</p>
+                                        <p className="text-xs text-gray-700 dark:text-gray-300 font-medium">{imp.suggestion}</p>
+                                        <p className="text-xs text-primary-600 dark:text-primary-400 mt-1">{imp.expectedImpact}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ) : null}
+
+                    {/* Optimized Version */}
+                    {result.optimizedVersion && (
+                        <div>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Optimized Version</h3>
+                            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                                <p className="text-gray-900 dark:text-white whitespace-pre-wrap mb-2">{result.optimizedVersion.caption}</p>
+                                {result.optimizedVersion.expectedBoost && (
+                                    <p className="text-xs text-green-700 dark:text-green-300 font-medium">
+                                        Expected Boost: {result.optimizedVersion.expectedBoost}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Summary */}
+                    {result.summary && (
+                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                            <p className="text-blue-900 dark:text-blue-200 text-sm">{result.summary}</p>
+                        </div>
+                    )}
+                </div>
+
+                <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
+                    {result.optimizedVersion && (
+                        <button
+                            onClick={() => onCopy(result.optimizedVersion.caption)}
+                            className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
+                        >
+                            <CopyIcon className="w-4 h-4" />
+                            Copy Optimized
+                        </button>
+                    )}
+                    <button
+                        onClick={onClose}
+                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+                    >
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Repurpose Modal Component
+const RepurposeModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: string) => void }> = ({ result, onClose, onCopy }) => {
+    // Defensive check: ensure repurposedContent is always an array (handle cases where API returns 0 or other non-array values)
+    let repurposedContent: any[] = [];
+    if (result && result !== null && typeof result === 'object') {
+        const content = result.repurposedContent;
+        if (content !== undefined && content !== null) {
+            if (Array.isArray(content)) {
+                repurposedContent = content;
+            } else {
+                // If API returns 0, string, or other non-array, default to empty array
+                repurposedContent = [];
+            }
+        }
+    }
+
+    const copyPlatformContent = (item: any) => {
+        const hashtags = Array.isArray(item.hashtags) ? item.hashtags : [];
+        const optimizations = Array.isArray(item.optimizations) ? item.optimizations : [];
+        const text = `${item.platform || ''} (${item.format || ''})\n\n${item.caption || ''}\n\nHashtags: ${hashtags.join(' ')}\n\nOptimizations:\n${optimizations.map((opt: string) => `• ${opt}`).join('\n')}`;
+        onCopy(text);
+    };
+
+    const copyAllContent = () => {
+        // Double-check that repurposedContent is an array (defensive programming)
+        const safeContent = Array.isArray(repurposedContent) ? repurposedContent : [];
+        if (safeContent.length === 0) {
+            onCopy('No content to copy');
+            return;
+        }
+        const text = safeContent.map((item: any) => {
+            const hashtags = Array.isArray(item.hashtags) ? item.hashtags : [];
+            const optimizations = Array.isArray(item.optimizations) ? item.optimizations : [];
+            return `--- ${item.platform || ''} (${item.format || ''}) ---\n${item.caption || ''}\n\nHashtags: ${hashtags.join(' ')}\n\nOptimizations:\n${optimizations.map((opt: string) => `• ${opt}`).join('\n')}`;
+        }).join('\n\n');
+        onCopy(text);
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+                <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Repurposed Content</h2>
+                    <button
+                        onClick={onClose}
+                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    >
+                        <XMarkIcon className="w-6 h-6" />
+                    </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                    {result.summary && (
+                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                            <p className="text-blue-900 dark:text-blue-200 text-sm">{result.summary}</p>
+                        </div>
+                    )}
+
+                    {Array.isArray(repurposedContent) && repurposedContent.length > 0 && repurposedContent.map((item: any, idx: number) => (
+                        <div key={idx} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                            <div className="flex items-start justify-between mb-3">
+                                <div>
+                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{item.platform}</h3>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">{item.format}</p>
+                                </div>
+                                <button
+                                    onClick={() => copyPlatformContent(item)}
+                                    className="px-3 py-1 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm flex items-center gap-1"
+                                >
+                                    <CopyIcon className="w-4 h-4" />
+                                    Copy
+                                </button>
+                            </div>
+
+                            <div className="mb-3">
+                                <p className="text-gray-900 dark:text-white whitespace-pre-wrap">{item.caption}</p>
+                            </div>
+
+                            {Array.isArray(item.hashtags) && item.hashtags.length > 0 && (
+                                <div className="mb-3">
+                                    <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Hashtags:</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {item.hashtags.map((tag: string, tagIdx: number) => (
+                                            <span
+                                                key={tagIdx}
+                                                className="px-2 py-1 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded text-xs"
+                                            >
+                                                #{tag}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {Array.isArray(item.optimizations) && item.optimizations.length > 0 && (
+                                <div>
+                                    <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Optimizations:</p>
+                                    <ul className="list-disc list-inside space-y-1">
+                                        {item.optimizations.map((opt: string, optIdx: number) => (
+                                            <li key={optIdx} className="text-xs text-gray-600 dark:text-gray-400">{opt}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+
+                            {item.suggestedPostingTime && (
+                                <p className="text-xs text-primary-600 dark:text-primary-400 mt-2">
+                                    💡 Best posting time: {item.suggestedPostingTime}
+                                </p>
+                            )}
+                        </div>
+                    ))}
+                </div>
+
+                <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
+                    <button
+                        onClick={copyAllContent}
+                        className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
+                    >
+                        <CopyIcon className="w-4 h-4" />
+                        Copy All
+                    </button>
+                    <button
+                        onClick={onClose}
+                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+                    >
+                        Close
+                    </button>
+                </div>
+            </div>
         </div>
     );
 };

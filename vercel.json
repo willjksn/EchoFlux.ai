@@ -9,7 +9,11 @@
       "destination": "/api/:path*"
     },
     {
-      "source": "/((?!api).*)",
+      "source": "/assets/:path*",
+      "destination": "/assets/:path*"
+    },
+    {
+      "source": "/((?!api|assets).*)",
       "destination": "/index.html"
     }
   ],
