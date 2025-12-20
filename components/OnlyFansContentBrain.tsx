@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from './AppContext';
 import { SparklesIcon, RefreshIcon, DownloadIcon, CheckIcon, UploadIcon, ImageIcon, VideoIcon, XMarkIcon, CopyIcon } from './icons/UIIcons';
 import { auth, storage, db } from '../firebaseConfig';
@@ -8,24 +8,39 @@ import { collection, addDoc, Timestamp } from 'firebase/firestore';
 type ContentType = 'captions' | 'mediaCaptions' | 'postIdeas' | 'shootConcepts' | 'weeklyPlan';
 
 export const OnlyFansContentBrain: React.FC = () => {
-    // Hooks must be called unconditionally - ErrorBoundary will catch any errors
-    const context = useAppContext();
-    const user = context?.user;
-    const showToast = context?.showToast || (() => {});
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     
-    const [activeTab, setActiveTab] = useState<ContentType>('captions');
-    const [isGenerating, setIsGenerating] = useState(false);
-    
-    // Show loading/error state if user is not available
-    if (!user) {
+    let user, showToast;
+    try {
+        const context = useAppContext();
+        user = context?.user;
+        showToast = context?.showToast;
+    } catch (err: any) {
+        console.error('Error accessing AppContext in OnlyFansContentBrain:', err);
         return (
             <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full flex items-center justify-center">
                 <div className="text-center">
-                    <p className="text-gray-500 dark:text-gray-400 mb-4">Loading Content Brain...</p>
+                    <p className="text-red-600 dark:text-red-400 mb-2">Failed to load Content Brain</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-2">{err?.message || 'Context error'}</p>
+                    <button 
+                        onClick={() => window.location.reload()} 
+                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+                    >
+                        Reload Page
+                    </button>
                 </div>
             </div>
         );
     }
+
+    useEffect(() => {
+        // Component mounted successfully
+        setIsLoading(false);
+        console.log('OnlyFansContentBrain component loaded successfully');
+    }, []);
+    const [activeTab, setActiveTab] = useState<ContentType>('captions');
+    const [isGenerating, setIsGenerating] = useState(false);
     
     // Caption generation state
     const [captionPrompt, setCaptionPrompt] = useState('');
@@ -64,12 +79,13 @@ export const OnlyFansContentBrain: React.FC = () => {
 
     const handleGenerateCaptions = async () => {
         if (!captionPrompt.trim()) {
-            showToast('Please enter a description or idea for your caption', 'error');
+            showToast?.('Please enter a description or idea for your caption', 'error');
             return;
         }
 
         setIsGenerating(true);
         try {
+            console.log('Generating captions...');
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             
             const response = await fetch('/api/generateCaptions', {
@@ -111,10 +127,12 @@ export const OnlyFansContentBrain: React.FC = () => {
                 });
             }
             setGeneratedCaptions(Array.isArray(captions) ? captions : []);
-            showToast('Captions generated successfully!', 'success');
+            showToast?.('Captions generated successfully!', 'success');
         } catch (error: any) {
             console.error('Error generating captions:', error);
-            showToast(error.message || 'Failed to generate captions. Please try again.', 'error');
+            const errorMsg = error.message || 'Failed to generate captions. Please try again.';
+            showToast?.(errorMsg, 'error');
+            setError(errorMsg);
         } finally {
             setIsGenerating(false);
         }
@@ -122,7 +140,7 @@ export const OnlyFansContentBrain: React.FC = () => {
 
     const handleGeneratePostIdeas = async () => {
         if (!postIdeaPrompt.trim()) {
-            showToast('Please enter what kind of post ideas you\'re looking for', 'error');
+            showToast?.('Please enter what kind of post ideas you\'re looking for', 'error');
             return;
         }
 
@@ -159,10 +177,12 @@ export const OnlyFansContentBrain: React.FC = () => {
                 ? text.split(/\d+\./).filter(item => item.trim()).map(item => item.trim())
                 : [];
             setGeneratedPostIdeas(Array.isArray(ideas) && ideas.length > 0 ? ideas : (typeof text === 'string' ? [text] : []));
-            showToast('Post ideas generated successfully!', 'success');
+            showToast?.('Post ideas generated successfully!', 'success');
         } catch (error: any) {
             console.error('Error generating post ideas:', error);
-            showToast(error.message || 'Failed to generate post ideas. Please try again.', 'error');
+            const errorMsg = error.message || 'Failed to generate post ideas. Please try again.';
+            showToast?.(errorMsg, 'error');
+            setError(errorMsg);
         } finally {
             setIsGenerating(false);
         }
@@ -213,10 +233,12 @@ export const OnlyFansContentBrain: React.FC = () => {
                 ? text.split(/\d+\./).filter(item => item.trim()).map(item => item.trim())
                 : [];
             setGeneratedShootConcepts(Array.isArray(concepts) && concepts.length > 0 ? concepts : (typeof text === 'string' ? [text] : []));
-            showToast('Shoot concepts generated successfully!', 'success');
+            showToast?.('Shoot concepts generated successfully!', 'success');
         } catch (error: any) {
             console.error('Error generating shoot concepts:', error);
-            showToast(error.message || 'Failed to generate shoot concepts. Please try again.', 'error');
+            const errorMsg = error.message || 'Failed to generate shoot concepts. Please try again.';
+            showToast?.(errorMsg, 'error');
+            setError(errorMsg);
         } finally {
             setIsGenerating(false);
         }
@@ -224,7 +246,7 @@ export const OnlyFansContentBrain: React.FC = () => {
 
     const handleGenerateWeeklyPlan = async () => {
         if (!weeklyPlanPrompt.trim()) {
-            showToast('Please describe your goals or preferences for the week', 'error');
+            showToast?.('Please describe your goals or preferences for the week', 'error');
             return;
         }
 
@@ -254,10 +276,12 @@ export const OnlyFansContentBrain: React.FC = () => {
 
             const data = await response.json();
             setGeneratedWeeklyPlan(data.plan || JSON.stringify(data, null, 2));
-            showToast('Weekly plan generated successfully!', 'success');
+            showToast?.('Weekly plan generated successfully!', 'success');
         } catch (error: any) {
             console.error('Error generating weekly plan:', error);
-            showToast(error.message || 'Failed to generate weekly plan. Please try again.', 'error');
+            const errorMsg = error.message || 'Failed to generate weekly plan. Please try again.';
+            showToast?.(errorMsg, 'error');
+            setError(errorMsg);
         } finally {
             setIsGenerating(false);
         }
@@ -284,7 +308,7 @@ export const OnlyFansContentBrain: React.FC = () => {
 
     const handleGenerateMediaCaptions = async () => {
         if (!mediaFile) {
-            showToast('Please upload an image or video', 'error');
+            showToast?.('Please upload an image or video', 'error');
             return;
         }
 
@@ -294,7 +318,7 @@ export const OnlyFansContentBrain: React.FC = () => {
         const maxSizeMB = isVideo ? 100 : 10; // Firebase Storage can handle larger files
 
         if (fileSizeMB > maxSizeMB) {
-            showToast(
+            showToast?.(
                 `File is too large (${fileSizeMB.toFixed(1)}MB). Maximum size: ${maxSizeMB}MB for ${isVideo ? 'videos' : 'images'}. Please compress or use a smaller file.`,
                 'error'
             );
@@ -368,10 +392,12 @@ export const OnlyFansContentBrain: React.FC = () => {
                 }));
             }
             setGeneratedMediaCaptions(Array.isArray(captions) ? captions : []);
-            showToast('Captions generated successfully!', 'success');
+            showToast?.('Captions generated successfully!', 'success');
         } catch (error: any) {
             console.error('Error generating media captions:', error);
-            showToast(error.message || 'Failed to generate captions. Please try again.', 'error');
+            const errorMsg = error.message || 'Failed to generate captions. Please try again.';
+            showToast?.(errorMsg, 'error');
+            setError(errorMsg);
         } finally {
             setIsGenerating(false);
         }
@@ -500,12 +526,6 @@ export const OnlyFansContentBrain: React.FC = () => {
         setMediaPreview(previewUrl);
     };
 
-    // Guard against any unexpected non-array values that may slip in from API responses
-    const captionsList = Array.isArray(generatedCaptions) ? generatedCaptions : [];
-    const mediaCaptionsList = Array.isArray(generatedMediaCaptions) ? generatedMediaCaptions : [];
-    const postIdeasList = Array.isArray(generatedPostIdeas) ? generatedPostIdeas : [];
-    const shootConceptsList = Array.isArray(generatedShootConcepts) ? generatedShootConcepts : [];
-
     const tabs: { id: ContentType; label: string }[] = [
         { id: 'captions', label: 'AI Captions' },
         { id: 'mediaCaptions', label: 'Image/Video Captions' },
@@ -513,6 +533,42 @@ export const OnlyFansContentBrain: React.FC = () => {
         { id: 'shootConcepts', label: 'Shoot Concepts' },
         { id: 'weeklyPlan', label: 'Weekly Plan' },
     ];
+
+    // Show loading state
+    if (isLoading) {
+        return (
+            <div className="max-w-5xl mx-auto p-6">
+                <div className="flex items-center justify-center min-h-[400px]">
+                    <div className="text-center">
+                        <RefreshIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 animate-spin mx-auto mb-4" />
+                        <p className="text-gray-600 dark:text-gray-400">Loading Content Brain...</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Show error state
+    if (error) {
+        return (
+            <div className="max-w-5xl mx-auto p-6">
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 text-center">
+                    <p className="text-red-600 dark:text-red-400 mb-2">Error loading Content Brain</p>
+                    <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">{error}</p>
+                    <button 
+                        onClick={() => {
+                            setError(null);
+                            setIsLoading(true);
+                            window.location.reload();
+                        }} 
+                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+                    >
+                        Reload
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="max-w-5xl mx-auto">
@@ -627,13 +683,13 @@ export const OnlyFansContentBrain: React.FC = () => {
                     </div>
 
                     {/* Generated Captions */}
-                    {captionsList.length > 0 && (
+                    {Array.isArray(generatedCaptions) && generatedCaptions.length > 0 && (
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                                 Generated Captions
                             </h3>
                             <div className="space-y-3">
-                                {captionsList.map((caption, index) => (
+                                {generatedCaptions.map((caption, index) => (
                                     <div
                                         key={index}
                                         className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
@@ -711,10 +767,10 @@ export const OnlyFansContentBrain: React.FC = () => {
                                                             setPredictResult(data);
                                                             setShowPredictModal(true);
                                                             await saveToHistory('predict', `Performance Prediction - OnlyFans`, data);
-                                                            showToast('Performance predicted!', 'success');
+                                                            showToast?.('Performance predicted!', 'success');
                                                         }
                                                     } catch (error: any) {
-                                                        showToast(error.message || 'Failed to predict', 'error');
+                                                        showToast?.(error.message || 'Failed to predict', 'error');
                                                     } finally {
                                                         setIsGenerating(false);
                                                     }
@@ -751,10 +807,10 @@ export const OnlyFansContentBrain: React.FC = () => {
                                                             setRepurposeResult(data);
                                                             setShowRepurposeModal(true);
                                                             await saveToHistory('repurpose', `Content Repurposing - OnlyFans`, data);
-                                                            showToast('Content repurposed!', 'success');
+                                                            showToast?.('Content repurposed!', 'success');
                                                         }
                                                     } catch (error: any) {
-                                                        showToast(error.message || 'Failed to repurpose', 'error');
+                                                        showToast?.(error.message || 'Failed to repurpose', 'error');
                                                     } finally {
                                                         setIsGenerating(false);
                                                     }
@@ -908,13 +964,13 @@ export const OnlyFansContentBrain: React.FC = () => {
                     </div>
 
                     {/* Generated Media Captions */}
-                    {mediaCaptionsList.length > 0 && (
+                    {Array.isArray(generatedMediaCaptions) && generatedMediaCaptions.length > 0 && (
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                                 Generated Captions
                             </h3>
                             <div className="space-y-3">
-                                {mediaCaptionsList.map((result, index) => (
+                                {generatedMediaCaptions.map((result, index) => (
                                     <div
                                         key={index}
                                         className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
@@ -997,10 +1053,10 @@ export const OnlyFansContentBrain: React.FC = () => {
                                                             setPredictResult(data);
                                                             setShowPredictModal(true);
                                                             await saveToHistory('predict', `Performance Prediction - OnlyFans`, data);
-                                                            showToast('Performance predicted!', 'success');
+                                                            showToast?.('Performance predicted!', 'success');
                                                         }
                                                     } catch (error: any) {
-                                                        showToast(error.message || 'Failed to predict', 'error');
+                                                        showToast?.(error.message || 'Failed to predict', 'error');
                                                     } finally {
                                                         setIsGenerating(false);
                                                     }
@@ -1037,10 +1093,10 @@ export const OnlyFansContentBrain: React.FC = () => {
                                                             setRepurposeResult(data);
                                                             setShowRepurposeModal(true);
                                                             await saveToHistory('repurpose', `Content Repurposing - OnlyFans`, data);
-                                                            showToast('Content repurposed!', 'success');
+                                                            showToast?.('Content repurposed!', 'success');
                                                         }
                                                     } catch (error: any) {
-                                                        showToast(error.message || 'Failed to repurpose', 'error');
+                                                        showToast?.(error.message || 'Failed to repurpose', 'error');
                                                     } finally {
                                                         setIsGenerating(false);
                                                     }
@@ -1101,13 +1157,13 @@ export const OnlyFansContentBrain: React.FC = () => {
                     </div>
 
                     {/* Generated Post Ideas */}
-                    {postIdeasList.length > 0 && (
+                    {Array.isArray(generatedPostIdeas) && generatedPostIdeas.length > 0 && (
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                                 Post Ideas
                             </h3>
                             <div className="space-y-3">
-                                {postIdeasList.map((idea, index) => (
+                                {generatedPostIdeas.map((idea, index) => (
                                     <div
                                         key={index}
                                         className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
@@ -1169,13 +1225,13 @@ export const OnlyFansContentBrain: React.FC = () => {
                     </div>
 
                     {/* Generated Shoot Concepts */}
-                    {shootConceptsList.length > 0 && (
+                    {Array.isArray(generatedShootConcepts) && generatedShootConcepts.length > 0 && (
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                                 Shoot Concepts
                             </h3>
                             <div className="space-y-4">
-                                {shootConceptsList.map((concept, index) => (
+                                {generatedShootConcepts.map((concept, index) => (
                                     <div
                                         key={index}
                                         className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
@@ -1268,7 +1324,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                     onClose={() => setShowOptimizeModal(false)}
                     onCopy={(text) => {
                         navigator.clipboard.writeText(text);
-                        showToast('Copied to clipboard!', 'success');
+                        showToast?.('Copied to clipboard!', 'success');
                     }}
                 />
             )}
@@ -1280,19 +1336,19 @@ export const OnlyFansContentBrain: React.FC = () => {
                     onClose={() => setShowPredictModal(false)}
                     onCopy={(text) => {
                         navigator.clipboard.writeText(text);
-                        showToast('Copied to clipboard!', 'success');
+                        showToast?.('Copied to clipboard!', 'success');
                     }}
                 />
             )}
 
             {/* Repurpose Modal */}
-            {showRepurposeModal && repurposeResult && repurposeResult.repurposedContent !== undefined && (
+            {showRepurposeModal && repurposeResult && (
                 <RepurposeModal
                     result={repurposeResult}
                     onClose={() => setShowRepurposeModal(false)}
                     onCopy={(text) => {
                         navigator.clipboard.writeText(text);
-                        showToast('Copied to clipboard!', 'success');
+                        showToast?.('Copied to clipboard!', 'success');
                     }}
                 />
             )}
@@ -1302,11 +1358,6 @@ export const OnlyFansContentBrain: React.FC = () => {
 
 // Optimize Modal Component
 const OptimizeModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: string) => void }> = ({ result, onClose, onCopy }) => {
-    // Safety check: ensure result is valid
-    if (!result || typeof result !== 'object' || Array.isArray(result)) {
-        return null;
-    }
-    
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
@@ -1338,24 +1389,22 @@ const OptimizeModal: React.FC<{ result: any; onClose: () => void; onCopy: (text:
                     </div>
 
                     {/* Scores */}
-                    {result.scores && typeof result.scores === 'object' && !Array.isArray(result.scores) && result.scores !== null && (
+                    {result.scores && (
                         <div>
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Quality Scores</h3>
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                {result.scores && typeof result.scores === 'object' && result.scores !== null
-                                    ? Object.entries(result.scores).map(([key, value]: [string, any]) => (
-                                        <div key={key} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</p>
-                                            <p className="text-2xl font-bold text-primary-600 dark:text-primary-400">{value}/10</p>
-                                        </div>
-                                    ))
-                                    : null}
+                                {Object.entries(result.scores).map(([key, value]: [string, any]) => (
+                                    <div key={key} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</p>
+                                        <p className="text-2xl font-bold text-primary-600 dark:text-primary-400">{value}/10</p>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     )}
 
                     {/* Improvements */}
-                    {Array.isArray(result.improvements) && result.improvements.length > 0 && (
+                    {result.improvements && result.improvements.length > 0 && (
                         <div>
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Improvements Made</h3>
                             <div className="space-y-2">
@@ -1371,7 +1420,7 @@ const OptimizeModal: React.FC<{ result: any; onClose: () => void; onCopy: (text:
                     )}
 
                     {/* Hashtag Suggestions */}
-                    {Array.isArray(result.hashtagSuggestions) && result.hashtagSuggestions.length > 0 && (
+                    {result.hashtagSuggestions && result.hashtagSuggestions.length > 0 && (
                         <div>
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Hashtag Suggestions</h3>
                             <div className="flex flex-wrap gap-2">
@@ -1410,11 +1459,6 @@ const OptimizeModal: React.FC<{ result: any; onClose: () => void; onCopy: (text:
 
 // Predict Modal Component
 const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: string) => void }> = ({ result, onClose, onCopy }) => {
-    // Safety check: ensure result is valid
-    if (!result || typeof result !== 'object' || Array.isArray(result)) {
-        return null;
-    }
-    
     const prediction = result.prediction || {};
     const level = prediction.level || 'Medium';
     const score = prediction.score || 50;
@@ -1462,13 +1506,12 @@ const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: 
                     </div>
 
                     {/* Factor Breakdown */}
-                    {result.factors && typeof result.factors === 'object' && !Array.isArray(result.factors) && result.factors !== null && (
+                    {result.factors && (
                         <div>
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Factor Analysis</h3>
                             <div className="space-y-3">
-                                {result.factors && typeof result.factors === 'object' && result.factors !== null
-                                    ? Object.entries(result.factors).map(([key, value]: [string, any]) => (
-                                        <div key={key} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                {Object.entries(result.factors).map(([key, value]: [string, any]) => (
+                                    <div key={key} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
                                         <div className="flex items-center justify-between mb-2">
                                             <p className="text-sm font-medium text-gray-900 dark:text-white capitalize">
                                                 {key.replace(/([A-Z])/g, ' $1').trim()}
@@ -1481,14 +1524,13 @@ const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: 
                                             <p className="text-xs text-gray-600 dark:text-gray-400">{value.analysis}</p>
                                         )}
                                     </div>
-                                    ))
-                                    : null}
+                                ))}
                             </div>
                         </div>
                     )}
 
                     {/* Improvements */}
-                    {Array.isArray(result.improvements) && result.improvements.length > 0 ? (
+                    {result.improvements && result.improvements.length > 0 && (
                         <div>
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Improvement Suggestions</h3>
                             <div className="space-y-2">
@@ -1511,7 +1553,7 @@ const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: 
                                 ))}
                             </div>
                         </div>
-                    ) : null}
+                    )}
 
                     {/* Optimized Version */}
                     {result.optimizedVersion && (
@@ -1560,39 +1602,17 @@ const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: 
 
 // Repurpose Modal Component
 const RepurposeModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: string) => void }> = ({ result, onClose, onCopy }) => {
-    // Defensive check: ensure repurposedContent is always an array (handle cases where API returns 0 or other non-array values)
-    let repurposedContent: any[] = [];
-    if (result && result !== null && typeof result === 'object') {
-        const content = result.repurposedContent;
-        if (content !== undefined && content !== null) {
-            if (Array.isArray(content)) {
-                repurposedContent = content;
-            } else {
-                // If API returns 0, string, or other non-array, default to empty array
-                repurposedContent = [];
-            }
-        }
-    }
+    const repurposedContent = result.repurposedContent || [];
 
     const copyPlatformContent = (item: any) => {
-        const hashtags = Array.isArray(item.hashtags) ? item.hashtags : [];
-        const optimizations = Array.isArray(item.optimizations) ? item.optimizations : [];
-        const text = `${item.platform || ''} (${item.format || ''})\n\n${item.caption || ''}\n\nHashtags: ${hashtags.join(' ')}\n\nOptimizations:\n${optimizations.map((opt: string) => `• ${opt}`).join('\n')}`;
+        const text = `${item.platform} (${item.format})\n\n${item.caption}\n\nHashtags: ${(item.hashtags || []).join(' ')}\n\nOptimizations:\n${(item.optimizations || []).map((opt: string) => `• ${opt}`).join('\n')}`;
         onCopy(text);
     };
 
     const copyAllContent = () => {
-        // Double-check that repurposedContent is an array (defensive programming)
-        const safeContent = Array.isArray(repurposedContent) ? repurposedContent : [];
-        if (safeContent.length === 0) {
-            onCopy('No content to copy');
-            return;
-        }
-        const text = safeContent.map((item: any) => {
-            const hashtags = Array.isArray(item.hashtags) ? item.hashtags : [];
-            const optimizations = Array.isArray(item.optimizations) ? item.optimizations : [];
-            return `--- ${item.platform || ''} (${item.format || ''}) ---\n${item.caption || ''}\n\nHashtags: ${hashtags.join(' ')}\n\nOptimizations:\n${optimizations.map((opt: string) => `• ${opt}`).join('\n')}`;
-        }).join('\n\n');
+        const text = repurposedContent.map((item: any) => 
+            `--- ${item.platform} (${item.format}) ---\n${item.caption}\n\nHashtags: ${(item.hashtags || []).join(' ')}\n\nOptimizations:\n${(item.optimizations || []).map((opt: string) => `• ${opt}`).join('\n')}`
+        ).join('\n\n');
         onCopy(text);
     };
 
@@ -1616,7 +1636,7 @@ const RepurposeModal: React.FC<{ result: any; onClose: () => void; onCopy: (text
                         </div>
                     )}
 
-                    {Array.isArray(repurposedContent) && repurposedContent.length > 0 && repurposedContent.map((item: any, idx: number) => (
+                    {Array.isArray(repurposedContent) && repurposedContent.map((item: any, idx: number) => (
                         <div key={idx} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
                             <div className="flex items-start justify-between mb-3">
                                 <div>
