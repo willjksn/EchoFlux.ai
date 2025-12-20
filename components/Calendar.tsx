@@ -94,11 +94,6 @@ export const Calendar: React.FC = () => {
         );
         
         return uniqueEvents.filter(evt => {
-            // Show Scheduled, Published, and Draft events (Drafts should appear if they have scheduledDate)
-            if (evt.status !== 'Scheduled' && evt.status !== 'Published' && evt.status !== 'Draft') {
-                return false;
-            }
-            
             // Find associated post
             const postId = evt.id.replace('post-', '').replace('cal-', '').split('-')[0];
             const associatedPost = posts.find(p => p.id === postId);
@@ -112,18 +107,37 @@ export const Calendar: React.FC = () => {
                 return false;
             }
             
-            // If Draft, only show if post is still Draft and has scheduledDate
-            if (evt.status === 'Draft' && associatedPost.status !== 'Draft') {
-                return false;
+            // IMPORTANT: Only show Published if post was MANUALLY set to Published
+            // Don't auto-mark as Published just because date passed
+            if (evt.status === 'Published' && associatedPost.status !== 'Published') {
+                return false; // Event says Published but post isn't - don't show
             }
             
-            // If Scheduled, only show if post is Scheduled (not Published)
-            if (evt.status === 'Scheduled' && associatedPost.status === 'Published') {
-                return false;
+            // Show Scheduled and Draft posts (Drafts should appear if they have scheduledDate)
+            // Only show Published if post status is explicitly Published
+            if (associatedPost.status === 'Published') {
+                // Only show if it was manually set to Published
+                return true;
+            } else if (associatedPost.status === 'Scheduled' || associatedPost.status === 'Draft') {
+                // Show Scheduled and Draft posts with scheduledDate
+                return true;
             }
             
-            // Show posts with or without media (text-only posts are allowed)
-            return true;
+            // Don't show other statuses
+            return false;
+        }).map(evt => {
+            // Update event status to match post status (don't auto-mark as Published)
+            const postId = evt.id.replace('post-', '').replace('cal-', '').split('-')[0];
+            const associatedPost = posts.find(p => p.id === postId);
+            
+            if (associatedPost) {
+                // Use post status, not event status (prevents auto-Published)
+                return {
+                    ...evt,
+                    status: associatedPost.status as 'Scheduled' | 'Published' | 'Draft'
+                };
+            }
+            return evt;
         });
     }, [calendarEvents, posts]);
 

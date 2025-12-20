@@ -3,6 +3,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { User, Activity } from '../types';
 import { UserManagementModal } from './UserManagementModal';
 import { PromotionsManagement } from './PromotionsManagement';
+import { ReferralRewardsConfig } from './ReferralRewardsConfig';
+import { GrantReferralRewardModal } from './GrantReferralRewardModal';
 import { TeamIcon, DollarSignIcon, UserPlusIcon, ArrowUpCircleIcon, ImageIcon, VideoIcon, LockIcon, TrendingIcon } from './icons/UIIcons';
 import { db } from '../firebaseConfig';
 import { collection, query, orderBy, onSnapshot, setDoc, doc } from 'firebase/firestore';
@@ -65,13 +67,14 @@ export const AdminDashboard: React.FC = () => {
     const [users, setUsers] = useState<User[]>([]);
     const [activityFeed, setActivityFeed] = useState<Activity[]>([]);
     const [editingUser, setEditingUser] = useState<User | null>(null);
+    const [grantingRewardToUser, setGrantingRewardToUser] = useState<User | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [accessError, setAccessError] = useState<string | null>(null);
     const [modelUsageStats, setModelUsageStats] = useState<ModelUsageStats | null>(null);
     const [isLoadingModelStats, setIsLoadingModelStats] = useState(true);
     const [modelStatsDays, setModelStatsDays] = useState<number>(30);
-    const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'promotions'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'promotions' | 'referralRewards'>('overview');
 
     // Fetch model usage analytics
     useEffect(() => {
@@ -269,9 +272,19 @@ export const AdminDashboard: React.FC = () => {
                     onSave={handleSaveUser}
                 />
             )}
-            <div className="flex justify-between items-center mb-6">
+            {grantingRewardToUser && (
+                <GrantReferralRewardModal
+                    user={grantingRewardToUser}
+                    onClose={() => setGrantingRewardToUser(null)}
+                    onSuccess={() => {
+                        setGrantingRewardToUser(null);
+                        // Optionally refresh user data
+                    }}
+                />
+            )}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
             <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Admin Dashboard</h2>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 -mx-2 px-2 sm:overflow-x-visible sm:pb-0 sm:mx-0 sm:px-0">
                     <button
                         onClick={() => setActiveTab('overview')}
                         className={`px-4 py-2 rounded-md transition-colors ${
@@ -302,10 +315,21 @@ export const AdminDashboard: React.FC = () => {
                     >
                         Promotions
                     </button>
+                    <button
+                        onClick={() => setActiveTab('referralRewards')}
+                        className={`px-4 py-2 rounded-md transition-colors ${
+                            activeTab === 'referralRewards'
+                                ? 'bg-primary-600 text-white'
+                                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                        }`}
+                    >
+                        Referral Rewards
+                    </button>
                 </div>
             </div>
 
             {activeTab === 'promotions' && <PromotionsManagement />}
+            {activeTab === 'referralRewards' && <ReferralRewardsConfig />}
             {activeTab === 'overview' && (
                 <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
@@ -613,9 +637,14 @@ export const AdminDashboard: React.FC = () => {
                                     <td className="p-3 font-mono text-gray-600 dark:text-gray-300">{getUsageString(user.plan, user.monthlyImageGenerationsUsed, 'image')}</td>
                                     <td className="p-3 font-mono text-gray-600 dark:text-gray-300">{getUsageString(user.plan, user.monthlyVideoGenerationsUsed, 'video')}</td>
                                     <td className="p-3">
-                                        <button onClick={() => setEditingUser(user)} className="px-3 py-1 text-sm font-medium text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-md">
-                                            Manage
-                                        </button>
+                                        <div className="flex gap-2">
+                                            <button onClick={() => setEditingUser(user)} className="px-3 py-1 text-sm font-medium text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-md">
+                                                Manage
+                                            </button>
+                                            <button onClick={() => setGrantingRewardToUser(user)} className="px-3 py-1 text-sm font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-md">
+                                                Grant Reward
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}

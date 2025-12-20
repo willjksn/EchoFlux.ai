@@ -2,9 +2,9 @@
 
 ### 1. High-Level Summary
 
-EchoFlux.ai is a **creator-focused AI social operating system** that helps solo creators and small studios go from **idea → strategy → content → scheduling → analytics → CRM** in one app. It is built as a **React + TypeScript (Vite) SPA** deployed on **Vercel**, backed by **Firebase (Auth, Firestore, Storage)** and a suite of Vercel serverless functions for AI and social platform integrations.
+EchoFlux.ai is now positioned as an **offline‑first AI content studio and campaign planner for creators**. The app helps a solo creator go from **idea → strategy → content packs → calendar → export** in one place, without depending on live social media integrations or real‑time analytics.
 
-The codebase still contains business/agency features, but the current UX is **explicitly optimized for creators**: agency/client and business modes are largely hidden in the UI while remaining technically available for future reactivation.
+The codebase still contains business/agency and live‑posting features, but the current UX is **explicitly optimized for creators in offline mode**: team/clients, agency/business plans, auto‑posting, and live analytics are hidden or reframed as planning tools while remaining technically available for future reactivation.
 
 ---
 
@@ -12,308 +12,168 @@ The codebase still contains business/agency features, but the current UX is **ex
 
 #### 2.1 Dashboard & Global Navigation
 
-- **Sidebar / Header (`Sidebar.tsx`, `Header.tsx`)**
-  - Entry points to all major modules: Dashboard, Compose, Calendar, Strategy, Automation, Autopilot, Analytics, Inbox, Media Library, OnlyFans Studio, Settings.
-  - **Agency-specific UI** (team/clients and client switcher) is hidden for non-admins, preserving future agency support without confusing creators.
+- **Sidebar / Header (`Sidebar.tsx`, `Header.tsx`)
+  - Entry points to all major modules: Dashboard, Compose, Calendar, Strategy, Approvals/Workflow, Media Library, OnlyFans Studio, Settings.
+  - **Agency-specific UI** (team/clients and client switcher) is hidden for non‑admins, preserving future agency support without confusing creators.
 
-- **Dashboard (`Dashboard.tsx`)**
-  - High-level overview of activity, performance cards, and shortcuts.
-  - Uses Gemini-backed services for quick insights and “what to do next” suggestions.
+- **Dashboard (`Dashboard.tsx`)
+  - Refocused as a **planning home base**, not an analytics wall.
+  - Shows:
+    - Goals & Milestones based on **content volume** (e.g., posts created this month), not follower growth.
+    - Quick stats about planned/scheduled content and workflow status.
+    - A "Plan my week" action that calls `/api/planMyWeek` (Gemini‑backed) to suggest content ideas based on the existing calendar and posts.
+  - Follower counts, engagement rate, and AI insights based on unreliable external stats are hidden in offline mode.
 
-#### 2.2 Content Creation & Scheduling
+#### 2.2 Content Creation & Planning
 
-- **Compose (`Compose.tsx`)**
-  - Main surface for creating and scheduling social posts.
-  - Supports multi-platform posting to Instagram, Facebook, X/Twitter, LinkedIn, TikTok, Pinterest, YouTube (Discord/Telegram/Reddit/Fanvue removed from UI).
-  - Features:
-    - Rich caption editor with tone/voice controls.
-    - Media selection via integrated Media Library.
-    - Platform targeting toggles and scheduling controls.
-  - Image/Video generation tabs are currently **hidden/disabled** by design; components and APIs still exist for later reactivation.
+- **Compose (`Compose.tsx`, `MediaBox.tsx`)
+  - Main surface for drafting posts and building content packs.
+  - In offline creator mode:
+    - **"Publish" and "Schedule" buttons in the media box are hidden** – Compose is for drafting, not auto‑posting.
+    - Platform icons are kept only where useful for planning; no promises of live publishing.
+    - "AI Auto Schedule" is hidden; scheduling decisions are made via Strategy/Calendar instead of opaque automation.
 
-- **Calendar (`Calendar.tsx`)**
-  - Visual calendar of scheduled posts and campaigns.
-  - Intended to unify items from Strategy plans, Automation workflows, and Autopilot campaigns.
-  - Provides a “home base” for reviewing everything scheduled in a given week/month.
+- **Calendar (`Calendar.tsx`)
+  - Visual calendar of **planned/scheduled content you will post manually**.
+  - Shows posts with `status: 'Scheduled'` as the final planned state.
 
-- **Captions & Ad Creation (`Captions.tsx`, `AdGenerator.tsx`)**
-  - Focused utilities that call AI APIs to generate:
-    - Social captions tailored to platforms and niches.
-    - Ad copy and creative briefs for promotion-oriented content.
+- **Approvals / Workflow (`Approvals.tsx`)
+  - Kanban‑style workflow: Draft → In Review → Approved → Scheduled.
+  - The **Approved column is now the main export surface**:
+    - Each post has a checkbox; you can select multiple approved posts and click **Export**.
+    - Export creates a **human‑readable text pack** and opens an in‑app modal showing cards with media + captions for easy copy/paste on mobile.
+    - For each exported post, its media item in `media_library` is tagged and moved into an `Exported / Used` folder for tracking.
+  - Any "Publish" / auto‑schedule actions are hidden in offline mode.
 
-#### 2.3 Strategy, Automation, and Autopilot
+#### 2.3 Strategy & Planning Intelligence
 
-- **Strategy – AI Content Strategist (`Strategy.tsx`, `api/generateContentStrategy.ts`, `api/saveStrategy.ts`, `api/getStrategies.ts`)**
-  - Generates **1–4 week content strategies**:
-    - Daily content themes.
-    - Platform and format recommendations per day.
-    - Example prompts and topics.
-  - Can push content plans into the calendar as draft events.
-  - Includes “Use in Autopilot” actions to pass strategy outputs into campaigns.
+- **Strategy – AI Content Strategist (`Strategy.tsx`, `api/generateContentStrategy.ts`)
+  - Generates 1–4 week content roadmaps.
+  - Roadmap UI has been rewritten to emphasize **planning checkpoints**, not numeric KPIs:
+    - "Content Roadmap & Success Checkpoints" replaces analytics‑heavy language.
+    - "Planning Focus" and "Success Criteria" talk about creating and shipping content, covering your pillars, and reviewing what worked.
+    - "Key Metrics to Track" are planning metrics (Posts Created, Planned Posts, Pillars Covered, Ideas Used).
+  - When you attach media to a roadmap day (from upload or Media Library):
+    - The corresponding post and calendar event are created with `status: 'Scheduled'`.
+    - The roadmap day is marked as `scheduled` and linked to that post.
+  - A **"Clear Plan"** button lets you wipe the current roadmap if you want to start over.
 
-- **Automation – Workflows (`Automation.tsx`, `api/*generate*`, `api/autoPostScheduled.ts`)**
-  - Creates **recurring workflows** for:
-    - Caption/image/video generation on schedules (daily/weekly).
-    - Automatic or manual approvals before posting.
-  - Workflows are currently functional but operate as **islands**, meaning they are not yet deeply integrated with Strategy or Autopilot contexts.
+- **Plan My Week (`api/planMyWeek.ts`, `Dashboard.tsx`)
+  - Authenticated endpoint that uses Gemini to suggest content for the next 7 days.
+  - Frontend now includes the Firebase ID token in an `Authorization: Bearer` header to avoid 401 errors.
 
-- **Autopilot – Campaign Engine (`Autopilot.tsx`, `AutopilotCampaignDetailModal.tsx`, `api/generateAutopilotPlan.ts`, `api/_generateAutopilotPlan.ts`, `src/services/autopilotExecutionService.ts`)**
-  - Goal-driven campaigns: user specifies objective, audience, tone, and time window.
-  - Backend:
-    - `_generateAutopilotPlan.ts` and `generateAutopilotPlan.ts` create structured, multi-week plans.
-    - `autopilotExecutionService.ts` is designed to:
-      - Generate captions and media.
-      - Create approval items.
-      - Schedule posts on the calendar.
-  - Frontend:
-    - Tracks campaign lifecycle (“Planning”, “Generating Content”, “Scheduled”).
-    - Shows campaign details via `AutopilotCampaignDetailModal.tsx`.
-  - This is the **flagship feature** and the natural “brain” that should orchestrate Strategy and Automation, but it still benefits from extra integration and UX polish.
+#### 2.4 Media Library & Export
 
-#### 2.4 Analytics & Insights
+- **Media Library (`MediaLibrary.tsx`, `MediaFolderSidebar.tsx`, `CreateFolderModal.tsx`, `MoveToFolderModal.tsx`)
+  - Manages all creator assets.
+  - `MediaLibraryItem` tracks `folderId` and `usedInPosts`.
+  - Export flows from Approvals automatically move used media into an `Exported / Used` folder and record which posts used each asset.
 
-- **Analytics Overview (`Analytics.tsx`, `components/analytics/*`, `api/getAnalytics.ts`, `api/getSocialStats.ts`, `api/social/fetchRealStats.ts`)**
-  - Provides an overview of account performance via:
-    - `StatCardGrid`: followers, engagement, growth stats.
-    - `AnalyticsCharts`: time-series graphs.
-    - `AIPoweredInsights`: AI-generated narrative insights.
-  - Some older **Social Listening** and **Competitor Analysis** modules exist but are effectively hidden as these features are de-emphasized.
+- **Export UX (Workflow + Strategy)**
+  - Workflow: exports Approved posts as a **card‑style content pack**, with each card containing media (or media URL) and caption, plus copy buttons.
+  - Strategy: planned for alignment so that roadmap exports match the same pack format instead of raw JSON.
 
-- **AI Analytics Reports (`api/generateAnalyticsReport.ts`)**
-  - Summarizes metrics into human-readable reports (e.g., “What happened this week?”).
-  - Intended to power creator-facing dashboards and email-style summaries.
+#### 2.5 OnlyFans Studio
 
-#### 2.5 Inbox, CRM, and Engagement
+OnlyFans Studio is preserved and enhanced as a **premium creator tool**, especially for Elite users.
 
-- **Inbox & Message View (`Inbox.tsx`, `MessageCard.tsx`)**
-  - Centralized conversation view for DMs and comments (conceptually across platforms).
-  - AI-powered reply suggestions with autoreply capabilities.
+- **OnlyFans Roleplay & Ideas (`OnlyFansRoleplay.tsx`)
+  - Scenario generation is explicitly from the **creator9s POV**, talking to a (typically male) fan and leading the roleplay.
+  - Tabs: Scenarios, Persona, Body Ratings, Interactive Posts.
+  - For each generated artifact (scenario, persona, rating prompts, long‑form ratings, interactive ideas):
+    - You can **Save**, **Copy**, and **Clear**.
+    - Saved items are stored in Firestore collections (`onlyfans_saved_scenarios`, `onlyfans_saved_personas`, `onlyfans_saved_ratings`, `onlyfans_saved_interactive`).
+    - History panels show saved items with load/delete controls.
+  - Body Ratings:
+    - "Generate Rating Prompts" and **"Generate Detailed Rating"** buttons are now visually consistent.
+    - Long‑form detailed body ratings can be generated from a rich description and saved/loaded like prompts.
 
-- **CRM Sidebar (`CRMSidebar.tsx`, `api/generateCRMSummary.ts`, `api/categorizeMessage.ts`, `api/generateReply.ts`)**
-  - Enriches conversations with:
-    - Contact summaries and tags.
-    - Message categorization (lead, support, fan, etc.).
-    - Tailored reply suggestions tuned to the creator’s brand voice.
+- **OnlyFans Analytics, Calendar, Media Vault**
+  - Analytics: fixed context/icon errors so the analytics page loads reliably when enabled.
+  - Media Vault: blur/eraser tools are disabled to avoid unreliable results; core organizing and viewing still work.
 
-- **Chatbot / Assistant (`Chatbot.tsx`, `api/askChatbot.ts`, `api/appKnowledge.ts`)**
-  - In-app assistant that knows the product’s capabilities and internal documentation.
-  - Helps users understand features, create strategies, or troubleshoot basic issues.
+#### 2.6 Voice Assistant & Tavily
 
-#### 2.6 Media Library & Link in Bio
+- **Voice Assistant (`VoiceAssistant.tsx`)
+  - Real‑time Gemini Live assistant with Alexa‑style voice.
+  - The system prompt is tuned to:
+    - Treat EchoFlux as an offline‑first planning studio.
+    - Avoid promising auto‑posting or live analytics.
+    - Default to **clear, natural English** unless the user asks for another language.
+  - Tooling:
+    - `navigate_to_page`: uses `setActivePage` to move between pages (dashboard, compose, calendar, strategy, approvals, media library, settings, etc.).
+    - `open_compose`, `open_strategy`, and calendar helpers so you can say "Open my calendar" or "Go to strategy" and the assistant actually changes pages.
+    - `fetch_current_info`: calls `/api/fetchCurrentInfo` (Tavily) **for Elite users only** to pull current trends/updates, which Gemini then summarizes.
 
-- **Media Library (`MediaLibrary.tsx`, `MediaBox.tsx`, `MediaFolderSidebar.tsx`, `CreateFolderModal.tsx`, `MoveToFolderModal.tsx`)**
-  - Manages media assets stored in Firebase Storage.
-  - Organizes content into folders, with rename/move/delete operations.
-  - Integrates tightly with Compose and OnlyFans Media Vault.
+- **Web Search / Tavily Integration (`api/fetchCurrentInfo.ts`, `src/services/modelUsageService.ts`)
+  - Wraps Tavily API calls behind an authenticated endpoint.
+  - Results are logged via `trackModelUsage` so admin analytics can show Tavily usage alongside Gemini, image, and video generation.
 
-- **Link in Bio / Bio Page Builder (`BioPageBuilder.tsx`, `BioPageView.tsx`, `api/getBioPage.ts`)**
-  - Creates a mobile-friendly bio page featuring:
-    - Profile section, social icons, link buttons.
-    - Custom sections and CTAs.
-  - Fixes implemented to keep phone preview from stretching and ensure scroll behavior is pleasant.
+#### 2.7 Pricing & Plans
 
-#### 2.7 OnlyFans Studio
+- **Pricing (`Pricing.tsx`)
+  - Landing page pricing is **creator‑focused** and visually centered.
+  - Visible tiers:
+    - **Free** – testing the studio.
+    - **Pro** – scaling creators, now with **5 GB storage**.
+    - **Elite** – professional & OF creators, now priced at **$59/mo ($47/yr)** with **10 GB storage** and OnlyFans Studio included.
+  - Agency plan remains defined in code but hidden from the default pricing view; it can be re‑exposed later if needed.
 
-The OnlyFans Studio is a specialized sub-product tightly aligned with your niche.
-
-- **Shell & Settings (`OnlyFansStudio.tsx`, `OnlyFansStudioSettings.tsx`)**
-  - Container component that hosts all OF-specific tools and settings.
-  - Uses error boundaries to avoid app-wide failures.
-
-- **OnlyFansAnalytics (`OnlyFansAnalytics.tsx`)**
-  - Provides a focused analytics view for OnlyFans earnings, engagement, and content performance.
-  - Previously broken due to icon/context issues; now stable with alias icons and guarded context access.
-
-- **OnlyFansCalendar (`OnlyFansCalendar.tsx`)**
-  - Dedicated calendar for OF-specific posts, messages, and promotions.
-
-- **OnlyFansMediaVault (`OnlyFansMediaVault.tsx`)**
-  - Advanced media editing and management environment.
-  - Blur and magic-eraser tools are currently disabled and replaced with explanatory messaging to avoid unreliable behavior, but the core vault functionality remains intact.
-
-- **Content Brain, Roleplay, Guides, Export Hub**
-  - **OnlyFansContentBrain.tsx**: AI-driven idea generation and scripting for spicy content, scenes, and long-running narratives.
-  - **OnlyFansRoleplay.tsx / OnlyFansRoleplayIdeas.tsx**: Roleplay scenario builders and idea generators.
-  - **OnlyFansGuides.tsx**: Education and best practices.
-  - **OnlyFansExportHub.tsx**: Export tooling to move content/scripts outside of the platform when needed.
-
-#### 2.8 Promotions & Monetization
-
-- **Promotions Management (`PromotionsManagement.tsx`, `src/services/promotionService.ts`, `api/applyPromotion.ts`, `api/validatePromotion.ts`)**
-  - Configures and validates promotional offers, discounts, and loyalty mechanics.
-  - Integrates with campaigns and content scheduling to support promotional pushes.
-
-#### 2.9 Pricing, Onboarding, and Plans
-
-- **Pricing & Plan Selection (`Pricing.tsx`, `PlanSelectorModal.tsx`, `OnboardingSeledtor.tsx`, `CreatorOnboardingModal.tsx`, `BusinessOnboardingModal.tsx`)**
-  - Pricing UI is now **creator-first**:
-    - Creator plans visible; business/agency tiers hidden in the interface.
-  - Onboarding enforces or defaults to **userType = "Creator"** in `AuthContext.tsx`.
-  - Agency/Business-related structures are preserved but paused in the front-end.
+- **Landing Page (`LandingPage.tsx`)
+  - Hero, features, and copy reframed around **AI Content Studio & Campaign Planner**, not a live "social operating system" with hard analytics promises.
+  - Pricing section uses a centered 3‑column layout to highlight creator tiers.
 
 ---
 
-### 3. Backend Architecture & Integrations
+### 3. Backend Architecture & Integrations (Current Perspective)
 
-#### 3.1 Overall Architecture
+Most of the backend remains as previously documented:
 
-- **Frontend**
-  - React + TypeScript with Vite.
-  - Contexts:
-    - `AuthContext.tsx` – wraps Firebase Auth; ensures all users default to Creator type.
-    - `DataContext.tsx` – manages campaigns, posts, approvals, stats, and Firestore sync.
-    - `UIContext.tsx` – toasts, modals, active page, tour state, etc.
-  - Routing is handled internally in `App.tsx`, with logic to:
-    - Avoid redirecting authenticated users back to public pages (like `/privacy`) after login.
+- Vercel serverless functions under `api/` for:
+  - Gemini‑based strategy, captions, analytics summaries.
+  - Image/video generation (currently UI‑hidden).
+  - Social platform OAuth and publishing (available but conceptually "parked").
+  - Tavily search and model usage tracking.
+- Firebase Admin utilities (`_firebaseAdmin.ts`, `_errorHandler.ts`) and `verifyAuth` enforce authenticated access.
 
-- **Backend (Vercel Functions)**
-  - All API routes live under `api/` and are TypeScript-based.
-  - Shared utilities:
-    - `_firebaseAdmin.ts` – initializes and exports `getAdminDb()` to talk to Firestore.
-    - `_errorHandler.ts` – wraps handlers with consistent error handling (`withErrorHandling`) and utility loaders (`getVerifyAuth()`, `getModelRouter()`).
-    - `verifyAuth.ts` / `_auth.ts` – decode Firebase ID tokens from `Authorization: Bearer` headers.
-
-#### 3.2 AI & Model Routing
-
-- **Gemini Service (`src/services/geminiService.ts`, `api/_geminiShared.ts`, `api/_modelRouter.ts`)**
-  - Central entry point for AI text and planning tasks.
-  - Uses `GEMINI_API_KEY` or `GOOGLE_API_KEY` environment variables.
-  - `getModelRouter()` selects appropriate models and tasks for:
-    - Strategy plans, Autopilot campaign plans.
-    - Caption/ad generation.
-    - Analytics summaries and content critiques.
-
-- **Image Generation (`api/generateImage.ts`, `components/ImageGenerator.tsx`)**
-  - Uses:
-    - DALL-E 3 (`quality: "hd"`) for **SFW photorealistic images**.
-    - Replicate model (`alicewuv/whiskii-gen`) for **NSFW/explicit content** when `allowExplicit` is set.
-  - Robust size guarding:
-    - Client-side: aggressive compression and downscaling, target base64 thresholds.
-    - Server-side: reject images above base64 size limit (~2MB) with clear error messages.
-  - UI currently hidden per your preference, but the pipeline is available.
-
-- **Video Generation (`api/generateVideo.ts`, `components/VideoGenerator.tsx`)**
-  - Uses Replicate’s `stability-ai/stable-video-diffusion` (updated from deprecated Runway Gen2).
-  - Strict input-size controls and explicit content flagging.
-  - UI tab is currently hidden from Compose.
-
-- **Voice & Audio (`api/generateSpeech.ts`, `generateSpeechWithVoice.ts`, `generateTextToSpeechAudio.ts`, `cloneVoice.ts`, `combineVideoAudio.ts`, `processVideoWithMusic.ts`)**
-  - Supports voice cloning, TTS, and video+audio pipeline to create more cinematic content.
-  - Integrates with Automation and (potentially) Autopilot pipelines.
-
-#### 3.3 Social Platform Integrations
-
-- **OAuth Flows (`api/oauth/*`)**
-  - **Meta (Facebook + Instagram)**:
-    - `oauth/meta/authorize.ts`: starts the unified OAuth with required scopes (`pages_show_list`, `instagram_basic`, `instagram_content_publish`, etc.).
-    - `oauth/meta/callback.ts`: exchanges code for user token, upgrades to long-lived token, fetches Pages and connected Instagram Business account(s), and stores them in Firestore under `socialAccounts`.
-  - **Instagram legacy endpoints**:
-    - `oauth/instagram/authorize.ts`, `oauth/instagram/callback.ts` – older flow, still present for compatibility but superseded by the Meta-unified flow.
-  - **X/Twitter**:
-    - OAuth 1.0a: `oauth/x/authorize-oauth1.ts`, `oauth/x/callback-oauth1.ts`.
-    - OAuth 2 / other endpoints: `oauth/x/authorize.ts`, `oauth/x/callback.ts`.
-  - **LinkedIn, Pinterest**:
-    - Standard `authorize.ts` and `callback.ts` in their respective subfolders.
-
-- **Publishing APIs (`api/platforms/*`)**
-  - Normalized publish functions:
-    - `platforms/instagram/publish.ts`, `platforms/instagram.ts`
-    - `platforms/facebook.ts`
-    - `platforms/pinterest/boards.ts`, `platforms/pinterest/publish.ts`
-    - `platforms/twitter.ts`, `platforms/x/publish.ts`
-    - `platforms/linkedin.ts`, `platforms/tiktok.ts`, `platforms/youtube.ts`
-  - These routes accept internal post payloads and fan them out to platform-specific APIs with proper tokens and error handling.
-
-- **Analytics & Webhooks**
-  - Real-time stats and updates:
-    - `api/social/instagram/stats.ts`, `api/social/fetchRealStats.ts`
-    - `api/webhooks/facebook.ts`, `api/webhooks/instagram.ts`, `api/webhooks/youtube.ts`
-  - Support webhook verification (`GET`) and event intake (`POST`) for comments, mentions, and account changes.
+Important nuance: **even though platform publishing and analytics routes exist, the product story now treats them as secondary**. The primary promise is **planning and content packs**, not "we guarantee to post and measure everything".
 
 ---
 
-### 4. Strengths
+### 4. Strengths (Updated)
 
-1. **End-to-end creator workflow**
-   - Strategy → Autopilot → Automation → Compose/Calendar → Analytics → CRM and OnlyFans Studio.
-   - Very few tools cover this entire funnel as comprehensively.
+1. **Clear creator‑first offline story**
+   - The app now cleanly presents itself as an AI studio for planning and content packs, avoiding overselling analytics or auto‑posting.
 
-2. **Solid technical foundations**
-   - Cleanly separated concerns between UI, AI logic, backend integrations, and persistence.
-   - Many TypeScript and runtime robustness improvements already in place (error boundaries, strict return types, defensive null checks).
+2. **Deep OnlyFans specialization**
+   - OnlyFans Studio (roleplay, ratings, interactive posts, analytics, calendar, vault) is a strong differentiator for premium creators.
 
-3. **Creator-first UX choices**
-   - Business/agency complexity is deliberately hidden without deleting code, allowing rapid reactivation later.
-   - Landing, FAQ, Terms, and Settings are fully aligned with this creator-centric story.
+3. **Integrated content lifecycle**
+   - Strategy → Compose/OnlyFans Studio → Approvals/Workflow → Calendar → Export → Manual posting.
 
-4. **Niche specialization with OnlyFans Studio**
-   - Deeply integrated OnlyFans tooling (analytics, calendar, media vault, roleplay content) is a unique differentiator versus generic schedulers.
+4. **Voice‑driven navigation and planning**
+   - The Gemini Live assistant can both **explain** how to use the app and **move you between pages** on voice command.
 
 ---
 
-### 5. Gaps, Risks, and Improvement Areas
+### 5. Gaps & Next Focus
 
-1. **Autopilot maturity**
-   - Still the most complex and risk-prone module:
-     - Needs fully tested and observable flows from **plan creation → content generation → approval → scheduling → analytics**.
-     - Error handling and progress states should be user-friendly (what’s happening now, what failed, what to do next).
+1. **Strategy ↔ Compose ↔ Workflow alignment**
+   - Continue tightening how roadmap items become posts, and how those posts show up in Approvals and Calendar.
 
-2. **Feature sprawl vs clarity**
-   - There is a rich set of features, but the risk is overwhelming new creators.
-   - The happy path should be extremely clear:
-     - Connect accounts → Generate Strategy → Run with Autopilot → Approve posts → Watch results.
+2. **Export consistency**
+   - Ensure Strategy exports use the same human‑readable card packs as Approvals so creators have one mental model for "content packs".
 
-3. **Analytics reliability & expectations**
-   - Some platform APIs are limited or inconsistent (especially X/Twitter, TikTok, and certain Instagram edges).
-   - It’s important to make sure:
-     - Non-functional analytics features stay hidden.
-     - Remaining dashboards clearly communicate what’s measured and what’s estimated or inferred.
+3. **Persistent OnlyFans Studio workspace**
+   - Ensure all generated OF content (scenarios, personas, ratings, interactive posts) persists across navigation until explicitly cleared or overwritten, with robust history views.
 
-4. **Hidden but present features**
-   - Image/video generation, social listening, competitor tracking, business/agency tiers:
-     - Technically present but hidden, which is good for now.
-     - Requires disciplined re-introduction and testing if/when re-enabled to avoid regressions.
+4. **Future re‑enablement path**
+   - Keep a clear checklist for safely turning on live posting/analytics later: feature flags, updated copy, and clear expectations.
 
 ---
 
-### 6. Recommended Roadmap (Creator-Focused)
+### 6. Conclusion (Current State)
 
-#### Phase 1: Harden the Creator Core
+EchoFlux.ai is now a **creator‑first, offline‑friendly AI content studio and campaign planner** with deep OnlyFans capabilities and a strong planning‑focused UX. Under the hood, the original social OS, publishing, and analytics plumbing still exists, but the product has been intentionally simplified so creators can confidently use it for **ideas, scripts, content packs, and calendars** without worrying about fragile integrations.
 
-- Make **Strategy → Autopilot → Approval → Calendar → Analytics** the default story:
-  - Ensure Strategy and Autopilot share structures and fields.
-  - Autopilot’s execution service should:
-    - Generate all needed content.
-    - Put everything into a single approval queue (with labels by source).
-    - Schedule on the calendar with predictable rules.
-  - Analytics pages should surface campaign performance in a simple way for creators.
-
-#### Phase 2: UX Simplification & Guidance
-
-- Tighten navigation and hide advanced tools behind clear “Advanced/Pro” labels.
-- Add:
-  - Guided onboarding flow showing the main loop.
-  - Inline tooltips and mini-tours explaining when to use Strategy vs Automation vs Autopilot.
-
-#### Phase 3: Meta (Instagram/Facebook) Integration Polish
-
-- With the new unified Meta OAuth in place:
-  - Provide a clean **“Connect Facebook & Instagram”** button in Settings.
-  - Add health indicators (connected, token expiring soon, needs re-auth).
-  - Ensure error messages from Meta are translated into simple “what to do” actions.
-
-#### Phase 4: Controlled Re-Enablement of Advanced Features
-
-- After creator core is proven stable in production:
-  - Consider re-introducing image/video generation with a clear quality/latency promise.
-  - Gradually re-enable agency tools (team/clients, business tiers) under a separate “Agency Mode” toggle.
-  - Optionally reintroduce social listening/competitor tracking for higher plans, if API reliability is sufficient.
-
----
-
-### 7. Conclusion
-
-EchoFlux.ai is already a **deep, full-stack social OS for creators**, with rich AI, scheduling, analytics, CRM, and OnlyFans-specific tooling. The codebase has been carefully adjusted to avoid breaking changes while pivoting to a creator-first experience, preserving business/agency capabilities for later.
-
-The most important next step is not adding new features, but **tightening and hardening** the end-to-end **creator journey**—especially Autopilot—as the central engine that orchestrates Strategy, content generation, workflows, and analytics into one coherent, reliable experience.
-
+The next stage is to keep tightening this offline creator loop, especially around Strategy → Compose → Approvals → Calendar → Export, while polishing OnlyFans Studio persistence and planning intelligence. When that foundation is rock‑solid, you9ll be in a strong position to selectively reintroduce live posting and analytics for higher tiers if you choose.

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User } from '../types';
+import { GrantReferralRewardModal } from './GrantReferralRewardModal';
 
 interface UserManagementModalProps {
     user: User;
@@ -9,6 +10,7 @@ interface UserManagementModalProps {
 
 export const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose, onSave }) => {
     const [editedUser, setEditedUser] = useState<User>(user);
+    const [showGrantRewardModal, setShowGrantRewardModal] = useState(false);
 
     useEffect(() => {
         setEditedUser(user);
@@ -66,10 +68,33 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, 
                         </p>
                     </div>
 
+                    <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                        <button
+                            onClick={() => setShowGrantRewardModal(true)}
+                            className="w-full px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors font-medium"
+                        >
+                            Grant Referral Reward
+                        </button>
+                        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-center">
+                            Manually grant referral rewards (generations, free months, or storage)
+                        </p>
+                    </div>
+
                      <div className="mt-6 flex justify-end space-x-3">
                         <button onClick={onClose} className="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500">Cancel</button>
                         <button onClick={handleSave} className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700">Save Changes</button>
                     </div>
+                    
+                    {showGrantRewardModal && (
+                        <GrantReferralRewardModal
+                            user={editedUser}
+                            onClose={() => setShowGrantRewardModal(false)}
+                            onSuccess={() => {
+                                // Refresh user data if needed
+                                setShowGrantRewardModal(false);
+                            }}
+                        />
+                    )}
                 </div>
             </div>
         </div>

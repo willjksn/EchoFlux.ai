@@ -866,3 +866,6 @@ curl -X POST "https://graph.instagram.com/v18.0/{ig-user-id}/media_publish" \
 
 
 
+
+
+

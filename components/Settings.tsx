@@ -227,9 +227,6 @@ export const Settings: React.FC = () => {
         LinkedIn: null,
         Facebook: null,
         Pinterest: null,
-        Discord: null,
-        Telegram: null,
-        Reddit: null,
     };
     
     const isPremiumFeatureUnlocked = ['Elite', 'Agency'].includes(user?.plan || 'Free') || user?.role === 'Admin';
@@ -636,8 +633,8 @@ export const Settings: React.FC = () => {
             try {
                 let totalSize = 0;
                 
-                // List all files in user's storage folders
-                const folders = ['uploads', 'media_library', 'automation', 'voices'];
+                // List all files in user's storage folders - matching Profile.tsx
+                const folders = ['uploads', 'media_library', 'automation', 'voices', 'profile_avatar', 'bio_avatar', 'roadmap'];
                 
                 for (const folder of folders) {
                     try {
@@ -665,14 +662,14 @@ export const Settings: React.FC = () => {
                 // Convert bytes to MB
                 const usedMB = totalSize / (1024 * 1024);
                 
-                // Set storage limits based on plan (in MB)
+                // Set storage limits based on plan (in MB) - matching Profile.tsx
                 const storageLimits: Record<string, number> = {
                     'Free': 100,
-                    'Pro': 1024, // 1 GB
-                    'Elite': 2048, // 2 GB
+                    'Pro': 5120, // 5 GB
+                    'Elite': 10240, // 10 GB
                     'Starter': 1024, // 1 GB
-                    'Growth': 3072, // 3 GB
-                    'Agency': 5120, // 5 GB
+                    'Growth': 10240, // 10 GB
+                    'Agency': 51200, // 50 GB
                 };
                 
                 const totalMB = storageLimits[user.plan || 'Free'] || 100;

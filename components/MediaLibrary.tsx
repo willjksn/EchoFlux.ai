@@ -269,9 +269,12 @@ export const MediaLibrary: React.FC = () => {
       name: item.name,
     };
     localStorage.setItem('pendingMediaFromLibrary', JSON.stringify(mediaToAdd));
+    // Navigate first, then dispatch event after a short delay to ensure Compose is mounted
     setActivePage('compose');
-    window.dispatchEvent(new CustomEvent('mediaLibraryItemAdded'));
-    showToast('Media added to Compose page', 'success');
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('mediaLibraryItemAdded'));
+    }, 100);
+    showToast('Opening Compose with selected media...', 'success');
   };
 
   // Folder management functions
@@ -453,9 +456,9 @@ export const MediaLibrary: React.FC = () => {
         <div className="p-6 overflow-y-auto flex-1">
           <div className="max-w-7xl mx-auto">
             {/* Header */}
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-2">
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            <div className="mb-4 sm:mb-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
                   Media Library
                 </h1>
                 {currentFolder && (
@@ -490,168 +493,204 @@ export const MediaLibrary: React.FC = () => {
               </p>
             </div>
 
-            {/* Upload Area */}
-            <div
-              ref={dropZoneRef}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-              className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mb-6"
-            >
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                className="flex flex-col items-center justify-center h-20 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors relative"
-              >
-                <PlusIcon className="w-8 h-8 text-gray-400 dark:text-primary-500" />
-                <span className="text-sm font-medium text-gray-600 dark:text-gray-400 mt-1">
-                  Drop files here or click to upload
-                </span>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  accept="image/*,video/*"
-                  onChange={(e) => handleFileSelect(e.target.files)}
-                  className="hidden"
-                />
-                {isUploading && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-gray-50/50 dark:bg-gray-700/50 rounded-lg">
-                    <div className="animate-spin h-6 w-6 border-2 border-primary-600 border-t-transparent rounded-full"></div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Filters and Actions */}
-            <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
-              <div className="flex items-center justify-between flex-wrap gap-4">
+            {/* Filters and View Toggle */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4">
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setFilterType('all')}
-                      className={`px-3 py-1.5 rounded-md text-sm font-medium ${
+                      className={`px-3 py-1 rounded-md text-sm ${
                         filterType === 'all'
-                          ? 'bg-primary-600 text-white'
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                          ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                       }`}
                     >
-                      All ({filteredItems.length})
+                      All
                     </button>
                     <button
                       onClick={() => setFilterType('image')}
-                      className={`px-3 py-1.5 rounded-md text-sm font-medium ${
+                      className={`px-3 py-1 rounded-md text-sm ${
                         filterType === 'image'
-                          ? 'bg-primary-600 text-white'
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                          ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                       }`}
                     >
-                      Images ({filteredItems.filter(m => m.type === 'image').length})
+                      Images
                     </button>
                     <button
                       onClick={() => setFilterType('video')}
-                      className={`px-3 py-1.5 rounded-md text-sm font-medium ${
+                      className={`px-3 py-1 rounded-md text-sm ${
                         filterType === 'video'
-                          ? 'bg-primary-600 text-white'
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                          ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                       }`}
                     >
-                      Videos ({filteredItems.filter(m => m.type === 'video').length})
+                      Videos
                     </button>
                   </div>
+                  {selectedItems.size > 0 && (
+                    <button
+                      onClick={handleBulkDelete}
+                      className="px-3 py-1 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md"
+                    >
+                      Delete {selectedItems.size} selected
+                    </button>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
-                  {selectedItems.size > 0 && (
-                    <>
-                      <button
-                        onClick={() => setShowMoveModal(true)}
-                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/30 border border-primary-200 dark:border-primary-800 rounded-md hover:bg-primary-100 dark:hover:bg-primary-900/50"
-                      >
-                        <FolderIcon className="w-4 h-4" />
-                        Move ({selectedItems.size})
-                      </button>
-                      <button
-                        onClick={handleBulkDelete}
-                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md hover:bg-red-100 dark:hover:bg-red-900/50"
-                      >
-                        <TrashIcon className="w-4 h-4" />
-                        Delete ({selectedItems.size})
-                      </button>
-                    </>
-                  )}
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    {filteredItems.length} items
+                  </span>
                   <button
-                    onClick={handleSelectAll}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
+                    onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+                    className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
                   >
-                    {selectedItems.size === filteredItems.length ? 'Deselect All' : 'Select All'}
+                    {viewMode === 'grid' ? 'List' : 'Grid'}
                   </button>
                 </div>
               </div>
             </div>
 
-            {/* Media Grid */}
-            {filteredItems.length === 0 ? (
-              <div className="bg-white dark:bg-gray-800 p-12 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 text-center">
-                <ImageIcon className="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-500" />
-                <p className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                  No media in this folder
-                </p>
-                <p className="text-gray-600 dark:text-gray-400">
-                  {filterType === 'all' 
-                    ? 'Upload images or videos to get started'
-                    : `No ${filterType}s in this folder. Try uploading some!`}
-                </p>
-              </div>
-            ) : (
-              <div className={`grid gap-4 ${
-                viewMode === 'grid' 
-                  ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5' 
-                  : 'grid-cols-1'
-              }`}>
-                {filteredItems.map((item) => (
+            {/* Drop Zone / Grid */}
+            <div
+              ref={dropZoneRef}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+              onClick={() => {
+                if (filteredItems.length === 0) {
+                  fileInputRef.current?.click();
+                }
+              }}
+              className={`bg-white dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 p-6 min-h-64 ${
+                viewMode === 'grid' ? 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4' : 'space-y-2'
+              } ${filteredItems.length === 0 ? 'cursor-pointer' : ''}`}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/*,video/*"
+                onChange={(e) => handleFileSelect(e.target.files)}
+                className="hidden"
+              />
+              {isUploading && (
+                <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
+                  <div className="animate-spin h-8 w-8 border-4 border-white border-t-transparent rounded-full"></div>
+                </div>
+              )}
+              {filteredItems.length === 0 ? (
+                <div className="col-span-full text-center py-12">
+                  <UploadIcon className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                  <p className="text-gray-600 dark:text-gray-400 mb-2">
+                    No media in this folder
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-500">
+                    Drag and drop files here or click to upload
+                  </p>
+                </div>
+              ) : (
+                filteredItems.map((item) => (
                   <div
                     key={item.id}
-                    className={`relative group bg-white dark:bg-gray-800 rounded-lg overflow-hidden border-2 transition-all ${
+                    className={`relative group cursor-pointer rounded-lg overflow-hidden border-2 transition-all ${
                       selectedItems.has(item.id)
-                        ? 'border-primary-500 shadow-lg'
-                        : 'border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-700'
-                    }`}
+                        ? 'border-primary-500 ring-2 ring-primary-200 dark:ring-primary-800'
+                        : 'border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-600'
+                    } ${viewMode === 'grid' ? 'aspect-square' : 'flex items-center gap-4'}`}
+                    onClick={() => setViewingItem(item)}
                   >
-                    <div className="relative">
+                    {item.type === 'video' ? (
+                      <video
+                        src={item.url}
+                        className={`${viewMode === 'grid' ? 'w-full h-full' : 'w-24 h-24'} object-contain bg-gray-100 dark:bg-gray-700`}
+                        controls={false}
+                        preload="metadata"
+                        playsInline
+                      />
+                    ) : (
+                      <img
+                        src={item.url}
+                        alt={item.name}
+                        className={`${viewMode === 'grid' ? 'w-full h-full' : 'w-24 h-24'} object-contain bg-gray-100 dark:bg-gray-700`}
+                        loading="lazy"
+                        decoding="async"
+                        onError={(e) => {
+                          console.error('Failed to load image:', item.url);
+                          (e.target as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23ccc" width="100" height="100"/%3E%3Ctext x="50" y="50" text-anchor="middle" fill="%23999"%3EFailed to load%3C/text%3E%3C/svg%3E';
+                        }}
+                      />
+                    )}
+                    
+                    {/* Overlay with actions */}
+                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-60 transition-opacity flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setViewingItem(item);
+                        }}
+                        className="p-2 bg-white dark:bg-gray-800 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 shadow-md"
+                        title="View"
+                      >
+                        <ImageIcon className="w-4 h-4 text-gray-900 dark:text-gray-100" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleUseInCompose(item);
+                        }}
+                        className="p-2 bg-white dark:bg-gray-800 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 shadow-md"
+                        title="Use in Post"
+                      >
+                        <CheckCircleIcon className="w-4 h-4 text-primary-600 dark:text-primary-400" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm(`Delete ${item.name}?`)) {
+                            handleDelete(item.id);
+                          }
+                        }}
+                        className="p-2 bg-white dark:bg-gray-800 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 shadow-md"
+                        title="Delete"
+                      >
+                        <TrashIcon className="w-4 h-4 text-red-600 dark:text-red-400" />
+                      </button>
+                    </div>
+
+                    {/* Selection checkbox */}
+                    <div
+                      className="absolute top-2 left-2 z-10"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedItems.has(item.id)}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          handleSelectItem(item.id);
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                        }}
+                        className="w-4 h-4 text-primary-600 rounded cursor-pointer"
+                      />
+                    </div>
+
+                    {/* Type indicator */}
+                    <div className="absolute top-2 right-2">
                       {item.type === 'video' ? (
-                        <video
-                          src={item.url}
-                          className="w-full h-48 object-contain bg-gray-100 dark:bg-gray-700"
-                          controls={false}
-                        />
+                        <VideoIcon className="w-4 h-4 text-white bg-black/50 rounded p-1" />
                       ) : (
-                        <img
-                          src={item.url}
-                          alt={item.name}
-                          className="w-full h-48 object-contain bg-gray-100 dark:bg-gray-700"
-                        />
+                        <ImageIcon className="w-4 h-4 text-white bg-black/50 rounded p-1" />
                       )}
-                      <div className="absolute top-2 left-2 z-30">
-                        <input
-                          type="checkbox"
-                          checked={selectedItems.has(item.id)}
-                          onChange={(e) => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                            handleSelectItem(item.id);
-                          }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                          }}
-                          className="w-5 h-5 text-primary-600 bg-white border-gray-300 rounded focus:ring-primary-500 cursor-pointer pointer-events-auto"
-                        />
-                      </div>
-                      <div className="absolute top-2 right-2">
-                        {item.type === 'video' ? (
-                          <VideoIcon className="w-6 h-6 text-white bg-black/50 rounded p-1" />
-                        ) : (
-                          <ImageIcon className="w-6 h-6 text-white bg-black/50 rounded p-1" />
-                        )}
-                      </div>
-                      <div className="p-3">
+                    </div>
+
+                    {/* Item info (for list view) */}
+                    {viewMode === 'list' && (
+                      <div className="flex-1 p-3">
                         <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
                           {item.name}
                         </p>
@@ -664,43 +703,11 @@ export const MediaLibrary: React.FC = () => {
                           </p>
                         )}
                       </div>
-                    </div>
-                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 pointer-events-none px-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setViewingItem(item);
-                        }}
-                        className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium pointer-events-auto whitespace-nowrap"
-                      >
-                        View
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleUseInCompose(item);
-                        }}
-                        className="flex-1 px-3 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-sm font-medium pointer-events-auto whitespace-nowrap"
-                      >
-                        Use in Post
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (window.confirm(`Delete ${item.name}?`)) {
-                            handleDelete(item.id);
-                          }
-                        }}
-                        className="flex-1 px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium pointer-events-auto whitespace-nowrap flex items-center justify-center gap-1"
-                      >
-                        <TrashIcon className="w-4 h-4" />
-                        <span>Delete</span>
-                      </button>
-                    </div>
+                    )}
                   </div>
-                ))}
+                  ))
+                )}
               </div>
-            )}
           </div>
         </div>
       </div>

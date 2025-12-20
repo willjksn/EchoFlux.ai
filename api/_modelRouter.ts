@@ -25,7 +25,11 @@ export type TaskType =
   | 'critique'          // Content critique - use balanced model
   | 'crm-summary'       // CRM summaries - use balanced model
   | 'chatbot'           // General chatbot - use balanced model
-  | 'image-prompt';     // Image prompt expansion - use balanced model
+  | 'image-prompt'      // Image prompt expansion - use balanced model
+  | 'content_gap_analysis'      // Content gap analysis - use balanced model
+  | 'caption_optimization'      // Caption optimization - use balanced model
+  | 'performance_prediction'   // Performance prediction - use balanced model
+  | 'content_repurposing';      // Content repurposing - use balanced model
 
 /**
  * Model configuration for each task type
@@ -91,6 +95,26 @@ const MODEL_CONFIG: Record<TaskType, {
   'image-prompt': {
     model: 'gemini-2.0-flash',
     description: 'Balanced model for image prompt expansion',
+    costTier: 'medium',
+  },
+  'content_gap_analysis': {
+    model: 'gemini-2.0-flash',
+    description: 'Balanced model for content gap analysis',
+    costTier: 'medium',
+  },
+  'caption_optimization': {
+    model: 'gemini-2.0-flash',
+    description: 'Balanced model for caption optimization',
+    costTier: 'medium',
+  },
+  'performance_prediction': {
+    model: 'gemini-2.0-flash',
+    description: 'Balanced model for performance prediction',
+    costTier: 'medium',
+  },
+  'content_repurposing': {
+    model: 'gemini-2.0-flash',
+    description: 'Balanced model for content repurposing',
     costTier: 'medium',
   },
   

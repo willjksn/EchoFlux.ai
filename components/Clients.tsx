@@ -68,7 +68,7 @@ const AddClientModal: React.FC<AddClientModalProps> = ({ isOpen, onClose, onSave
         setName('');
         setEmail('');
         setPlan('Pro');
-        setConnectedAccounts({ Instagram: false, TikTok: false, X: false, Threads: false, YouTube: false, LinkedIn: false, Facebook: false, Pinterest: false, Discord: false, Telegram: false, Reddit: false });
+        setConnectedAccounts({ Instagram: false, TikTok: false, X: false, Threads: false, YouTube: false, LinkedIn: false, Facebook: false, Pinterest: false });
     };
     
     const toggleAccount = (platform: Platform) => {

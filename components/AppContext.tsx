@@ -12,6 +12,7 @@ import { useData } from './contexts/DataContext';
  */
 export const useAppContext = (): AppContextType => {
     // Hooks must be called unconditionally - cannot wrap in try-catch
+    // These hooks will throw if used outside their providers, which is the correct behavior
     const auth = useAuth();
     const ui = useUI();
     const data = useData();

@@ -405,39 +405,41 @@ ${p.content}
                     )}
                 </div>
                 <div className="flex items-center gap-3">
-                    {/* Source Filter */}
-                    <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-1">
-                        <button
-                            onClick={() => setSourceFilter('all')}
-                            className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
-                                sourceFilter === 'all'
-                                    ? 'bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-md'
-                                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
-                            }`}
-                        >
-                            All
-                        </button>
-                        <button
-                            onClick={() => setSourceFilter('automation')}
-                            className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
-                                sourceFilter === 'automation'
-                                    ? 'bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-md'
-                                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
-                            }`}
-                        >
-                            Automation
-                        </button>
-                        <button
-                            onClick={() => setSourceFilter('manual')}
-                            className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
-                                sourceFilter === 'manual'
-                                    ? 'bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-md'
-                                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
-                            }`}
-                        >
-                            Manual
-                        </button>
-                    </div>
+                    {/* Source Filter - Hidden in offline creator mode */}
+                    {false && (
+                        <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-1">
+                            <button
+                                onClick={() => setSourceFilter('all')}
+                                className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
+                                    sourceFilter === 'all'
+                                        ? 'bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-md'
+                                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                }`}
+                            >
+                                All
+                            </button>
+                            <button
+                                onClick={() => setSourceFilter('automation')}
+                                className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
+                                    sourceFilter === 'automation'
+                                        ? 'bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-md'
+                                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                }`}
+                            >
+                                Automation
+                            </button>
+                            <button
+                                onClick={() => setSourceFilter('manual')}
+                                className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
+                                    sourceFilter === 'manual'
+                                        ? 'bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-md'
+                                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                }`}
+                            >
+                                Manual
+                            </button>
+                        </div>
+                    )}
                     {hasAnyPosts && (
                         <button 
                             onClick={() => {
@@ -459,12 +461,15 @@ ${p.content}
                             Copy all captions
                         </button>
                     )}
-                    <button 
-                        onClick={() => setActivePage('compose')} 
-                        className="px-5 py-2.5 bg-gradient-to-r from-gray-800 to-gray-700 text-white rounded-lg hover:from-gray-900 hover:to-gray-800 text-sm font-semibold flex items-center gap-2 shadow-md transition-all"
-                    >
-                        + Create Post
-                    </button>
+                    {/* Create Post button - Hidden in offline creator mode */}
+                    {false && (
+                        <button 
+                            onClick={() => setActivePage('compose')} 
+                            className="px-5 py-2.5 bg-gradient-to-r from-gray-800 to-gray-700 text-white rounded-lg hover:from-gray-900 hover:to-gray-800 text-sm font-semibold flex items-center gap-2 shadow-md transition-all"
+                        >
+                            + Create Post
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -476,12 +481,14 @@ ${p.content}
                         </div>
                         <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">No posts in workflow</h3>
                         <p className="text-gray-500 dark:text-gray-400 mb-6">Create a draft from Compose or Automation to get started.</p>
-                        <button 
-                            onClick={() => setActivePage('compose')} 
-                            className="px-5 py-2.5 bg-gradient-to-r from-primary-600 to-primary-500 text-white rounded-lg hover:from-primary-700 hover:to-primary-600 text-sm font-semibold shadow-md transition-all"
-                        >
-                            Create Post
-                        </button>
+                        {false && (
+                            <button 
+                                onClick={() => setActivePage('compose')} 
+                                className="px-5 py-2.5 bg-gradient-to-r from-primary-600 to-primary-500 text-white rounded-lg hover:from-primary-700 hover:to-primary-600 text-sm font-semibold shadow-md transition-all"
+                            >
+                                Create Post
+                            </button>
+                        )}
                     </div>
                 </div>
             ) : (

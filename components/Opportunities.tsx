@@ -1,14 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
-import { findTrends } from "../src/services/geminiService"
+import { findTrends, generateCaptions, generateContentStrategy } from "../src/services/geminiService"
 import { Opportunity, Platform, HashtagSet } from '../types';
-import { SparklesIcon, TrendingIcon } from './icons/UIIcons';
+import { SparklesIcon, TrendingIcon, HashtagIcon, TrashIcon, XMarkIcon, RocketIcon, TargetIcon } from './icons/UIIcons';
 import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
 import { useAppContext } from './AppContext';
 import { UpgradePrompt } from './UpgradePrompt';
 import { BrandSuggestions } from './BrandSuggestions';
 import { db } from '../firebaseConfig';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, addDoc, getDocs, query, orderBy, deleteDoc, Timestamp } from 'firebase/firestore';
 
 const platformIcons: { [key in Platform]: React.ReactNode } = {
   Instagram: <InstagramIcon />,
@@ -32,6 +32,11 @@ export const Opportunities: React.FC = () => {
     const [autoScanEnabled, setAutoScanEnabled] = useState(true);
     const [lastScanDate, setLastScanDate] = useState<string | null>(null);
     const [isAutoScanning, setIsAutoScanning] = useState(false);
+    const [savedScans, setSavedScans] = useState<any[]>([]);
+    const [showHistory, setShowHistory] = useState(false);
+    const [selectedOpportunity, setSelectedOpportunity] = useState<Opportunity | null>(null);
+    const [showContentModal, setShowContentModal] = useState(false);
+    const [isGeneratingContent, setIsGeneratingContent] = useState(false);
 
     // Opportunities: Creator feature, available on Pro, Elite, and Agency plans
     // Agency (Business) also gets access since they manage creators
@@ -43,6 +48,76 @@ export const Opportunities: React.FC = () => {
         // Available on Pro, Elite, and Agency plans
         return ['Pro', 'Elite', 'Agency'].includes(user?.plan || '');
     })();
+
+    // Load saved scan from localStorage on mount
+    useEffect(() => {
+        if (!user?.id) return;
+        
+        const saved = localStorage.getItem(`opportunities_scan_${user.id}`);
+        if (saved) {
+            try {
+                const data = JSON.parse(saved);
+                if (data.results && Array.isArray(data.results) && data.results.length > 0) {
+                    setResults(data.results);
+                    setNiche(data.niche || '');
+                    setLastScanDate(data.scanDate || null);
+                }
+            } catch (err) {
+                console.error('Failed to load saved opportunities scan:', err);
+            }
+        }
+        
+        // Load selected opportunity if navigating back
+        const selected = localStorage.getItem(`selected_opportunity_${user.id}`);
+        if (selected) {
+            try {
+                const opp = JSON.parse(selected);
+                setSelectedOpportunity(opp);
+            } catch (err) {
+                console.error('Failed to load selected opportunity:', err);
+            }
+        }
+        
+        // Load history from Firestore
+        loadScanHistory();
+    }, [user?.id]);
+
+    // Load scan history from Firestore
+    const loadScanHistory = async () => {
+        if (!user?.id) return;
+        
+        try {
+            const scansRef = collection(db, 'users', user.id, 'opportunities_history');
+            const q = query(scansRef, orderBy('scannedAt', 'desc'));
+            const snapshot = await getDocs(q);
+            
+            const history = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            
+            setSavedScans(history);
+        } catch (error) {
+            console.error('Failed to load scan history:', error);
+        }
+    };
+
+    // Save scan to Firestore history
+    const saveScanToHistory = async (niche: string, results: Opportunity[]) => {
+        if (!user?.id || !results || results.length === 0) return;
+        
+        try {
+            await addDoc(collection(db, 'users', user.id, 'opportunities_history'), {
+                niche,
+                results,
+                scannedAt: Timestamp.now(),
+                resultCount: results.length
+            });
+            await loadScanHistory(); // Refresh history
+        } catch (error) {
+            console.error('Failed to save scan to history:', error);
+        }
+    };
 
     const handleFindTrends = async (isAutoScan = false) => {
         if (!niche.trim()) return;
@@ -60,7 +135,18 @@ export const Opportunities: React.FC = () => {
                 // Update results with new scan - this replaces previous results
                 setResults(trends);
                 setError(null); // Clear any previous errors on success
-                setLastScanDate(new Date().toISOString());
+                const scanDate = new Date().toISOString();
+                setLastScanDate(scanDate);
+                
+                // Save to localStorage for persistence
+                localStorage.setItem(`opportunities_scan_${user.id}`, JSON.stringify({
+                    niche,
+                    results: trends,
+                    scanDate
+                }));
+                
+                // Save to Firestore history (both manual and auto-scan)
+                await saveScanToHistory(niche, trends);
                 
                 // Auto-save trending hashtags from opportunities
                 autoSaveTrendingHashtags(trends);
@@ -147,6 +233,89 @@ export const Opportunities: React.FC = () => {
         showToast(`Saved "${setName}" to Hashtag Manager!`, 'success');
     };
 
+    // Handle AI Generate Content
+    const handleAIGenerate = async () => {
+        if (!selectedOpportunity) return;
+        
+        setIsGeneratingContent(true);
+        try {
+            const prompt = `Create engaging social media content based on this trending opportunity:
+Title: ${selectedOpportunity.title}
+Description: ${selectedOpportunity.description}
+Platform: ${selectedOpportunity.platform}
+${selectedOpportunity.relatedHashtags ? `Hashtags: ${selectedOpportunity.relatedHashtags.join(', ')}` : ''}
+${selectedOpportunity.bestPractices ? `Best Practices: ${selectedOpportunity.bestPractices}` : ''}
+
+Generate a compelling caption that leverages this trend.`;
+
+            const captions = await generateCaptions({
+                goal: 'engagement',
+                tone: 'friendly',
+                promptText: prompt,
+                platforms: [selectedOpportunity.platform]
+            });
+
+            if (captions && captions.length > 0) {
+                // Save generated content to localStorage for Compose
+                localStorage.setItem(`opportunity_generated_content_${user.id}`, JSON.stringify({
+                    opportunity: selectedOpportunity,
+                    captions: captions,
+                    platform: selectedOpportunity.platform,
+                    hashtags: selectedOpportunity.relatedHashtags?.join(' ') || ''
+                }));
+                
+                setComposeContext({
+                    topic: selectedOpportunity.title,
+                    platform: selectedOpportunity.platform,
+                    hashtags: selectedOpportunity.relatedHashtags?.join(' ') || '',
+                    generatedCaptions: captions
+                });
+                
+                setShowContentModal(false);
+                setActivePage('compose');
+                showToast('AI-generated content ready in Compose!', 'success');
+            } else {
+                showToast('Failed to generate content. Please try again.', 'error');
+            }
+        } catch (error: any) {
+            console.error('Error generating content:', error);
+            showToast(error?.message || 'Failed to generate content. Please try again.', 'error');
+        } finally {
+            setIsGeneratingContent(false);
+        }
+    };
+
+    // Handle Send to Strategy
+    const handleSendToStrategy = () => {
+        if (!selectedOpportunity) return;
+        
+        // Save opportunity context for Strategy
+        localStorage.setItem(`opportunity_for_strategy_${user.id}`, JSON.stringify({
+            opportunity: selectedOpportunity,
+            niche: niche,
+            goal: `Create content around: ${selectedOpportunity.title}`,
+            platform: selectedOpportunity.platform
+        }));
+        
+        setShowContentModal(false);
+        setActivePage('strategy');
+        showToast('Opportunity sent to Strategy! Generate your roadmap.', 'success');
+    };
+
+    // Handle Manual Create
+    const handleManualCreate = () => {
+        if (!selectedOpportunity) return;
+        
+        setComposeContext({
+            topic: selectedOpportunity.title,
+            platform: selectedOpportunity.platform,
+        });
+        
+        setShowContentModal(false);
+        setActivePage('compose');
+        showToast('Ready to create content manually!', 'success');
+    };
+
     if (!isFeatureUnlocked) {
         return (
             <UpgradePrompt 
@@ -173,9 +342,9 @@ export const Opportunities: React.FC = () => {
                 )}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Left Column: Trend Finder */}
-                <div className="lg:col-span-2 space-y-6">
+            <div className="max-w-5xl mx-auto">
+                {/* Centered: Trend Finder */}
+                <div className="space-y-6">
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-3">
@@ -191,6 +360,12 @@ export const Opportunities: React.FC = () => {
                                 </div>
                             </div>
                             <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setShowHistory(!showHistory)}
+                                    className="px-3 py-1.5 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
+                                >
+                                    {showHistory ? 'Hide' : 'Show'} History
+                                </button>
                                 <label className="flex items-center gap-2 cursor-pointer">
                                     <input
                                         type="checkbox"
@@ -204,17 +379,80 @@ export const Opportunities: React.FC = () => {
                                 </label>
                             </div>
                         </div>
+                        
+                        {/* History Panel */}
+                        {showHistory && (
+                            <div className="mb-6 bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 border border-gray-200 dark:border-gray-600">
+                                <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Scan History</h4>
+                                {savedScans.length === 0 ? (
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">No saved scans yet. Your scans will appear here.</p>
+                                ) : (
+                                    <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+                                        {savedScans.map((scan) => (
+                                            <div
+                                                key={scan.id}
+                                                className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                                            >
+                                                <div className="flex-1">
+                                                    <p className="text-sm font-medium text-gray-900 dark:text-white">{scan.niche}</p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                        {scan.resultCount || 0} opportunities • {scan.scannedAt?.toDate ? new Date(scan.scannedAt.toDate()).toLocaleDateString() : 'Recently'}
+                                                    </p>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={() => {
+                                                            setResults(scan.results || []);
+                                                            setNiche(scan.niche || '');
+                                                            setLastScanDate(scan.scannedAt?.toDate ? scan.scannedAt.toDate().toISOString() : null);
+                                                            // Update localStorage
+                                                            localStorage.setItem(`opportunities_scan_${user.id}`, JSON.stringify({
+                                                                niche: scan.niche,
+                                                                results: scan.results,
+                                                                scanDate: scan.scannedAt?.toDate ? scan.scannedAt.toDate().toISOString() : null
+                                                            }));
+                                                            setShowHistory(false);
+                                                            showToast('Scan loaded', 'success');
+                                                        }}
+                                                        className="px-2 py-1 text-xs bg-primary-600 text-white rounded hover:bg-primary-700"
+                                                    >
+                                                        Load
+                                                    </button>
+                                                    <button
+                                                        onClick={async () => {
+                                                            if (window.confirm('Delete this scan from history?')) {
+                                                                try {
+                                                                    await deleteDoc(doc(db, 'users', user.id, 'opportunities_history', scan.id));
+                                                                    await loadScanHistory();
+                                                                    showToast('Scan deleted', 'success');
+                                                                } catch (error) {
+                                                                    console.error('Failed to delete scan:', error);
+                                                                    showToast('Failed to delete scan', 'error');
+                                                                }
+                                                            }
+                                                        }}
+                                                        className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                         <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
                             Enter a topic or niche to find relevant trends and opportunities. {autoScanEnabled && '⭐ Trends will auto-update weekly or scan on-demand.'}
                         </p>
-                        <div className="flex gap-2">
+                        <div className="flex flex-col sm:flex-row gap-2">
                             <input
                                 type="text"
                                 value={niche}
                                 onChange={(e) => setNiche(e.target.value)}
                                 onKeyPress={(e) => e.key === 'Enter' && niche.trim() && handleFindTrends()}
                                 placeholder="e.g., sustainable fashion, tech reviews"
-                                className="flex-grow p-3 border rounded-lg bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 focus:ring-2 focus:ring-primary-500"
+                                className="flex-1 p-3 border rounded-lg bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 focus:ring-2 focus:ring-primary-500"
                             />
                             <button
                                 onClick={handleFindTrends}
@@ -251,6 +489,31 @@ export const Opportunities: React.FC = () => {
                         </div>
                     )}
                     
+                    {/* Show selected opportunity indicator if returning from content creation */}
+                    {selectedOpportunity && (
+                        <div className="bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-lg p-4 mb-4">
+                            <div className="flex items-center justify-between">
+                                <div className="flex-1">
+                                    <p className="text-sm font-semibold text-primary-900 dark:text-primary-300 mb-1">
+                                        📝 Working on: {selectedOpportunity.title}
+                                    </p>
+                                    <p className="text-xs text-primary-700 dark:text-primary-400">
+                                        {selectedOpportunity.platform} • Click "Create Content" again to continue
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        setSelectedOpportunity(null);
+                                        localStorage.removeItem(`selected_opportunity_${user.id}`);
+                                    }}
+                                    className="px-3 py-1 text-xs text-primary-600 dark:text-primary-400 hover:bg-primary-100 dark:hover:bg-primary-900/30 rounded"
+                                >
+                                    Clear
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     {results.length > 0 && (
                          <div className="space-y-4">
                              <div className="flex justify-between items-center mb-4 flex-wrap gap-4">
@@ -339,7 +602,11 @@ export const Opportunities: React.FC = () => {
                                      };
 
                                      return (
-                                     <div key={result.id} className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-shadow">
+                                     <div key={result.id} className={`bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border-2 hover:shadow-md transition-shadow ${
+                                         selectedOpportunity && (selectedOpportunity.id === result.id || selectedOpportunity.title === result.title)
+                                             ? 'border-primary-500 dark:border-primary-400 bg-primary-50 dark:bg-primary-900/20'
+                                             : 'border-gray-100 dark:border-gray-700'
+                                     }`}>
                                          <div className="flex items-start justify-between mb-3">
                                              <div className="flex items-center gap-3 flex-wrap">
                                                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${typeColors[result.type] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'}`}>
@@ -412,12 +679,10 @@ export const Opportunities: React.FC = () => {
                                          <div className="flex gap-2">
                                              <button
                                                  onClick={() => {
-                                                     setComposeContext({ 
-                                                         topic: result.title, 
-                                                         platform: result.platform,
-                                                         hashtags: result.relatedHashtags?.join(' ') || ''
-                                                     });
-                                                     setActivePage('compose');
+                                                     setSelectedOpportunity(result);
+                                                     // Save to localStorage for persistence
+                                                     localStorage.setItem(`selected_opportunity_${user.id}`, JSON.stringify(result));
+                                                     setShowContentModal(true);
                                                  }}
                                                  className="flex-1 px-4 py-2 bg-gradient-to-r from-primary-600 to-primary-500 text-white rounded-lg hover:from-primary-700 hover:to-primary-600 text-sm font-semibold shadow-sm transition-all"
                                              >
@@ -449,12 +714,109 @@ export const Opportunities: React.FC = () => {
                         </div>
                     )}
                 </div>
-
-                {/* Right Column: Brand Suggestions */}
-                <div className="lg:col-span-1">
-                    <BrandSuggestions />
-                </div>
             </div>
+
+            {/* Content Creation Modal */}
+            {showContentModal && selectedOpportunity && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-gray-200 dark:border-gray-700">
+                        {/* Header */}
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                            <div>
+                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Create Content from Opportunity</h2>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                    {selectedOpportunity.title} • {selectedOpportunity.platform}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    setShowContentModal(false);
+                                    // Don't clear selectedOpportunity - keep it for when user returns
+                                }}
+                                className="p-2 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                            >
+                                <XMarkIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Opportunity Details */}
+                        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                            <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 mb-6">
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">{selectedOpportunity.title}</h3>
+                                <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">{selectedOpportunity.description}</p>
+                                
+                                {selectedOpportunity.relatedHashtags && selectedOpportunity.relatedHashtags.length > 0 && (
+                                    <div className="mb-3">
+                                        <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Trending Hashtags:</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {selectedOpportunity.relatedHashtags.map((tag, idx) => (
+                                                <span key={idx} className="text-xs px-2 py-1 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-full">
+                                                    {tag}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                {selectedOpportunity.bestPractices && (
+                                    <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-lg">
+                                        <p className="text-xs font-semibold text-blue-900 dark:text-blue-300 mb-1">💡 Best Practice</p>
+                                        <p className="text-xs text-blue-700 dark:text-blue-400">{selectedOpportunity.bestPractices}</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Content Creation Options */}
+                            <div className="space-y-4">
+                                <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Choose how to create content:</h4>
+                                
+                                {/* Option 1: AI Generate */}
+                                <button
+                                    onClick={handleAIGenerate}
+                                    disabled={isGeneratingContent}
+                                    className="w-full p-4 bg-gradient-to-r from-primary-600 to-primary-500 text-white rounded-lg hover:from-primary-700 hover:to-primary-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3 shadow-md transition-all"
+                                >
+                                    <SparklesIcon className="w-6 h-6" />
+                                    <div className="flex-1 text-left">
+                                        <p className="font-semibold">AI Generate Content</p>
+                                        <p className="text-sm text-primary-100">Let Gemini create captions and content ideas for you</p>
+                                    </div>
+                                    {isGeneratingContent && (
+                                        <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                    )}
+                                </button>
+
+                                {/* Option 2: Send to Strategy */}
+                                <button
+                                    onClick={handleSendToStrategy}
+                                    className="w-full p-4 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-lg hover:from-purple-700 hover:to-purple-600 flex items-center gap-3 shadow-md transition-all"
+                                >
+                                    <TargetIcon className="w-6 h-6" />
+                                    <div className="flex-1 text-left">
+                                        <p className="font-semibold">Send to Strategy</p>
+                                        <p className="text-sm text-purple-100">Generate a multi-week content roadmap around this trend</p>
+                                    </div>
+                                </button>
+
+                                {/* Option 3: Manual Create */}
+                                <button
+                                    onClick={handleManualCreate}
+                                    className="w-full p-4 bg-gradient-to-r from-gray-700 to-gray-600 text-white rounded-lg hover:from-gray-800 hover:to-gray-700 flex items-center gap-3 shadow-md transition-all"
+                                >
+                                    <RocketIcon className="w-6 h-6" />
+                                    <div className="flex-1 text-left">
+                                        <p className="font-semibold">Create Manually</p>
+                                        <p className="text-sm text-gray-200">Open Compose with this opportunity's details pre-filled</p>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

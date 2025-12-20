@@ -91,7 +91,8 @@ export const OnlyFansExportHub: React.FC = () => {
 
     const handleAddMedia = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);
-        setMediaFiles(prev => [...prev, ...files]);
+        // Only add to mediaUrls/mediaNames - don't duplicate in mediaFiles
+        // mediaFiles is kept for backwards compatibility but not displayed
         files.forEach(file => {
             const reader = new FileReader();
             reader.onloadend = () => {
@@ -102,6 +103,8 @@ export const OnlyFansExportHub: React.FC = () => {
             };
             reader.readAsDataURL(file);
         });
+        // Clear the input so same file can be selected again if needed
+        e.target.value = '';
     };
 
     const handleAddFromVault = () => {
@@ -116,9 +119,14 @@ export const OnlyFansExportHub: React.FC = () => {
     };
 
     const handleRemoveMedia = (index: number) => {
-        setMediaFiles(prev => prev.filter((_, i) => i !== index));
+        // Only remove from mediaUrls/mediaNames since that's what we display
+        // mediaFiles is kept for backwards compatibility but not actively used
         setMediaUrls(prev => prev.filter((_, i) => i !== index));
         setMediaNames(prev => prev.filter((_, i) => i !== index));
+        // Also remove from mediaFiles if it exists at that index
+        if (index < mediaFiles.length) {
+            setMediaFiles(prev => prev.filter((_, i) => i !== index));
+        }
     };
 
     const handleToggleMediaSelection = (id: string) => {
@@ -143,7 +151,7 @@ export const OnlyFansExportHub: React.FC = () => {
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             
-            const platforms = ['Instagram', 'X (Twitter)', 'Reddit', 'TikTok'];
+            const platforms = ['Instagram', 'X (Twitter)', 'TikTok'];
             const generated: { platform: string; caption: string }[] = [];
 
             for (const platform of platforms) {
@@ -468,46 +476,31 @@ export const OnlyFansExportHub: React.FC = () => {
                         )}
 
                         {/* Selected Media Display */}
-                        {(mediaFiles.length > 0 || mediaUrls.length > 0) && (
+                        {mediaUrls.length > 0 && (
                             <div className="mt-3 space-y-2">
-                                {mediaFiles.map((file, index) => (
-                                    <div
-                                        key={`file-${index}`}
-                                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md border border-gray-200 dark:border-gray-600"
-                                    >
-                                        <div className="flex items-center gap-2">
-                                            {file.type.startsWith('image/') ? (
-                                                <ImageIcon className="w-5 h-5 text-gray-500" />
-                                            ) : (
-                                                <VideoIcon className="w-5 h-5 text-gray-500" />
-                                            )}
-                                            <span className="text-sm text-gray-900 dark:text-white">
-                                                {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
-                                            </span>
-                                        </div>
-                                        <button
-                                            onClick={() => handleRemoveMedia(index)}
-                                            className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                                        >
-                                            <XMarkIcon className="w-5 h-5" />
-                                        </button>
-                                    </div>
-                                ))}
                                 {mediaUrls.map((url, index) => {
-                                    const name = mediaNames[index] || `Media ${index + mediaFiles.length + 1}`;
+                                    const name = mediaNames[index] || `Media ${index + 1}`;
+                                    // Detect if it's an image or video from URL or name
+                                    const isImage = url.startsWith('data:image/') || 
+                                                   name.match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i) ||
+                                                   (!url.startsWith('data:video/') && !name.match(/\.(mp4|mov|avi|wmv|flv|webm|mkv|m4v)$/i));
                                     return (
                                         <div
                                             key={`url-${index}`}
                                             className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md border border-gray-200 dark:border-gray-600"
                                         >
                                             <div className="flex items-center gap-2">
-                                                <ImageIcon className="w-5 h-5 text-gray-500" />
+                                                {isImage ? (
+                                                    <ImageIcon className="w-5 h-5 text-gray-500" />
+                                                ) : (
+                                                    <VideoIcon className="w-5 h-5 text-gray-500" />
+                                                )}
                                                 <span className="text-sm text-gray-900 dark:text-white">
                                                     {name}
                                                 </span>
                                             </div>
                                             <button
-                                                onClick={() => handleRemoveMedia(index + mediaFiles.length)}
+                                                onClick={() => handleRemoveMedia(index)}
                                                 className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                                             >
                                                 <XMarkIcon className="w-5 h-5" />

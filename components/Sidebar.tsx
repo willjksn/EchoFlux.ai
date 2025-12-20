@@ -1,6 +1,7 @@
 import React from 'react';
 import { Page } from '../types';
 import { DashboardIcon, AnalyticsIcon, SettingsIcon, LogoIcon, ComposeIcon, TrendingIcon, TeamIcon, RocketIcon, BriefcaseIcon, AdminIcon, AutomationIcon, CalendarIcon, KanbanIcon, GlobeIcon, TargetIcon, SparklesIcon, ImageIcon, ChatIcon } from './icons/UIIcons';
+import { OFFLINE_MODE } from '../constants';
 import { useAppContext } from './AppContext';
 
 interface NavItemProps {
@@ -80,6 +81,11 @@ export const Sidebar: React.FC = () => {
               // Hide Analytics in offline studio mode (depends on live social data)
               return false;
           case 'automation':
+              // Hide Automation in offline mode until social connections are working
+              if (OFFLINE_MODE) {
+                  return false;
+              }
+              return user.plan !== 'Free';
           case 'calendar':
           case 'bio':
           case 'strategy':

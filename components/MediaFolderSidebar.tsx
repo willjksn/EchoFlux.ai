@@ -16,39 +16,40 @@ export const MediaFolderSidebar: React.FC<MediaFolderSidebarProps> = ({
   onCreateFolder,
 }) => {
   return (
-    <div className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 h-full flex flex-col">
+    <div className="w-full md:w-64 bg-white dark:bg-gray-800 border-b md:border-b-0 md:border-r border-gray-200 dark:border-gray-700 h-auto md:h-full flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Folders</h2>
+      <div className="p-3 sm:p-4 border-b border-gray-200 dark:border-gray-700">
+        <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-2 sm:mb-3">Folders</h2>
         <button
           onClick={onCreateFolder}
-          className="w-full px-3 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-sm font-medium flex items-center justify-center gap-2"
+          className="w-full px-3 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-xs sm:text-sm font-medium flex items-center justify-center gap-2"
         >
           <span className="text-lg">+</span>
-          Create Folder
+          <span className="hidden sm:inline">Create Folder</span>
+          <span className="sm:hidden">New Folder</span>
         </button>
       </div>
 
       {/* Folder List */}
-      <div className="flex-1 overflow-y-auto p-2">
+      <div className="flex-1 overflow-y-auto p-2 flex flex-row md:flex-col gap-1 md:gap-0 overflow-x-auto md:overflow-x-hidden">
         {folders.map((folder) => {
           const isSelected = folder.id === selectedFolderId;
           return (
             <button
               key={folder.id}
               onClick={() => onSelectFolder(folder.id)}
-              className={`w-full px-3 py-2 rounded-md text-left flex items-center justify-between group transition-colors ${
+              className={`px-3 py-2 rounded-md text-left flex items-center justify-between group transition-colors flex-shrink-0 md:w-full ${
                 isSelected
                   ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'
               }`}
             >
               <div className="flex items-center gap-2 flex-1 min-w-0">
-                <FolderIcon className="w-5 h-5 flex-shrink-0" />
-                <span className="text-sm font-medium truncate">{folder.name}</span>
+                <FolderIcon className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+                <span className="text-xs sm:text-sm font-medium truncate">{folder.name}</span>
               </div>
               {folder.itemCount !== undefined && (
-                <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${
+                <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ml-2 ${
                   isSelected
                     ? 'bg-primary-200 dark:bg-primary-800 text-primary-800 dark:text-primary-200'
                     : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
@@ -63,6 +64,7 @@ export const MediaFolderSidebar: React.FC<MediaFolderSidebarProps> = ({
     </div>
   );
 };
+
 
 
 

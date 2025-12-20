@@ -162,29 +162,31 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
                         </span>
                     </div>
                     {/* Promotion Code Input */}
-                    {isAuthenticated && (
-                        <div className="flex items-center gap-2">
-                            <input
-                                type="text"
-                                value={promoCode}
-                                onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-                                placeholder="Enter promotion code"
-                                className="px-4 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                            />
-                            <button
-                                onClick={() => {
-                                    if (!promoCode.trim()) {
-                                        showToast('Please enter a promotion code', 'error');
-                                        return;
-                                    }
-                                    showToast('Promotion code will be applied at checkout', 'success');
-                                }}
-                                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
-                            >
-                                Apply
-                            </button>
-                        </div>
-                    )}
+                    <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
+                        <input
+                            type="text"
+                            value={promoCode}
+                            onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                            placeholder="Enter promotion code"
+                            className="w-full sm:w-auto px-4 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        />
+                        <button
+                            onClick={() => {
+                                if (!promoCode.trim()) {
+                                    showToast('Please enter a promotion code', 'error');
+                                    return;
+                                }
+                                if (!isAuthenticated) {
+                                    showToast('Please sign in to apply promotion code', 'error');
+                                    return;
+                                }
+                                showToast('Promotion code will be applied at checkout', 'success');
+                            }}
+                            className="w-full sm:w-auto px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors whitespace-nowrap"
+                        >
+                            Apply
+                        </button>
+                    </div>
                 </div>
 
                 <div className="mt-10 grid gap-6 grid-cols-1 md:grid-cols-3 max-w-4xl mx-auto">

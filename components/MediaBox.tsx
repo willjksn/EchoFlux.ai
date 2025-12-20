@@ -38,6 +38,8 @@ import {
   CheckCircleIcon,
   ClipboardCheckIcon,
   SparklesIcon,
+  XMarkIcon,
+  CopyIcon,
 } from './icons/UIIcons';
 import { MusicTrack } from '../types';
 import { EMOJIS, EMOJI_CATEGORIES, Emoji } from './emojiData';
@@ -54,7 +56,7 @@ import {
 import { useAppContext } from './AppContext';
 import { MediaLibraryItem } from '../types';
 import { db } from '../firebaseConfig';
-import { collection, getDocs, query, orderBy, setDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, setDoc, doc, addDoc, Timestamp, deleteDoc } from 'firebase/firestore';
 import { VideoIcon } from './icons/UIIcons';
 
 const categoryIcons: Record<string, React.ReactNode> = {
@@ -159,6 +161,64 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   const [isAiHelpOpen, setIsAiHelpOpen] = useState(false);
   const [aiHelpPrompt, setAiHelpPrompt] = useState('');
   const [isAiHelpGenerating, setIsAiHelpGenerating] = useState(false);
+  
+  // Predict and Repurpose modals
+  const [predictResult, setPredictResult] = useState<any>(null);
+  const [showPredictModal, setShowPredictModal] = useState(false);
+  const [repurposeResult, setRepurposeResult] = useState<any>(null);
+  const [showRepurposeModal, setShowRepurposeModal] = useState(false);
+
+  // Save predict to history (limit to last 10)
+  const savePredictToHistory = async (data: any) => {
+    if (!user?.id) return;
+    try {
+      const historyRef = collection(db, 'users', user.id, 'compose_predict_history');
+      await addDoc(historyRef, {
+        type: 'predict',
+        data,
+        createdAt: Timestamp.now(),
+      });
+      
+      // Keep only last 10 - get all, delete oldest if > 10
+      const q = query(historyRef, orderBy('createdAt', 'desc'));
+      const snapshot = await getDocs(q);
+      if (snapshot.size > 10) {
+        const docs = snapshot.docs;
+        const toDelete = docs.slice(10);
+        for (const docToDelete of toDelete) {
+          await deleteDoc(docToDelete.ref);
+        }
+      }
+    } catch (error: any) {
+      console.error('Error saving predict to history:', error);
+    }
+  };
+
+  // Save repurpose to history (limit to last 10)
+  const saveRepurposeToHistory = async (data: any) => {
+    if (!user?.id) return;
+    try {
+      const historyRef = collection(db, 'users', user.id, 'compose_repurpose_history');
+      await addDoc(historyRef, {
+        type: 'repurpose',
+        data,
+        createdAt: Timestamp.now(),
+      });
+      
+      // Keep only last 10 - get all, delete oldest if > 10
+      const q = query(historyRef, orderBy('createdAt', 'desc'));
+      const snapshot = await getDocs(q);
+      if (snapshot.size > 10) {
+        const docs = snapshot.docs;
+        const toDelete = docs.slice(10);
+        for (const docToDelete of toDelete) {
+          await deleteDoc(docToDelete.ref);
+        }
+      }
+    } catch (error: any) {
+      console.error('Error saving repurpose to history:', error);
+    }
+  };
 
   // Cleanup music playback on unmount or modal close
   useEffect(() => {
@@ -359,7 +419,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
     showToast('Image removed', 'success');
   };
 
-  const generateCaptionsForMedia = async (base64Data: string, mimeType: string) => {
+  const generateCaptionsForMedia = async (base64Data: string | null, mimeType: string, mediaUrl?: string) => {
     if (!canGenerate || !user) {
       // Show upgrade modal if callback is provided
       if (onUpgradeClick) {
@@ -372,30 +432,46 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
 
     setIsGenerating(true);
     try {
-      // Upload to Firebase Storage first
-      const timestamp = Date.now();
-      const extension = mimeType.split('/')[1] || 'png';
-      const storagePath = `users/${user.id}/uploads/${timestamp}.${extension}`;
-      const storageRef = ref(storage, storagePath);
+      let finalMediaUrl = mediaUrl;
+      
+      // If we don't have a URL yet, upload the base64 data to Firebase Storage
+      if (!finalMediaUrl && base64Data) {
+        const timestamp = Date.now();
+        const extension = mimeType.split('/')[1] || 'png';
+        const storagePath = `users/${user.id}/uploads/${timestamp}.${extension}`;
+        const storageRef = ref(storage, storagePath);
 
-      const bytes = base64ToBytes(base64Data);
-      await uploadBytes(storageRef, bytes, {
-        contentType: mimeType,
-      });
+        const bytes = base64ToBytes(base64Data);
+        await uploadBytes(storageRef, bytes, {
+          contentType: mimeType,
+        });
 
-      const mediaUrl = await getDownloadURL(storageRef);
+        finalMediaUrl = await getDownloadURL(storageRef);
+      }
+      
+      if (!finalMediaUrl) {
+        showToast('Failed to get media URL for caption generation.', 'error');
+        setIsGenerating(false);
+        return;
+      }
 
-      // Get selected platforms for platform-specific hashtags
-      const selectedPlatforms = (Object.keys(mediaItem.selectedPlatforms || {}) as Platform[]).filter(
+      // Get single selected platform for platform-optimized captions
+      const selectedPlatform = (Object.keys(mediaItem.selectedPlatforms || {}) as Platform[]).find(
         p => mediaItem.selectedPlatforms?.[p]
       );
       
+      if (!selectedPlatform) {
+        showToast('Please select a platform first to generate platform-optimized captions', 'error');
+        setIsGenerating(false);
+        return;
+      }
+      
       const res = await generateCaptions({
-        mediaUrl,
+        mediaUrl: finalMediaUrl,
         goal: mediaItem.postGoal,
         tone: mediaItem.postTone,
         promptText: undefined,
-        platforms: selectedPlatforms.length > 0 ? selectedPlatforms : undefined, // Pass platforms for hashtag generation
+        platforms: [selectedPlatform], // Pass single platform for platform-optimized caption generation
       });
 
       let generatedResults: CaptionResult[] = [];
@@ -434,9 +510,15 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
     }
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
+    // Check if we have media - either base64 data or a preview URL
     if (mediaItem.data) {
-      generateCaptionsForMedia(mediaItem.data, mediaItem.mimeType);
+      // We have base64 data (uploaded file)
+      generateCaptionsForMedia(mediaItem.data, mediaItem.mimeType || 'image/jpeg');
+    } else if (mediaItem.previewUrl) {
+      // We have a URL (from media library or already uploaded)
+      // Use the URL directly - no need to convert to base64 and re-upload
+      generateCaptionsForMedia(null, mediaItem.mimeType || 'image/jpeg', mediaItem.previewUrl);
     } else {
       showToast('Please upload media first.', 'error');
     }
@@ -528,9 +610,12 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
           context: {
             goal: mediaItem.postGoal,
             tone: mediaItem.postTone,
-            platforms: (Object.keys(mediaItem.selectedPlatforms || {}) as Platform[]).filter(
-              p => mediaItem.selectedPlatforms?.[p]
-            ),
+            platforms: (() => {
+              const selectedPlatform = (Object.keys(mediaItem.selectedPlatforms || {}) as Platform[]).find(
+                p => mediaItem.selectedPlatforms?.[p]
+              );
+              return selectedPlatform ? [selectedPlatform] : undefined;
+            })(),
           },
         }),
       });
@@ -850,6 +935,180 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
         </div>
       )}
 
+      {/* AI Action Buttons - Show when caption exists */}
+      {mediaItem.captionText && mediaItem.captionText.trim() && (
+        <div className="mb-3 flex flex-wrap gap-2">
+          <button
+            onClick={async () => {
+              if (!mediaItem.captionText.trim()) {
+                showToast('Please add a caption first', 'error');
+                return;
+              }
+              setIsGenerating(true);
+              try {
+                const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+                const selectedPlatform = (Object.keys(mediaItem.selectedPlatforms || {}) as Platform[]).find(
+                  p => mediaItem.selectedPlatforms?.[p]
+                );
+                if (!selectedPlatform) {
+                  showToast('Please select a platform first', 'error');
+                  setIsGenerating(false);
+                  return;
+                }
+                const response = await fetch('/api/optimizeCaption', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                  },
+                  body: JSON.stringify({
+                    originalCaption: mediaItem.captionText,
+                    platform: selectedPlatform,
+                    niche: user?.niche || '',
+                    tone: mediaItem.postTone,
+                    goal: mediaItem.postGoal,
+                    mediaType: mediaItem.type,
+                  }),
+                });
+                if (!response.ok) throw new Error('Failed to optimize caption');
+                const data = await response.json();
+                if (data.success && data.optimizedCaption) {
+                  onUpdate(index, { captionText: data.optimizedCaption });
+                  showToast('Caption optimized! Check the improvements below.', 'success');
+                }
+              } catch (error: any) {
+                showToast(error.message || 'Failed to optimize caption', 'error');
+              } finally {
+                setIsGenerating(false);
+              }
+            }}
+            disabled={isGenerating}
+            className="flex-1 px-2 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+          >
+            <SparklesIcon className="w-3 h-3" />
+            Optimize
+          </button>
+          <button
+            onClick={async () => {
+              if (!mediaItem.captionText.trim()) {
+                showToast('Please add a caption first', 'error');
+                return;
+              }
+              setIsGenerating(true);
+              try {
+                const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+                const selectedPlatform = (Object.keys(mediaItem.selectedPlatforms || {}) as Platform[]).find(
+                  p => mediaItem.selectedPlatforms?.[p]
+                );
+                if (!selectedPlatform) {
+                  showToast('Please select a platform first', 'error');
+                  setIsGenerating(false);
+                  return;
+                }
+                const response = await fetch('/api/predictContentPerformance', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                  },
+                  body: JSON.stringify({
+                    caption: mediaItem.captionText,
+                    platform: selectedPlatform,
+                    mediaType: mediaItem.type,
+                    niche: user?.niche || '',
+                    tone: mediaItem.postTone,
+                    goal: mediaItem.postGoal,
+                    scheduledDate: mediaItem.scheduledDate,
+                  }),
+                });
+                if (!response.ok) throw new Error('Failed to predict performance');
+                const data = await response.json();
+                if (data.success) {
+                  // Save to history
+                  await savePredictToHistory({
+                    ...data,
+                    originalCaption: mediaItem.captionText,
+                    platform: selectedPlatform,
+                  });
+                  
+                  setPredictResult(data);
+                  setShowPredictModal(true);
+                  showToast('Performance predicted!', 'success');
+                }
+              } catch (error: any) {
+                showToast(error.message || 'Failed to predict performance', 'error');
+              } finally {
+                setIsGenerating(false);
+              }
+            }}
+            disabled={isGenerating}
+            className="flex-1 px-2 py-1.5 text-xs font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+          >
+            <SparklesIcon className="w-3 h-3" />
+            Predict
+          </button>
+          <button
+            onClick={async () => {
+              if (!mediaItem.captionText.trim()) {
+                showToast('Please add a caption first', 'error');
+                return;
+              }
+              setIsGenerating(true);
+              try {
+                const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+                const selectedPlatform = (Object.keys(mediaItem.selectedPlatforms || {}) as Platform[]).find(
+                  p => mediaItem.selectedPlatforms?.[p]
+                );
+                if (!selectedPlatform) {
+                  showToast('Please select a platform first', 'error');
+                  setIsGenerating(false);
+                  return;
+                }
+                const response = await fetch('/api/repurposeContent', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                  },
+                  body: JSON.stringify({
+                    originalContent: mediaItem.captionText,
+                    originalPlatform: selectedPlatform,
+                    targetPlatforms: ['Instagram', 'TikTok', 'X', 'LinkedIn', 'Facebook', 'Threads', 'YouTube'],
+                    niche: user?.niche || '',
+                    tone: mediaItem.postTone,
+                    goal: mediaItem.postGoal,
+                    mediaType: mediaItem.type,
+                  }),
+                });
+                if (!response.ok) throw new Error('Failed to repurpose content');
+                const data = await response.json();
+                if (data.success && data.repurposedContent) {
+                  // Save to history
+                  await saveRepurposeToHistory({
+                    ...data,
+                    originalContent: mediaItem.captionText,
+                    originalPlatform: selectedPlatform,
+                  });
+                  
+                  setRepurposeResult(data);
+                  setShowRepurposeModal(true);
+                  showToast('Content repurposed!', 'success');
+                }
+              } catch (error: any) {
+                showToast(error.message || 'Failed to repurpose content', 'error');
+              } finally {
+                setIsGenerating(false);
+              }
+            }}
+            disabled={isGenerating}
+            className="flex-1 px-2 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 rounded-md hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+          >
+            <SparklesIcon className="w-3 h-3" />
+            Repurpose
+          </button>
+        </div>
+      )}
+
       {/* Caption Input */}
       <div className="relative mb-3">
         <textarea
@@ -1044,45 +1303,57 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
         )}
       </div>
 
-      {/* Platform Selection */}
+      {/* Platform Selection - Single Select */}
       <div className="mb-3">
         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-          Plan for platforms
+          Plan for platform (select one)
         </label>
         <div className="flex flex-wrap gap-1.5">
-          {(Object.keys(platformIcons) as Platform[]).map(platform => (
-            <button
-              key={platform}
-              onClick={() => {
-                const currentPlatforms = mediaItem.selectedPlatforms || {};
-                const newValue = !currentPlatforms[platform];
-                const updates: Partial<MediaItemState> = {
-                  selectedPlatforms: {
-                    ...currentPlatforms,
-                    [platform]: newValue,
-                  },
-                };
-                // Reset Instagram post type if Instagram is deselected
-                if (platform === 'Instagram' && !newValue) {
-                  updates.instagramPostType = undefined;
-                }
-                // Auto-set Instagram post type based on media type when Instagram is selected
-                if (platform === 'Instagram' && newValue && !mediaItem.instagramPostType) {
-                  updates.instagramPostType = mediaItem.type === 'video' ? 'Reel' : 'Post';
-                }
-                onUpdate(index, updates);
-              }}
-              className={`flex items-center justify-center gap-1 px-2 py-1 rounded text-xs border transition-colors ${
-                mediaItem.selectedPlatforms?.[platform]
-                  ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
-                  : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
-              }`}
-            >
-              <span className="w-3 h-3 flex items-center justify-center flex-shrink-0">{platformIcons[platform]}</span>
-              <span className="hidden sm:inline">{platform}</span>
-            </button>
-          ))}
+          {(Object.keys(platformIcons) as Platform[]).map(platform => {
+            const isSelected = mediaItem.selectedPlatforms?.[platform] === true;
+            return (
+              <button
+                key={platform}
+                onClick={() => {
+                  // Single select: only this platform is selected, all others are false
+                  const updates: Partial<MediaItemState> = {
+                    selectedPlatforms: {
+                      Instagram: false,
+                      TikTok: false,
+                      X: false,
+                      Threads: false,
+                      YouTube: false,
+                      LinkedIn: false,
+                      Facebook: false,
+                      Pinterest: false,
+                      [platform]: true,
+                    },
+                  };
+                  // Reset Instagram post type if switching away from Instagram
+                  if (mediaItem.selectedPlatforms?.Instagram && platform !== 'Instagram') {
+                    updates.instagramPostType = undefined;
+                  }
+                  // Auto-set Instagram post type based on media type when Instagram is selected
+                  if (platform === 'Instagram' && !mediaItem.instagramPostType) {
+                    updates.instagramPostType = mediaItem.type === 'video' ? 'Reel' : 'Post';
+                  }
+                  onUpdate(index, updates);
+                }}
+                className={`flex items-center justify-center gap-1 px-2 py-1 rounded text-xs border transition-colors ${
+                  isSelected
+                    ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 font-medium'
+                    : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+                }`}
+              >
+                <span className="w-3 h-3 flex items-center justify-center flex-shrink-0">{platformIcons[platform]}</span>
+                <span className="hidden sm:inline">{platform}</span>
+              </button>
+            );
+          })}
         </div>
+        {mediaItem.selectedPlatforms && Object.values(mediaItem.selectedPlatforms).every(p => !p) && (
+          <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Please select a platform to generate platform-optimized captions</p>
+        )}
       </div>
 
       {/* Instagram Post Type Selection */}
@@ -1488,6 +1759,293 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
           </div>
         </div>
       )}
+
+      {/* Predict Modal */}
+      {showPredictModal && predictResult && (
+        <PredictModal
+          result={predictResult}
+          onClose={() => {
+            setShowPredictModal(false);
+            // Trigger history reload in parent (Compose)
+            window.dispatchEvent(new CustomEvent('composeHistoryReload'));
+          }}
+          onCopy={(text) => {
+            navigator.clipboard.writeText(text);
+            showToast('Copied to clipboard!', 'success');
+          }}
+        />
+      )}
+
+      {/* Repurpose Modal */}
+      {showRepurposeModal && repurposeResult && (
+        <RepurposeModal
+          result={repurposeResult}
+          onClose={() => {
+            setShowRepurposeModal(false);
+            // Trigger history reload in parent (Compose)
+            window.dispatchEvent(new CustomEvent('composeHistoryReload'));
+          }}
+          onCopy={(text) => {
+            navigator.clipboard.writeText(text);
+            showToast('Copied to clipboard!', 'success');
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+// Predict Modal Component
+const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: string) => void }> = ({ result, onClose, onCopy }) => {
+  const prediction = result.prediction || {};
+  const level = prediction.level || 'Medium';
+  const score = prediction.score || 50;
+  const confidence = prediction.confidence || 50;
+
+  const getLevelColor = (level: string) => {
+    if (level === 'High') return 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800';
+    if (level === 'Medium') return 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800';
+    return 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800';
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Performance Prediction</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          >
+            <XMarkIcon className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {/* Prediction Summary */}
+          <div className={`p-6 rounded-lg border-2 ${getLevelColor(level)}`}>
+            <div className="text-center">
+              <p className="text-sm font-medium mb-2">Predicted Performance</p>
+              <p className="text-4xl font-bold mb-2">{level}</p>
+              <div className="flex items-center justify-center gap-4 mt-4">
+                <div>
+                  <p className="text-xs opacity-75">Score</p>
+                  <p className="text-2xl font-bold">{score}/100</p>
+                </div>
+                <div>
+                  <p className="text-xs opacity-75">Confidence</p>
+                  <p className="text-2xl font-bold">{confidence}%</p>
+                </div>
+              </div>
+              {prediction.reasoning && (
+                <p className="text-sm mt-4 opacity-90">{prediction.reasoning}</p>
+              )}
+            </div>
+          </div>
+
+          {/* Factor Breakdown */}
+          {result.factors && (
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Factor Analysis</h3>
+              <div className="space-y-3">
+                {Object.entries(result.factors).map(([key, value]: [string, any]) => (
+                  <div key={key} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white capitalize">
+                        {key.replace(/([A-Z])/g, ' $1').trim()}
+                      </p>
+                      <p className="text-lg font-bold text-primary-600 dark:text-primary-400">
+                        {value.score || 0}/100
+                      </p>
+                    </div>
+                    {value.analysis && (
+                      <p className="text-xs text-gray-600 dark:text-gray-400">{value.analysis}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Improvements */}
+          {result.improvements && result.improvements.length > 0 && (
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Improvement Suggestions</h3>
+              <div className="space-y-2">
+                {result.improvements.map((imp: any, idx: number) => (
+                  <div key={idx} className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <div className="flex items-start justify-between mb-1">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white capitalize">{imp.factor}</p>
+                      <span className={`text-xs px-2 py-1 rounded ${
+                        imp.priority === 'high' ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300' :
+                        imp.priority === 'medium' ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300' :
+                        'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                      }`}>
+                        {imp.priority}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">{imp.currentIssue}</p>
+                    <p className="text-xs text-gray-700 dark:text-gray-300 font-medium">{imp.suggestion}</p>
+                    <p className="text-xs text-primary-600 dark:text-primary-400 mt-1">{imp.expectedImpact}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Optimized Version */}
+          {result.optimizedVersion && (
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Optimized Version</h3>
+              <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                <p className="text-gray-900 dark:text-white whitespace-pre-wrap mb-2">{result.optimizedVersion.caption}</p>
+                {result.optimizedVersion.expectedBoost && (
+                  <p className="text-xs text-green-700 dark:text-green-300 font-medium">
+                    Expected Boost: {result.optimizedVersion.expectedBoost}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Summary */}
+          {result.summary && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <p className="text-blue-900 dark:text-blue-200 text-sm">{result.summary}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
+          {result.optimizedVersion && (
+            <button
+              onClick={() => onCopy(result.optimizedVersion.caption)}
+              className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
+            >
+              <CopyIcon className="w-4 h-4" />
+              Copy Optimized
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+          >
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Repurpose Modal Component
+const RepurposeModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: string) => void }> = ({ result, onClose, onCopy }) => {
+  const repurposedContent = result.repurposedContent || [];
+
+  const copyPlatformContent = (item: any) => {
+    const text = `${item.platform} (${item.format})\n\n${item.caption}\n\nHashtags: ${(item.hashtags || []).join(' ')}\n\nOptimizations:\n${(item.optimizations || []).map((opt: string) => `• ${opt}`).join('\n')}`;
+    onCopy(text);
+  };
+
+  const copyAllContent = () => {
+    const text = repurposedContent.map((item: any) => 
+      `--- ${item.platform} (${item.format}) ---\n${item.caption}\n\nHashtags: ${(item.hashtags || []).join(' ')}\n\nOptimizations:\n${(item.optimizations || []).map((opt: string) => `• ${opt}`).join('\n')}`
+    ).join('\n\n');
+    onCopy(text);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Repurposed Content</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          >
+            <XMarkIcon className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {result.summary && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <p className="text-blue-900 dark:text-blue-200 text-sm">{result.summary}</p>
+            </div>
+          )}
+
+          {repurposedContent.map((item: any, idx: number) => (
+            <div key={idx} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{item.platform}</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{item.format}</p>
+                </div>
+                <button
+                  onClick={() => copyPlatformContent(item)}
+                  className="px-3 py-1 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm flex items-center gap-1"
+                >
+                  <CopyIcon className="w-4 h-4" />
+                  Copy
+                </button>
+              </div>
+
+              <div className="mb-3">
+                <p className="text-gray-900 dark:text-white whitespace-pre-wrap">{item.caption}</p>
+              </div>
+
+              {item.hashtags && item.hashtags.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Hashtags:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {item.hashtags.map((tag: string, tagIdx: number) => (
+                      <span
+                        key={tagIdx}
+                        className="px-2 py-1 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded text-xs"
+                      >
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {item.optimizations && item.optimizations.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Optimizations:</p>
+                  <ul className="list-disc list-inside space-y-1">
+                    {item.optimizations.map((opt: string, optIdx: number) => (
+                      <li key={optIdx} className="text-xs text-gray-600 dark:text-gray-400">{opt}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {item.suggestedPostingTime && (
+                <p className="text-xs text-primary-600 dark:text-primary-400 mt-2">
+                  💡 Best posting time: {item.suggestedPostingTime}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
+          <button
+            onClick={copyAllContent}
+            className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
+          >
+            <CopyIcon className="w-4 h-4" />
+            Copy All
+          </button>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+          >
+            OK
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

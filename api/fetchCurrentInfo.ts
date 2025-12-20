@@ -28,7 +28,19 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
 
   const searchQuery = topic.trim();
 
-  const result = await searchWeb(searchQuery);
+  console.log('[fetchCurrentInfo] Tavily search requested for topic:', searchQuery, 'user:', user?.uid || 'anonymous');
+  const result = await searchWeb(
+    searchQuery,
+    user?.uid,
+    user?.plan,
+    user?.role
+  );
+  console.log('[fetchCurrentInfo] Tavily search result:', {
+    success: result.success,
+    resultCount: result.results?.length || 0,
+    note: result.note,
+    topic: searchQuery
+  });
 
   // Track Tavily usage for admin analytics (only when we know the user)
   if (user?.uid) {

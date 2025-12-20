@@ -97,6 +97,26 @@ export const Strategy: React.FC = () => {
         loadActiveRoadmap();
         loadMediaLibrary();
         loadAnalytics();
+        
+        // Check for opportunity sent from Opportunities page
+        if (user?.id) {
+            const opportunityData = localStorage.getItem(`opportunity_for_strategy_${user.id}`);
+            if (opportunityData) {
+                try {
+                    const data = JSON.parse(opportunityData);
+                    if (data.opportunity && data.niche) {
+                        setNiche(data.niche);
+                        setGoal(data.goal || 'Increase Followers/Fans');
+                        setAudience(data.opportunity.platform || 'General Audience');
+                        showToast('Opportunity loaded! Generate your roadmap.', 'success');
+                        // Don't remove - let user generate, then clear on successful generation
+                    }
+                } catch (error) {
+                    console.error('Failed to load opportunity for strategy:', error);
+                    localStorage.removeItem(`opportunity_for_strategy_${user.id}`);
+                }
+            }
+        }
     }, [user?.id]);
 
     const loadAnalytics = async () => {
@@ -191,6 +211,12 @@ export const Strategy: React.FC = () => {
             return;
         }
         setIsLoading(true);
+        
+        // Clear opportunity data after starting generation
+        if (user?.id) {
+            localStorage.removeItem(`opportunity_for_strategy_${user.id}`);
+        }
+        
         try {
             // Fetch analytics if not already loaded
             let analytics = analyticsData;
@@ -420,18 +446,19 @@ export const Strategy: React.FC = () => {
                 }
             }
 
-            // Create a scheduled post + calendar event so this day shows up on the planning calendar.
+            // Create a post + calendar event so this day shows up on the planning calendar.
+            // Status is "Ready" (not "Scheduled") - user will schedule it when ready.
             // This does NOT auto-post; it is for planning and manual posting later.
-            // Get the updated day for scheduling
+            // Get the updated day for calendar
             const updatedDay = updatedPlan.weeks[weekIndex].content[dayIndex];
 
-            // Calculate scheduled date based on roadmap
+            // Calculate suggested date based on roadmap (for planning purposes)
             const today = new Date();
-            const scheduledDate = new Date(today);
-            scheduledDate.setDate(today.getDate() + (weekIndex * 7) + updatedDay.dayOffset);
-            scheduledDate.setHours(14, 0, 0, 0); // Default to 2 PM
+            const suggestedDate = new Date(today);
+            suggestedDate.setDate(today.getDate() + (weekIndex * 7) + updatedDay.dayOffset);
+            suggestedDate.setHours(14, 0, 0, 0); // Default to 2 PM
 
-            // Create a post + calendar event so it appears as scheduled content
+            // Create a post + calendar event so it appears as "Ready" content
             const postId = `roadmap-${selectedStrategy?.id || 'temp'}-${weekIndex}-${dayIndex}-${Date.now()}`;
 
             if (user) {
@@ -441,10 +468,10 @@ export const Strategy: React.FC = () => {
                     mediaUrl: mediaUrl,
                     mediaType: fileType,
                     platforms: [updatedDay.platform],
-                    status: 'Scheduled',
+                    status: 'Draft', // Draft until user schedules it
                     author: { name: user.name, avatar: user.avatar },
                     comments: [],
-                    scheduledDate: scheduledDate.toISOString(),
+                    scheduledDate: suggestedDate.toISOString(), // Suggested date, not actual schedule
                     clientId: user.userType === 'Business' ? user.id : undefined,
                     timestamp: new Date().toISOString(),
                 };
@@ -452,15 +479,15 @@ export const Strategy: React.FC = () => {
                 const safePost = JSON.parse(JSON.stringify(newPost));
                 await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
 
-                // Create calendar event so it appears on the calendar as Scheduled
+                // Create calendar event so it appears on the calendar as "Ready" (not "Scheduled")
                 try {
                     await addCalendarEvent({
                         id: `strategy-${postId}`,
                         title: updatedDay.topic,
-                        date: scheduledDate.toISOString(),
+                        date: suggestedDate.toISOString(),
                         type: 'Post',
                         platform: updatedDay.platform,
-                        status: 'Scheduled',
+                        status: 'Ready', // Ready status - needs scheduling
                         thumbnail: mediaUrl
                     } as CalendarEvent);
                 } catch (calendarError) {
@@ -468,8 +495,10 @@ export const Strategy: React.FC = () => {
                     // Don't fail the whole operation if calendar event creation fails
                 }
 
-                // Update roadmap item status to scheduled and link post
-                const updatedPlanWithSchedule = {
+                // Update roadmap item status to "ready" (not "scheduled") and link post
+                // Status stays as "ready" - it was already set above
+                // Just link the post ID
+                const updatedPlanWithLink = {
                     ...updatedPlan,
                     weeks: updatedPlan.weeks.map((week, wIdx) => {
                         if (wIdx !== weekIndex) return week;
@@ -479,21 +508,21 @@ export const Strategy: React.FC = () => {
                                 if (dIdx !== dayIndex) return d;
                                 return {
                                     ...d,
-                                    status: 'scheduled' as const,
                                     linkedPostId: postId
+                                    // Status is already "ready" from above
                                 };
                             })
                         };
                     })
                 };
 
-                setPlan(updatedPlanWithSchedule);
+                setPlan(updatedPlanWithLink);
 
                 // Update selectedStrategy
                 if (selectedStrategy) {
                     const updatedStrategy = {
                         ...selectedStrategy,
-                        plan: updatedPlanWithSchedule,
+                        plan: updatedPlanWithLink,
                         linkedPostIds: [...(selectedStrategy.linkedPostIds || []), postId]
                     };
                     setSelectedStrategy(updatedStrategy);
@@ -503,7 +532,7 @@ export const Strategy: React.FC = () => {
                 }
             }
 
-            showToast('Media uploaded, caption generated, and added to your calendar.', 'success');
+            showToast('Media uploaded, caption generated, and added to your calendar as "Ready".', 'success');
         } catch (error) {
             console.error('Failed to upload media:', error);
             showToast('Failed to upload media. Please try again.', 'error');
@@ -565,15 +594,15 @@ export const Strategy: React.FC = () => {
                 }),
             };
 
-            // Calculate scheduled date for this roadmap day
+            // Calculate suggested date for this roadmap day (for planning purposes)
             const today = new Date();
-            const scheduledDate = new Date(today);
-            scheduledDate.setDate(today.getDate() + (weekIndex * 7) + currentDay.dayOffset);
-            scheduledDate.setHours(14, 0, 0, 0); // 2 PM by default
+            const suggestedDate = new Date(today);
+            suggestedDate.setDate(today.getDate() + (weekIndex * 7) + currentDay.dayOffset);
+            suggestedDate.setHours(14, 0, 0, 0); // 2 PM by default
 
             const postId = `roadmap-${selectedStrategy?.id || 'temp'}-${weekIndex}-${dayIndex}-${Date.now()}`;
 
-            // Create a scheduled Post + calendar event so this shows up on Calendar
+            // Create a Post + calendar event so this shows up on Calendar as "Ready"
             if (user) {
                 const newPost: Post = {
                     id: postId,
@@ -581,10 +610,10 @@ export const Strategy: React.FC = () => {
                     mediaUrl: item.url,
                     mediaType,
                     platforms: [currentDay.platform],
-                    status: 'Scheduled',
+                    status: 'Draft', // Draft until user schedules it
                     author: { name: user.name, avatar: user.avatar },
                     comments: [],
-                    scheduledDate: scheduledDate.toISOString(),
+                    scheduledDate: suggestedDate.toISOString(), // Suggested date, not actual schedule
                     clientId: user.userType === 'Business' ? user.id : undefined,
                     timestamp: new Date().toISOString(),
                 };
@@ -596,10 +625,10 @@ export const Strategy: React.FC = () => {
                     await addCalendarEvent({
                         id: `strategy-${postId}`,
                         title: currentDay.topic,
-                        date: scheduledDate.toISOString(),
+                        date: suggestedDate.toISOString(),
                         type: 'Post',
                         platform: currentDay.platform,
-                        status: 'Scheduled',
+                        status: 'Ready', // Ready status - needs scheduling
                         thumbnail: item.url,
                     } as CalendarEvent);
                 } catch (calendarError) {
@@ -607,8 +636,9 @@ export const Strategy: React.FC = () => {
                 }
             }
 
-            // Mark this roadmap day as scheduled and link the post
-            const updatedPlanWithSchedule: StrategyPlan = {
+            // Mark this roadmap day as "ready" (not "scheduled") and link the post
+            // Status is already "ready" from basePlan above
+            const updatedPlanWithLink: StrategyPlan = {
                 ...basePlan,
                 weeks: basePlan.weeks.map((week, wIdx) => {
                     if (wIdx !== weekIndex) return week;
@@ -618,21 +648,21 @@ export const Strategy: React.FC = () => {
                             if (dIdx !== dayIndex) return day;
                             return {
                                 ...day,
-                                status: 'scheduled' as const,
                                 linkedPostId: postId,
+                                // Status is already "ready" from basePlan
                             };
                         }),
                     };
                 }),
             };
 
-            setPlan(updatedPlanWithSchedule);
+            setPlan(updatedPlanWithLink);
 
             // Persist into the selected strategy document if it exists
             if (selectedStrategy && user) {
                 const updatedStrategy = {
                     ...selectedStrategy,
-                    plan: updatedPlanWithSchedule,
+                    plan: updatedPlanWithLink,
                     linkedPostIds: [...(selectedStrategy.linkedPostIds || []), postId],
                 };
                 setSelectedStrategy(updatedStrategy);
@@ -644,7 +674,7 @@ export const Strategy: React.FC = () => {
             }
 
             setShowMediaLibrary(null);
-            showToast('Media attached from your library, caption generated, and added to your calendar.', 'success');
+            showToast('Media attached from your library, caption generated, and added to your calendar as "Ready".', 'success');
         } catch (error) {
             console.error('Failed to attach media from library:', error);
             showToast('Failed to attach media from your library. Please try again.', 'error');
@@ -934,10 +964,6 @@ export const Strategy: React.FC = () => {
                             <option value="LinkedIn">LinkedIn Focus</option>
                             <option value="Facebook">Facebook Focus</option>
                             <option value="Pinterest">Pinterest Focus</option>
-                            <option value="Discord">Discord Focus</option>
-                            <option value="Telegram">Telegram Focus</option>
-                            <option value="Reddit">Reddit Focus</option>
-                            <option value="Fanvue">Fanvue Focus</option>
                             <option value="OnlyFans">OnlyFans Focus</option>
                         </select>
                     </div>

@@ -6,6 +6,7 @@ import { DashboardIcon, FlagIcon, SearchIcon, StarIcon, CalendarIcon, SparklesIc
 import { useAppContext } from './AppContext';
 import { updateUserSocialStats } from '../src/services/socialStatsService';
 import { auth } from '../firebaseConfig';
+import { ContentGapAnalysis } from './ContentGapAnalysis';
 
 const platformFilterIcons: { [key in Platform]: React.ReactNode } = {
   Instagram: <InstagramIcon />,
@@ -46,6 +47,43 @@ export const Dashboard: React.FC = () => {
       notes?: string;
     }>
   >([]);
+
+  // Load and filter weekly suggestions from localStorage on mount
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    const saved = localStorage.getItem(`weeklySuggestions_${user.id}`);
+    if (saved) {
+      try {
+        const data = JSON.parse(saved);
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        
+        // Filter out suggestions with past dates
+        const filtered = (data.suggestions || []).filter((s: any) => {
+          if (!s.date) return false;
+          try {
+            const suggestionDate = new Date(s.date);
+            suggestionDate.setHours(0, 0, 0, 0);
+            return suggestionDate.getTime() >= now.getTime();
+          } catch {
+            return false;
+          }
+        });
+        
+        if (filtered.length > 0) {
+          setWeeklySuggestions(filtered);
+          // Update localStorage with filtered suggestions
+          localStorage.setItem(`weeklySuggestions_${user.id}`, JSON.stringify({
+            suggestions: filtered,
+            generatedAt: data.generatedAt
+          }));
+        }
+      } catch (err) {
+        console.error('Failed to load weekly suggestions:', err);
+      }
+    }
+  }, [user?.id]);
   // Content Ideas state - moved to top level
   const [isGeneratingIdeas, setIsGeneratingIdeas] = useState(false);
   const [generatedIdeas, setGeneratedIdeas] = useState<any[]>([]);
@@ -207,6 +245,11 @@ export const Dashboard: React.FC = () => {
 
       const data = await res.json();
       if (data.success && Array.isArray(data.suggestions)) {
+        // Save to localStorage for persistence
+        localStorage.setItem(`weeklySuggestions_${user.id}`, JSON.stringify({
+          suggestions: data.suggestions,
+          generatedAt: new Date().toISOString()
+        }));
         setWeeklySuggestions(data.suggestions);
         showToast?.('Weekly plan generated. Review your suggested content pack below.', 'success');
       } else {
@@ -423,15 +466,22 @@ export const Dashboard: React.FC = () => {
                           onClick={() => setActivePage('opportunities')}
                         />
                       )}
-                      <QuickAction
-                        label="Automation"
-                        icon={<RocketIcon />}
-                        color="bg-gradient-to-br from-amber-500 to-orange-500"
-                        onClick={() => setActivePage('automation')}
-                      />
                     </>
                   )}
              </div>
+          </div>
+
+          {/* Content Gap Analysis Widget */}
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Content Intelligence</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  Analyze your content mix and identify gaps
+                </p>
+              </div>
+            </div>
+            <ContentGapAnalysis />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

@@ -74,7 +74,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let webSearchSuccess = false;
 
       try {
-        const webResult = await searchWeb(niche);
+        console.log('[findTrendsByNiche] Tavily search requested for niche:', niche, 'user:', user.uid);
+        const webResult = await searchWeb(niche, user.uid, user.plan, user.role);
+        console.log('[findTrendsByNiche] Tavily search result:', {
+          success: webResult.success,
+          resultCount: webResult.results?.length || 0,
+          note: webResult.note
+        });
+        
         if (webResult.success && Array.isArray(webResult.results) && webResult.results.length > 0) {
           const lines = webResult.results.map((r, idx) => {
             const title = r.title || "Result";

@@ -191,6 +191,8 @@ export interface Client {
   approvalLink?: string; 
   socialStats?: Record<Platform, SocialStats>;
   bioPage?: BioPageConfig;
+  referralCode?: string;
+  referralStats?: ReferralStats;
 }
 
 export interface MediaItem {
@@ -231,6 +233,34 @@ export interface HashtagSet {
 }
 
 export type UserType = 'Creator' | 'Business';
+
+export interface Referral {
+  id: string;
+  referrerId: string;
+  refereeId: string;
+  referralCode: string;
+  createdAt: string;
+  rewardStatus: 'pending' | 'claimed' | 'expired';
+  rewardType?: 'free_month' | 'extra_generations' | 'storage_boost';
+  rewardAmount?: number;
+  claimedAt?: string;
+}
+
+export interface ReferralReward {
+  milestone: number;
+  type: 'free_month' | 'extra_generations' | 'storage_boost';
+  amount: number;
+  description: string;
+  isEarned: boolean;
+  isClaimed: boolean;
+}
+
+export interface ReferralStats {
+  totalReferrals: number;
+  activeReferrals: number;
+  rewardsEarned: number;
+  referralCode: string;
+}
 
 export interface User {
   id: string;
@@ -277,6 +307,12 @@ export interface User {
   cancelAtPeriodEnd?: boolean; // Whether subscription is set to cancel at period end
   subscriptionStartDate?: string; // ISO timestamp when current subscription started
   billingCycle?: 'monthly' | 'annually'; // Billing cycle for current plan
+  claimedReferralRewards?: Array<{
+    milestone: number;
+    type: string;
+    amount: number;
+    claimedAt: string;
+  }>;
 }
 
 export interface Notification {

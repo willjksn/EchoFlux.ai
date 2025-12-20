@@ -69,19 +69,7 @@ export const Automation: React.FC = () => {
   const [processingIndex, setProcessingIndex] = useState<number | null>(null);
   const [goal, setGoal] = useState('engagement');
   const [tone, setTone] = useState('friendly');
-  const [selectedPlatforms, setSelectedPlatforms] = useState<Record<Platform, boolean>>({
-    Instagram: true,
-    TikTok: false,
-    X: false,
-    Threads: false,
-    YouTube: false,
-    LinkedIn: false,
-    Facebook: false,
-    Pinterest: false,
-    Discord: false,
-    Telegram: false,
-    Reddit: false,
-  });
+  const [selectedPlatform, setSelectedPlatform] = useState<Platform | null>('Instagram');
     
     // Filter options for Business Starter/Growth plans
     const isBusiness = user?.userType === 'Business';
@@ -432,15 +420,13 @@ export const Automation: React.FC = () => {
 
       const analysis = await response.json();
       
-      // Use selected platforms if any are selected, otherwise use AI recommendations
-      const platformsToUse = Object.keys(selectedPlatforms).some(p => selectedPlatforms[p as Platform]) 
-        ? (Object.keys(selectedPlatforms).filter(p => selectedPlatforms[p as Platform]) as Platform[])
-        : (analysis.platforms || ['Instagram']) as Platform[];
+      // Use selected platform if one is selected, otherwise use AI recommendations
+      const platformToUse = selectedPlatform || (analysis.platforms?.[0] as Platform) || 'Instagram';
       
       return {
         caption: analysis.caption || '',
         hashtags: analysis.hashtags || [],
-        platforms: platformsToUse,
+        platforms: [platformToUse],
         goal: analysis.goal || media.goal,
         tone: analysis.tone || media.tone,
         mediaUrl,
@@ -818,16 +804,16 @@ export const Automation: React.FC = () => {
           </div>
           <div className="mt-4">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Platforms to Post To
+              Plan for Platform (Select One)
             </label>
             <div className="flex flex-wrap gap-2">
               {(Object.keys(platformIcons) as Platform[]).filter(p => p !== 'OnlyFans').map((platform) => (
                 <button
                   key={platform}
-                  onClick={() => setSelectedPlatforms(prev => ({ ...prev, [platform]: !prev[platform] }))}
+                  onClick={() => setSelectedPlatform(platform)}
                   className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition-colors ${
-                    selectedPlatforms[platform]
-                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                    selectedPlatform === platform
+                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 font-medium'
                       : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
                   }`}
                 >
@@ -836,6 +822,9 @@ export const Automation: React.FC = () => {
                                 </button>
               ))}
                             </div>
+            {!selectedPlatform && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Please select a platform to generate platform-optimized captions</p>
+            )}
                         </div>
                             </div>
             

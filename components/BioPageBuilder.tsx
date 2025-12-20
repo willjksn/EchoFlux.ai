@@ -136,17 +136,11 @@ const BioPreview: React.FC<{ config: any }> = ({ config }) => {
                     <div className="mb-1">
                         <h3 className="text-xl font-bold inline" style={{ color: theme.textColor }}>
                             {config?.displayName || 'Display Name'}
-                            {config?.verified && <span className="ml-1">✓</span>}
                         </h3>
                     </div>
                     {config?.username && (
                         <p className="text-sm mb-1 opacity-80" style={{ color: theme.textColor }}>
                             @{String(config.username).replace('@', '')}
-                        </p>
-                    )}
-                    {config?.totalFollowers && config.totalFollowers > 0 && (
-                        <p className="text-xs mb-3 opacity-70" style={{ color: theme.textColor }}>
-                            {formatFollowerCount(config.totalFollowers)} Total Followers
                         </p>
                     )}
                     <p className="text-sm mb-6 px-4 opacity-90" style={{ color: theme.textColor }}>{config?.bio || 'Bio description'}</p>
@@ -820,21 +814,7 @@ export const BioPageBuilder: React.FC = () => {
                                         className="w-full p-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
                                     />
                                 </div>
-                                <label className="flex items-center gap-2 px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 cursor-pointer">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={bioPage.verified || false} 
-                                        onChange={e => setBioPage({ ...bioPage, verified: e.target.checked })} 
-                                        className="w-4 h-4 text-primary-600 rounded"
-                                    />
-                                    <span className="text-sm text-gray-700 dark:text-gray-300">Verified</span>
-                                </label>
                             </div>
-                            {bioPage.totalFollowers !== undefined && bioPage.totalFollowers > 0 && (
-                                <div className="text-sm text-gray-600 dark:text-gray-400">
-                                    {formatFollowerCount(bioPage.totalFollowers)} Total Followers
-                                </div>
-                            )}
                             <div className="relative">
                                 <textarea 
                                     ref={bioTextareaRef}

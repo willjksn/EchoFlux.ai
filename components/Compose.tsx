@@ -19,7 +19,9 @@ import {
   MobileIcon,
   ClipboardCheckIcon,
   CalendarIcon,
-  DownloadIcon
+  DownloadIcon,
+  XMarkIcon,
+  CopyIcon,
 } from './icons/UIIcons';
 import {
   InstagramIcon,
@@ -41,7 +43,7 @@ import { useAppContext } from './AppContext';
 import { MobilePreviewModal } from './MobilePreviewModal';
 import { MediaBox } from './MediaBox';
 import { db, storage } from '../firebaseConfig';
-import { collection, setDoc, doc, getDocs, deleteDoc, query, where, getDoc } from 'firebase/firestore';
+import { collection, setDoc, doc, getDocs, deleteDoc, query, where, getDoc, orderBy, Timestamp } from 'firebase/firestore';
 // @ts-ignore
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { scheduleMultiplePosts, analyzeOptimalPostingTimes } from '../src/services/smartSchedulingService';
@@ -180,6 +182,49 @@ const CaptionGenerator: React.FC = () => {
   const [isPinterestBoardModalOpen, setIsPinterestBoardModalOpen] = useState(false);
   const [selectedPinterestBoardId, setSelectedPinterestBoardId] = useState<string | null>(null);
   const [selectedPinterestBoardName, setSelectedPinterestBoardName] = useState<string | null>(null);
+  
+  // History state for predict and repurpose
+  const [predictHistory, setPredictHistory] = useState<any[]>([]);
+  const [repurposeHistory, setRepurposeHistory] = useState<any[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  
+  // Predict and Repurpose modals (for history viewing)
+  const [predictResult, setPredictResult] = useState<any>(null);
+  const [showPredictModal, setShowPredictModal] = useState(false);
+  const [repurposeResult, setRepurposeResult] = useState<any>(null);
+  const [showRepurposeModal, setShowRepurposeModal] = useState(false);
+
+  const loadHistory = async () => {
+    if (!user?.id) return;
+    setLoadingHistory(true);
+    try {
+      // Load predict history
+      const predictRef = collection(db, 'users', user.id, 'compose_predict_history');
+      const predictQuery = query(predictRef, orderBy('createdAt', 'desc'));
+      const predictSnapshot = await getDocs(predictQuery);
+      const predictItems: any[] = [];
+      predictSnapshot.forEach((doc) => {
+        predictItems.push({ id: doc.id, ...doc.data() });
+      });
+      setPredictHistory(predictItems.slice(0, 10)); // Keep only last 10
+
+      // Load repurpose history
+      const repurposeRef = collection(db, 'users', user.id, 'compose_repurpose_history');
+      const repurposeQuery = query(repurposeRef, orderBy('createdAt', 'desc'));
+      const repurposeSnapshot = await getDocs(repurposeQuery);
+      const repurposeItems: any[] = [];
+      repurposeSnapshot.forEach((doc) => {
+        repurposeItems.push({ id: doc.id, ...doc.data() });
+      });
+      setRepurposeHistory(repurposeItems.slice(0, 10)); // Keep only last 10
+    } catch (error: any) {
+      console.error('Error loading history:', error);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
   const [pendingPinterestPublish, setPendingPinterestPublish] = useState<{
     mediaUrl: string;
     title: string;
@@ -3316,6 +3361,104 @@ const CaptionGenerator: React.FC = () => {
         )}
       </div>
 
+      {/* Predict & Repurpose History */}
+      {(predictHistory.length > 0 || repurposeHistory.length > 0) && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Predictions & Repurposes</h3>
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+            >
+              {showHistory ? 'Hide' : 'Show'} History
+            </button>
+          </div>
+          {showHistory && (
+            <div className="space-y-3 max-h-64 overflow-y-auto">
+              {/* Predict History */}
+              {predictHistory.map((item) => {
+                const prediction = item.data?.prediction || {};
+                const level = prediction.level || 'Medium';
+                const score = prediction.score || 50;
+                return (
+                  <div
+                    key={item.id}
+                    className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs font-semibold text-purple-600 dark:text-purple-400">PREDICT</span>
+                          <span className={`text-xs px-2 py-0.5 rounded ${
+                            level === 'High' ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' :
+                            level === 'Medium' ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300' :
+                            'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
+                          }`}>
+                            {level} ({score}/100)
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                          {item.data?.originalCaption?.substring(0, 100)}...
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                          {item.createdAt?.toDate?.() ? new Date(item.createdAt.toDate()).toLocaleString() : 'Recently'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setPredictResult(item.data);
+                          setShowPredictModal(true);
+                        }}
+                        className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 ml-2"
+                      >
+                        View
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+              
+              {/* Repurpose History */}
+              {repurposeHistory.map((item) => {
+                const platforms = item.data?.repurposedContent?.length || 0;
+                return (
+                  <div
+                    key={item.id}
+                    className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">REPURPOSE</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {platforms} platforms
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                          {item.data?.originalContent?.substring(0, 100)}...
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                          {item.createdAt?.toDate?.() ? new Date(item.createdAt.toDate()).toLocaleString() : 'Recently'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setRepurposeResult(item.data);
+                          setShowRepurposeModal(true);
+                        }}
+                        className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 ml-2"
+                      >
+                        View
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Tone & Goal Controls - Only show for Caption plan */}
       {user?.plan === 'Caption' && (
         <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
@@ -3718,6 +3861,35 @@ const CaptionGenerator: React.FC = () => {
             </div>
           )}
 
+      {/* Predict Modal (for history) */}
+      {showPredictModal && predictResult && (
+        <PredictModal
+          result={predictResult}
+          onClose={() => {
+            setShowPredictModal(false);
+            loadHistory(); // Reload history when modal closes
+          }}
+          onCopy={(text) => {
+            navigator.clipboard.writeText(text);
+            showToast('Copied to clipboard!', 'success');
+          }}
+        />
+      )}
+
+      {/* Repurpose Modal (for history) */}
+      {showRepurposeModal && repurposeResult && (
+        <RepurposeModal
+          result={repurposeResult}
+          onClose={() => {
+            setShowRepurposeModal(false);
+            loadHistory(); // Reload history when modal closes
+          }}
+          onCopy={(text) => {
+            navigator.clipboard.writeText(text);
+            showToast('Copied to clipboard!', 'success');
+          }}
+        />
+      )}
     </div>
   );
 };
@@ -3737,10 +3909,18 @@ export const Compose: React.FC = () => {
     setActivePage,
     composeContext,
     clearComposeContext,
-    setComposeState
+    setComposeState,
+    showToast
   } = useAppContext();
   const [activeTab, setActiveTab] = useState<ComposeTab>('captions');
   const [initialPrompt, setInitialPrompt] = useState<string | undefined>(undefined);
+  
+  // Predict and Repurpose modals (for history viewing)
+  const [predictResult, setPredictResult] = useState<any>(null);
+  const [showPredictModal, setShowPredictModal] = useState(false);
+  const [repurposeResult, setRepurposeResult] = useState<any>(null);
+  const [showRepurposeModal, setShowRepurposeModal] = useState(false);
+  
 
   useEffect(() => {
     if (composeContext) {
@@ -3893,6 +4073,261 @@ export const Compose: React.FC = () => {
         ))}
       </div>
       {renderTabContent()}
+    </div>
+  );
+};
+
+// Predict Modal Component (shared with MediaBox and CaptionGenerator)
+const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: string) => void }> = ({ result, onClose, onCopy }) => {
+  const prediction = result.prediction || {};
+  const level = prediction.level || 'Medium';
+  const score = prediction.score || 50;
+  const confidence = prediction.confidence || 50;
+
+  const getLevelColor = (level: string) => {
+    if (level === 'High') return 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800';
+    if (level === 'Medium') return 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800';
+    return 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800';
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Performance Prediction</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          >
+            <XMarkIcon className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {/* Prediction Summary */}
+          <div className={`p-6 rounded-lg border-2 ${getLevelColor(level)}`}>
+            <div className="text-center">
+              <p className="text-sm font-medium mb-2">Predicted Performance</p>
+              <p className="text-4xl font-bold mb-2">{level}</p>
+              <div className="flex items-center justify-center gap-4 mt-4">
+                <div>
+                  <p className="text-xs opacity-75">Score</p>
+                  <p className="text-2xl font-bold">{score}/100</p>
+                </div>
+                <div>
+                  <p className="text-xs opacity-75">Confidence</p>
+                  <p className="text-2xl font-bold">{confidence}%</p>
+                </div>
+              </div>
+              {prediction.reasoning && (
+                <p className="text-sm mt-4 opacity-90">{prediction.reasoning}</p>
+              )}
+            </div>
+          </div>
+
+          {/* Factor Breakdown */}
+          {result.factors && (
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Factor Analysis</h3>
+              <div className="space-y-3">
+                {Object.entries(result.factors).map(([key, value]: [string, any]) => (
+                  <div key={key} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white capitalize">
+                        {key.replace(/([A-Z])/g, ' $1').trim()}
+                      </p>
+                      <p className="text-lg font-bold text-primary-600 dark:text-primary-400">
+                        {value.score || 0}/100
+                      </p>
+                    </div>
+                    {value.analysis && (
+                      <p className="text-xs text-gray-600 dark:text-gray-400">{value.analysis}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Improvements */}
+          {result.improvements && result.improvements.length > 0 && (
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Improvement Suggestions</h3>
+              <div className="space-y-2">
+                {result.improvements.map((imp: any, idx: number) => (
+                  <div key={idx} className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <div className="flex items-start justify-between mb-1">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white capitalize">{imp.factor}</p>
+                      <span className={`text-xs px-2 py-1 rounded ${
+                        imp.priority === 'high' ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300' :
+                        imp.priority === 'medium' ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300' :
+                        'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                      }`}>
+                        {imp.priority}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">{imp.currentIssue}</p>
+                    <p className="text-xs text-gray-700 dark:text-gray-300 font-medium">{imp.suggestion}</p>
+                    <p className="text-xs text-primary-600 dark:text-primary-400 mt-1">{imp.expectedImpact}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Optimized Version */}
+          {result.optimizedVersion && (
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Optimized Version</h3>
+              <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                <p className="text-gray-900 dark:text-white whitespace-pre-wrap mb-2">{result.optimizedVersion.caption}</p>
+                {result.optimizedVersion.expectedBoost && (
+                  <p className="text-xs text-green-700 dark:text-green-300 font-medium">
+                    Expected Boost: {result.optimizedVersion.expectedBoost}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Summary */}
+          {result.summary && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <p className="text-blue-900 dark:text-blue-200 text-sm">{result.summary}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
+          {result.optimizedVersion && (
+            <button
+              onClick={() => onCopy(result.optimizedVersion.caption)}
+              className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
+            >
+              <CopyIcon className="w-4 h-4" />
+              Copy Optimized
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+          >
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Repurpose Modal Component (shared with MediaBox)
+const RepurposeModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: string) => void }> = ({ result, onClose, onCopy }) => {
+  const repurposedContent = result.repurposedContent || [];
+
+  const copyPlatformContent = (item: any) => {
+    const text = `${item.platform} (${item.format})\n\n${item.caption}\n\nHashtags: ${(item.hashtags || []).join(' ')}\n\nOptimizations:\n${(item.optimizations || []).map((opt: string) => `• ${opt}`).join('\n')}`;
+    onCopy(text);
+  };
+
+  const copyAllContent = () => {
+    const text = repurposedContent.map((item: any) => 
+      `--- ${item.platform} (${item.format}) ---\n${item.caption}\n\nHashtags: ${(item.hashtags || []).join(' ')}\n\nOptimizations:\n${(item.optimizations || []).map((opt: string) => `• ${opt}`).join('\n')}`
+    ).join('\n\n');
+    onCopy(text);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Repurposed Content</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          >
+            <XMarkIcon className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {result.summary && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <p className="text-blue-900 dark:text-blue-200 text-sm">{result.summary}</p>
+            </div>
+          )}
+
+          {repurposedContent.map((item: any, idx: number) => (
+            <div key={idx} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{item.platform}</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{item.format}</p>
+                </div>
+                <button
+                  onClick={() => copyPlatformContent(item)}
+                  className="px-3 py-1 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm flex items-center gap-1"
+                >
+                  <CopyIcon className="w-4 h-4" />
+                  Copy
+                </button>
+              </div>
+
+              <div className="mb-3">
+                <p className="text-gray-900 dark:text-white whitespace-pre-wrap">{item.caption}</p>
+              </div>
+
+              {item.hashtags && item.hashtags.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Hashtags:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {item.hashtags.map((tag: string, tagIdx: number) => (
+                      <span
+                        key={tagIdx}
+                        className="px-2 py-1 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded text-xs"
+                      >
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {item.optimizations && item.optimizations.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Optimizations:</p>
+                  <ul className="list-disc list-inside space-y-1">
+                    {item.optimizations.map((opt: string, optIdx: number) => (
+                      <li key={optIdx} className="text-xs text-gray-600 dark:text-gray-400">{opt}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {item.suggestedPostingTime && (
+                <p className="text-xs text-primary-600 dark:text-primary-400 mt-2">
+                  💡 Best posting time: {item.suggestedPostingTime}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
+          <button
+            onClick={copyAllContent}
+            className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
+          >
+            <CopyIcon className="w-4 h-4" />
+            Copy All
+          </button>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+          >
+            OK
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

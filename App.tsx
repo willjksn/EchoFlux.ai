@@ -84,10 +84,33 @@ const pageTitles: Record<Page, string> = {
 };
 
 const MainContent: React.FC = () => {
-    // Hooks must be called unconditionally; rely on ErrorBoundary to catch render errors
-    const context = useAppContext();
-    const user = context?.user;
-    const activePage = context?.activePage || 'dashboard';
+    let user, activePage;
+    
+    try {
+        const context = useAppContext();
+        if (!context) {
+            throw new Error('AppContext is not available');
+        }
+        user = context?.user;
+        activePage = context?.activePage || 'dashboard';
+    } catch (error: any) {
+        console.error('Error accessing AppContext in MainContent:', error);
+        // Return a safe fallback that doesn't use context
+        return (
+            <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full flex items-center justify-center">
+                <div className="text-center">
+                    <p className="text-red-600 dark:text-red-400 mb-2">An error occurred loading the page.</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-2">Context error: {error?.message || 'Unknown error'}</p>
+                    <button 
+                        onClick={() => window.location.reload()} 
+                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+                    >
+                        Reload Page
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     try {
         switch (activePage) {

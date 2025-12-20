@@ -321,7 +321,6 @@ export const BioPageView: React.FC = () => {
                         <div className="mb-1">
                             <h1 className="text-xl font-bold inline" style={{ color: theme.textColor }}>
                                 {bioPage.displayName || 'Display Name'}
-                                {bioPage.verified && <span className="ml-1">✓</span>}
                             </h1>
                         </div>
                         {bioPage.username && (

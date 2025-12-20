@@ -4,6 +4,7 @@ import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import { MicrophoneWaveIcon, StopCircleIcon, XMarkIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 import { auth } from '../firebaseConfig';
+import { Page } from '../types';
 
 // Helper to create Blob for audio input
 function createBlob(data: Float32Array) {
@@ -201,11 +202,33 @@ export const VoiceAssistant: React.FC = () => {
         - Example: \"Start in Strategy to generate a roadmap, then send it into Autopilot for a content pack, then use Approvals to mark posts as ready to post.\"
       - Prefer concrete instructions like \"Go to Strategy\", \"Open Autopilot\", \"Use Approvals\" instead of vague comments.
 
-      NAVIGATION & ACTIONS:
-      - You can call tools to:
-        - Navigate to pages: dashboard, compose, calendar (planning), strategy, media library, settings, approvals
-        - Open compose when the user wants to \"write a post\" or \"draft a caption\"
-      - Whenever the user clearly wants to move somewhere in the app, use the appropriate tool AND briefly say what you did.
+      NAVIGATION & ACTIONS (CRITICAL):
+      - You have the ability to ACTUALLY navigate the user to different pages in the app using the navigate_to_page function.
+      - When the user says ANY variation of "go to", "open", "show me", "take me to", "navigate to", "switch to", or "let's see" followed by a page name, you MUST immediately call navigate_to_page.
+      - Available pages and their common names:
+        * "dashboard" or "home" → dashboard
+        * "compose" or "create post" or "write post" → compose
+        * "calendar" → calendar
+        * "strategy" → strategy
+        * "media library" or "media" → media library
+        * "settings" → settings
+        * "workflow" or "approvals" → approvals
+        * "opportunities" or "trends" → opportunities
+        * "onlyfans studio" or "onlyfans" or "of studio" → onlyfansStudio
+        * "profile" → profile
+        * "inbox" or "messages" → inbox
+        * "autopilot" → autopilot
+      - Examples that REQUIRE navigation:
+        * "Go to dashboard" → navigate_to_page("dashboard")
+        * "Open compose" → navigate_to_page("compose")
+        * "Show me my calendar" → navigate_to_page("calendar")
+        * "Take me to strategy" → navigate_to_page("strategy")
+        * "I want to see my media library" → navigate_to_page("media library")
+        * "Let's check settings" → navigate_to_page("settings")
+        * "Open workflow" → navigate_to_page("approvals")
+        * "Show me opportunities" → navigate_to_page("opportunities")
+      - DO NOT just tell the user "you can navigate to X" - YOU must actually call the function to navigate them.
+      - After successfully navigating, briefly confirm: "I've opened [page name] for you" or "Taking you to [page name] now."
 
       CONTENT CREATION:
       - Treat the user as a creator first (OF, TikTok, IG, YouTube, etc.).
@@ -237,14 +260,14 @@ export const VoiceAssistant: React.FC = () => {
     const tools = [
       {
         name: 'navigate_to_page',
-        description: 'Navigate to a specific page in the app. Use this when the user wants to go to a page like dashboard, analytics, compose, calendar, automation, strategy, media library, or settings.',
+        description: 'CRITICAL: Use this function to navigate the user to a different page in the app. When the user says "go to", "open", "show me", "take me to", or "navigate to" followed by a page name, you MUST call this function immediately. Available pages: dashboard, analytics, compose, calendar, automation, strategy, media library, settings, approvals (also called workflow), opportunities, onlyfans studio, profile, inbox.',
         parameters: {
           type: 'object',
           properties: {
             page: {
               type: 'string',
-              enum: ['dashboard', 'analytics', 'compose', 'calendar', 'automation', 'strategy', 'media library', 'settings', 'approvals', 'team'],
-              description: 'The page to navigate to'
+              enum: ['dashboard', 'analytics', 'compose', 'calendar', 'automation', 'strategy', 'media library', 'mediaLibrary', 'settings', 'approvals', 'workflow', 'opportunities', 'onlyfans studio', 'onlyfansStudio', 'profile', 'team', 'inbox', 'autopilot'],
+              description: 'The exact page name to navigate to. Common requests: "dashboard" or "home" → dashboard, "compose" or "create post" → compose, "calendar" → calendar, "strategy" → strategy, "media library" → media library, "settings" → settings, "workflow" or "approvals" → approvals, "opportunities" → opportunities, "onlyfans studio" → onlyfansStudio.'
             }
           },
           required: ['page']
@@ -362,66 +385,139 @@ export const VoiceAssistant: React.FC = () => {
         },
 
         onmessage: async (msg: LiveServerMessage) => {
-          // Handle function calls
+          // Handle function calls FIRST - before processing audio
           const functionCall = msg.serverContent?.modelTurn?.parts?.find(p => p.functionCall);
           if (functionCall?.functionCall) {
             const { name, args } = functionCall.functionCall;
             let result = '';
+            
+            console.log('[VoiceAssistant] Function call received:', { name, args, setActivePageAvailable: typeof setActivePage === 'function' });
             
             try {
               switch (name) {
                 case 'navigate_to_page':
                   const page = args?.page as string;
                   if (page) {
-                    // Map page names to correct page identifiers
-                    const pageMap: Record<string, any> = {
+                    // Map page names to correct page identifiers (must match Page type exactly)
+                    const pageMap: Record<string, Page> = {
                       'dashboard': 'dashboard',
+                      'home': 'dashboard',
                       'analytics': 'analytics',
                       'compose': 'compose',
+                      'create post': 'compose',
+                      'write post': 'compose',
                       'calendar': 'calendar',
                       'automation': 'automation',
                       'strategy': 'strategy',
                       'media library': 'mediaLibrary',
                       'media-library': 'mediaLibrary',
+                      'medialibrary': 'mediaLibrary',
+                      'media': 'mediaLibrary',
                       'settings': 'settings',
                       'approvals': 'approvals',
-                      'team': 'team'
+                      'workflow': 'approvals',
+                      'workflows': 'approvals',
+                      'onlyfans studio': 'onlyfansStudio',
+                      'onlyfans': 'onlyfansStudio',
+                      'of studio': 'onlyfansStudio',
+                      'team': 'team',
+                      'opportunities': 'opportunities',
+                      'trends': 'opportunities',
+                      'profile': 'profile',
+                      'inbox': 'inbox',
+                      'messages': 'inbox',
+                      'autopilot': 'autopilot',
+                      'bio': 'bio',
+                      'link in bio': 'bio'
                     };
-                    const mappedPage = pageMap[page.toLowerCase()] || page;
-                    setActivePage(mappedPage as any);
-                    result = `Navigated to ${page}.`;
-                    showToast(`Navigated to ${page}`, "success");
+                    const pageLower = page.toLowerCase().trim();
+                    const mappedPage = pageMap[pageLower] || pageMap[pageLower.replace(/\s+/g, ' ')] || page as Page;
+                    
+                    console.log('[VoiceAssistant] Navigate request:', { 
+                      originalPage: page, 
+                      pageLower, 
+                      mappedPage, 
+                      setActivePageType: typeof setActivePage,
+                      setActivePageExists: !!setActivePage 
+                    });
+                    
+                    if (mappedPage && typeof setActivePage === 'function') {
+                      try {
+                        // Call setActivePage immediately - it's a React state setter
+                        // Use setTimeout to ensure it happens in the next tick and doesn't block the function response
+                        setActivePage(mappedPage);
+                        result = `Successfully navigated to ${page}.`;
+                        showToast(`Navigated to ${page}`, "success");
+                        console.log('[VoiceAssistant] Navigation successful - page set to:', mappedPage);
+                      } catch (navError: any) {
+                        console.error('[VoiceAssistant] Navigation error:', navError);
+                        result = `Failed to navigate: ${navError?.message || String(navError)}`;
+                        showToast(`Failed to navigate to ${page}`, "error");
+                      }
+                    } else {
+                      console.warn('[VoiceAssistant] Navigation failed - invalid page or setActivePage missing:', { 
+                        mappedPage, 
+                        setActivePageType: typeof setActivePage,
+                        setActivePageAvailable: !!setActivePage,
+                        validPages: Object.keys(pageMap),
+                        receivedPage: page
+                      });
+                      result = `Could not navigate to "${page}". Available pages: ${Object.keys(pageMap).slice(0, 10).join(', ')}...`;
+                      showToast(`Could not navigate to ${page}`, "error");
+                    }
+                  } else {
+                    result = 'No page specified for navigation.';
                   }
                   break;
                   
                 case 'open_compose':
-                  setActivePage('compose');
-                  result = 'Opened compose page. You can now create a new post.';
-                  showToast('Opened compose page', "success");
+                  if (setActivePage) {
+                    setActivePage('compose');
+                    result = 'Opened compose page. You can now create a new post.';
+                    showToast('Opened compose page', "success");
+                  } else {
+                    result = 'Navigation function not available.';
+                  }
                   break;
                   
                 case 'check_analytics':
-                  setActivePage('analytics');
-                  result = 'Opened analytics page. You can view your performance metrics here.';
-                  showToast('Opened analytics', "success");
+                  if (setActivePage) {
+                    setActivePage('analytics');
+                    result = 'Opened analytics page. You can view your performance metrics here.';
+                    showToast('Opened analytics', "success");
+                  } else {
+                    result = 'Navigation function not available.';
+                  }
                   break;
                   
                 case 'view_calendar':
-                  setActivePage('calendar');
-                  result = 'Opened calendar. You can view your scheduled posts here.';
-                  showToast('Opened calendar', "success");
+                  if (setActivePage) {
+                    setActivePage('calendar');
+                    result = 'Opened calendar. You can view your scheduled posts here.';
+                    showToast('Opened calendar', "success");
+                  } else {
+                    result = 'Navigation function not available.';
+                  }
                   break;
                   
                 case 'open_automation':
-                  setActivePage('automation');
-                  result = 'Opened automation page. You can set up automated content creation here.';
-                  showToast('Opened automation', "success");
+                  if (setActivePage) {
+                    setActivePage('automation');
+                    result = 'Opened automation page. You can set up automated content creation here.';
+                    showToast('Opened automation', "success");
+                  } else {
+                    result = 'Navigation function not available.';
+                  }
                   break;
                   
                 case 'open_strategy':
-                  setActivePage('strategy');
-                  result = 'Opened strategy page. You can generate content roadmaps here.';
-                  showToast('Opened strategy', "success");
+                  if (setActivePage) {
+                    setActivePage('strategy');
+                    result = 'Opened strategy page. You can generate content roadmaps here.';
+                    showToast('Opened strategy', "success");
+                  } else {
+                    result = 'Navigation function not available.';
+                  }
                   break;
                   
                 case 'show_help':
@@ -492,26 +588,37 @@ Just ask me anything or tell me what you'd like to do!`;
                   result = `Unknown function: ${name}`;
               }
               
-              // Send function response back to the AI
+              // Send function response back to the AI IMMEDIATELY
               const session = await sessionPromise.current;
               if (session) {
-                await session.sendRealtimeInput({
-                  functionResponse: {
-                    name,
-                    response: { result }
-                  }
-                });
+                try {
+                  await session.sendRealtimeInput({
+                    functionResponse: {
+                      name,
+                      response: { result }
+                    }
+                  });
+                  console.log('[VoiceAssistant] Function response sent:', { name, resultLength: result.length });
+                } catch (responseError: any) {
+                  console.error('[VoiceAssistant] Failed to send function response:', responseError);
+                }
+              } else {
+                console.error('[VoiceAssistant] No active session to send function response');
               }
             } catch (err: any) {
-              console.error('Function call error:', err);
+              console.error('[VoiceAssistant] Function call error:', err);
               const session = await sessionPromise.current;
               if (session) {
-                await session.sendRealtimeInput({
-                  functionResponse: {
-                    name,
-                    response: { error: err?.message || 'Failed to execute function' }
-                  }
-                });
+                try {
+                  await session.sendRealtimeInput({
+                    functionResponse: {
+                      name,
+                      response: { error: err?.message || 'Failed to execute function' }
+                    }
+                  });
+                } catch (responseError: any) {
+                  console.error('[VoiceAssistant] Failed to send error response:', responseError);
+                }
               }
             }
             
