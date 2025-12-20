@@ -6,7 +6,6 @@ import { db, storage } from '../firebaseConfig';
 import { collection, setDoc, doc, getDocs, deleteDoc, query, orderBy, updateDoc, writeBatch, where } from 'firebase/firestore';
 // @ts-ignore
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { MediaFolderSidebar } from './MediaFolderSidebar';
 import { CreateFolderModal } from './CreateFolderModal';
 import { MoveToFolderModal } from './MoveToFolderModal';
 
@@ -439,133 +438,182 @@ export const MediaLibrary: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
-      {/* Folder Sidebar */}
-      <MediaFolderSidebar
-        folders={folders}
-        selectedFolderId={selectedFolderId}
-        onSelectFolder={setSelectedFolderId}
-        onCreateFolder={() => {
-          setEditingFolder(null);
-          setShowCreateFolderModal(true);
-        }}
-      />
-
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="p-6 overflow-y-auto flex-1">
-          <div className="max-w-7xl mx-auto">
-            {/* Header */}
-            <div className="mb-4 sm:mb-6">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="p-4 md:p-6">
+        <div className="max-w-7xl mx-auto">
+          {/* Header */}
+          <div className="mb-4 sm:mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <div>
                 <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
                   Media Library
                 </h1>
-                {currentFolder && (
-                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                    <FolderIcon className="w-4 h-4" />
-                    <span>{currentFolder.name}</span>
-                    {currentFolder.id !== GENERAL_FOLDER_ID && (
-                      <>
-                        <button
-                          onClick={() => {
-                            setEditingFolder({ id: currentFolder.id, name: currentFolder.name });
-                            setShowCreateFolderModal(true);
-                          }}
-                          className="text-primary-600 dark:text-primary-400 hover:underline"
-                        >
-                          Rename
-                        </button>
-                        <span>•</span>
-                        <button
-                          onClick={() => handleDeleteFolder(currentFolder.id)}
-                          className="text-red-600 dark:text-red-400 hover:underline"
-                        >
-                          Delete
-                        </button>
-                      </>
-                    )}
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  Upload and manage images and videos that you can reuse across your posts.
+                </p>
+              </div>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className="px-4 py-2 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 flex items-center gap-2 disabled:opacity-50"
+              >
+                <UploadIcon className="w-4 h-4" />
+                {isUploading ? 'Uploading...' : 'Upload Media'}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/*,video/*"
+                onChange={(e) => handleFileSelect(e.target.files)}
+                className="hidden"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
+            {/* Folder Sidebar */}
+            <div className="md:col-span-3">
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 overflow-hidden">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold text-gray-900 dark:text-white">Folders</h3>
+                  <button
+                    onClick={() => {
+                      setEditingFolder(null);
+                      setShowCreateFolderModal(true);
+                    }}
+                    className="p-1 text-primary-600 dark:text-primary-400 hover:text-primary-700"
+                    title="Create folder"
+                  >
+                    <PlusIcon className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="space-y-1 max-h-[400px] overflow-y-auto">
+                  {folders.map(folder => (
+                    <button
+                      key={folder.id}
+                      onClick={() => setSelectedFolderId(folder.id)}
+                      className={`w-full text-left px-3 py-2 rounded-md flex items-center justify-between text-sm transition-colors ${
+                        selectedFolderId === folder.id
+                          ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <FolderIcon className="w-4 h-4 flex-shrink-0" />
+                        <span className="truncate">{folder.name}</span>
+                      </div>
+                      {folder.itemCount !== undefined && (
+                        <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0 ml-2">
+                          {folder.itemCount}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                {currentFolder && currentFolder.id !== GENERAL_FOLDER_ID && (
+                  <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-2">
+                      <FolderIcon className="w-4 h-4" />
+                      <span className="truncate">{currentFolder.name}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          setEditingFolder({ id: currentFolder.id, name: currentFolder.name });
+                          setShowCreateFolderModal(true);
+                        }}
+                        className="text-xs text-primary-600 dark:text-primary-400 hover:underline"
+                      >
+                        Rename
+                      </button>
+                      <span className="text-gray-400">•</span>
+                      <button
+                        onClick={() => handleDeleteFolder(currentFolder.id)}
+                        className="text-xs text-red-600 dark:text-red-400 hover:underline"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
-              <p className="text-gray-600 dark:text-gray-400">
-                Upload and manage images and videos that you can reuse across your posts.
-              </p>
             </div>
 
-            {/* Filters and View Toggle */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
+            {/* Main Content Area */}
+            <div className="md:col-span-9">
+                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setFilterType('all')}
+                        className={`px-3 py-1 rounded-md text-sm ${
+                          filterType === 'all'
+                            ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        All
+                      </button>
+                      <button
+                        onClick={() => setFilterType('image')}
+                        className={`px-3 py-1 rounded-md text-sm ${
+                          filterType === 'image'
+                            ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        Images
+                      </button>
+                      <button
+                        onClick={() => setFilterType('video')}
+                        className={`px-3 py-1 rounded-md text-sm ${
+                          filterType === 'video'
+                            ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        Videos
+                      </button>
+                    </div>
+                    {selectedItems.size > 0 && (
+                      <button
+                        onClick={handleBulkDelete}
+                        className="px-3 py-1 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md"
+                      >
+                        Delete {selectedItems.size} selected
+                      </button>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      {filteredItems.length} items
+                    </span>
                     <button
-                      onClick={() => setFilterType('all')}
-                      className={`px-3 py-1 rounded-md text-sm ${
-                        filterType === 'all'
-                          ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
-                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                      }`}
+                      onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+                      className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
                     >
-                      All
-                    </button>
-                    <button
-                      onClick={() => setFilterType('image')}
-                      className={`px-3 py-1 rounded-md text-sm ${
-                        filterType === 'image'
-                          ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
-                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                      }`}
-                    >
-                      Images
-                    </button>
-                    <button
-                      onClick={() => setFilterType('video')}
-                      className={`px-3 py-1 rounded-md text-sm ${
-                        filterType === 'video'
-                          ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
-                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                      }`}
-                    >
-                      Videos
+                      {viewMode === 'grid' ? 'List' : 'Grid'}
                     </button>
                   </div>
-                  {selectedItems.size > 0 && (
-                    <button
-                      onClick={handleBulkDelete}
-                      className="px-3 py-1 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md"
-                    >
-                      Delete {selectedItems.size} selected
-                    </button>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">
-                    {filteredItems.length} items
-                  </span>
-                  <button
-                    onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-                    className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
-                  >
-                    {viewMode === 'grid' ? 'List' : 'Grid'}
-                  </button>
                 </div>
               </div>
-            </div>
 
-            {/* Drop Zone / Grid */}
-            <div
-              ref={dropZoneRef}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-              onClick={() => {
-                if (filteredItems.length === 0) {
-                  fileInputRef.current?.click();
-                }
-              }}
-              className={`bg-white dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 p-6 min-h-64 ${
-                viewMode === 'grid' ? 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4' : 'space-y-2'
-              } ${filteredItems.length === 0 ? 'cursor-pointer' : ''}`}
-            >
+              {/* Drop Zone / Grid */}
+              <div
+                ref={dropZoneRef}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+                onClick={() => {
+                  if (filteredItems.length === 0) {
+                    fileInputRef.current?.click();
+                  }
+                }}
+                className={`bg-white dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 p-6 min-h-64 ${
+                  viewMode === 'grid' ? 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4' : 'space-y-2'
+                } ${filteredItems.length === 0 ? 'cursor-pointer' : ''}`}
+              >
               <input
                 ref={fileInputRef}
                 type="file"
@@ -708,7 +756,9 @@ export const MediaLibrary: React.FC = () => {
                   ))
                 )}
               </div>
+            </div>
           </div>
+        </div>
         </div>
       </div>
 
