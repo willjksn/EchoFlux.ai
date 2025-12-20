@@ -107,6 +107,7 @@ const CaptionGenerator: React.FC = () => {
     hashtagSets,
     setHashtagSets,
     composeContext,
+    setComposeContext,
     addCalendarEvent,
     setActivePage,
     setPosts,
@@ -257,6 +258,10 @@ const CaptionGenerator: React.FC = () => {
     if (composeContext?.date) {
       setIsScheduling(true);
       setScheduleDate(new Date(composeContext.date).toISOString().slice(0, 16));
+    }
+    if (composeContext?.topic) {
+      // Topic is available from Opportunities - can be used as a hint
+      // The generated captions are already loaded in the previous useEffect
     }
   }, [composeContext]);
 
@@ -518,6 +523,39 @@ const CaptionGenerator: React.FC = () => {
       localStorage.removeItem('compose_mediaItems');
     }
   }, [composeState.mediaItems.length]);
+
+  // Check for opportunity-generated content
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    const opportunityContent = localStorage.getItem(`opportunity_generated_content_${user.id}`);
+    if (opportunityContent) {
+      try {
+        const data = JSON.parse(opportunityContent);
+        if (data.captions && data.captions.length > 0) {
+          // Load first caption into compose state
+          setComposeState(prev => ({
+            ...prev,
+            captionText: data.captions[0].caption || '',
+            postGoal: 'engagement',
+            postTone: 'friendly',
+          }));
+          
+          // Set compose context with opportunity data
+          setComposeContext({
+            topic: data.opportunity?.title || '',
+            platform: data.platform as Platform || undefined,
+          });
+          
+          showToast('AI-generated content loaded!', 'success');
+          localStorage.removeItem(`opportunity_generated_content_${user.id}`);
+        }
+      } catch (error) {
+        console.error('Failed to load opportunity content:', error);
+        localStorage.removeItem(`opportunity_generated_content_${user.id}`);
+      }
+    }
+  }, [user?.id, showToast, setComposeState, setComposeContext]);
 
   // Check for pending media from Media Library
   useEffect(() => {
@@ -791,11 +829,13 @@ const CaptionGenerator: React.FC = () => {
 
   const handlePublishMedia = async (index: number) => {
     if (OFFLINE_MODE) {
-      showToast('Publishing directly to social platforms is disabled in this version. Use EchoFlux.ai to plan and generate content, then copy captions and post manually.', 'info');
+      showToast(
+        'Scheduling to social platforms is disabled in this version. You can still use the calendar and campaigns to plan content, then post manually.',
+        'error'
+      );
       return;
     }
     const item = composeState.mediaItems[index];
-    
     // Prevent double-publishing
     if (isSaving) {
       console.log('Already publishing, ignoring duplicate request');
@@ -1055,7 +1095,7 @@ const CaptionGenerator: React.FC = () => {
 
   const handleScheduleMedia = async (index: number) => {
     if (OFFLINE_MODE) {
-      showToast('Scheduling to social platforms is disabled in this version. You can still use the calendar and campaigns to plan content, then post manually.', 'info');
+      showToast('Scheduling to social platforms is disabled in this version. You can still use the calendar and campaigns to plan content, then post manually.', 'error');
       return;
     }
     const item = composeState.mediaItems[index];
@@ -2044,17 +2084,22 @@ const CaptionGenerator: React.FC = () => {
             continue;
           }
 
-          // Get selected platforms for platform-specific hashtags
-          const selectedPlatforms = (Object.keys(item.selectedPlatforms || {}) as Platform[]).filter(
+          // Get single selected platform for platform-optimized captions
+          const selectedPlatform = (Object.keys(item.selectedPlatforms || {}) as Platform[]).find(
             p => item.selectedPlatforms?.[p]
           );
+          
+          if (!selectedPlatform) {
+            showToast(`Media item ${index + 1}: Please select a platform first`, 'error');
+            continue;
+          }
           
           const res = await generateCaptions({
             mediaUrl: mediaUrl,
             goal: item.postGoal,
             tone: item.postTone,
             promptText: undefined,
-            platforms: selectedPlatforms.length > 0 ? selectedPlatforms : undefined, // Pass platforms for hashtag generation
+            platforms: [selectedPlatform], // Pass single platform for platform-optimized caption generation
           });
 
           let generatedResults: CaptionResult[] = [];
