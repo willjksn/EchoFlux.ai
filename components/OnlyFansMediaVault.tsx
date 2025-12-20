@@ -131,36 +131,10 @@ export const OnlyFansMediaVault: React.FC = () => {
                 const items: OnlyFansMediaItem[] = [];
                 snapshot.forEach((docSnap) => {
                     const data = docSnap.data();
-                    // Skip corrupted documents that are not plain objects
-                    if (!data || typeof data !== 'object' || Array.isArray(data)) {
-                        console.warn('Skipping non-object media doc', docSnap.id, data);
-                        return;
-                    }
-                    // Ensure aiTags arrays are actually arrays (defensive check for corrupted data)
-                    let aiTags = data.aiTags;
-                    if (aiTags && typeof aiTags === 'object' && !Array.isArray(aiTags) && aiTags !== null) {
-                        aiTags = {
-                            outfits: Array.isArray(aiTags.outfits) ? aiTags.outfits : [],
-                            poses: Array.isArray(aiTags.poses) ? aiTags.poses : [],
-                            vibes: Array.isArray(aiTags.vibes) ? aiTags.vibes : []
-                        };
-                    } else {
-                        // If aiTags is not an object (could be number, string, etc.), set to undefined
-                        aiTags = undefined;
-                    }
-                    // Don't spread aiTags from data - use sanitized version instead
-                    const { aiTags: _, tags, ...dataWithoutAiTags } = data;
-                    // Sanitize tags array if it exists and is corrupted
-                    let sanitizedTags = tags;
-                    if (tags !== undefined && !Array.isArray(tags)) {
-                        sanitizedTags = [];
-                    }
                     items.push({
                         id: docSnap.id,
-                        ...dataWithoutAiTags,
+                        ...data,
                         folderId: data.folderId || GENERAL_FOLDER_ID,
-                        tags: sanitizedTags || [],
-                        aiTags: aiTags,
                     } as OnlyFansMediaItem);
                 });
                 
@@ -333,13 +307,7 @@ export const OnlyFansMediaVault: React.FC = () => {
             }
 
             const data = await response.json();
-            // Ensure all tag arrays are actually arrays (defensive check)
-            const tags = data.tags || {};
-            const aiTags = {
-                outfits: Array.isArray(tags.outfits) ? tags.outfits : [],
-                poses: Array.isArray(tags.poses) ? tags.poses : [],
-                vibes: Array.isArray(tags.vibes) ? tags.vibes : []
-            };
+            const aiTags = data.tags || { outfits: [], poses: [], vibes: [] };
 
             // Update item with AI tags
             await updateDoc(doc(db, 'users', user.id, 'onlyfans_media_library', item.id), {
@@ -820,9 +788,9 @@ const MediaViewModal: React.FC<{
                                 {isGeneratingTags ? 'Generating...' : 'Generate Tags'}
                             </button>
                         </div>
-                        {item.aiTags && typeof item.aiTags === 'object' && !Array.isArray(item.aiTags) && item.aiTags !== null ? (
+                        {item.aiTags ? (
                             <div className="space-y-2">
-                                {item.aiTags.outfits && Array.isArray(item.aiTags.outfits) && item.aiTags.outfits.length > 0 && (
+                                {item.aiTags.outfits && item.aiTags.outfits.length > 0 && (
                                     <div>
                                         <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Outfits: </span>
                                         <div className="flex flex-wrap gap-1 mt-1">
@@ -834,7 +802,7 @@ const MediaViewModal: React.FC<{
                                         </div>
                                     </div>
                                 )}
-                                {item.aiTags.poses && Array.isArray(item.aiTags.poses) && item.aiTags.poses.length > 0 && (
+                                {item.aiTags.poses && item.aiTags.poses.length > 0 && (
                                     <div>
                                         <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Poses: </span>
                                         <div className="flex flex-wrap gap-1 mt-1">
@@ -846,7 +814,7 @@ const MediaViewModal: React.FC<{
                                         </div>
                                     </div>
                                 )}
-                                {item.aiTags.vibes && Array.isArray(item.aiTags.vibes) && item.aiTags.vibes.length > 0 && (
+                                {item.aiTags.vibes && item.aiTags.vibes.length > 0 && (
                                     <div>
                                         <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Vibes: </span>
                                         <div className="flex flex-wrap gap-1 mt-1">
@@ -874,7 +842,9 @@ const MediaViewModal: React.FC<{
                                 }}
                                 className="px-4 py-2 text-sm border border-primary-300 dark:border-primary-700 text-primary-700 dark:text-primary-400 rounded-md hover:bg-primary-50 dark:hover:bg-primary-900/30 flex items-center gap-2"
                             >
-                                <EditIcon className="w-4 h-4" />
+                                <span className="text-gray-900 dark:text-gray-100">
+                                    <EditIcon />
+                                </span>
                                 Edit Image
                             </button>
                         )}
