@@ -641,20 +641,13 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                     if (event.type === 'post' && event.status) {
                                                         colors = statusColors[event.status] || statusColors.Draft;
                                                     } else if (event.type === 'reminder') {
-                                                        // Reminders use different colors based on content type
-                                                        colors = event.contentType === 'paid'
-                                                            ? {
-                                                                bg: 'bg-purple-100 dark:bg-purple-900/30',
-                                                                border: 'border-l-4 border-purple-500 dark:border-purple-400',
-                                                                dot: 'bg-purple-500 dark:bg-purple-400',
-                                                                text: 'text-purple-800 dark:text-purple-200'
-                                                            }
-                                                            : {
-                                                                bg: 'bg-green-100 dark:bg-green-900/30',
-                                                                border: 'border-l-4 border-green-500 dark:border-green-400',
-                                                                dot: 'bg-green-500 dark:bg-green-400',
-                                                                text: 'text-green-800 dark:text-green-200'
-                                                            };
+                                                        // Reminders use orange/amber color to match main calendar
+                                                        colors = {
+                                                            bg: 'bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-900/30 dark:to-amber-900/30',
+                                                            border: 'border-l-4 border-orange-500 dark:border-orange-400',
+                                                            dot: 'bg-orange-500 dark:bg-orange-400',
+                                                            text: 'text-orange-700 dark:text-orange-300'
+                                                        };
                                                     } else {
                                                         colors = statusColors.Draft;
                                                     }

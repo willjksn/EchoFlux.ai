@@ -960,6 +960,7 @@ export const OnlyFansContentBrain: React.FC = () => {
             if (status === 'Scheduled' && scheduledDate) {
                 scheduledDateISO = new Date(scheduledDate).toISOString();
             } else if (status === 'Draft') {
+                // For drafts, use today's date at noon
                 scheduledDateISO = draftDate.toISOString();
             }
 
@@ -967,22 +968,8 @@ export const OnlyFansContentBrain: React.FC = () => {
                 ? `${caption} ${hashtags.join(' ')}`
                 : caption;
 
-            // Save to OnlyFans calendar events (not main calendar)
-            const eventId = `onlyfans_${postId}`;
-            const eventData: OnlyFansCalendarEvent = {
-                id: eventId,
-                title: fullCaption.substring(0, 100) + (fullCaption.length > 100 ? '...' : ''),
-                date: scheduledDateISO || new Date().toISOString(),
-                reminderType: 'post',
-                contentType: 'free', // Default to free, user can change later
-                description: fullCaption,
-                createdAt: new Date().toISOString(),
-                userId: user.id,
-            };
-
-            await setDoc(doc(db, 'users', user.id, 'onlyfans_calendar_events', eventId), eventData);
-
-            // Also save as a post with media URL for the calendar to display
+            // Only save as a post - do NOT create a reminder event for posts
+            // Reminders are separate and should only be created manually
             const postData = {
                 id: postId,
                 content: fullCaption,
@@ -1788,18 +1775,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                                                                         const postId = Date.now().toString();
                                                                         const fullCaption = currentCaptionForAI || caption;
                                                                         const scheduledDateISO = new Date(scheduledDate).toISOString();
-                                                                        const eventId = `onlyfans_${postId}`;
-                                                                        const eventData: OnlyFansCalendarEvent = {
-                                                                            id: eventId,
-                                                                            title: fullCaption.substring(0, 100) + (fullCaption.length > 100 ? '...' : ''),
-                                                                            date: scheduledDateISO,
-                                                                            reminderType: 'post',
-                                                                            contentType: 'free',
-                                                                            description: fullCaption,
-                                                                            createdAt: new Date().toISOString(),
-                                                                            userId: user.id,
-                                                                        };
-                                                                        await setDoc(doc(db, 'users', user.id, 'onlyfans_calendar_events', eventId), eventData);
+                                                                        // Only save as a post - do NOT create a reminder event
                                                                         const postData = {
                                                                             id: postId,
                                                                             content: fullCaption,

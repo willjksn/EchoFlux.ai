@@ -442,10 +442,22 @@ export const Dashboard: React.FC = () => {
   const upcomingEvents = useMemo(() => {
       const now = new Date();
       // Use filtered calendar events (only Scheduled and Published posts, exclude Draft)
+      // Include reminders from main calendar
       // Filter events that are scheduled for future dates/times (exclude past events)
       // Show the next 3 events regardless of how far out they are
       const futureEvents = filteredCalendarEvents
         .filter(e => {
+          // Include reminders (they don't have status)
+          if ((e as any).type === 'Reminder' || (e as any).reminderType) {
+            if (!e.date) return false;
+            try {
+              const eventDate = new Date(e.date);
+              return eventDate.getTime() > now.getTime();
+            } catch (error) {
+              return false;
+            }
+          }
+          
           // Only show Scheduled and Published posts (exclude Draft posts from upcoming schedule)
           if (e.status === 'Draft') return false;
           
@@ -489,6 +501,7 @@ export const Dashboard: React.FC = () => {
           title: e.title,
           date: e.date,
           status: e.status,
+          type: (e as any).type,
           dateFormatted: new Date(e.date).toLocaleString()
         }))
       });
