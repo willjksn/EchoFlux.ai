@@ -574,6 +574,29 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                 </button>
             </div>
 
+            {/* Color Legend */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <div className="flex flex-wrap items-center gap-4 text-sm">
+                    <span className="font-semibold text-gray-700 dark:text-gray-300">Status:</span>
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 rounded-full bg-green-500 dark:bg-green-400"></div>
+                        <span className="text-gray-700 dark:text-gray-300">Published</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 rounded-full bg-blue-500 dark:bg-blue-400"></div>
+                        <span className="text-gray-700 dark:text-gray-300">Scheduled</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 rounded-full bg-gray-400 dark:bg-gray-500"></div>
+                        <span className="text-gray-700 dark:text-gray-300">Draft</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 rounded-full bg-orange-500 dark:bg-orange-400"></div>
+                        <span className="text-gray-700 dark:text-gray-300">Reminder</span>
+                    </div>
+                </div>
+            </div>
+
             {/* Calendar Grid */}
             <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
                 {/* Day headers */}

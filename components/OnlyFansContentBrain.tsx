@@ -9,7 +9,7 @@ import { OnlyFansCalendarEvent } from './OnlyFansCalendar';
 type ContentType = 'captions' | 'mediaCaptions' | 'postIdeas' | 'shootConcepts' | 'weeklyPlan' | 'monetizationPlanner' | 'guides' | 'history';
 
 // Predict Modal Component (similar to Compose)
-const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: string) => void }> = ({ result, onClose, onCopy }) => {
+const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: string) => void; onSave?: () => void; showToast?: (message: string, type: 'success' | 'error') => void }> = ({ result, onClose, onCopy, onSave, showToast }) => {
     const prediction = result.prediction || {};
     const level = prediction.level || 'Medium';
     const score = prediction.score || 50;
@@ -128,6 +128,18 @@ const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: 
                             Copy Optimized
                         </button>
                     )}
+                    {onSave && (
+                        <button
+                            onClick={() => {
+                                onSave();
+                                showToast?.('Saved to history!', 'success');
+                            }}
+                            className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors flex items-center gap-2"
+                        >
+                            <DownloadIcon className="w-4 h-4" />
+                            Save to History
+                        </button>
+                    )}
                     <button
                         onClick={onClose}
                         className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
@@ -141,7 +153,7 @@ const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: 
 };
 
 // Repurpose Modal Component (similar to Compose)
-const RepurposeModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: string) => void }> = ({ result, onClose, onCopy }) => {
+const RepurposeModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: string) => void; onSave?: () => void; showToast?: (message: string, type: 'success' | 'error') => void }> = ({ result, onClose, onCopy, onSave, showToast }) => {
     const repurposedContent = result.repurposedContent || [];
 
     const copyPlatformContent = (item: any) => {
@@ -218,6 +230,18 @@ const RepurposeModal: React.FC<{ result: any; onClose: () => void; onCopy: (text
                             Copy All
                         </button>
                     )}
+                    {onSave && (
+                        <button
+                            onClick={() => {
+                                onSave();
+                                showToast?.('Saved to history!', 'success');
+                            }}
+                            className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors flex items-center gap-2"
+                        >
+                            <DownloadIcon className="w-4 h-4" />
+                            Save to History
+                        </button>
+                    )}
                     <button
                         onClick={onClose}
                         className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
@@ -261,6 +285,7 @@ export const OnlyFansContentBrain: React.FC = () => {
     const [currentCaptionForAI, setCurrentCaptionForAI] = useState<string>('');
     const [scheduledDate, setScheduledDate] = useState<string>('');
     const [usedCaptions, setUsedCaptions] = useState<Set<number>>(new Set());
+    const [usedCaptionsHash, setUsedCaptionsHash] = useState<Set<string>>(new Set()); // Track by caption hash for persistence
     
     // Media caption generation state (kept for backward compatibility)
     const [mediaFile, setMediaFile] = useState<File | null>(null);
@@ -380,6 +405,30 @@ export const OnlyFansContentBrain: React.FC = () => {
         }
     }, [activeTab, user?.id]);
     
+    // Load used captions from Firestore on mount
+    useEffect(() => {
+        if (!user?.id) return;
+        
+        const loadUsedCaptions = async () => {
+            try {
+                const usedCaptionsRef = collection(db, 'users', user.id, 'onlyfans_used_captions');
+                const snapshot = await getDocs(usedCaptionsRef);
+                const usedHashes = new Set<string>();
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    if (data.captionHash) {
+                        usedHashes.add(data.captionHash);
+                    }
+                });
+                setUsedCaptionsHash(usedHashes);
+            } catch (error) {
+                console.error('Error loading used captions:', error);
+            }
+        };
+        
+        loadUsedCaptions();
+    }, [user?.id]);
+
     // Persist media and captions to localStorage
     useEffect(() => {
         if (!user?.id) return;
@@ -399,6 +448,35 @@ export const OnlyFansContentBrain: React.FC = () => {
             console.error('Error saving state to localStorage:', e);
         }
     }, [uploadedMediaUrl, uploadedMediaType, generatedCaptions, currentCaptionForAI, scheduledDate, user?.id]);
+
+    // Save used caption to Firestore
+    const markCaptionAsUsed = async (caption: string, index: number) => {
+        if (!user?.id) return;
+        
+        try {
+            // Create a hash of the caption to track it
+            const captionHash = btoa(caption).substring(0, 50); // Simple hash
+            
+            // Check if already saved
+            if (usedCaptionsHash.has(captionHash)) {
+                setUsedCaptions(prev => new Set(prev).add(index));
+                return;
+            }
+            
+            // Save to Firestore
+            await addDoc(collection(db, 'users', user.id, 'onlyfans_used_captions'), {
+                captionHash,
+                caption: caption.substring(0, 200), // Store first 200 chars for reference
+                usedAt: Timestamp.now(),
+            });
+            
+            // Update local state
+            setUsedCaptionsHash(prev => new Set(prev).add(captionHash));
+            setUsedCaptions(prev => new Set(prev).add(index));
+        } catch (error) {
+            console.error('Error saving used caption:', error);
+        }
+    };
 
     // Show error state if context is not available
     if (!context || !user) {
@@ -1711,7 +1789,9 @@ export const OnlyFansContentBrain: React.FC = () => {
                             </h3>
                             <div className="space-y-3">
                                 {generatedCaptions.map((caption, index) => {
-                                    const isUsed = usedCaptions.has(index);
+                                    // Check if used by index or by caption hash
+                                    const captionHash = btoa(caption).substring(0, 50);
+                                    const isUsed = usedCaptions.has(index) || usedCaptionsHash.has(captionHash);
                                     return (
                                     <div
                                         key={index}
@@ -1754,8 +1834,8 @@ export const OnlyFansContentBrain: React.FC = () => {
                                                                 onClick={async () => {
                                                                     // Save as Draft to OnlyFans calendar
                                                                     await handleSaveCaptionToOnlyFansCalendar(caption, [], 'Draft');
-                                                                    // Mark as used
-                                                                    setUsedCaptions(prev => new Set(prev).add(index));
+                                                                    // Mark as used (persist to Firestore)
+                                                                    await markCaptionAsUsed(caption, index);
                                                                 }}
                                                                 className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
                                                             >
@@ -1789,8 +1869,8 @@ export const OnlyFansContentBrain: React.FC = () => {
                                                                         await setDoc(doc(db, 'users', user.id, 'posts', postId), postData);
                                                                         showToast?.('Added to OnlyFans Calendar!', 'success');
                                                                         setScheduledDate(''); // Clear after scheduling
-                                                                        // Mark as used
-                                                                        setUsedCaptions(prev => new Set(prev).add(index));
+                                                                        // Mark as used (persist to Firestore)
+                                                                        await markCaptionAsUsed(fullCaption, index);
                                                                     } catch (error: any) {
                                                                         console.error('Error saving caption:', error);
                                                                         showToast?.('Failed to save. Please try again.', 'error');
@@ -2816,6 +2896,16 @@ export const OnlyFansContentBrain: React.FC = () => {
                         copyToClipboard(text);
                         showToast?.('Copied to clipboard!', 'success');
                     }}
+                    onSave={async () => {
+                        if (predictResult) {
+                            const captionToUse = currentCaptionForAI.trim() || generatedCaptions[0] || predictResult.originalCaption || '';
+                            await savePredictToHistory({
+                                ...predictResult,
+                                originalCaption: captionToUse,
+                            });
+                        }
+                    }}
+                    showToast={showToast}
                 />
             )}
 
@@ -2828,6 +2918,16 @@ export const OnlyFansContentBrain: React.FC = () => {
                         copyToClipboard(text);
                         showToast?.('Copied to clipboard!', 'success');
                     }}
+                    onSave={async () => {
+                        if (repurposeResult) {
+                            const captionToUse = currentCaptionForAI.trim() || generatedCaptions[0] || repurposeResult.originalContent || '';
+                            await saveRepurposeToHistory({
+                                ...repurposeResult,
+                                originalContent: captionToUse,
+                            });
+                        }
+                    }}
+                    showToast={showToast}
                 />
             )}
 
