@@ -146,27 +146,27 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                       </div>
 
                       <div className="space-y-4 p-4">
-                        <div className="grid grid-cols-3 gap-4 text-center text-xs text-gray-200">
-                          <div className="rounded-xl bg-white/5 p-3">
-                            <p className="text-[0.7rem] uppercase tracking-wide text-primary-200/80">
+                        <div className="grid grid-cols-3 gap-2 sm:gap-4 text-center text-xs text-gray-200">
+                          <div className="rounded-xl bg-white/5 p-2 sm:p-3 min-w-0">
+                            <p className="text-[0.65rem] sm:text-[0.7rem] uppercase tracking-wide text-primary-200/80">
                               Scheduled
                             </p>
-                            <p className="mt-1 text-2xl font-bold text-white">32</p>
-                            <p className="mt-1 text-[0.7rem] text-gray-300">posts</p>
+                            <p className="mt-1 text-base sm:text-2xl font-bold text-white break-words">32</p>
+                            <p className="mt-1 text-[0.65rem] sm:text-[0.7rem] text-gray-300">posts</p>
                           </div>
-                          <div className="rounded-xl bg-white/5 p-3">
-                            <p className="text-[0.7rem] uppercase tracking-wide text-primary-200/80">
+                          <div className="rounded-xl bg-white/5 p-2 sm:p-3 min-w-0">
+                            <p className="text-[0.65rem] sm:text-[0.7rem] uppercase tracking-wide text-primary-200/80">
                               Engagement
                             </p>
-                            <p className="mt-1 text-2xl font-bold text-white">+184%</p>
-                            <p className="mt-1 text-[0.7rem] text-gray-300">last 30 days</p>
+                            <p className="mt-1 text-base sm:text-2xl font-bold text-white break-words">+184%</p>
+                            <p className="mt-1 text-[0.65rem] sm:text-[0.7rem] text-gray-300 leading-tight">last 30 days</p>
                           </div>
-                          <div className="rounded-xl bg-white/5 p-3">
-                            <p className="text-[0.7rem] uppercase tracking-wide text-primary-200/80">
+                          <div className="rounded-xl bg-white/5 p-2 sm:p-3 min-w-0">
+                            <p className="text-[0.65rem] sm:text-[0.7rem] uppercase tracking-wide text-primary-200/80">
                               Leads
                             </p>
-                            <p className="mt-1 text-2xl font-bold text-white">241</p>
-                            <p className="mt-1 text-[0.7rem] text-gray-300">captured</p>
+                            <p className="mt-1 text-base sm:text-2xl font-bold text-white break-words">241</p>
+                            <p className="mt-1 text-[0.65rem] sm:text-[0.7rem] text-gray-300">captured</p>
                           </div>
                         </div>
 

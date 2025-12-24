@@ -1609,11 +1609,12 @@ export const Calendar: React.FC = () => {
                          </button>
                     </div>
                 </div>
-                <div className="flex gap-4 items-center">
-                    <div className="hidden md:flex items-center gap-4 text-xs bg-white dark:bg-gray-800 py-2.5 px-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-                         <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-green-500 shadow-sm"></span> <span className="text-gray-700 dark:text-gray-300 font-medium">Published</span></div>
-                         <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-blue-500 shadow-sm"></span> <span className="text-gray-700 dark:text-gray-300 font-medium">Scheduled</span></div>
-                         <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-gray-400 shadow-sm"></span> <span className="text-gray-700 dark:text-gray-300 font-medium">Draft</span></div>
+                <div className="flex gap-4 items-center flex-wrap">
+                    <div className="flex items-center gap-2 sm:gap-4 text-xs bg-white dark:bg-gray-800 py-2.5 px-3 sm:px-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 flex-wrap">
+                         <div className="flex items-center gap-1.5 sm:gap-2"><span className="w-3 h-3 rounded-full bg-green-500 dark:bg-green-400 shadow-sm"></span> <span className="text-gray-700 dark:text-gray-300 font-medium">Published</span></div>
+                         <div className="flex items-center gap-1.5 sm:gap-2"><span className="w-3 h-3 rounded-full bg-blue-500 dark:bg-blue-400 shadow-sm"></span> <span className="text-gray-700 dark:text-gray-300 font-medium">Scheduled</span></div>
+                         <div className="flex items-center gap-1.5 sm:gap-2"><span className="w-3 h-3 rounded-full bg-gray-400 dark:bg-gray-500 shadow-sm"></span> <span className="text-gray-700 dark:text-gray-300 font-medium">Draft</span></div>
+                         <div className="flex items-center gap-1.5 sm:gap-2"><span className="w-3 h-3 rounded-full bg-orange-500 dark:bg-orange-400 shadow-sm"></span> <span className="text-gray-700 dark:text-gray-300 font-medium">Reminder</span></div>
                     </div>
                     <button 
                         onClick={() => setIsCreatingReminder(true)}

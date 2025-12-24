@@ -130,9 +130,8 @@ const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: 
                     )}
                     {onSave && (
                         <button
-                            onClick={() => {
-                                onSave();
-                                showToast?.('Saved to history!', 'success');
+                            onClick={async () => {
+                                await onSave();
                             }}
                             className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors flex items-center gap-2"
                         >
@@ -232,9 +231,8 @@ const RepurposeModal: React.FC<{ result: any; onClose: () => void; onCopy: (text
                     )}
                     {onSave && (
                         <button
-                            onClick={() => {
-                                onSave();
-                                showToast?.('Saved to history!', 'success');
+                            onClick={async () => {
+                                await onSave();
                             }}
                             className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors flex items-center gap-2"
                         >
@@ -1357,13 +1355,11 @@ export const OnlyFansContentBrain: React.FC = () => {
             if (!response.ok) throw new Error('Failed to predict performance');
             const data = await response.json();
             if (data.success) {
-                setPredictResult(data);
-                setShowPredictModal(true);
-                // Save with originalCaption for history display
-                await savePredictToHistory({
+                setPredictResult({
                     ...data,
                     originalCaption: captionToPredict,
                 });
+                setShowPredictModal(true);
                 showToast?.('Performance predicted!', 'success');
             }
         } catch (error: any) {
@@ -1409,13 +1405,11 @@ export const OnlyFansContentBrain: React.FC = () => {
             if (!response.ok) throw new Error('Failed to repurpose content');
             const data = await response.json();
             if (data.success && data.repurposedContent) {
-                setRepurposeResult(data);
-                setShowRepurposeModal(true);
-                // Save with originalContent for history display
-                await saveRepurposeToHistory({
+                setRepurposeResult({
                     ...data,
                     originalContent: captionToRepurpose,
                 });
+                setShowRepurposeModal(true);
                 showToast?.('Content repurposed!', 'success');
             }
         } catch (error: any) {
@@ -1585,20 +1579,22 @@ export const OnlyFansContentBrain: React.FC = () => {
             )}
 
             {/* Tabs */}
-            <div className="flex gap-2 mb-6 border-b border-gray-200 dark:border-gray-700">
-                {tabs.map((tab) => (
-                    <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id as ContentType)}
-                        className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
-                            activeTab === tab.id
-                                ? 'border-primary-600 text-primary-600 dark:text-primary-400'
-                                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                        }`}
-                    >
-                        {tab.label}
-                    </button>
-                ))}
+            <div className="flex gap-2 mb-6 border-b border-gray-200 dark:border-gray-700 overflow-x-auto overflow-y-hidden">
+                <div className="flex gap-2 min-w-max">
+                    {tabs.map((tab) => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id as ContentType)}
+                            className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ${
+                                activeTab === tab.id
+                                    ? 'border-primary-600 text-primary-600 dark:text-primary-400'
+                                    : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                            }`}
+                        >
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
             </div>
 
             {/* Captions Tab */}
@@ -2898,11 +2894,12 @@ export const OnlyFansContentBrain: React.FC = () => {
                     }}
                     onSave={async () => {
                         if (predictResult) {
-                            const captionToUse = currentCaptionForAI.trim() || generatedCaptions[0] || predictResult.originalCaption || '';
-                            await savePredictToHistory({
-                                ...predictResult,
-                                originalCaption: captionToUse,
-                            });
+                            try {
+                                await savePredictToHistory(predictResult);
+                                showToast?.('Prediction saved to history!', 'success');
+                            } catch (error) {
+                                showToast?.('Failed to save to history', 'error');
+                            }
                         }
                     }}
                     showToast={showToast}
@@ -2920,11 +2917,12 @@ export const OnlyFansContentBrain: React.FC = () => {
                     }}
                     onSave={async () => {
                         if (repurposeResult) {
-                            const captionToUse = currentCaptionForAI.trim() || generatedCaptions[0] || repurposeResult.originalContent || '';
-                            await saveRepurposeToHistory({
-                                ...repurposeResult,
-                                originalContent: captionToUse,
-                            });
+                            try {
+                                await saveRepurposeToHistory(repurposeResult);
+                                showToast?.('Repurposed content saved to history!', 'success');
+                            } catch (error) {
+                                showToast?.('Failed to save to history', 'error');
+                            }
                         }
                     }}
                     showToast={showToast}
