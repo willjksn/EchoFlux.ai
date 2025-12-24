@@ -314,6 +314,12 @@ export const OnlyFansContentBrain: React.FC = () => {
     const [balanceRetention, setBalanceRetention] = useState(20);
     const [balanceConversion, setBalanceConversion] = useState(10);
     const [generatedMonetizationPlan, setGeneratedMonetizationPlan] = useState<any>(null);
+    
+    // Saved items state for each tab
+    const [savedPostIdeas, setSavedPostIdeas] = useState<any[]>([]);
+    const [savedShootConcepts, setSavedShootConcepts] = useState<any[]>([]);
+    const [savedWeeklyPlans, setSavedWeeklyPlans] = useState<any[]>([]);
+    const [savedMonetizationPlans, setSavedMonetizationPlans] = useState<any[]>([]);
 
     // Modal state for AI features
     const [optimizeResult, setOptimizeResult] = useState<any>(null);
@@ -426,6 +432,20 @@ export const OnlyFansContentBrain: React.FC = () => {
         
         loadUsedCaptions();
     }, [user?.id]);
+    
+    // Load saved items when respective tabs are active
+    useEffect(() => {
+        if (!user?.id) return;
+        if (activeTab === 'postIdeas') {
+            loadSavedPostIdeas();
+        } else if (activeTab === 'shootConcepts') {
+            loadSavedShootConcepts();
+        } else if (activeTab === 'weeklyPlan') {
+            loadSavedWeeklyPlans();
+        } else if (activeTab === 'monetizationPlanner') {
+            loadSavedMonetizationPlans();
+        }
+    }, [activeTab, user?.id]);
 
     // Persist media and captions to localStorage
     useEffect(() => {
@@ -1015,8 +1035,98 @@ export const OnlyFansContentBrain: React.FC = () => {
             if (activeTab === 'history') {
                 loadHistory();
             }
+            // Reload saved items for the respective tab
+            if (type === 'post_ideas' && activeTab === 'postIdeas') {
+                loadSavedPostIdeas();
+            } else if (type === 'shoot_concepts' && activeTab === 'shootConcepts') {
+                loadSavedShootConcepts();
+            } else if (type === 'weekly_plan' && activeTab === 'weeklyPlan') {
+                loadSavedWeeklyPlans();
+            } else if (type === 'monetization_plan' && activeTab === 'monetizationPlanner') {
+                loadSavedMonetizationPlans();
+            }
         } catch (error: any) {
             console.error('Error saving to history:', error);
+        }
+    };
+    
+    // Load saved post ideas
+    const loadSavedPostIdeas = async () => {
+        if (!user?.id) return;
+        try {
+            const historyRef = collection(db, 'users', user.id, 'onlyfans_content_brain_history');
+            const q = query(historyRef, orderBy('createdAt', 'desc'));
+            const snapshot = await getDocs(q);
+            const items: any[] = [];
+            snapshot.forEach((doc) => {
+                const data = doc.data();
+                if (data.type === 'post_ideas') {
+                    items.push({ id: doc.id, ...data });
+                }
+            });
+            setSavedPostIdeas(items);
+        } catch (error) {
+            console.error('Error loading saved post ideas:', error);
+        }
+    };
+    
+    // Load saved shoot concepts
+    const loadSavedShootConcepts = async () => {
+        if (!user?.id) return;
+        try {
+            const historyRef = collection(db, 'users', user.id, 'onlyfans_content_brain_history');
+            const q = query(historyRef, orderBy('createdAt', 'desc'));
+            const snapshot = await getDocs(q);
+            const items: any[] = [];
+            snapshot.forEach((doc) => {
+                const data = doc.data();
+                if (data.type === 'shoot_concepts') {
+                    items.push({ id: doc.id, ...data });
+                }
+            });
+            setSavedShootConcepts(items);
+        } catch (error) {
+            console.error('Error loading saved shoot concepts:', error);
+        }
+    };
+    
+    // Load saved weekly plans
+    const loadSavedWeeklyPlans = async () => {
+        if (!user?.id) return;
+        try {
+            const historyRef = collection(db, 'users', user.id, 'onlyfans_content_brain_history');
+            const q = query(historyRef, orderBy('createdAt', 'desc'));
+            const snapshot = await getDocs(q);
+            const items: any[] = [];
+            snapshot.forEach((doc) => {
+                const data = doc.data();
+                if (data.type === 'weekly_plan') {
+                    items.push({ id: doc.id, ...data });
+                }
+            });
+            setSavedWeeklyPlans(items);
+        } catch (error) {
+            console.error('Error loading saved weekly plans:', error);
+        }
+    };
+    
+    // Load saved monetization plans
+    const loadSavedMonetizationPlans = async () => {
+        if (!user?.id) return;
+        try {
+            const historyRef = collection(db, 'users', user.id, 'onlyfans_content_brain_history');
+            const q = query(historyRef, orderBy('createdAt', 'desc'));
+            const snapshot = await getDocs(q);
+            const items: any[] = [];
+            snapshot.forEach((doc) => {
+                const data = doc.data();
+                if (data.type === 'monetization_plan') {
+                    items.push({ id: doc.id, ...data });
+                }
+            });
+            setSavedMonetizationPlans(items);
+        } catch (error) {
+            console.error('Error loading saved monetization plans:', error);
         }
     };
 
@@ -2168,9 +2278,16 @@ export const OnlyFansContentBrain: React.FC = () => {
             {activeTab === 'postIdeas' && (
                 <div className="space-y-6">
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                            Generate Post Ideas
-                        </h2>
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                                Generate Post Ideas
+                            </h2>
+                            {savedPostIdeas.length > 0 && (
+                                <span className="text-sm text-gray-500 dark:text-gray-400">
+                                    {savedPostIdeas.length} saved
+                                </span>
+                            )}
+                        </div>
                         
                         <div className="space-y-4">
                             <div>
@@ -2206,6 +2323,44 @@ export const OnlyFansContentBrain: React.FC = () => {
                         </div>
                     </div>
 
+                    {/* Saved Post Ideas */}
+                    {savedPostIdeas.length > 0 && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                                Saved Post Ideas ({savedPostIdeas.length})
+                            </h3>
+                            <div className="space-y-4">
+                                {savedPostIdeas.map((saved, index) => (
+                                    <div
+                                        key={saved.id || index}
+                                        className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
+                                    >
+                                        <div className="flex items-start justify-between mb-2">
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                {saved.title || `Saved ${new Date(saved.createdAt?.toDate?.() || saved.createdAt).toLocaleDateString()}`}
+                                            </p>
+                                        </div>
+                                        {saved.data?.ideas && Array.isArray(saved.data.ideas) && (
+                                            <div className="space-y-2 mt-3">
+                                                {saved.data.ideas.map((idea: string, idx: number) => (
+                                                    <div key={idx} className="p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600">
+                                                        <p className="text-gray-900 dark:text-white text-sm">{idea}</p>
+                                                        <button
+                                                            onClick={() => copyToClipboard(idea)}
+                                                            className="mt-2 text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                                        >
+                                                            Copy
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Generated Post Ideas */}
                     {Array.isArray(generatedPostIdeas) && generatedPostIdeas.length > 0 && (
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
@@ -2237,9 +2392,16 @@ export const OnlyFansContentBrain: React.FC = () => {
             {activeTab === 'shootConcepts' && (
                 <div className="space-y-6">
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                            Generate Shoot Concepts
-                        </h2>
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                                Generate Shoot Concepts
+                            </h2>
+                            {savedShootConcepts.length > 0 && (
+                                <span className="text-sm text-gray-500 dark:text-gray-400">
+                                    {savedShootConcepts.length} saved
+                                </span>
+                            )}
+                        </div>
                         
                         <div className="space-y-4">
                             <div>
@@ -2306,9 +2468,16 @@ export const OnlyFansContentBrain: React.FC = () => {
             {activeTab === 'weeklyPlan' && (
                 <div className="space-y-6">
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                            Generate Weekly Content Plan
-                        </h2>
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                                Generate Weekly Content Plan
+                            </h2>
+                            {savedWeeklyPlans.length > 0 && (
+                                <span className="text-sm text-gray-500 dark:text-gray-400">
+                                    {savedWeeklyPlans.length} saved
+                                </span>
+                            )}
+                        </div>
                         
                         <div className="space-y-4">
                             <div>
@@ -2452,9 +2621,16 @@ export const OnlyFansContentBrain: React.FC = () => {
             {activeTab === 'monetizationPlanner' && (
                 <div className="space-y-6">
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                            AI Monetization Planner
-                        </h2>
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                                AI Monetization Planner
+                            </h2>
+                            {savedMonetizationPlans.length > 0 && (
+                                <span className="text-sm text-gray-500 dark:text-gray-400">
+                                    {savedMonetizationPlans.length} saved
+                                </span>
+                            )}
+                        </div>
                         <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
                             Generate a balanced content strategy that labels each idea as Engagement, Upsell, Retention, or Conversion. 
                             Automatically balances your content mix to prevent over-selling.
@@ -2686,6 +2862,61 @@ export const OnlyFansContentBrain: React.FC = () => {
                             </button>
                         </div>
                     </div>
+
+                    {/* Saved Monetization Plans */}
+                    {savedMonetizationPlans.length > 0 && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                                Saved Monetization Plans ({savedMonetizationPlans.length})
+                            </h3>
+                            <div className="space-y-4">
+                                {savedMonetizationPlans.map((saved, index) => (
+                                    <div
+                                        key={saved.id || index}
+                                        className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
+                                    >
+                                        <div className="flex items-start justify-between mb-2">
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                {saved.title || `Saved ${new Date(saved.createdAt?.toDate?.() || saved.createdAt).toLocaleDateString()}`}
+                                            </p>
+                                        </div>
+                                        {saved.data && (
+                                            <div className="mt-3">
+                                                {saved.data.summary && (
+                                                    <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800 mb-3">
+                                                        <p className="text-blue-900 dark:text-blue-200 text-sm">{saved.data.summary}</p>
+                                                    </div>
+                                                )}
+                                                {saved.data.contentIdeas && Array.isArray(saved.data.contentIdeas) && (
+                                                    <div className="space-y-2">
+                                                        {saved.data.contentIdeas.map((idea: any, idx: number) => (
+                                                            <div key={idx} className="p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600">
+                                                                <p className="text-gray-900 dark:text-white text-sm font-medium">{idea.title || `Idea ${idx + 1}`}</p>
+                                                                {idea.description && (
+                                                                    <p className="text-gray-600 dark:text-gray-400 text-xs mt-1">{idea.description}</p>
+                                                                )}
+                                                                {idea.category && (
+                                                                    <span className="inline-block mt-2 px-2 py-1 text-xs rounded bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300">
+                                                                        {idea.category}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                                <button
+                                                    onClick={() => copyToClipboard(JSON.stringify(saved.data, null, 2))}
+                                                    className="mt-3 text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                                >
+                                                    Copy Plan
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Generated Monetization Plan */}
                     {generatedMonetizationPlan && (
