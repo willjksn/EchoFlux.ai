@@ -1,11 +1,234 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from './AppContext';
-import { SparklesIcon, RefreshIcon, DownloadIcon, UploadIcon, XMarkIcon, CopyIcon } from './icons/UIIcons';
+import { SparklesIcon, RefreshIcon, DownloadIcon, UploadIcon, XMarkIcon, CopyIcon, ImageIcon } from './icons/UIIcons';
 import { auth, storage, db } from '../firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { collection, addDoc, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, query, getDocs, orderBy, getDoc, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { OnlyFansCalendarEvent } from './OnlyFansCalendar';
 
-type ContentType = 'captions' | 'mediaCaptions' | 'postIdeas' | 'shootConcepts' | 'weeklyPlan' | 'monetizationPlanner';
+type ContentType = 'captions' | 'mediaCaptions' | 'postIdeas' | 'shootConcepts' | 'weeklyPlan' | 'monetizationPlanner' | 'guides' | 'history';
+
+// Predict Modal Component (similar to Compose)
+const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: string) => void }> = ({ result, onClose, onCopy }) => {
+    const prediction = result.prediction || {};
+    const level = prediction.level || 'Medium';
+    const score = prediction.score || 50;
+    const confidence = prediction.confidence || 50;
+
+    const getLevelColor = (level: string) => {
+        if (level === 'High') return 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800';
+        if (level === 'Medium') return 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800';
+        return 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800';
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+                <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Performance Prediction</h2>
+                    <button
+                        onClick={onClose}
+                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    >
+                        <XMarkIcon className="w-6 h-6" />
+                    </button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                    <div className={`p-6 rounded-lg border-2 ${getLevelColor(level)}`}>
+                        <div className="text-center">
+                            <p className="text-sm font-medium mb-2">Predicted Performance</p>
+                            <p className="text-4xl font-bold mb-2">{level}</p>
+                            <div className="flex items-center justify-center gap-4 mt-4">
+                                <div>
+                                    <p className="text-xs opacity-75">Score</p>
+                                    <p className="text-2xl font-bold">{score}/100</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs opacity-75">Confidence</p>
+                                    <p className="text-2xl font-bold">{confidence}%</p>
+                                </div>
+                            </div>
+                            {prediction.reasoning && (
+                                <p className="text-sm mt-4 opacity-90">{prediction.reasoning}</p>
+                            )}
+                        </div>
+                    </div>
+                    {result.factors && (
+                        <div>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Factor Analysis</h3>
+                            <div className="space-y-3">
+                                {Object.entries(result.factors).map(([key, value]: [string, any]) => (
+                                    <div key={key} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <p className="text-sm font-medium text-gray-900 dark:text-white capitalize">
+                                                {key.replace(/([A-Z])/g, ' $1').trim()}
+                                            </p>
+                                            <p className="text-lg font-bold text-primary-600 dark:text-primary-400">
+                                                {value.score || 0}/100
+                                            </p>
+                                        </div>
+                                        {value.analysis && (
+                                            <p className="text-xs text-gray-600 dark:text-gray-400">{value.analysis}</p>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {result.improvements && result.improvements.length > 0 && (
+                        <div>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Improvement Suggestions</h3>
+                            <div className="space-y-2">
+                                {result.improvements.map((imp: any, idx: number) => (
+                                    <div key={idx} className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                        <div className="flex items-start justify-between mb-1">
+                                            <p className="text-sm font-medium text-gray-900 dark:text-white capitalize">{imp.factor}</p>
+                                            <span className={`text-xs px-2 py-1 rounded ${
+                                                imp.priority === 'high' ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300' :
+                                                imp.priority === 'medium' ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300' :
+                                                'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                            }`}>
+                                                {imp.priority}
+                                            </span>
+                                        </div>
+                                        {imp.currentIssue && <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">{imp.currentIssue}</p>}
+                                        {imp.suggestion && <p className="text-xs text-gray-700 dark:text-gray-300 font-medium">{imp.suggestion}</p>}
+                                        {imp.expectedImpact && <p className="text-xs text-primary-600 dark:text-primary-400 mt-1">{imp.expectedImpact}</p>}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {result.optimizedVersion && (
+                        <div>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Optimized Version</h3>
+                            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                                <p className="text-gray-900 dark:text-white whitespace-pre-wrap mb-2">{result.optimizedVersion.caption}</p>
+                                {result.optimizedVersion.expectedBoost && (
+                                    <p className="text-xs text-green-700 dark:text-green-300 font-medium">
+                                        Expected Boost: {result.optimizedVersion.expectedBoost}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                    {result.summary && (
+                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                            <p className="text-blue-900 dark:text-blue-200 text-sm">{result.summary}</p>
+                        </div>
+                    )}
+                </div>
+                <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
+                    {result.optimizedVersion && (
+                        <button
+                            onClick={() => onCopy(result.optimizedVersion.caption)}
+                            className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
+                        >
+                            <CopyIcon className="w-4 h-4" />
+                            Copy Optimized
+                        </button>
+                    )}
+                    <button
+                        onClick={onClose}
+                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+                    >
+                        OK
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Repurpose Modal Component (similar to Compose)
+const RepurposeModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: string) => void }> = ({ result, onClose, onCopy }) => {
+    const repurposedContent = result.repurposedContent || [];
+
+    const copyPlatformContent = (item: any) => {
+        const text = `${item.platform} (${item.format})\n\n${item.caption}\n\nHashtags: ${(item.hashtags || []).join(' ')}\n\nOptimizations:\n${(item.optimizations || []).map((opt: string) => `• ${opt}`).join('\n')}`;
+        onCopy(text);
+    };
+
+    const copyAllContent = () => {
+        const text = repurposedContent.map((item: any) => 
+            `--- ${item.platform} (${item.format}) ---\n${item.caption}\n\nHashtags: ${(item.hashtags || []).join(' ')}\n\nOptimizations:\n${(item.optimizations || []).map((opt: string) => `• ${opt}`).join('\n')}`
+        ).join('\n\n');
+        onCopy(text);
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+                <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Repurposed Content</h2>
+                    <button
+                        onClick={onClose}
+                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    >
+                        <XMarkIcon className="w-6 h-6" />
+                    </button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                    {result.summary && (
+                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                            <p className="text-blue-900 dark:text-blue-200 text-sm">{result.summary}</p>
+                        </div>
+                    )}
+                    {repurposedContent.map((item: any, idx: number) => (
+                        <div key={idx} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                            <div className="flex items-start justify-between mb-3">
+                                <div>
+                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{item.platform}</h3>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">{item.format}</p>
+                                </div>
+                                <button
+                                    onClick={() => copyPlatformContent(item)}
+                                    className="px-3 py-1 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm flex items-center gap-1"
+                                >
+                                    <CopyIcon className="w-4 h-4" />
+                                    Copy
+                                </button>
+                            </div>
+                            <p className="text-gray-900 dark:text-white whitespace-pre-wrap mb-2">{item.caption}</p>
+                            {item.hashtags && item.hashtags.length > 0 && (
+                                <p className="text-primary-600 dark:text-primary-400 text-sm mb-2">
+                                    {item.hashtags.join(' ')}
+                                </p>
+                            )}
+                            {item.optimizations && item.optimizations.length > 0 && (
+                                <div className="mt-3">
+                                    <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Optimizations:</p>
+                                    <ul className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                                        {item.optimizations.map((opt: string, optIdx: number) => (
+                                            <li key={optIdx}>• {opt}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+                <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
+                    {repurposedContent.length > 0 && (
+                        <button
+                            onClick={copyAllContent}
+                            className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
+                        >
+                            <CopyIcon className="w-4 h-4" />
+                            Copy All
+                        </button>
+                    )}
+                    <button
+                        onClick={onClose}
+                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+                    >
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 export const OnlyFansContentBrain: React.FC = () => {
     // All hooks must be called unconditionally at the top
@@ -16,7 +239,7 @@ export const OnlyFansContentBrain: React.FC = () => {
     // State management
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<ContentType>('captions');
+    const [activeTab, setActiveTab] = useState<ContentType>('captions' as ContentType);
     const [isGenerating, setIsGenerating] = useState(false);
     
     // Caption generation state
@@ -25,7 +248,21 @@ export const OnlyFansContentBrain: React.FC = () => {
     const [captionGoal, setCaptionGoal] = useState('engagement');
     const [generatedCaptions, setGeneratedCaptions] = useState<string[]>([]);
     
-    // Media caption generation state
+    // Media upload state (for captions tab)
+    const [uploadedMediaFile, setUploadedMediaFile] = useState<File | null>(null);
+    const [uploadedMediaPreview, setUploadedMediaPreview] = useState<string | null>(null);
+    const [uploadedMediaUrl, setUploadedMediaUrl] = useState<string | null>(null);
+    const [uploadedMediaType, setUploadedMediaType] = useState<'image' | 'video' | null>(null);
+    const [showMediaVaultModal, setShowMediaVaultModal] = useState(false);
+    const [mediaVaultItems, setMediaVaultItems] = useState<any[]>([]);
+    const [isAnalyzingGaps, setIsAnalyzingGaps] = useState(false);
+    const [contentGapAnalysis, setContentGapAnalysis] = useState<any>(null);
+    const [showGapAnalysisModal, setShowGapAnalysisModal] = useState(false);
+    const [currentCaptionForAI, setCurrentCaptionForAI] = useState<string>('');
+    const [scheduledDate, setScheduledDate] = useState<string>('');
+    const [usedCaptions, setUsedCaptions] = useState<Set<number>>(new Set());
+    
+    // Media caption generation state (kept for backward compatibility)
     const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
     const [mediaCaptionTone, setMediaCaptionTone] = useState<'Playful' | 'Flirty' | 'Confident' | 'Teasing' | 'Intimate' | 'Explicit'>('Teasing');
@@ -62,9 +299,45 @@ export const OnlyFansContentBrain: React.FC = () => {
     const [showOptimizeModal, setShowOptimizeModal] = useState(false);
     const [showPredictModal, setShowPredictModal] = useState(false);
     const [showRepurposeModal, setShowRepurposeModal] = useState(false);
-    const [currentCaptionForAI, setCurrentCaptionForAI] = useState<{caption: string; index: number; type: 'plain' | 'media'} | null>(null);
 
-    // Initialize component
+    // Analytics & Insights state
+    const [showAnalytics, setShowAnalytics] = useState(false);
+    const [creatorAnalytics, setCreatorAnalytics] = useState({
+        subscriberCount: '',
+        engagementRate: '',
+        topContentTypes: [] as string[],
+        bestPostingTimes: [] as string[],
+        topTopics: [] as string[],
+        customInsights: ''
+    });
+    const [topContentTypeInput, setTopContentTypeInput] = useState('');
+    const [bestPostingTimeInput, setBestPostingTimeInput] = useState('');
+    const [topTopicInput, setTopTopicInput] = useState('');
+
+    // Guides & Tips state
+    const [guides, setGuides] = useState<any>(null);
+    const [guidesLoading, setGuidesLoading] = useState(false);
+
+    // Load user explicitness level
+    useEffect(() => {
+        const loadExplicitnessLevel = async () => {
+            if (!user?.id) return;
+            try {
+                const { doc, getDoc } = await import('firebase/firestore');
+                const userDoc = await getDoc(doc(db, 'users', user.id));
+                if (userDoc.exists()) {
+                    const data = userDoc.data();
+                    // Store explicitness level for use in caption generation
+                    // We'll use this when generating captions
+                }
+            } catch (error) {
+                console.error('Error loading explicitness level:', error);
+            }
+        };
+        loadExplicitnessLevel();
+    }, [user?.id]);
+
+    // Initialize component and restore persisted state
     useEffect(() => {
         try {
             setIsLoading(false);
@@ -73,12 +346,59 @@ export const OnlyFansContentBrain: React.FC = () => {
             if (activeTab === 'mediaCaptions') {
                 setActiveTab('captions');
             }
+            
+            // Restore persisted state from localStorage
+            if (user?.id) {
+                const storageKey = `onlyfans_content_brain_${user.id}`;
+                try {
+                    const saved = localStorage.getItem(storageKey);
+                    if (saved) {
+                        const data = JSON.parse(saved);
+                        if (data.uploadedMediaUrl) {
+                            setUploadedMediaUrl(data.uploadedMediaUrl);
+                            setUploadedMediaPreview(data.uploadedMediaUrl);
+                            setUploadedMediaType(data.uploadedMediaType || 'image');
+                        }
+                        if (data.generatedCaptions && Array.isArray(data.generatedCaptions)) {
+                            setGeneratedCaptions(data.generatedCaptions);
+                        }
+                        if (data.currentCaptionForAI) {
+                            setCurrentCaptionForAI(data.currentCaptionForAI);
+                        }
+                        if (data.scheduledDate) {
+                            setScheduledDate(data.scheduledDate);
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error restoring persisted state:', e);
+                }
+            }
         } catch (err: any) {
             console.error('Error initializing OnlyFansContentBrain:', err);
             setError(err?.message || 'Failed to initialize component');
             setIsLoading(false);
         }
-    }, [activeTab]);
+    }, [activeTab, user?.id]);
+    
+    // Persist media and captions to localStorage
+    useEffect(() => {
+        if (!user?.id) return;
+        
+        const storageKey = `onlyfans_content_brain_${user.id}`;
+        const dataToSave = {
+            uploadedMediaUrl,
+            uploadedMediaType,
+            generatedCaptions,
+            currentCaptionForAI,
+            scheduledDate,
+        };
+        
+        try {
+            localStorage.setItem(storageKey, JSON.stringify(dataToSave));
+        } catch (e) {
+            console.error('Error saving state to localStorage:', e);
+        }
+    }, [uploadedMediaUrl, uploadedMediaType, generatedCaptions, currentCaptionForAI, scheduledDate, user?.id]);
 
     // Show error state if context is not available
     if (!context || !user) {
@@ -99,17 +419,42 @@ export const OnlyFansContentBrain: React.FC = () => {
     }
 
     const handleGenerateCaptions = async () => {
-        if (!captionPrompt.trim()) {
-            showToast?.('Please enter a description or idea for your caption', 'error');
-            return;
+        // If media is uploaded, require it to be analyzed
+        if (uploadedMediaUrl && !captionPrompt.trim()) {
+            // Optional: user can add context but it's not required
         }
 
+        // Clear old captions when regenerating
+        setGeneratedCaptions([]);
+        setCurrentCaptionForAI('');
+        setUsedCaptions(new Set());
+        
         setIsGenerating(true);
         setError(null);
         try {
             console.log('Generating captions...');
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             
+            // Get user explicitness level
+            let explicitnessLevel = 7; // Default
+            try {
+                const userDoc = await getDoc(doc(db, 'users', user.id));
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    explicitnessLevel = userData?.explicitnessLevel ?? 7;
+                }
+            } catch (e) {
+                console.error('Error loading explicitness level:', e);
+            }
+
+            // Determine tone based on explicitness level
+            let finalTone = captionTone;
+            if (explicitnessLevel >= 8) {
+                finalTone = 'Explicit';
+            } else if (explicitnessLevel >= 6) {
+                finalTone = captionTone === 'Explicit' ? 'Explicit' : 'Intimate';
+            }
+
             const response = await fetch('/api/generateCaptions', {
                 method: 'POST',
                 headers: {
@@ -117,10 +462,13 @@ export const OnlyFansContentBrain: React.FC = () => {
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
                 body: JSON.stringify({
-                    tone: captionTone === 'Explicit' ? 'Sexy / Explicit' : captionTone,
+                    mediaUrl: uploadedMediaUrl || undefined, // Include media URL to analyze image/video
+                    tone: finalTone === 'Explicit' ? 'Sexy / Explicit' : finalTone,
                     goal: captionGoal,
                     platforms: ['OnlyFans'],
-                    promptText: `${captionPrompt}\n\n[Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`,
+                    promptText: uploadedMediaUrl 
+                        ? `${captionPrompt || 'Analyze this image/video in detail and describe what you see. Create explicit OnlyFans captions based on the actual content shown. Be very descriptive and explicit about what is visually present.'}\n\n[Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`
+                        : `${captionPrompt}\n\n[Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`,
                 }),
             });
 
@@ -186,6 +534,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                         tone: 'Explicit/Adult Content',
                         platforms: ['OnlyFans'],
                     },
+                    analyticsData: buildAnalyticsData(),
                 }),
             });
 
@@ -246,6 +595,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                         tone: 'Explicit/Adult Content',
                         platforms: ['OnlyFans'],
                     },
+                    analyticsData: buildAnalyticsData(),
                 }),
             });
 
@@ -294,10 +644,11 @@ export const OnlyFansContentBrain: React.FC = () => {
                 body: JSON.stringify({
                     niche: 'Adult Content Creator (OnlyFans)',
                     audience: 'Subscribers and fans',
-                    goals: weeklyPlanPrompt,
+                    goal: weeklyPlanPrompt || 'Sales Conversion', // Use goal (singular) - default to Sales Conversion for OnlyFans
                     duration: 1, // 1 week
-                    platforms: ['OnlyFans'],
-                    explicitContent: true,
+                    tone: 'Explicit/Adult Content',
+                    platformFocus: 'OnlyFans',
+                    analyticsData: buildAnalyticsData(),
                 }),
             });
 
@@ -325,6 +676,72 @@ export const OnlyFansContentBrain: React.FC = () => {
         navigator.clipboard.writeText(text);
         showToast?.('Copied to clipboard!', 'success');
     };
+
+    // Build analytics data object for API calls
+    const buildAnalyticsData = () => {
+        if (!showAnalytics) return undefined;
+        
+        const hasData = creatorAnalytics.subscriberCount || 
+                       creatorAnalytics.engagementRate || 
+                       creatorAnalytics.topContentTypes.length > 0 ||
+                       creatorAnalytics.bestPostingTimes.length > 0 ||
+                       creatorAnalytics.topTopics.length > 0 ||
+                       creatorAnalytics.customInsights;
+        
+        if (!hasData) return undefined;
+
+        return {
+            subscriberCount: creatorAnalytics.subscriberCount || undefined,
+            engagementRate: creatorAnalytics.engagementRate || undefined,
+            topContentTypes: creatorAnalytics.topContentTypes.length > 0 ? creatorAnalytics.topContentTypes : undefined,
+            bestPostingTimes: creatorAnalytics.bestPostingTimes.length > 0 ? creatorAnalytics.bestPostingTimes : undefined,
+            topTopics: creatorAnalytics.topTopics.length > 0 ? creatorAnalytics.topTopics : undefined,
+            customInsights: creatorAnalytics.customInsights || undefined
+        };
+    };
+
+    // Fetch dynamic guides
+    const fetchGuides = async () => {
+        setGuidesLoading(true);
+        setError(null);
+        try {
+            const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+            
+            const response = await fetch('/api/getOnlyFansGuides', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({
+                    audience: 'Subscribers',
+                    goal: 'Engagement',
+                    analyticsData: buildAnalyticsData()
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch guides');
+            }
+
+            const data = await response.json();
+            if (data.success && data.guides) {
+                setGuides(data.guides);
+                showToast?.('Guides updated with latest trends!', 'success');
+            } else {
+                throw new Error(data.error || 'Failed to fetch guides');
+            }
+        } catch (error: any) {
+            console.error('Error fetching guides:', error);
+            const errorMsg = error.message || 'Failed to fetch guides. Please try again.';
+            showToast?.(errorMsg, 'error');
+            setError(errorMsg);
+        } finally {
+            setGuidesLoading(false);
+        }
+    };
+
+    // Reusable Analytics Input Component
 
     const handleGenerateMonetizationPlan = async () => {
         if (monetizationGoals.length === 0) {
@@ -361,6 +778,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                         conversion: balanceConversion,
                     },
                     niche: user?.niche || 'Adult Content Creator',
+                    analyticsData: buildAnalyticsData(),
                 }),
             });
 
@@ -387,17 +805,204 @@ export const OnlyFansContentBrain: React.FC = () => {
         }
     };
 
-    const saveToHistory = async (type: 'optimize' | 'predict' | 'repurpose' | 'monetization_plan' | 'post_ideas' | 'shoot_concepts' | 'weekly_plan', title: string, data: any) => {
+    // History state
+    const [history, setHistory] = useState<any[]>([]);
+    const [loadingHistory, setLoadingHistory] = useState(false);
+    const [showHistoryTab, setShowHistoryTab] = useState(false);
+
+    const loadHistory = async () => {
+        if (!user?.id) return;
+        setLoadingHistory(true);
+        try {
+            // Load from onlyfans_predict_history and onlyfans_repurpose_history (separate from compose page)
+            const items: any[] = [];
+            
+            // Load predict history from OnlyFans-specific collection
+            try {
+                const predictRef = collection(db, 'users', user.id, 'onlyfans_predict_history');
+                const predictQuery = query(predictRef, orderBy('createdAt', 'desc'));
+                const predictSnapshot = await getDocs(predictQuery);
+                predictSnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    items.push({ id: doc.id, type: 'predict', ...data });
+                });
+            } catch (error) {
+                console.error('Error loading predict history:', error);
+            }
+            
+            // Load repurpose history from OnlyFans-specific collection
+            try {
+                const repurposeRef = collection(db, 'users', user.id, 'onlyfans_repurpose_history');
+                const repurposeQuery = query(repurposeRef, orderBy('createdAt', 'desc'));
+                const repurposeSnapshot = await getDocs(repurposeQuery);
+                repurposeSnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    items.push({ id: doc.id, type: 'repurpose', ...data });
+                });
+            } catch (error) {
+                console.error('Error loading repurpose history:', error);
+            }
+            
+            // Sort by createdAt descending
+            items.sort((a, b) => {
+                const aTime = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+                const bTime = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+                return bTime - aTime;
+            });
+            
+            setHistory(items);
+        } catch (error: any) {
+            console.error('Error loading history:', error);
+            showToast?.('Failed to load history', 'error');
+        } finally {
+            setLoadingHistory(false);
+        }
+    };
+
+    // Save predict to history (OnlyFans-specific collection, separate from compose page)
+    const savePredictToHistory = async (data: any) => {
         if (!user?.id) return;
         try {
-            await addDoc(collection(db, 'users', user.id, 'content_intelligence_history'), {
+            const historyRef = collection(db, 'users', user.id, 'onlyfans_predict_history');
+            await addDoc(historyRef, {
+                type: 'predict',
+                data,
+                createdAt: Timestamp.now(),
+            });
+            
+            // Keep only last 10 - get all, delete oldest if > 10
+            const q = query(historyRef, orderBy('createdAt', 'desc'));
+            const snapshot = await getDocs(q);
+            if (snapshot.size > 10) {
+                const docs = snapshot.docs;
+                const toDelete = docs.slice(10);
+                for (const docToDelete of toDelete) {
+                    await deleteDoc(docToDelete.ref);
+                }
+            }
+            
+            // Reload history if history tab is active
+            if (activeTab === 'history') {
+                loadHistory();
+            }
+        } catch (error: any) {
+            console.error('Error saving predict to history:', error);
+        }
+    };
+
+    // Save repurpose to history (OnlyFans-specific collection, separate from compose page)
+    const saveRepurposeToHistory = async (data: any) => {
+        if (!user?.id) return;
+        try {
+            const historyRef = collection(db, 'users', user.id, 'onlyfans_repurpose_history');
+            await addDoc(historyRef, {
+                type: 'repurpose',
+                data,
+                createdAt: Timestamp.now(),
+            });
+            
+            // Keep only last 10 - get all, delete oldest if > 10
+            const q = query(historyRef, orderBy('createdAt', 'desc'));
+            const snapshot = await getDocs(q);
+            if (snapshot.size > 10) {
+                const docs = snapshot.docs;
+                const toDelete = docs.slice(10);
+                for (const docToDelete of toDelete) {
+                    await deleteDoc(docToDelete.ref);
+                }
+            }
+            
+            // Reload history if history tab is active
+            if (activeTab === 'history') {
+                loadHistory();
+            }
+        } catch (error: any) {
+            console.error('Error saving repurpose to history:', error);
+        }
+    };
+
+    const saveToHistory = async (type: 'optimize' | 'predict' | 'repurpose' | 'monetization_plan' | 'post_ideas' | 'shoot_concepts' | 'weekly_plan' | 'gap_analysis', title: string, data: any) => {
+        if (!user?.id) return;
+        try {
+            // Don't save predict and repurpose to content brain history - they have their own history
+            if (type === 'predict' || type === 'repurpose') {
+                return;
+            }
+            // Save OnlyFans Content Brain history (excluding predict and repurpose) to onlyfans_content_brain_history
+            await addDoc(collection(db, 'users', user.id, 'onlyfans_content_brain_history'), {
                 type,
                 title,
                 data,
                 createdAt: Timestamp.now(),
             });
+            // Reload history if history tab is active
+            if (activeTab === 'history') {
+                loadHistory();
+            }
         } catch (error: any) {
             console.error('Error saving to history:', error);
+        }
+    };
+
+    // Handle saving caption to OnlyFans calendar
+    const handleSaveCaptionToOnlyFansCalendar = async (caption: string, hashtags: string[], status: 'Draft' | 'Scheduled') => {
+        if (!user || !uploadedMediaUrl) {
+            showToast?.('Please upload media first', 'error');
+            return;
+        }
+
+        try {
+            const postId = Date.now().toString();
+            const draftDate = new Date();
+            draftDate.setHours(12, 0, 0, 0);
+
+            let scheduledDateISO: string | undefined;
+            if (status === 'Scheduled' && scheduledDate) {
+                scheduledDateISO = new Date(scheduledDate).toISOString();
+            } else if (status === 'Draft') {
+                scheduledDateISO = draftDate.toISOString();
+            }
+
+            const fullCaption = hashtags && hashtags.length > 0 
+                ? `${caption} ${hashtags.join(' ')}`
+                : caption;
+
+            // Save to OnlyFans calendar events (not main calendar)
+            const eventId = `onlyfans_${postId}`;
+            const eventData: OnlyFansCalendarEvent = {
+                id: eventId,
+                title: fullCaption.substring(0, 100) + (fullCaption.length > 100 ? '...' : ''),
+                date: scheduledDateISO || new Date().toISOString(),
+                reminderType: 'post',
+                contentType: 'free', // Default to free, user can change later
+                description: fullCaption,
+                createdAt: new Date().toISOString(),
+                userId: user.id,
+            };
+
+            await setDoc(doc(db, 'users', user.id, 'onlyfans_calendar_events', eventId), eventData);
+
+            // Also save as a post with media URL for the calendar to display
+            const postData = {
+                id: postId,
+                content: fullCaption,
+                mediaUrl: uploadedMediaUrl,
+                mediaType: uploadedMediaType || 'image',
+                platforms: ['OnlyFans'],
+                status: status,
+                scheduledDate: scheduledDateISO,
+                timestamp: new Date().toISOString(),
+            };
+            await setDoc(doc(db, 'users', user.id, 'posts', postId), postData);
+            
+            if (status === 'Scheduled') {
+                showToast?.('Added to OnlyFans Calendar!', 'success');
+            } else {
+                showToast?.('Saved to Drafts!', 'success');
+            }
+        } catch (error: any) {
+            console.error('Error saving caption:', error);
+            showToast?.('Failed to save. Please try again.', 'error');
         }
     };
 
@@ -459,6 +1064,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                     goal: mediaCaptionGoal,
                     platforms: ['OnlyFans'],
                     promptText: `${mediaCaptionPrompt || ''} [Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`.trim(),
+                    analyticsData: buildAnalyticsData(),
                 }),
             });
 
@@ -508,6 +1114,334 @@ export const OnlyFansContentBrain: React.FC = () => {
         setMediaPreview(previewUrl);
     };
 
+    // Handle media upload for captions tab
+    const handleUploadMedia = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Clear old captions when uploading new media
+        setGeneratedCaptions([]);
+        setCurrentCaptionForAI('');
+        setUsedCaptions(new Set());
+        
+        setUploadedMediaFile(file);
+        const previewUrl = URL.createObjectURL(file);
+        setUploadedMediaPreview(previewUrl);
+        setUploadedMediaType(file.type.startsWith('video/') ? 'video' : 'image');
+        
+        // Upload to Firebase Storage
+        try {
+            if (!user?.id) return;
+            const timestamp = Date.now();
+            const fileExtension = file.name.split('.').pop() || (file.type.startsWith('video/') ? 'mp4' : 'jpg');
+            const storagePath = `users/${user.id}/onlyfans-uploads/${timestamp}.${fileExtension}`;
+            const storageRef = ref(storage, storagePath);
+            await uploadBytes(storageRef, file, { contentType: file.type });
+            const mediaUrl = await getDownloadURL(storageRef);
+            setUploadedMediaUrl(mediaUrl);
+        } catch (error: any) {
+            console.error('Upload error:', error);
+            showToast?.('Failed to upload media', 'error');
+        }
+    };
+
+    // Load media vault items
+    const loadMediaVault = async () => {
+        if (!user?.id) return;
+        try {
+            const vaultRef = collection(db, 'users', user.id, 'onlyfans_media_library');
+            const q = query(vaultRef, orderBy('uploadedAt', 'desc'));
+            const snapshot = await getDocs(q);
+            const items: any[] = [];
+            snapshot.forEach((doc) => {
+                items.push({ id: doc.id, ...doc.data() });
+            });
+            setMediaVaultItems(items);
+        } catch (error) {
+            console.error('Error loading media vault:', error);
+        }
+    };
+
+    // Handle selecting media from vault
+    const handleSelectFromVault = (item: any) => {
+        // Clear old captions when selecting new media
+        setGeneratedCaptions([]);
+        setCurrentCaptionForAI('');
+        setUsedCaptions(new Set());
+        
+        setUploadedMediaUrl(item.url);
+        setUploadedMediaPreview(item.url);
+        setUploadedMediaType(item.type === 'video' ? 'video' : 'image');
+        setShowMediaVaultModal(false);
+    };
+
+    // Handle regenerate captions with media
+    const handleRegenerateCaptionsWithMedia = async () => {
+        if (!uploadedMediaUrl) {
+            showToast?.('Please upload or select media first', 'error');
+            return;
+        }
+
+        setIsGenerating(true);
+        setError(null);
+        try {
+            const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+            
+            if (!user?.id) {
+                throw new Error('User not authenticated');
+            }
+
+            // Get user explicitness level
+            let explicitnessLevel = 7; // Default
+            try {
+                const userDoc = await getDoc(doc(db, 'users', user.id));
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    explicitnessLevel = userData?.explicitnessLevel ?? 7;
+                }
+            } catch (e) {
+                console.error('Error loading explicitness level:', e);
+            }
+
+            // Determine tone based on explicitness level
+            let finalTone = captionTone;
+            if (explicitnessLevel >= 8) {
+                finalTone = 'Explicit';
+            } else if (explicitnessLevel >= 6) {
+                finalTone = captionTone === 'Explicit' ? 'Explicit' : 'Intimate';
+            }
+            
+            const response = await fetch('/api/generateCaptions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({
+                    mediaUrl: uploadedMediaUrl,
+                    tone: finalTone === 'Explicit' ? 'Sexy / Explicit' : finalTone,
+                    goal: captionGoal,
+                    platforms: ['OnlyFans'],
+                    promptText: `${captionPrompt || 'Analyze this image/video in detail and describe what you see. Create explicit OnlyFans captions based on the actual content shown. Be very descriptive and explicit about what is visually present.'} [Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`.trim(),
+                }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                const errorMsg = errorData.error || errorData.message || 'Failed to generate captions';
+                throw new Error(errorMsg);
+            }
+
+            const data = await response.json();
+            let captions: {caption: string; hashtags: string[]}[] = [];
+            if (Array.isArray(data)) {
+                captions = data.map((item: any) => ({
+                    caption: item.caption || '',
+                    hashtags: Array.isArray(item.hashtags) ? item.hashtags : [],
+                }));
+            } else if (data && typeof data === 'object' && Array.isArray(data.captions)) {
+                captions = data.captions.map((item: any) => ({
+                    caption: item.caption || '',
+                    hashtags: Array.isArray(item.hashtags) ? item.hashtags : [],
+                }));
+            }
+            setGeneratedCaptions(captions.map(c => `${c.caption} ${(c.hashtags || []).join(' ')}`.trim()));
+            showToast?.('Captions generated successfully!', 'success');
+        } catch (error: any) {
+            console.error('Error generating media captions:', error);
+            const errorMsg = error.message || 'Failed to generate captions. Please try again.';
+            showToast?.(errorMsg, 'error');
+            setError(errorMsg);
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    // Handle predict performance
+    const handlePredictPerformance = async () => {
+        if (!currentCaptionForAI.trim() && generatedCaptions.length === 0) {
+            showToast?.('Please generate captions first or enter a caption', 'error');
+            return;
+        }
+
+        const captionToPredict = currentCaptionForAI.trim() || generatedCaptions[0] || '';
+        if (!captionToPredict) {
+            showToast?.('Please enter or generate a caption first', 'error');
+            return;
+        }
+
+        setIsGenerating(true);
+        try {
+            const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+            const response = await fetch('/api/predictContentPerformance', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({
+                    caption: captionToPredict,
+                    platform: 'OnlyFans',
+                    mediaType: uploadedMediaType || 'image',
+                    niche: user?.niche || 'Adult Content Creator',
+                    tone: captionTone,
+                    goal: captionGoal,
+                }),
+            });
+
+            if (!response.ok) throw new Error('Failed to predict performance');
+            const data = await response.json();
+            if (data.success) {
+                setPredictResult(data);
+                setShowPredictModal(true);
+                // Save with originalCaption for history display
+                await savePredictToHistory({
+                    ...data,
+                    originalCaption: captionToPredict,
+                });
+                showToast?.('Performance predicted!', 'success');
+            }
+        } catch (error: any) {
+            showToast?.(error.message || 'Failed to predict performance', 'error');
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    // Handle repurpose content
+    const handleRepurposeContent = async () => {
+        if (!currentCaptionForAI.trim() && generatedCaptions.length === 0) {
+            showToast?.('Please generate captions first or enter a caption', 'error');
+            return;
+        }
+
+        const captionToRepurpose = currentCaptionForAI.trim() || generatedCaptions[0] || '';
+        if (!captionToRepurpose) {
+            showToast?.('Please enter or generate a caption first', 'error');
+            return;
+        }
+
+        setIsGenerating(true);
+        try {
+            const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+            const response = await fetch('/api/repurposeContent', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({
+                    originalContent: captionToRepurpose,
+                    originalPlatform: 'OnlyFans',
+                    targetPlatforms: ['Instagram', 'TikTok', 'X', 'LinkedIn', 'Facebook', 'Threads', 'YouTube'],
+                    niche: user?.niche || 'Adult Content Creator',
+                    tone: captionTone,
+                    goal: captionGoal,
+                    mediaType: uploadedMediaType || 'image',
+                }),
+            });
+
+            if (!response.ok) throw new Error('Failed to repurpose content');
+            const data = await response.json();
+            if (data.success && data.repurposedContent) {
+                setRepurposeResult(data);
+                setShowRepurposeModal(true);
+                // Save with originalContent for history display
+                await saveRepurposeToHistory({
+                    ...data,
+                    originalContent: captionToRepurpose,
+                });
+                showToast?.('Content repurposed!', 'success');
+            }
+        } catch (error: any) {
+            showToast?.(error.message || 'Failed to repurpose content', 'error');
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    // Handle analyze content gaps using OnlyFans calendar data
+    const handleAnalyzeContentGaps = async () => {
+        if (!user?.id) {
+            showToast?.('Please sign in to analyze content gaps', 'error');
+            return;
+        }
+
+        setIsAnalyzingGaps(true);
+        try {
+            // Load OnlyFans calendar events
+            const eventsRef = collection(db, 'users', user.id, 'onlyfans_calendar_events');
+            const eventsQuery = query(eventsRef, orderBy('date', 'desc'));
+            const eventsSnapshot = await getDocs(eventsQuery);
+            const calendarEvents: OnlyFansCalendarEvent[] = [];
+            eventsSnapshot.forEach((doc) => {
+                calendarEvents.push({ id: doc.id, ...doc.data() } as OnlyFansCalendarEvent);
+            });
+
+            // Also get posts with OnlyFans platform
+            const postsRef = collection(db, 'users', user.id, 'posts');
+            const postsSnapshot = await getDocs(postsRef);
+            const onlyfansPosts: any[] = [];
+            postsSnapshot.forEach((doc) => {
+                const post = doc.data();
+                if (post.platforms && post.platforms.includes('OnlyFans')) {
+                    onlyfansPosts.push({ id: doc.id, ...post });
+                }
+            });
+
+            const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+            
+            const response = await fetch('/api/analyzeContentGaps', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({
+                    daysToAnalyze: 90,
+                    niche: user.niche || 'Adult Content Creator',
+                    platforms: ['OnlyFans'],
+                    calendarEvents: calendarEvents.map(e => ({
+                        date: e.date,
+                        reminderType: e.reminderType,
+                        contentType: e.contentType,
+                        description: e.description,
+                    })),
+                    posts: onlyfansPosts.map(p => ({
+                        content: p.content,
+                        scheduledDate: p.scheduledDate,
+                        status: p.status,
+                    })),
+                    useWeeklyTrends: true, // Use weekly tavily data
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to analyze content gaps');
+            }
+
+            const data = await response.json();
+            if (data.success) {
+                setContentGapAnalysis(data);
+                setShowGapAnalysisModal(true);
+                await saveToHistory('gap_analysis', `Content Gap Analysis - ${new Date().toLocaleDateString()}`, data);
+                showToast?.('Content gap analysis complete!', 'success');
+            }
+        } catch (error: any) {
+            console.error('Error analyzing content gaps:', error);
+            showToast?.(error.message || 'Failed to analyze content gaps', 'error');
+        } finally {
+            setIsAnalyzingGaps(false);
+        }
+    };
+
+    // Load media vault when modal opens
+    useEffect(() => {
+        if (showMediaVaultModal) {
+            loadMediaVault();
+        }
+    }, [showMediaVaultModal]);
+
     const allTabs: { id: ContentType; label: string }[] = [
         { id: 'captions', label: 'AI Captions' },
         { id: 'mediaCaptions', label: 'Image/Video Captions' }, // Hidden but kept for stability
@@ -515,9 +1449,11 @@ export const OnlyFansContentBrain: React.FC = () => {
         { id: 'shootConcepts', label: 'Shoot Concepts' },
         { id: 'weeklyPlan', label: 'Weekly Plan' },
         { id: 'monetizationPlanner', label: 'Monetization Planner' },
+        { id: 'guides', label: 'Guides & Tips' },
+        { id: 'history', label: 'History' },
     ];
-    // Filter out mediaCaptions tab (hidden but code kept for stability)
-    const tabs = allTabs.filter(tab => tab.id !== 'mediaCaptions') as { id: ContentType; label: string }[];
+    // Filter out mediaCaptions and guides tabs
+    const tabs = allTabs.filter(tab => tab.id !== 'mediaCaptions' && tab.id !== 'guides') as { id: ContentType; label: string }[];
 
     // Show loading state
     if (isLoading) {
@@ -588,7 +1524,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                 {tabs.map((tab) => (
                     <button
                         key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
+                        onClick={() => setActiveTab(tab.id as ContentType)}
                         className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
                             activeTab === tab.id
                                 ? 'border-primary-600 text-primary-600 dark:text-primary-400'
@@ -609,16 +1545,94 @@ export const OnlyFansContentBrain: React.FC = () => {
                         </h2>
                         
                         <div className="space-y-4">
+                            {/* Media Upload Section - Matching MediaBox Style */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Describe your content or what you want the caption to focus on:
+                                    Upload Image/Video:
+                                </label>
+                                {!uploadedMediaPreview ? (
+                                    <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6">
+                                        <div className="flex flex-col items-center gap-3">
+                                            <div className="flex gap-2 w-full">
+                                                <input
+                                                    type="file"
+                                                    accept="image/*,video/*"
+                                                    onChange={handleUploadMedia}
+                                                    className="hidden"
+                                                    id="media-upload-captions"
+                                                />
+                                                <label
+                                                    htmlFor="media-upload-captions"
+                                                    className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer text-center text-sm font-medium flex items-center justify-center gap-2"
+                                                >
+                                                    <UploadIcon className="w-5 h-5" />
+                                                    Upload File
+                                                </label>
+                                                <button
+                                                    onClick={() => setShowMediaVaultModal(true)}
+                                                    className="flex-1 px-4 py-3 border border-primary-300 dark:border-primary-700 rounded-md bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 hover:bg-primary-100 dark:hover:bg-primary-900/50 text-sm font-medium flex items-center justify-center gap-2"
+                                                >
+                                                    <ImageIcon className="w-5 h-5" />
+                                                    From Media Vault
+                                                </button>
+                                            </div>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                Drag and drop or click to upload. Images or Videos (max 20MB)
+                                            </p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="relative border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-700/50">
+                                        {uploadedMediaType === 'video' ? (
+                                            <video
+                                                src={uploadedMediaPreview}
+                                                controls
+                                                className="w-full max-h-96 rounded-lg"
+                                            />
+                                        ) : (
+                                            <img
+                                                src={uploadedMediaPreview}
+                                                alt="Preview"
+                                                className="w-full max-h-96 object-contain rounded-lg"
+                                            />
+                                        )}
+                                        <button
+                                            onClick={() => {
+                                                // Clear captions when removing media
+                                                setGeneratedCaptions([]);
+                                                setCurrentCaptionForAI('');
+                                                setUsedCaptions(new Set());
+                                                setUploadedMediaFile(null);
+                                                setUploadedMediaPreview(null);
+                                                setUploadedMediaUrl(null);
+                                                setUploadedMediaType(null);
+                                            }}
+                                            className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 shadow-lg"
+                                            title="Remove media"
+                                        >
+                                            <XMarkIcon className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Additional Context (Optional):
                                 </label>
                                 <textarea
                                     value={captionPrompt}
                                     onChange={(e) => setCaptionPrompt(e.target.value)}
-                                    placeholder="e.g., 'A seductive photoset with lingerie and soft lighting' or 'Behind-the-scenes getting ready video'"
+                                    placeholder={uploadedMediaUrl 
+                                        ? "Add specific details or focus you want for the caption (e.g., 'Focus on the lingerie details' or 'Emphasize the mood and lighting'). The AI will analyze the image/video in detail automatically."
+                                        : "Describe your content or what you want the caption to focus on (e.g., 'A seductive photoset with lingerie and soft lighting' or 'Behind-the-scenes getting ready video')"}
                                     className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[100px]"
                                 />
+                                {uploadedMediaUrl && (
+                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                        The AI will automatically analyze your image/video in detail. Use this field to add specific focus or details.
+                                    </p>
+                                )}
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -660,23 +1674,45 @@ export const OnlyFansContentBrain: React.FC = () => {
                                 </div>
                             </div>
 
-                            <button
-                                onClick={handleGenerateCaptions}
-                                disabled={isGenerating}
-                                className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                            >
-                                {isGenerating ? (
-                                    <>
-                                        <RefreshIcon className="w-5 h-5 animate-spin" />
-                                        Generating...
-                                    </>
-                                ) : (
-                                    <>
-                                        <SparklesIcon className="w-5 h-5" />
-                                        Generate Captions
-                                    </>
-                                )}
-                            </button>
+                            {/* Date and Time Picker - In Main Content Container */}
+                            {uploadedMediaUrl && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Schedule Date & Time (Optional):
+                                    </label>
+                                    <input
+                                        type="datetime-local"
+                                        value={scheduledDate}
+                                        onChange={(e) => setScheduledDate(e.target.value)}
+                                        className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                        style={{ colorScheme: 'dark' }}
+                                    />
+                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                        Set a date and time to schedule this post to OnlyFans calendar
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Generate Captions Button - Always Visible */}
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={handleGenerateCaptions}
+                                    disabled={isGenerating}
+                                    className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    {isGenerating ? (
+                                        <>
+                                            <RefreshIcon className="w-5 h-5 animate-spin" />
+                                            Generating...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <SparklesIcon className="w-5 h-5" />
+                                            Generate Captions
+                                        </>
+                                    )}
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -687,22 +1723,221 @@ export const OnlyFansContentBrain: React.FC = () => {
                                 Generated Captions
                             </h3>
                             <div className="space-y-3">
-                                {generatedCaptions.map((caption, index) => (
+                                {generatedCaptions.map((caption, index) => {
+                                    const isUsed = usedCaptions.has(index);
+                                    return (
                                     <div
                                         key={index}
-                                        className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
+                                        className={`p-4 rounded-lg border ${
+                                            isUsed 
+                                                ? 'bg-gray-100 dark:bg-gray-800/50 border-gray-300 dark:border-gray-600 opacity-50' 
+                                                : 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600'
+                                        }`}
                                     >
-                                        <p className="text-gray-900 dark:text-white mb-3">{caption}</p>
-                                        <div className="flex flex-wrap gap-2">
-                                            <button
-                                                onClick={() => copyToClipboard(caption)}
-                                                className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                            >
-                                                Copy
-                                            </button>
-                                        </div>
+                                        {isUsed && (
+                                            <div className="mb-2 text-xs text-gray-500 dark:text-gray-400 italic">
+                                                ✓ Used
+                                            </div>
+                                        )}
+                                        <textarea
+                                            value={currentCaptionForAI || caption}
+                                            onChange={(e) => setCurrentCaptionForAI(e.target.value)}
+                                            onFocus={() => setCurrentCaptionForAI(caption)}
+                                            disabled={isUsed}
+                                            className={`w-full p-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[80px] mb-2 ${
+                                                isUsed ? 'opacity-50 cursor-not-allowed' : ''
+                                            }`}
+                                            placeholder="Edit caption here..."
+                                        />
+                                        {!isUsed && (
+                                            <>
+                                                <div className="mb-2">
+                                                    <button
+                                                        onClick={() => copyToClipboard(currentCaptionForAI || caption)}
+                                                        className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+                                                    >
+                                                        <CopyIcon className="w-4 h-4" />
+                                                        Copy Caption
+                                                    </button>
+                                                </div>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {uploadedMediaUrl && (
+                                                        <>
+                                                            <button
+                                                                onClick={async () => {
+                                                                    // Save as Draft to OnlyFans calendar
+                                                                    await handleSaveCaptionToOnlyFansCalendar(caption, [], 'Draft');
+                                                                    // Mark as used
+                                                                    setUsedCaptions(prev => new Set(prev).add(index));
+                                                                }}
+                                                                className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                                                            >
+                                                                Save as Draft
+                                                            </button>
+                                                            <button
+                                                                onClick={async () => {
+                                                                    if (!scheduledDate) {
+                                                                        showToast?.('Please set a date and time in the main content area above', 'error');
+                                                                        return;
+                                                                    }
+                                                                    try {
+                                                                        if (!user || !uploadedMediaUrl) {
+                                                                            showToast?.('Please upload media first', 'error');
+                                                                            return;
+                                                                        }
+                                                                        const postId = Date.now().toString();
+                                                                        const fullCaption = currentCaptionForAI || caption;
+                                                                        const scheduledDateISO = new Date(scheduledDate).toISOString();
+                                                                        const eventId = `onlyfans_${postId}`;
+                                                                        const eventData: OnlyFansCalendarEvent = {
+                                                                            id: eventId,
+                                                                            title: fullCaption.substring(0, 100) + (fullCaption.length > 100 ? '...' : ''),
+                                                                            date: scheduledDateISO,
+                                                                            reminderType: 'post',
+                                                                            contentType: 'free',
+                                                                            description: fullCaption,
+                                                                            createdAt: new Date().toISOString(),
+                                                                            userId: user.id,
+                                                                        };
+                                                                        await setDoc(doc(db, 'users', user.id, 'onlyfans_calendar_events', eventId), eventData);
+                                                                        const postData = {
+                                                                            id: postId,
+                                                                            content: fullCaption,
+                                                                            mediaUrl: uploadedMediaUrl,
+                                                                            mediaType: uploadedMediaType || 'image',
+                                                                            platforms: ['OnlyFans'],
+                                                                            status: 'Scheduled',
+                                                                            scheduledDate: scheduledDateISO,
+                                                                            timestamp: new Date().toISOString(),
+                                                                        };
+                                                                        await setDoc(doc(db, 'users', user.id, 'posts', postId), postData);
+                                                                        showToast?.('Added to OnlyFans Calendar!', 'success');
+                                                                        setScheduledDate(''); // Clear after scheduling
+                                                                        // Mark as used
+                                                                        setUsedCaptions(prev => new Set(prev).add(index));
+                                                                    } catch (error: any) {
+                                                                        console.error('Error saving caption:', error);
+                                                                        showToast?.('Failed to save. Please try again.', 'error');
+                                                                    }
+                                                                }}
+                                                                className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 px-3 py-1 border border-blue-300 dark:border-blue-600 rounded-md bg-white dark:bg-gray-700 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                                                            >
+                                                                Schedule
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
-                                ))}
+                                    );
+                                })}
+                            </div>
+
+                            {/* Action Buttons - Always Visible */}
+                            <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700 space-y-3">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    {/* Analyze Content Gaps */}
+                                    <button
+                                        onClick={handleAnalyzeContentGaps}
+                                        disabled={isAnalyzingGaps || isGenerating}
+                                        className="px-4 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium transition-all shadow-md hover:shadow-lg"
+                                    >
+                                        {isAnalyzingGaps ? (
+                                            <>
+                                                <RefreshIcon className="w-5 h-5 animate-spin" />
+                                                Analyzing...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <SparklesIcon className="w-5 h-5" />
+                                                Analyze Content Gaps
+                                            </>
+                                        )}
+                                    </button>
+
+                                    {/* Predict Performance */}
+                                    <button
+                                        onClick={handlePredictPerformance}
+                                        disabled={isGenerating || user?.plan === 'Free' || generatedCaptions.length === 0}
+                                        className={`px-4 py-3 rounded-lg font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 ${
+                                            user?.plan === 'Free' || generatedCaptions.length === 0
+                                                ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
+                                                : 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/50 disabled:opacity-50'
+                                        }`}
+                                    >
+                                        <SparklesIcon className="w-5 h-5" />
+                                        Predict Performance
+                                    </button>
+
+                                    {/* Repurpose Content */}
+                                    <button
+                                        onClick={handleRepurposeContent}
+                                        disabled={isGenerating || user?.plan === 'Free' || generatedCaptions.length === 0}
+                                        className={`px-4 py-3 rounded-lg font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 ${
+                                            user?.plan === 'Free' || generatedCaptions.length === 0
+                                                ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
+                                                : 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 disabled:opacity-50'
+                                        }`}
+                                    >
+                                        <SparklesIcon className="w-5 h-5" />
+                                        Repurpose Content
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Action Buttons - Always Visible (even when no captions) */}
+                    {generatedCaptions.length === 0 && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                {/* Analyze Content Gaps */}
+                                <button
+                                    onClick={handleAnalyzeContentGaps}
+                                    disabled={isAnalyzingGaps || isGenerating}
+                                    className="px-4 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium transition-all shadow-md hover:shadow-lg"
+                                >
+                                    {isAnalyzingGaps ? (
+                                        <>
+                                            <RefreshIcon className="w-5 h-5 animate-spin" />
+                                            Analyzing...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <SparklesIcon className="w-5 h-5" />
+                                            Analyze Content Gaps
+                                        </>
+                                    )}
+                                </button>
+
+                                {/* Predict Performance */}
+                                <button
+                                    onClick={handlePredictPerformance}
+                                    disabled={isGenerating || user?.plan === 'Free' || generatedCaptions.length === 0}
+                                    className={`px-4 py-3 rounded-lg font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 ${
+                                        user?.plan === 'Free' || generatedCaptions.length === 0
+                                            ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
+                                            : 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/50 disabled:opacity-50'
+                                    }`}
+                                >
+                                    <SparklesIcon className="w-5 h-5" />
+                                    Predict Performance
+                                </button>
+
+                                {/* Repurpose Content */}
+                                <button
+                                    onClick={handleRepurposeContent}
+                                    disabled={isGenerating || user?.plan === 'Free' || generatedCaptions.length === 0}
+                                    className={`px-4 py-3 rounded-lg font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 ${
+                                        user?.plan === 'Free' || generatedCaptions.length === 0
+                                            ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
+                                            : 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 disabled:opacity-50'
+                                    }`}
+                                >
+                                    <SparklesIcon className="w-5 h-5" />
+                                    Repurpose Content
+                                </button>
                             </div>
                         </div>
                     )}
@@ -898,6 +2133,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                                 />
                             </div>
 
+
                             <button
                                 onClick={handleGeneratePostIdeas}
                                 disabled={isGenerating}
@@ -965,6 +2201,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                                     className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[100px]"
                                 />
                             </div>
+
 
                             <button
                                 onClick={handleGenerateShootConcepts}
@@ -1034,6 +2271,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                                 />
                             </div>
 
+
                             <button
                                 onClick={handleGenerateWeeklyPlan}
                                 disabled={isGenerating}
@@ -1074,6 +2312,85 @@ export const OnlyFansContentBrain: React.FC = () => {
                                     {generatedWeeklyPlan}
                                 </pre>
                             </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* History Tab */}
+            {activeTab === 'history' && (
+                <div className="space-y-4">
+                    {loadingHistory ? (
+                        <div className="text-center py-8">
+                            <RefreshIcon className="w-8 h-8 animate-spin mx-auto text-primary-600 dark:text-primary-400" />
+                        </div>
+                    ) : history.length === 0 ? (
+                        <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                            No history yet. Use Predict Performance or Repurpose Content to see results here.
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {history.map((item) => {
+                                const isPredict = item.type === 'predict';
+                                const isRepurpose = item.type === 'repurpose';
+                                const prediction = isPredict ? (item.data?.prediction || {}) : null;
+                                const level = prediction?.level || 'Medium';
+                                const score = prediction?.score || 50;
+                                const platforms = isRepurpose ? (item.data?.repurposedContent?.length || 0) : 0;
+                                const caption = isPredict ? (item.data?.originalCaption || '') : (isRepurpose ? (item.data?.originalContent || '') : '');
+                                
+                                return (
+                                    <div
+                                        key={item.id}
+                                        className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
+                                    >
+                                        <div className="flex items-start justify-between mb-2">
+                                            <div className="flex-1">
+                                                {isPredict && (
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="text-xs font-semibold text-purple-600 dark:text-purple-400">PREDICT</span>
+                                                        <span className={`text-xs px-2 py-0.5 rounded ${
+                                                            level === 'High' ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' :
+                                                            level === 'Medium' ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300' :
+                                                            'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
+                                                        }`}>
+                                                            {level} ({score}/100)
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                {isRepurpose && (
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">REPURPOSE</span>
+                                                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                                                            {platforms} platforms
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                                                    {caption ? `${caption.substring(0, 100)}...` : item.title}
+                                                </p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                                    {item.createdAt?.toDate ? new Date(item.createdAt.toDate()).toLocaleString() : (item.createdAt ? new Date(item.createdAt).toLocaleString() : 'Recently')}
+                                                </p>
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    if (isPredict) {
+                                                        setPredictResult(item.data);
+                                                        setShowPredictModal(true);
+                                                    } else if (isRepurpose) {
+                                                        setRepurposeResult(item.data);
+                                                        setShowRepurposeModal(true);
+                                                    }
+                                                }}
+                                                className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 ml-2"
+                                            >
+                                                View
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
                 </div>
@@ -1297,6 +2614,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                                 </div>
                             </div>
 
+
                             <button
                                 onClick={handleGenerateMonetizationPlan}
                                 disabled={isGenerating || monetizationGoals.length === 0 || Math.abs((balanceEngagement + balanceUpsell + balanceRetention + balanceConversion) - 100) > 1}
@@ -1460,6 +2778,190 @@ export const OnlyFansContentBrain: React.FC = () => {
                             )}
                         </div>
                     )}
+                </div>
+            )}
+
+
+            {/* Media Vault Selection Modal */}
+            {showMediaVaultModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+                        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Select from Media Vault</h2>
+                            <button
+                                onClick={() => setShowMediaVaultModal(false)}
+                                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                            >
+                                <XMarkIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-6">
+                            {mediaVaultItems.length === 0 ? (
+                                <div className="text-center py-8">
+                                    <p className="text-gray-600 dark:text-gray-400">No media in vault yet.</p>
+                                    <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">Upload media to your OnlyFans Media Vault first.</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                    {mediaVaultItems.map((item) => (
+                                        <button
+                                            key={item.id}
+                                            onClick={() => handleSelectFromVault(item)}
+                                            className="relative aspect-square rounded-lg overflow-hidden border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 dark:hover:border-primary-400 transition-colors"
+                                        >
+                                            {item.type === 'video' ? (
+                                                <video src={item.url} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <img src={item.url} alt={item.name || 'Media'} className="w-full h-full object-cover" />
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+                            <button
+                                onClick={() => setShowMediaVaultModal(false)}
+                                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Predict Modal */}
+            {showPredictModal && predictResult && (
+                <PredictModal
+                    result={predictResult}
+                    onClose={() => setShowPredictModal(false)}
+                    onCopy={(text: string) => {
+                        copyToClipboard(text);
+                        showToast?.('Copied to clipboard!', 'success');
+                    }}
+                />
+            )}
+
+            {/* Repurpose Modal */}
+            {showRepurposeModal && repurposeResult && (
+                <RepurposeModal
+                    result={repurposeResult}
+                    onClose={() => setShowRepurposeModal(false)}
+                    onCopy={(text: string) => {
+                        copyToClipboard(text);
+                        showToast?.('Copied to clipboard!', 'success');
+                    }}
+                />
+            )}
+
+            {/* Content Gap Analysis Modal */}
+            {showGapAnalysisModal && contentGapAnalysis && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+                        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Content Gap Analysis</h2>
+                            <button
+                                onClick={() => setShowGapAnalysisModal(false)}
+                                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                            >
+                                <XMarkIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                            {contentGapAnalysis.summary && (
+                                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                                    <p className="text-blue-900 dark:text-blue-200">{contentGapAnalysis.summary}</p>
+                                </div>
+                            )}
+                            {contentGapAnalysis.gaps && contentGapAnalysis.gaps.length > 0 && (
+                                <div>
+                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Identified Gaps</h3>
+                                    <div className="space-y-3">
+                                        {contentGapAnalysis.gaps.map((gap: any, idx: number) => (
+                                            <div
+                                                key={idx}
+                                                className={`p-4 rounded-lg border ${
+                                                    gap.severity === 'high'
+                                                        ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                                                        : gap.severity === 'medium'
+                                                        ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
+                                                        : 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600'
+                                                }`}
+                                            >
+                                                <div className="flex items-start justify-between mb-2">
+                                                    <span className={`text-xs font-semibold px-2 py-1 rounded ${
+                                                        gap.severity === 'high'
+                                                            ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
+                                                            : gap.severity === 'medium'
+                                                            ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
+                                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                                    }`}>
+                                                        {gap.severity?.toUpperCase() || 'LOW'}
+                                                    </span>
+                                                    <span className="text-xs text-gray-500 dark:text-gray-400">{gap.type || 'Content Gap'}</span>
+                                                </div>
+                                                <p className="text-sm font-medium text-gray-900 dark:text-white mb-1">{gap.description}</p>
+                                                {gap.impact && <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">{gap.impact}</p>}
+                                                {gap.recommendation && <p className="text-xs text-gray-700 dark:text-gray-300">{gap.recommendation}</p>}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            {contentGapAnalysis.suggestions && contentGapAnalysis.suggestions.length > 0 && (
+                                <div>
+                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Content Suggestions to Fill Gaps</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {contentGapAnalysis.suggestions.map((suggestion: any, idx: number) => (
+                                            <div
+                                                key={idx}
+                                                className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-primary-300 dark:hover:border-primary-700 transition-colors"
+                                            >
+                                                <div className="flex items-start justify-between mb-2">
+                                                    <span className={`text-xs font-semibold px-2 py-1 rounded ${
+                                                        suggestion.priority === 'high'
+                                                            ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
+                                                            : suggestion.priority === 'medium'
+                                                            ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
+                                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                                    }`}>
+                                                        {suggestion.priority?.toUpperCase() || 'MEDIUM'}
+                                                    </span>
+                                                    <span className="text-xs text-gray-500 dark:text-gray-400">{suggestion.type || 'Suggestion'}</span>
+                                                </div>
+                                                <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">{suggestion.title}</h4>
+                                                {suggestion.captionOutline && <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">{suggestion.captionOutline}</p>}
+                                                <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-2">
+                                                    {suggestion.platform && <span>{suggestion.platform}</span>}
+                                                    {suggestion.format && (
+                                                        <>
+                                                            {suggestion.platform && <span>•</span>}
+                                                            <span>{suggestion.format}</span>
+                                                        </>
+                                                    )}
+                                                </div>
+                                                {suggestion.whyThisFillsGap && <p className="text-xs text-gray-700 dark:text-gray-300 italic">{suggestion.whyThisFillsGap}</p>}
+                                                {suggestion.trendRelevance && (
+                                                    <p className="text-xs text-primary-600 dark:text-primary-400 mt-1">
+                                                        🔥 {suggestion.trendRelevance}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+                            <button
+                                onClick={() => setShowGapAnalysisModal(false)}
+                                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

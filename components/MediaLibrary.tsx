@@ -379,6 +379,26 @@ export const MediaLibrary: React.FC = () => {
     }
   };
 
+  // Move single item to folder
+  const handleMoveToFolder = async (itemId: string, folderId: string) => {
+    if (!user) return;
+
+    try {
+      await updateDoc(doc(db, 'users', user.id, 'media_library', itemId), {
+        folderId,
+      });
+
+      setMediaItems(prev => prev.map(item =>
+        item.id === itemId ? { ...item, folderId } : item
+      ));
+
+      showToast('Item moved to folder', 'success');
+    } catch (error) {
+      console.error('Failed to move item:', error);
+      showToast('Failed to move item', 'error');
+    }
+  };
+
   const handleMoveItems = async (targetFolderId: string) => {
     if (!user || selectedItems.size === 0) return;
 
@@ -578,15 +598,31 @@ export const MediaLibrary: React.FC = () => {
                       </button>
                     </div>
                     {selectedItems.size > 0 && (
-                      <button
-                        onClick={handleBulkDelete}
-                        className="px-3 py-1 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md"
-                      >
-                        Delete {selectedItems.size} selected
-                      </button>
+                      <>
+                        <button
+                          onClick={() => setShowMoveModal(true)}
+                          className="px-3 py-1 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-md"
+                        >
+                          Move {selectedItems.size} selected
+                        </button>
+                        <button
+                          onClick={handleBulkDelete}
+                          className="px-3 py-1 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md"
+                        >
+                          Delete {selectedItems.size} selected
+                        </button>
+                      </>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
+                    {filteredItems.length > 0 && (
+                      <button
+                        onClick={handleSelectAll}
+                        className="px-3 py-1 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-md"
+                      >
+                        {selectedItems.size === filteredItems.length ? 'Deselect All' : 'Select All'}
+                      </button>
+                    )}
                     <span className="text-sm text-gray-600 dark:text-gray-400">
                       {filteredItems.length} items
                     </span>
@@ -688,7 +724,6 @@ export const MediaLibrary: React.FC = () => {
                           handleUseInCompose(item);
                         }}
                         className="p-2 bg-white dark:bg-gray-800 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 shadow-md"
-                        title="Use in Post"
                       >
                         <CheckCircleIcon className="w-4 h-4 text-primary-600 dark:text-primary-400" />
                       </button>
@@ -759,7 +794,6 @@ export const MediaLibrary: React.FC = () => {
             </div>
           </div>
         </div>
-        </div>
       </div>
 
       {/* Modals */}
@@ -775,10 +809,24 @@ export const MediaLibrary: React.FC = () => {
 
       <MoveToFolderModal
         isOpen={showMoveModal}
-        onClose={() => setShowMoveModal(false)}
+        onClose={() => {
+          setShowMoveModal(false);
+          setViewingItem(null);
+        }}
         folders={folders}
         currentFolderId={selectedFolderId}
-        onMove={handleMoveItems}
+        onMove={async (targetFolderId: string) => {
+          if (selectedItems.size === 1) {
+            // Single item move (from view modal)
+            const itemId = Array.from(selectedItems)[0];
+            await handleMoveToFolder(itemId, targetFolderId);
+            setViewingItem(null);
+            setSelectedItems(new Set());
+          } else {
+            // Bulk move
+            await handleMoveItems(targetFolderId);
+          }
+        }}
         itemCount={selectedItems.size}
       />
 
@@ -824,7 +872,7 @@ export const MediaLibrary: React.FC = () => {
                   </span>
                 )}
               </div>
-              <div className="mt-4 flex gap-2">
+              <div className="mt-4 flex gap-2 flex-wrap">
                 <button
                   onClick={() => {
                     handleUseInCompose(viewingItem);
@@ -833,6 +881,15 @@ export const MediaLibrary: React.FC = () => {
                   className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
                 >
                   Use in Post
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedItems(new Set([viewingItem.id]));
+                    setShowMoveModal(true);
+                  }}
+                  className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+                >
+                  Move to Folder
                 </button>
                 <button
                   onClick={() => {

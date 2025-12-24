@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { checkApiKeys, getVerifyAuth, withErrorHandling } from "./_errorHandler.js";
 import { getModelForTask } from "./_modelRouter.js";
 import { getModel, parseJSON } from "./_geminiShared.js";
+import { getOnlyFansResearchContext } from "./_onlyfansResearch.js";
 
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -62,6 +63,34 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
                              tone === 'Sexy / Bold' ||
                              (Array.isArray(platforms) && platforms.includes('OnlyFans'));
 
+    // Detect if this is for OnlyFans platform
+    const isOnlyFansPlatform = Array.isArray(platforms) && platforms.includes('OnlyFans');
+    
+    // Get OnlyFans-specific research if OnlyFans platform is detected
+    let onlyfansResearch = '';
+    if (isOnlyFansPlatform) {
+      try {
+        const { getAdminDb } = await import("./_firebaseAdmin.js");
+        const db = getAdminDb();
+        const userDoc = await db.collection("users").doc(user.uid).get();
+        const userData = userDoc.data();
+        const userPlan = userData?.plan || 'Free';
+        const userRole = userData?.role;
+        
+        onlyfansResearch = await getOnlyFansResearchContext(
+          'Subscribers', // Default audience for OnlyFans
+          goal,
+          user.uid,
+          userPlan,
+          userRole
+        );
+        console.log('[generateText] OnlyFans research context fetched');
+      } catch (error) {
+        console.error('[generateText] Error fetching OnlyFans research:', error);
+        // Continue without OnlyFans research - not critical
+      }
+    }
+
     const explicitContext = isExplicitContent ? `
 CRITICAL CONTEXT - EXPLICIT/ADULT CONTENT:
 - This content is for an adult content platform (creator monetization platform)
@@ -81,6 +110,8 @@ User wants you to write: "${prompt}"
 ${context?.goal ? `Goal: ${goal}` : ''}
 ${context?.tone ? `Tone: ${tone}${isExplicitContent ? ' (EXPLICIT/ADULT CONTENT - Generate bold, explicit content as requested)' : ''}` : ''}
 ${platformContext ? `Platforms: ${platformContext}` : ''}
+
+${onlyfansResearch ? `ONLYFANS-SPECIFIC RESEARCH & BEST PRACTICES:\n${onlyfansResearch}\n` : ''}
 
 ${explicitContext}
 

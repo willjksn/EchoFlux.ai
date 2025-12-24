@@ -55,6 +55,7 @@ import {
 } from "../../constants";
 
 import { categorizeMessage } from "../../src/services/geminiService";
+import { checkAllUsageLimits } from "../../src/utils/usageNotifications";
 
 
 /*--------------------------------------------------------------------
@@ -173,6 +174,62 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     Facebook: null,
     Pinterest: null,
   });
+
+  /*--------------------------------------------------------------------
+    USAGE LIMIT NOTIFICATIONS
+  --------------------------------------------------------------------*/
+  // State for usage stats (for strategy notifications)
+  const [usageStatsForNotifications, setUsageStatsForNotifications] = useState<{
+    strategy: { count: number; limit: number; remaining: number };
+  } | null>(null);
+
+  // Fetch usage stats periodically for strategy notifications
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const fetchUsageStats = async () => {
+      try {
+        const { auth } = await import('../../firebaseConfig');
+        const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+        const response = await fetch('/api/getUsageStats', {
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setUsageStatsForNotifications({ strategy: data.strategy });
+        }
+      } catch (error) {
+        console.error('Failed to fetch usage stats for notifications:', error);
+      }
+    };
+
+    // Fetch immediately and then every 5 minutes
+    fetchUsageStats();
+    const interval = setInterval(fetchUsageStats, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [user?.id]);
+
+  // Check usage limits when user data changes
+  useEffect(() => {
+    if (!user) return;
+
+    // Check for usage limit notifications using functional update to avoid dependency issues
+    setNotifications(prevNotifications => {
+      const newNotifications = checkAllUsageLimits(user, prevNotifications, usageStatsForNotifications);
+      
+      if (newNotifications.length > 0) {
+        // Add new notifications, avoiding duplicates
+        const existingIds = new Set(prevNotifications.map(n => n.id));
+        const toAdd = newNotifications.filter(n => !existingIds.has(n.id));
+        return [...toAdd, ...prevNotifications];
+      }
+      
+      return prevNotifications;
+    });
+  }, [user?.monthlyCaptionGenerationsUsed, user?.monthlyImageGenerationsUsed, user?.monthlyVideoGenerationsUsed, user?.plan, user?.id, usageStatsForNotifications]);
 
   /*--------------------------------------------------------------------
     SEEDING HELPERS

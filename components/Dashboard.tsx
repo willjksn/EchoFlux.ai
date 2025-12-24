@@ -26,15 +26,36 @@ const FilterButton: React.FC<{ isActive: boolean; onClick: () => void; children?
 const QuickAction: React.FC<{ icon: React.ReactNode; label: string; onClick: () => void; color: string }> = ({ icon, label, onClick, color }) => (
     <button onClick={onClick} className={`flex flex-col items-center justify-center p-4 rounded-xl bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-all group w-full sm:w-auto sm:min-w-[140px]`}><div className={`p-3 rounded-full mb-3 text-white transition-transform group-hover:scale-110 flex items-center justify-center ${color}`}>{icon}</div><span className="text-sm font-medium text-gray-700 dark:text-gray-300 text-center">{label}</span></button>
 );
-const UpcomingEventCard: React.FC<{ event: CalendarEvent; onClick: () => void }> = ({ event, onClick }) => (
-    <div onClick={onClick} className="flex items-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700 shadow-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"><div className="flex-shrink-0 w-12 h-12 bg-primary-50 dark:bg-primary-900/30 rounded-md flex flex-col items-center justify-center text-primary-600 dark:text-primary-400 mr-3"><span className="text-xs font-bold uppercase">{new Date(event.date).toLocaleDateString('en-US', { month: 'short' })}</span><span className="text-lg font-bold">{new Date(event.date).getDate()}</span></div><div className="flex-1 min-w-0"><p className="text-sm font-medium text-gray-900 dark:text-white truncate">{event.title}</p><div className="flex items-center mt-1"><span className="text-xs text-gray-500 dark:text-gray-400 mr-2 font-medium">{new Date(event.date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span><span className="text-gray-400 mr-2 scale-75">{platformFilterIcons[event.platform]}</span><span className={`text-xs px-2 py-0.5 rounded-full ${event.status === 'Scheduled' ? 'bg-blue-100 text-blue-700' : event.status === 'Published' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{event.status}</span></div></div></div>
-);
+const UpcomingEventCard: React.FC<{ event: CalendarEvent; onClick: () => void }> = ({ event, onClick }) => {
+  // Safely get platform icon - handle OnlyFans and other non-standard platforms
+  const platformIcon = event.platform && platformFilterIcons[event.platform as Platform] 
+    ? platformFilterIcons[event.platform as Platform] 
+    : <span className="text-xs">📅</span>; // Fallback icon
+  
+  return (
+    <div onClick={onClick} className="flex items-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700 shadow-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+      <div className="flex-shrink-0 w-12 h-12 bg-primary-50 dark:bg-primary-900/30 rounded-md flex flex-col items-center justify-center text-primary-600 dark:text-primary-400 mr-3">
+        <span className="text-xs font-bold uppercase">{new Date(event.date).toLocaleDateString('en-US', { month: 'short' })}</span>
+        <span className="text-lg font-bold">{new Date(event.date).getDate()}</span>
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{event.title}</p>
+        <div className="flex items-center mt-1">
+          <span className="text-xs text-gray-500 dark:text-gray-400 mr-2 font-medium">{new Date(event.date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+          <span className="text-gray-400 mr-2 scale-75">{platformIcon}</span>
+          <span className={`text-xs px-2 py-0.5 rounded-full ${event.status === 'Scheduled' ? 'bg-blue-100 text-blue-700' : event.status === 'Published' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{event.status}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export const Dashboard: React.FC = () => {
   const { messages, selectedClient, user, dashboardNavState, clearDashboardNavState, settings, setSettings, setActivePage, calendarEvents, posts, setComposeContext, updateMessage, deleteMessage, categorizeAllMessages, openCRM, ensureCRMProfile, setUser, socialAccounts, showToast } = useAppContext();
   const [comparisonView, setComparisonView] = useState<'WoW' | 'MoM'>('WoW');
   const [isUpdatingStats, setIsUpdatingStats] = useState(false);
   const [isPlanningWeek, setIsPlanningWeek] = useState(false);
+  const [weeklyPlanUsage, setWeeklyPlanUsage] = useState<{ count: number; limit: number; remaining: number } | null>(null);
   const [weeklySuggestions, setWeeklySuggestions] = useState<
     Array<{
       date: string;
@@ -106,27 +127,59 @@ export const Dashboard: React.FC = () => {
     return user?.userType === 'Business';
   }, [selectedClient, user?.role, user?.userType]);
   
-  // Filter calendar events: only show Scheduled posts with media, exclude Published (same as Calendar page)
+  // Derive calendar events from posts - excludes OnlyFans posts (they only show in OnlyFans Studio calendar)
+  // When posts are deleted, events automatically disappear from both Calendar and Dashboard
   const filteredCalendarEvents = useMemo(() => {
-    return calendarEvents.filter(evt => {
-      // Only show Scheduled events (not Published or Draft)
-      if (evt.status !== 'Scheduled') return false;
-      
-      // Find associated post
-      const associatedPost = posts.find(p => {
-        if (evt.id.includes(p.id) || p.id.includes(evt.id.replace('cal-', '').replace('-calendar', ''))) {
-          return true;
-        }
-        if (p.content && evt.title && p.content.includes(evt.title.substring(0, 30))) {
-          return true;
-        }
-        return false;
+    // Get all posts that have scheduledDate - include Scheduled, Published, and Draft posts (for consistency with Calendar)
+    // Exclude OnlyFans posts - they should only appear in OnlyFans Studio calendar
+    const scheduledPosts = posts.filter(p => 
+      p.scheduledDate && 
+      (p.status === 'Scheduled' || p.status === 'Published' || p.status === 'Draft') && // Include Scheduled, Published, and Draft posts
+      (p.mediaUrl || p.mediaUrls) && // Must have media (either single or multiple)
+      !(p.platforms && (p.platforms as any[]).includes('OnlyFans')) // Exclude OnlyFans posts
+    );
+    
+    // Create calendar events from posts (same format as Calendar component)
+    // This ensures Dashboard and Calendar are always in sync - both derive from the same posts array
+    const eventsFromPosts: CalendarEvent[] = scheduledPosts.flatMap(post => {
+      const platforms = post.platforms || [];
+      return platforms.map((platform, idx) => {
+        const eventDate = post.scheduledDate || new Date().toISOString();
+        return {
+          id: `post-${post.id}-${platform}-${idx}`,
+          title: post.content?.substring(0, 30) + '...' || 'Post',
+          date: eventDate,
+          type: post.mediaType === 'video' ? 'Reel' : 'Post',
+          platform: platform as Platform, // Cast to Platform (OnlyFans will need special handling)
+          status: post.status as 'Scheduled' | 'Published' | 'Draft',
+          thumbnail: post.mediaUrl || undefined,
+        };
       });
-      
-      // Only show if post has media
-      return associatedPost ? !!associatedPost.mediaUrl : !!evt.thumbnail;
     });
-  }, [calendarEvents, posts]);
+    
+    // Also include events from calendarEvents context (exclude OnlyFans events)
+    const eventsFromContext: CalendarEvent[] = (calendarEvents || []).filter(e => {
+      // Exclude OnlyFans platform events
+      if (e.platform === 'OnlyFans' || (e.platform as any) === 'OnlyFans') return false;
+      // Include scheduled, published, and draft events with future dates
+      if (e.status !== 'Scheduled' && e.status !== 'Published' && e.status !== 'Draft') return false;
+      if (!e.date) return false;
+      try {
+        const eventDate = new Date(e.date);
+        return eventDate.getTime() > new Date().getTime();
+      } catch {
+        return false;
+      }
+    });
+    
+    // Combine and deduplicate by ID
+    const allEvents = [...eventsFromPosts, ...eventsFromContext];
+    const uniqueEvents = allEvents.filter((event, index, self) => 
+      index === self.findIndex(e => e.id === event.id)
+    );
+    
+    return uniqueEvents;
+  }, [posts, calendarEvents]);
   
   // Calculate today's highlights
   const todaysHighlights = useMemo(() => {
@@ -220,10 +273,46 @@ export const Dashboard: React.FC = () => {
     };
   }, []);
 
+  // Load weekly plan usage stats
+  const loadWeeklyPlanUsage = async () => {
+    if (!user?.id) return;
+    try {
+      const { auth } = await import('../firebaseConfig');
+      const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+      const response = await fetch('/api/getUsageStats', {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.weeklyPlan) {
+          setWeeklyPlanUsage(data.weeklyPlan);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load weekly plan usage:', error);
+    }
+  };
+
+  // Load usage stats on mount
+  useEffect(() => {
+    if (user?.id) {
+      loadWeeklyPlanUsage();
+    }
+  }, [user?.id]);
+
   // Plan My Week - uses new /api/planMyWeek endpoint (requires auth)
   const handlePlanMyWeek = async () => {
     if (!user) {
       showToast('Please sign in again to plan your week.', 'error');
+      return;
+    }
+
+    // Check if Free plan has reached limit
+    if (user.plan === 'Free' && weeklyPlanUsage && weeklyPlanUsage.remaining <= 0) {
+      showToast(`You've used your 1 free weekly plan this month. Upgrade to Pro or Elite for more weekly plans.`, 'info');
+      setActivePage('pricing');
       return;
     }
 
@@ -251,8 +340,22 @@ export const Dashboard: React.FC = () => {
           generatedAt: new Date().toISOString()
         }));
         setWeeklySuggestions(data.suggestions);
+        // Update usage stats
+        if (data.remaining !== undefined && weeklyPlanUsage) {
+          setWeeklyPlanUsage({
+            ...weeklyPlanUsage,
+            count: weeklyPlanUsage.count + 1,
+            remaining: data.remaining,
+          });
+        } else {
+          loadWeeklyPlanUsage(); // Reload if not provided
+        }
         showToast?.('Weekly plan generated. Review your suggested content pack below.', 'success');
       } else {
+        if (data.note && data.note.includes('limit')) {
+          // Limit reached - reload usage stats
+          loadWeeklyPlanUsage();
+        }
         showToast?.(data.note || data.error || 'Could not generate your weekly plan. Please try again.', 'error');
       }
     } catch (err: any) {
@@ -338,16 +441,30 @@ export const Dashboard: React.FC = () => {
   
   const upcomingEvents = useMemo(() => {
       const now = new Date();
-      // Use filtered calendar events (only Scheduled with media)
-      // Filter events that are scheduled for future dates/times
-      return filteredCalendarEvents
+      // Use filtered calendar events (only Scheduled and Published posts, exclude Draft)
+      // Filter events that are scheduled for future dates/times (exclude past events)
+      // Show the next 3 events regardless of how far out they are
+      const futureEvents = filteredCalendarEvents
         .filter(e => {
+          // Only show Scheduled and Published posts (exclude Draft posts from upcoming schedule)
+          if (e.status === 'Draft') return false;
+          
           if (!e.date) return false;
           try {
             const eventDate = new Date(e.date);
-            // Only show events that are scheduled for now or in the future
-            // Use >= to include events scheduled for the current moment
-            return eventDate.getTime() >= now.getTime();
+            // Only show events that are scheduled for the future (not past)
+            // Use > (not >=) to exclude events that have already passed
+            const isFuture = eventDate.getTime() > now.getTime();
+            if (!isFuture) {
+              console.log('Dashboard: Filtered out past event:', {
+                id: e.id,
+                date: e.date,
+                eventDate: eventDate.toISOString(),
+                now: now.toISOString(),
+                diff: eventDate.getTime() - now.getTime()
+              });
+            }
+            return isFuture;
           } catch (error) {
             console.error('Error parsing event date:', e.date, error);
             return false;
@@ -357,12 +474,27 @@ export const Dashboard: React.FC = () => {
           try {
             const dateA = new Date(a.date).getTime();
             const dateB = new Date(b.date).getTime();
-            return dateA - dateB;
+            return dateA - dateB; // Sort ascending (earliest first)
           } catch (error) {
             return 0;
           }
-        })
-        .slice(0, 3);
+        });
+      
+      // Debug logging
+      console.log('Dashboard: Upcoming events calculation:', {
+        totalFilteredEvents: filteredCalendarEvents.length,
+        futureEventsCount: futureEvents.length,
+        next3Events: futureEvents.slice(0, 3).map(e => ({
+          id: e.id,
+          title: e.title,
+          date: e.date,
+          status: e.status,
+          dateFormatted: new Date(e.date).toLocaleString()
+        }))
+      });
+      
+      // Return the next 3 events (regardless of how far out)
+      return futureEvents.slice(0, 3);
   }, [filteredCalendarEvents]);
 
   const accountName = selectedClient ? selectedClient.name : 'Main Account';
@@ -396,7 +528,7 @@ export const Dashboard: React.FC = () => {
             </div>
             <div className="flex items-center gap-2 text-xs text-primary-100/80">
               <SparklesIcon className="w-4 h-4" />
-              <span>Best flow: Strategy → Autopilot → Workflow → Calendar</span>
+              <span>Best flow: Strategy → Compose → Calendar</span>
             </div>
           </div>
 
@@ -472,24 +604,30 @@ export const Dashboard: React.FC = () => {
           </div>
 
           {/* Content Gap Analysis Widget */}
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Content Intelligence</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  Analyze your content mix and identify gaps
-                </p>
+          {user?.plan !== 'Free' && (
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">Content Intelligence</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Analyze your content mix and identify gaps
+                  </p>
+                </div>
               </div>
+              <ContentGapAnalysis />
             </div>
-            <ContentGapAnalysis />
-          </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* Upcoming Schedule */}
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+              <div className={`bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 ${user?.plan === 'Free' ? 'opacity-50' : ''}`}>
                    <div className="flex items-center justify-between mb-4">
                         <h3 className="text-lg font-bold text-gray-900 dark:text-white">Upcoming Schedule</h3>
-                        <button onClick={() => setActivePage('calendar')} className="text-sm text-primary-600 hover:underline">View Calendar</button>
+                        {user?.plan === 'Free' ? (
+                          <span className="text-sm text-gray-400 dark:text-gray-500 cursor-not-allowed">View Calendar</span>
+                        ) : (
+                          <button onClick={() => setActivePage('calendar')} className="text-sm text-primary-600 hover:underline">View Calendar</button>
+                        )}
                    </div>
                    <div className="space-y-3">
                         {upcomingEvents.length > 0 ? (
@@ -497,7 +635,11 @@ export const Dashboard: React.FC = () => {
                         ) : (
                             <div className="text-center py-8 bg-gray-50 dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
                                 <p className="text-gray-500 text-sm">No upcoming planned content.</p>
-                                <button onClick={() => setActivePage('strategy')} className="mt-2 text-primary-600 text-sm font-medium">Start a content plan</button>
+                                {user?.plan === 'Free' ? (
+                                    <span className="mt-2 text-gray-400 dark:text-gray-500 text-sm cursor-not-allowed">Start a content plan</span>
+                                ) : (
+                                    <button onClick={() => setActivePage('strategy')} className="mt-2 text-primary-600 text-sm font-medium">Start a content plan</button>
+                                )}
                             </div>
                         )}
                    </div>
@@ -507,14 +649,25 @@ export const Dashboard: React.FC = () => {
               <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                    <div className="flex items-center justify-between mb-4">
                         <h3 className="text-lg font-bold text-gray-900 dark:text-white">AI Weekly Plan</h3>
-                        <button
-                          onClick={handlePlanMyWeek}
-                          disabled={isPlanningWeek}
-                          className="text-sm text-primary-600 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {isPlanningWeek ? 'Planning…' : 'Regenerate'}
-                        </button>
+                        {user?.plan === 'Free' && weeklyPlanUsage && weeklyPlanUsage.remaining <= 0 ? (
+                          <span className="text-sm text-gray-400 dark:text-gray-500 cursor-not-allowed">Limit Reached</span>
+                        ) : (
+                          <button
+                            onClick={handlePlanMyWeek}
+                            disabled={isPlanningWeek || (user?.plan === 'Free' && weeklyPlanUsage && weeklyPlanUsage.remaining <= 0)}
+                            className="text-sm text-primary-600 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {isPlanningWeek ? 'Planning…' : 'Regenerate'}
+                          </button>
+                        )}
                    </div>
+                   {user?.plan === 'Free' && weeklyPlanUsage && (
+                     <div className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+                       {weeklyPlanUsage.remaining > 0 
+                         ? `${weeklyPlanUsage.remaining} weekly plan${weeklyPlanUsage.remaining === 1 ? '' : 's'} remaining this month`
+                         : 'Monthly limit reached. Upgrade to Pro or Elite for more weekly plans.'}
+                     </div>
+                   )}
                    <div className="space-y-3">
                         {isPlanningWeek && (
                           <p className="text-sm text-gray-500 dark:text-gray-400">EchoFlux.ai is planning your week…</p>
@@ -522,12 +675,22 @@ export const Dashboard: React.FC = () => {
                         {!isPlanningWeek && weeklySuggestions.length === 0 && (
                           <div className="text-center py-8 bg-gray-50 dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
                               <p className="text-gray-500 text-sm">Let the assistant suggest a content pack for the next 7 days.</p>
-                              <button
-                                onClick={handlePlanMyWeek}
-                                className="mt-2 inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700"
-                              >
-                                Plan my week
-                              </button>
+                              {user?.plan === 'Free' && weeklyPlanUsage && weeklyPlanUsage.remaining <= 0 ? (
+                                <button
+                                  onClick={() => setActivePage('pricing')}
+                                  className="mt-2 inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700"
+                                >
+                                  Upgrade for More Weekly Plans
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={handlePlanMyWeek}
+                                  disabled={isPlanningWeek || (user?.plan === 'Free' && weeklyPlanUsage && weeklyPlanUsage.remaining <= 0)}
+                                  className="mt-2 inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  Plan my week
+                                </button>
+                              )}
                           </div>
                         )}
                         {!isPlanningWeek && weeklySuggestions.length > 0 && (
@@ -584,6 +747,9 @@ export const Dashboard: React.FC = () => {
                     {currentStats && Object.entries(currentStats)
                       // For Free plan, only show the first connected social account
                       .filter(([platform, stats], index) => {
+                        if (!stats || typeof stats.followers !== 'number') {
+                          return false;
+                        }
                         if (user?.plan === 'Free') {
                           // Only show the first connected account
                           return index === 0;
@@ -591,7 +757,7 @@ export const Dashboard: React.FC = () => {
                         return true;
                       })
                       .map(([platform, stats]) => {
-                      const trend = calculateTrend(stats.followers, platform);
+                      const trend = calculateTrend(stats?.followers || 0, platform);
                       return (
                        <div key={platform} className="relative overflow-hidden p-4 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700/50 dark:to-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-600 hover:shadow-md transition-all">
                           <div className="flex items-start justify-between mb-2">
@@ -606,7 +772,7 @@ export const Dashboard: React.FC = () => {
                             ) : null}
                           </div>
                           <div>
-                             <p className="text-2xl font-bold text-gray-900 dark:text-white">{new Intl.NumberFormat('en-US', { notation: "compact" }).format(stats.followers)}</p>
+                             <p className="text-2xl font-bold text-gray-900 dark:text-white">{new Intl.NumberFormat('en-US', { notation: "compact" }).format(stats?.followers || 0)}</p>
                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{isBusiness ? 'Potential Reach' : 'Followers'}</p>
                           </div>
                        </div>
@@ -969,7 +1135,7 @@ export const Dashboard: React.FC = () => {
               {/* Goals & Milestones Widget */}
               {(() => {
               // Calculate goals progress using user-defined goals or defaults
-              const currentFollowers = currentStats ? Object.values(currentStats).reduce((sum, stats) => sum + stats.followers, 0) : 0;
+              const currentFollowers = currentStats ? Object.values(currentStats).reduce((sum, stats) => sum + (stats?.followers || 0), 0) : 0;
               const goalFollowers = user?.goals?.followerGoal || Math.ceil(currentFollowers * 1.5); // kept for future analytics-focused mode
               const followersProgress = goalFollowers > 0 ? Math.min((currentFollowers / goalFollowers) * 100, 100) : 0;
               
@@ -1327,8 +1493,8 @@ export const Dashboard: React.FC = () => {
               if (user?.plan !== 'Free') {
                 recommendations.push({
                   type: 'tip',
-                  title: 'Try Quick Post Automation',
-                  description: 'Upload images or videos and let AI automatically create captions, hashtags, and schedule posts at optimal times.',
+                  title: 'Try AI Content Generation',
+                  description: 'Upload images or videos and let AI automatically generate captions and hashtags tailored to your content and platforms.',
                   action: () => setActivePage('automation'),
                   actionLabel: 'Try Automation'
                 });
@@ -2169,7 +2335,7 @@ export const Dashboard: React.FC = () => {
             
             // Revenue per follower
             const currentStats = user?.socialStats || {};
-            const totalFollowers = currentStats ? Object.values(currentStats).reduce((sum, stats) => sum + stats.followers, 0) : 0;
+            const totalFollowers = currentStats ? Object.values(currentStats).reduce((sum, stats) => sum + (stats?.followers || 0), 0) : 0;
             const revenuePerFollower = totalFollowers > 0 
               ? (estimatedRevenue / totalFollowers).toFixed(2)
               : '0';
@@ -2309,7 +2475,7 @@ export const Dashboard: React.FC = () => {
           {isBusiness && user?.plan !== 'Agency' && (() => {
             // Calculate funnel metrics from available data
             const currentStats = user?.socialStats || {};
-            const totalReach = currentStats ? Object.values(currentStats).reduce((sum, stats) => sum + stats.followers, 0) : 0;
+            const totalReach = currentStats ? Object.values(currentStats).reduce((sum, stats) => sum + (stats?.followers || 0), 0) : 0;
             
             // Estimate traffic based on reach (mock calculation)
             const traffic = Math.floor(totalReach * 1.2); // Assume 20% more traffic than reach

@@ -320,7 +320,7 @@ export interface Notification {
   text: string;
   timestamp: string;
   read: boolean;
-  messageId: string; 
+  messageId?: string; // Optional - used for DM/comment links, or usage limit notifications
 }
 
 export type DashboardFilters = {
@@ -451,6 +451,9 @@ export interface ComposeContextData {
     platform?: Platform;
     type?: 'Post' | 'Story' | 'Reel' | 'image' | 'video';
     date?: string;
+    captionText?: string;
+    hashtags?: string;
+    generatedCaptions?: Array<{ caption: string; hashtags: string[] }>;
 }
 
 export interface MusicTrack {

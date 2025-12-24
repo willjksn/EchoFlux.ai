@@ -1,57 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { CheckIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
-import { Page } from '../types';
+import { Page, Plan } from '../types';
 
 interface PricingProps {
     onGetStartedClick?: () => void;
     onNavigateRequest?: (page: Page) => void;
 }
 
-const creatorTiers = [
+// All available plans (hidden plans commented out for future use)
+const allCreatorTiers = [
     {
         name: 'Free',
         priceMonthly: 0,
         priceAnnually: 0,
         description: 'For individuals testing the studio.',
         features: [
-            '1 active campaign',
-            'Basic Strategy & Autopilot access',
-            '25 AI captions / month',
+            '1 AI strategy generation / month (basic)',
+            '10 AI captions / month',
             'Basic Link-in-Bio (1 link)',
+            'Media Library',
             '100 MB Storage'
-        ],
-        isRecommended: false
-    },
-    {
-        name: 'Caption',
-        displayName: 'Caption Pro',
-        priceMonthly: 9,
-        priceAnnually: 7,
-        description: 'Perfect for caption writing.',
-        features: [
-            '100 AI captions / month',
-            'Trending hashtags (all platforms)',
-            'Tone & goal customization',
-            'AI Training',
-            'Basic Link-in-Bio (1 link)'
-        ],
-        isRecommended: false
-    },
-    {
-        name: 'OnlyFansStudio',
-        displayName: 'OnlyFans Studio',
-        priceMonthly: 24,
-        priceAnnually: 19,
-        description: 'AI content planning for premium creators.',
-        features: [
-            'OnlyFans Studio access',
-            'OF-specific AI captions & prompts',
-            'Content planning & calendars',
-            'Roleplay & interactive ideas',
-            'Media organization',
-            'Export content packages',
-            'Cross-platform teaser generator'
         ],
         isRecommended: false
     },
@@ -61,12 +30,14 @@ const creatorTiers = [
         priceAnnually: 23,
         description: 'For creators scaling their brand.',
         features: [
-            'Up to 3 active campaigns',
             'AI Content Strategist',
-            'Autopilot content packs',
+            '2 AI strategy generations / month',
+            'Live trend research included (16 searches/month)',
             '500 AI captions / month',
+            'Link-in-Bio Builder (5 links)',
             'Media Library',
             'Visual Content Calendar',
+            'AI Voice Assistant',
             '5 GB Storage'
         ],
         isRecommended: true
@@ -77,47 +48,110 @@ const creatorTiers = [
         priceAnnually: 47,
         description: 'For professional & OF creators.',
         features: [
-            'Unlimited active campaigns',
-            'Advanced Strategy & Autopilot options',
+            'Advanced Strategy options',
+            '5 AI strategy generations / month',
+            'Enhanced live trend research (40 searches/month)',
             '1,500 AI captions / month',
-            'Workflow board & approvals',
+            'Link-in-Bio Builder (unlimited links)',
             'Media Library',
+            'Visual Content Calendar',
+            'AI Voice Assistant',
             '10 GB Storage',
             'OnlyFans Studio (included)'
         ],
         isRecommended: false
     },
-    {
-        name: 'Agency',
-        priceMonthly: 299,
-        priceAnnually: 239,
-        description: 'For agencies managing clients.',
-        features: [
-            'Unlimited Accounts',
-            '2,000 AI Replies / month',
-            '10,000 AI Captions / month*',
-            'AI Content Strategist',
-            'Quick Post Automation',
-            'Media Library',
-            '5 GB Storage',
-            'Client Workflows',
-            'Team Management',
-            'White-labeling',
-            'Advanced Analytics',
-            'OnlyFans Studio'
-        ],
-        isRecommended: false
-    },
+    // Hidden plans - will be available in future updates
+    // {
+    //     name: 'Caption',
+    //     displayName: 'Caption Pro',
+    //     priceMonthly: 9,
+    //     priceAnnually: 7,
+    //     description: 'Perfect for caption writing.',
+    //     features: [
+    //         '100 AI captions / month',
+    //         'Trending hashtags (all platforms)',
+    //         'Tone & goal customization',
+    //         'AI Training',
+    //         'Basic Link-in-Bio (1 link)'
+    //     ],
+    //     isRecommended: false
+    // },
+    // {
+    //     name: 'OnlyFansStudio',
+    //     displayName: 'OnlyFans Studio',
+    //     priceMonthly: 24,
+    //     priceAnnually: 19,
+    //     description: 'AI content planning for premium creators.',
+    //     features: [
+    //         'OnlyFans Studio access',
+    //         'OF-specific AI captions & prompts',
+    //         'Content planning & calendars',
+    //         'Roleplay & interactive ideas',
+    //         'Media organization',
+    //         'Export content packages',
+    //         'Cross-platform teaser generator'
+    //     ],
+    //     isRecommended: false
+    // },
+    // {
+    //     name: 'Agency',
+    //     priceMonthly: 299,
+    //     priceAnnually: 239,
+    //     description: 'For agencies managing clients.',
+    //     features: [
+    //         'Unlimited Accounts',
+    //         '2,000 AI Replies / month',
+    //         '10,000 AI Captions / month*',
+    //         'AI Content Strategist',
+    //         'AI Content Generation',
+    //         'Media Library',
+    //         '5 GB Storage',
+    //         'Client Workflows',
+    //         'Team Management',
+    //         'White-labeling',
+    //         'Advanced Analytics',
+    //         'OnlyFans Studio'
+    //     ],
+    //     isRecommended: false
+    // },
 ];
 
+// Only show Free, Pro, and Elite plans
+const creatorTiers = allCreatorTiers.filter(tier => ['Free', 'Pro', 'Elite'].includes(tier.name));
+
 export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateRequest }) => {
-    const { user, openPaymentModal, setActivePage, isAuthenticated, pricingView, setPricingView, showToast } = useAppContext();
+    const { user, openPaymentModal, setActivePage, isAuthenticated, pricingView, setPricingView, showToast, setUser, setSelectedPlan } = useAppContext();
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'annually'>('monthly');
-    const [promoCode, setPromoCode] = useState('');
     // Initialize view from context or userType, default to Creator
     const initialView = 'Creator';
     // Business view is hidden for now; keep type simple to avoid toggles.
     const [view, setView] = useState<'Creator'>(initialView);
+    
+    // Handle Stripe success/cancel redirects
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const success = urlParams.get('success');
+        const canceled = urlParams.get('canceled');
+        const sessionId = urlParams.get('session_id');
+
+        if (success === 'true' && sessionId) {
+            showToast('Payment successful! Your subscription is being activated...', 'success');
+            // Webhook will update the plan, but we can refresh user data
+            setTimeout(() => {
+                if (user) {
+                    // Refresh user data to get updated plan
+                    window.location.reload();
+                }
+            }, 2000);
+            // Clean URL
+            window.history.replaceState({}, '', window.location.pathname);
+        } else if (canceled === 'true') {
+            showToast('Payment canceled. You can try again anytime.', 'info');
+            // Clean URL
+            window.history.replaceState({}, '', window.location.pathname);
+        }
+    }, [user, showToast]);
     
     // Update view when pricingView changes (e.g., from Settings)
     useEffect(() => {
@@ -161,56 +195,22 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
                             Annually <span className="text-sm text-green-500 font-semibold">(Save 20%)</span>
                         </span>
                     </div>
-                    {/* Promotion Code Input */}
-                    <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
-                        <input
-                            type="text"
-                            value={promoCode}
-                            onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-                            placeholder="Enter promotion code"
-                            className="w-full sm:w-auto px-4 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                        />
-                        <button
-                            onClick={() => {
-                                if (!promoCode.trim()) {
-                                    showToast('Please enter a promotion code', 'error');
-                                    return;
-                                }
-                                if (!isAuthenticated) {
-                                    showToast('Please sign in to apply promotion code', 'error');
-                                    return;
-                                }
-                                showToast('Promotion code will be applied at checkout', 'success');
-                            }}
-                            className="w-full sm:w-auto px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors whitespace-nowrap"
-                        >
-                            Apply
-                        </button>
-                    </div>
                 </div>
 
                 <div className="mt-10 grid gap-6 grid-cols-1 md:grid-cols-3 max-w-4xl mx-auto">
                     {pricingTiers.map((tier) => {
                         const isCurrentPlan = currentPlan === tier.name;
-                        const isAgency = tier.name === 'Agency';
                         const price = billingCycle === 'monthly' ? tier.priceMonthly : tier.priceAnnually;
                         
                         const handleButtonClick = () => {
                             if (isCurrentPlan) return;
-                            if (isAgency) {
-                                if (isAuthenticated && setActivePage) setActivePage('contact');
-                                else if (onNavigateRequest) onNavigateRequest('contact');
-                                return;
-                            }
                             if (!isAuthenticated && onGetStartedClick) {
+                                // When clicking a plan on landing page, store selected plan and open signup modal
+                                setSelectedPlan(tier.name as Plan);
                                 onGetStartedClick();
                                 return;
                             }
                             if(isAuthenticated) {
-                                // Store promo code in localStorage if entered
-                                if (promoCode) {
-                                    localStorage.setItem('pendingPromoCode', promoCode);
-                                }
                                 openPaymentModal({ name: tier.name, price, cycle: billingCycle });
                             }
                         };
@@ -218,29 +218,21 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
                         let buttonText = 'Choose Plan';
                         if (!isAuthenticated && tier.priceMonthly === 0) buttonText = 'Start for free';
                         if (isCurrentPlan) buttonText = 'Current Plan';
-                        if (isAgency) buttonText = 'Call for Quote';
 
                         return (
                             <div key={tier.name} className={`relative flex flex-col p-6 rounded-2xl shadow-lg transition-transform hover:-translate-y-1 ${tier.isRecommended ? 'bg-white dark:bg-gray-800 ring-2 ring-primary-500' : 'bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700'}`}>
                                 {tier.isRecommended && !isCurrentPlan && (
-                                    <div className="absolute top-0 -translate-y-1/2 w-full flex justify-center left-0">
+                                    <div className="absolute top-0 -translate-y-1/2 w-full flex justify-center left-0 z-10">
                                         <span className="px-4 py-1 text-xs font-semibold tracking-wider text-white uppercase bg-primary-500 rounded-full shadow-sm">Most Popular</span>
                                     </div>
                                 )}
-                                <h3 className="text-xl font-bold text-gray-900 dark:text-white">{(tier as any).displayName || tier.name}</h3>
+                                <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-4">{(tier as any).displayName || tier.name}</h3>
                                 <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 h-10">{tier.description}</p>
-                                {isAgency && (
-                                    <p className="mt-1 text-xs text-gray-400 dark:text-gray-500 italic">*10,000 captions/month included. Overage fees apply. See Terms for details.</p>
-                                )}
                                 <div className="mt-6">
-                                    {isAgency ? (
-                                        <span className="text-4xl font-extrabold text-gray-900 dark:text-white">Call for Quote</span>
-                                    ) : (
-                                        <>
-                                            <span className="text-4xl font-extrabold text-gray-900 dark:text-white">${price}</span>
-                                            <span className="text-base font-medium text-gray-500 dark:text-gray-400">/{billingCycle === 'monthly' ? 'mo' : 'yr'}</span>
-                                        </>
-                                    )}
+                                    <>
+                                        <span className="text-4xl font-extrabold text-gray-900 dark:text-white">${price}</span>
+                                        <span className="text-base font-medium text-gray-500 dark:text-gray-400">/{billingCycle === 'monthly' ? 'mo' : 'yr'}</span>
+                                    </>
                                 </div>
                                 <ul className="mt-6 space-y-4 flex-1">
                                     {tier.features.map((feature) => (
@@ -260,9 +252,7 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
                                     className={`mt-8 block w-full py-3 px-6 border border-transparent rounded-md text-center font-medium transition-colors ${ 
                                         isCurrentPlan 
                                             ? 'bg-gray-100 text-gray-400 cursor-default dark:bg-gray-700 dark:text-gray-500' 
-                                            : isAgency 
-                                                ? 'bg-gray-900 text-white hover:bg-black dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100' 
-                                                : tier.isRecommended 
+                                            : tier.isRecommended 
                                                     ? 'bg-primary-600 text-white hover:bg-primary-700 shadow-md' 
                                                     : 'bg-primary-50 text-primary-700 hover:bg-primary-100 dark:bg-primary-900/30 dark:text-primary-300 dark:hover:bg-primary-900/50'
                                     }`}

@@ -10,8 +10,8 @@ const faqData = [
         answer: "Not right now. We’ve hidden business and agency features to perfect the creator experience. We’ll bring them back later after creator launch and testing."
     },
     {
-        question: "What is Quick Post Automation?",
-        answer: "Upload multiple images or videos, set your goal and tone, and our AI generates captions/hashtags plus suggested best times and a calendar plan. You then post on your social platforms manually when you’re ready."
+        question: "What is AI Content Generation?",
+        answer: "Upload your images or videos, set your goal and tone, and our AI automatically generates engaging captions and relevant hashtags tailored to your content and target platforms. You can then schedule your posts or save them as drafts for manual posting when you're ready."
     },
     {
         question: "How does the AI Content Strategist work?",

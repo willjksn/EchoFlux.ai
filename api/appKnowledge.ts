@@ -1,6 +1,16 @@
 export const APP_KNOWLEDGE = `
 # EchoFlux.ai Knowledge Base
 
+## Age Requirements and Eligibility
+**IMPORTANT:** EchoFlux.ai has strict age requirements that must be enforced:
+- **Minimum Age:** Users must be at least **13 years old** to use EchoFlux.ai
+- **Users Under 18:** If under 18 (or age of majority in their jurisdiction), users must have parent/guardian consent. Parents/guardians are responsible for their child's activities.
+- **Adult Content Features (18+):** Certain features including OnlyFans Studio and explicit content generation tools are restricted to users who are **18 years of age or older**. Users must verify they are 18+ and legally permitted to access adult content in their jurisdiction.
+- **Age Verification:** EchoFlux.ai reserves the right to verify age at any time. False age information may result in immediate account suspension or termination.
+- **Compliance:** EchoFlux.ai complies with COPPA (Children's Online Privacy Protection Act) and other age-related regulations.
+
+If users ask about age requirements, clearly explain these policies and direct them to the Terms of Service for complete details. If you suspect a user may be underage, you should advise them to review the Terms of Service and contact support if needed.
+
 ## Core Concept
 EchoFlux.ai is an **AI Content Studio & Campaign Planner for creators**.
 
@@ -17,26 +27,11 @@ EchoFlux.ai is an **AI Content Studio & Campaign Planner for creators**.
 - It generates:
   - A **multi-week content roadmap** (campaigns, themes, and example posts).
   - Suggested **posting cadence** and content types (reels, carousels, stories, etc.).
+- Uses weekly trends (free, updated every Monday) + Tavily searches (Pro/Elite only) for niche-specific research.
 - From a good strategy, the user can:
   - Save it.
-  - Send it into **Autopilot** as the base for a full campaign content pack.
-
-### 2. Autopilot / AI Campaign Studio (Autopilot.tsx)
-- Autopilot turns a goal/strategy into a **campaign content pack**:
-  - Campaign summary + objectives.
-  - Multiple posts with **captions, angles, hooks, and platform notes**.
-  - Planned dates/slots (for planning only, not auto-posting).
-- Status language is **about planning**, e.g. "AI is building your campaign content plan" and "Content pack ready!".
-- Users can:
-  - Review generated posts.
-  - Copy individual captions or the **entire content pack** to clipboard for manual posting.
-
-### 3. Approvals / Workflow Board (Approvals.tsx)
-- A **Kanban-style workflow** for moving content from:
-  - Draft → In Review → Ready to Post.
-- Designed for creators to visually manage what’s **ready to post next**.
-- Includes **"Copy all captions"** to export the visible posts as a content pack.
-- Team/client features are hidden; it behaves like a **solo creator workflow board**.
+  - Use it to create posts in Compose.
+  - Organize content on the Calendar.
 
 ### 4. Compose (Compose.tsx)
 - Main **caption/editor & content planning** surface.
@@ -51,10 +46,10 @@ EchoFlux.ai is an **AI Content Studio & Campaign Planner for creators**.
 ### 5. Calendar / Schedule
 - Calendar focuses on **planned content**, not live posting.
 - It shows:
-  - Planned Autopilot posts.
+  - Posts created in Compose with scheduled dates.
   - Strategy-generated content that includes dates.
 - When talking about the calendar, emphasize:
-  - It’s a **planning calendar**, not a guarantee that content was posted.
+  - It's a **planning calendar**, not a guarantee that content was posted.
 
 ### 6. Media Library / OnlyFans Studio
 - **Media Library**: stores images, videos, and assets used in content.
@@ -77,15 +72,16 @@ EchoFlux.ai is an **AI Content Studio & Campaign Planner for creators**.
     - New posts created.
     - Messages to review (if inbox is enabled in future).
     - Planned slots.
-  - Quick actions push users to **Strategy, Autopilot, Compose, Approvals**.
+  - Quick actions push users to **Strategy, Compose, Calendar**.
 - If asked "Why don’t I see analytics here?", explain that **deep analytics are paused in this version**.
 
 ### 9. Pricing & Plans (Pricing.tsx, PlanSelectorModal.tsx)
 - Visible creator plans:
-  - **Free** – 1 active campaign, basic Strategy & Autopilot, limited AI captions, basic link-in-bio, small storage.
-  - **Pro** – multiple active campaigns, full Strategy + Autopilot content packs, workflow board & calendar, more AI captions, media library, larger storage.
-  - **Elite** – unlimited campaigns, advanced Strategy & Autopilot, workflow board & calendar, high AI caption limits, media library, more storage, **OnlyFans Studio included**.
+  - **Free** – 1 AI strategy generation/month (basic), 10 AI captions/month, Basic Link-in-Bio (1 link), 100 MB storage.
+  - **Pro** – AI Content Strategist, 2 AI strategy generations/month, Live trend research (16 Tavily searches/month), 500 AI captions/month, Link-in-Bio Builder (5 links), Media Library, Visual Content Calendar, 5 GB storage.
+  - **Elite** – Advanced Strategy options, 5 AI strategy generations/month, Enhanced live trend research (40 Tavily searches/month), 1,500 AI captions/month, Link-in-Bio Builder (unlimited links), Media Library, 10 GB storage, **OnlyFans Studio included**.
 - Business/Agency plans and "for businesses" positioning are **hidden/paused**.
+- **Note:** Strategy generation uses weekly trends (free, updated every Monday) + Tavily searches (Pro/Elite only) for niche-specific research. Free plans use weekly trends only.
 
 ### 10. Settings (Settings.tsx)
 - Central place for:
@@ -100,13 +96,18 @@ EchoFlux.ai is an **AI Content Studio & Campaign Planner for creators**.
 - **Chatbot**:
   - Text-based assistant inside the app.
   - Uses this knowledge base to answer questions about features, pricing, and workflows.
+  - Does NOT have live web access - uses general knowledge and app knowledge base.
 - **Voice Assistant**:
   - Real-time audio assistant (if enabled via settings.voiceMode).
   - Can:
     - Answer questions about using EchoFlux.ai.
     - Help brainstorm content ideas, hooks, scripts, and captions.
-    - Suggest workflows (e.g., "start in Strategy, then move into Autopilot").
+    - Suggest workflows (e.g., "start in Strategy to generate a roadmap, then use Compose to create posts").
     - Navigate to pages like dashboard, strategy, compose, approvals, media library, settings.
+  - **Live Web Search (Elite only):**
+    - Elite users can ask for current trends/info via fetch_current_info function.
+    - Uses Tavily web search (counts against Elite's 40 searches/month limit).
+    - Can also use weekly trends data (free, no Tavily cost) for general social media trends.
 
 ## Important Constraints & Messaging
 
@@ -124,7 +125,7 @@ EchoFlux.ai is an **AI Content Studio & Campaign Planner for creators**.
 ## How-To Answer Examples
 
 - "How do I plan a campaign?":
-  - Explain: Start in **Strategy** to generate a roadmap → push into **Autopilot** for a content pack → refine in **Approvals**/**Compose** → copy captions into platforms.
+  - Explain: Start in **Strategy** to generate a roadmap → use **Compose** to create posts → organize on **Calendar** → copy captions to post manually on platforms.
 - "Where do I see my content calendar?":
   - Point to the **planning calendar** and clarify it shows planned content, not verified posted content.
 - "How do I use OnlyFans Studio?":

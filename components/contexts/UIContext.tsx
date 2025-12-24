@@ -1,6 +1,6 @@
 
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
-import { Page, DashboardNavState, TourStep, PaymentPlan, Toast, ComposeContextData } from '../../types';
+import { Page, DashboardNavState, TourStep, PaymentPlan, Toast, ComposeContextData, Plan } from '../../types';
 import { useAuth } from './AuthContext';
 import { getTourStepsForPlan } from '../../constants';
 
@@ -45,6 +45,10 @@ interface UIContextType {
     // Pricing
     pricingView: 'Creator' | 'Business' | null;
     setPricingView: (view: 'Creator' | 'Business' | null) => void;
+    
+    // Selected plan from landing page (for signup flow)
+    selectedPlan: Plan | null;
+    setSelectedPlan: (plan: Plan | null) => void;
 }
 
 const UIContext = createContext<UIContextType | undefined>(undefined);
@@ -79,6 +83,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [activeCRMProfileId, setActiveCRMProfileId] = useState<string | null>(null);
     const [pendingCRMUser, setPendingCRMUser] = useState<{ name: string; avatar: string } | null>(null);
     const [pricingView, setPricingView] = useState<'Creator' | 'Business' | null>(null);
+    const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
 
     useEffect(() => {
         // Ensure the class is present on mount based on state
@@ -109,11 +114,23 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         if (!user) return;
         // FIX: Passed the full 'user' object instead of 'user.plan' to match the function signature.
         const steps = getTourStepsForPlan(user);
-        setTourSteps(steps);
-        setTourStep(0);
-        setIsTourActive(true);
         const firstStepPage = steps[0]?.page;
-        if (firstStepPage && activePage !== firstStepPage) setActivePage(firstStepPage);
+        
+        // If first step requires a specific page, navigate there first
+        if (firstStepPage && activePage !== firstStepPage) {
+            setActivePage(firstStepPage);
+            // Wait for page to render before starting tour
+            setTimeout(() => {
+                setTourSteps(steps);
+                setTourStep(0);
+                setIsTourActive(true);
+            }, 500);
+        } else {
+            // Start tour immediately if already on correct page
+            setTourSteps(steps);
+            setTourStep(0);
+            setIsTourActive(true);
+        }
     };
 
     const endTour = () => {
@@ -125,8 +142,16 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const nextTourStep = () => {
         if (tourStep < tourSteps.length - 1) {
             const next = tourSteps[tourStep + 1];
-            if (next.page && activePage !== next.page) setActivePage(next.page);
-            setTourStep(prev => prev + 1);
+            // Navigate to the page for the next step if needed
+            if (next.page && activePage !== next.page) {
+                setActivePage(next.page);
+                // Wait a bit for the page to render before moving to next step
+                setTimeout(() => {
+                    setTourStep(prev => prev + 1);
+                }, 300);
+            } else {
+                setTourStep(prev => prev + 1);
+            }
         } else {
             endTour();
         }
@@ -168,6 +193,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         isCRMOpen, activeCRMProfileId, openCRM, closeCRM,
         toast, showToast,
         pricingView, setPricingView,
+        selectedPlan, setSelectedPlan,
     };
 
     return <UIContext.Provider value={value}>{children}</UIContext.Provider>;

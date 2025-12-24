@@ -2,6 +2,9 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { checkApiKeys, getVerifyAuth, withErrorHandling } from "./_errorHandler.js";
 import { getModelForTask } from "./_modelRouter.js";
 import { parseJSON } from "./_geminiShared.js";
+import { getGoalFramework, getGoalSpecificCTAs, getGoalSpecificContentGuidance } from "./_goalFrameworks.js";
+import { getLatestTrends } from "./_trendsHelper.js";
+import { getOnlyFansResearchContext } from "./_onlyfansResearch.js";
 
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -40,7 +43,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     return;
   }
 
-  const { goals, contentPreferences, subscriberCount, balance, niche } = req.body || {};
+  const { goals, contentPreferences, subscriberCount, balance, niche, analyticsData } = req.body || {};
 
   if (!goals || !Array.isArray(goals) || goals.length === 0) {
     res.status(400).json({ error: "Missing or invalid 'goals' array" });
@@ -71,8 +74,86 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
       ? `Current subscriber count: ${subscriberCount}. ` 
       : "";
 
+    // Get goal-specific framework for Sales Conversion (primary OnlyFans goal)
+    const goalFramework = getGoalFramework('Sales Conversion');
+    
+    // Get latest trends from weekly Tavily updates
+    let currentTrends = '';
+    try {
+      currentTrends = await getLatestTrends();
+    } catch (error) {
+      console.error('[generateMonetizationPlan] Error fetching trends:', error);
+      currentTrends = 'Trend data unavailable. Using general best practices.';
+    }
+
+    // Get OnlyFans-specific research (this is for OnlyFans monetization planning)
+    let onlyfansResearch = '';
+    try {
+      const { getAdminDb } = await import("./_firebaseAdmin.js");
+      const db = getAdminDb();
+      const userDoc = await db.collection("users").doc(user.uid).get();
+      const userData = userDoc.data();
+      const userPlan = userData?.plan || 'Free';
+      const userRole = userData?.role;
+      
+      onlyfansResearch = await getOnlyFansResearchContext(
+        'Subscribers',
+        'Sales Conversion', // Primary goal for monetization planning
+        user.uid,
+        userPlan,
+        userRole
+      );
+      console.log('[generateMonetizationPlan] OnlyFans research context fetched');
+    } catch (error) {
+      console.error('[generateMonetizationPlan] Error fetching OnlyFans research:', error);
+      // Continue without OnlyFans research - not critical
+    }
+
+    // Build analytics context for AI
+    let analyticsContext = '';
+    if (analyticsData) {
+      const topTopics = analyticsData.topTopics?.slice(0, 5).join(', ') || 'No trending topics available';
+      const engagementInsights = analyticsData.engagementInsights?.map((insight: any) => `- ${insight.title}: ${insight.description}`).join('\n') || 'No specific insights available';
+      const bestDays = analyticsData.responseRate?.sort((a: any, b: any) => b.value - a.value).slice(0, 3).map((d: any) => d.name).join(', ') || 'No data';
+      const engagementIncrease = analyticsData.engagementIncrease || 0;
+      const subscriberCountFromAnalytics = analyticsData.subscriberCount || subscriberCount || 'Not provided';
+      const engagementRate = analyticsData.engagementRate || 'Not provided';
+      const topContentTypes = analyticsData.topContentTypes?.join(', ') || 'No data';
+      const bestPostingTimes = analyticsData.bestPostingTimes?.join(', ') || 'No data';
+      const customInsights = analyticsData.customInsights || '';
+      
+      analyticsContext = `
+CREATOR ANALYTICS & INSIGHTS (What's Working for This Account):
+- Subscriber Count: ${subscriberCountFromAnalytics}
+- Engagement Rate: ${engagementRate}
+- Top Performing Topics: ${topTopics}
+- Top Content Types: ${topContentTypes}
+- Engagement Insights:
+${engagementInsights}
+- Best Days for Posting: ${bestDays}
+- Best Posting Times: ${bestPostingTimes}
+- Engagement Increase: ${engagementIncrease}%
+${customInsights ? `- Custom Insights: ${customInsights}` : ''}
+
+Use this analytics data to inform the monetization plan:
+1. Focus on content types that are already performing well (${topContentTypes})
+2. Schedule content on days and times that historically perform best (${bestDays}, ${bestPostingTimes})
+3. Create content similar to what's getting high engagement (${topTopics})
+4. Scale what's working: Use insights from high-performing content
+5. Balance monetization with engagement patterns that are proven to work
+`;
+    }
+
     const prompt = `
 You are an expert monetization strategist for OnlyFans creators.
+
+${goalFramework}
+
+${currentTrends}
+
+${onlyfansResearch ? `ONLYFANS-SPECIFIC RESEARCH & BEST PRACTICES:\n${onlyfansResearch}\n` : ''}
+
+${analyticsContext ? analyticsContext : 'Note: No analytics data available. Use best practices for OnlyFans monetization.'}
 
 CRITICAL CONTEXT - EXPLICIT/ADULT CONTENT PLATFORM:
 - This monetization plan is for an adult content creator platform (OnlyFans)
@@ -80,11 +161,17 @@ CRITICAL CONTEXT - EXPLICIT/ADULT CONTENT PLATFORM:
 - Focus on strategic monetization: balancing free engagement content with paid premium content
 - Help creators understand when to post free vs paid content, when to tease vs upsell
 - Prevent over-selling by balancing content types intelligently
+- PRIMARY GOAL: Sales Conversion - Every content idea should ultimately support revenue generation
 
 Creator Goals: ${goals.join(', ')}
 Content Preferences: ${contentPreferences || 'No specific preferences'}
 ${subscriberContext}
 Niche: ${userNiche}
+
+GOAL-SPECIFIC GUIDANCE FOR SALES CONVERSION:
+${getGoalSpecificCTAs('Sales Conversion')}
+
+${getGoalSpecificContentGuidance('Sales Conversion')}
 
 Balance Requirements:
 - Engagement: ${engagementCount} ideas (${finalBalance.engagement}%) - Free content to build connection

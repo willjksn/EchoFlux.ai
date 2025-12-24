@@ -4,19 +4,6 @@ import { generateCaptions } from '../src/services/geminiService';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage, auth } from '../firebaseConfig';
 
-export interface TrendingSound {
-  id: string;
-  title: string;
-  artist?: string;
-  hashtags: string[];
-  trendStats: {
-    usageCount?: number;
-    growthRate?: number;
-    peakTime?: string;
-  };
-  instagramUrl: string;
-  thumbnail?: string;
-}
 import {
   UploadIcon,
   TrashIcon,
@@ -113,7 +100,7 @@ interface MediaBoxProps {
   onPreview: (index: number) => void;
   onPublish: (index: number) => void;
   onSchedule: (index: number) => void;
-  onSaveToWorkflow: (index: number, status: 'Draft' | 'Approved') => void;
+  onSaveToWorkflow: (index: number, status: 'Draft' | 'Scheduled') => void;
   onAIAutoSchedule?: (index: number) => void;
   platformIcons: Record<Platform, React.ReactNode>;
   onUpgradeClick?: () => void; // Callback to show upgrade modal
@@ -150,9 +137,6 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   const [musicSearchQuery, setMusicSearchQuery] = useState('');
   const [selectedMusicGenre, setSelectedMusicGenre] = useState<string>('');
   const [playingMusicId, setPlayingMusicId] = useState<string | null>(null);
-  const [trendingSounds, setTrendingSounds] = useState<TrendingSound[]>([]);
-  const [isLoadingTrendingSounds, setIsLoadingTrendingSounds] = useState(false);
-  const [showTrendingSounds, setShowTrendingSounds] = useState(false);
   const musicAudioRef = useRef<HTMLAudioElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
@@ -266,45 +250,6 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
     }
   }, [showMediaLibraryModal, user, showToast]);
 
-  const fetchTrendingSounds = async () => {
-    setIsLoadingTrendingSounds(true);
-    try {
-      // Get auth token for Instagram Graph API integration
-      let authHeader = '';
-      if (user) {
-        try {
-          const { auth } = await import('../firebaseConfig');
-          const currentUser = auth.currentUser;
-          if (currentUser) {
-            const token = await currentUser.getIdToken();
-            authHeader = `Bearer ${token}`;
-          }
-        } catch (authError) {
-          console.warn('Could not get auth token:', authError);
-        }
-      }
-
-      const url = user?.id 
-        ? `/api/getTrendingInstagramSounds?userId=${user.id}`
-        : '/api/getTrendingInstagramSounds';
-      
-      const response = await fetch(url, {
-        headers: authHeader ? { Authorization: authHeader } : {},
-      });
-      
-      const data = await response.json();
-      if (data.success && data.sounds) {
-        setTrendingSounds(data.sounds);
-      } else {
-        showToast('Failed to load trending sounds', 'error');
-      }
-    } catch (error) {
-      console.error('Error fetching trending sounds:', error);
-      showToast('Failed to load trending sounds', 'error');
-    } finally {
-      setIsLoadingTrendingSounds(false);
-    }
-  };
 
   const handleSelectFromLibrary = (item: MediaLibraryItem) => {
     onUpdate(index, {
@@ -352,7 +297,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
       // Revoke the temporary blob URL
       URL.revokeObjectURL(tempPreviewUrl);
 
-      // Save to media library
+      // Save to media library in general folder
       try {
         const mediaLibraryItem = {
           id: timestamp.toString(),
@@ -365,6 +310,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
           uploadedAt: new Date().toISOString(),
           usedInPosts: [],
           tags: [],
+          folderId: 'general', // Save to general folder
         };
         await setDoc(doc(db, 'users', user.id, 'media_library', mediaLibraryItem.id), mediaLibraryItem);
       } catch (libraryError) {
@@ -881,8 +827,87 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
         </div>
       </div>
 
-      {/* Generate Button */}
-      {mediaItem.previewUrl && !mediaItem.results.length && (
+      {/* Platform Selection - Single Select - Moved below Goal & Tone */}
+      <div className="mb-3">
+        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+          Plan for platform (select one)
+        </label>
+        <div className="flex flex-wrap gap-1.5">
+          {(Object.keys(platformIcons) as Platform[]).map(platform => {
+            const isSelected = mediaItem.selectedPlatforms?.[platform] === true;
+            return (
+              <button
+                key={platform}
+                onClick={() => {
+                  // Single select: only this platform is selected, all others are false
+                  const updates: Partial<MediaItemState> = {
+                    selectedPlatforms: {
+                      Instagram: false,
+                      TikTok: false,
+                      X: false,
+                      Threads: false,
+                      YouTube: false,
+                      LinkedIn: false,
+                      Facebook: false,
+                      Pinterest: false,
+                      [platform]: true,
+                    },
+                  };
+                  // Reset Instagram post type if switching away from Instagram
+                  if (mediaItem.selectedPlatforms?.Instagram && platform !== 'Instagram') {
+                    updates.instagramPostType = undefined;
+                  }
+                  // Auto-set Instagram post type based on media type when Instagram is selected
+                  if (platform === 'Instagram' && !mediaItem.instagramPostType) {
+                    updates.instagramPostType = mediaItem.type === 'video' ? 'Reel' : 'Post';
+                  }
+                  onUpdate(index, updates);
+                }}
+                className={`flex items-center justify-center gap-1 px-2 py-1 rounded text-xs border transition-colors ${
+                  isSelected
+                    ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 font-medium'
+                    : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+                }`}
+              >
+                <span className="w-3 h-3 flex items-center justify-center flex-shrink-0">{platformIcons[platform]}</span>
+                <span className="hidden sm:inline">{platform}</span>
+              </button>
+            );
+          })}
+        </div>
+        {mediaItem.selectedPlatforms && Object.values(mediaItem.selectedPlatforms).every(p => !p) && (
+          <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Please select a platform to generate platform-optimized captions</p>
+        )}
+      </div>
+
+      {/* Instagram Post Type Selection */}
+      {mediaItem.selectedPlatforms?.Instagram && (
+        <div className="mb-3">
+          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Instagram Post Type
+          </label>
+          <div className="flex gap-1.5">
+            {(['Post', 'Reel', 'Story'] as const).map(postType => (
+              <button
+                key={postType}
+                onClick={() => {
+                  onUpdate(index, { instagramPostType: postType });
+                }}
+                className={`flex-1 px-2 py-1.5 rounded text-xs border transition-colors ${
+                  mediaItem.instagramPostType === postType
+                    ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 font-medium'
+                    : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+                }`}
+              >
+                {postType}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Generate Button - Always visible when media exists */}
+      {mediaItem.previewUrl && (
         <button
           onClick={handleGenerate}
           disabled={!canGenerate || isGenerating}
@@ -900,14 +925,6 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
             <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
               AI Suggestions
             </span>
-            <button
-              onClick={handleGenerate}
-              disabled={!canGenerate || isGenerating}
-              className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 disabled:opacity-50 flex items-center gap-1"
-            >
-              <RefreshIcon className={`w-3 h-3 ${isGenerating ? 'animate-spin' : ''}`} />
-              (Re)Generate
-            </button>
           </div>
           <div className="space-y-1 max-h-28 overflow-y-auto">
             {mediaItem.results.slice(0, 2).map((result, idx) => (
@@ -940,6 +957,11 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
         <div className="mb-3 flex flex-wrap gap-2">
           <button
             onClick={async () => {
+              if (user?.plan === 'Free') {
+                showToast('Upgrade to Pro or Elite to unlock Optimize', 'info');
+                setActivePage('pricing');
+                return;
+              }
               if (!mediaItem.captionText.trim()) {
                 showToast('Please add a caption first', 'error');
                 return;
@@ -982,14 +1004,23 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
                 setIsGenerating(false);
               }
             }}
-            disabled={isGenerating}
-            className="flex-1 px-2 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+            disabled={isGenerating || user?.plan === 'Free'}
+            className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center justify-center gap-1 ${
+              user?.plan === 'Free'
+                ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
+                : 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 disabled:opacity-50'
+            }`}
           >
             <SparklesIcon className="w-3 h-3" />
             Optimize
           </button>
           <button
             onClick={async () => {
+              if (user?.plan === 'Free') {
+                showToast('Upgrade to Pro or Elite to unlock Predict', 'info');
+                setActivePage('pricing');
+                return;
+              }
               if (!mediaItem.captionText.trim()) {
                 showToast('Please add a caption first', 'error');
                 return;
@@ -1041,14 +1072,23 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
                 setIsGenerating(false);
               }
             }}
-            disabled={isGenerating}
-            className="flex-1 px-2 py-1.5 text-xs font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+            disabled={isGenerating || user?.plan === 'Free'}
+            className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center justify-center gap-1 ${
+              user?.plan === 'Free'
+                ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
+                : 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/50 disabled:opacity-50'
+            }`}
           >
             <SparklesIcon className="w-3 h-3" />
             Predict
           </button>
           <button
             onClick={async () => {
+              if (user?.plan === 'Free') {
+                showToast('Upgrade to Pro or Elite to unlock Repurpose', 'info');
+                setActivePage('pricing');
+                return;
+              }
               if (!mediaItem.captionText.trim()) {
                 showToast('Please add a caption first', 'error');
                 return;
@@ -1100,8 +1140,12 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
                 setIsGenerating(false);
               }
             }}
-            disabled={isGenerating}
-            className="flex-1 px-2 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 rounded-md hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+            disabled={isGenerating || user?.plan === 'Free'}
+            className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center justify-center gap-1 ${
+              user?.plan === 'Free'
+                ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
+                : 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 disabled:opacity-50'
+            }`}
           >
             <SparklesIcon className="w-3 h-3" />
             Repurpose
@@ -1120,6 +1164,20 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
           className="w-full p-2.5 pr-20 text-sm border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 resize-y"
         />
         <div className="absolute right-2 top-2 flex flex-col gap-1">
+          <button
+            type="button"
+            onClick={() => {
+              if (mediaItem.captionText) {
+                navigator.clipboard.writeText(mediaItem.captionText);
+                showToast('Caption copied to clipboard!', 'success');
+              }
+            }}
+            disabled={!mediaItem.captionText || !mediaItem.captionText.trim()}
+            className="p-1 text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 disabled:opacity-30 disabled:cursor-not-allowed"
+            title="Copy caption"
+          >
+            <CopyIcon className="w-4 h-4" />
+          </button>
           <button
             type="button"
             onClick={() => setIsAiHelpOpen(!isAiHelpOpen)}
@@ -1224,12 +1282,28 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
                 </button>
               ))}
             </div>
+            {/* Copy All Button */}
+            <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => {
+                  if (mediaItem.captionText) {
+                    navigator.clipboard.writeText(mediaItem.captionText);
+                    showToast('Caption copied to clipboard!', 'success');
+                  }
+                }}
+                className="w-full px-3 py-2 text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md flex items-center justify-center gap-2 transition-colors"
+                disabled={!mediaItem.captionText || !mediaItem.captionText.trim()}
+              >
+                <CopyIcon className="w-4 h-4" />
+                Copy All
+              </button>
+            </div>
           </div>
         )}
       </div>
 
-      {/* Music Selection for Videos */}
-      {mediaItem.type === 'video' && (
+      {/* Music Selection for Videos - Hidden for now */}
+      {false && mediaItem.type === 'video' && (
         <div className="mb-3">
           <div className="flex items-center justify-between mb-2">
             <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
@@ -1273,7 +1347,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
       )}
 
       {/* Schedule Date/Time Picker */}
-      <div className="mb-3">
+      <div className={`mb-3 ${user?.plan === 'Free' ? 'opacity-50' : ''}`}>
         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
           Schedule Date & Time
         </label>
@@ -1281,6 +1355,11 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
           type="datetime-local"
           value={mediaItem.scheduledDate ? new Date(mediaItem.scheduledDate).toISOString().slice(0, 16) : ''}
           onChange={(e) => {
+            if (user?.plan === 'Free') {
+              showToast('Upgrade to Pro or Elite to schedule posts', 'info');
+              setActivePage('pricing');
+              return;
+            }
             if (e.target.value) {
               const date = new Date(e.target.value);
               onUpdate(index, { scheduledDate: date.toISOString() });
@@ -1288,7 +1367,11 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
               onUpdate(index, { scheduledDate: undefined });
             }
           }}
-          className="w-full p-1.5 text-xs border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+          disabled={user?.plan === 'Free'}
+          className={`w-full p-1.5 text-xs border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white ${
+            user?.plan === 'Free' ? 'cursor-not-allowed opacity-50' : ''
+          }`}
+          title={user?.plan === 'Free' ? 'Upgrade to Pro or Elite to schedule posts' : ''}
         />
         {mediaItem.scheduledDate && (
           <div className="mt-1 flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
@@ -1303,171 +1386,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
         )}
       </div>
 
-      {/* Platform Selection - Single Select */}
-      <div className="mb-3">
-        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-          Plan for platform (select one)
-        </label>
-        <div className="flex flex-wrap gap-1.5">
-          {(Object.keys(platformIcons) as Platform[]).map(platform => {
-            const isSelected = mediaItem.selectedPlatforms?.[platform] === true;
-            return (
-              <button
-                key={platform}
-                onClick={() => {
-                  // Single select: only this platform is selected, all others are false
-                  const updates: Partial<MediaItemState> = {
-                    selectedPlatforms: {
-                      Instagram: false,
-                      TikTok: false,
-                      X: false,
-                      Threads: false,
-                      YouTube: false,
-                      LinkedIn: false,
-                      Facebook: false,
-                      Pinterest: false,
-                      [platform]: true,
-                    },
-                  };
-                  // Reset Instagram post type if switching away from Instagram
-                  if (mediaItem.selectedPlatforms?.Instagram && platform !== 'Instagram') {
-                    updates.instagramPostType = undefined;
-                  }
-                  // Auto-set Instagram post type based on media type when Instagram is selected
-                  if (platform === 'Instagram' && !mediaItem.instagramPostType) {
-                    updates.instagramPostType = mediaItem.type === 'video' ? 'Reel' : 'Post';
-                  }
-                  onUpdate(index, updates);
-                }}
-                className={`flex items-center justify-center gap-1 px-2 py-1 rounded text-xs border transition-colors ${
-                  isSelected
-                    ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 font-medium'
-                    : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
-                }`}
-              >
-                <span className="w-3 h-3 flex items-center justify-center flex-shrink-0">{platformIcons[platform]}</span>
-                <span className="hidden sm:inline">{platform}</span>
-              </button>
-            );
-          })}
-        </div>
-        {mediaItem.selectedPlatforms && Object.values(mediaItem.selectedPlatforms).every(p => !p) && (
-          <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Please select a platform to generate platform-optimized captions</p>
-        )}
-      </div>
 
-      {/* Instagram Post Type Selection */}
-      {mediaItem.selectedPlatforms?.Instagram && (
-        <div className="mb-3">
-          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Instagram Post Type
-          </label>
-          <div className="flex gap-1.5">
-            {(['Post', 'Reel', 'Story'] as const).map(postType => (
-              <button
-                key={postType}
-                onClick={() => {
-                  onUpdate(index, { instagramPostType: postType });
-                  // Fetch trending sounds when Reel is selected
-                  if (postType === 'Reel') {
-                    fetchTrendingSounds();
-                  }
-                }}
-                className={`flex-1 px-2 py-1.5 rounded text-xs border transition-colors ${
-                  mediaItem.instagramPostType === postType
-                    ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 font-medium'
-                    : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
-                }`}
-              >
-                {postType}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Trending Sounds for Instagram Reels */}
-      {mediaItem.selectedPlatforms?.Instagram && mediaItem.instagramPostType === 'Reel' && (
-        <div className="mb-3">
-          <div className="flex items-center justify-between mb-2">
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
-              Trending Sounds
-            </label>
-            <button
-              onClick={() => {
-                setShowTrendingSounds(!showTrendingSounds);
-                if (!showTrendingSounds && trendingSounds.length === 0) {
-                  fetchTrendingSounds();
-                }
-              }}
-              className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-            >
-              {showTrendingSounds ? 'Hide' : 'Show'} Trending
-            </button>
-          </div>
-          {showTrendingSounds && (
-            <div className="max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-md p-2 space-y-2">
-              {isLoadingTrendingSounds ? (
-                <div className="flex items-center justify-center py-4">
-                  <RefreshIcon className="w-4 h-4 animate-spin text-primary-600" />
-                  <span className="ml-2 text-xs text-gray-600 dark:text-gray-400">Loading trending sounds...</span>
-                </div>
-              ) : trendingSounds.length === 0 ? (
-                <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-4">No trending sounds available</p>
-              ) : (
-                trendingSounds.map((sound) => (
-                  <div
-                    key={sound.id}
-                    className="p-2 bg-gray-50 dark:bg-gray-700/50 rounded-md border border-gray-200 dark:border-gray-600"
-                  >
-                    <div className="flex items-start justify-between mb-1">
-                      <div className="flex-1">
-                        <h4 className="text-xs font-semibold text-gray-900 dark:text-white">{sound.title}</h4>
-                        {sound.artist && (
-                          <p className="text-xs text-gray-600 dark:text-gray-400">{sound.artist}</p>
-                        )}
-                      </div>
-                      <a
-                        href={sound.instagramUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium ml-2"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        Use on Instagram →
-                      </a>
-                    </div>
-                    {sound.hashtags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mb-1">
-                        {sound.hashtags.slice(0, 3).map((tag: string, idx: number) => (
-                          <span key={idx} className="text-xs text-primary-600 dark:text-primary-400">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    {sound.trendStats && (
-                      <div className="flex items-center gap-3 text-xs text-gray-600 dark:text-gray-400 mt-1">
-                        {sound.trendStats.usageCount && (
-                          <span>{sound.trendStats.usageCount.toLocaleString()} uses</span>
-                        )}
-                        {sound.trendStats.growthRate && (
-                          <span className="text-green-600 dark:text-green-400">
-                            ↑ {sound.trendStats.growthRate}% growth
-                          </span>
-                        )}
-                        {sound.trendStats.peakTime && (
-                          <span>Peak: {sound.trendStats.peakTime}</span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Preview Button - Always visible if media exists */}
       {mediaItem.previewUrl && (
@@ -1483,20 +1402,50 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
       <div className="flex flex-col gap-2">
         <div className="grid grid-cols-2 gap-2">
           <button
-            onClick={() => onSaveToWorkflow(index, 'Draft')}
-            disabled={platformsToPost.length === 0}
-            className="flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
-            title={platformsToPost.length === 0 ? 'Select at least one platform' : 'Save as Draft'}
+            onClick={() => {
+              if (user?.plan === 'Free') {
+                if (onUpgradeClick) {
+                  onUpgradeClick();
+                } else {
+                  showToast('Upgrade to Pro or Elite to save drafts to calendar', 'info');
+                  setActivePage('pricing');
+                }
+                return;
+              }
+              onSaveToWorkflow(index, 'Draft');
+            }}
+            disabled={platformsToPost.length === 0 || user?.plan === 'Free'}
+            className={`flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium rounded-md transition-colors ${
+              user?.plan === 'Free'
+                ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
+                : 'text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50'
+            }`}
+            title={user?.plan === 'Free' ? 'Upgrade to Pro or Elite to save drafts to calendar' : (platformsToPost.length === 0 ? 'Select at least one platform' : 'Save as Draft')}
           >
             <ClipboardCheckIcon className="w-3 h-3" /> Draft
           </button>
           <button
-            onClick={() => onSaveToWorkflow(index, 'Approved')}
-            disabled={platformsToPost.length === 0}
-            className="flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-md hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors disabled:opacity-50"
-            title={platformsToPost.length === 0 ? 'Select at least one platform' : 'Save as Approved'}
+            onClick={() => {
+              if (user?.plan === 'Free') {
+                if (onUpgradeClick) {
+                  onUpgradeClick();
+                } else {
+                  showToast('Upgrade to Pro or Elite to access the visual calendar view', 'info');
+                  setActivePage('pricing');
+                }
+                return;
+              }
+              onSaveToWorkflow(index, 'Scheduled');
+            }}
+            disabled={platformsToPost.length === 0 || user?.plan === 'Free'}
+            className={`flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium rounded-md transition-colors ${
+              user?.plan === 'Free'
+                ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
+                : 'text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 disabled:opacity-50'
+            }`}
+            title={user?.plan === 'Free' ? 'Upgrade to Pro or Elite to access the visual calendar view' : (platformsToPost.length === 0 ? 'Select at least one platform' : 'Add to Calendar')}
           >
-            <CheckCircleIcon className="w-3 h-3" /> Approved
+            <CalendarIcon className="w-3 h-3" /> Schedule
           </button>
         </div>
         {/* In offline AI Studio mode, we don't show in-compose publish/schedule controls */}

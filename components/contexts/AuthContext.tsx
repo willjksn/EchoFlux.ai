@@ -97,15 +97,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     setUserState(mergedUser);
 
                 } else {
-                    // NEW user document
-                    // Get pending plan from localStorage if available
-                    const pendingPlan = (typeof window !== 'undefined'
-                        ? (localStorage.getItem('pendingPlan') as Plan | null)
-                        : null);
+                    // NEW user document - check if there's a pending signup
+                    // If there is, don't create the document yet - wait for plan selection
+                    const pendingSignup = typeof window !== 'undefined' ? localStorage.getItem('pendingSignup') : null;
                     
-                    // Default plan: Free for Creators, but Business users should select a plan
-                    // If no pendingPlan, default to Free (will be changed during onboarding)
-                    const defaultPlan: Plan = pendingPlan || 'Free';
+                    if (pendingSignup) {
+                        // User has pending signup - don't create document yet
+                        // The plan selection flow will create it after plan is selected
+                        // Set user state to null so the app knows to show plan selector
+                        setUserState(null);
+                        setIsAuthLoading(false);
+                        return;
+                    }
+                    
+                    // No pending signup - this might be a Google sign-in for an existing user
+                    // or a direct sign-in. Create the user document.
+                    // New users start with Free plan (will be updated when they select a plan during onboarding)
+                    const defaultPlan: Plan = 'Free';
                     
                     const newUser: User = {
                         id: fbUser.uid,
@@ -115,7 +123,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         bio: "Welcome to EchoFlux.ai!",
                         plan: defaultPlan,
                         role: "User",
-                        userType: 'Creator',
+                        userType: 'Creator', // All users are Creators now
                         signupDate: new Date().toISOString(),
                         hasCompletedOnboarding: false,
                         notifications: {
@@ -134,7 +142,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         socialStats: generateMockSocialStats(),
                     };
 
-                    await setDoc(ref, newUser);
+                    // Remove undefined values before saving to Firestore
+                    const cleanUser = removeUndefined(newUser);
+                    await setDoc(ref, cleanUser);
                     
                     // Clear pendingPlan from localStorage after use
                     try {

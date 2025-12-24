@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from './AppContext';
-import { SparklesIcon, RefreshIcon, XMarkIcon, ClockIcon, CopyIcon, TrashIcon, UploadIcon, DownloadIcon } from './icons/UIIcons';
+import { SparklesIcon, RefreshIcon, XMarkIcon, ClockIcon, CopyIcon, TrashIcon, UploadIcon, DownloadIcon, ImageIcon } from './icons/UIIcons';
 import { auth, storage, db } from '../firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { collection, addDoc, query, getDocs, deleteDoc, doc, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, query, getDocs, deleteDoc, doc, orderBy, Timestamp, setDoc, getDocs as getDocsQuery } from 'firebase/firestore';
 import { Platform } from '../types';
 import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
 
@@ -18,7 +18,7 @@ interface HistoryItem {
 }
 
 export const ContentIntelligence: React.FC = () => {
-    const { user, showToast, activePage } = useAppContext();
+    const { user, showToast, activePage, setPosts, setActivePage } = useAppContext();
     const [activeTab, setActiveTab] = useState<'tools' | 'history'>('tools');
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [isOptimizing, setIsOptimizing] = useState(false);
@@ -49,9 +49,13 @@ export const ContentIntelligence: React.FC = () => {
     // Media captions inputs (integrated into Content Input)
     const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
-    const [mediaCaptionTone, setMediaCaptionTone] = useState<'Playful' | 'Flirty' | 'Confident' | 'Teasing' | 'Intimate' | 'Explicit'>('Teasing');
+    const [mediaUrl, setMediaUrl] = useState<string | null>(null); // Store uploaded media URL
+    const [mediaCaptionTone, setMediaCaptionTone] = useState<'Playful' | 'Flirty' | 'Confident' | 'Teasing' | 'Intimate' | 'Explicit' | 'Very Explicit'>('Teasing');
     const [mediaCaptionGoal, setMediaCaptionGoal] = useState('engagement');
     const [mediaCaptionPrompt, setMediaCaptionPrompt] = useState('');
+    const [showRepurposePlatforms, setShowRepurposePlatforms] = useState(false);
+    const [showMediaVaultModal, setShowMediaVaultModal] = useState(false);
+    const [mediaVaultItems, setMediaVaultItems] = useState<any[]>([]);
     
     // History
     const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -62,6 +66,40 @@ export const ContentIntelligence: React.FC = () => {
             loadHistory();
         }
     }, [user?.id, activeTab]);
+
+    // Load media vault when modal opens
+    useEffect(() => {
+        if (showMediaVaultModal && isOnlyFansStudio) {
+            loadMediaVault();
+        }
+    }, [showMediaVaultModal, isOnlyFansStudio]);
+
+    const loadMediaVault = async () => {
+        if (!user?.id) return;
+        try {
+            const vaultRef = collection(db, 'users', user.id, 'onlyfans_media_library');
+            const q = query(vaultRef, orderBy('uploadedAt', 'desc'));
+            const snapshot = await getDocs(q);
+            const items: any[] = [];
+            snapshot.forEach((doc) => {
+                items.push({ id: doc.id, ...doc.data() });
+            });
+            setMediaVaultItems(items);
+        } catch (error) {
+            console.error('Error loading media vault:', error);
+        }
+    };
+
+    const handleSelectFromVault = async (item: any) => {
+        setMediaUrl(item.url);
+        setMediaPreview(item.url);
+        // Create a fake File object for compatibility with existing code
+        // The actual upload will use the URL directly
+        const fakeFile = new File([], item.name || 'vault-media', { type: item.mimeType || (item.type === 'video' ? 'video/mp4' : 'image/jpeg') });
+        Object.defineProperty(fakeFile, 'type', { value: item.mimeType || (item.type === 'video' ? 'video/mp4' : 'image/jpeg') });
+        setMediaFile(fakeFile);
+        setShowMediaVaultModal(false);
+    };
 
     const loadHistory = async () => {
         if (!user?.id) return;
@@ -180,10 +218,10 @@ export const ContentIntelligence: React.FC = () => {
                     },
                     body: JSON.stringify({
                         mediaUrl: mediaUrl,
-                        tone: mediaCaptionTone === 'Explicit' ? 'Sexy / Explicit' : mediaCaptionTone,
+                        tone: mediaCaptionTone === 'Explicit' ? 'Sexy / Explicit' : mediaCaptionTone === 'Very Explicit' ? 'Sexy / Very Explicit' : mediaCaptionTone,
                         goal: mediaCaptionGoal,
-                        platforms: isOnlyFansStudio ? ['OnlyFans'] : [platformInput],
-                        promptText: `${mediaCaptionPrompt || ''} [Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}]`.trim(),
+                        platforms: isOnlyFansStudio ? ['OnlyFans' as any] : [platformInput],
+                        promptText: `${isOnlyFansStudio ? 'Generate OnlyFans-optimized captions with emojis. OnlyFans creators use lots of emojis to engage fans. ' : ''}${mediaCaptionPrompt || ''} [Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}]`.trim(),
                     }),
                 });
 
@@ -262,8 +300,10 @@ export const ContentIntelligence: React.FC = () => {
     };
 
     const handlePredict = async () => {
-        // If media is uploaded but no caption, generate caption from media first
-        let captionToUse = captionInput.trim();
+        // Use generated caption if available, otherwise use input
+        let captionToUse = generatedMediaCaptions.length > 0 
+            ? generatedMediaCaptions[0].caption 
+            : captionInput.trim();
         
         if (mediaFile && !captionToUse) {
             showToast('Generating caption from media first...', 'info');
@@ -289,10 +329,10 @@ export const ContentIntelligence: React.FC = () => {
                     },
                     body: JSON.stringify({
                         mediaUrl: mediaUrl,
-                        tone: mediaCaptionTone === 'Explicit' ? 'Sexy / Explicit' : mediaCaptionTone,
+                        tone: mediaCaptionTone === 'Explicit' ? 'Sexy / Explicit' : mediaCaptionTone === 'Very Explicit' ? 'Sexy / Very Explicit' : mediaCaptionTone,
                         goal: mediaCaptionGoal,
-                        platforms: isOnlyFansStudio ? ['OnlyFans'] : [platformInput],
-                        promptText: `${mediaCaptionPrompt || ''} [Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}]`.trim(),
+                        platforms: isOnlyFansStudio ? ['OnlyFans' as any] : [platformInput],
+                        promptText: `${isOnlyFansStudio ? 'Generate OnlyFans-optimized captions with emojis. OnlyFans creators use lots of emojis to engage fans. ' : ''}${mediaCaptionPrompt || ''} [Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}]`.trim(),
                     }),
                 });
 
@@ -371,8 +411,10 @@ export const ContentIntelligence: React.FC = () => {
     };
 
     const handleRepurpose = async () => {
-        // If media is uploaded but no caption, generate caption from media first
-        let captionToUse = captionInput.trim();
+        // Use generated caption if available, otherwise use input
+        let captionToUse = generatedMediaCaptions.length > 0 
+            ? generatedMediaCaptions[0].caption 
+            : captionInput.trim();
         
         if (mediaFile && !captionToUse) {
             showToast('Generating caption from media first...', 'info');
@@ -398,10 +440,10 @@ export const ContentIntelligence: React.FC = () => {
                     },
                     body: JSON.stringify({
                         mediaUrl: mediaUrl,
-                        tone: mediaCaptionTone === 'Explicit' ? 'Sexy / Explicit' : mediaCaptionTone,
+                        tone: mediaCaptionTone === 'Explicit' ? 'Sexy / Explicit' : mediaCaptionTone === 'Very Explicit' ? 'Sexy / Very Explicit' : mediaCaptionTone,
                         goal: mediaCaptionGoal,
-                        platforms: isOnlyFansStudio ? ['OnlyFans'] : [platformInput],
-                        promptText: `${mediaCaptionPrompt || ''} [Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}]`.trim(),
+                        platforms: isOnlyFansStudio ? ['OnlyFans' as any] : [platformInput],
+                        promptText: `${isOnlyFansStudio ? 'Generate OnlyFans-optimized captions with emojis. OnlyFans creators use lots of emojis to engage fans. ' : ''}${mediaCaptionPrompt || ''} [Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}]`.trim(),
                     }),
                 });
 
@@ -440,8 +482,18 @@ export const ContentIntelligence: React.FC = () => {
             return;
         }
 
+        if (isOnlyFansStudio && !showRepurposePlatforms) {
+            showToast('Please click Repurpose Content first to select a platform', 'error');
+            return;
+        }
+        
         if (!platformInput && !isOnlyFansStudio) {
             showToast('Please select a platform first', 'error');
+            return;
+        }
+        
+        if (isOnlyFansStudio && showRepurposePlatforms && !platformInput) {
+            showToast('Please select a platform to repurpose to', 'error');
             return;
         }
 
@@ -449,9 +501,12 @@ export const ContentIntelligence: React.FC = () => {
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             
-            // For repurpose, target all other platforms (if in OnlyFans Studio, repurpose from OnlyFans to other platforms)
+            // For repurpose, if in OnlyFans Studio and platform is selected, repurpose to that single platform
+            // Otherwise, repurpose to all other platforms
             const originalPlatform = isOnlyFansStudio ? 'OnlyFans' : platformInput;
-            const allTargetPlatforms = safePlatforms.filter(p => p !== originalPlatform);
+            const allTargetPlatforms = isOnlyFansStudio && showRepurposePlatforms && platformInput
+                ? [platformInput] // Single platform for OnlyFans repurpose
+                : safePlatforms.filter(p => p !== originalPlatform);
             
             const response = await fetch('/api/repurposeContent', {
                 method: 'POST',
@@ -503,21 +558,24 @@ export const ContentIntelligence: React.FC = () => {
 
     // Media Captions Generation
     const handleGenerateMediaCaptions = async () => {
-        if (!mediaFile) {
+        if (!mediaFile && !mediaUrl) {
             showToast('Please upload an image or video', 'error');
             return;
         }
 
-        const fileSizeMB = mediaFile.size / 1024 / 1024;
-        const isVideo = mediaFile.type.startsWith('video/');
-        const maxSizeMB = isVideo ? 100 : 10;
+        // Check file size only if it's an actual file (not from vault)
+        if (mediaFile && mediaFile.size > 0) {
+            const fileSizeMB = mediaFile.size / 1024 / 1024;
+            const isVideo = mediaFile.type.startsWith('video/');
+            const maxSizeMB = isVideo ? 100 : 10;
 
-        if (fileSizeMB > maxSizeMB) {
-            showToast(
-                `File is too large (${fileSizeMB.toFixed(1)}MB). Maximum size: ${maxSizeMB}MB for ${isVideo ? 'videos' : 'images'}.`,
-                'error'
-            );
-            return;
+            if (fileSizeMB > maxSizeMB) {
+                showToast(
+                    `File is too large (${fileSizeMB.toFixed(1)}MB). Maximum size: ${maxSizeMB}MB for ${isVideo ? 'videos' : 'images'}.`,
+                    'error'
+                );
+                return;
+            }
         }
 
         setIsGeneratingMediaCaptions(true);
@@ -528,22 +586,56 @@ export const ContentIntelligence: React.FC = () => {
                 throw new Error('User not authenticated');
             }
 
-            // Upload to Firebase Storage
-            let mediaUrl: string;
-            try {
-                const timestamp = Date.now();
-                const fileExtension = mediaFile.name.split('.').pop() || (mediaFile.type.startsWith('video/') ? 'mp4' : 'jpg');
-                const storagePath = `users/${user.id}/content-intelligence-uploads/${timestamp}.${fileExtension}`;
-                const storageRef = ref(storage, storagePath);
+            // Use existing URL if available (from vault), otherwise upload
+            let uploadedMediaUrl: string;
+            if (mediaUrl && !mediaUrl.startsWith('blob:')) {
+                // Already have a URL from vault
+                uploadedMediaUrl = mediaUrl;
+            } else {
+                // Need to upload the file
+                if (!mediaFile || mediaFile.size === 0) {
+                    throw new Error('Please upload an image or video');
+                }
+                try {
+                    const timestamp = Date.now();
+                    const fileExtension = mediaFile.name.split('.').pop() || (mediaFile.type.startsWith('video/') ? 'mp4' : 'jpg');
+                    const storagePath = `users/${user.id}/content-intelligence-uploads/${timestamp}.${fileExtension}`;
+                    const storageRef = ref(storage, storagePath);
 
-                await uploadBytes(storageRef, mediaFile, {
-                    contentType: mediaFile.type,
-                });
+                    await uploadBytes(storageRef, mediaFile, {
+                        contentType: mediaFile.type,
+                    });
 
-                mediaUrl = await getDownloadURL(storageRef);
-            } catch (uploadError: any) {
-                console.error('Upload error:', uploadError);
-                throw new Error(`Failed to upload media: ${uploadError.message || 'Please try again'}`);
+                    uploadedMediaUrl = await getDownloadURL(storageRef);
+                    setMediaUrl(uploadedMediaUrl); // Store the URL for later use
+                
+                    // If in OnlyFans Studio, also save to media vault
+                    if (isOnlyFansStudio) {
+                        try {
+                            const mediaItem = {
+                                id: timestamp.toString(),
+                                userId: user.id,
+                                url: uploadedMediaUrl,
+                                name: mediaFile.name,
+                                type: mediaFile.type.startsWith('video/') ? 'video' : 'image',
+                                mimeType: mediaFile.type,
+                                size: mediaFile.size,
+                                uploadedAt: new Date().toISOString(),
+                                usedInPosts: [],
+                                tags: [],
+                                folderId: 'general', // Save to General folder
+                            };
+                            
+                            await setDoc(doc(db, 'users', user.id, 'onlyfans_media_library', mediaItem.id), mediaItem);
+                        } catch (vaultError: any) {
+                            console.error('Failed to save to media vault:', vaultError);
+                            // Don't throw - continue with caption generation even if vault save fails
+                        }
+                    }
+                } catch (uploadError: any) {
+                    console.error('Upload error:', uploadError);
+                    throw new Error(`Failed to upload media: ${uploadError.message || 'Please try again'}`);
+                }
             }
             
             const response = await fetch('/api/generateCaptions', {
@@ -553,11 +645,11 @@ export const ContentIntelligence: React.FC = () => {
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
                 body: JSON.stringify({
-                    mediaUrl: mediaUrl,
-                    tone: mediaCaptionTone === 'Explicit' ? 'Sexy / Explicit' : mediaCaptionTone,
+                    mediaUrl: uploadedMediaUrl,
+                    tone: mediaCaptionTone === 'Explicit' ? 'Sexy / Explicit' : mediaCaptionTone === 'Very Explicit' ? 'Sexy / Very Explicit' : mediaCaptionTone,
                     goal: mediaCaptionGoal,
-                    platforms: [platformInput],
-                    promptText: `${mediaCaptionPrompt || ''} [Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`.trim(),
+                    platforms: isOnlyFansStudio ? ['OnlyFans' as any] : [platformInput],
+                    promptText: `${isOnlyFansStudio ? 'Generate OnlyFans-optimized captions with emojis. OnlyFans creators use lots of emojis to engage fans. ' : ''}${mediaCaptionPrompt || ''} [Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`.trim(),
                 }),
             });
 
@@ -579,7 +671,7 @@ export const ContentIntelligence: React.FC = () => {
                 }));
             }
             setGeneratedMediaCaptions(Array.isArray(captions) ? captions : []);
-            await saveToHistory('media_captions', `Media Captions - ${platformInput}`, { captions, platform: platformInput });
+            await saveToHistory('media_captions', `Media Captions - ${isOnlyFansStudio ? 'OnlyFans' : platformInput}`, { captions, platform: isOnlyFansStudio ? 'OnlyFans' : platformInput });
             showToast('Captions generated successfully!', 'success');
         } catch (error: any) {
             console.error('Error generating media captions:', error);
@@ -596,12 +688,125 @@ export const ContentIntelligence: React.FC = () => {
         setMediaFile(file);
         const previewUrl = URL.createObjectURL(file);
         setMediaPreview(previewUrl);
+        setMediaUrl(null); // Reset stored URL when new file is selected
+        setShowRepurposePlatforms(false); // Reset repurpose platforms visibility
     };
 
 
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text);
         showToast('Copied to clipboard!', 'success');
+    };
+
+    // Handle save to Draft or Calendar
+    const handleSaveCaption = async (caption: string, hashtags: string[], status: 'Draft' | 'Scheduled') => {
+        if (!user || !mediaFile) {
+            showToast('Please upload media first', 'error');
+            return;
+        }
+
+        try {
+            // Use stored media URL from generation, or upload if not available
+            let finalMediaUrl: string | undefined = mediaUrl || undefined;
+            
+            if (!finalMediaUrl && mediaPreview && mediaPreview.startsWith('blob:')) {
+                // Need to upload to get permanent URL
+                const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+                if (!user?.id) {
+                    throw new Error('User not authenticated');
+                }
+
+                const timestamp = Date.now();
+                const fileExtension = mediaFile.name.split('.').pop() || (mediaFile.type.startsWith('video/') ? 'mp4' : 'jpg');
+                const storagePath = `users/${user.id}/content-intelligence-uploads/${timestamp}.${fileExtension}`;
+                const storageRef = ref(storage, storagePath);
+                await uploadBytes(storageRef, mediaFile, { contentType: mediaFile.type });
+                finalMediaUrl = await getDownloadURL(storageRef);
+                setMediaUrl(finalMediaUrl);
+            } else if (!finalMediaUrl) {
+                finalMediaUrl = mediaPreview || undefined;
+            }
+
+            const postId = Date.now().toString();
+            const draftDate = new Date();
+            draftDate.setHours(12, 0, 0, 0);
+
+            let scheduledDate: string | undefined;
+            if (status === 'Scheduled') {
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                tomorrow.setHours(14, 0, 0, 0);
+                scheduledDate = tomorrow.toISOString();
+            } else if (status === 'Draft') {
+                scheduledDate = draftDate.toISOString();
+            }
+
+            const fullCaption = hashtags && hashtags.length > 0 
+                ? `${caption} ${hashtags.join(' ')}`
+                : caption;
+
+            const newPost = {
+                id: postId,
+                content: fullCaption,
+                mediaUrl: finalMediaUrl,
+                mediaType: mediaFile.type.startsWith('video/') ? 'video' : 'image',
+                platforms: isOnlyFansStudio ? ['OnlyFans' as any] : [platformInput],
+                status: status,
+                author: { name: user.name, avatar: user.avatar },
+                comments: [],
+                scheduledDate: scheduledDate,
+                postGoal: mediaCaptionGoal,
+                postTone: mediaCaptionTone === 'Explicit' ? 'Sexy / Explicit' : mediaCaptionTone === 'Very Explicit' ? 'Sexy / Very Explicit' : mediaCaptionTone,
+                timestamp: new Date().toISOString(),
+            };
+
+            const safePost = JSON.parse(JSON.stringify(newPost));
+            await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
+
+            // Refresh posts
+            if (setPosts) {
+                try {
+                    const postsRef = collection(db, 'users', user.id, 'posts');
+                    const snapshot = await getDocs(postsRef);
+                    const updatedPosts: any[] = [];
+                    snapshot.forEach((doc) => {
+                        updatedPosts.push({
+                            id: doc.id,
+                            ...doc.data(),
+                        });
+                    });
+                    setPosts(updatedPosts);
+                } catch (error) {
+                    console.error('Failed to refresh posts:', error);
+                }
+            }
+
+            // Clear media after saving
+            setMediaFile(null);
+            setMediaPreview(null);
+            setMediaUrl(null);
+            setGeneratedMediaCaptions([]);
+            setShowRepurposePlatforms(false);
+            
+            if (status === 'Scheduled') {
+                showToast('Added to Calendar!', 'success');
+                if (isOnlyFansStudio && setActivePage) {
+                    setActivePage('onlyfansStudio');
+                } else if (setActivePage) {
+                    setActivePage('calendar');
+                }
+            } else {
+                showToast('Saved to Drafts!', 'success');
+                if (isOnlyFansStudio && setActivePage) {
+                    setActivePage('onlyfansStudio');
+                } else if (setActivePage) {
+                    setActivePage('approvals');
+                }
+            }
+        } catch (error: any) {
+            console.error('Error saving caption:', error);
+            showToast('Failed to save. Please try again.', 'error');
+        }
     };
 
     const platforms: Platform[] = ['Instagram', 'TikTok', 'X', 'LinkedIn', 'Facebook', 'Threads', 'YouTube'];
@@ -660,26 +865,37 @@ export const ContentIntelligence: React.FC = () => {
                                     Upload Image/Video (Optional):
                                 </label>
                                 {!mediaPreview ? (
-                                    <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center">
-                                        <input
-                                            type="file"
-                                            accept="image/*,video/*"
-                                            onChange={handleMediaFileChange}
-                                            className="hidden"
-                                            id="media-upload"
-                                        />
-                                        <label
-                                            htmlFor="media-upload"
-                                            className="cursor-pointer flex flex-col items-center gap-2"
-                                        >
-                                            <UploadIcon className="w-8 h-8 text-gray-400" />
-                                            <span className="text-sm text-gray-600 dark:text-gray-400">
-                                                Click to upload image or video
-                                            </span>
-                                            <span className="text-xs text-gray-500 dark:text-gray-500">
-                                                Max 20MB
-                                            </span>
-                                        </label>
+                                    <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6">
+                                        <div className="flex flex-col items-center gap-3">
+                                            <div className="flex gap-2 w-full">
+                                                <input
+                                                    type="file"
+                                                    accept="image/*,video/*"
+                                                    onChange={handleMediaFileChange}
+                                                    className="hidden"
+                                                    id="media-upload"
+                                                />
+                                                <label
+                                                    htmlFor="media-upload"
+                                                    className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer text-center text-sm font-medium flex items-center justify-center gap-2"
+                                                >
+                                                    <UploadIcon className="w-5 h-5" />
+                                                    Upload File
+                                                </label>
+                                                {isOnlyFansStudio && (
+                                                    <button
+                                                        onClick={() => setShowMediaVaultModal(true)}
+                                                        className="flex-1 px-4 py-3 border border-primary-300 dark:border-primary-700 rounded-md bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 hover:bg-primary-100 dark:hover:bg-primary-900/50 text-sm font-medium flex items-center justify-center gap-2"
+                                                    >
+                                                        <ImageIcon className="w-5 h-5" />
+                                                        From Media Vault
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                Drag and drop or click to upload. Images or Videos (max 20MB)
+                                            </p>
+                                        </div>
                                     </div>
                                 ) : (
                                     <div className="relative">
@@ -700,6 +916,9 @@ export const ContentIntelligence: React.FC = () => {
                                             onClick={() => {
                                                 setMediaFile(null);
                                                 setMediaPreview(null);
+                                                setMediaUrl(null);
+                                                setShowRepurposePlatforms(false);
+                                                setGeneratedMediaCaptions([]);
                                             }}
                                             className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600"
                                         >
@@ -709,80 +928,69 @@ export const ContentIntelligence: React.FC = () => {
                                 )}
                             </div>
 
+                            {/* Context (Optional) - Single text box */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Caption/Content/Context:
+                                    Add context for your caption (optional):
                                 </label>
                                 <textarea
-                                    value={captionInput}
-                                    onChange={(e) => setCaptionInput(e.target.value)}
-                                    placeholder={mediaFile ? "Enter your caption or content to analyze, optimize, predict, or repurpose..." : "Enter your caption or content to analyze, optimize, predict, or repurpose..."}
-                                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[120px]"
+                                    value={mediaCaptionPrompt}
+                                    onChange={(e) => setMediaCaptionPrompt(e.target.value)}
+                                    placeholder="Add any specific details or focus you want for the caption..."
+                                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[80px]"
                                 />
                             </div>
 
-                            {/* Media Caption Options (only show if media is uploaded) */}
+                            {/* Goal and Tone (always show if media is uploaded) */}
                             {mediaFile && (
-                                <>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                            Additional Context (Optional):
+                                            Goal:
                                         </label>
-                                        <textarea
-                                            value={mediaCaptionPrompt}
-                                            onChange={(e) => setMediaCaptionPrompt(e.target.value)}
-                                            placeholder="Add any specific details or focus you want for the caption..."
-                                            className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[80px]"
-                                        />
+                                        <select
+                                            value={mediaCaptionGoal}
+                                            onChange={(e) => setMediaCaptionGoal(e.target.value)}
+                                            className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                        >
+                                            <option value="engagement">Engagement</option>
+                                            <option value="sales">Sales/Monetization</option>
+                                            <option value="brand">Brand Awareness</option>
+                                            <option value="followers">Increase Followers</option>
+                                        </select>
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                                Goal:
-                                            </label>
-                                            <select
-                                                value={mediaCaptionGoal}
-                                                onChange={(e) => setMediaCaptionGoal(e.target.value)}
-                                                className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                            >
-                                                <option value="engagement">Engagement</option>
-                                                <option value="sales">Sales/Monetization</option>
-                                                <option value="brand">Brand Awareness</option>
-                                                <option value="followers">Increase Followers</option>
-                                            </select>
-                                        </div>
 
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                                Tone:
-                                            </label>
-                                            <div className="grid grid-cols-3 gap-2">
-                                                {(['Playful', 'Flirty', 'Confident', 'Teasing', 'Intimate', 'Explicit'] as const).map((tone) => (
-                                                    <button
-                                                        key={tone}
-                                                        onClick={() => setMediaCaptionTone(tone)}
-                                                        className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
-                                                            mediaCaptionTone === tone
-                                                                ? 'bg-primary-600 text-white'
-                                                                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                                                        }`}
-                                                    >
-                                                        {tone}
-                                                    </button>
-                                                ))}
-                                            </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Tone:
+                                        </label>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {(['Playful', 'Flirty', 'Confident', 'Teasing', 'Intimate', 'Explicit', 'Very Explicit'] as const).map((tone) => (
+                                                <button
+                                                    key={tone}
+                                                    onClick={() => setMediaCaptionTone(tone)}
+                                                    className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+                                                        mediaCaptionTone === tone
+                                                            ? 'bg-primary-600 text-white'
+                                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                                    }`}
+                                                >
+                                                    {tone}
+                                                </button>
+                                            ))}
                                         </div>
                                     </div>
-                                </>
+                                </div>
                             )}
 
-                            {isOnlyFansStudio ? (
+                            {/* Platform Selection - Only show when Repurpose is clicked (OnlyFans Studio) */}
+                            {isOnlyFansStudio && showRepurposePlatforms && (
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        Target Platform (for Repurpose Content only):
+                                        Select Platform to Repurpose To:
                                     </label>
                                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                                        Content is optimized for OnlyFans by default. Select a platform below only if you want to repurpose content to other platforms.
+                                        Select a single platform to repurpose your OnlyFans content to.
                                     </p>
                                     <div className="flex flex-wrap gap-1.5">
                                         {platforms.map(platform => {
@@ -804,7 +1012,10 @@ export const ContentIntelligence: React.FC = () => {
                                         })}
                                     </div>
                                 </div>
-                            ) : (
+                            )}
+
+                            {/* Platform Selection - Non-OnlyFans Studio (always show) */}
+                            {!isOnlyFansStudio && (
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                         Plan for Platform (Select One):
@@ -836,26 +1047,25 @@ export const ContentIntelligence: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* Generate Media Captions Button (only show if media is uploaded) */}
-                    {mediaFile && (
-                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                            <button
-                                onClick={handleGenerateMediaCaptions}
-                                disabled={isGeneratingMediaCaptions}
-                                className="w-full px-4 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium transition-all shadow-md hover:shadow-lg"
-                            >
-                                {isGeneratingMediaCaptions ? (
-                                    <>
-                                        <RefreshIcon className="w-5 h-5 animate-spin" />
-                                        Analyzing media and generating captions...
-                                    </>
-                                ) : (
-                                    <>
-                                        <SparklesIcon className="w-5 h-5" />
-                                        Generate Captions from Image/Video
-                                    </>
-                                )}
-                            </button>
+                    {/* Generate Media Captions Button - Always Visible */}
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                        <button
+                            onClick={handleGenerateMediaCaptions}
+                            disabled={isGeneratingMediaCaptions || (!mediaFile && !mediaUrl)}
+                            className="w-full px-4 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium transition-all shadow-md hover:shadow-lg"
+                        >
+                            {isGeneratingMediaCaptions ? (
+                                <>
+                                    <RefreshIcon className="w-5 h-5 animate-spin" />
+                                    Analyzing media and generating captions...
+                                </>
+                            ) : (
+                                <>
+                                    <SparklesIcon className="w-5 h-5" />
+                                    Generate Captions from Image/Video
+                                </>
+                            )}
+                        </button>
 
                             {/* Generated Media Captions */}
                             {Array.isArray(generatedMediaCaptions) && generatedMediaCaptions.length > 0 && (
@@ -872,18 +1082,35 @@ export const ContentIntelligence: React.FC = () => {
                                                     {result.hashtags.join(' ')}
                                                 </p>
                                             )}
-                                            <button
-                                                onClick={() => copyToClipboard(`${result.caption} ${(result.hashtags || []).join(' ')}`.trim())}
-                                                className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                            >
-                                                Copy
-                                            </button>
+                                            <div className="flex flex-wrap gap-2">
+                                                <button
+                                                    onClick={() => copyToClipboard(`${result.caption} ${(result.hashtags || []).join(' ')}`.trim())}
+                                                    className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                                >
+                                                    Copy
+                                                </button>
+                                                {isOnlyFansStudio && (
+                                                    <>
+                                                        <button
+                                                            onClick={() => handleSaveCaption(result.caption, result.hashtags || [], 'Draft')}
+                                                            className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                                                        >
+                                                            Draft
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleSaveCaption(result.caption, result.hashtags || [], 'Scheduled')}
+                                                            className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 px-3 py-1 border border-blue-300 dark:border-blue-600 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                                                        >
+                                                            Calendar
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
                             )}
-                        </div>
-                    )}
+                    </div>
 
                     {/* Action Buttons */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -906,29 +1133,10 @@ export const ContentIntelligence: React.FC = () => {
                             )}
                         </button>
 
-                        {/* Optimize */}
-                        <button
-                            onClick={handleOptimize}
-                            disabled={isOptimizing || !captionInput.trim()}
-                            className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium transition-all shadow-md hover:shadow-lg"
-                        >
-                            {isOptimizing ? (
-                                <>
-                                    <RefreshIcon className="w-5 h-5 animate-spin" />
-                                    Optimizing...
-                                </>
-                            ) : (
-                                <>
-                                    <SparklesIcon className="w-5 h-5" />
-                                    Optimize Caption
-                                </>
-                            )}
-                        </button>
-
                         {/* Predict */}
                         <button
                             onClick={handlePredict}
-                            disabled={isPredicting || !captionInput.trim()}
+                            disabled={isPredicting || (!captionInput.trim() && generatedMediaCaptions.length === 0)}
                             className="px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium transition-all shadow-md hover:shadow-lg"
                         >
                             {isPredicting ? (
@@ -946,8 +1154,17 @@ export const ContentIntelligence: React.FC = () => {
 
                         {/* Repurpose */}
                         <button
-                            onClick={handleRepurpose}
-                            disabled={isRepurposing || !captionInput.trim() || !platformInput}
+                            onClick={() => {
+                                if (isOnlyFansStudio && !showRepurposePlatforms) {
+                                    // First click: show platform selection
+                                    setShowRepurposePlatforms(true);
+                                    showToast('Select a platform to repurpose to', 'info');
+                                } else {
+                                    // Second click: execute repurpose
+                                    handleRepurpose();
+                                }
+                            }}
+                            disabled={isRepurposing || !captionInput.trim() || (!isOnlyFansStudio && !platformInput)}
                             className="px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium transition-all shadow-md hover:shadow-lg"
                         >
                             {isRepurposing ? (
@@ -958,7 +1175,7 @@ export const ContentIntelligence: React.FC = () => {
                             ) : (
                                 <>
                                     <SparklesIcon className="w-5 h-5" />
-                                    Repurpose Content
+                                    {isOnlyFansStudio && !showRepurposePlatforms ? 'Repurpose Content' : 'Repurpose to Selected Platform'}
                                 </>
                             )}
                         </button>
@@ -1079,6 +1296,55 @@ export const ContentIntelligence: React.FC = () => {
                         showToast('Copied to clipboard!', 'success');
                     }}
                 />
+            )}
+
+            {/* Media Vault Selection Modal */}
+            {showMediaVaultModal && isOnlyFansStudio && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+                        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Select from Media Vault</h2>
+                            <button
+                                onClick={() => setShowMediaVaultModal(false)}
+                                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                            >
+                                <XMarkIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-6">
+                            {mediaVaultItems.length === 0 ? (
+                                <div className="text-center py-8">
+                                    <p className="text-gray-600 dark:text-gray-400">No media in vault yet.</p>
+                                    <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">Upload media to your OnlyFans Media Vault first.</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                    {mediaVaultItems.map((item) => (
+                                        <button
+                                            key={item.id}
+                                            onClick={() => handleSelectFromVault(item)}
+                                            className="relative aspect-square rounded-lg overflow-hidden border-2 border-gray-200 dark:border-gray-700 hover:border-primary-500 dark:hover:border-primary-400 transition-colors"
+                                        >
+                                            {item.type === 'video' ? (
+                                                <video src={item.url} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <img src={item.url} alt={item.name || 'Media'} className="w-full h-full object-cover" />
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+                            <button
+                                onClick={() => setShowMediaVaultModal(false)}
+                                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

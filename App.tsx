@@ -29,9 +29,7 @@ import { Calendar } from './components/Calendar';
 import MediaLibrary from './components/MediaLibrary';
 import { Approvals } from './components/Approvals';
 import { Inbox } from './components/Inbox';
-import { OnboardingSelector } from './components/OnboardingSeledtor';
 import { CreatorOnboardingModal } from './components/CreatorOnboardingModal';
-import { BusinessOnboardingModal } from './components/BusinessOnboardingModal';
 import { PlanSelectorModal } from './components/PlanSelectorModal';
 import { MaintenancePage } from './components/MaintenancePage';
 import { isMaintenanceMode, getAllowedEmail, canBypassMaintenance } from './src/utils/maintenance';
@@ -84,23 +82,18 @@ const pageTitles: Record<Page, string> = {
 };
 
 const MainContent: React.FC = () => {
-    let user, activePage;
-    
-    try {
-        const context = useAppContext();
-        if (!context) {
-            throw new Error('AppContext is not available');
-        }
-        user = context?.user;
-        activePage = context?.activePage || 'dashboard';
-    } catch (error: any) {
-        console.error('Error accessing AppContext in MainContent:', error);
-        // Return a safe fallback that doesn't use context
+    // Hooks must be called unconditionally - cannot be in try-catch
+    const context = useAppContext();
+    const user = context?.user;
+    const activePage = context?.activePage || 'dashboard';
+
+    // Check if context is available
+    if (!context) {
         return (
             <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full flex items-center justify-center">
                 <div className="text-center">
                     <p className="text-red-600 dark:text-red-400 mb-2">An error occurred loading the page.</p>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-2">Context error: {error?.message || 'Unknown error'}</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-2">AppContext is not available</p>
                     <button 
                         onClick={() => window.location.reload()} 
                         className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
@@ -202,11 +195,11 @@ const AppContent: React.FC = () => {
     const allowedEmail = getAllowedEmail();
     
     // Hooks must be called unconditionally at the top level
-    const { isAuthenticated, isAuthLoading, user, setUser, activePage, setActivePage, startTour, isTourActive, toast, isCRMOpen, setPricingView } = useAppContext();
+    const { isAuthenticated, isAuthLoading, user, setUser, activePage, setActivePage, startTour, isTourActive, toast, isCRMOpen, setPricingView, handleLogout, selectedPlan, setSelectedPlan, openPaymentModal } = useAppContext();
     
     const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-    const [onboardingStep, setOnboardingStep] = useState<'selector' | 'plan-selector' | 'creator' | 'business' | 'none'>('none');
-    const [selectedUserType, setSelectedUserType] = useState<UserType | null>(null);
+    const [loginModalInitialView, setLoginModalInitialView] = useState<'login' | 'signup'>('login');
+    const [onboardingStep, setOnboardingStep] = useState<'plan-selector' | 'creator' | 'none'>('none');
     const [bypassMaintenance, setBypassMaintenance] = useState(false);
 
     // Auto-bypass maintenance for whitelisted users
@@ -266,29 +259,60 @@ const AppContent: React.FC = () => {
     }, [activePage]);
 
     useEffect(() => {
-        if (isAuthenticated && user) {
-            if (!user.userType) {
-                setOnboardingStep('selector');
-            } else {
-                // Check if user has a valid plan for their userType
-                const hasValidPlan = user.userType === 'Business' 
-                    ? (user.plan === 'Starter' || user.plan === 'Growth')
-                    : (user.plan === 'Free' || user.plan === 'Caption' || user.plan === 'OnlyFansStudio' || user.plan === 'Pro' || user.plan === 'Elite' || user.plan === 'Agency');
-                
-                // If user has completed onboarding, they're done
-                if (user.hasCompletedOnboarding) {
-                    setOnboardingStep('none');
-                } else if (!hasValidPlan) {
-                    // User has userType but invalid plan (e.g., Business with Free plan) - show plan selector
-                    setSelectedUserType(user.userType);
-                    setOnboardingStep('plan-selector');
-                } else {
-                    // User has valid plan but hasn't completed onboarding - proceed to onboarding
-                    setOnboardingStep(user.userType === 'Business' ? 'business' : 'creator');
-                }
-            }
+        // Check for pending signup - if user is not authenticated but has pending signup, show plan selector
+        const pendingSignup = localStorage.getItem('pendingSignup');
+        if (!isAuthenticated && pendingSignup) {
+            // User has filled signup form but hasn't created account yet - show plan selector
+            setOnboardingStep('plan-selector');
+            return;
         }
-    }, [isAuthenticated, user]);
+
+        if (isAuthenticated && user) {
+            // If user has completed onboarding, they're done
+            if (user.hasCompletedOnboarding) {
+                setOnboardingStep('none');
+                return;
+            }
+            
+            // All users are Creators now - auto-set if missing
+            if (!user.userType) {
+                setUser({ ...user, userType: 'Creator' });
+            }
+            
+            // New signup flow: Show plan selector first for users who haven't completed onboarding
+            // Exception: If they already have a paid plan (Pro/Elite), they've already selected,
+            // so proceed directly to onboarding
+            const hasPaidPlan = user.plan === 'Pro' || user.plan === 'Elite' || user.plan === 'Agency';
+            
+            // If user has a pre-selected plan from landing page, handle it
+            if (selectedPlan) {
+                if (selectedPlan === 'Free') {
+                    // Free plan - set it and proceed to onboarding
+                    setUser({ ...user, plan: 'Free' });
+                    setSelectedPlan(null); // Clear selected plan
+                    setOnboardingStep('creator');
+                } else if (selectedPlan === 'Pro' || selectedPlan === 'Elite') {
+                    // Paid plan - open payment modal instead of plan selector
+                    const planData = selectedPlan === 'Pro' 
+                        ? { name: 'Pro', price: 29, cycle: 'monthly' as const }
+                        : { name: 'Elite', price: 59, cycle: 'monthly' as const };
+                    openPaymentModal(planData);
+                    setSelectedPlan(null); // Clear selected plan
+                    // Don't set onboarding step yet - wait for payment to complete
+                    return;
+                }
+            } else if (hasPaidPlan) {
+                // User already selected a paid plan, proceed to onboarding
+                setOnboardingStep('creator');
+            } else {
+                // User has Free plan (auto-assigned) or no plan - show plan selector so they can choose
+                setOnboardingStep('plan-selector');
+            }
+        } else if (!isAuthenticated) {
+            // Not authenticated and no pending signup - clear onboarding
+            setOnboardingStep('none');
+        }
+    }, [isAuthenticated, user, setUser, selectedPlan, openPaymentModal]);
 
     const handleOnboardingComplete = async () => {
         if (user) {
@@ -298,33 +322,23 @@ const AppContent: React.FC = () => {
         startTour();
     };
     
-    const handleUserTypeSelected = async (type: UserType) => {
-        if (user) {
-            await setUser({ ...user, userType: type });
-        }
-        
-        // Check if there's a pending pricing view from plan upgrade/downgrade
-        const pendingPricingView = localStorage.getItem('pendingPricingView') as 'Creator' | 'Business' | null;
-        if (pendingPricingView && pendingPricingView === type) {
-            // Navigate to pricing with the stored view
-            localStorage.removeItem('pendingPricingView');
-            setPricingView(pendingPricingView);
-            setActivePage('pricing');
-            setOnboardingStep('none');
-            return;
-        }
-        
-        // Always show plan selector after userType selection (for new signups)
-        // This ensures users explicitly choose their plan
-        setSelectedUserType(type);
-        setOnboardingStep('plan-selector');
-    };
+    // Removed handleUserTypeSelected - all users are Creators now
 
     const handlePlanSelected = async (plan: Plan) => {
-        // Plan is already saved in PlanSelectorModal, just proceed to onboarding
-        if (selectedUserType) {
-            setOnboardingStep(selectedUserType === 'Business' ? 'business' : 'creator');
+        // Plan is already saved in PlanSelectorModal
+        // Ensure userType is set to Creator (all users are Creators)
+        if (user && user.userType !== 'Creator') {
+            await setUser({ ...user, userType: 'Creator' });
         }
+        // Proceed to plan-specific onboarding
+        setOnboardingStep('creator');
+    };
+
+    const handlePlanCancel = async () => {
+        // Cancel signup process: sign out user and close modal
+        // This will take them back to the landing page (user becomes null, so landing page shows)
+        await handleLogout();
+        setOnboardingStep('none');
     };
 
     const handleNavigateRequest = (page: Page) => {
@@ -389,12 +403,72 @@ const AppContent: React.FC = () => {
         return <div className="h-screen w-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900"><p className="text-gray-500 dark:text-gray-400">Loading...</p></div>;
     }
 
+    // Check for pending signup - if exists, show plan selector instead of landing page
+    const pendingSignup = typeof window !== 'undefined' ? localStorage.getItem('pendingSignup') : null;
+    
     // Show landing page/login only if maintenance is NOT enabled OR user can bypass
     if (!isAuthenticated) {
+        // If there's a pending signup, show plan selector modal
+        if (pendingSignup && onboardingStep === 'plan-selector') {
+            return (
+                <>
+                    <LandingPage 
+                        onLoginClick={() => {
+                            setLoginModalInitialView('login');
+                            setIsLoginModalOpen(true);
+                        }}
+                        onGetStartedClick={() => {
+                            setLoginModalInitialView('signup');
+                            setIsLoginModalOpen(true);
+                        }}
+                        onNavigateRequest={handleNavigateRequest} 
+                    />
+                    <PlanSelectorModal userType="Creator" onSelect={handlePlanSelected} onCancel={handlePlanCancel} />
+                    {isLoginModalOpen && (
+                        <LoginModal 
+                            isOpen={isLoginModalOpen} 
+                            onClose={() => {
+                                setIsLoginModalOpen(false);
+                                // Clear selected plan when closing modal if user didn't sign up
+                                if (!isAuthenticated) {
+                                    setSelectedPlan(null);
+                                }
+                            }}
+                            initialView={loginModalInitialView}
+                            selectedPlan={selectedPlan || undefined}
+                        />
+                    )}
+                </>
+            );
+        }
+        
         return (
             <>
-                <LandingPage onLoginClick={() => setIsLoginModalOpen(true)} onNavigateRequest={handleNavigateRequest} />
-                {isLoginModalOpen && <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} />}
+                <LandingPage 
+                    onLoginClick={() => {
+                        setLoginModalInitialView('login');
+                        setIsLoginModalOpen(true);
+                    }}
+                    onGetStartedClick={() => {
+                        setLoginModalInitialView('signup');
+                        setIsLoginModalOpen(true);
+                    }}
+                    onNavigateRequest={handleNavigateRequest} 
+                />
+                {isLoginModalOpen && (
+                    <LoginModal 
+                        isOpen={isLoginModalOpen} 
+                        onClose={() => {
+                            setIsLoginModalOpen(false);
+                            // Clear selected plan when closing modal if user didn't sign up
+                            if (!isAuthenticated) {
+                                setSelectedPlan(null);
+                            }
+                        }}
+                        initialView={loginModalInitialView}
+                        selectedPlan={selectedPlan || undefined}
+                    />
+                )}
             </>
         );
     }
@@ -427,12 +501,10 @@ const AppContent: React.FC = () => {
 
     return (
         <div className="flex h-screen bg-gray-100 dark:bg-gray-900 font-sans w-full overflow-x-hidden">
-            {onboardingStep === 'selector' && <OnboardingSelector onSelect={handleUserTypeSelected} />}
-            {onboardingStep === 'plan-selector' && selectedUserType && (
-                <PlanSelectorModal userType={selectedUserType} onSelect={handlePlanSelected} />
+            {onboardingStep === 'plan-selector' && (
+                <PlanSelectorModal userType="Creator" onSelect={handlePlanSelected} onCancel={handlePlanCancel} />
             )}
             {onboardingStep === 'creator' && <CreatorOnboardingModal onComplete={handleOnboardingComplete} />}
-            {onboardingStep === 'business' && <BusinessOnboardingModal onComplete={handleOnboardingComplete} />}
 
             {isTourActive && <InteractiveTour />}
             <Sidebar />
@@ -445,7 +517,7 @@ const AppContent: React.FC = () => {
             </div>
             <PaymentModal />
             {toast && <Toast message={toast.message} type={toast.type} />}
-            <VoiceAssistant />
+            {user?.plan !== 'Free' && <VoiceAssistant />}
             <Chatbot />
         </div>
     );

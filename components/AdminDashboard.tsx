@@ -2,11 +2,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, Activity } from '../types';
 import { UserManagementModal } from './UserManagementModal';
-import { PromotionsManagement } from './PromotionsManagement';
 import { ReferralRewardsConfig } from './ReferralRewardsConfig';
 import { GrantReferralRewardModal } from './GrantReferralRewardModal';
-import { TeamIcon, DollarSignIcon, UserPlusIcon, ArrowUpCircleIcon, ImageIcon, VideoIcon, LockIcon, TrendingIcon } from './icons/UIIcons';
-import { db } from '../firebaseConfig';
+import { TeamIcon, DollarSignIcon, UserPlusIcon, ArrowUpCircleIcon, ImageIcon, VideoIcon, LockIcon, TrendingIcon, TrashIcon } from './icons/UIIcons';
+import { db, auth } from '../firebaseConfig';
 import { collection, query, orderBy, onSnapshot, setDoc, doc } from 'firebase/firestore';
 import { useAppContext } from './AppContext';
 import { defaultSettings } from '../constants';
@@ -42,6 +41,26 @@ const getUsageString = (plan: User['plan'], usage: number | undefined, type: 'im
     return `${currentUsage}`;
 };
 
+const getStorageLimit = (plan: User['plan']): number => {
+    // Storage limits in MB
+    if (plan === 'Free') return 100;
+    if (plan === 'Pro') return 5120; // 5 GB
+    if (plan === 'Elite' || plan === 'Growth') return 10240; // 10 GB
+    if (plan === 'Agency') return 51200; // 50 GB
+    if (plan === 'Starter') return 1024; // 1 GB
+    return 100; // Default to Free plan limit
+};
+
+const formatStorage = (used: number, limit: number): string => {
+    // If limit is >= 1024 MB, display in GB
+    if (limit >= 1024) {
+        const usedGB = (used / 1024).toFixed(2);
+        const limitGB = (limit / 1024).toFixed(0);
+        return `${usedGB}GB / ${limitGB}GB`;
+    }
+    return `${used.toFixed(1)}MB / ${limit}MB`;
+};
+
 const planColorMap: Record<User['plan'], string> = {
     Free: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
     Caption: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200',
@@ -63,7 +82,7 @@ const planPrices: Record<User['plan'], number> = {
 };
 
 export const AdminDashboard: React.FC = () => {
-    const { user: currentUser } = useAppContext();
+    const { user: currentUser, showToast } = useAppContext();
     const [users, setUsers] = useState<User[]>([]);
     const [activityFeed, setActivityFeed] = useState<Activity[]>([]);
     const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -74,7 +93,7 @@ export const AdminDashboard: React.FC = () => {
     const [modelUsageStats, setModelUsageStats] = useState<ModelUsageStats | null>(null);
     const [isLoadingModelStats, setIsLoadingModelStats] = useState(true);
     const [modelStatsDays, setModelStatsDays] = useState<number>(30);
-    const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'promotions' | 'referralRewards'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'referralRewards'>('overview');
 
     // Fetch model usage analytics
     useEffect(() => {
@@ -214,6 +233,38 @@ export const AdminDashboard: React.FC = () => {
         }
     };
 
+    const handleDeleteUser = async (userToDelete: User) => {
+        if (!window.confirm(`Are you sure you want to delete user "${userToDelete.name}" (${userToDelete.email})? This action cannot be undone and will delete the user from both Firebase Auth and Firestore.`)) {
+            return;
+        }
+
+        try {
+            const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+            
+            const response = await fetch('/api/adminDeleteUser', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({ userId: userToDelete.id }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Failed to delete user');
+            }
+
+            // Remove user from local state
+            setUsers(prevUsers => prevUsers.filter(u => u.id !== userToDelete.id));
+            showToast('User deleted successfully', 'success');
+        } catch (error: any) {
+            console.error('Failed to delete user:', error);
+            showToast(error?.message || 'Failed to delete user', 'error');
+        }
+    };
+
     const { 
         totalUsers, 
         simulatedMRR, 
@@ -229,7 +280,8 @@ export const AdminDashboard: React.FC = () => {
         const distribution: Record<User['plan'], number> = { Free: 0, Caption: 0, Pro: 0, Elite: 0, Agency: 0, Growth: 0, Starter: 0 };
         
         users.forEach(user => {
-            if (user.plan in distribution) {
+            // Hide Agency, Starter, Growth, and Caption plans from display
+            if (user.plan !== 'Agency' && user.plan !== 'Starter' && user.plan !== 'Growth' && user.plan !== 'Caption' && user.plan in distribution) {
                 distribution[user.plan]++;
             }
         });
@@ -306,16 +358,6 @@ export const AdminDashboard: React.FC = () => {
                         Users
                     </button>
                     <button
-                        onClick={() => setActiveTab('promotions')}
-                        className={`px-4 py-2 rounded-md transition-colors ${
-                            activeTab === 'promotions'
-                                ? 'bg-primary-600 text-white'
-                                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                        }`}
-                    >
-                        Promotions
-                    </button>
-                    <button
                         onClick={() => setActiveTab('referralRewards')}
                         className={`px-4 py-2 rounded-md transition-colors ${
                             activeTab === 'referralRewards'
@@ -328,7 +370,6 @@ export const AdminDashboard: React.FC = () => {
                 </div>
             </div>
 
-            {activeTab === 'promotions' && <PromotionsManagement />}
             {activeTab === 'referralRewards' && <ReferralRewardsConfig />}
             {activeTab === 'overview' && (
                 <>
@@ -345,7 +386,9 @@ export const AdminDashboard: React.FC = () => {
                      <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
                         <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Plan Distribution</h3>
                          <div className="space-y-3">
-                            {Object.entries(planDistribution).map(([plan, count]) => {
+                            {Object.entries(planDistribution)
+                                .filter(([plan]) => plan !== 'Agency' && plan !== 'Starter' && plan !== 'Growth' && plan !== 'Caption') // Hide Agency, Starter, Growth, and Caption
+                                .map(([plan, count]) => {
                                 const percentage = totalUsers > 0 ? (Number(count) / totalUsers * 100).toFixed(1) : "0";
                                 return (
                                     <div key={plan}>
@@ -606,13 +649,16 @@ export const AdminDashboard: React.FC = () => {
                                 <th className="p-3 font-semibold text-gray-600 dark:text-gray-300">Plan</th>
                                 <th className="p-3 font-semibold text-gray-600 dark:text-gray-300">Signup Date</th>
                                 <th className="p-3 font-semibold text-gray-600 dark:text-gray-300">Storage</th>
+                                <th className="p-3 font-semibold text-gray-600 dark:text-gray-300">AI Captions</th>
                                 <th className="p-3 font-semibold text-gray-600 dark:text-gray-300">Image Usage</th>
                                 <th className="p-3 font-semibold text-gray-600 dark:text-gray-300">Video Usage</th>
                                 <th className="p-3 font-semibold text-gray-600 dark:text-gray-300">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredUsers.map(user => (
+                            {filteredUsers
+                                .filter(user => user.plan !== 'Agency' && user.plan !== 'Starter' && user.plan !== 'Growth' && user.plan !== 'Caption') // Hide Agency, Starter, Growth, and Caption users
+                                .map(user => (
                                 <tr key={user.id} className="border-b border-gray-200 dark:border-gray-700">
                                     <td className="p-3">
                                         <div className="flex items-center space-x-3">
@@ -632,7 +678,18 @@ export const AdminDashboard: React.FC = () => {
                                         {new Date(user.signupDate).toLocaleDateString()}
                                     </td>
                                     <td className="p-3 text-sm text-gray-600 dark:text-gray-300">
-                                        {`${(user.storageUsed ?? 0).toFixed(1)}MB / ${(user.storageLimit ?? 0)}MB`}
+                                        {formatStorage(user.storageUsed ?? 0, getStorageLimit(user.plan))}
+                                    </td>
+                                    <td className="p-3 font-mono text-gray-600 dark:text-gray-300">
+                                        {(() => {
+                                            const used = user.monthlyCaptionGenerationsUsed ?? 0;
+                                            let limit = 0;
+                                            if (user.plan === 'Free') limit = 10;
+                                            else if (user.plan === 'Pro') limit = 500;
+                                            else if (user.plan === 'Elite') limit = 1500;
+                                            else if (user.plan === 'Agency') limit = 10000;
+                                            return limit > 0 ? `${used}/${limit}` : `${used}`;
+                                        })()}
                                     </td>
                                     <td className="p-3 font-mono text-gray-600 dark:text-gray-300">{getUsageString(user.plan, user.monthlyImageGenerationsUsed, 'image')}</td>
                                     <td className="p-3 font-mono text-gray-600 dark:text-gray-300">{getUsageString(user.plan, user.monthlyVideoGenerationsUsed, 'video')}</td>
@@ -643,6 +700,14 @@ export const AdminDashboard: React.FC = () => {
                                             </button>
                                             <button onClick={() => setGrantingRewardToUser(user)} className="px-3 py-1 text-sm font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-md">
                                                 Grant Reward
+                                            </button>
+                                            <button 
+                                                onClick={() => handleDeleteUser(user)} 
+                                                className="px-3 py-1 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md flex items-center gap-1"
+                                                title="Delete User"
+                                            >
+                                                <TrashIcon className="w-4 h-4" />
+                                                Delete
                                             </button>
                                         </div>
                                     </td>

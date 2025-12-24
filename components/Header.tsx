@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { SunIcon, MoonIcon, BellIcon, MenuIcon, LogoutIcon, ChatIcon, BriefcaseIcon } from './icons/UIIcons';
+import { SunIcon, MoonIcon, BellIcon, MenuIcon, LogoutIcon, ChatIcon, BriefcaseIcon, WarningIcon } from './icons/UIIcons';
 import { Client, Notification } from '../types';
 import { useAppContext } from './AppContext';
 
@@ -62,6 +62,23 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
   };
 
   const handleNotificationClick = (notification: Notification) => {
+    // Handle usage limit notifications differently
+    if (notification.messageId?.startsWith('usage-')) {
+      // Navigate to pricing page for usage limit notifications
+      setActivePage('pricing');
+      
+      // Mark notification as read
+      setNotifications(prevNotifications => 
+        prevNotifications.map(n => 
+          n.id === notification.id ? { ...n, read: true } : n
+        )
+      );
+      
+      setIsNotificationsOpen(false);
+      return;
+    }
+    
+    // Handle regular message notifications (DMs/comments)
     setSelectedClient(null); // Switch to main account to ensure message is visible
     navigateToDashboardWithFilter(
       { platform: 'All', messageType: 'All', sentiment: 'All' }, 
@@ -160,24 +177,27 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
                         <h3 className="font-semibold text-gray-900 dark:text-white">Notifications</h3>
                     </div>
                     <div className="py-1 max-h-80 overflow-y-auto">
-                        {notifications.length > 0 ? notifications.map(notification => (
-                            <button key={notification.id} onClick={() => handleNotificationClick(notification)} className="w-full text-left px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                                <div className="flex items-start">
-                                    <div className="flex-shrink-0 mt-1">
-                                      <div className="relative">
-                                        <div className={`p-2 rounded-full ${!notification.read ? 'bg-primary-100 dark:bg-primary-900/50' : 'bg-gray-100 dark:bg-gray-700'}`}>
-                                            <ChatIcon />
+                        {notifications.length > 0 ? notifications.map(notification => {
+                            const isUsageNotification = notification.messageId?.startsWith('usage-');
+                            return (
+                                <button key={notification.id} onClick={() => handleNotificationClick(notification)} className="w-full text-left px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                                    <div className="flex items-start">
+                                        <div className="flex-shrink-0 mt-1">
+                                          <div className="relative">
+                                            <div className={`p-2 rounded-full ${!notification.read ? (isUsageNotification ? 'bg-yellow-100 dark:bg-yellow-900/50' : 'bg-primary-100 dark:bg-primary-900/50') : 'bg-gray-100 dark:bg-gray-700'}`}>
+                                                {isUsageNotification ? <WarningIcon className="w-5 h-5 text-yellow-600 dark:text-yellow-400" /> : <ChatIcon />}
+                                            </div>
+                                            {!notification.read && <span className="absolute top-0 right-0 h-2 w-2 bg-blue-500 rounded-full"></span>}
+                                          </div>
                                         </div>
-                                        {!notification.read && <span className="absolute top-0 right-0 h-2 w-2 bg-blue-500 rounded-full"></span>}
-                                      </div>
+                                        <div className="ml-3 w-0 flex-1">
+                                            <p className={`text-sm font-medium ${!notification.read ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300'}`}>{notification.text}</p>
+                                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{notification.timestamp}</p>
+                                        </div>
                                     </div>
-                                    <div className="ml-3 w-0 flex-1">
-                                        <p className={`text-sm font-medium ${!notification.read ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300'}`}>{notification.text}</p>
-                                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{notification.timestamp}</p>
-                                    </div>
-                                </div>
-                            </button>
-                        )) : (
+                                </button>
+                            );
+                        }) : (
                            <p className="text-center text-sm text-gray-500 dark:text-gray-400 py-6">You're all caught up!</p> 
                         )}
                     </div>

@@ -1,0 +1,207 @@
+/**
+ * Weekly Tavily Trends Job
+ * 
+ * This job runs weekly (via Vercel Cron or external scheduler) to fetch
+ * current social media trends and store them for use across the app.
+ * 
+ * The trends are stored in Firestore and can be accessed by any Gemini endpoint
+ * to ensure AI suggestions stay current with social media best practices.
+ */
+
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { searchWeb } from "./_webSearch.js";
+import { initializeApp, getApps, cert } from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
+
+// Initialize Firebase Admin if not already initialized
+if (!getApps().length) {
+  try {
+    const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY
+      ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY)
+      : null;
+
+    if (serviceAccount) {
+      initializeApp({
+        credential: cert(serviceAccount),
+      });
+    } else {
+      // Fallback: use default credentials if available
+      initializeApp();
+    }
+  } catch (error) {
+    console.error("Firebase Admin initialization error:", error);
+  }
+}
+
+const db = getFirestore();
+
+interface TrendData {
+  category: string;
+  query: string;
+  results: Array<{
+    title: string;
+    link: string;
+    snippet: string;
+  }>;
+  timestamp: string;
+}
+
+/**
+ * Fetch and store weekly social media trends
+ */
+export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
+  // Allow both GET (for cron) and POST (for manual trigger)
+  if (req.method !== "GET" && req.method !== "POST") {
+    res.status(405).json({ error: "Method not allowed" });
+    return;
+  }
+
+  // Optional: Add authentication for manual triggers
+  if (req.method === "POST") {
+    const authHeader = req.headers.authorization;
+    if (authHeader !== `Bearer ${process.env.CRON_SECRET || "weekly-trends-secret"}`) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+  }
+
+  try {
+    const apiKey = process.env.TAVILY_API_KEY;
+    if (!apiKey) {
+      console.log("[WeeklyTrendsJob] TAVILY_API_KEY not configured, skipping");
+      res.status(200).json({
+        success: false,
+        note: "TAVILY_API_KEY not configured",
+      });
+      return;
+    }
+
+    console.log("[WeeklyTrendsJob] Starting weekly trends fetch...");
+
+    // Define trend categories and queries
+    const trendQueries = [
+      {
+        category: "general_social_media_trends",
+        query: "social media trends 2024 2025 algorithm updates",
+      },
+      {
+        category: "instagram_trends",
+        query: "Instagram algorithm updates 2024 2025 best practices Reels",
+      },
+      {
+        category: "tiktok_trends",
+        query: "TikTok trends 2024 2025 algorithm changes best practices",
+      },
+      {
+        category: "content_creator_tips",
+        query: "content creator best practices 2024 2025 social media tips",
+      },
+      {
+        category: "engagement_strategies",
+        query: "social media engagement strategies 2024 2025 increase engagement",
+      },
+      {
+        category: "hashtag_strategies",
+        query: "social media hashtag strategy 2024 2025 trending hashtags",
+      },
+      {
+        category: "video_content_trends",
+        query: "video content trends 2024 2025 short-form video Reels Shorts",
+      },
+      {
+        category: "platform_updates",
+        query: "social media platform updates 2024 2025 new features",
+      },
+      {
+        category: "onlyfans_creator_tips",
+        query: "OnlyFans creator tips strategies best practices 2024 2025",
+      },
+      {
+        category: "onlyfans_monetization_strategies",
+        query: "OnlyFans monetization strategies tips revenue 2024 2025",
+      },
+      {
+        category: "onlyfans_platform_updates",
+        query: "OnlyFans platform updates features changes 2024 2025",
+      },
+      {
+        category: "onlyfans_engagement_tactics",
+        query: "OnlyFans subscriber engagement strategies retention 2024 2025",
+      },
+    ];
+
+    const allTrends: TrendData[] = [];
+    const timestamp = new Date().toISOString();
+
+    // Fetch trends for each category
+    for (const { category, query } of trendQueries) {
+      try {
+        console.log(`[WeeklyTrendsJob] Fetching trends for: ${category}`);
+        
+        // Use searchWeb without user limits (this is a system job)
+        const searchResult = await searchWeb(query);
+        
+        if (searchResult.success && searchResult.results.length > 0) {
+          allTrends.push({
+            category,
+            query,
+            results: searchResult.results,
+            timestamp,
+          });
+          console.log(`[WeeklyTrendsJob] Fetched ${searchResult.results.length} results for ${category}`);
+        } else {
+          console.log(`[WeeklyTrendsJob] No results for ${category}: ${searchResult.note || "Unknown error"}`);
+        }
+      } catch (error: any) {
+        console.error(`[WeeklyTrendsJob] Error fetching ${category}:`, error);
+        // Continue with other categories even if one fails
+      }
+    }
+
+    // Store trends in Firestore
+    if (allTrends.length > 0) {
+      const trendsDoc = {
+        trends: allTrends,
+        fetchedAt: timestamp,
+        week: getWeekNumber(new Date()),
+        year: new Date().getFullYear(),
+      };
+
+      // Store in a collection for easy access
+      await db.collection("weekly_trends").doc(`week_${getWeekNumber(new Date())}_${new Date().getFullYear()}`).set(trendsDoc, { merge: true });
+      
+      // Also store as "latest" for easy access
+      await db.collection("weekly_trends").doc("latest").set(trendsDoc);
+
+      console.log(`[WeeklyTrendsJob] Stored ${allTrends.length} trend categories in Firestore`);
+    }
+
+    res.status(200).json({
+      success: true,
+      trendsFetched: allTrends.length,
+      timestamp,
+      message: "Weekly trends fetched and stored successfully",
+    });
+    return;
+  } catch (error: any) {
+    console.error("[WeeklyTrendsJob] Error:", error);
+    res.status(500).json({
+      success: false,
+      error: error?.message || "Failed to fetch weekly trends",
+    });
+    return;
+  }
+}
+
+/**
+ * Get week number of the year
+ */
+function getWeekNumber(date: Date): number {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}
+
+

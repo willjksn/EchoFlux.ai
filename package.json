@@ -11,11 +11,13 @@
     "dev:vercel": "vercel dev",
     "build": "vite build",
     "preview": "vite preview",
-    "deploy": "firebase deploy --only hosting,functions"
+    "deploy": "firebase deploy --only hosting"
   },
   "dependencies": {
     "@google/genai": "^1.0.0",
     "@google/generative-ai": "^0.24.1",
+    "@sentry/react": "^10.32.1",
+    "@stripe/stripe-js": "^8.6.0",
     "@vercel/node": "^5.5.10",
     "axios": "^1.13.2",
     "cloudinary": "^2.8.0",
@@ -27,6 +29,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "replicate": "^1.4.0",
+    "stripe": "^20.1.0",
     "vercel": "^48.11.0"
   },
   "devDependencies": {

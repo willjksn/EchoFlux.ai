@@ -86,7 +86,7 @@
    - 3 Social Accounts
    - 250 AI Replies/month
    - AI Content Strategist
-   - Quick Post Automation
+   - AI Content Generation
    - Media Library
    - 1 GB Storage
    - Advanced Analytics
@@ -209,6 +209,8 @@
 5. **Update pricing page** - New plan display
 6. **Test upgrade flows** - Ensure smooth transitions
 7. **Add upgrade prompts** - Guide users to paid plans
+
+
 
 
 

@@ -1,0 +1,148 @@
+// Utility function to create Firebase account from pending signup data
+import { createUserWithEmailAndPassword, updateProfile, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../../firebaseConfig';
+import { User, Plan, Platform, SocialStats } from '../../types';
+import { defaultSettings } from '../../constants';
+
+interface PendingSignupData {
+  email: string;
+  password: string;
+  fullName: string;
+  selectedPlan: string | null;
+  timestamp: number;
+  isGoogleSignup?: boolean;
+  googleUid?: string;
+  googlePhotoURL?: string | null;
+}
+
+export async function createAccountFromPendingSignup(): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Get pending signup data from localStorage
+    const pendingSignupStr = localStorage.getItem('pendingSignup');
+    if (!pendingSignupStr) {
+      return { success: false, error: 'No pending signup found' };
+    }
+
+    const pendingSignup: PendingSignupData = JSON.parse(pendingSignupStr);
+
+    // Check if data is too old (more than 1 hour)
+    const oneHourAgo = Date.now() - 60 * 60 * 1000;
+    if (pendingSignup.timestamp < oneHourAgo) {
+      localStorage.removeItem('pendingSignup');
+      return { success: false, error: 'Signup session expired. Please try again.' };
+    }
+
+    let currentUser = auth.currentUser;
+    
+    // Handle Google signup differently
+    if (pendingSignup.isGoogleSignup) {
+      // For Google signup, the user is already authenticated in Firebase Auth
+      // We just need to ensure they're still signed in (they should be)
+      if (!currentUser) {
+        // If somehow they're not signed in, sign them in with Google
+        const provider = new GoogleAuthProvider();
+        const result = await signInWithPopup(auth, provider);
+        currentUser = result.user;
+      }
+      
+      // Check if user document already exists (shouldn't, but check anyway)
+      const userRef = doc(db, 'users', currentUser.uid);
+      const userSnap = await getDoc(userRef);
+      
+      if (!userSnap.exists()) {
+        // Create the user document manually since AuthContext won't do it (pendingSignup exists)
+        // We'll clear pendingSignup after creating the document
+        const generateMockSocialStats = (): Record<Platform, SocialStats> => {
+          const stats: any = {};
+          const platforms: Platform[] = ['Instagram','TikTok','X','Threads','YouTube','LinkedIn','Facebook','Pinterest'];
+          platforms.forEach(p => {
+            stats[p] = {
+              followers: Math.floor(Math.random() * 15000) + 50,
+              following: Math.floor(Math.random() * 1000) + 5,
+            };
+          });
+          return stats;
+        };
+        
+        const newUser: User = {
+          id: currentUser.uid,
+          name: pendingSignup.fullName || currentUser.displayName || "New User",
+          email: currentUser.email || pendingSignup.email || "",
+          avatar: pendingSignup.googlePhotoURL || currentUser.photoURL || `https://picsum.photos/seed/${currentUser.uid}/100/100`,
+          bio: "Welcome to EchoFlux.ai!",
+          plan: (pendingSignup.selectedPlan as Plan) || 'Free',
+          role: "User",
+          userType: 'Creator',
+          signupDate: new Date().toISOString(),
+          hasCompletedOnboarding: false,
+          notifications: {
+            newMessages: true,
+            weeklySummary: false,
+            trendAlerts: false,
+          },
+          monthlyCaptionGenerationsUsed: 0,
+          monthlyImageGenerationsUsed: 0,
+          monthlyVideoGenerationsUsed: 0,
+          monthlyRepliesUsed: 0,
+          storageUsed: 0,
+          storageLimit: 100,
+          mediaLibrary: [],
+          settings: defaultSettings,
+          socialStats: generateMockSocialStats(),
+        };
+        
+        // Remove undefined values before saving
+        const removeUndefined = (obj: any): any => {
+          if (!obj || typeof obj !== "object") return obj;
+          const clean: any = {};
+          for (const key in obj) {
+            const value = obj[key];
+            if (value !== undefined) clean[key] = removeUndefined(value);
+          }
+          return clean;
+        };
+        
+        const cleanUser = removeUndefined(newUser);
+        await setDoc(userRef, cleanUser);
+      }
+    } else {
+      // Regular email/password signup - create Firebase account
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        pendingSignup.email,
+        pendingSignup.password
+      );
+
+      // Update profile with full name
+      await updateProfile(userCredential.user, {
+        displayName: pendingSignup.fullName || 'New User',
+      });
+      
+      currentUser = userCredential.user;
+    }
+
+    // Clear pending signup data after account/document is created
+    localStorage.removeItem('pendingSignup');
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error creating account from pending signup:', error);
+    
+    // Handle specific Firebase errors
+    let errorMessage = 'Failed to create account. Please try again.';
+    if (error.code === 'auth/email-already-in-use') {
+      errorMessage = 'This email is already registered. Please sign in instead.';
+      localStorage.removeItem('pendingSignup');
+    } else if (error.code === 'auth/weak-password') {
+      errorMessage = 'Password is too weak. Please use a stronger password.';
+    } else if (error.code === 'auth/popup-closed-by-user') {
+      errorMessage = 'Sign-in popup was closed. Please try again.';
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+
+    return { success: false, error: errorMessage };
+  }
+}
+

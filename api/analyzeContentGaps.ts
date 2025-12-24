@@ -4,6 +4,7 @@ import { checkApiKeys, getVerifyAuth, withErrorHandling } from "./_errorHandler.
 import { getModelForTask, getModelNameForTask, getCostTierForTask } from "./_modelRouter.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { trackModelUsage } from "./trackModelUsage.js";
+import { getLatestTrends } from "./_trendsHelper.js";
 
 /**
  * Smart Content Gap Analysis
@@ -37,51 +38,84 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   const { 
     daysToAnalyze = 90,
     niche,
-    platforms 
+    platforms,
+    calendarEvents,
+    posts: providedPosts,
+    useWeeklyTrends = false
   } = (req.body as any) || {};
 
   try {
     const db = getAdminDb();
     
-    // Get user's posts from the last N days
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - daysToAnalyze);
+    let posts: any[] = [];
     
-    const postsRef = db.collection("users").doc(user.uid).collection("posts");
-    const postsSnapshot = await postsRef
-      .where("createdAt", ">=", cutoffDate.toISOString())
-      .get();
+    // Use provided posts if available (for OnlyFans calendar data)
+    if (providedPosts && Array.isArray(providedPosts)) {
+      posts = providedPosts;
+    } else {
+      // Get user's posts from the last N days
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - daysToAnalyze);
+      
+      const postsRef = db.collection("users").doc(user.uid).collection("posts");
+      const postsSnapshot = await postsRef
+        .where("createdAt", ">=", cutoffDate.toISOString())
+        .get();
 
-    const posts: any[] = [];
-    postsSnapshot.forEach((doc) => {
-      const data = doc.data();
-      posts.push({
-        id: doc.id,
-        content: data.content || '',
-        platforms: data.platforms || [],
-        mediaType: data.mediaType || 'image',
-        createdAt: data.createdAt || data.scheduledDate || '',
-        status: data.status || 'draft',
-        goal: data.goal || '',
-        tone: data.tone || '',
-      });
-    });
-
-    // Get trending context if Elite user (optional - works without trends too)
-    let trendContext = '';
-    if (user.plan === 'Elite' || user.role === 'Admin') {
-      try {
-        const trendRes = await fetch(`${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}/api/getTrendingContext`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': req.headers.authorization || '',
-          },
-          body: JSON.stringify({ niche, platforms }),
+      postsSnapshot.forEach((doc) => {
+        const data = doc.data();
+        posts.push({
+          id: doc.id,
+          content: data.content || '',
+          platforms: data.platforms || [],
+          mediaType: data.mediaType || 'image',
+          createdAt: data.createdAt || data.scheduledDate || '',
+          status: data.status || 'draft',
+          goal: data.goal || '',
+          tone: data.tone || '',
         });
-        if (trendRes.ok) {
-          const trendData = await trendRes.json();
-          trendContext = trendData.trendContext || '';
+      });
+    }
+
+    // Add calendar events to posts data if provided (for OnlyFans)
+    if (calendarEvents && Array.isArray(calendarEvents)) {
+      calendarEvents.forEach((event: any) => {
+        posts.push({
+          id: `calendar-${event.date}`,
+          content: event.description || '',
+          platforms: ['OnlyFans'],
+          mediaType: event.contentType === 'paid' ? 'video' : 'image',
+          createdAt: event.date || '',
+          status: 'scheduled',
+          reminderType: event.reminderType,
+          contentType: event.contentType,
+        });
+      });
+    }
+
+    // Get trending context - use weekly trends if requested, or Elite user
+    let trendContext = '';
+    if (useWeeklyTrends || user.plan === 'Elite' || user.role === 'Admin') {
+      try {
+        // Try to get weekly trends first (free, updated every Monday)
+        if (useWeeklyTrends) {
+          trendContext = await getLatestTrends();
+        }
+        
+        // If Elite user and weekly trends not available, try Tavily
+        if (!trendContext && (user.plan === 'Elite' || user.role === 'Admin')) {
+          const trendRes = await fetch(`${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}/api/getTrendingContext`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': req.headers.authorization || '',
+            },
+            body: JSON.stringify({ niche, platforms }),
+          });
+          if (trendRes.ok) {
+            const trendData = await trendRes.json();
+            trendContext = trendData.trendContext || '';
+          }
         }
       } catch (trendError) {
         console.warn('Failed to fetch trends, continuing without:', trendError);

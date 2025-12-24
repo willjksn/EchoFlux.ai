@@ -605,7 +605,9 @@ export const Settings: React.FC = () => {
         if(user) {
             showToast("Resetting account setup...", "success");
             // Async update to ensure persistence before reload
-            await setUser({ ...user, hasCompletedOnboarding: false, userType: undefined });
+            // Remove userType field instead of setting to undefined
+            const { userType, ...userWithoutType } = user;
+            await setUser({ ...userWithoutType, hasCompletedOnboarding: false });
             setTimeout(() => window.location.reload(), 500);
         }
     }
@@ -731,52 +733,36 @@ export const Settings: React.FC = () => {
         
         setIsCancelling(true);
         try {
-            // Calculate subscription end date (end of current billing period)
-            const now = new Date();
-            let endDate = new Date(now);
+            const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             
-            // Calculate end date based on subscription start date and billing cycle
-            // If subscriptionStartDate is not set, use signupDate or current date as fallback
-            const startDate = user.subscriptionStartDate 
-                ? new Date(user.subscriptionStartDate) 
-                : (user.signupDate ? new Date(user.signupDate) : now);
-            
-            if (billingCycle === 'annually') {
-                endDate = new Date(startDate);
-                endDate.setFullYear(endDate.getFullYear() + 1);
-                // If we're past the annual renewal, add another year from now
-                while (endDate <= now) {
-                    endDate.setFullYear(endDate.getFullYear() + 1);
-                }
-            } else {
-                // Monthly billing
-                endDate = new Date(startDate);
-                endDate.setMonth(endDate.getMonth() + 1);
-                // If we're past the monthly renewal, add another month from now
-                while (endDate <= now) {
-                    endDate.setMonth(endDate.getMonth() + 1);
-                }
-            }
-            
-            // Ensure we set subscriptionStartDate if not already set
-            if (!user.subscriptionStartDate) {
-                user.subscriptionStartDate = startDate.toISOString();
-            }
-
-            // Set subscription to cancel at period end
-            await setUser({
-                ...user,
-                cancelAtPeriodEnd: true,
-                subscriptionEndDate: endDate.toISOString(),
-                billingCycle: billingCycle,
-                subscriptionStartDate: user.subscriptionStartDate || now.toISOString()
+            const response = await fetch('/api/cancelSubscription', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({ action: 'cancel' }),
             });
 
-            showToast('Subscription cancelled. You will retain access until the end of your billing period.', 'success');
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || 'Failed to cancel subscription');
+            }
+
+            const data = await response.json();
+            
+            // Update local user state
+            await setUser({ 
+                ...user, 
+                cancelAtPeriodEnd: true,
+                subscriptionEndDate: data.subscriptionEndDate || null,
+            });
+            
+            showToast(data.message || 'Subscription cancelled. You will retain access until the end of your billing period.', 'success');
             setShowCancelModal(false);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to cancel subscription:', error);
-            showToast('Failed to cancel subscription. Please try again.', 'error');
+            showToast(error.message || 'Failed to cancel subscription. Please try again.', 'error');
         } finally {
             setIsCancelling(false);
         }
@@ -787,16 +773,35 @@ export const Settings: React.FC = () => {
         
         setIsCancelling(true);
         try {
-            await setUser({
-                ...user,
-                cancelAtPeriodEnd: false,
-                subscriptionEndDate: undefined
+            const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+            
+            const response = await fetch('/api/cancelSubscription', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({ action: 'reactivate' }),
             });
 
-            showToast('Subscription reactivated successfully!', 'success');
-        } catch (error) {
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || 'Failed to reactivate subscription');
+            }
+
+            const data = await response.json();
+            
+            // Update local user state
+            await setUser({ 
+                ...user, 
+                cancelAtPeriodEnd: false,
+                subscriptionEndDate: null,
+            });
+            
+            showToast(data.message || 'Subscription reactivated successfully!', 'success');
+        } catch (error: any) {
             console.error('Failed to reactivate subscription:', error);
-            showToast('Failed to reactivate subscription. Please try again.', 'error');
+            showToast(error.message || 'Failed to reactivate subscription. Please try again.', 'error');
         } finally {
             setIsCancelling(false);
         }
@@ -896,8 +901,26 @@ export const Settings: React.FC = () => {
                             <ToggleSwitch label="Safe Mode" enabled={settings.safeMode} onChange={(val) => updateSetting('safeMode', val)} />
                             <p className="text-sm text-gray-500 dark:text-gray-400">Prevents the AI from generating replies with profanity or discussing sensitive topics.</p>
                             <hr className="border-gray-200 dark:border-gray-700" />
-                            <ToggleSwitch label="Enable Voice Mode" enabled={settings.voiceMode} onChange={(val) => updateSetting('voiceMode', val)} />
-                            <p className="text-sm text-gray-500 dark:text-gray-400">Enable the floating AI Voice Assistant button for hands-free control.</p>
+                            {user?.plan === 'Free' ? (
+                                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="font-medium text-gray-700 dark:text-gray-300">Enable Voice Mode</span>
+                                        <span className="text-xs px-2 py-1 rounded bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-400">Pro+</span>
+                                    </div>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">AI Voice Assistant is available on Pro and Elite plans.</p>
+                                    <button
+                                        onClick={() => setActivePage('pricing')}
+                                        className="text-sm text-primary-600 dark:text-primary-400 hover:underline"
+                                    >
+                                        Upgrade to unlock Voice Assistant
+                                    </button>
+                                </div>
+                            ) : (
+                                <>
+                                    <ToggleSwitch label="Enable Voice Mode" enabled={settings.voiceMode} onChange={(val) => updateSetting('voiceMode', val)} />
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">Enable the floating AI Voice Assistant button for hands-free control.</p>
+                                </>
+                            )}
                         </SettingsSection>
                         {(user.plan !== 'Free' || user.plan === 'Caption') && (
                         <SettingsSection title="Goals & Milestones">

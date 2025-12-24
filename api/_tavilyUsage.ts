@@ -3,7 +3,8 @@
  * 
  * Tracks per-user Tavily API calls to control costs.
  * Limits:
- * - Elite users: 100 searches/month
+ * - Elite users: 40 searches/month
+ * - Pro users: 16 searches/month
  * - Admin: Unlimited
  * - Others: 0 (no access)
  */
@@ -20,12 +21,12 @@ export interface TavilyUsage {
 }
 
 const TAVILY_LIMITS: Record<string, number> = {
-  Elite: 100, // 100 searches per month
+  Elite: 40, // 40 searches per month (Enhanced live trend research)
   Admin: 999999, // Effectively unlimited
-  Pro: 0, // No access
-  Free: 0, // No access
-  OnlyFansStudio: 0, // No access
-  Agency: 0, // No access (unless Admin)
+  Pro: 16, // 16 searches per month (Live trend research included)
+  Free: 0, // No access (strategies use general trends only, no live research - basic Gemini only)
+  OnlyFansStudio: 16, // Same as Pro
+  Agency: 40, // 40 searches per month (hidden for now)
 };
 
 /**
@@ -184,4 +185,7 @@ export async function getTavilyUsageStats(
     return { count: 0, limit, remaining: limit, month };
   }
 }
+
+
+
 

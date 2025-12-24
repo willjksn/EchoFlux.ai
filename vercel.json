@@ -24,6 +24,10 @@
     {
       "path": "/api/autoPostScheduled",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/weeklyTrendsJob",
+      "schedule": "0 0 * * 1"
     }
   ]
 }

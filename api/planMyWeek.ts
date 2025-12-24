@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { checkApiKeys } from "./_errorHandler.js";
 import { verifyAuth } from "./verifyAuth.js";
+import { canGenerateWeeklyPlan, recordWeeklyPlanGeneration } from "./_weeklyPlanUsage.js";
 
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -22,6 +23,22 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   const user = await verifyAuth(req);
   if (!user) {
     res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  // Check weekly plan usage limit
+  const usageCheck = await canGenerateWeeklyPlan(
+    user.uid,
+    user.plan || 'Free',
+    user.role
+  );
+
+  if (!usageCheck.allowed) {
+    res.status(200).json({
+      success: false,
+      error: "Usage limit reached",
+      note: `You've reached your monthly limit of ${usageCheck.limit} weekly plan${usageCheck.limit === 1 ? '' : 's'}. Upgrade to Pro or Elite for more weekly plans.`,
+    });
     return;
   }
 
@@ -136,9 +153,17 @@ Guidelines:
       ? data.suggestions
       : [];
 
+    // Record usage after successful generation
+    await recordWeeklyPlanGeneration(
+      user.uid,
+      user.plan || 'Free',
+      user.role
+    );
+
     res.status(200).json({
       success: true,
       suggestions,
+      remaining: usageCheck.remaining - 1, // Subtract 1 since we just used one
     });
     return;
   } catch (err: any) {

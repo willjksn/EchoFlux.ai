@@ -186,3 +186,5 @@ status: 'draft' | 'ready' | 'scheduled' | 'posted'
 5. **Should "Scheduled" status only be set when user explicitly schedules?**
    - ✅ YES - Not automatic when media is uploaded
 
+
+

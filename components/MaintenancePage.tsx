@@ -40,7 +40,7 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({ allowedEmail, 
                 <div className="flex justify-center mb-8" style={{ display: 'flex', justifyContent: 'center', marginBottom: '2rem' }}>
                     <div className="flex items-center" style={{ display: 'flex', alignItems: 'center' }}>
                         <LogoIcon />
-                        <span className="ml-2 text-2xl font-bold text-white" style={{ marginLeft: '0.5rem', fontSize: '1.5rem', fontWeight: 'bold', color: '#ffffff' }}>EchoFlux.AI</span>
+                        <span className="ml-2 text-2xl font-bold text-white" style={{ marginLeft: '0.5rem', fontSize: '1.5rem', fontWeight: 'bold', color: '#ffffff' }}>EchoFlux.ai</span>
                     </div>
                 </div>
 
@@ -99,7 +99,7 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({ allowedEmail, 
                             marginBottom: '1.5rem'
                         }}
                     >
-                        EchoFlux.AI is currently in development and testing mode. 
+                        EchoFlux.ai is currently in development and testing mode. 
                         We're working hard to bring you an amazing experience.
                     </p>
 
@@ -144,7 +144,7 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({ allowedEmail, 
 
                 {/* Footer */}
                 <div className="mt-8 text-sm text-gray-400">
-                    <p>&copy; {new Date().getFullYear()} EchoFlux.AI. All rights reserved.</p>
+                    <p>&copy; {new Date().getFullYear()} EchoFlux.ai. All rights reserved.</p>
                 </div>
             </div>
         </div>

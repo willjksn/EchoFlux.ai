@@ -17,13 +17,19 @@ export const Privacy: React.FC = () => {
 
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">2. How We Use Your Information</h3>
                     <p>
-                        We use the information we collect to operate, maintain, and provide to you the features and functionality of the Service. This includes connecting to your social media accounts via their official APIs to retrieve messages and post replies on your behalf. We store your uploaded media files securely and use them to provide features such as Quick Post Automation, Media Library, content scheduling, and strategy roadmaps. We may use your email address to send you service-related notices.
+                        We use the information we collect to operate, maintain, and provide to you the features and functionality of the Service. This includes connecting to your social media accounts via their official APIs to retrieve messages and post replies on your behalf. We store your uploaded media files securely and use them to provide features such as AI Content Generation, Media Library, content scheduling, and strategy roadmaps. We may use your email address to send you service-related notices.
                     </p>
                     
                      <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">3. Data Sent to AI Models & User Content</h3>
                      <h4>a. Data Sent to AI Models</h4>
                     <p>
                         To provide our core service, message content (DMs, comments), uploaded media files, and prompts you enter are sent to third-party AI models (like Google's Gemini) to generate replies, captions, hashtags, content strategies, and analyze media for optimal posting times. We do not use this data to train our own models. Please refer to the privacy policies of these third-party providers for more information on how they handle data.
+                    </p>
+                    <p className="mt-2">
+                        <strong>Weekly Trends Data:</strong> We collect and store general social media trends data weekly (updated every Monday) using Tavily web search. This data is stored in our database and used to provide current trend information to all users at no cost. This shared trend data does not contain any personal information and is used to enhance AI-generated content strategies and suggestions.
+                    </p>
+                    <p className="mt-2">
+                        <strong>Tavily Web Search:</strong> Pro and Elite users may use Tavily web search for niche-specific research. When you use features that require Tavily (like Strategy generation or Voice Assistant web search), your search queries are sent to Tavily's API. Please refer to Tavily's privacy policy for information on how they handle search queries.
                     </p>
                     
                     <h4>b. User-Uploaded Media Content</h4>

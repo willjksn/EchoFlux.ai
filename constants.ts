@@ -77,7 +77,7 @@ export const MOCK_POSTS: Post[] = [
 
 export const getTourStepsForPlan = (user: User): TourStep[] => {
     let steps: TourStep[] = [
-      { elementId: 'tour-step-1-dashboard', title: 'Your Command Center', content: 'This is your new home base. Check stats, see upcoming posts, and handle urgent messages.', position: 'bottom' },
+      { elementId: 'tour-step-1-dashboard', page: 'dashboard', title: 'Your Command Center', content: 'This is your new home base. Check stats, see upcoming posts, and handle urgent messages.', position: 'bottom' },
       { elementId: 'tour-step-3-compose-nav', page: 'compose', title: 'AI Content Suite', content: 'Generate captions, images, and short videos.', position: 'right' },
     ];
     

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { findTrends, generateCaptions, generateContentStrategy } from "../src/services/geminiService"
 import { Opportunity, Platform, HashtagSet } from '../types';
-import { SparklesIcon, TrendingIcon, HashtagIcon, TrashIcon, XMarkIcon, RocketIcon, TargetIcon } from './icons/UIIcons';
+import { SparklesIcon, TrendingIcon, HashtagIcon, TrashIcon, XMarkIcon, RocketIcon, TargetIcon, DownloadIcon } from './icons/UIIcons';
 import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
 import { useAppContext } from './AppContext';
 import { UpgradePrompt } from './UpgradePrompt';
@@ -37,6 +37,8 @@ export const Opportunities: React.FC = () => {
     const [selectedOpportunity, setSelectedOpportunity] = useState<Opportunity | null>(null);
     const [showContentModal, setShowContentModal] = useState(false);
     const [isGeneratingContent, setIsGeneratingContent] = useState(false);
+    const [generatedCaptions, setGeneratedCaptions] = useState<Array<{ caption: string; hashtags: string[] }>>([]);
+    const [showAIGeneratedModal, setShowAIGeneratedModal] = useState(false);
 
     // Opportunities: Creator feature, available on Pro, Elite, and Agency plans
     // Agency (Business) also gets access since they manage creators
@@ -246,7 +248,7 @@ Platform: ${selectedOpportunity.platform}
 ${selectedOpportunity.relatedHashtags ? `Hashtags: ${selectedOpportunity.relatedHashtags.join(', ')}` : ''}
 ${selectedOpportunity.bestPractices ? `Best Practices: ${selectedOpportunity.bestPractices}` : ''}
 
-Generate a compelling caption that leverages this trend.`;
+Generate multiple compelling captions (at least 5) that leverage this trend. Each caption should be unique and engaging.`;
 
             const captions = await generateCaptions({
                 goal: 'engagement',
@@ -256,24 +258,9 @@ Generate a compelling caption that leverages this trend.`;
             });
 
             if (captions && captions.length > 0) {
-                // Save generated content to localStorage for Compose
-                localStorage.setItem(`opportunity_generated_content_${user.id}`, JSON.stringify({
-                    opportunity: selectedOpportunity,
-                    captions: captions,
-                    platform: selectedOpportunity.platform,
-                    hashtags: selectedOpportunity.relatedHashtags?.join(' ') || ''
-                }));
-                
-                setComposeContext({
-                    topic: selectedOpportunity.title,
-                    platform: selectedOpportunity.platform,
-                    hashtags: selectedOpportunity.relatedHashtags?.join(' ') || '',
-                    generatedCaptions: captions
-                });
-                
+                setGeneratedCaptions(captions);
                 setShowContentModal(false);
-                setActivePage('compose');
-                showToast('AI-generated content ready in Compose!', 'success');
+                setShowAIGeneratedModal(true);
             } else {
                 showToast('Failed to generate content. Please try again.', 'error');
             }
@@ -283,6 +270,43 @@ Generate a compelling caption that leverages this trend.`;
         } finally {
             setIsGeneratingContent(false);
         }
+    };
+
+    // Handle saving generated caption to compose
+    const handleUseCaption = (caption: { caption: string; hashtags: string[] }) => {
+        if (!selectedOpportunity) return;
+        
+        setComposeContext({
+            topic: selectedOpportunity.title,
+            platform: selectedOpportunity.platform,
+            hashtags: caption.hashtags.join(' ') || selectedOpportunity.relatedHashtags?.join(' ') || '',
+            captionText: caption.caption
+        });
+        
+        setShowAIGeneratedModal(false);
+        setActivePage('compose');
+        showToast('Caption loaded in Compose!', 'success');
+    };
+
+    // Handle downloading captions
+    const handleDownloadCaptions = () => {
+        if (generatedCaptions.length === 0) return;
+        
+        const content = generatedCaptions.map((item, idx) => {
+            return `Caption ${idx + 1}:\n${item.caption}\n\nHashtags: ${item.hashtags.join(' ')}\n\n${'='.repeat(50)}\n\n`;
+        }).join('');
+        
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `generated-captions-${selectedOpportunity?.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${Date.now()}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        showToast('Captions downloaded!', 'success');
     };
 
     // Handle Send to Strategy
@@ -306,14 +330,27 @@ Generate a compelling caption that leverages this trend.`;
     const handleManualCreate = () => {
         if (!selectedOpportunity) return;
         
+        // Create a pre-filled caption with opportunity details
+        let preFilledCaption = `${selectedOpportunity.title}\n\n${selectedOpportunity.description}`;
+        
+        if (selectedOpportunity.bestPractices) {
+            preFilledCaption += `\n\n💡 ${selectedOpportunity.bestPractices}`;
+        }
+        
+        if (selectedOpportunity.relatedHashtags && selectedOpportunity.relatedHashtags.length > 0) {
+            preFilledCaption += `\n\n${selectedOpportunity.relatedHashtags.join(' ')}`;
+        }
+        
         setComposeContext({
             topic: selectedOpportunity.title,
             platform: selectedOpportunity.platform,
+            hashtags: selectedOpportunity.relatedHashtags?.join(' ') || '',
+            captionText: preFilledCaption
         });
         
         setShowContentModal(false);
         setActivePage('compose');
-        showToast('Ready to create content manually!', 'success');
+        showToast('Opportunity details pre-filled in Compose!', 'success');
     };
 
     if (!isFeatureUnlocked) {
@@ -362,9 +399,14 @@ Generate a compelling caption that leverages this trend.`;
                             <div className="flex items-center gap-2">
                                 <button
                                     onClick={() => setShowHistory(!showHistory)}
-                                    className="px-3 py-1.5 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
+                                    className="relative px-3 py-1.5 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
                                 >
                                     {showHistory ? 'Hide' : 'Show'} History
+                                    {savedScans.length > 0 && (
+                                        <span className="absolute -top-2 -right-2 bg-primary-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                                            {savedScans.length}
+                                        </span>
+                                    )}
                                 </button>
                                 <label className="flex items-center gap-2 cursor-pointer">
                                     <input
@@ -801,17 +843,80 @@ Generate a compelling caption that leverages this trend.`;
                                     </div>
                                 </button>
 
-                                {/* Option 3: Manual Create */}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* AI Generated Content Modal */}
+            {showAIGeneratedModal && selectedOpportunity && generatedCaptions.length > 0 && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-gray-200 dark:border-gray-700">
+                        {/* Header */}
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                            <div>
+                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">AI Generated Content</h2>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                    {generatedCaptions.length} captions generated for {selectedOpportunity.title}
+                                </p>
+                            </div>
+                            <div className="flex items-center gap-2">
                                 <button
-                                    onClick={handleManualCreate}
-                                    className="w-full p-4 bg-gradient-to-r from-gray-700 to-gray-600 text-white rounded-lg hover:from-gray-800 hover:to-gray-700 flex items-center gap-3 shadow-md transition-all"
+                                    onClick={handleDownloadCaptions}
+                                    className="px-3 py-1.5 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center gap-2"
                                 >
-                                    <RocketIcon className="w-6 h-6" />
-                                    <div className="flex-1 text-left">
-                                        <p className="font-semibold">Create Manually</p>
-                                        <p className="text-sm text-gray-200">Open Compose with this opportunity's details pre-filled</p>
-                                    </div>
+                                    <DownloadIcon className="w-4 h-4" />
+                                    Download All
                                 </button>
+                                <button
+                                    onClick={() => {
+                                        setShowAIGeneratedModal(false);
+                                        setGeneratedCaptions([]);
+                                    }}
+                                    className="p-2 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                                >
+                                    <XMarkIcon className="w-5 h-5" />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                            <div className="space-y-4">
+                                {generatedCaptions.map((item, idx) => (
+                                    <div
+                                        key={idx}
+                                        className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 border border-gray-200 dark:border-gray-600"
+                                    >
+                                        <div className="flex items-start justify-between mb-3">
+                                            <span className="text-xs font-semibold text-primary-600 dark:text-primary-400">
+                                                Caption {idx + 1}
+                                            </span>
+                                            <button
+                                                onClick={() => handleUseCaption(item)}
+                                                className="px-3 py-1.5 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+                                            >
+                                                Use This Caption
+                                            </button>
+                                        </div>
+                                        <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap mb-3">
+                                            {item.caption}
+                                        </p>
+                                        {item.hashtags && item.hashtags.length > 0 && (
+                                            <div className="flex flex-wrap gap-2">
+                                                {item.hashtags.map((tag, tagIdx) => (
+                                                    <span
+                                                        key={tagIdx}
+                                                        className="text-xs px-2 py-1 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-full"
+                                                    >
+                                                        {tag}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     </div>

@@ -25,7 +25,6 @@ export const OnlyFansStudioSettings: React.FC = () => {
     
     // General settings
     const [notifications, setNotifications] = useState(true);
-    const [emailUpdates, setEmailUpdates] = useState(true);
     
     // Load user settings
     useEffect(() => {
@@ -43,7 +42,6 @@ export const OnlyFansStudioSettings: React.FC = () => {
                     setCreatorGender(data.creatorGender || '');
                     setTargetAudienceGender(data.targetAudienceGender || '');
                     setNotifications(data.notificationsEnabled !== false);
-                    setEmailUpdates(data.emailUpdatesEnabled !== false);
                 }
             } catch (error) {
                 console.error('Error loading settings:', error);
@@ -127,7 +125,6 @@ export const OnlyFansStudioSettings: React.FC = () => {
             // Use setDoc with merge: true to handle cases where document might not exist
             await setDoc(doc(db, 'users', user.id), {
                 notificationsEnabled: notifications,
-                emailUpdatesEnabled: emailUpdates,
                 updatedAt: new Date().toISOString(),
             }, { merge: true });
             
@@ -150,10 +147,7 @@ export const OnlyFansStudioSettings: React.FC = () => {
 
     const tabs: { id: SettingsTab; label: string }[] = [
         { id: 'general', label: 'General' },
-        { id: 'account', label: 'Account Type' },
         { id: 'aiTraining', label: 'AI Training' },
-        { id: 'profile', label: 'Profile' },
-        { id: 'billing', label: 'Billing' },
     ];
 
     return (
@@ -199,26 +193,6 @@ export const OnlyFansStudioSettings: React.FC = () => {
                         <div className="flex items-center justify-between">
                             <div>
                                 <h3 className="text-sm font-medium text-gray-900 dark:text-white">
-                                    Email Notifications
-                                </h3>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">
-                                    Receive email updates about your OnlyFans Studio account
-                                </p>
-                            </div>
-                            <label className="relative inline-flex items-center cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={emailUpdates}
-                                    onChange={(e) => setEmailUpdates(e.target.checked)}
-                                    className="sr-only peer"
-                                />
-                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary-600"></div>
-                            </label>
-                        </div>
-
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <h3 className="text-sm font-medium text-gray-900 dark:text-white">
                                     In-App Notifications
                                 </h3>
                                 <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -243,32 +217,6 @@ export const OnlyFansStudioSettings: React.FC = () => {
                                 className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50"
                             >
                                 {isSaving ? 'Saving...' : 'Save Changes'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Account Type Tab */}
-            {activeTab === 'account' && (
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
-                        Account Type
-                    </h2>
-                    
-                    <div className="space-y-4">
-                        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                            <p className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                                Current Plan: <span className="text-primary-600 dark:text-primary-400">{user?.plan || 'N/A'}</span>
-                            </p>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                                Your OnlyFans Studio plan includes access to all content planning and creation tools.
-                            </p>
-                            <button
-                                onClick={() => window.location.href = '/pricing'}
-                                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-sm"
-                            >
-                                View Plans & Upgrade
                             </button>
                         </div>
                     </div>
@@ -402,80 +350,6 @@ export const OnlyFansStudioSettings: React.FC = () => {
                 </div>
             )}
 
-            {/* Profile Tab */}
-            {activeTab === 'profile' && (
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
-                        Profile Settings
-                    </h2>
-                    
-                    <div className="space-y-6">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Display Name
-                            </label>
-                            <input
-                                type="text"
-                                value={displayName}
-                                onChange={(e) => setDisplayName(e.target.value)}
-                                placeholder="Your display name"
-                                className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Bio
-                            </label>
-                            <textarea
-                                value={bio}
-                                onChange={(e) => setBio(e.target.value)}
-                                placeholder="Tell us about yourself and your content..."
-                                className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[100px]"
-                            />
-                        </div>
-
-                        <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                            <button
-                                onClick={handleSaveProfile}
-                                disabled={isSaving}
-                                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50"
-                            >
-                                {isSaving ? 'Saving...' : 'Save Profile'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Billing Tab */}
-            {activeTab === 'billing' && (
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
-                        Billing & Subscription
-                    </h2>
-                    
-                    <div className="space-y-4">
-                        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                            <p className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                                Current Plan: <span className="text-primary-600 dark:text-primary-400">{user?.plan || 'N/A'}</span>
-                            </p>
-                            {user?.plan === 'OnlyFansStudio' && (
-                                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                                    OnlyFans Studio Plan - $24/month
-                                </p>
-                            )}
-                        </div>
-
-                        <button
-                            onClick={() => window.location.href = '/pricing'}
-                            className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
-                        >
-                            Manage Subscription
-                        </button>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

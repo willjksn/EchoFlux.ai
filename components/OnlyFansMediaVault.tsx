@@ -5,6 +5,7 @@ import { UploadIcon, TrashIcon, ImageIcon, VideoIcon, CheckCircleIcon, PlusIcon,
 import { db, storage } from '../firebaseConfig';
 import { collection, setDoc, doc, getDocs, deleteDoc, query, orderBy, updateDoc, writeBatch, where } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { MoveToFolderModal } from './MoveToFolderModal';
 
 const GENERAL_FOLDER_ID = 'general';
 const ONLYFANS_DEFAULT_FOLDERS = ['Photosets', 'Videos', 'Teasers', 'Roleplay Content'];
@@ -31,6 +32,7 @@ export const OnlyFansMediaVault: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [viewingItem, setViewingItem] = useState<OnlyFansMediaItem | null>(null);
     const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
+    const [showMoveModal, setShowMoveModal] = useState(false);
     const [editingItem, setEditingItem] = useState<OnlyFansMediaItem | null>(null);
     const [isGeneratingTags, setIsGeneratingTags] = useState(false);
     const [showEditor, setShowEditor] = useState(false);
@@ -347,6 +349,32 @@ export const OnlyFansMediaVault: React.FC = () => {
         }
     };
 
+    // Bulk move items to folder
+    const handleMoveItems = async (targetFolderId: string) => {
+        if (!user || selectedItems.size === 0) return;
+
+        try {
+            const batch = writeBatch(db);
+            Array.from(selectedItems).forEach(itemId => {
+                batch.update(doc(db, 'users', user.id, 'onlyfans_media_library', itemId), {
+                    folderId: targetFolderId,
+                });
+            });
+            await batch.commit();
+
+            setMediaItems(prev => prev.map(item => 
+                selectedItems.has(item.id) ? { ...item, folderId: targetFolderId } : item
+            ));
+
+            const movedCount = selectedItems.size;
+            setSelectedItems(new Set());
+            showToast(`Moved ${movedCount} ${movedCount === 1 ? 'item' : 'items'}`, 'success');
+        } catch (error) {
+            console.error('Failed to move items:', error);
+            showToast('Failed to move items', 'error');
+        }
+    };
+
     const getFilteredItems = () => {
         let filtered = mediaItems.filter(item => 
             (item.folderId || GENERAL_FOLDER_ID) === selectedFolderId
@@ -478,12 +506,20 @@ export const OnlyFansMediaVault: React.FC = () => {
                                     </button>
                                 </div>
                                 {selectedItems.size > 0 && (
-                                    <button
-                                        onClick={handleBulkDelete}
-                                        className="px-3 py-1 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md"
-                                    >
-                                        Delete {selectedItems.size} selected
-                                    </button>
+                                    <>
+                                        <button
+                                            onClick={() => setShowMoveModal(true)}
+                                            className="px-3 py-1 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-md"
+                                        >
+                                            Move {selectedItems.size} selected
+                                        </button>
+                                        <button
+                                            onClick={handleBulkDelete}
+                                            className="px-3 py-1 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md"
+                                        >
+                                            Delete {selectedItems.size} selected
+                                        </button>
+                                    </>
                                 )}
                             </div>
                             <div className="flex items-center gap-2">
@@ -631,6 +667,16 @@ export const OnlyFansMediaVault: React.FC = () => {
                     }}
                 />
             )}
+
+            {/* Move To Folder Modal */}
+            <MoveToFolderModal
+                isOpen={showMoveModal}
+                onClose={() => setShowMoveModal(false)}
+                folders={folders}
+                currentFolderId={selectedFolderId}
+                onMove={handleMoveItems}
+                itemCount={selectedItems.size}
+            />
         </div>
     );
 };

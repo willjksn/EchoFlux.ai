@@ -96,7 +96,7 @@ export const DataDeletion: React.FC = () => {
 
                 <div className="mt-6 prose prose-lg dark:prose-invert max-w-none text-gray-700 dark:text-gray-300">
                     <p>
-                        EchoFlux.AI respects your right to control your personal data. This page explains how you can request deletion of your data from our platform.
+                        EchoFlux.ai respects your right to control your personal data. This page explains how you can request deletion of your data from our platform.
                     </p>
 
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">How to Request Data Deletion</h3>
@@ -219,6 +219,8 @@ export const DataDeletion: React.FC = () => {
         </div>
     );
 };
+
+
 
 
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from './AppContext';
 import { XMarkIcon } from './icons/UIIcons';
-import { auth } from '../firebaseConfig';
+import { auth, db } from '../firebaseConfig';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -9,7 +9,9 @@ import {
   sendPasswordResetEmail,
   signInWithPopup,
   GoogleAuthProvider,
+  signOut,
 } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
 import type { Plan } from '../types';
 import { isMaintenanceMode, canBypassMaintenance } from '../src/utils/maintenance';
 
@@ -18,12 +20,12 @@ import { isMaintenanceMode, canBypassMaintenance } from '../src/utils/maintenanc
 const Terms: React.FC = () => (
   <div className="space-y-4 text-sm text-gray-700 dark:text-gray-300">
     <p>
-      Welcome to EchoFlux.AI. By using this platform, you agree to our terms of service.
+      Welcome to EchoFlux.ai. By using this platform, you agree to our terms of service.
       This includes using the platform responsibly, respecting other users, and following all
       applicable laws and regulations.
     </p>
     <p>
-      <strong>Platform Feature Availability:</strong> EchoFlux.AI integrates with multiple social media platforms, 
+      <strong>Platform Feature Availability:</strong> EchoFlux.ai integrates with multiple social media platforms, 
       but feature availability varies by platform due to API limitations:
     </p>
     <ul className="list-disc pl-6 space-y-1 mt-2">
@@ -35,11 +37,11 @@ const Terms: React.FC = () => (
       <li><strong>Threads:</strong> Publishing only - limited features</li>
     </ul>
     <p>
-      You are responsible for any content you create, schedule, or publish through EchoFlux.AI.
+      You are responsible for any content you create, schedule, or publish through EchoFlux.ai.
       We do not guarantee performance of any content or strategy recommendations provided by the AI.
     </p>
     <p>
-      EchoFlux.AI is provided &quot;as is&quot; without warranties of any kind. We are not
+      EchoFlux.ai is provided &quot;as is&quot; without warranties of any kind. We are not
       liable for any loss or damage resulting from use of the platform, platform outages, API deprecations, 
       or third-party policy changes.
     </p>
@@ -56,7 +58,7 @@ const Terms: React.FC = () => (
 const PrivacyPolicy: React.FC = () => (
   <div className="space-y-4 text-sm text-gray-700 dark:text-gray-300">
     <p>
-      EchoFlux.AI respects your privacy. We collect basic account information such as your name,
+      EchoFlux.ai respects your privacy. We collect basic account information such as your name,
       email address, and profile details to personalize your experience.
     </p>
     <p>
@@ -69,7 +71,7 @@ const PrivacyPolicy: React.FC = () => (
       support.
     </p>
     <p>
-      By using EchoFlux.AI, you consent to our data usage practices described here.
+      By using EchoFlux.ai, you consent to our data usage practices described here.
     </p>
   </div>
 );
@@ -99,21 +101,67 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [viewingPolicy, setViewingPolicy] = useState<'terms' | 'privacy' | null>(null);
+  const [errorModal, setErrorModal] = useState<{ show: boolean; message: string }>({ show: false, message: '' });
 
   const [showPassword, setShowPassword] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   // keep internal state in sync if parent changes initialView
   useEffect(() => {
     setIsLogin(initialView === 'login');
+    // Clear validation errors when switching views
+    setValidationErrors({});
+    // Reset terms acceptance when switching views
+    setAcceptedTerms(false);
   }, [initialView]);
 
   if (!isOpen) return null;
 
   /* ---------- AUTH HANDLERS ---------- */
 
+  // Validate signup form
+  const validateSignup = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    // Validate full name
+    if (!fullName || fullName.trim().length < 2) {
+      errors.fullName = 'Please enter your full name (at least 2 characters)';
+    }
+
+    // Validate email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+      errors.email = 'Please enter a valid email address';
+    }
+
+    // Validate password
+    if (!password) {
+      errors.password = 'Password is required';
+    } else if (password.length < 6) {
+      errors.password = 'Password must be at least 6 characters';
+    }
+
+    // Validate confirm password
+    if (!confirmPassword) {
+      errors.confirmPassword = 'Please confirm your password';
+    } else if (password !== confirmPassword) {
+      errors.confirmPassword = 'Passwords do not match';
+    }
+
+    // Validate terms acceptance
+    if (!acceptedTerms) {
+      errors.terms = 'You must accept the Terms of Service and Privacy Policy to continue';
+    }
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setValidationErrors({}); // Clear previous errors
 
     try {
       // Check maintenance mode
@@ -127,70 +175,113 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       }
 
       if (isLogin) {
+        // Validate login form
+        if (!email) {
+          setValidationErrors({ email: 'Email is required' });
+          setIsLoading(false);
+          return;
+        }
+        if (!password) {
+          setValidationErrors({ password: 'Password is required' });
+          setIsLoading(false);
+          return;
+        }
+
         // Sign in
         await signInWithEmailAndPassword(auth, email, password);
         showToast('Logged in successfully!', 'success');
         onClose();
       } else {
-        // Sign up - block during maintenance unless whitelisted
+        // Sign up - validate first
+        if (!validateSignup()) {
+          setIsLoading(false);
+          // Show first error in toast
+          const firstError = Object.values(validationErrors)[0];
+          if (firstError) {
+            showToast(firstError, 'error');
+          }
+          return;
+        }
+
+        // Block during maintenance unless whitelisted
         if (isMaintenanceMode() && !canBypassMaintenance(email)) {
           showToast('New sign-ups are currently disabled. The site is in maintenance mode.', 'error');
           setIsLoading(false);
           return;
         }
 
-        if (password !== confirmPassword) {
-          showToast('Passwords do not match.', 'error');
-          setIsLoading(false);
-          return;
-        }
+        // Store signup info temporarily - don't create account yet
+        // We'll create the account after plan selection
+        const signupData = {
+          email,
+          password,
+          fullName: fullName.trim(),
+          selectedPlan: selectedPlan || null,
+          timestamp: Date.now(),
+        };
 
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        // Store in localStorage temporarily (will be cleared after account creation)
+        localStorage.setItem('pendingSignup', JSON.stringify(signupData));
 
-        // Store pending plan selection for user creation (handled in AuthContext / backend)
-        const planToStore: Plan = selectedPlan || ('Free' as Plan);
-        try {
-          localStorage.setItem('pendingPlan', planToStore);
-        } catch {
-          // non-fatal if localStorage isn't available
-        }
-
-        await updateProfile(userCredential.user, {
-          displayName: fullName || 'New User',
-        });
-
-        showToast('Account created! Please complete onboarding.', 'success');
+        // Close modal and let the plan selection flow handle account creation
         onClose();
+        
+        // Show message that they need to select a plan
+        if (selectedPlan) {
+          showToast(`Please complete your ${selectedPlan} plan selection to create your account.`, 'info');
+        } else {
+          showToast('Please select a plan to complete your signup.', 'info');
+        }
       }
     } catch (error: any) {
       console.error('Auth error:', error);
-      let errorMessage = 'Authentication failed';
+      let errorMessage = 'Authentication failed. Please try again.';
       
       // Handle login-specific errors
       if (isLogin) {
-        if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-          errorMessage = 'Wrong username or password. Please check your credentials and try again.';
-        } else if (error.code === 'auth/invalid-email') {
+        const errorCode = error?.code || '';
+        // Firebase Auth v9+ uses 'auth/invalid-credential' for both wrong password and user not found
+        if (errorCode === 'auth/user-not-found' || 
+            errorCode === 'auth/wrong-password' || 
+            errorCode === 'auth/invalid-credential' ||
+            errorCode === 'auth/invalid-login-credentials') {
+          errorMessage = 'Incorrect email or password. Please check your credentials and try again.';
+          // Show error modal for login credential errors
+          setErrorModal({ show: true, message: errorMessage });
+        } else if (errorCode === 'auth/invalid-email') {
           errorMessage = 'Invalid email address. Please check your email and try again.';
-        } else if (error.code === 'auth/too-many-requests') {
+          setErrorModal({ show: true, message: errorMessage });
+        } else if (errorCode === 'auth/too-many-requests') {
           errorMessage = 'Too many failed login attempts. Please try again later.';
-        } else if (error.message) {
+          setErrorModal({ show: true, message: errorMessage });
+        } else if (errorCode === 'auth/network-request-failed') {
+          errorMessage = 'Network error. Please check your connection and try again.';
+          setErrorModal({ show: true, message: errorMessage });
+        } else if (error?.message) {
           errorMessage = error.message;
+          setErrorModal({ show: true, message: errorMessage });
         }
       } else {
         // Handle signup-specific errors
-        if (error.code === 'auth/email-already-in-use') {
+        const errorCode = error?.code || '';
+        if (errorCode === 'auth/email-already-in-use') {
           errorMessage = 'This email is already registered. Please sign in instead.';
-        } else if (error.code === 'auth/invalid-email') {
+          // Show popup modal for email already in use
+          setErrorModal({ show: true, message: errorMessage });
+        } else if (errorCode === 'auth/invalid-email') {
           errorMessage = 'Invalid email address. Please check your email and try again.';
-        } else if (error.code === 'auth/weak-password') {
+        } else if (errorCode === 'auth/weak-password') {
           errorMessage = 'Password is too weak. Please use a stronger password (at least 6 characters).';
-        } else if (error.message) {
+        } else if (error?.message) {
           errorMessage = error.message;
         }
       }
       
-      showToast(errorMessage, 'error');
+      // Show error toast (skip if modal is shown)
+      if (!errorModal.show) {
+        showToast(errorMessage, 'error');
+      }
+      console.error('Login error message shown:', errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -220,18 +311,57 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         return;
       }
 
+      // Validate terms acceptance for signup
+      if (!isLogin && !acceptedTerms) {
+        setValidationErrors({ terms: 'You must accept the Terms of Service and Privacy Policy to continue' });
+        setIsLoading(false);
+        return;
+      }
+
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       
       // Check if user can bypass after Google sign-in
       if (isMaintenanceMode() && !canBypassMaintenance(result.user.email)) {
         // Sign them out if they can't bypass
-        await auth.signOut();
+        await signOut(auth);
         showToast('The site is currently in maintenance mode. Please check back soon.', 'error');
         setIsLoading(false);
         return;
       }
+
+      // If this is a signup (not login), check if it's a new user
+      if (!isLogin) {
+        // Check if user document exists in Firestore
+        const userRef = doc(db, 'users', result.user.uid);
+        const userSnap = await getDoc(userRef);
+        
+        if (!userSnap.exists()) {
+          // New user during signup - store as pending signup
+          // AuthContext will see this and not create the document yet
+          const signupData = {
+            email: result.user.email || '',
+            password: '', // Google sign-in doesn't have password
+            fullName: result.user.displayName || 'New User',
+            selectedPlan: selectedPlan || null,
+            timestamp: Date.now(),
+            isGoogleSignup: true, // Flag to indicate Google signup
+            googleUid: result.user.uid, // Store the UID for later
+            googlePhotoURL: result.user.photoURL || null,
+          };
+          
+          localStorage.setItem('pendingSignup', JSON.stringify(signupData));
+          
+          // Close modal - AuthContext will handle not creating the document
+          // and App.tsx will show the plan selector
+          onClose();
+          showToast('Please select a plan to complete your signup.', 'info');
+          setIsLoading(false);
+          return;
+        }
+      }
       
+      // Existing user or login - proceed normally
       showToast('Logged in with Google successfully!', 'success');
       onClose();
     } catch (error: any) {
@@ -281,7 +411,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         <div className="px-6 pt-6 pb-4 border-b border-gray-200 dark:border-gray-800">
           <div className="flex items-center justify-center mb-2">
             <span className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-primary-100 dark:bg-primary-900 text-primary-600 dark:text-primary-300 font-bold text-xl">
-              ES
+              EF
             </span>
           </div>
           <h2 className="text-xl font-bold text-center text-gray-900 dark:text-white">
@@ -290,7 +420,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-1">
             {isLogin
               ? 'Sign in to access your content workspace.'
-              : 'Start using EchoFlux.AI to grow your audience.'}
+              : 'Start using EchoFlux.ai to grow your audience.'}
           </p>
 
           <div className="mt-4 flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
@@ -354,11 +484,19 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   <input
                     type="text"
                     value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
+                    onChange={(e) => {
+                      setFullName(e.target.value);
+                      if (validationErrors.fullName) {
+                        setValidationErrors(prev => ({ ...prev, fullName: '' }));
+                      }
+                    }}
                     placeholder="Full Name"
-                    className={inputClasses}
+                    className={`${inputClasses} ${validationErrors.fullName ? 'border-red-500 focus:ring-red-500' : ''}`}
                     autoComplete="name"
                   />
+                  {validationErrors.fullName && (
+                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{validationErrors.fullName}</p>
+                  )}
                 </div>
               )}
 
@@ -369,11 +507,19 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 <input
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (validationErrors.email) {
+                      setValidationErrors(prev => ({ ...prev, email: '' }));
+                    }
+                  }}
                   placeholder="you@example.com"
-                  className={inputClasses}
+                  className={`${inputClasses} ${validationErrors.email ? 'border-red-500 focus:ring-red-500' : ''}`}
                   autoComplete="email"
                 />
+                {validationErrors.email && (
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">{validationErrors.email}</p>
+                )}
               </div>
 
               <div>
@@ -384,9 +530,18 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   <input
                     type={showPassword ? 'text' : 'password'}
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (validationErrors.password) {
+                        setValidationErrors(prev => ({ ...prev, password: '' }));
+                      }
+                      // Clear confirm password error if passwords now match
+                      if (confirmPassword && e.target.value === confirmPassword && validationErrors.confirmPassword) {
+                        setValidationErrors(prev => ({ ...prev, confirmPassword: '' }));
+                      }
+                    }}
                     placeholder="••••••••"
-                    className={`${inputClasses} pr-10`}
+                    className={`${inputClasses} pr-10 ${validationErrors.password ? 'border-red-500 focus:ring-red-500' : ''}`}
                     autoComplete={isLogin ? 'current-password' : 'new-password'}
                   />
                   <button
@@ -397,6 +552,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                     {showPassword ? 'Hide' : 'Show'}
                   </button>
                 </div>
+                {validationErrors.password && (
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">{validationErrors.password}</p>
+                )}
               </div>
 
               {!isLogin && (
@@ -407,11 +565,62 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   <input
                     type="password"
                     value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    onChange={(e) => {
+                      setConfirmPassword(e.target.value);
+                      if (validationErrors.confirmPassword) {
+                        setValidationErrors(prev => ({ ...prev, confirmPassword: '' }));
+                      }
+                      // Clear error if passwords now match
+                      if (password && e.target.value === password) {
+                        setValidationErrors(prev => ({ ...prev, confirmPassword: '' }));
+                      }
+                    }}
                     placeholder="Re-enter password"
-                    className={inputClasses}
+                    className={`${inputClasses} ${validationErrors.confirmPassword ? 'border-red-500 focus:ring-red-500' : ''}`}
                     autoComplete="new-password"
                   />
+                  {validationErrors.confirmPassword && (
+                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{validationErrors.confirmPassword}</p>
+                  )}
+                </div>
+              )}
+
+              {!isLogin && (
+                <div className="pt-2">
+                  <label className="flex items-start text-xs text-gray-700 dark:text-gray-300">
+                    <input
+                      type="checkbox"
+                      checked={acceptedTerms}
+                      onChange={(e) => {
+                        setAcceptedTerms(e.target.checked);
+                        if (validationErrors.terms) {
+                          setValidationErrors(prev => ({ ...prev, terms: '' }));
+                        }
+                      }}
+                      className="mt-0.5 h-4 w-4 text-primary-600 border-gray-300 dark:border-gray-600 rounded focus:ring-primary-500 dark:bg-gray-800 dark:checked:bg-primary-600"
+                    />
+                    <span className="ml-2">
+                      I agree to the{' '}
+                      <button
+                        type="button"
+                        onClick={() => setViewingPolicy('terms')}
+                        className="text-primary-600 dark:text-primary-400 hover:underline font-medium"
+                      >
+                        Terms of Service
+                      </button>{' '}
+                      and{' '}
+                      <button
+                        type="button"
+                        onClick={() => setViewingPolicy('privacy')}
+                        className="text-primary-600 dark:text-primary-400 hover:underline font-medium"
+                      >
+                        Privacy Policy
+                      </button>
+                    </span>
+                  </label>
+                  {validationErrors.terms && (
+                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{validationErrors.terms}</p>
+                  )}
                 </div>
               )}
 
@@ -467,30 +676,73 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               >
                 {isLoading ? 'Please wait...' : isLogin ? 'Log In' : 'Sign Up'}
               </button>
-
-              <p className="mt-3 text-[11px] text-gray-500 dark:text-gray-400 text-center leading-snug">
-                By continuing, you agree to our{' '}
-                <button
-                  type="button"
-                  onClick={() => setViewingPolicy('terms')}
-                  className="text-primary-600 hover:underline"
-                >
-                  Terms of Service
-                </button>{' '}
-                and{' '}
-                <button
-                  type="button"
-                  onClick={() => setViewingPolicy('privacy')}
-                  className="text-primary-600 hover:underline"
-                >
-                  Privacy Policy
-                </button>
-                .
-              </p>
             </form>
           )}
         </div>
       </div>
+
+      {/* Error Modal for Authentication Errors */}
+      {errorModal.show && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                {isLogin ? 'Login Error' : 'Sign Up Error'}
+              </h3>
+              <button
+                onClick={() => setErrorModal({ show: false, message: '' })}
+                className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500"
+              >
+                <XMarkIcon className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="mb-6">
+              <div className="flex items-center mb-3">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    {isLogin 
+                      ? (errorModal.message.includes('email') || errorModal.message.includes('password') 
+                          ? 'Incorrect Credentials' 
+                          : 'Unable to Sign In')
+                      : 'Unable to Create Account'}
+                  </p>
+                </div>
+              </div>
+              <p className="text-gray-700 dark:text-gray-300 text-sm">{errorModal.message}</p>
+            </div>
+            <div className="flex gap-3">
+              {!isLogin && errorModal.message.includes('already registered') && (
+                <button
+                  onClick={() => {
+                    setErrorModal({ show: false, message: '' });
+                    setIsLogin(true);
+                  }}
+                  className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+                >
+                  Sign In Instead
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  setErrorModal({ show: false, message: '' });
+                  // Clear password fields on close for security
+                  if (isLogin) {
+                    setPassword('');
+                  }
+                }}
+                className={`px-4 py-2 ${!isLogin && errorModal.message.includes('already registered') ? 'flex-1' : 'w-full'} bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors`}
+              >
+                {isLogin ? 'Try Again' : 'Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

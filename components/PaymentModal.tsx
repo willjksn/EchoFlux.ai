@@ -4,16 +4,14 @@ import { CreditCardIcon, VisaIcon, MastercardIcon, CheckCircleIcon } from './ico
 import { PaymentPlan, User } from '../types';
 import { doc, setDoc, deleteField } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
-import { validatePromotion, applyPromotion } from '../src/services/promotionService';
+import { createAccountFromPendingSignup } from '../src/utils/createAccountFromPendingSignup';
 
 export const PaymentModal: React.FC = () => {
     const { paymentPlan, closePaymentModal, user, setUser, selectedClient, setClients, showToast, setPricingView, setActivePage } = useAppContext();
     const [isLoading, setIsLoading] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
-    const [promoCode, setPromoCode] = useState('');
-    const [appliedPromotion, setAppliedPromotion] = useState<any>(null);
-    const [finalPrice, setFinalPrice] = useState(paymentPlan?.price || 0);
     const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
 
     // Cleanup timeout on unmount
     useEffect(() => {
@@ -52,75 +50,8 @@ export const PaymentModal: React.FC = () => {
                 // Map plan name to ensure it matches exactly with the Plan type
                 const planName = paymentPlan.name as User['plan'];
                 
-                // Determine which userType the new plan belongs to
-                const creatorPlans: User['plan'][] = ['Free', 'Caption', 'OnlyFansStudio', 'Pro', 'Elite'];
-                const businessPlans: User['plan'][] = ['Starter', 'Growth'];
-                const isNewPlanCreator = creatorPlans.includes(planName);
-                const isNewPlanBusiness = businessPlans.includes(planName);
-                const currentIsCreator = user.userType === 'Creator';
-                const currentIsBusiness = user.userType === 'Business';
-                
-                // Check if switching between Creator and Business plan types
-                const needsUserTypeChange = (isNewPlanCreator && currentIsBusiness) || 
-                                           (isNewPlanBusiness && currentIsCreator);
-                
-                // If switching between Creator/Business, reset onboarding to show selector first
-                if (needsUserTypeChange) {
-                    // Determine which userType the new plan requires
-                    const newUserType = isNewPlanCreator ? 'Creator' : 'Business';
-                    
-                    // Don't change the plan yet - let them confirm userType first
-                    // Clear userType and reset onboarding to trigger selector
-                    try {
-                        // Store the desired pricing view and plan in localStorage before reload
-                        localStorage.setItem('pendingPricingView', newUserType);
-                        localStorage.setItem('pendingPlanSelection', planName);
-                        
-                        // Update Firestore directly to delete userType field
-                        await setDoc(
-                            doc(db, 'users', user.id),
-                            {
-                                userType: deleteField(),
-                                hasCompletedOnboarding: false,
-                            },
-                            { merge: true }
-                        );
-                        
-                        // Reload page to fetch fresh user data (without userType)
-                        // This will trigger the selector in App.tsx
-                        showToast(`Please choose your account type and select a plan.`, 'success');
-                        closePaymentModal();
-                        setIsLoading(false);
-                        setTimeout(() => window.location.reload(), 500);
-                        return;
-                    } catch (error) {
-                        console.error('Failed to clear userType:', error);
-                        showToast('Failed to reset account type. Please try again.', 'error');
-                        setIsLoading(false);
-                        return;
-                    }
-                }
-                
-                // Determine new userType for non-switching cases
-                let newUserType = user.userType;
-                if (isNewPlanCreator) {
-                    newUserType = 'Creator';
-                } else if (isNewPlanBusiness) {
-                    newUserType = 'Business';
-                }
-                // Agency plan keeps current userType
-                
-                // Apply promotion if one was used
-                if (appliedPromotion && appliedPromotion.promotion) {
-                    await applyPromotion(
-                        appliedPromotion.promotion.id,
-                        planName,
-                        paymentPlan.price,
-                        appliedPromotion.discountedPrice,
-                        appliedPromotion.discountAmount,
-                        appliedPromotion.expiresAt
-                    );
-                }
+                // All users are Creators now - ensure userType is set
+                const newUserType: UserType = 'Creator';
                 
                 // Update user plan, userType (if needed), and reset usage counters
                 const now = new Date().toISOString();
@@ -146,10 +77,7 @@ export const PaymentModal: React.FC = () => {
                 
                 console.log('Plan updated successfully:', planName);
                 
-            const successMessage = appliedPromotion 
-                ? `Successfully switched to the ${paymentPlan.name} plan with ${appliedPromotion.promotion.name}!`
-                : `Successfully switched to the ${paymentPlan.name} plan!`;
-            showToast(successMessage, 'success');
+            showToast(`Successfully switched to the ${paymentPlan.name} plan!`, 'success');
                 setIsLoading(false);
                 setIsSuccess(true);
                 
@@ -173,11 +101,105 @@ export const PaymentModal: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!paymentPlan) return;
+
         setIsLoading(true);
-        // Simulate API call
-        setTimeout(() => {
-            handleSuccess();
-        }, 2000);
+
+        try {
+            if (!user) {
+                showToast('Please sign in to continue.', 'error');
+                setIsLoading(false);
+                return;
+            }
+
+            // Get auth token for API call
+            const auth = (await import('../firebaseConfig')).auth;
+            const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+
+            // Create Stripe checkout session
+            const response = await fetch('/api/createCheckoutSession', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({
+                    planName: paymentPlan.name,
+                    billingCycle: paymentPlan.cycle,
+                    // Promotional codes can be entered directly in Stripe Checkout
+                    // Stripe's allow_promotion_codes: true enables this feature
+                }),
+            });
+
+            if (!response.ok) {
+                let errorMessage = 'Failed to create checkout session';
+                let errorDetails = '';
+                
+                // Clone response before reading to avoid "body stream already read" error
+                const responseClone = response.clone();
+                
+                try {
+                    const error = await response.json();
+                    errorMessage = error.message || error.error || errorMessage;
+                    errorDetails = error.details || '';
+                    
+                    // Log the full error for debugging
+                    console.error('Checkout API error:', {
+                        status: response.status,
+                        error: error,
+                        message: errorMessage,
+                        details: errorDetails
+                    });
+                } catch (e) {
+                    // If response is not JSON, try to get text from clone
+                    try {
+                        const text = await responseClone.text();
+                        errorMessage = text || errorMessage;
+                        console.error('Checkout API error (non-JSON):', text);
+                    } catch (e2) {
+                        // If that fails too, use status text
+                        errorMessage = response.statusText || errorMessage;
+                        console.error('Failed to parse error response:', e2);
+                    }
+                }
+                
+                // Show detailed error to user
+                const fullErrorMessage = errorDetails 
+                    ? `${errorMessage}\n\n${errorDetails}`
+                    : errorMessage;
+                throw new Error(fullErrorMessage);
+            }
+
+            const { url } = await response.json();
+
+            if (url) {
+                // Redirect to Stripe Checkout
+                window.location.href = url;
+            } else {
+                throw new Error('No checkout URL received');
+            }
+        } catch (error: any) {
+            console.error('Checkout error:', error);
+            
+            // Extract error message from various possible formats
+            let errorMessage = 'Failed to start checkout. Please try again.';
+            
+            if (error.message) {
+                errorMessage = error.message;
+            } else if (typeof error === 'string') {
+                errorMessage = error;
+            }
+            
+            // Check for Stripe configuration errors
+            if (errorMessage.includes('Stripe is not configured') || 
+                errorMessage.includes('Payment system not configured') ||
+                errorMessage.includes('not configured')) {
+                errorMessage = 'Payment system is currently unavailable. Please contact support or try again later.';
+            }
+            
+            showToast(errorMessage, 'error');
+            setIsLoading(false);
+        }
     };
 
     const handleFreePlanConfirm = async () => {
@@ -240,86 +262,30 @@ export const PaymentModal: React.FC = () => {
                             <span className="font-semibold text-gray-800 dark:text-gray-200">Amount Due Today</span>
                             <span className="text-2xl font-bold text-gray-900 dark:text-white">${paymentPlan.price} <span className="text-base font-medium">/{paymentPlan.cycle === 'monthly' ? 'mo' : 'yr'}</span></span>
                         </div>
-                        <div>
-                            <label htmlFor="card-number" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Card Information</label>
-                            <div className="mt-1 relative">
-                                <input type="text" id="card-number" placeholder="0000 0000 0000 0000" className="w-full p-3 pl-12 border rounded-md bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-600" />
-                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
-                                    <CreditCardIcon />
-                                </div>
-                                <div className="absolute inset-y-0 right-0 pr-3 flex items-center space-x-1">
-                                    <VisaIcon />
-                                    <MastercardIcon />
-                                </div>
-                            </div>
+                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                            <p className="text-sm text-blue-800 dark:text-blue-200">
+                                <strong>Secure Checkout:</strong> You'll be redirected to Stripe's secure payment page to complete your purchase.
+                            </p>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label htmlFor="expiry-date" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Expiry Date</label>
-                                <input type="text" id="expiry-date" placeholder="MM / YY" className="mt-1 w-full p-3 border rounded-md bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-600"/>
-                            </div>
-                            <div>
-                                <label htmlFor="cvc" className="block text-sm font-medium text-gray-700 dark:text-gray-300">CVC</label>
-                                <input type="text" id="cvc" placeholder="123" className="mt-1 w-full p-3 border rounded-md bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-600"/>
-                            </div>
-                        </div>
-                    </div>
-                    {/* Promotion Code Section */}
-                    <div className="p-6 border-t border-gray-200 dark:border-gray-700">
-                        <div className="flex items-center gap-2 mb-4">
-                            <input
-                                type="text"
-                                value={promoCode}
-                                onChange={(e) => setPromoCode(e.target.value)}
-                                placeholder="Enter promotion code"
-                                className="flex-1 px-4 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                            />
-                            <button
-                                type="button"
-                                onClick={() => handleValidatePromotion(promoCode)}
-                                disabled={!promoCode || isLoading}
-                                className="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500 disabled:opacity-50 transition-colors"
-                            >
-                                Apply
-                            </button>
-                        </div>
-                        {appliedPromotion && (
-                            <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md mb-4">
-                                <div>
-                                    <p className="text-sm font-medium text-green-800 dark:text-green-200">
-                                        {appliedPromotion.promotion.name} applied!
-                                    </p>
-                                    <p className="text-xs text-green-600 dark:text-green-400">
-                                        Save ${appliedPromotion.discountAmount.toFixed(2)}
-                                    </p>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={handleRemovePromotion}
-                                    className="text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-200 text-sm"
-                                >
-                                    Remove
-                                </button>
-                            </div>
-                        )}
                     </div>
                     <div className="p-6 bg-gray-50 dark:bg-gray-900/50 rounded-b-xl">
                         <div className="flex justify-between items-center mb-4">
                             <span className="text-sm text-gray-600 dark:text-gray-400">Total:</span>
                             <div className="text-right">
-                                {appliedPromotion && (
-                                    <div className="text-sm text-gray-500 dark:text-gray-400 line-through mb-1">
-                                        ${paymentPlan.price.toFixed(2)}
-                                    </div>
-                                )}
                                 <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                                    ${finalPrice.toFixed(2)}
+                                    ${paymentPlan.price.toFixed(2)}
                                 </div>
                             </div>
                         </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 text-center">
+                            You can enter a promotion code during checkout on Stripe's secure payment page.
+                        </p>
                          <button type="submit" disabled={isLoading} className="w-full flex justify-center py-3 px-4 border border-transparent text-base font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50">
-                            {isLoading ? 'Processing...' : `Pay $${finalPrice.toFixed(2)}`}
+                            {isLoading ? 'Redirecting to checkout...' : `Continue to Checkout - $${paymentPlan.price.toFixed(2)}`}
                         </button>
+                        <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">
+                            Secure payment powered by Stripe
+                        </p>
                     </div>
                 </form>
             </>

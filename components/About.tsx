@@ -23,7 +23,7 @@ export const About: React.FC = () => {
                     
                     <h4 className="text-lg font-bold text-gray-900 dark:text-white mt-6">The 8 Pillars of EchoFlux</h4>
                     <ul className="list-disc pl-5 space-y-2">
-                        <li><strong>Quick Post Automation:</strong> Upload multiple images or videos, select your platforms, and let AI automatically create captions, hashtags, and schedule posts at optimal times. Perfect for busy creators who need to maintain a consistent presence.</li>
+                        <li><strong>AI Content Generation:</strong> Upload images or videos, set your goal and tone, and let AI automatically generate engaging captions and relevant hashtags tailored to your content and target platforms. Perfect for busy creators who need to maintain a consistent presence.</li>
                         <li><strong>Central Command:</strong> A unified dashboard that highlights what matters—your account health, upcoming schedule, and urgent tasks—so you never feel lost in the noise.</li>
                         <li><strong>AI Strategy Engine:</strong> Stop guessing what to post. Our AI Content Strategist builds multi-week content roadmaps with image and video ideas tailored to your niche and goals. Upload media directly to roadmap items and auto-schedule posts to your calendar.</li>
                         <li><strong>Media Library:</strong> Upload and organize images and videos in your personal media library. Reuse assets across posts, select from library when composing, and keep your content organized for maximum efficiency.</li>

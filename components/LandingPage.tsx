@@ -1,11 +1,12 @@
 import React from 'react';
 import { LogoIcon, SparklesIcon, AutomationIcon, ChatIcon, AnalyticsIcon, CalendarIcon, RefreshIcon, GlobeIcon, UserIcon, TargetIcon, DashboardIcon, FilmIcon, MicrophoneWaveIcon, RocketIcon, TrendingIcon, ImageIcon, KanbanIcon } from './icons/UIIcons';
-import { InstagramIcon, TikTokIcon, XIcon, FacebookIcon } from './icons/PlatformIcons';
+import { InstagramIcon, TikTokIcon, XIcon, FacebookIcon, YouTubeIcon } from './icons/PlatformIcons';
 import { Pricing } from './Pricing';
 import { Page } from '../types';
 
 interface LandingPageProps {
   onLoginClick: () => void;
+  onGetStartedClick?: () => void;
   onNavigateRequest: (page: Page) => void;
 }
 
@@ -24,7 +25,8 @@ const Feature: React.FC<{ icon: React.ReactNode; title: string; children: React.
 );
 
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNavigateRequest }) => {
+export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetStartedClick, onNavigateRequest }) => {
+  const handleGetStarted = onGetStartedClick || onLoginClick;
   const handleScroll = (id: string) => {
     const element = document.getElementById(id);
     if (element) {
@@ -48,7 +50,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNaviga
                 <button onClick={() => handleScroll('features')} className="text-base font-medium text-gray-500 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">Features</button>
                 <button onClick={() => handleScroll('pricing')} className="text-base font-medium text-gray-500 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">Pricing</button>
                 <button onClick={onLoginClick} className="whitespace-nowrap text-base font-medium text-gray-500 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">Sign in</button>
-                <button onClick={onLoginClick} className="whitespace-nowrap inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-primary-600 hover:bg-primary-700">Get Started</button>
+                <button onClick={handleGetStarted} className="whitespace-nowrap inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-primary-600 hover:bg-primary-700">Get Started</button>
             </div>
              <div className="md:hidden">
                 <button onClick={onLoginClick} className="whitespace-nowrap inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-primary-600 hover:bg-primary-700">Menu</button>
@@ -96,7 +98,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNaviga
 
                     <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
                       <button
-                        onClick={onLoginClick}
+                        onClick={handleGetStarted}
                         className="inline-flex items-center justify-center rounded-md bg-white px-8 py-3 text-base font-semibold text-primary-700 shadow-sm transition hover:bg-primary-50"
                       >
                         Get started for free
@@ -175,7 +177,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNaviga
                           </div>
                           <ul className="mt-2 space-y-1 text-[0.7rem] text-gray-300">
                             <li>• AI-generated content roadmap with image/video ideas</li>
-                            <li>• Quick Post Automation created 12 ready-to-use posts</li>
+                            <li>• AI Content Generation created 12 ready-to-use posts</li>
                             <li>• Media Library with reusable assets</li>
                             <li>• Analytics-style insights guiding content decisions</li>
                           </ul>
@@ -302,7 +304,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNaviga
         </div>
 
         {/* Pricing Section */}
-        <Pricing onGetStartedClick={onLoginClick} onNavigateRequest={onNavigateRequest} />
+        <Pricing onGetStartedClick={handleGetStarted} onNavigateRequest={onNavigateRequest} />
 
       </main>
 
@@ -311,16 +313,32 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onNaviga
         <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:py-16 lg:px-8">
             <div className="xl:grid xl:grid-cols-3 xl:gap-8">
                 <div className="space-y-8 xl:col-span-1">
-                     <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex items-center text-primary-600 dark:text-primary-400">
+                     <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex items-center">
                         <LogoIcon />
-                        <span className="ml-2 text-xl font-bold">EchoFlux.AI</span>
+                        <span className="ml-2 text-xl font-bold" style={{ color: '#2563eb' }}>EchoFlux.ai</span>
                      </button>
                     <p className="text-gray-500 dark:text-gray-400 text-base">AI Content Studio & Campaign Planner for creators.</p>
                     <div className="flex space-x-6">
-                        <button className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"><span className="sr-only">X</span><XIcon /></button>
-                        <button className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"><span className="sr-only">Instagram</span><InstagramIcon /></button>
-                        <button className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"><span className="sr-only">TikTok</span><TikTokIcon /></button>
-                        <button className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"><span className="sr-only">Facebook</span><FacebookIcon /></button>
+                        <a href="https://x.com/echoflux_ai" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 transition-colors" aria-label="Follow us on X">
+                            <span className="sr-only">X</span>
+                            <XIcon />
+                        </a>
+                        <a href="https://instagram.com/echoflux.ai" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 transition-colors" aria-label="Follow us on Instagram">
+                            <span className="sr-only">Instagram</span>
+                            <InstagramIcon />
+                        </a>
+                        <a href="https://www.facebook.com/profile.php?id=61584686017015" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 transition-colors" aria-label="Follow us on Facebook">
+                            <span className="sr-only">Facebook</span>
+                            <FacebookIcon />
+                        </a>
+                        <a href="https://www.tiktok.com/@echoflux.ai" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 transition-colors" aria-label="Follow us on TikTok">
+                            <span className="sr-only">TikTok</span>
+                            <TikTokIcon />
+                        </a>
+                        <a href="https://www.youtube.com/@echo_flux_ai" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 transition-colors" aria-label="Subscribe to our YouTube channel">
+                            <span className="sr-only">YouTube</span>
+                            <YouTubeIcon />
+                        </a>
                     </div>
                 </div>
                 <div className="mt-12 grid grid-cols-2 gap-8 xl:mt-0 xl:col-span-2">

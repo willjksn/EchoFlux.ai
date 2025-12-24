@@ -6,6 +6,9 @@ import {
   getModelRouter,
   withErrorHandling,
 } from "./_errorHandler.js";
+import { getGoalFramework, getGoalSpecificCTAs } from "./_goalFrameworks.js";
+import { getLatestTrends } from "./_trendsHelper.js";
+import { getOnlyFansResearchContext } from "./_onlyfansResearch.js";
 
 async function getGeminiShared() {
   try {
@@ -130,6 +133,23 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     return;
   }
 
+  // Fetch user's plan and role from Firestore
+  let userPlan = 'Free';
+  let userRole: string | undefined;
+  try {
+    const { getAdminDb } = await import("./_firebaseAdmin.js");
+    const db = getAdminDb();
+    const userDoc = await db.collection("users").doc(authUser.uid).get();
+    if (userDoc.exists) {
+      const userData = userDoc.data();
+      userPlan = userData?.plan || 'Free';
+      userRole = userData?.role;
+    }
+  } catch (error) {
+    console.error("Failed to fetch user plan:", error);
+    // Continue with default Free plan
+  }
+
   const {
     mediaUrl,
     mediaData,
@@ -232,6 +252,53 @@ CRITICAL CONTEXT - EXPLICIT/ADULT CONTENT PLATFORM:
 ${shouldGenerateOnlyFansHashtags ? '- HASHTAGS MUST BE EXPLICIT AND MATCH THE CAPTION: Use bold, adult-oriented hashtags that describe the explicit/intimate content shown (e.g., #intimate, #sensual, #boudoir, #explicit, #adultcontent, etc.)' : '- HASHTAGS: Use appropriate hashtags for the content, but DO NOT use OnlyFans-specific hashtags, explicit adult content hashtags, or platform-specific adult content hashtags. Keep hashtags appropriate for general social media platforms.'}
 ` : '';
 
+  // Get goal-specific framework and current trends
+  // Always fetch trends from weekly Tavily updates (even for "engagement" goal)
+  let goalContext = '';
+  let currentTrends = '';
+  let onlyfansResearch = '';
+  
+  // Detect if this is for OnlyFans platform
+  const isOnlyFansPlatform = targetPlatform === 'OnlyFans' || 
+                             (Array.isArray(platforms) && platforms.includes('OnlyFans'));
+  
+  // Always get latest trends from weekly Tavily job (no Tavily calls needed here)
+  try {
+    currentTrends = await getLatestTrends();
+  } catch (error) {
+    console.error('[generateCaptions] Error fetching trends:', error);
+    currentTrends = 'Trend data unavailable. Using general best practices.';
+  }
+  
+  // Get OnlyFans-specific research if OnlyFans platform is detected
+  if (isOnlyFansPlatform) {
+    try {
+      const { getAdminDb } = await import("./_firebaseAdmin.js");
+      const db = getAdminDb();
+      const userDoc = await db.collection("users").doc(authUser.uid).get();
+      const userData = userDoc.data();
+      const userPlan = userData?.plan || 'Free';
+      const userRole = userData?.role;
+      
+      onlyfansResearch = await getOnlyFansResearchContext(
+        'Subscribers', // Default audience for OnlyFans
+        goal || 'Engagement',
+        authUser.uid,
+        userPlan,
+        userRole
+      );
+      console.log('[generateCaptions] OnlyFans research context fetched');
+    } catch (error) {
+      console.error('[generateCaptions] Error fetching OnlyFans research:', error);
+      // Continue without OnlyFans research - not critical
+    }
+  }
+  
+  // Get goal-specific framework if a specific goal is provided
+  if (goal && goal !== "engagement") {
+    goalContext = getGoalFramework(goal);
+  }
+
   // Build prompt
   const prompt = `
 ${isExplicitContent ? `
@@ -247,6 +314,12 @@ YOU MUST GENERATE EXPLICIT, UNCENSORED, RAW, ADULT CONTENT CAPTIONS.
 ` : ''}
 You are a world-class social media copywriter${isExplicitContent ? ' specializing in EXPLICIT adult content platforms' : ''}.
 
+${goalContext ? `PRIMARY GOAL: ${goal}\n${goalContext}\n` : goal ? `PRIMARY GOAL: ${goal}\n` : ''}
+
+${currentTrends ? `CURRENT SOCIAL MEDIA TRENDS (from weekly research):\n${currentTrends}\n` : ''}
+
+${onlyfansResearch ? `ONLYFANS-SPECIFIC RESEARCH & BEST PRACTICES:\n${onlyfansResearch}\n` : ''}
+
 CRITICAL - PERSPECTIVE REQUIREMENT:
 - Write captions FROM THE CONTENT CREATOR'S PERSPECTIVE (first person: "I", "my", "me")
 - The captions are what the CONTENT CREATOR is posting, NOT what fans/followers are saying or wanting
@@ -260,9 +333,10 @@ CRITICAL - PERSPECTIVE REQUIREMENT:
 ${explicitContext}
 
 Generate 3–5 UNIQUE, DIVERSE captions based on:
-- Goal: ${goal || "engagement"}${isExplicitContent ? ' (Mix of EXPLICIT SEXUAL content description and sales-focused captions)' : ''}
+- Goal: ${goal || "engagement"}${isExplicitContent ? ' (Mix of EXPLICIT SEXUAL content description and sales-focused captions)' : goal ? ` (Every caption must directly support achieving: ${goal})` : ''}
 - Tone: ${tone || "friendly"}${isExplicitContent ? ' (EXPLICIT/ADULT CONTENT - Generate BOLD, EXPLICIT, RAW, UNCENSORED captions with explicit sexual language that describe what is visually shown in explicit detail, plus sales-focused captions)' : ''}
 - Extra instructions: ${promptText || "none"}
+${goal && goal !== "engagement" ? `\nGOAL-SPECIFIC CTAs TO CONSIDER: ${getGoalSpecificCTAs(goal)}\n` : ''}
 
 CRITICAL - VARIETY REQUIREMENT:
 - Each caption MUST be completely different from the others
@@ -492,6 +566,15 @@ ${shouldGenerateOnlyFansHashtags ? `HASHTAG REQUIREMENTS:
     captions = parsed.captions;
   } else {
     captions = [{ caption: rawText, hashtags: [] }];
+  }
+
+  // Record caption generation usage (only after successful generation)
+  try {
+    const { recordCaptionGeneration } = await import("./_captionUsage.js");
+    await recordCaptionGeneration(authUser.uid, userPlan, userRole, captions.length);
+  } catch (usageError) {
+    // Don't fail the request if usage tracking fails
+    console.error("Failed to record caption generation usage:", usageError);
   }
 
   res.status(200).json(captions);

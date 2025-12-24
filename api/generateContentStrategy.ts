@@ -1,7 +1,12 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getModel, parseJSON } from "./_geminiShared.js";
 import { verifyAuth } from "./verifyAuth.js";
+import { getAdminDb } from "./_firebaseAdmin.js";
 import { getModelForTask } from "./_modelRouter.js";
+import { getGoalFramework, getGoalSpecificCTAs, getGoalSpecificContentGuidance } from "./_goalFrameworks.js";
+import { getLatestTrends } from "./_trendsHelper.js";
+import { researchNicheStrategy } from "./_nicheResearch.js";
+import { canGenerateStrategy, recordStrategyGeneration } from "./_strategyUsage.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -9,9 +14,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return;
   }
 
-  const user = await verifyAuth(req);
-  if (!user) {
+  const authUser = await verifyAuth(req);
+  if (!authUser) {
     res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  // Fetch user's plan and role from Firestore
+  const db = getAdminDb();
+  const userDoc = await db.collection("users").doc(authUser.uid).get();
+  
+  if (!userDoc.exists) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  const userData = userDoc.data();
+  const userPlan = userData?.plan || 'Free';
+  const userRole = userData?.role;
+
+  // Check strategy generation limit
+  const usageCheck = await canGenerateStrategy(authUser.uid, userPlan, userRole);
+  if (!usageCheck.allowed) {
+    res.status(200).json({
+      error: "Strategy generation limit reached",
+      note: `You've reached your monthly limit of ${usageCheck.limit} strategy generations. ${userPlan === 'Free' ? 'Upgrade to Pro or Elite for more strategies.' : 'Your limit will reset at the start of next month.'}`,
+      limit: usageCheck.limit,
+      remaining: usageCheck.remaining,
+    });
     return;
   }
 
@@ -24,7 +54,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
   try {
     // Use strategy task type for better model routing
-    const model = await getModelForTask("strategy", user.uid);
+    const model = await getModelForTask("strategy", authUser.uid);
     
     const durationWeeks = duration ? parseInt(duration.replace(/\D/g, '')) || 4 : 4;
     const platforms = platformFocus && platformFocus !== 'Mixed / All' 
@@ -83,19 +113,82 @@ CRITICAL CONTEXT - EXPLICIT/ADULT CONTENT PLATFORM:
 - Avoid generic "subscribe" topics - create specific, explicit content ideas that describe what will be shown
 ` : '';
 
+    // Get goal-specific strategic framework
+    const goalFramework = getGoalFramework(goal);
+    
+    // Get latest social media trends from weekly Tavily job
+    let currentTrends = '';
+    try {
+      currentTrends = await getLatestTrends();
+    } catch (error) {
+      console.error('[generateContentStrategy] Error fetching trends:', error);
+      currentTrends = 'Trend data unavailable. Using general best practices.';
+    }
+
+    // Perform niche-specific research using Tavily (primary strategy input)
+    // Note: This uses 8 Tavily searches per strategy generation
+    let nicheResearch = '';
+    try {
+      nicheResearch = await researchNicheStrategy(niche, audience, goal, platformFocus, authUser.uid, userPlan, userRole);
+      console.log('[generateContentStrategy] Niche research completed');
+    } catch (error) {
+      console.error('[generateContentStrategy] Error performing niche research:', error);
+      nicheResearch = 'Niche research unavailable. Using general best practices.';
+    }
+
     const prompt = `
-You are an elite content strategist specializing in ${niche} for ${audience}.
+You are an elite content strategist specializing in ${niche} for ${audience}. Your expertise is creating data-driven strategies that achieve specific business goals.
 
 ${explicitContentContext}
 
+${goalFramework}
+
+${nicheResearch}
+
+${currentTrends}
+
 ${analyticsContext ? analyticsContext : 'Note: No analytics data available. Use best practices for this niche and audience.'}
 
-Create a ${durationWeeks}-week content strategy with the following parameters:
-- Goal: ${goal}
+PRIMARY OBJECTIVE: Create a ${durationWeeks}-week content strategy specifically designed to achieve: ${goal}
+
+Strategy Parameters:
+- Primary Goal: ${goal} (THIS IS THE MOST IMPORTANT - every content piece should directly support this goal)
 - Tone: ${tone}${isExplicitContent ? ' (EXPLICIT/ADULT CONTENT - Generate bold, sales-oriented, explicit content ideas)' : ''}
 - Platform Focus: ${platformFocus || 'Mixed / All'}
 - Target Audience: ${audience}
 - Niche: ${niche}
+- Duration: ${durationWeeks} weeks
+
+CRITICAL INSTRUCTIONS FOR GOAL ACHIEVEMENT:
+1. Every content piece must directly contribute to achieving "${goal}" - evaluate each topic against: "Does this help achieve ${goal}?"
+2. Use the strategic framework above to guide content creation - these are proven tactics for ${goal}
+3. PRIMARY STRATEGY SOURCE: Use the niche-specific research above as your PRIMARY source of insights:
+   - This research includes successful strategies, competitor analysis, and proven tactics for ${niche} targeting ${audience}
+   - Adapt successful strategies from the research to fit the goal: ${goal}
+   - Incorporate proven content formats, engagement tactics, and platform strategies from the research
+   - Use trending topics and hashtags identified in the research
+4. Create a strategic progression:
+   - Week 1-2: Foundation building (awareness, trust, value delivery)
+   - Week 3-4: Engagement and relationship building
+   - Week 5+: Action-driving content that directly moves toward ${goal}
+5. Include specific CTAs and engagement tactics aligned with ${goal}:
+   ${getGoalSpecificCTAs(goal)}
+6. Balance content types to maximize goal achievement:
+   - Educational content: Establishes authority and provides value
+   - Entertaining content: Builds connection and shareability
+   - Inspirational content: Creates emotional connection
+   - Promotional content: Directly drives action toward goal
+7. Ensure content is actionable and measurable:
+   - Each week should have clear milestones toward ${goal}
+   - Content should be trackable (can measure if it's working)
+   - Include variety but maintain focus on the primary goal
+8. Platform optimization:
+   - Instagram: Visual storytelling, Reels for reach, Stories for engagement
+   - TikTok: Trending formats, quick hooks, entertainment value
+   - X/Twitter: Thought leadership, timely takes, conversation starters
+   - LinkedIn: Professional insights, industry expertise, B2B value
+   - YouTube: Educational deep-dives, tutorials, long-form value
+   - Adapt content format to platform strengths while maintaining goal focus
 
 Return ONLY valid JSON in this exact structure:
 
@@ -239,6 +332,14 @@ IMPORTANT: When generating imageIdeas and videoIdeas:
         details: process.env.NODE_ENV === "development" ? parseError?.message : undefined
       });
       return;
+    }
+
+    // Record strategy generation usage (only after successful generation)
+    try {
+      await recordStrategyGeneration(authUser.uid, userPlan, userRole);
+    } catch (usageError) {
+      // Don't fail the request if usage tracking fails
+      console.error("Failed to record strategy generation usage:", usageError);
     }
 
     res.status(200).json({ plan });

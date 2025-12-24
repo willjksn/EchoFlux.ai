@@ -6,7 +6,7 @@ import type { UserType, Platform } from "../../types";
 // ----------------------------------------------------
 // Generic API caller for Vercel Serverless Functions
 // ----------------------------------------------------
-async function callFunction(path: string, data: any) {
+async function callFunction(path: string, data: any, timeoutMs: number = 30000) {
   const token = auth.currentUser
     ? await auth.currentUser.getIdToken(true)
     : null;
@@ -19,7 +19,7 @@ async function callFunction(path: string, data: any) {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify(data),
-      signal: AbortSignal.timeout(30000), // 30 second timeout
+      signal: AbortSignal.timeout(timeoutMs),
     });
 
     if (!res.ok) {
@@ -51,6 +51,12 @@ async function callFunction(path: string, data: any) {
 
     return res.json();
   } catch (error: any) {
+    // Handle timeout errors specifically
+    if (error.name === 'TimeoutError' || error.message?.includes('timed out') || error.message?.includes('signal timed out')) {
+      const timeoutSeconds = timeoutMs / 1000;
+      console.error(`API ${path} failed: Timeout after ${timeoutSeconds}s`);
+      throw new Error(`Request timed out after ${timeoutSeconds} seconds. This operation may take longer - please try again.`);
+    }
     // Handle network errors gracefully
     if (error.name === 'AbortError' || (error.name === 'TypeError' && error.message.includes('Failed to fetch'))) {
       // For non-critical endpoints, return empty data instead of throwing
@@ -411,8 +417,11 @@ export async function generateContentStrategy(
   duration: string,
   tone: string,
   platformFocus: string,
-  analyticsData?: any
+  analyticsData?: any,
+  postingHistoryAnalysis?: string
 ): Promise<any> {
+  // Strategy generation can take longer due to niche research and multiple API calls
+  // Use 120 seconds (2 minutes) timeout instead of default 30 seconds
   const res = await callFunction("generateContentStrategy", {
     niche,
     audience,
@@ -421,7 +430,8 @@ export async function generateContentStrategy(
     tone,
     platformFocus,
     analyticsData,
-  });
+    postingHistoryAnalysis,
+  }, 120000); // 120 second timeout
   // Return the plan directly (API now returns { plan: StrategyPlan })
   return res.plan || res;
 }

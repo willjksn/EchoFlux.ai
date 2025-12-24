@@ -724,10 +724,10 @@ export const Automation: React.FC = () => {
       <div className="max-w-4xl mx-auto">
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            Quick Post Automation
+            AI Content Generation
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Upload images or videos and let AI automatically create captions, hashtags, select platforms, and schedule posts at optimal times.
+            Upload images or videos, set your goal and tone, and let AI automatically generate engaging captions and relevant hashtags tailored to your content and target platforms.
           </p>
         </div>
 

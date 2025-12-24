@@ -51,7 +51,7 @@ export const Sidebar: React.FC = () => {
     { page: 'compose', icon: <ComposeIcon />, label: 'Compose', tourId: 'tour-step-3-compose-nav' },
     { page: 'automation', icon: <AutomationIcon />, label: 'Automation' },
     { page: 'mediaLibrary', icon: <ImageIcon />, label: 'Media Library' },
-    { page: 'approvals', icon: <KanbanIcon />, label: 'Workflow' },
+    { page: 'approvals', icon: <KanbanIcon />, label: 'Drafts' },
     { page: 'calendar', icon: <CalendarIcon />, label: 'Calendar' },
     { page: 'strategy', icon: <TargetIcon />, label: 'Strategy' },
     { page: 'analytics', icon: <AnalyticsIcon />, label: 'Analytics', tourId: 'tour-step-2-analytics-nav' },
@@ -87,9 +87,13 @@ export const Sidebar: React.FC = () => {
               }
               return user.plan !== 'Free';
           case 'calendar':
-          case 'bio':
-          case 'strategy':
               return user.plan !== 'Free';
+          case 'bio':
+              // All plans can access Link-in-Bio (Free: 1 link, Pro: 5, Elite: unlimited)
+              return true;
+          case 'strategy':
+              // Free plan gets basic strategy (Gemini only, no live research)
+              return true; // All plans can access Strategy
           case 'opportunities':
               // Opportunities/Trends: Creator feature, also available to Agency (Business or Creator) since they manage creators
               if (user.userType === 'Business' && user.plan !== 'Agency') {
@@ -136,7 +140,7 @@ export const Sidebar: React.FC = () => {
         <div className="flex items-center justify-center h-20 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
           <div className="flex items-center">
             <LogoIcon />
-            <span className="ml-2 text-xl font-bold" style={{ color: '#2563eb' }}>EchoFlux.AI</span>
+            <span className="ml-2 text-xl font-bold" style={{ color: '#2563eb' }}>EchoFlux.ai</span>
           </div>
         </div>
         <nav className="p-4 flex-grow overflow-y-auto custom-scrollbar">

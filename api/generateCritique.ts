@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { checkApiKeys, getVerifyAuth, getModelRouter, withErrorHandling } from "./_errorHandler.js";
+import { getGoalFramework } from "./_goalFrameworks.js";
 
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -45,14 +46,21 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     const getModelForTask = await getModelRouter();
     const model = await getModelForTask('critique', user.uid);
 
+    // Get goal-specific framework if goal is provided
+    const goalContext = goal && goal !== "engagement" ? getGoalFramework(goal) : '';
+
     const prompt = `
 You critique social media content and give constructive feedback.
+
+${goalContext ? `PRIMARY GOAL: ${goal}\n${goalContext}\n` : ''}
 
 Content:
 ${content}
 
 Goal: ${goal || "engagement"}
 Platform: ${platform || "generic"}
+
+${goalContext ? `CRITICAL: Evaluate this content against how well it achieves the goal: ${goal}. Provide specific feedback on whether the content aligns with the strategic framework for ${goal}.\n` : ''}
 
 Return ONLY JSON:
 {

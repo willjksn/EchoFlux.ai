@@ -52,7 +52,12 @@ interface ConversationMessage {
 }
 
 export const VoiceAssistant: React.FC = () => {
-  const { user, showToast, settings, setActivePage, setComposeContext } = useAppContext();
+  const { user, showToast, settings } = useAppContext();
+  
+  // Hide Voice Assistant for Free plan users
+  if (user?.plan === 'Free') {
+    return null;
+  }
   const [isOpen, setIsOpen] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -169,66 +174,70 @@ export const VoiceAssistant: React.FC = () => {
         user.name || 'the creator'
       } use the app and create better content.
 
+      AGE REQUIREMENTS & ELIGIBILITY (CRITICAL):
+      - EchoFlux.ai requires users to be at least 13 years old
+      - Users under 18 must have parent/guardian consent
+      - OnlyFans Studio and explicit content features are restricted to users 18+ only
+      - EchoFlux.ai complies with COPPA and age-related regulations
+      - If asked about age requirements, clearly explain these policies and direct users to Terms of Service
+      - If you suspect a user may be underage or accessing restricted features inappropriately, advise them to review Terms of Service and contact support
+
       PRODUCT CONTEXT (VERY IMPORTANT):
       - EchoFlux.ai is currently an **AI Content Studio & Campaign Planner for creators** in **offline / planning mode**.
       - Do NOT promise:
         - Automatic posting to social platforms
         - Real-time analytics, competitor tracking, or social listening
         - Team/client management for agencies
+        - Autopilot features (removed from app)
       - Emphasize:
         - Strategy and campaign planning
         - Generating content packs (captions, hooks, ideas)
-        - Organizing everything on a calendar and workflow board
+        - Organizing everything on a calendar
         - Copying content out to post manually on any platform
 
       YOUR CORE JOB:
       - Know the main surfaces in the app and how they relate:
         - Dashboard: high-level planning snapshot + quick actions
-        - Strategy: generate multi-week content roadmaps
-        - Autopilot: turn a strategy or goal into a full campaign content pack
-        - Approvals / Workflow: move posts from Draft → Ready to Post and copy captions
+        - Strategy: generate multi-week content roadmaps (Free: 1/month basic, Pro: 2/month with live research, Elite: 5/month with enhanced research)
         - Compose: refine captions and plan for platforms (not \"publish\")
+        - Calendar: visual planning calendar for scheduled content
         - Media Library: find and reuse assets
-        - OnlyFans Studio (if available): plan and review OF content
+        - Link-in-Bio: build link-in-bio pages (Free: 1 link, Pro: 5 links, Elite: unlimited)
+        - OnlyFans Studio (Elite only): plan and review OF content
         - Settings: brand voice, AI behavior, voice mode
-      - Help the user:
-        - Understand where to click and which page to use for a given goal
-        - Plan campaigns end-to-end (strategy → Autopilot → Approvals/Compose)
+      - Help the user by providing COMPREHENSIVE, DETAILED explanations:
+        - Explain WHERE to find features (which page, which section, which button)
+        - Provide STEP-BY-STEP instructions for using each feature
+        - Describe ALL available options and settings for each feature
+        - Explain the FULL FUNCTIONALITY and capabilities of features
+        - Give context on how features work together in workflows
         - Brainstorm hooks, angles, scripts, captions, and content ideas
         - Turn rough ideas spoken aloud into clearer, creator-ready copy
+        - When asked "how do I...", provide thorough, detailed instructions that cover the entire process
+
+      PRICING & FEATURES:
+      - Free Plan: 1 AI strategy/month (basic), 10 AI captions/month, 1 link-in-bio, 100 MB storage
+      - Pro Plan: 2 strategies/month, 500 captions/month, 5 links, 5 GB storage, Live trend research (16 Tavily searches/month), AI Voice Assistant
+      - Elite Plan: 5 strategies/month, 1,500 captions/month, unlimited links, 10 GB storage, Enhanced trend research (40 Tavily searches/month), AI Voice Assistant, OnlyFans Studio
+      - Strategy generation uses weekly trends (free, updated every Monday) + Tavily searches (Pro/Elite only) for niche-specific research
+      - Voice Assistant is available for Pro and Elite users to provide detailed explanations and guidance on using all features
 
       WHEN ASKED \"HOW DO I ...\" ABOUT THE APP:
-      - Give a short, step-by-step answer that references the actual pages:
-        - Example: \"Start in Strategy to generate a roadmap, then send it into Autopilot for a content pack, then use Approvals to mark posts as ready to post.\"
-      - Prefer concrete instructions like \"Go to Strategy\", \"Open Autopilot\", \"Use Approvals\" instead of vague comments.
+      - Provide detailed, step-by-step instructions on how to accomplish tasks and use features.
+      - Be specific about where to find features, what buttons to click, and the exact workflow.
+      - Give comprehensive explanations that help users understand the full functionality.
+      - When describing navigation, tell users HOW to navigate (e.g., "Click on the Strategy option in the sidebar" or "Go to the Compose page by clicking Compose in the navigation menu").
+      - DO NOT attempt to navigate for the user - only provide clear instructions on how they can navigate themselves.
+      - Note: Autopilot and Workflow/Approvals features have been removed from the app.
 
-      NAVIGATION & ACTIONS (CRITICAL):
-      - You have the ability to ACTUALLY navigate the user to different pages in the app using the navigate_to_page function.
-      - When the user says ANY variation of "go to", "open", "show me", "take me to", "navigate to", "switch to", or "let's see" followed by a page name, you MUST immediately call navigate_to_page.
-      - Available pages and their common names:
-        * "dashboard" or "home" → dashboard
-        * "compose" or "create post" or "write post" → compose
-        * "calendar" → calendar
-        * "strategy" → strategy
-        * "media library" or "media" → media library
-        * "settings" → settings
-        * "workflow" or "approvals" → approvals
-        * "opportunities" or "trends" → opportunities
-        * "onlyfans studio" or "onlyfans" or "of studio" → onlyfansStudio
-        * "profile" → profile
-        * "inbox" or "messages" → inbox
-        * "autopilot" → autopilot
-      - Examples that REQUIRE navigation:
-        * "Go to dashboard" → navigate_to_page("dashboard")
-        * "Open compose" → navigate_to_page("compose")
-        * "Show me my calendar" → navigate_to_page("calendar")
-        * "Take me to strategy" → navigate_to_page("strategy")
-        * "I want to see my media library" → navigate_to_page("media library")
-        * "Let's check settings" → navigate_to_page("settings")
-        * "Open workflow" → navigate_to_page("approvals")
-        * "Show me opportunities" → navigate_to_page("opportunities")
-      - DO NOT just tell the user "you can navigate to X" - YOU must actually call the function to navigate them.
-      - After successfully navigating, briefly confirm: "I've opened [page name] for you" or "Taking you to [page name] now."
+      DETAILED FEATURE DESCRIPTIONS:
+      - When explaining features, provide comprehensive information including:
+        - What the feature does and its purpose
+        - Where to find it in the app (which page/section)
+        - Step-by-step instructions on how to use it
+        - What options and settings are available
+        - Tips and best practices for getting the most out of the feature
+      - Be thorough and detailed - users should understand the full functionality after your explanation.
 
       CONTENT CREATION:
       - Treat the user as a creator first (OF, TikTok, IG, YouTube, etc.).
@@ -251,73 +260,20 @@ export const VoiceAssistant: React.FC = () => {
       - Use examples when helpful (e.g., show 2–3 alternative hooks).
       - If something is not available in this version (e.g., analytics, auto-posting), say so honestly and offer a planning-based workaround.
 
+      WEEKLY TRENDS & TAVILY:
+      - All users have access to weekly social media trends (updated every Monday, free, no Tavily cost).
+      - Weekly trends cover: general social media trends, platform updates, content creator tips, engagement strategies, hashtag strategies, video content trends.
+      - Elite users (40 Tavily searches/month) can use fetch_current_info for specific, niche-specific, or very recent topics.
+      - Pro users (16 Tavily searches/month) can use Tavily in Strategy generation but not in Voice Assistant.
+      - When asked about trends, first use weekly trends knowledge (general), then use Tavily only if needed for specific/niche topics.
+
       FIRST GREETING:
-      - When you first connect, greet them as the EchoFlux.ai voice assistant and ask a focused question like:
-        - \"What are you working on today—planning a campaign, writing posts, or organizing your calendar?\"
+      - When you first connect, greet them as the EchoFlux.ai voice assistant and offer help like:
+        - \"Hi! I'm your EchoFlux.ai voice assistant. I can explain how to use any feature in the app, help you create content, answer questions about social media strategy, and more. What would you like to learn about or work on today?\"
     `;
 
     // Define available tools/functions
     const tools = [
-      {
-        name: 'navigate_to_page',
-        description: 'CRITICAL: Use this function to navigate the user to a different page in the app. When the user says "go to", "open", "show me", "take me to", or "navigate to" followed by a page name, you MUST call this function immediately. Available pages: dashboard, analytics, compose, calendar, automation, strategy, media library, settings, approvals (also called workflow), opportunities, onlyfans studio, profile, inbox.',
-        parameters: {
-          type: 'object',
-          properties: {
-            page: {
-              type: 'string',
-              enum: ['dashboard', 'analytics', 'compose', 'calendar', 'automation', 'strategy', 'media library', 'mediaLibrary', 'settings', 'approvals', 'workflow', 'opportunities', 'onlyfans studio', 'onlyfansStudio', 'profile', 'team', 'inbox', 'autopilot'],
-              description: 'The exact page name to navigate to. Common requests: "dashboard" or "home" → dashboard, "compose" or "create post" → compose, "calendar" → calendar, "strategy" → strategy, "media library" → media library, "settings" → settings, "workflow" or "approvals" → approvals, "opportunities" → opportunities, "onlyfans studio" → onlyfansStudio.'
-            }
-          },
-          required: ['page']
-        }
-      },
-      {
-        name: 'open_compose',
-        description: 'Open the compose page to create a new post. Use this when the user wants to create a post, write content, or compose something.',
-        parameters: {
-          type: 'object',
-          properties: {},
-          required: []
-        }
-      },
-      {
-        name: 'check_analytics',
-        description: 'Navigate to the analytics page to view performance metrics and insights.',
-        parameters: {
-          type: 'object',
-          properties: {},
-          required: []
-        }
-      },
-      {
-        name: 'view_calendar',
-        description: 'Navigate to the calendar page to view scheduled posts and content calendar.',
-        parameters: {
-          type: 'object',
-          properties: {},
-          required: []
-        }
-      },
-      {
-        name: 'open_automation',
-        description: 'Navigate to the automation page to set up automated content creation.',
-        parameters: {
-          type: 'object',
-          properties: {},
-          required: []
-        }
-      },
-      {
-        name: 'open_strategy',
-        description: 'Navigate to the strategy page to generate content roadmaps and strategies.',
-        parameters: {
-          type: 'object',
-          properties: {},
-          required: []
-        }
-      },
       {
         name: 'show_help',
         description: 'Show available commands and what the assistant can do. Use this when the user asks what you can do, how to use you, or what commands are available.',
@@ -329,7 +285,7 @@ export const VoiceAssistant: React.FC = () => {
       },
       {
         name: 'fetch_current_info',
-        description: 'Fetch current web information about a topic (e.g. latest trends, algorithm updates, news). Use this when the user asks about time-sensitive or “what is trending now” questions.',
+        description: 'Fetch current web information about a topic using Tavily web search (Elite only, counts against 40 searches/month limit). Use this when the user asks about time-sensitive or "what is trending now" questions. Note: All users have access to weekly social media trends (updated every Monday, free) - use general knowledge for those. Only use this function for specific, niche-specific, or very recent topics that weekly trends don\'t cover.',
         parameters: {
           type: 'object',
           properties: {
@@ -391,154 +347,29 @@ export const VoiceAssistant: React.FC = () => {
             const { name, args } = functionCall.functionCall;
             let result = '';
             
-            console.log('[VoiceAssistant] Function call received:', { name, args, setActivePageAvailable: typeof setActivePage === 'function' });
+            console.log('[VoiceAssistant] Function call received:', { name, args });
             
             try {
               switch (name) {
-                case 'navigate_to_page':
-                  const page = args?.page as string;
-                  if (page) {
-                    // Map page names to correct page identifiers (must match Page type exactly)
-                    const pageMap: Record<string, Page> = {
-                      'dashboard': 'dashboard',
-                      'home': 'dashboard',
-                      'analytics': 'analytics',
-                      'compose': 'compose',
-                      'create post': 'compose',
-                      'write post': 'compose',
-                      'calendar': 'calendar',
-                      'automation': 'automation',
-                      'strategy': 'strategy',
-                      'media library': 'mediaLibrary',
-                      'media-library': 'mediaLibrary',
-                      'medialibrary': 'mediaLibrary',
-                      'media': 'mediaLibrary',
-                      'settings': 'settings',
-                      'approvals': 'approvals',
-                      'workflow': 'approvals',
-                      'workflows': 'approvals',
-                      'onlyfans studio': 'onlyfansStudio',
-                      'onlyfans': 'onlyfansStudio',
-                      'of studio': 'onlyfansStudio',
-                      'team': 'team',
-                      'opportunities': 'opportunities',
-                      'trends': 'opportunities',
-                      'profile': 'profile',
-                      'inbox': 'inbox',
-                      'messages': 'inbox',
-                      'autopilot': 'autopilot',
-                      'bio': 'bio',
-                      'link in bio': 'bio'
-                    };
-                    const pageLower = page.toLowerCase().trim();
-                    const mappedPage = pageMap[pageLower] || pageMap[pageLower.replace(/\s+/g, ' ')] || page as Page;
-                    
-                    console.log('[VoiceAssistant] Navigate request:', { 
-                      originalPage: page, 
-                      pageLower, 
-                      mappedPage, 
-                      setActivePageType: typeof setActivePage,
-                      setActivePageExists: !!setActivePage 
-                    });
-                    
-                    if (mappedPage && typeof setActivePage === 'function') {
-                      try {
-                        // Call setActivePage immediately - it's a React state setter
-                        // Use setTimeout to ensure it happens in the next tick and doesn't block the function response
-                        setActivePage(mappedPage);
-                        result = `Successfully navigated to ${page}.`;
-                        showToast(`Navigated to ${page}`, "success");
-                        console.log('[VoiceAssistant] Navigation successful - page set to:', mappedPage);
-                      } catch (navError: any) {
-                        console.error('[VoiceAssistant] Navigation error:', navError);
-                        result = `Failed to navigate: ${navError?.message || String(navError)}`;
-                        showToast(`Failed to navigate to ${page}`, "error");
-                      }
-                    } else {
-                      console.warn('[VoiceAssistant] Navigation failed - invalid page or setActivePage missing:', { 
-                        mappedPage, 
-                        setActivePageType: typeof setActivePage,
-                        setActivePageAvailable: !!setActivePage,
-                        validPages: Object.keys(pageMap),
-                        receivedPage: page
-                      });
-                      result = `Could not navigate to "${page}". Available pages: ${Object.keys(pageMap).slice(0, 10).join(', ')}...`;
-                      showToast(`Could not navigate to ${page}`, "error");
-                    }
-                  } else {
-                    result = 'No page specified for navigation.';
-                  }
-                  break;
-                  
-                case 'open_compose':
-                  if (setActivePage) {
-                    setActivePage('compose');
-                    result = 'Opened compose page. You can now create a new post.';
-                    showToast('Opened compose page', "success");
-                  } else {
-                    result = 'Navigation function not available.';
-                  }
-                  break;
-                  
-                case 'check_analytics':
-                  if (setActivePage) {
-                    setActivePage('analytics');
-                    result = 'Opened analytics page. You can view your performance metrics here.';
-                    showToast('Opened analytics', "success");
-                  } else {
-                    result = 'Navigation function not available.';
-                  }
-                  break;
-                  
-                case 'view_calendar':
-                  if (setActivePage) {
-                    setActivePage('calendar');
-                    result = 'Opened calendar. You can view your scheduled posts here.';
-                    showToast('Opened calendar', "success");
-                  } else {
-                    result = 'Navigation function not available.';
-                  }
-                  break;
-                  
-                case 'open_automation':
-                  if (setActivePage) {
-                    setActivePage('automation');
-                    result = 'Opened automation page. You can set up automated content creation here.';
-                    showToast('Opened automation', "success");
-                  } else {
-                    result = 'Navigation function not available.';
-                  }
-                  break;
-                  
-                case 'open_strategy':
-                  if (setActivePage) {
-                    setActivePage('strategy');
-                    result = 'Opened strategy page. You can generate content roadmaps here.';
-                    showToast('Opened strategy', "success");
-                  } else {
-                    result = 'Navigation function not available.';
-                  }
-                  break;
-                  
                 case 'show_help':
-                  result = `I can help you with:
-- Navigate to pages: dashboard, analytics, compose, calendar, automation, strategy, media library, settings
-- Open compose page to create posts
-- Check analytics and view calendar
-- Provide social media strategy advice and feedback
-- Share trending topics and what's popular
-- Answer questions about social media, marketing, content creation, and general topics
-- Give feedback on your content ideas and strategies
-- Discuss best practices and tips
+                  result = `I'm your EchoFlux.ai Voice Assistant! I can help you with:
+- Explaining how to use any feature in the app with detailed step-by-step instructions
+- Providing comprehensive guides on creating content, generating strategies, using the calendar, and more
+- Answering questions about social media strategy, content creation, marketing, and best practices
+- Sharing trending topics and what's popular (using weekly trends or live search for Elite users)
+- Giving detailed feedback on your content ideas and strategies
+- Explaining workflows and helping you understand the full functionality of each feature
 
-Just ask me anything or tell me what you'd like to do!`;
+Just ask me how to do something or what you'd like to learn about!`;
                   break;
                 
                 case 'fetch_current_info': {
-                  // Elite-only: live web insights are reserved for Elite creators
+                  // Elite-only: live web insights via Tavily are reserved for Elite creators
+                  // Note: All users have access to weekly trends (updated every Monday, free)
+                  // This function uses Tavily for specific topic searches (counts against Elite's 40 searches/month)
                   if (user?.plan !== 'Elite') {
                     result =
-                      'Live trends and current-events insights are available for Elite creators. You can still ask me for strategy and evergreen best practices.';
+                      'Live web search is available for Elite creators (40 Tavily searches/month). All users have access to weekly social media trends (updated every Monday). You can still ask me for strategy and evergreen best practices based on weekly trends.';
                     break;
                   }
 

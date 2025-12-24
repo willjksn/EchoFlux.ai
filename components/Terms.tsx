@@ -16,7 +16,47 @@ export const Terms: React.FC = () => {
                     </p>
 
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">
-                        1. Service Overview (Offline / Planning Mode)
+                        1. Age Requirements and Eligibility
+                    </h3>
+                    <p>
+                        <strong>Minimum Age Requirement:</strong> You must be at least <strong>13 years old</strong> to use EchoFlux.ai. 
+                        By creating an account or using our services, you represent and warrant that you meet this minimum age requirement.
+                    </p>
+                    <ul className="list-disc pl-6 space-y-2 mt-2">
+                        <li>
+                            <strong>Users Under 18:</strong> If you are under 18 years of age (or the age of majority in your jurisdiction), 
+                            you represent that you have obtained the consent of your parent or legal guardian to use EchoFlux.ai. 
+                            Your parent or guardian agrees to be bound by these Terms on your behalf.
+                        </li>
+                        <li>
+                            <strong>Adult Content Features:</strong> Certain features, including OnlyFans Studio and explicit content generation 
+                            tools, are restricted to users who are <strong>18 years of age or older</strong>. By accessing these features, 
+                            you represent and warrant that you are at least 18 years old and are legally permitted to access adult content 
+                            in your jurisdiction.
+                        </li>
+                        <li>
+                            <strong>Age Verification:</strong> We reserve the right to verify your age at any time. If we discover that 
+                            you have provided false information about your age or are accessing features for which you are not eligible, 
+                            we may immediately suspend or terminate your account without notice.
+                        </li>
+                        <li>
+                            <strong>Responsibility:</strong> If you are a parent or guardian and you allow your child to use EchoFlux.ai, 
+                            you are responsible for their activities and agree to these Terms. You are responsible for ensuring that any 
+                            content created or shared by your child complies with all applicable laws and platform policies.
+                        </li>
+                        <li>
+                            <strong>Account Termination:</strong> We reserve the right to refuse service, suspend, or terminate accounts 
+                            of users who do not meet age requirements or who provide false age information.
+                        </li>
+                    </ul>
+                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                        <strong>Compliance with Laws:</strong> EchoFlux.ai complies with applicable laws including the Children's Online 
+                        Privacy Protection Act (COPPA) and other age-related regulations. If you are aware of a user under 13 using our 
+                        service, please contact us immediately at support@echoflux.ai.
+                    </p>
+
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">
+                        2. Service Overview (Offline / Planning Mode)
                     </h3>
                     <p>
                         EchoFlux.ai currently operates as an <strong>AI Content Studio & Campaign Planner</strong>. The product is designed
@@ -39,7 +79,7 @@ export const Terms: React.FC = () => {
                     </ul>
 
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">
-                        2. AI‑Powered Services
+                        3. AI‑Powered Services
                     </h3>
                     <p>
                         EchoFlux.ai offers AI‑powered tools for captions, hooks, content ideas, planning roadmaps, and campaign
@@ -62,7 +102,7 @@ export const Terms: React.FC = () => {
                     </ul>
 
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">
-                        3. Subscription Plans and Pricing
+                        4. Subscription Plans and Pricing
                     </h3>
                     <p>
                         Plan names, limits, and prices are shown in the Pricing section of the app or on our website. We are
@@ -80,7 +120,7 @@ export const Terms: React.FC = () => {
                     </ul>
 
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">
-                        4. Fair Use Policy & Monthly Allowances
+                        5. Fair Use Policy & Monthly Allowances
                     </h3>
                     <p>
                         Different subscription tiers may include different soft limits or allowances for AI generation, media
@@ -88,12 +128,29 @@ export const Terms: React.FC = () => {
                         designed to provide room for serious creators while keeping the service stable and sustainable.
                     </p>
                     
-                    <h4>AI Caption Generation</h4>
+                    <h4>AI Strategy Generation</h4>
                     <p>
-                        All paid plans include AI-powered caption generation with trending hashtags. Monthly limits are as follows:
+                        AI Content Strategist generates multi-week content roadmaps based on your goals, niche, and audience. Each strategy uses live web research to provide current trends and niche-specific insights. Monthly limits are as follows:
                     </p>
                     <ul>
-                        <li><strong>Free Plan:</strong> No AI Captions included.</li>
+                        <li><strong>Free Plan:</strong> 1 AI strategy generation per month (basic - uses general trends only, no live research).</li>
+                        <li><strong>Pro Plan:</strong> 2 AI strategy generations per month (includes live trend research - 16 Tavily searches/month).</li>
+                        <li><strong>Elite Plan:</strong> 5 AI strategy generations per month (includes enhanced live trend research - 40 Tavily searches/month).</li>
+                        <li><strong>Agency Plan:</strong> 5 AI strategy generations per month (includes enhanced live trend research - 40 Tavily searches/month).</li>
+                    </ul>
+                    <p>
+                        Strategy generations reset on your monthly billing date. Unused generations do not roll over to the next month.
+                    </p>
+                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                        <strong>Note:</strong> Strategy generation uses a combination of weekly trend data (updated every Monday, free for all users) and live web research (via Tavily) for niche-specific insights. Pro and Elite plans get Tavily searches for real-time research, while Free plans use general trend data from our weekly updates. Each strategy generation uses approximately 5 Tavily searches for niche-specific research.
+                    </p>
+
+                    <h4>AI Caption Generation</h4>
+                    <p>
+                        All plans include AI-powered caption generation with trending hashtags. Monthly limits are as follows:
+                    </p>
+                    <ul>
+                        <li><strong>Free Plan:</strong> 10 AI Captions per month.</li>
                         <li><strong>Caption Pro Plan:</strong> 100 AI Captions per month.</li>
                         <li><strong>Creator Pro Plan:</strong> 500 AI Captions per month.</li>
                         <li><strong>Creator Elite Plan:</strong> 1,500 AI Captions per month.</li>
@@ -104,13 +161,13 @@ export const Terms: React.FC = () => {
 
                     <h4>Media Storage Allowance</h4>
                      <p>
-                        Users can upload their own media (images and videos) for use in features like caption generation, Quick Post Automation, and the Media Library. Each plan comes with a specific storage limit:
+                        Users can upload their own media (images and videos) for use in features like caption generation, AI Content Generation, and the Media Library. Each plan comes with a specific storage limit:
                     </p>
                     <ul>
                         <li><strong>Free Plan:</strong> 100 MB of media storage.</li>
                         <li><strong>Caption Pro Plan:</strong> Basic Link-in-Bio only (no Media Library).</li>
-                        <li><strong>Creator Pro Plan:</strong> 1 GB of media storage.</li>
-                        <li><strong>Creator Elite Plan:</strong> 2 GB of media storage.</li>
+                        <li><strong>Creator Pro Plan:</strong> 5 GB of media storage.</li>
+                        <li><strong>Creator Elite Plan:</strong> 10 GB of media storage.</li>
                     </ul>
                     <p>
                         Media uploaded to your Media Library remains stored until you delete it. Storage usage is calculated across all uploaded media including profile pictures, link-in-bio images, and media library items.
@@ -141,10 +198,23 @@ export const Terms: React.FC = () => {
                         <li><strong>Usage:</strong> You can select media from your library when composing posts or adding media to strategy roadmap items.</li>
                     </ul>
 
-
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">5. Prohibited Use</h3>
+                    <h4>Link-in-Bio Builder</h4>
                     <p>
-                        You may not use EchoFlux.AI to:
+                        All plans include access to the Link-in-Bio Builder feature. Link limits are as follows:
+                    </p>
+                    <ul>
+                        <li><strong>Free Plan:</strong> 1 link maximum.</li>
+                        <li><strong>Creator Pro Plan:</strong> 5 links maximum.</li>
+                        <li><strong>Creator Elite Plan:</strong> Unlimited links.</li>
+                    </ul>
+                    <p>
+                        Links include both social media links (auto-populated from connected accounts) and custom links you add manually.
+                    </p>
+
+
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">6. Prohibited Use</h3>
+                    <p>
+                        You may not use EchoFlux.ai to:
                     </p>
                     <ul className="list-disc pl-6 space-y-2 mt-2">
                         <li>Circumvent API limitations imposed by third-party platforms.</li>
@@ -156,7 +226,7 @@ export const Terms: React.FC = () => {
                         Violating this policy may result in immediate account suspension or termination.
                     </p>
 
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">6. Changes to These Terms</h3>
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">7. Changes to These Terms</h3>
                     <p>
                         We may update these Terms of Service and Fair Use guidelines from time to time. If we make any changes,
                         we will update the “Last updated” date at the top of the page and, where appropriate, provide additional

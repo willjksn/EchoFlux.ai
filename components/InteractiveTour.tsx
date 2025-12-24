@@ -56,6 +56,12 @@ export const InteractiveTour: React.FC = () => {
             } else {
                 attempts++;
                 if (attempts > maxAttempts) {
+                    // If element not found and we have a page to navigate to, try navigating first
+                    if (step.page) {
+                        console.warn(`Tour element with id "${step.elementId}" not found on current page. The tour will continue when you navigate to the correct page.`);
+                        // Don't end tour, just skip this step - the next step might work
+                        return;
+                    }
                     console.warn(`Tour element with id "${step.elementId}" not found. Ending tour.`);
                     endTour();
                 } else {

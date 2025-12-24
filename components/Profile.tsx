@@ -276,7 +276,8 @@ export const Profile: React.FC = () => {
             // Determine storage limit based on plan
             let limitMB = Infinity;
             if (user.plan === 'Free') limitMB = 100;
-            else if (user.plan === 'Pro' || user.plan === 'Starter') limitMB = 1024; // 1 GB
+            else if (user.plan === 'Pro') limitMB = 5120; // 5 GB
+            else if (user.plan === 'Starter') limitMB = 1024; // 1 GB
             else if (user.plan === 'Elite' || user.plan === 'Growth') limitMB = 10240; // 10 GB
             else if (user.plan === 'Agency') limitMB = 51200; // 50 GB
             

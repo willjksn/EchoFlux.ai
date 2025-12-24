@@ -113,7 +113,8 @@ const CaptionGenerator: React.FC = () => {
     addCalendarEvent,
     setActivePage,
     setPosts,
-    socialAccounts
+    socialAccounts,
+    activePage
   } = useAppContext();
 
   // Error boundary - prevent blank page
@@ -138,6 +139,7 @@ const CaptionGenerator: React.FC = () => {
   const recognitionRef = useRef<any>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const draftLoadedRef = useRef(false);
 
   // Remix state
   const [isRemixModalOpen, setIsRemixModalOpen] = useState(false);
@@ -257,7 +259,7 @@ const CaptionGenerator: React.FC = () => {
   // Caption limits including new plans, with safe default
   const captionLimits = useMemo(
     () => ({
-      Free: 0, // Free plan: No AI captions
+      Free: 10, // Free plan: 10 AI captions/month
       Caption: 100, // Caption Pro plan: 100 captions/month
       Pro: 500,
       Elite: 1500,
@@ -321,11 +323,17 @@ const CaptionGenerator: React.FC = () => {
       setIsScheduling(true);
       setScheduleDate(new Date(composeContext.date).toISOString().slice(0, 16));
     }
-    if (composeContext?.topic) {
-      // Topic is available from Opportunities - can be used as a hint
-      // The generated captions are already loaded in the previous useEffect
+    if (composeContext?.captionText) {
+      // Pre-fill caption text from opportunity
+      setComposeState(prev => ({
+        ...prev,
+        captionText: composeContext.captionText || prev.captionText
+      }));
     }
-  }, [composeContext]);
+    if (composeContext?.hashtags) {
+      // Hashtags are available - they'll be used when generating captions
+    }
+  }, [composeContext, setComposeState]);
 
   useEffect(() => {
     if (!isSpeechRecognitionSupported) return;
@@ -460,16 +468,41 @@ const CaptionGenerator: React.FC = () => {
   useEffect(() => {
     const checkForDraft = () => {
       const draftPostData = localStorage.getItem('draftPostToEdit');
-      if (draftPostData && user) {
+      // Only load draft if we're on the compose page and have user data, and haven't already loaded a draft
+      if (draftPostData && user && activePage === 'compose' && !draftLoadedRef.current) {
         try {
           const draftPost = JSON.parse(draftPostData);
+          
+          // Log the draft data for debugging
+          console.log('Compose: Loading draft post:', {
+            id: draftPost.id,
+            hasMediaUrl: !!draftPost.mediaUrl,
+            mediaUrl: draftPost.mediaUrl,
+            hasContent: !!draftPost.content,
+            content: draftPost.content?.substring(0, 50),
+            mediaType: draftPost.mediaType,
+            platforms: draftPost.platforms,
+            activePage: activePage,
+          });
+          
           // Create a MediaItemState from the draft post
+          // Handle both mediaUrl (string) and mediaUrls (array) for multi-image posts
+          const primaryMediaUrl = draftPost.mediaUrl || (draftPost.mediaUrls && draftPost.mediaUrls.length > 0 ? draftPost.mediaUrls[0] : '');
+          const additionalImages = draftPost.mediaUrls && draftPost.mediaUrls.length > 1 
+            ? draftPost.mediaUrls.slice(1).map((url: string, idx: number) => ({
+                id: `${draftPost.id}-additional-${idx}`,
+                previewUrl: url,
+                data: '',
+                mimeType: draftPost.mediaType === 'video' ? 'video/mp4' : 'image/jpeg',
+              }))
+            : undefined;
+          
           const mediaItem: MediaItemState = {
             id: draftPost.id,
-            previewUrl: draftPost.mediaUrl || '',
-            data: '',
-            mimeType: draftPost.mediaType === 'video' ? 'video/mp4' : 'image/jpeg',
-            type: draftPost.mediaType || 'image',
+            previewUrl: primaryMediaUrl || '',
+            data: '', // Empty data is fine - MediaBox will use previewUrl for Firebase URLs
+            mimeType: draftPost.mediaType === 'video' ? 'video/mp4' : (draftPost.mediaType === 'image' ? 'image/jpeg' : 'image/jpeg'),
+            type: (draftPost.mediaType || 'image') as 'image' | 'video',
             results: [],
             captionText: draftPost.content || '',
             postGoal: draftPost.postGoal || 'engagement',
@@ -478,104 +511,185 @@ const CaptionGenerator: React.FC = () => {
               acc[p] = true;
               return acc;
             }, { ...emptyPlatforms }) || { ...emptyPlatforms },
+            scheduledDate: draftPost.scheduledDate || undefined,
+            additionalImages: additionalImages,
           };
-          setComposeState(prev => ({
-            ...prev,
-            mediaItems: [mediaItem],
-            postGoal: draftPost.postGoal || prev.postGoal,
-            postTone: draftPost.postTone || prev.postTone,
-          }));
-          localStorage.removeItem('draftPostToEdit');
+          
+          console.log('Compose: Created media item:', {
+            previewUrl: mediaItem.previewUrl,
+            captionText: mediaItem.captionText?.substring(0, 50),
+            type: mediaItem.type,
+            hasPreviewUrl: !!mediaItem.previewUrl,
+            additionalImages: mediaItem.additionalImages?.length || 0,
+          });
+          
+          // Set compose state with the draft media item
+          // Use functional update to ensure we're working with latest state
+          setComposeState(prev => {
+            // Clear any existing media items and set the draft
+            return {
+              ...prev,
+              media: null, // Clear single media if present
+              mediaItems: [mediaItem], // Set draft as media item
+              postGoal: draftPost.postGoal || prev.postGoal,
+              postTone: draftPost.postTone || prev.postTone,
+            };
+          });
+          
+          // Mark draft as loaded to prevent Firestore from overwriting
+          draftLoadedRef.current = true;
+          
           showToast('Draft loaded. Continue editing.', 'success');
+          
+          // Clear localStorage after successful load
+          localStorage.removeItem('draftPostToEdit');
         } catch (error) {
           console.error('Failed to load draft post:', error);
+          showToast('Failed to load draft. Please try again.', 'error');
           localStorage.removeItem('draftPostToEdit');
         }
+      } else if (draftPostData && activePage !== 'compose') {
+        // Draft data exists but we're not on compose page yet - wait for navigation
+        console.log('Compose: Draft data found but not on compose page yet, waiting...', { activePage });
       }
     };
     
-    // Check immediately
-    checkForDraft();
+    // Check immediately when component mounts (if on compose page)
+    if (activePage === 'compose') {
+      checkForDraft();
+    }
     
-    // Also check after a short delay to catch navigation
-    const timeoutId = setTimeout(checkForDraft, 300);
+    // Also check after delays to catch navigation and ensure page is ready
+    const timeoutId1 = setTimeout(() => {
+      if (activePage === 'compose') {
+        checkForDraft();
+      }
+    }, 100);
+    const timeoutId2 = setTimeout(() => {
+      if (activePage === 'compose') {
+        checkForDraft();
+      }
+    }, 500);
+    const timeoutId3 = setTimeout(() => {
+      if (activePage === 'compose') {
+        checkForDraft();
+      }
+    }, 1000); // Longer delay to ensure page is fully loaded
     
-    // Listen for page visibility changes
+    // Listen for page visibility changes and storage changes
     const handleVisibilityChange = () => {
-      if (!document.hidden) {
+      if (!document.hidden && activePage === 'compose') {
         checkForDraft();
       }
     };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
     
-    return () => {
-      clearTimeout(timeoutId);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [user, showToast, setComposeState]);
-
-  // Load mediaItems from Firestore on mount
-  useEffect(() => {
-    if (!user) return;
-
-    let mounted = true;
-
-    const loadMediaItems = async () => {
-      try {
-        const composeRef = collection(db, 'users', user.id, 'compose_media');
-        const snapshot = await getDocs(composeRef);
-        
-        if (!mounted) return;
-        
-        const loadedItems: MediaItemState[] = [];
-        snapshot.forEach((docSnapshot) => {
-          const data = docSnapshot.data();
-          // Skip items with blob URLs
-          if (data.previewUrl && (data.previewUrl.startsWith('blob:') || data.previewUrl.startsWith('data:'))) {
-            return;
-          }
-          
-          loadedItems.push({
-            id: docSnapshot.id,
-            previewUrl: data.previewUrl || '',
-            captionText: data.captionText || '',
-            postGoal: data.postGoal || 'engagement',
-            postTone: data.postTone || 'friendly',
-            selectedPlatforms: data.selectedPlatforms || {
-              Instagram: false,
-              TikTok: false,
-              X: false,
-              Threads: false,
-              YouTube: false,
-              LinkedIn: false,
-              Facebook: false,
-            },
-            results: data.results || [],
-            instagramPostType: data.instagramPostType,
-            type: data.type || 'image',
-            mimeType: data.mimeType || '',
-            scheduledDate: data.scheduledDate || undefined,
-            selectedMusic: data.selectedMusic || undefined,
-            musicNote: data.musicNote || undefined,
-            data: '', // Don't load base64 data
-          });
-        });
-        
-        if (mounted && loadedItems.length > 0) {
-          setComposeState(prev => ({
-            ...prev,
-            mediaItems: loadedItems,
-          }));
-        }
-      } catch (error) {
-        console.error('Failed to load compose media items:', error);
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'draftPostToEdit' && e.newValue && activePage === 'compose') {
+        checkForDraft();
       }
     };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      clearTimeout(timeoutId1);
+      clearTimeout(timeoutId2);
+      clearTimeout(timeoutId3);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [user, showToast, setComposeState, activePage]);
 
-    loadMediaItems();
+  // Reset draft loaded ref when leaving compose page
+  useEffect(() => {
+    if (activePage !== 'compose') {
+      draftLoadedRef.current = false;
+    }
+  }, [activePage]);
+
+  // Load mediaItems from Firestore on mount
+  // But only if there's no draft to load (draft loading takes priority)
+  useEffect(() => {
+    if (!user || activePage !== 'compose') return;
+
+    // Wait a bit to let draft loading happen first
+    const timeoutId = setTimeout(() => {
+      // Don't load from Firestore if a draft was already loaded
+      if (draftLoadedRef.current) {
+        return;
+      }
+      
+      // Also check localStorage as a backup
+      const draftPostData = localStorage.getItem('draftPostToEdit');
+      if (draftPostData) {
+        // Draft will be loaded by the other useEffect, so skip this
+        return;
+      }
+
+      let mounted = true;
+
+      const loadMediaItems = async () => {
+        try {
+          const composeRef = collection(db, 'users', user.id, 'compose_media');
+          const snapshot = await getDocs(composeRef);
+          
+          if (!mounted) return;
+          
+          const loadedItems: MediaItemState[] = [];
+          snapshot.forEach((docSnapshot) => {
+            const data = docSnapshot.data();
+            // Skip items with blob URLs
+            if (data.previewUrl && (data.previewUrl.startsWith('blob:') || data.previewUrl.startsWith('data:'))) {
+              return;
+            }
+            
+            loadedItems.push({
+              id: docSnapshot.id,
+              previewUrl: data.previewUrl || '',
+              captionText: data.captionText || '',
+              postGoal: data.postGoal || 'engagement',
+              postTone: data.postTone || 'friendly',
+              selectedPlatforms: data.selectedPlatforms || {
+                Instagram: false,
+                TikTok: false,
+                X: false,
+                Threads: false,
+                YouTube: false,
+                LinkedIn: false,
+                Facebook: false,
+              },
+              results: data.results || [],
+              instagramPostType: data.instagramPostType,
+              type: data.type || 'image',
+              mimeType: data.mimeType || '',
+              scheduledDate: data.scheduledDate || undefined,
+              selectedMusic: data.selectedMusic || undefined,
+              musicNote: data.musicNote || undefined,
+              data: '', // Don't load base64 data
+            });
+          });
+          
+          if (mounted && loadedItems.length > 0) {
+            setComposeState(prev => ({
+              ...prev,
+              mediaItems: loadedItems,
+            }));
+          }
+        } catch (error) {
+          console.error('Failed to load compose media items:', error);
+        }
+      };
+
+      loadMediaItems();
+
+      return () => {
+        mounted = false;
+      };
+    }, 500); // Wait 500ms for draft loading to complete
 
     return () => {
-      mounted = false;
+      clearTimeout(timeoutId);
     };
   }, [user?.id]);
 
@@ -1560,20 +1674,8 @@ const CaptionGenerator: React.FC = () => {
           await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
         }
 
-        // Create calendar event for each platform
-        for (const platform of platformsToPost) {
-          const newEvent: CalendarEvent = {
-            id: `cal-${postId}-${platform}`,
-            title: title,
-            date: scheduledDate,
-            type: platform === 'Instagram' && item.instagramPostType ? item.instagramPostType : (item.type === 'video' ? 'Reel' : 'Post'),
-            platform: platform,
-            status: status,
-            thumbnail: mediaUrl,
-          };
-
-          await addCalendarEvent(newEvent);
-        }
+        // Note: Calendar events are automatically derived from posts with scheduledDate
+        // No need to create separate calendar events - Calendar component reads from posts
       }
 
       showToast(
@@ -2586,7 +2688,7 @@ const CaptionGenerator: React.FC = () => {
     }
   };
 
-  const handleSaveToWorkflowMedia = async (index: number, status: 'Draft' | 'Approved') => {
+  const handleSaveToWorkflowMedia = async (index: number, status: 'Draft' | 'Scheduled') => {
     const item = composeState.mediaItems[index];
     // Allow text-only posts (announcements without media)
     if (!item.captionText.trim()) {
@@ -2628,8 +2730,8 @@ const CaptionGenerator: React.FC = () => {
       draftDate.setHours(12, 0, 0, 0);
 
       if (user) {
-        // If editing a draft and approving it, delete draft calendar events
-        if (isDraftEdit && status === 'Approved') {
+        // If editing a draft and scheduling it, delete draft calendar events
+        if (isDraftEdit && status === 'Scheduled') {
           // Delete ALL draft calendar events for this post
           try {
             const calendarEventsRef = collection(db, 'users', user.id, 'calendar_events');
@@ -2660,6 +2762,21 @@ const CaptionGenerator: React.FC = () => {
           }
         }
 
+        // Set scheduled date - use item's scheduledDate if available, otherwise default to tomorrow
+        let scheduledDate: string | undefined;
+        if (status === 'Scheduled') {
+          if (item.scheduledDate) {
+            scheduledDate = item.scheduledDate;
+          } else {
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(14, 0, 0, 0); // Default to 2 PM tomorrow
+            scheduledDate = tomorrow.toISOString();
+          }
+        } else if (status === 'Draft') {
+          scheduledDate = draftDate.toISOString(); // Drafts also get a suggested date
+        }
+
         const newPost: Post = {
           id: postId,
           content: item.captionText,
@@ -2669,7 +2786,7 @@ const CaptionGenerator: React.FC = () => {
           status: status,
           author: { name: user.name, avatar: user.avatar },
           comments: [],
-          scheduledDate: status === 'Draft' ? draftDate.toISOString() : undefined,
+          scheduledDate: scheduledDate,
           clientId: selectedClient?.id,
           timestamp: new Date().toISOString(), // Add timestamp for Firestore ordering
         } as Post & { timestamp: string };
@@ -2677,17 +2794,43 @@ const CaptionGenerator: React.FC = () => {
         const safePost = JSON.parse(JSON.stringify(newPost));
         await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
 
-        // Note: Calendar events are now derived from Posts, not created separately
-        // Draft posts with scheduledDate will appear in Calendar automatically
+        // Note: Calendar events are automatically derived from posts with scheduledDate
+        // No need to create separate calendar events - Calendar component reads from posts
       }
 
-      // Remove from mediaItems after saving
-      setComposeState(prev => ({
-        ...prev,
-        mediaItems: prev.mediaItems.filter((_, idx) => idx !== index),
-      }));
+      // Remove from mediaItems after saving AND delete from Firestore
+      // Do this IMMEDIATELY to ensure UI updates
+      const itemToRemove = composeState.mediaItems[index];
+      
+      // Delete from Firestore if it has an ID
+      if (itemToRemove?.id && user) {
+        try {
+          await deleteDoc(doc(db, 'users', user.id, 'compose_media', itemToRemove.id));
+        } catch (error) {
+          console.error('Failed to delete media item from Firestore:', error);
+          // Continue anyway - we'll remove it from UI
+        }
+      }
+      
+      // Remove from UI state
+      setComposeState(prev => {
+        const newItems = prev.mediaItems.filter((_, idx) => idx !== index);
+        return {
+          ...prev,
+          mediaItems: newItems,
+        };
+      });
 
-      showToast(`Saved to ${status} workflow!`, 'success');
+      // Small delay to ensure state update is processed
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      if (status === 'Scheduled') {
+        showToast('Added to Calendar!', 'success');
+        setActivePage('calendar');
+      } else {
+        showToast('Saved to Drafts!', 'success');
+        setActivePage('approvals');
+      }
       
       // Refresh posts in context
       if (setPosts) {
@@ -2706,8 +2849,6 @@ const CaptionGenerator: React.FC = () => {
           console.error('Failed to refresh posts:', error);
         }
       }
-      
-      setActivePage('approvals');
     } catch (e) {
       console.error(e);
       showToast('Failed to save to workflow.', 'error');
@@ -3379,17 +3520,18 @@ const CaptionGenerator: React.FC = () => {
       </div>
 
       {/* Predict & Repurpose History */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Predictions & Repurposes</h3>
-          <button
-            onClick={() => setShowHistory(!showHistory)}
-            className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-          >
-            {showHistory ? 'Hide' : 'Show'} History
-          </button>
-        </div>
-        {showHistory && (
+      {user?.plan !== 'Free' && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Predictions & Repurposes</h3>
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+            >
+              {showHistory ? 'Hide' : 'Show'} History
+            </button>
+          </div>
+          {showHistory && (
           <>
             {(predictHistory.length === 0 && repurposeHistory.length === 0) ? (
               <div className="text-center py-8 text-gray-500 dark:text-gray-400">
@@ -3480,8 +3622,9 @@ const CaptionGenerator: React.FC = () => {
             </div>
             )}
           </>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       {/* Tone & Goal Controls - Only show for Caption plan */}
       {user?.plan === 'Caption' && (
@@ -3795,8 +3938,31 @@ const CaptionGenerator: React.FC = () => {
                   <p className="text-primary-600 dark:text-primary-400 mt-2 text-sm">
                     {(result.hashtags || []).join(' ')}
                   </p>
+                  <button
+                    onClick={e => {
+                      e.stopPropagation();
+                      const fullText = `${result.caption}\n\n${(result.hashtags || []).join(' ')}`;
+                      navigator.clipboard.writeText(fullText);
+                      showToast('Caption copied to clipboard!', 'success');
+                    }}
+                    className="mt-3 flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 bg-primary-50 dark:bg-primary-900/30 rounded-md hover:bg-primary-100 dark:hover:bg-primary-900/50"
+                  >
+                    <CopyIcon className="w-4 h-4" /> Copy Caption & Hashtags
+                  </button>
                 </div>
                 <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={e => {
+                      e.stopPropagation();
+                      const fullText = `${result.caption}\n\n${(result.hashtags || []).join(' ')}`;
+                      navigator.clipboard.writeText(fullText);
+                      showToast('Caption copied to clipboard!', 'success');
+                    }}
+                    className="p-2 bg-white dark:bg-gray-600 rounded-full shadow text-primary-600 dark:text-primary-300"
+                    title="Copy caption and hashtags"
+                  >
+                    <CopyIcon className="w-4 h-4" />
+                  </button>
                   <button
                     onClick={e => {
                       e.stopPropagation();
@@ -3854,7 +4020,8 @@ const CaptionGenerator: React.FC = () => {
                     type="datetime-local"
                     value={scheduleDate}
                     onChange={e => setScheduleDate(e.target.value)}
-                    className="flex-grow p-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
+                    className="flex-grow p-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+                    style={{ colorScheme: 'dark' }}
                   />
                   <button
                     onClick={() => handleSchedule(scheduleDate)}

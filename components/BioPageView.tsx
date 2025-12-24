@@ -328,11 +328,6 @@ export const BioPageView: React.FC = () => {
                                 @{String(bioPage.username).replace('@', '')}
                             </p>
                         )}
-                        {bioPage.totalFollowers && bioPage.totalFollowers > 0 && (
-                            <p className="text-xs mb-3 opacity-70" style={{ color: theme.textColor }}>
-                                {formatFollowerCount(bioPage.totalFollowers)} Total Followers
-                            </p>
-                        )}
                         <p className="text-sm mb-6 px-4 opacity-90" style={{ color: theme.textColor }}>
                             {bioPage.bio || 'Bio description'}
                         </p>
@@ -473,7 +468,7 @@ export const BioPageView: React.FC = () => {
                         )}
 
                         <div className="mt-auto pt-8 pb-4">
-                            <p className="text-[10px] font-bold opacity-50" style={{ color: theme.textColor }}>POWERED BY ENGAGESUITE.AI</p>
+                            <p className="text-[10px] font-bold opacity-50" style={{ color: theme.textColor }}>POWERED BY ECHOFLUX.AI</p>
                         </div>
                     </div>
                 </div>

@@ -1,6 +1,8 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getModel, parseJSON } from "./_geminiShared.js";
 import { verifyAuth } from "./verifyAuth.js";
+import { getGoalFramework, getGoalSpecificCTAs, getGoalSpecificContentGuidance } from "./_goalFrameworks.js";
+import { getLatestTrends } from "./_trendsHelper.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
@@ -30,19 +32,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const model = getModel("gemini-2.0-flash");
 
-    const prompt = `
-You are an elite social media strategist.
+    // Get goal-specific framework and current trends
+    const goalFramework = getGoalFramework(goal);
+    let currentTrends = '';
+    try {
+      currentTrends = await getLatestTrends();
+    } catch (error) {
+      console.error('[generateAutopilotPlan] Error fetching trends:', error);
+      currentTrends = 'Trend data unavailable. Using general best practices.';
+    }
 
-Create a structured content campaign plan.
+    const prompt = `
+You are an elite social media strategist specializing in creating goal-driven content campaigns.
+
+${goalFramework}
+
+${currentTrends}
+
+PRIMARY OBJECTIVE: Create a structured content campaign plan specifically designed to achieve: ${goal}
 
 Inputs:
-- Goal: ${goal}
+- Primary Goal: ${goal} (THIS IS THE MOST IMPORTANT - every content piece should directly support this goal)
 - Niche: ${niche}
 - Audience: ${audience}
 - Channels: ${
       Array.isArray(channels) ? channels.join(", ") : channels || "unspecified"
     }
 - Duration in weeks: ${durationWeeks || 4}
+
+CRITICAL INSTRUCTIONS FOR GOAL ACHIEVEMENT:
+1. Every content piece must directly contribute to achieving "${goal}"
+2. Use the strategic framework above to guide content creation
+3. Incorporate current social media trends and best practices from the trends data
+4. Create a strategic progression: Early weeks build foundation, later weeks drive action
+5. Include specific CTAs aligned with ${goal}: ${getGoalSpecificCTAs(goal)}
+6. Follow goal-specific content guidance: ${getGoalSpecificContentGuidance(goal)}
 
 Return ONLY valid JSON with this exact shape:
 
