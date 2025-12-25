@@ -43,7 +43,7 @@ import { useAppContext } from './AppContext';
 import { MobilePreviewModal } from './MobilePreviewModal';
 import { MediaBox } from './MediaBox';
 import { db, storage } from '../firebaseConfig';
-import { collection, setDoc, doc, getDocs, deleteDoc, query, where, getDoc, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, setDoc, doc, getDocs, deleteDoc, query, where, getDoc, orderBy, Timestamp, addDoc } from 'firebase/firestore';
 // @ts-ignore
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { scheduleMultiplePosts, analyzeOptimalPostingTimes } from '../src/services/smartSchedulingService';
@@ -185,17 +185,21 @@ const CaptionGenerator: React.FC = () => {
   const [selectedPinterestBoardId, setSelectedPinterestBoardId] = useState<string | null>(null);
   const [selectedPinterestBoardName, setSelectedPinterestBoardName] = useState<string | null>(null);
   
-  // History state for predict and repurpose
+  // History state for predict, repurpose, and gap analysis
   const [predictHistory, setPredictHistory] = useState<any[]>([]);
   const [repurposeHistory, setRepurposeHistory] = useState<any[]>([]);
+  const [gapAnalysisHistory, setGapAnalysisHistory] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
   
-  // Predict and Repurpose modals (for history viewing)
+  // Predict, Repurpose, and Gap Analysis modals (for history viewing)
   const [predictResult, setPredictResult] = useState<any>(null);
   const [showPredictModal, setShowPredictModal] = useState(false);
   const [repurposeResult, setRepurposeResult] = useState<any>(null);
   const [showRepurposeModal, setShowRepurposeModal] = useState(false);
+  const [gapAnalysisResult, setGapAnalysisResult] = useState<any>(null);
+  const [showGapAnalysisModal, setShowGapAnalysisModal] = useState(false);
+  const [isAnalyzingGaps, setIsAnalyzingGaps] = useState(false);
 
   const loadHistory = async () => {
     if (!user?.id) return;
@@ -220,10 +224,93 @@ const CaptionGenerator: React.FC = () => {
         repurposeItems.push({ id: doc.id, ...doc.data() });
       });
       setRepurposeHistory(repurposeItems.slice(0, 10)); // Keep only last 10
+
+      // Load gap analysis history
+      const gapAnalysisRef = collection(db, 'users', user.id, 'compose_gap_analysis_history');
+      try {
+        const gapAnalysisQuery = query(gapAnalysisRef, orderBy('createdAt', 'desc'));
+        const gapAnalysisSnapshot = await getDocs(gapAnalysisQuery);
+        const gapAnalysisItems: any[] = [];
+        gapAnalysisSnapshot.forEach((doc) => {
+          gapAnalysisItems.push({ id: doc.id, ...doc.data() });
+        });
+        setGapAnalysisHistory(gapAnalysisItems.slice(0, 10)); // Keep only last 10
+      } catch (error: any) {
+        // Fallback: try without orderBy if index is missing
+        if (error.code === 'failed-precondition' || error.message?.includes('index')) {
+          const fallbackQuery = query(gapAnalysisRef);
+          const fallbackSnapshot = await getDocs(fallbackQuery);
+          const gapAnalysisItems: any[] = [];
+          fallbackSnapshot.forEach((doc) => {
+            gapAnalysisItems.push({ id: doc.id, ...doc.data() });
+          });
+          // Sort manually by createdAt
+          gapAnalysisItems.sort((a, b) => {
+            const aTime = a.createdAt?.toDate?.()?.getTime() || a.createdAt || 0;
+            const bTime = b.createdAt?.toDate?.()?.getTime() || b.createdAt || 0;
+            return bTime - aTime;
+          });
+          setGapAnalysisHistory(gapAnalysisItems.slice(0, 10));
+        }
+      }
     } catch (error: any) {
       console.error('Error loading history:', error);
     } finally {
       setLoadingHistory(false);
+    }
+  };
+
+  // Handle analyze content gaps
+  const handleAnalyzeContentGaps = async () => {
+    if (!user?.id) {
+      showToast('Please sign in to analyze content gaps', 'error');
+      return;
+    }
+
+    setIsAnalyzingGaps(true);
+    try {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+      
+      const response = await fetch('/api/analyzeContentGaps', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          daysToAnalyze: 90,
+          niche: user.niche || '',
+          platforms: ['Instagram', 'TikTok', 'X', 'LinkedIn', 'Facebook', 'Threads', 'YouTube'],
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to analyze content gaps');
+      }
+
+      const data = await response.json();
+      if (data.success) {
+        setGapAnalysisResult(data);
+        setShowGapAnalysisModal(true);
+        // Auto-save to compose gap analysis history
+        try {
+          await addDoc(collection(db, 'users', user.id, 'compose_gap_analysis_history'), {
+            type: 'gap_analysis',
+            title: `Content Gap Analysis - ${new Date().toLocaleDateString()}`,
+            data: data,
+            createdAt: Timestamp.now(),
+          });
+          loadHistory(); // Reload history to show the new analysis
+        } catch (saveError) {
+          console.error('Failed to auto-save content gap analysis:', saveError);
+        }
+        showToast('Content gap analysis complete!', 'success');
+      }
+    } catch (error: any) {
+      console.error('Error analyzing content gaps:', error);
+      showToast(error.message || 'Failed to analyze content gaps', 'error');
+    } finally {
+      setIsAnalyzingGaps(false);
     }
   };
 
@@ -3523,7 +3610,7 @@ const CaptionGenerator: React.FC = () => {
       {user?.plan !== 'Free' && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Predictions & Repurposes</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Analyze Content Gaps, Predictions & Repurposes</h3>
             <button
               onClick={() => setShowHistory(!showHistory)}
               className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
@@ -3533,10 +3620,10 @@ const CaptionGenerator: React.FC = () => {
           </div>
           {showHistory && (
           <>
-            {(predictHistory.length === 0 && repurposeHistory.length === 0) ? (
+            {(predictHistory.length === 0 && repurposeHistory.length === 0 && gapAnalysisHistory.length === 0) ? (
               <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                <p className="text-sm">No predictions or repurposes yet.</p>
-                <p className="text-xs mt-1">Use the Predict or Repurpose buttons on your posts to see history here.</p>
+                <p className="text-sm">No content gap analysis, predictions or repurposes yet.</p>
+                <p className="text-xs mt-1">Use the Analyze Content Gaps, Predict or Repurpose buttons on your posts to see history here.</p>
               </div>
             ) : (
             <div className="space-y-3 max-h-64 overflow-y-auto">
@@ -3545,13 +3632,24 @@ const CaptionGenerator: React.FC = () => {
                 const prediction = item.data?.prediction || {};
                 const level = prediction.level || 'Medium';
                 const score = prediction.score || 50;
+                const mediaUrl = item.data?.mediaUrl;
+                const mediaType = item.data?.mediaType || 'image';
                 return (
                   <div
                     key={item.id}
                     className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
                   >
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1">
+                    <div className="flex items-start justify-between mb-2 gap-3">
+                      {mediaUrl && (
+                        <div className="flex-shrink-0">
+                          {mediaType === 'video' ? (
+                            <video src={mediaUrl} className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
+                          ) : (
+                            <img src={mediaUrl} alt="Preview" className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
+                          )}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-xs font-semibold text-purple-600 dark:text-purple-400">PREDICT</span>
                           <span className={`text-xs px-2 py-0.5 rounded ${
@@ -3574,7 +3672,7 @@ const CaptionGenerator: React.FC = () => {
                           setPredictResult(item.data);
                           setShowPredictModal(true);
                         }}
-                        className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 ml-2"
+                        className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 ml-2 flex-shrink-0"
                       >
                         View
                       </button>
@@ -3586,13 +3684,24 @@ const CaptionGenerator: React.FC = () => {
               {/* Repurpose History */}
               {repurposeHistory.map((item) => {
                 const platforms = item.data?.repurposedContent?.length || 0;
+                const mediaUrl = item.data?.mediaUrl;
+                const mediaType = item.data?.mediaType || 'image';
                 return (
                   <div
                     key={item.id}
                     className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
                   >
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1">
+                    <div className="flex items-start justify-between mb-2 gap-3">
+                      {mediaUrl && (
+                        <div className="flex-shrink-0">
+                          {mediaType === 'video' ? (
+                            <video src={mediaUrl} className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
+                          ) : (
+                            <img src={mediaUrl} alt="Preview" className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
+                          )}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">REPURPOSE</span>
                           <span className="text-xs text-gray-500 dark:text-gray-400">
@@ -3611,7 +3720,41 @@ const CaptionGenerator: React.FC = () => {
                           setRepurposeResult(item.data);
                           setShowRepurposeModal(true);
                         }}
-                        className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 ml-2"
+                        className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 ml-2 flex-shrink-0"
+                      >
+                        View
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Gap Analysis History */}
+              {gapAnalysisHistory.map((item) => {
+                const summary = item.data?.summary || item.title || 'Content Gap Analysis';
+                return (
+                  <div
+                    key={item.id}
+                    className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
+                  >
+                    <div className="flex items-start justify-between mb-2 gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs font-semibold text-purple-600 dark:text-purple-400">CONTENT GAP ANALYSIS</span>
+                        </div>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                          {summary.substring(0, 100)}...
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                          {item.createdAt?.toDate?.() ? new Date(item.createdAt.toDate()).toLocaleString() : (item.createdAt ? new Date(item.createdAt).toLocaleString() : 'Recently')}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setGapAnalysisResult(item.data);
+                          setShowGapAnalysisModal(true);
+                        }}
+                        className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 ml-2 flex-shrink-0"
                       >
                         View
                       </button>
@@ -3724,6 +3867,8 @@ const CaptionGenerator: React.FC = () => {
                 setUpgradeModalReason('limit');
                 setIsUpgradeModalOpen(true);
               }}
+              onAnalyzeContentGaps={handleAnalyzeContentGaps}
+              isAnalyzingGaps={isAnalyzingGaps}
             />
             </div>
           </div>
@@ -4081,6 +4226,17 @@ const CaptionGenerator: React.FC = () => {
           }}
         />
       )}
+
+      {/* Gap Analysis Modal */}
+      {showGapAnalysisModal && gapAnalysisResult && (
+        <GapAnalysisModal
+          analysis={gapAnalysisResult}
+          onClose={() => {
+            setShowGapAnalysisModal(false);
+            loadHistory(); // Reload history when modal closes
+          }}
+        />
+      )}
     </div>
   );
 };
@@ -4404,6 +4560,121 @@ const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: 
             className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
           >
             OK
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Gap Analysis Modal Component
+const GapAnalysisModal: React.FC<{ analysis: any; onClose: () => void }> = ({ analysis, onClose }) => {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Content Gap Analysis</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          >
+            <XMarkIcon className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {/* Summary */}
+          {analysis.summary && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <p className="text-blue-900 dark:text-blue-200">{analysis.summary}</p>
+            </div>
+          )}
+
+          {/* Gaps */}
+          {analysis.gaps && analysis.gaps.length > 0 && (
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Identified Gaps</h3>
+              <div className="space-y-3">
+                {analysis.gaps.map((gap: any, idx: number) => (
+                  <div
+                    key={idx}
+                    className={`p-4 rounded-lg border ${
+                      gap.severity === 'high'
+                        ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                        : gap.severity === 'medium'
+                        ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
+                        : 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <span className={`text-xs font-semibold px-2 py-1 rounded ${
+                        gap.severity === 'high'
+                          ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
+                          : gap.severity === 'medium'
+                          ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                      }`}>
+                        {gap.severity?.toUpperCase() || 'LOW'}
+                      </span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{gap.type}</span>
+                    </div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white mb-1">{gap.description}</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">{gap.impact}</p>
+                    <p className="text-xs text-gray-700 dark:text-gray-300">{gap.recommendation}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Suggestions */}
+          {analysis.suggestions && analysis.suggestions.length > 0 && (
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Content Suggestions to Fill Gaps</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {analysis.suggestions.map((suggestion: any, idx: number) => (
+                  <div
+                    key={idx}
+                    className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-primary-300 dark:hover:border-primary-700 transition-colors"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <span className={`text-xs font-semibold px-2 py-1 rounded ${
+                        suggestion.priority === 'high'
+                          ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
+                          : suggestion.priority === 'medium'
+                          ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                      }`}>
+                        {suggestion.priority?.toUpperCase() || 'LOW'}
+                      </span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{suggestion.type}</span>
+                    </div>
+                    <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">{suggestion.title}</h4>
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">{suggestion.captionOutline}</p>
+                    <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-2">
+                      {suggestion.platform && <span>{suggestion.platform}</span>}
+                      {suggestion.platform && suggestion.format && <span>•</span>}
+                      {suggestion.format && <span>{suggestion.format}</span>}
+                    </div>
+                    {suggestion.whyThisFillsGap && <p className="text-xs text-gray-700 dark:text-gray-300 italic">{suggestion.whyThisFillsGap}</p>}
+                    {suggestion.trendRelevance && (
+                      <p className="text-xs text-primary-600 dark:text-primary-400 mt-1">
+                        🔥 {suggestion.trendRelevance}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+          >
+            Close
           </button>
         </div>
       </div>

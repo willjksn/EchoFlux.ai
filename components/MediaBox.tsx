@@ -104,6 +104,8 @@ interface MediaBoxProps {
   onAIAutoSchedule?: (index: number) => void;
   platformIcons: Record<Platform, React.ReactNode>;
   onUpgradeClick?: () => void; // Callback to show upgrade modal
+  onAnalyzeContentGaps?: () => void; // Callback to analyze content gaps
+  isAnalyzingGaps?: boolean; // Whether content gaps are being analyzed
 }
 
 export const MediaBox: React.FC<MediaBoxProps> = ({
@@ -116,6 +118,8 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   goalOptions,
   toneOptions,
   isSelected,
+  onAnalyzeContentGaps,
+  isAnalyzingGaps = false,
   onToggleSelect,
   onPreview,
   onPublish,
@@ -956,63 +960,29 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
       {mediaItem.captionText && mediaItem.captionText.trim() && (
         <div className="mb-3 flex flex-wrap gap-2">
           <button
-            onClick={async () => {
-              if (user?.plan === 'Free') {
-                showToast('Upgrade to Pro or Elite to unlock Optimize', 'info');
-                setActivePage('pricing');
-                return;
-              }
-              if (!mediaItem.captionText.trim()) {
-                showToast('Please add a caption first', 'error');
-                return;
-              }
-              setIsGenerating(true);
-              try {
-                const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
-                const selectedPlatform = (Object.keys(mediaItem.selectedPlatforms || {}) as Platform[]).find(
-                  p => mediaItem.selectedPlatforms?.[p]
-                );
-                if (!selectedPlatform) {
-                  showToast('Please select a platform first', 'error');
-                  setIsGenerating(false);
-                  return;
-                }
-                const response = await fetch('/api/optimizeCaption', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                  },
-                  body: JSON.stringify({
-                    originalCaption: mediaItem.captionText,
-                    platform: selectedPlatform,
-                    niche: user?.niche || '',
-                    tone: mediaItem.postTone,
-                    goal: mediaItem.postGoal,
-                    mediaType: mediaItem.type,
-                  }),
-                });
-                if (!response.ok) throw new Error('Failed to optimize caption');
-                const data = await response.json();
-                if (data.success && data.optimizedCaption) {
-                  onUpdate(index, { captionText: data.optimizedCaption });
-                  showToast('Caption optimized! Check the improvements below.', 'success');
-                }
-              } catch (error: any) {
-                showToast(error.message || 'Failed to optimize caption', 'error');
-              } finally {
-                setIsGenerating(false);
+            onClick={() => {
+              if (onAnalyzeContentGaps) {
+                onAnalyzeContentGaps();
               }
             }}
-            disabled={isGenerating || user?.plan === 'Free'}
+            disabled={isAnalyzingGaps || user?.plan === 'Free'}
             className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center justify-center gap-1 ${
               user?.plan === 'Free'
                 ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
-                : 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 disabled:opacity-50'
+                : 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/50 disabled:opacity-50'
             }`}
           >
-            <SparklesIcon className="w-3 h-3" />
-            Optimize
+            {isAnalyzingGaps ? (
+              <>
+                <RefreshIcon className="w-3 h-3 animate-spin" />
+                Analyzing...
+              </>
+            ) : (
+              <>
+                <SparklesIcon className="w-3 h-3" />
+                Analyze Content Gaps
+              </>
+            )}
           </button>
           <button
             onClick={async () => {
@@ -1060,6 +1030,8 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
                     ...data,
                     originalCaption: mediaItem.captionText,
                     platform: selectedPlatform,
+                    mediaUrl: mediaItem.previewUrl,
+                    mediaType: mediaItem.type,
                   });
                   
                   setPredictResult(data);
@@ -1128,6 +1100,8 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
                     ...data,
                     originalContent: mediaItem.captionText,
                     originalPlatform: selectedPlatform,
+                    mediaUrl: mediaItem.previewUrl,
+                    mediaType: mediaItem.type,
                   });
                   
                   setRepurposeResult(data);
