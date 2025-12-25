@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from './AppContext';
-import { SparklesIcon, RefreshIcon, DownloadIcon, UploadIcon, XMarkIcon, CopyIcon, ImageIcon } from './icons/UIIcons';
+import { SparklesIcon, RefreshIcon, DownloadIcon, UploadIcon, XMarkIcon, CopyIcon, ImageIcon, TrashIcon } from './icons/UIIcons';
 import { auth, storage, db } from '../firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { collection, addDoc, Timestamp, query, getDocs, orderBy, getDoc, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, query, getDocs, orderBy, getDoc, doc, setDoc, deleteDoc, where } from 'firebase/firestore';
 import { OnlyFansCalendarEvent } from './OnlyFansCalendar';
 
 type ContentType = 'captions' | 'mediaCaptions' | 'postIdeas' | 'shootConcepts' | 'weeklyPlan' | 'monetizationPlanner' | 'guides' | 'history';
@@ -252,6 +252,355 @@ const RepurposeModal: React.FC<{ result: any; onClose: () => void; onCopy: (text
     );
 };
 
+// Helper function to get a summary from a weekly plan
+const getWeeklyPlanSummary = (plan: any): string => {
+    if (!plan) return '';
+    
+    // Handle string plans
+    let planData = plan;
+    if (typeof plan === 'string') {
+        try {
+            planData = JSON.parse(plan);
+        } catch (e) {
+            return plan.substring(0, 100) + (plan.length > 100 ? '...' : '');
+        }
+    }
+    
+    const actualPlan = planData?.plan || planData;
+    
+    // Try to extract meaningful summary
+    if (actualPlan?.weeks && Array.isArray(actualPlan.weeks) && actualPlan.weeks.length > 0) {
+        const firstWeek = actualPlan.weeks[0];
+        const focus = firstWeek.focus || firstWeek.theme || '';
+        const daysCount = (firstWeek.days || firstWeek.content || []).length;
+        const totalWeeks = actualPlan.weeks.length;
+        
+        if (focus) {
+            return `Week 1: ${focus} (${daysCount} posts)${totalWeeks > 1 ? ` • ${totalWeeks} weeks total` : ''}`;
+        }
+        return `${totalWeeks} week${totalWeeks > 1 ? 's' : ''} • ${daysCount} posts`;
+    }
+    
+    // Fallback
+    return typeof planData === 'string' ? planData.substring(0, 100) + (planData.length > 100 ? '...' : '') : 'Weekly Plan';
+};
+
+// Weekly Plan Formatter Component
+const MonetizationPlanFormatter: React.FC<{ plan: any }> = ({ plan }) => {
+    if (!plan) return null;
+    
+    // Handle string plans (try to parse if it's JSON)
+    let planData = plan;
+    if (typeof plan === 'string') {
+        try {
+            planData = JSON.parse(plan);
+        } catch (e) {
+            // If it's not JSON, just display as text
+            return (
+                <div className="text-gray-900 dark:text-white whitespace-pre-wrap">
+                    {plan}
+                </div>
+            );
+        }
+    }
+    
+    // Handle plan structure: could be nested or direct
+    // If planData has a 'plan' property, use that; otherwise use planData directly
+    // This handles both { plan: {...} } and direct plan object structures
+    const actualPlan = (planData && typeof planData === 'object' && 'plan' in planData && planData.plan) 
+        ? planData.plan 
+        : planData;
+    
+    // Debug: Check if we have the expected structure
+    if (!actualPlan || (typeof actualPlan === 'object' && !actualPlan.summary && !actualPlan.balance && !actualPlan.ideas)) {
+        // If the plan doesn't have expected properties, it might be malformed
+        // Try to display it as JSON for debugging
+        console.warn('MonetizationPlanFormatter: Unexpected plan structure', { plan, planData, actualPlan });
+        return (
+            <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                <p className="text-sm text-yellow-600 dark:text-yellow-400 mb-2">⚠️ Plan data structure issue. Raw data:</p>
+                <pre className="text-gray-900 dark:text-white whitespace-pre-wrap font-mono text-xs overflow-auto max-h-96">
+                    {JSON.stringify(actualPlan || planData || plan, null, 2)}
+                </pre>
+            </div>
+        );
+    }
+    
+    return (
+        <div className="space-y-6">
+            {/* Summary */}
+            {actualPlan?.summary && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                    <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-200 mb-2">Strategy Summary</h3>
+                    <p className="text-blue-800 dark:text-blue-300">{actualPlan.summary}</p>
+                </div>
+            )}
+
+            {/* Balance Visualization */}
+            {actualPlan?.balance && (
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Content Balance</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="text-center p-3 bg-primary-50 dark:bg-primary-900/20 rounded-lg">
+                            <p className="text-2xl font-bold text-primary-600 dark:text-primary-400">{actualPlan.balance.engagement}</p>
+                            <p className="text-xs text-gray-600 dark:text-gray-400">Engagement</p>
+                        </div>
+                        <div className="text-center p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+                            <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{actualPlan.balance.upsell}</p>
+                            <p className="text-xs text-gray-600 dark:text-gray-400">Upsell</p>
+                        </div>
+                        <div className="text-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{actualPlan.balance.retention}</p>
+                            <p className="text-xs text-gray-600 dark:text-gray-400">Retention</p>
+                        </div>
+                        <div className="text-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                            <p className="text-2xl font-bold text-green-600 dark:text-green-400">{actualPlan.balance.conversion}</p>
+                            <p className="text-xs text-gray-600 dark:text-gray-400">Conversion</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Warnings */}
+            {actualPlan?.warnings && Array.isArray(actualPlan.warnings) && actualPlan.warnings.length > 0 && (
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                    <h4 className="font-semibold text-yellow-900 dark:text-yellow-200 mb-2">⚠️ Warnings</h4>
+                    <ul className="list-disc list-inside space-y-1 text-yellow-800 dark:text-yellow-300 text-sm">
+                        {actualPlan.warnings.map((warning: string, index: number) => (
+                            <li key={index}>{warning}</li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
+            {/* Tips */}
+            {actualPlan?.tips && Array.isArray(actualPlan.tips) && actualPlan.tips.length > 0 && (
+                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                    <h4 className="font-semibold text-green-900 dark:text-green-200 mb-2">💡 Tips</h4>
+                    <ul className="list-disc list-inside space-y-1 text-green-800 dark:text-green-300 text-sm">
+                        {actualPlan.tips.map((tip: string, index: number) => (
+                            <li key={index}>{tip}</li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
+            {/* Ideas by Category */}
+            {actualPlan?.ideas && Array.isArray(actualPlan.ideas) && actualPlan.ideas.length > 0 && (
+                <div className="space-y-4">
+                    {/* Group ideas by label */}
+                    {['engagement', 'upsell', 'retention', 'conversion'].map((label) => {
+                        const categoryIdeas = actualPlan.ideas.filter((idea: any) => idea.label === label);
+                        if (categoryIdeas.length === 0) return null;
+
+                        const labelColors: Record<string, { bg: string; text: string; border: string }> = {
+                            engagement: { bg: 'bg-primary-50 dark:bg-primary-900/20', text: 'text-primary-700 dark:text-primary-300', border: 'border-primary-200 dark:border-primary-800' },
+                            upsell: { bg: 'bg-orange-50 dark:bg-orange-900/20', text: 'text-orange-700 dark:text-orange-300', border: 'border-orange-200 dark:border-orange-800' },
+                            retention: { bg: 'bg-blue-50 dark:bg-blue-900/20', text: 'text-blue-700 dark:text-blue-300', border: 'border-blue-200 dark:border-blue-800' },
+                            conversion: { bg: 'bg-green-50 dark:bg-green-900/20', text: 'text-green-700 dark:text-green-300', border: 'border-green-200 dark:border-green-800' },
+                        };
+
+                        const colors = labelColors[label] || labelColors.engagement;
+
+                        return (
+                            <div key={label} className={`${colors.bg} border ${colors.border} rounded-lg p-4`}>
+                                <h4 className={`text-lg font-semibold ${colors.text} mb-3 capitalize`}>
+                                    {label} Ideas ({categoryIdeas.length})
+                                </h4>
+                                <div className="space-y-3">
+                                    {categoryIdeas.map((idea: any, index: number) => (
+                                        <div key={index} className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                                            <div className="flex items-start justify-between mb-2">
+                                                <h5 className="font-semibold text-gray-900 dark:text-white">{idea.idea}</h5>
+                                                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                                    idea.pricing === 'free' ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' :
+                                                    idea.pricing === 'teaser' ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300' :
+                                                    'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
+                                                }`}>
+                                                    {idea.pricing === 'free' ? 'FREE' : idea.pricing === 'teaser' ? 'TEASER' : 'PAID'}
+                                                </span>
+                                            </div>
+                                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{idea.description}</p>
+                                            <div className="flex flex-wrap gap-2 text-xs">
+                                                <span className="text-gray-500 dark:text-gray-400">📅 {idea.suggestedTiming}</span>
+                                                {idea.cta && (
+                                                    <span className="text-primary-600 dark:text-primary-400">💬 CTA: {idea.cta}</span>
+                                                )}
+                                                {idea.priority && (
+                                                    <span className="text-gray-500 dark:text-gray-400">⭐ Priority: {idea.priority}/5</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* Weekly Distribution */}
+            {actualPlan?.weeklyDistribution && Array.isArray(actualPlan.weeklyDistribution) && actualPlan.weeklyDistribution.length > 0 && (
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Weekly Distribution</h3>
+                    <div className="space-y-3">
+                        {actualPlan.weeklyDistribution.map((day: any, index: number) => (
+                            <div key={index} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                <div className="flex items-start justify-between mb-2">
+                                    <h4 className="font-semibold text-gray-900 dark:text-white">{day.day}</h4>
+                                    <span className="text-xs text-primary-600 dark:text-primary-400">{day.focus}</span>
+                                </div>
+                                <ul className="list-disc list-inside space-y-1 text-sm text-gray-600 dark:text-gray-400">
+                                    {Array.isArray(day.ideas) && day.ideas.map((idea: string, ideaIndex: number) => (
+                                        <li key={ideaIndex}>{idea}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const WeeklyPlanFormatter: React.FC<{ plan: any }> = ({ plan }) => {
+    if (!plan) return null;
+    
+    // Handle string plans (try to parse if it's JSON)
+    let planData = plan;
+    if (typeof plan === 'string') {
+        try {
+            planData = JSON.parse(plan);
+        } catch (e) {
+            // If it's not JSON, just display as text
+            return (
+                <div className="text-gray-900 dark:text-white whitespace-pre-wrap">
+                    {plan}
+                </div>
+            );
+        }
+    }
+    
+    // Handle plan structure: could be plan.plan or plan directly
+    const actualPlan = planData?.plan || planData;
+    
+    // Extract metrics if they exist
+    const metrics = actualPlan?.metrics || planData?.metrics;
+    
+    return (
+        <div className="space-y-4">
+            {/* Metrics Section */}
+            {metrics && metrics.milestones && metrics.milestones.length > 0 && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+                    <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">Weekly Goals & Milestones</h4>
+                    <ul className="space-y-2">
+                        {metrics.milestones.map((milestone: any, idx: number) => (
+                            <li key={idx} className="text-sm text-blue-800 dark:text-blue-200">
+                                {milestone.targetMetric && (
+                                    <strong className="mr-2">{milestone.targetMetric}:</strong>
+                                )}
+                                {milestone.description && <span>{milestone.description}</span>}
+                                {!milestone.targetMetric && !milestone.description && JSON.stringify(milestone)}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+            
+            {/* Weeks Section */}
+            {actualPlan?.weeks && Array.isArray(actualPlan.weeks) && actualPlan.weeks.length > 0 ? (
+                actualPlan.weeks.map((week: any, weekIndex: number) => {
+                    const weekNum = week.week || week.weekNumber || weekIndex + 1;
+                    const focus = week.focus || week.theme || 'Content Focus';
+                    const days = week.days || week.content || [];
+                    const isOneWeekPlan = actualPlan.weeks.length === 1;
+                    
+                    return (
+                        <div
+                            key={weekIndex}
+                            className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden"
+                        >
+                            <div className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                                        {isOneWeekPlan ? focus : `Week ${weekNum}`}
+                                    </h3>
+                                    {!isOneWeekPlan && (
+                                        <span className="text-sm text-gray-600 dark:text-gray-400">
+                                            {focus}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                            
+                            <div className="p-4 space-y-3">
+                                {days.length > 0 ? (
+                                    days.map((day: any, dayIndex: number) => {
+                                        const dayName = day.day || `Day ${day.dayOffset !== undefined ? day.dayOffset + 1 : dayIndex + 1}`;
+                                        const postType = day.postType || day.format || 'Post';
+                                        const postIdea = day.postIdea || day.topic || day.content || 'Content idea';
+                                        const description = day.description;
+                                        const angle = day.angle;
+                                        const cta = day.cta;
+                                        
+                                        return (
+                                            <div
+                                                key={dayIndex}
+                                                className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700"
+                                            >
+                                                <div className="flex items-start justify-between gap-4">
+                                                    <div className="flex-1">
+                                                        <div className="flex items-center gap-3 mb-2">
+                                                            <span className="font-bold text-sm text-primary-600 dark:text-primary-400">
+                                                                {dayName}
+                                                            </span>
+                                                            <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded">
+                                                                {postType}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-sm text-gray-700 dark:text-gray-300 font-medium mb-1">
+                                                            {postIdea}
+                                                        </p>
+                                                        {description && typeof description === 'string' && (
+                                                            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 mb-2">
+                                                                {description}
+                                                            </p>
+                                                        )}
+                                                        {angle && (
+                                                            <p className="text-xs text-gray-600 dark:text-gray-400 italic mb-1">
+                                                                <strong>Angle:</strong> {angle}
+                                                            </p>
+                                                        )}
+                                                        {cta && (
+                                                            <p className="text-xs text-primary-600 dark:text-primary-400 font-medium mt-1">
+                                                                <strong>CTA:</strong> {cta}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                ) : (
+                                    <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                                        No content planned for this week
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    );
+                })
+            ) : (
+                // Fallback: if it's a string or other format, display as-is
+                <div className="text-gray-900 dark:text-white whitespace-pre-wrap">
+                    {typeof actualPlan === 'string' ? actualPlan : JSON.stringify(actualPlan, null, 2)}
+                </div>
+            )}
+        </div>
+    );
+};
+
 export const OnlyFansContentBrain: React.FC = () => {
     // All hooks must be called unconditionally at the top
     const context = useAppContext();
@@ -303,7 +652,7 @@ export const OnlyFansContentBrain: React.FC = () => {
     
     // Weekly plan state
     const [weeklyPlanPrompt, setWeeklyPlanPrompt] = useState('');
-    const [generatedWeeklyPlan, setGeneratedWeeklyPlan] = useState<string>('');
+    const [generatedWeeklyPlan, setGeneratedWeeklyPlan] = useState<any>(null);
     
     // Monetization planner state
     const [monetizationGoals, setMonetizationGoals] = useState<string[]>([]);
@@ -320,6 +669,12 @@ export const OnlyFansContentBrain: React.FC = () => {
     const [savedShootConcepts, setSavedShootConcepts] = useState<any[]>([]);
     const [savedWeeklyPlans, setSavedWeeklyPlans] = useState<any[]>([]);
     const [savedMonetizationPlans, setSavedMonetizationPlans] = useState<any[]>([]);
+    
+    // Collapse state for saved items sections
+    const [showSavedPostIdeas, setShowSavedPostIdeas] = useState(true);
+    const [showSavedShootConcepts, setShowSavedShootConcepts] = useState(true);
+    const [showSavedWeeklyPlans, setShowSavedWeeklyPlans] = useState(true);
+    const [showSavedMonetizationPlans, setShowSavedMonetizationPlans] = useState(true);
 
     // Modal state for AI features
     const [optimizeResult, setOptimizeResult] = useState<any>(null);
@@ -328,6 +683,10 @@ export const OnlyFansContentBrain: React.FC = () => {
     const [showOptimizeModal, setShowOptimizeModal] = useState(false);
     const [showPredictModal, setShowPredictModal] = useState(false);
     const [showRepurposeModal, setShowRepurposeModal] = useState(false);
+    
+    // Modal state for viewing saved items
+    const [viewingSavedItem, setViewingSavedItem] = useState<any>(null);
+    const [showSavedItemModal, setShowSavedItemModal] = useState(false);
 
     // Analytics & Insights state
     const [showAnalytics, setShowAnalytics] = useState(false);
@@ -367,6 +726,13 @@ export const OnlyFansContentBrain: React.FC = () => {
     }, [user?.id]);
 
     // Initialize component and restore persisted state
+    // Load captions history on mount and when user changes
+    useEffect(() => {
+        if (user?.id) {
+            loadCaptionsHistory();
+        }
+    }, [user?.id]);
+
     useEffect(() => {
         try {
             setIsLoading(false);
@@ -472,8 +838,12 @@ export const OnlyFansContentBrain: React.FC = () => {
         if (!user?.id) return;
         
         try {
-            // Create a hash of the caption to track it
-            const captionHash = btoa(caption).substring(0, 50); // Simple hash
+            // Create a hash of the caption to track it (Unicode-safe)
+            // Use TextEncoder to handle Unicode characters properly
+            const encoder = new TextEncoder();
+            const data = encoder.encode(caption);
+            const binaryString = Array.from(data, byte => String.fromCharCode(byte)).join('');
+            const captionHash = btoa(binaryString).substring(0, 50); // Simple hash
             
             // Check if already saved
             if (usedCaptionsHash.has(captionHash)) {
@@ -647,7 +1017,10 @@ export const OnlyFansContentBrain: React.FC = () => {
             const finalIdeas = Array.isArray(ideas) && ideas.length > 0 ? ideas : (typeof text === 'string' ? [text] : []);
             setGeneratedPostIdeas(finalIdeas);
             // Save to history
-            await saveToHistory('post_ideas', `Post Ideas - ${new Date().toLocaleDateString()}`, { ideas: finalIdeas, prompt: postIdeaPrompt });
+            await saveToHistory('post_ideas', `Post Ideas - ${new Date().toLocaleDateString()}`, { 
+                ideas: finalIdeas, 
+                prompt: postIdeaPrompt,
+            });
             showToast?.('Post ideas generated successfully!', 'success');
         } catch (error: any) {
             console.error('Error generating post ideas:', error);
@@ -708,7 +1081,10 @@ export const OnlyFansContentBrain: React.FC = () => {
             const finalConcepts = Array.isArray(concepts) && concepts.length > 0 ? concepts : (typeof text === 'string' ? [text] : []);
             setGeneratedShootConcepts(finalConcepts);
             // Save to history
-            await saveToHistory('shoot_concepts', `Shoot Concepts - ${new Date().toLocaleDateString()}`, { concepts: finalConcepts, prompt: shootConceptPrompt });
+            await saveToHistory('shoot_concepts', `Shoot Concepts - ${new Date().toLocaleDateString()}`, { 
+                concepts: finalConcepts, 
+                prompt: shootConceptPrompt,
+            });
             showToast?.('Shoot concepts generated successfully!', 'success');
         } catch (error: any) {
             console.error('Error generating shoot concepts:', error);
@@ -753,10 +1129,15 @@ export const OnlyFansContentBrain: React.FC = () => {
             }
 
             const data = await response.json();
-            const plan = data.plan || JSON.stringify(data, null, 2);
+            // Handle both object and string responses
+            const plan = data.plan || data;
+            // Store the plan object (not stringified)
             setGeneratedWeeklyPlan(plan);
             // Save to history
-            await saveToHistory('weekly_plan', `Weekly Plan - ${new Date().toLocaleDateString()}`, { plan, prompt: weeklyPlanPrompt });
+            await saveToHistory('weekly_plan', `Weekly Plan - ${new Date().toLocaleDateString()}`, { 
+                plan, 
+                prompt: weeklyPlanPrompt,
+            });
             showToast?.('Weekly plan generated successfully!', 'success');
         } catch (error: any) {
             console.error('Error generating weekly plan:', error);
@@ -886,7 +1267,9 @@ export const OnlyFansContentBrain: React.FC = () => {
             if (data.success && data.plan) {
                 setGeneratedMonetizationPlan(data.plan);
                 // Save to history
-                await saveToHistory('monetization_plan', `Monetization Plan - ${new Date().toLocaleDateString()}`, data.plan);
+                await saveToHistory('monetization_plan', `Monetization Plan - ${new Date().toLocaleDateString()}`, {
+                    ...data.plan,
+                });
                 showToast?.('Monetization plan generated successfully!', 'success');
             } else {
                 throw new Error(data.error || 'Failed to generate monetization plan');
@@ -905,6 +1288,116 @@ export const OnlyFansContentBrain: React.FC = () => {
     const [history, setHistory] = useState<any[]>([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
     const [showHistoryTab, setShowHistoryTab] = useState(false);
+    // History state for captions tab (separate from main history tab)
+    const [showCaptionsHistory, setShowCaptionsHistory] = useState(false);
+    const [captionsPredictHistory, setCaptionsPredictHistory] = useState<any[]>([]);
+    const [captionsRepurposeHistory, setCaptionsRepurposeHistory] = useState<any[]>([]);
+    const [captionsGapAnalysisHistory, setCaptionsGapAnalysisHistory] = useState<any[]>([]);
+    const [loadingCaptionsHistory, setLoadingCaptionsHistory] = useState(false);
+
+    // Load history for captions tab (separate from main history tab)
+    const loadCaptionsHistory = async () => {
+        if (!user?.id) return;
+        setLoadingCaptionsHistory(true);
+        try {
+            // Load predict history from OnlyFans-specific collection
+            const predictItems: any[] = [];
+            try {
+                const predictRef = collection(db, 'users', user.id, 'onlyfans_predict_history');
+                const predictQuery = query(predictRef, orderBy('createdAt', 'desc'));
+                const predictSnapshot = await getDocs(predictQuery);
+                predictSnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    predictItems.push({ id: doc.id, ...data });
+                });
+            } catch (error: any) {
+                console.error('Error loading predict history:', error);
+                // Fallback: try without orderBy if index is missing
+                if (error.code === 'failed-precondition' || error.message?.includes('index')) {
+                    try {
+                        const predictRef = collection(db, 'users', user.id, 'onlyfans_predict_history');
+                        const fallbackQuery = query(predictRef);
+                        const fallbackSnapshot = await getDocs(fallbackQuery);
+                        fallbackSnapshot.forEach((doc) => {
+                            const data = doc.data();
+                            predictItems.push({ id: doc.id, ...data });
+                        });
+                    } catch (fallbackError) {
+                        console.error('Fallback query also failed for predict history:', fallbackError);
+                    }
+                }
+            }
+            setCaptionsPredictHistory(predictItems.slice(0, 10)); // Keep only last 10
+
+            // Load repurpose history from OnlyFans-specific collection
+            const repurposeItems: any[] = [];
+            try {
+                const repurposeRef = collection(db, 'users', user.id, 'onlyfans_repurpose_history');
+                const repurposeQuery = query(repurposeRef, orderBy('createdAt', 'desc'));
+                const repurposeSnapshot = await getDocs(repurposeQuery);
+                repurposeSnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    repurposeItems.push({ id: doc.id, ...data });
+                });
+            } catch (error: any) {
+                console.error('Error loading repurpose history:', error);
+                // Fallback: try without orderBy if index is missing
+                if (error.code === 'failed-precondition' || error.message?.includes('index')) {
+                    try {
+                        const repurposeRef = collection(db, 'users', user.id, 'onlyfans_repurpose_history');
+                        const fallbackQuery = query(repurposeRef);
+                        const fallbackSnapshot = await getDocs(fallbackQuery);
+                        fallbackSnapshot.forEach((doc) => {
+                            const data = doc.data();
+                            repurposeItems.push({ id: doc.id, ...data });
+                        });
+                    } catch (fallbackError) {
+                        console.error('Fallback query also failed for repurpose history:', fallbackError);
+                    }
+                }
+            }
+            setCaptionsRepurposeHistory(repurposeItems.slice(0, 10)); // Keep only last 10
+
+            // Load gap analysis history from onlyfans_content_brain_history
+            const gapAnalysisItems: any[] = [];
+            try {
+                const gapAnalysisRef = collection(db, 'users', user.id, 'onlyfans_content_brain_history');
+                const gapAnalysisQuery = query(gapAnalysisRef, where('type', '==', 'gap_analysis'), orderBy('createdAt', 'desc'));
+                const gapAnalysisSnapshot = await getDocs(gapAnalysisQuery);
+                gapAnalysisSnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    gapAnalysisItems.push({ id: doc.id, ...data });
+                });
+            } catch (error: any) {
+                console.error('Error loading gap analysis history:', error);
+                // Fallback: try without orderBy if index is missing
+                if (error.code === 'failed-precondition' || error.message?.includes('index')) {
+                    try {
+                        const gapAnalysisRef = collection(db, 'users', user.id, 'onlyfans_content_brain_history');
+                        const fallbackQuery = query(gapAnalysisRef, where('type', '==', 'gap_analysis'));
+                        const fallbackSnapshot = await getDocs(fallbackQuery);
+                        fallbackSnapshot.forEach((doc) => {
+                            const data = doc.data();
+                            gapAnalysisItems.push({ id: doc.id, ...data });
+                        });
+                        // Sort manually by createdAt
+                        gapAnalysisItems.sort((a, b) => {
+                            const aTime = a.createdAt?.toDate?.()?.getTime() || a.createdAt || 0;
+                            const bTime = b.createdAt?.toDate?.()?.getTime() || b.createdAt || 0;
+                            return bTime - aTime;
+                        });
+                    } catch (fallbackError) {
+                        console.error('Fallback query also failed for gap analysis history:', fallbackError);
+                    }
+                }
+            }
+            setCaptionsGapAnalysisHistory(gapAnalysisItems.slice(0, 10)); // Keep only last 10
+        } catch (error: any) {
+            console.error('Error loading captions history:', error);
+        } finally {
+            setLoadingCaptionsHistory(false);
+        }
+    };
 
     const loadHistory = async () => {
         if (!user?.id) return;
@@ -922,8 +1415,23 @@ export const OnlyFansContentBrain: React.FC = () => {
                     const data = doc.data();
                     items.push({ id: doc.id, type: 'predict', ...data });
                 });
-            } catch (error) {
+            } catch (error: any) {
                 console.error('Error loading predict history:', error);
+                // Fallback: try without orderBy if index is missing
+                if (error.code === 'failed-precondition' || error.message?.includes('index')) {
+                    console.warn('Predict history query failed due to missing index, using fallback query');
+                    try {
+                        const predictRef = collection(db, 'users', user.id, 'onlyfans_predict_history');
+                        const fallbackQuery = query(predictRef);
+                        const fallbackSnapshot = await getDocs(fallbackQuery);
+                        fallbackSnapshot.forEach((doc) => {
+                            const data = doc.data();
+                            items.push({ id: doc.id, type: 'predict', ...data });
+                        });
+                    } catch (fallbackError) {
+                        console.error('Fallback query also failed for predict history:', fallbackError);
+                    }
+                }
             }
             
             // Load repurpose history from OnlyFans-specific collection
@@ -935,8 +1443,23 @@ export const OnlyFansContentBrain: React.FC = () => {
                     const data = doc.data();
                     items.push({ id: doc.id, type: 'repurpose', ...data });
                 });
-            } catch (error) {
+            } catch (error: any) {
                 console.error('Error loading repurpose history:', error);
+                // Fallback: try without orderBy if index is missing
+                if (error.code === 'failed-precondition' || error.message?.includes('index')) {
+                    console.warn('Repurpose history query failed due to missing index, using fallback query');
+                    try {
+                        const repurposeRef = collection(db, 'users', user.id, 'onlyfans_repurpose_history');
+                        const fallbackQuery = query(repurposeRef);
+                        const fallbackSnapshot = await getDocs(fallbackQuery);
+                        fallbackSnapshot.forEach((doc) => {
+                            const data = doc.data();
+                            items.push({ id: doc.id, type: 'repurpose', ...data });
+                        });
+                    } catch (fallbackError) {
+                        console.error('Fallback query also failed for repurpose history:', fallbackError);
+                    }
+                }
             }
             
             // Sort by createdAt descending
@@ -957,63 +1480,158 @@ export const OnlyFansContentBrain: React.FC = () => {
 
     // Save predict to history (OnlyFans-specific collection, separate from compose page)
     const savePredictToHistory = async (data: any) => {
-        if (!user?.id) return;
+        if (!user?.id) {
+            console.error('Cannot save predict history: user ID is missing');
+            showToast?.('Cannot save: User not logged in', 'error');
+            return;
+        }
         try {
+            // Ensure media is included in the data - explicitly check and include
+            const historyData = {
+                ...data,
+                mediaUrl: data.mediaUrl || null,
+                mediaType: data.mediaType || 'image',
+                originalCaption: data.originalCaption || '',
+                prediction: data.prediction || {},
+                factors: data.factors || {},
+                improvements: data.improvements || [],
+            };
+            
+            console.log('Saving predict to history with media:', {
+                hasMediaUrl: !!historyData.mediaUrl,
+                mediaType: historyData.mediaType,
+                mediaUrl: historyData.mediaUrl?.substring(0, 50) + '...'
+            });
+            
             const historyRef = collection(db, 'users', user.id, 'onlyfans_predict_history');
             await addDoc(historyRef, {
                 type: 'predict',
-                data,
+                data: historyData,
                 createdAt: Timestamp.now(),
             });
             
             // Keep only last 10 - get all, delete oldest if > 10
-            const q = query(historyRef, orderBy('createdAt', 'desc'));
-            const snapshot = await getDocs(q);
-            if (snapshot.size > 10) {
-                const docs = snapshot.docs;
-                const toDelete = docs.slice(10);
-                for (const docToDelete of toDelete) {
-                    await deleteDoc(docToDelete.ref);
+            try {
+                const q = query(historyRef, orderBy('createdAt', 'desc'));
+                const snapshot = await getDocs(q);
+                if (snapshot.size > 10) {
+                    const docs = snapshot.docs;
+                    const toDelete = docs.slice(10);
+                    for (const docToDelete of toDelete) {
+                        await deleteDoc(docToDelete.ref);
+                    }
+                }
+            } catch (cleanupError: any) {
+                // If orderBy fails due to missing index, try fallback cleanup
+                if (cleanupError.code === 'failed-precondition' || cleanupError.message?.includes('index')) {
+                    console.warn('Cleanup query failed due to missing index, using fallback');
+                    const fallbackQ = query(historyRef);
+                    const fallbackSnapshot = await getDocs(fallbackQ);
+                    if (fallbackSnapshot.size > 10) {
+                        // Sort manually and delete oldest
+                        const docs = fallbackSnapshot.docs.map(d => ({
+                            id: d.id,
+                            createdAt: d.data().createdAt,
+                            ref: d.ref
+                        })).sort((a, b) => {
+                            const aTime = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+                            const bTime = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+                            return bTime - aTime;
+                        });
+                        const toDelete = docs.slice(10);
+                        for (const docToDelete of toDelete) {
+                            await deleteDoc(docToDelete.ref);
+                        }
+                    }
+                } else {
+                    throw cleanupError;
                 }
             }
             
-            // Reload history if history tab is active
-            if (activeTab === 'history') {
-                loadHistory();
-            }
+            // Reload captions history
+            loadCaptionsHistory();
         } catch (error: any) {
             console.error('Error saving predict to history:', error);
+            showToast?.('Failed to save prediction to history. Please try again.', 'error');
+            throw error; // Re-throw so caller knows it failed
         }
     };
 
     // Save repurpose to history (OnlyFans-specific collection, separate from compose page)
     const saveRepurposeToHistory = async (data: any) => {
-        if (!user?.id) return;
+        if (!user?.id) {
+            console.error('Cannot save repurpose history: user ID is missing');
+            showToast?.('Cannot save: User not logged in', 'error');
+            return;
+        }
         try {
+            // Ensure media is included in the data - explicitly check and include
+            const historyData = {
+                ...data,
+                mediaUrl: data.mediaUrl || null,
+                mediaType: data.mediaType || 'image',
+                originalContent: data.originalContent || '',
+                repurposedContent: data.repurposedContent || [],
+                summary: data.summary || '',
+            };
+            
+            console.log('Saving repurpose to history with media:', {
+                hasMediaUrl: !!historyData.mediaUrl,
+                mediaType: historyData.mediaType,
+                mediaUrl: historyData.mediaUrl?.substring(0, 50) + '...'
+            });
+            
             const historyRef = collection(db, 'users', user.id, 'onlyfans_repurpose_history');
             await addDoc(historyRef, {
                 type: 'repurpose',
-                data,
+                data: historyData,
                 createdAt: Timestamp.now(),
             });
             
             // Keep only last 10 - get all, delete oldest if > 10
-            const q = query(historyRef, orderBy('createdAt', 'desc'));
-            const snapshot = await getDocs(q);
-            if (snapshot.size > 10) {
-                const docs = snapshot.docs;
-                const toDelete = docs.slice(10);
-                for (const docToDelete of toDelete) {
-                    await deleteDoc(docToDelete.ref);
+            try {
+                const q = query(historyRef, orderBy('createdAt', 'desc'));
+                const snapshot = await getDocs(q);
+                if (snapshot.size > 10) {
+                    const docs = snapshot.docs;
+                    const toDelete = docs.slice(10);
+                    for (const docToDelete of toDelete) {
+                        await deleteDoc(docToDelete.ref);
+                    }
+                }
+            } catch (cleanupError: any) {
+                // If orderBy fails due to missing index, try fallback cleanup
+                if (cleanupError.code === 'failed-precondition' || cleanupError.message?.includes('index')) {
+                    console.warn('Cleanup query failed due to missing index, using fallback');
+                    const fallbackQ = query(historyRef);
+                    const fallbackSnapshot = await getDocs(fallbackQ);
+                    if (fallbackSnapshot.size > 10) {
+                        // Sort manually and delete oldest
+                        const docs = fallbackSnapshot.docs.map(d => ({
+                            id: d.id,
+                            createdAt: d.data().createdAt,
+                            ref: d.ref
+                        })).sort((a, b) => {
+                            const aTime = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+                            const bTime = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+                            return bTime - aTime;
+                        });
+                        const toDelete = docs.slice(10);
+                        for (const docToDelete of toDelete) {
+                            await deleteDoc(docToDelete.ref);
+                        }
+                    }
+                } else {
+                    throw cleanupError;
                 }
             }
             
-            // Reload history if history tab is active
-            if (activeTab === 'history') {
-                loadHistory();
-            }
+            // Reload captions history
+            loadCaptionsHistory();
         } catch (error: any) {
             console.error('Error saving repurpose to history:', error);
+            showToast?.('Failed to save repurpose to history. Please try again.', 'error');
+            throw error; // Re-throw so caller knows it failed
         }
     };
 
@@ -1031,10 +1649,8 @@ export const OnlyFansContentBrain: React.FC = () => {
                 data,
                 createdAt: Timestamp.now(),
             });
-            // Reload history if history tab is active
-            if (activeTab === 'history') {
-                loadHistory();
-            }
+            // Reload captions history
+            loadCaptionsHistory();
             // Reload saved items for the respective tab
             if (type === 'post_ideas' && activeTab === 'postIdeas') {
                 loadSavedPostIdeas();
@@ -1127,6 +1743,91 @@ export const OnlyFansContentBrain: React.FC = () => {
             setSavedMonetizationPlans(items);
         } catch (error) {
             console.error('Error loading saved monetization plans:', error);
+        }
+    };
+
+    // Delete saved item
+    const handleDeleteSavedItem = async (itemId: string, type: 'post_ideas' | 'shoot_concepts' | 'weekly_plan' | 'monetization_plan') => {
+        if (!user?.id || !itemId) return;
+        
+        if (!confirm('Are you sure you want to delete this saved item? This action cannot be undone.')) {
+            return;
+        }
+
+        try {
+            const historyRef = doc(db, 'users', user.id, 'onlyfans_content_brain_history', itemId);
+            await deleteDoc(historyRef);
+            
+            // Reload the appropriate list
+            if (type === 'post_ideas' && activeTab === 'postIdeas') {
+                loadSavedPostIdeas();
+            } else if (type === 'shoot_concepts' && activeTab === 'shootConcepts') {
+                loadSavedShootConcepts();
+            } else if (type === 'weekly_plan' && activeTab === 'weeklyPlan') {
+                loadSavedWeeklyPlans();
+            } else if (type === 'monetization_plan' && activeTab === 'monetizationPlanner') {
+                loadSavedMonetizationPlans();
+            }
+            
+            showToast?.('Item deleted successfully', 'success');
+        } catch (error) {
+            console.error('Error deleting saved item:', error);
+            showToast?.('Failed to delete item. Please try again.', 'error');
+        }
+    };
+
+    // Delete handlers for predict, repurpose, and gap analysis history items
+    const handleDeletePredictHistory = async (itemId: string) => {
+        if (!user?.id || !itemId) return;
+        
+        if (!confirm('Are you sure you want to delete this prediction? This action cannot be undone.')) {
+            return;
+        }
+
+        try {
+            const historyRef = doc(db, 'users', user.id, 'onlyfans_predict_history', itemId);
+            await deleteDoc(historyRef);
+            loadCaptionsHistory();
+            showToast?.('Prediction deleted successfully', 'success');
+        } catch (error) {
+            console.error('Error deleting prediction:', error);
+            showToast?.('Failed to delete prediction. Please try again.', 'error');
+        }
+    };
+
+    const handleDeleteRepurposeHistory = async (itemId: string) => {
+        if (!user?.id || !itemId) return;
+        
+        if (!confirm('Are you sure you want to delete this repurpose? This action cannot be undone.')) {
+            return;
+        }
+
+        try {
+            const historyRef = doc(db, 'users', user.id, 'onlyfans_repurpose_history', itemId);
+            await deleteDoc(historyRef);
+            loadCaptionsHistory();
+            showToast?.('Repurpose deleted successfully', 'success');
+        } catch (error) {
+            console.error('Error deleting repurpose:', error);
+            showToast?.('Failed to delete repurpose. Please try again.', 'error');
+        }
+    };
+
+    const handleDeleteGapAnalysisHistory = async (itemId: string) => {
+        if (!user?.id || !itemId) return;
+        
+        if (!confirm('Are you sure you want to delete this content gap analysis? This action cannot be undone.')) {
+            return;
+        }
+
+        try {
+            const historyRef = doc(db, 'users', user.id, 'onlyfans_content_brain_history', itemId);
+            await deleteDoc(historyRef);
+            loadCaptionsHistory();
+            showToast?.('Content gap analysis deleted successfully', 'success');
+        } catch (error) {
+            console.error('Error deleting gap analysis:', error);
+            showToast?.('Failed to delete gap analysis. Please try again.', 'error');
         }
     };
 
@@ -1443,6 +2144,10 @@ export const OnlyFansContentBrain: React.FC = () => {
             return;
         }
 
+        // Capture media URL and type at the time of prediction
+        const currentMediaUrl = uploadedMediaUrl;
+        const currentMediaType = uploadedMediaType || 'image';
+
         setIsGenerating(true);
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
@@ -1455,7 +2160,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                 body: JSON.stringify({
                     caption: captionToPredict,
                     platform: 'OnlyFans',
-                    mediaType: uploadedMediaType || 'image',
+                    mediaType: currentMediaType,
                     niche: user?.niche || 'Adult Content Creator',
                     tone: captionTone,
                     goal: captionGoal,
@@ -1465,10 +2170,30 @@ export const OnlyFansContentBrain: React.FC = () => {
             if (!response.ok) throw new Error('Failed to predict performance');
             const data = await response.json();
             if (data.success) {
-                setPredictResult({
+                const resultData = {
                     ...data,
                     originalCaption: captionToPredict,
-                });
+                    mediaUrl: currentMediaUrl || null,
+                    mediaType: currentMediaType,
+                };
+                
+                // Save to history automatically - ensure media is included
+                try {
+                    await savePredictToHistory({
+                        ...resultData,
+                        mediaUrl: currentMediaUrl || null,
+                        mediaType: currentMediaType,
+                    });
+                    // Reload captions history
+                    await loadCaptionsHistory();
+                    showToast?.('Prediction saved to history!', 'success');
+                } catch (saveError: any) {
+                    // Log error but don't block showing the result
+                    console.error('Failed to save prediction to history:', saveError);
+                    showToast?.('Prediction generated but failed to save to history. Please try saving manually.', 'error');
+                }
+                
+                setPredictResult(resultData);
                 setShowPredictModal(true);
                 showToast?.('Performance predicted!', 'success');
             }
@@ -1492,6 +2217,10 @@ export const OnlyFansContentBrain: React.FC = () => {
             return;
         }
 
+        // Capture media URL and type at the time of repurpose
+        const currentMediaUrl = uploadedMediaUrl;
+        const currentMediaType = uploadedMediaType || 'image';
+
         setIsGenerating(true);
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
@@ -1508,17 +2237,37 @@ export const OnlyFansContentBrain: React.FC = () => {
                     niche: user?.niche || 'Adult Content Creator',
                     tone: captionTone,
                     goal: captionGoal,
-                    mediaType: uploadedMediaType || 'image',
+                    mediaType: currentMediaType,
                 }),
             });
 
             if (!response.ok) throw new Error('Failed to repurpose content');
             const data = await response.json();
             if (data.success && data.repurposedContent) {
-                setRepurposeResult({
+                const resultData = {
                     ...data,
                     originalContent: captionToRepurpose,
-                });
+                    mediaUrl: currentMediaUrl || null,
+                    mediaType: currentMediaType,
+                };
+                
+                // Save to history automatically - ensure media is included
+                try {
+                    await saveRepurposeToHistory({
+                        ...resultData,
+                        mediaUrl: currentMediaUrl || null,
+                        mediaType: currentMediaType,
+                    });
+                    // Reload captions history
+                    await loadCaptionsHistory();
+                    showToast?.('Repurpose saved to history!', 'success');
+                } catch (saveError: any) {
+                    // Log error but don't block showing the result
+                    console.error('Failed to save repurpose to history:', saveError);
+                    showToast?.('Content repurposed but failed to save to history. Please try saving manually.', 'error');
+                }
+                
+                setRepurposeResult(resultData);
                 setShowRepurposeModal(true);
                 showToast?.('Content repurposed!', 'success');
             }
@@ -1619,9 +2368,8 @@ export const OnlyFansContentBrain: React.FC = () => {
         { id: 'weeklyPlan', label: 'Weekly Plan' },
         { id: 'monetizationPlanner', label: 'Monetization Planner' },
         { id: 'guides', label: 'Guides & Tips' },
-        { id: 'history', label: 'History' },
     ];
-    // Filter out mediaCaptions and guides tabs
+    // Filter out mediaCaptions and guides tabs (history is now in captions tab)
     const tabs = allTabs.filter(tab => tab.id !== 'mediaCaptions' && tab.id !== 'guides') as { id: ContentType; label: string }[];
 
     // Show loading state
@@ -1710,6 +2458,214 @@ export const OnlyFansContentBrain: React.FC = () => {
             {/* Captions Tab */}
             {activeTab === 'captions' && (
                 <div className="space-y-6">
+                    {/* Predict & Repurpose History Section */}
+                    {user?.plan !== 'Free' && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Analyze Content Gaps, Predictions & Repurposes</h3>
+                                <button
+                                    onClick={() => {
+                                        setShowCaptionsHistory(!showCaptionsHistory);
+                                        if (!showCaptionsHistory) {
+                                            loadCaptionsHistory();
+                                        }
+                                    }}
+                                    className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                >
+                                    {showCaptionsHistory ? 'Hide' : 'Show'} History
+                                </button>
+                            </div>
+                            {showCaptionsHistory && (
+                                <>
+                                    {loadingCaptionsHistory ? (
+                                        <div className="text-center py-8">
+                                            <RefreshIcon className="w-6 h-6 animate-spin mx-auto text-primary-600 dark:text-primary-400" />
+                                        </div>
+                                    ) : (captionsPredictHistory.length === 0 && captionsRepurposeHistory.length === 0 && captionsGapAnalysisHistory.length === 0) ? (
+                                        <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                                            <p className="text-sm">No content gap analysis, predictions or repurposes yet.</p>
+                                            <p className="text-xs mt-1">Use the Analyze Content Gaps, Predict Performance or Repurpose Content buttons above to see history here.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3 max-h-64 overflow-y-auto">
+                                            {/* Predict History */}
+                                            {captionsPredictHistory.map((item) => {
+                                                const prediction = item.data?.prediction || {};
+                                                const level = prediction.level || 'Medium';
+                                                const score = prediction.score || 50;
+                                                const mediaUrl = item.data?.mediaUrl;
+                                                const mediaType = item.data?.mediaType || 'image';
+                                                return (
+                                                    <div
+                                                        key={item.id}
+                                                        className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
+                                                    >
+                                                        <div className="flex items-start justify-between mb-2 gap-3">
+                                                            {mediaUrl && (
+                                                                <div className="flex-shrink-0">
+                                                                    {mediaType === 'video' ? (
+                                                                        <video src={mediaUrl} className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" controls={false} muted />
+                                                                    ) : (
+                                                                        <img src={mediaUrl} alt="Preview" className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <span className="text-xs font-semibold text-purple-600 dark:text-purple-400">PREDICT</span>
+                                                                    <span className={`text-xs px-2 py-0.5 rounded ${
+                                                                        level === 'High' ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' :
+                                                                        level === 'Medium' ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300' :
+                                                                        'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
+                                                                    }`}>
+                                                                        {level} ({score}/100)
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                                                                    {item.data?.originalCaption?.substring(0, 100)}...
+                                                                </p>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                                                    {item.createdAt?.toDate ? new Date(item.createdAt.toDate()).toLocaleString() : (item.createdAt ? new Date(item.createdAt).toLocaleString() : 'Recently')}
+                                                                </p>
+                                                            </div>
+                                                            <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setPredictResult(item.data);
+                                                                        setShowPredictModal(true);
+                                                                    }}
+                                                                    className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                                                >
+                                                                    View
+                                                                </button>
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleDeletePredictHistory(item.id);
+                                                                    }}
+                                                                    className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                                                                    title="Delete"
+                                                                >
+                                                                    <TrashIcon className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                            
+                                            {/* Repurpose History */}
+                                            {captionsRepurposeHistory.map((item) => {
+                                                const platforms = item.data?.repurposedContent?.length || 0;
+                                                const mediaUrl = item.data?.mediaUrl;
+                                                const mediaType = item.data?.mediaType || 'image';
+                                                return (
+                                                    <div
+                                                        key={item.id}
+                                                        className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
+                                                    >
+                                                        <div className="flex items-start justify-between mb-2 gap-3">
+                                                            {mediaUrl && (
+                                                                <div className="flex-shrink-0">
+                                                                    {mediaType === 'video' ? (
+                                                                        <video src={mediaUrl} className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" controls={false} muted />
+                                                                    ) : (
+                                                                        <img src={mediaUrl} alt="Preview" className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">REPURPOSE</span>
+                                                                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                                                                        {platforms} platforms
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                                                                    {item.data?.originalContent?.substring(0, 100)}...
+                                                                </p>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                                                    {item.createdAt?.toDate ? new Date(item.createdAt.toDate()).toLocaleString() : (item.createdAt ? new Date(item.createdAt).toLocaleString() : 'Recently')}
+                                                                </p>
+                                                            </div>
+                                                            <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setRepurposeResult(item.data);
+                                                                        setShowRepurposeModal(true);
+                                                                    }}
+                                                                    className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                                                >
+                                                                    View
+                                                                </button>
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleDeleteRepurposeHistory(item.id);
+                                                                    }}
+                                                                    className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                                                                    title="Delete"
+                                                                >
+                                                                    <TrashIcon className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+
+                                            {/* Gap Analysis History */}
+                                            {captionsGapAnalysisHistory.map((item) => {
+                                                const summary = item.data?.summary || item.title || 'Content Gap Analysis';
+                                                return (
+                                                    <div
+                                                        key={item.id}
+                                                        className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
+                                                    >
+                                                        <div className="flex items-start justify-between mb-2 gap-3">
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <span className="text-xs font-semibold text-purple-600 dark:text-purple-400">CONTENT GAP ANALYSIS</span>
+                                                                </div>
+                                                                <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                                                                    {summary.substring(0, 100)}...
+                                                                </p>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                                                    {item.createdAt?.toDate ? new Date(item.createdAt.toDate()).toLocaleString() : (item.createdAt ? new Date(item.createdAt).toLocaleString() : 'Recently')}
+                                                                </p>
+                                                            </div>
+                                                            <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setContentGapAnalysis(item.data);
+                                                                        setShowGapAnalysisModal(true);
+                                                                    }}
+                                                                    className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                                                >
+                                                                    View
+                                                                </button>
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleDeleteGapAnalysisHistory(item.id);
+                                                                    }}
+                                                                    className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                                                                    title="Delete"
+                                                                >
+                                                                    <TrashIcon className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    )}
+
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                             Generate AI Captions
@@ -1895,8 +2851,12 @@ export const OnlyFansContentBrain: React.FC = () => {
                             </h3>
                             <div className="space-y-3">
                                 {generatedCaptions.map((caption, index) => {
-                                    // Check if used by index or by caption hash
-                                    const captionHash = btoa(caption).substring(0, 50);
+                                    // Check if used by index or by caption hash (Unicode-safe)
+                                    // Use TextEncoder to handle Unicode characters properly
+                                    const encoder = new TextEncoder();
+                                    const data = encoder.encode(caption);
+                                    const binaryString = Array.from(data, byte => String.fromCharCode(byte)).join('');
+                                    const captionHash = btoa(binaryString).substring(0, 50);
                                     const isUsed = usedCaptions.has(index) || usedCaptionsHash.has(captionHash);
                                     return (
                                     <div
@@ -2025,7 +2985,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                                         className={`px-4 py-3 rounded-lg font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 ${
                                             user?.plan === 'Free' || generatedCaptions.length === 0
                                                 ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
-                                                : 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/50 disabled:opacity-50'
+                                                : 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:from-blue-700 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed'
                                         }`}
                                     >
                                         <SparklesIcon className="w-5 h-5" />
@@ -2039,7 +2999,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                                         className={`px-4 py-3 rounded-lg font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 ${
                                             user?.plan === 'Free' || generatedCaptions.length === 0
                                                 ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
-                                                : 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 disabled:opacity-50'
+                                                : 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed'
                                         }`}
                                     >
                                         <SparklesIcon className="w-5 h-5" />
@@ -2080,7 +3040,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                                     className={`px-4 py-3 rounded-lg font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 ${
                                         user?.plan === 'Free' || generatedCaptions.length === 0
                                             ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
-                                            : 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/50 disabled:opacity-50'
+                                            : 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:from-blue-700 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed'
                                     }`}
                                 >
                                     <SparklesIcon className="w-5 h-5" />
@@ -2094,7 +3054,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                                     className={`px-4 py-3 rounded-lg font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 ${
                                         user?.plan === 'Free' || generatedCaptions.length === 0
                                             ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
-                                            : 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 disabled:opacity-50'
+                                            : 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed'
                                     }`}
                                 >
                                     <SparklesIcon className="w-5 h-5" />
@@ -2325,39 +3285,78 @@ export const OnlyFansContentBrain: React.FC = () => {
 
                     {/* Saved Post Ideas */}
                     {savedPostIdeas.length > 0 && (
-                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                                Saved Post Ideas ({savedPostIdeas.length})
-                            </h3>
-                            <div className="space-y-4">
-                                {savedPostIdeas.map((saved, index) => (
-                                    <div
-                                        key={saved.id || index}
-                                        className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
-                                    >
-                                        <div className="flex items-start justify-between mb-2">
-                                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                {saved.title || `Saved ${new Date(saved.createdAt?.toDate?.() || saved.createdAt).toLocaleDateString()}`}
-                                            </p>
-                                        </div>
-                                        {saved.data?.ideas && Array.isArray(saved.data.ideas) && (
-                                            <div className="space-y-2 mt-3">
-                                                {saved.data.ideas.map((idea: string, idx: number) => (
-                                                    <div key={idx} className="p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600">
-                                                        <p className="text-gray-900 dark:text-white text-sm">{idea}</p>
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                    Saved Post Ideas ({savedPostIdeas.length})
+                                </h3>
+                                <button
+                                    onClick={() => setShowSavedPostIdeas(!showSavedPostIdeas)}
+                                    className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                >
+                                    {showSavedPostIdeas ? 'Hide' : 'Show'} History
+                                </button>
+                            </div>
+                            {showSavedPostIdeas && (
+                                <div className="space-y-3 max-h-64 overflow-y-auto">
+                                    {savedPostIdeas.map((saved, index) => {
+                                        const mediaUrl = saved.data?.mediaUrl;
+                                        const mediaType = saved.data?.mediaType || 'image';
+                                        return (
+                                            <div
+                                                key={saved.id || index}
+                                                className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
+                                            >
+                                                <div className="flex items-start justify-between mb-2 gap-3">
+                                                    {mediaUrl && (
+                                                        <div className="flex-shrink-0">
+                                                            {mediaType === 'video' ? (
+                                                                <video src={mediaUrl} className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
+                                                            ) : (
+                                                                <img src={mediaUrl} alt="Preview" className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                                            {saved.title || `Saved ${new Date(saved.createdAt?.toDate?.() || saved.createdAt).toLocaleDateString()}`}
+                                                        </p>
+                                                        {saved.data?.ideas && Array.isArray(saved.data.ideas) && saved.data.ideas.length > 0 && (
+                                                            <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                                                                {saved.data.ideas[0]?.substring(0, 100)}...
+                                                            </p>
+                                                        )}
+                                                        <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                                            {saved.createdAt?.toDate?.() ? new Date(saved.createdAt.toDate()).toLocaleString() : 'Recently'}
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 ml-2 flex-shrink-0">
                                                         <button
-                                                            onClick={() => copyToClipboard(idea)}
-                                                            className="mt-2 text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                                            onClick={() => {
+                                                                setViewingSavedItem(saved);
+                                                                setShowSavedItemModal(true);
+                                                            }}
+                                                            className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
                                                         >
-                                                            Copy
+                                                            View
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleDeleteSavedItem(saved.id, 'post_ideas');
+                                                            }}
+                                                            className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                                                            title="Delete"
+                                                        >
+                                                            <TrashIcon className="w-4 h-4" />
                                                         </button>
                                                     </div>
-                                                ))}
+                                                </div>
                                             </div>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -2437,6 +3436,83 @@ export const OnlyFansContentBrain: React.FC = () => {
                         </div>
                     </div>
 
+                    {/* Saved Shoot Concepts */}
+                    {savedShootConcepts.length > 0 && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                    Saved Shoot Concepts ({savedShootConcepts.length})
+                                </h3>
+                                <button
+                                    onClick={() => setShowSavedShootConcepts(!showSavedShootConcepts)}
+                                    className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                >
+                                    {showSavedShootConcepts ? 'Hide' : 'Show'} History
+                                </button>
+                            </div>
+                            {showSavedShootConcepts && (
+                                <div className="space-y-3 max-h-64 overflow-y-auto">
+                                    {savedShootConcepts.map((saved, index) => {
+                                        const mediaUrl = saved.data?.mediaUrl;
+                                        const mediaType = saved.data?.mediaType || 'image';
+                                        return (
+                                            <div
+                                                key={saved.id || index}
+                                                className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
+                                            >
+                                                <div className="flex items-start justify-between mb-2 gap-3">
+                                                    {mediaUrl && (
+                                                        <div className="flex-shrink-0">
+                                                            {mediaType === 'video' ? (
+                                                                <video src={mediaUrl} className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
+                                                            ) : (
+                                                                <img src={mediaUrl} alt="Preview" className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                                            {saved.title || `Saved ${new Date(saved.createdAt?.toDate?.() || saved.createdAt).toLocaleDateString()}`}
+                                                        </p>
+                                                        {saved.data?.concepts && Array.isArray(saved.data.concepts) && saved.data.concepts.length > 0 && (
+                                                            <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                                                                {saved.data.concepts[0]?.substring(0, 100)}...
+                                                            </p>
+                                                        )}
+                                                        <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                                            {saved.createdAt?.toDate?.() ? new Date(saved.createdAt.toDate()).toLocaleString() : 'Recently'}
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                                                        <button
+                                                            onClick={() => {
+                                                                setViewingSavedItem(saved);
+                                                                setShowSavedItemModal(true);
+                                                            }}
+                                                            className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                                        >
+                                                            View
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleDeleteSavedItem(saved.id, 'shoot_concepts');
+                                                            }}
+                                                            className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                                                            title="Delete"
+                                                        >
+                                                            <TrashIcon className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {/* Generated Shoot Concepts */}
                     {Array.isArray(generatedShootConcepts) && generatedShootConcepts.length > 0 && (
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
@@ -2513,6 +3589,83 @@ export const OnlyFansContentBrain: React.FC = () => {
                         </div>
                     </div>
 
+                    {/* Saved Weekly Plans */}
+                    {savedWeeklyPlans.length > 0 && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                    Saved Weekly Plans ({savedWeeklyPlans.length})
+                                </h3>
+                                <button
+                                    onClick={() => setShowSavedWeeklyPlans(!showSavedWeeklyPlans)}
+                                    className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                >
+                                    {showSavedWeeklyPlans ? 'Hide' : 'Show'} History
+                                </button>
+                            </div>
+                            {showSavedWeeklyPlans && (
+                                <div className="space-y-3 max-h-64 overflow-y-auto">
+                                    {savedWeeklyPlans.map((saved, index) => {
+                                        const mediaUrl = saved.data?.mediaUrl;
+                                        const mediaType = saved.data?.mediaType || 'image';
+                                        return (
+                                            <div
+                                                key={saved.id || index}
+                                                className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
+                                            >
+                                                <div className="flex items-start justify-between mb-2 gap-3">
+                                                    {mediaUrl && (
+                                                        <div className="flex-shrink-0">
+                                                            {mediaType === 'video' ? (
+                                                                <video src={mediaUrl} className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
+                                                            ) : (
+                                                                <img src={mediaUrl} alt="Preview" className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                                            {saved.title || `Saved ${new Date(saved.createdAt?.toDate?.() || saved.createdAt).toLocaleDateString()}`}
+                                                        </p>
+                                                        {saved.data?.plan && (
+                                                            <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                                                                {getWeeklyPlanSummary(saved.data.plan)}
+                                                            </p>
+                                                        )}
+                                                        <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                                            {saved.createdAt?.toDate?.() ? new Date(saved.createdAt.toDate()).toLocaleString() : 'Recently'}
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                                                        <button
+                                                            onClick={() => {
+                                                                setViewingSavedItem(saved);
+                                                                setShowSavedItemModal(true);
+                                                            }}
+                                                            className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                                        >
+                                                            View
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleDeleteSavedItem(saved.id, 'weekly_plan');
+                                                            }}
+                                                            className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                                                            title="Delete"
+                                                        >
+                                                            <TrashIcon className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {/* Generated Weekly Plan */}
                     {generatedWeeklyPlan && (
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
@@ -2521,7 +3674,12 @@ export const OnlyFansContentBrain: React.FC = () => {
                                     Weekly Content Plan
                                 </h3>
                                 <button
-                                    onClick={() => copyToClipboard(generatedWeeklyPlan)}
+                                    onClick={() => {
+                                        const textToCopy = typeof generatedWeeklyPlan === 'string' 
+                                            ? generatedWeeklyPlan 
+                                            : JSON.stringify(generatedWeeklyPlan, null, 2);
+                                        copyToClipboard(textToCopy);
+                                    }}
                                     className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-1"
                                 >
                                     <DownloadIcon className="w-4 h-4" />
@@ -2529,93 +3687,13 @@ export const OnlyFansContentBrain: React.FC = () => {
                                 </button>
                             </div>
                             <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                                <pre className="text-gray-900 dark:text-white whitespace-pre-wrap font-sans">
-                                    {generatedWeeklyPlan}
-                                </pre>
+                                <WeeklyPlanFormatter plan={generatedWeeklyPlan} />
                             </div>
                         </div>
                     )}
                 </div>
             )}
 
-            {/* History Tab */}
-            {activeTab === 'history' && (
-                <div className="space-y-4">
-                    {loadingHistory ? (
-                        <div className="text-center py-8">
-                            <RefreshIcon className="w-8 h-8 animate-spin mx-auto text-primary-600 dark:text-primary-400" />
-                        </div>
-                    ) : history.length === 0 ? (
-                        <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                            No history yet. Use Predict Performance or Repurpose Content to see results here.
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {history.map((item) => {
-                                const isPredict = item.type === 'predict';
-                                const isRepurpose = item.type === 'repurpose';
-                                const prediction = isPredict ? (item.data?.prediction || {}) : null;
-                                const level = prediction?.level || 'Medium';
-                                const score = prediction?.score || 50;
-                                const platforms = isRepurpose ? (item.data?.repurposedContent?.length || 0) : 0;
-                                const caption = isPredict ? (item.data?.originalCaption || '') : (isRepurpose ? (item.data?.originalContent || '') : '');
-                                
-                                return (
-                                    <div
-                                        key={item.id}
-                                        className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
-                                    >
-                                        <div className="flex items-start justify-between mb-2">
-                                            <div className="flex-1">
-                                                {isPredict && (
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <span className="text-xs font-semibold text-purple-600 dark:text-purple-400">PREDICT</span>
-                                                        <span className={`text-xs px-2 py-0.5 rounded ${
-                                                            level === 'High' ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' :
-                                                            level === 'Medium' ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300' :
-                                                            'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
-                                                        }`}>
-                                                            {level} ({score}/100)
-                                                        </span>
-                                                    </div>
-                                                )}
-                                                {isRepurpose && (
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">REPURPOSE</span>
-                                                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                                                            {platforms} platforms
-                                                        </span>
-                                                    </div>
-                                                )}
-                                                <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
-                                                    {caption ? `${caption.substring(0, 100)}...` : item.title}
-                                                </p>
-                                                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                                                    {item.createdAt?.toDate ? new Date(item.createdAt.toDate()).toLocaleString() : (item.createdAt ? new Date(item.createdAt).toLocaleString() : 'Recently')}
-                                                </p>
-                                            </div>
-                                            <button
-                                                onClick={() => {
-                                                    if (isPredict) {
-                                                        setPredictResult(item.data);
-                                                        setShowPredictModal(true);
-                                                    } else if (isRepurpose) {
-                                                        setRepurposeResult(item.data);
-                                                        setShowRepurposeModal(true);
-                                                    }
-                                                }}
-                                                className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 ml-2"
-                                            >
-                                                View
-                                            </button>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
-            )}
 
             {/* Monetization Planner Tab */}
             {activeTab === 'monetizationPlanner' && (
@@ -2865,201 +3943,84 @@ export const OnlyFansContentBrain: React.FC = () => {
 
                     {/* Saved Monetization Plans */}
                     {savedMonetizationPlans.length > 0 && (
-                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                                Saved Monetization Plans ({savedMonetizationPlans.length})
-                            </h3>
-                            <div className="space-y-4">
-                                {savedMonetizationPlans.map((saved, index) => (
-                                    <div
-                                        key={saved.id || index}
-                                        className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
-                                    >
-                                        <div className="flex items-start justify-between mb-2">
-                                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                {saved.title || `Saved ${new Date(saved.createdAt?.toDate?.() || saved.createdAt).toLocaleDateString()}`}
-                                            </p>
-                                        </div>
-                                        {saved.data && (
-                                            <div className="mt-3">
-                                                {saved.data.summary && (
-                                                    <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800 mb-3">
-                                                        <p className="text-blue-900 dark:text-blue-200 text-sm">{saved.data.summary}</p>
-                                                    </div>
-                                                )}
-                                                {saved.data.contentIdeas && Array.isArray(saved.data.contentIdeas) && (
-                                                    <div className="space-y-2">
-                                                        {saved.data.contentIdeas.map((idea: any, idx: number) => (
-                                                            <div key={idx} className="p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600">
-                                                                <p className="text-gray-900 dark:text-white text-sm font-medium">{idea.title || `Idea ${idx + 1}`}</p>
-                                                                {idea.description && (
-                                                                    <p className="text-gray-600 dark:text-gray-400 text-xs mt-1">{idea.description}</p>
-                                                                )}
-                                                                {idea.category && (
-                                                                    <span className="inline-block mt-2 px-2 py-1 text-xs rounded bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300">
-                                                                        {idea.category}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                                <button
-                                                    onClick={() => copyToClipboard(JSON.stringify(saved.data, null, 2))}
-                                                    className="mt-3 text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                                >
-                                                    Copy Plan
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                    Saved Monetization Plans ({savedMonetizationPlans.length})
+                                </h3>
+                                <button
+                                    onClick={() => setShowSavedMonetizationPlans(!showSavedMonetizationPlans)}
+                                    className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                >
+                                    {showSavedMonetizationPlans ? 'Hide' : 'Show'} History
+                                </button>
                             </div>
-                        </div>
-                    )}
-
-                    {/* Generated Monetization Plan */}
-                    {generatedMonetizationPlan && (
-                        <div className="space-y-6">
-                            {/* Summary */}
-                            {generatedMonetizationPlan.summary && (
-                                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                                    <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-200 mb-2">Strategy Summary</h3>
-                                    <p className="text-blue-800 dark:text-blue-300">{generatedMonetizationPlan.summary}</p>
-                                </div>
-                            )}
-
-                            {/* Balance Visualization */}
-                            {generatedMonetizationPlan.balance && (
-                                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Content Balance</h3>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                        <div className="text-center p-3 bg-primary-50 dark:bg-primary-900/20 rounded-lg">
-                                            <p className="text-2xl font-bold text-primary-600 dark:text-primary-400">{generatedMonetizationPlan.balance.engagement}</p>
-                                            <p className="text-xs text-gray-600 dark:text-gray-400">Engagement</p>
-                                        </div>
-                                        <div className="text-center p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-                                            <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{generatedMonetizationPlan.balance.upsell}</p>
-                                            <p className="text-xs text-gray-600 dark:text-gray-400">Upsell</p>
-                                        </div>
-                                        <div className="text-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                                            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{generatedMonetizationPlan.balance.retention}</p>
-                                            <p className="text-xs text-gray-600 dark:text-gray-400">Retention</p>
-                                        </div>
-                                        <div className="text-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                                            <p className="text-2xl font-bold text-green-600 dark:text-green-400">{generatedMonetizationPlan.balance.conversion}</p>
-                                            <p className="text-xs text-gray-600 dark:text-gray-400">Conversion</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Warnings */}
-                            {generatedMonetizationPlan.warnings && generatedMonetizationPlan.warnings.length > 0 && (
-                                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-                                    <h4 className="font-semibold text-yellow-900 dark:text-yellow-200 mb-2">⚠️ Warnings</h4>
-                                    <ul className="list-disc list-inside space-y-1 text-yellow-800 dark:text-yellow-300 text-sm">
-                                        {generatedMonetizationPlan.warnings.map((warning: string, index: number) => (
-                                            <li key={index}>{warning}</li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
-
-                            {/* Tips */}
-                            {generatedMonetizationPlan.tips && generatedMonetizationPlan.tips.length > 0 && (
-                                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-                                    <h4 className="font-semibold text-green-900 dark:text-green-200 mb-2">💡 Tips</h4>
-                                    <ul className="list-disc list-inside space-y-1 text-green-800 dark:text-green-300 text-sm">
-                                        {generatedMonetizationPlan.tips.map((tip: string, index: number) => (
-                                            <li key={index}>{tip}</li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
-
-                            {/* Ideas by Category */}
-                            {generatedMonetizationPlan.ideas && generatedMonetizationPlan.ideas.length > 0 && (
-                                <div className="space-y-4">
-                                    {/* Group ideas by label */}
-                                    {['engagement', 'upsell', 'retention', 'conversion'].map((label) => {
-                                        const categoryIdeas = generatedMonetizationPlan.ideas.filter((idea: any) => idea.label === label);
-                                        if (categoryIdeas.length === 0) return null;
-
-                                        const labelColors: Record<string, { bg: string; text: string; border: string }> = {
-                                            engagement: { bg: 'bg-primary-50 dark:bg-primary-900/20', text: 'text-primary-700 dark:text-primary-300', border: 'border-primary-200 dark:border-primary-800' },
-                                            upsell: { bg: 'bg-orange-50 dark:bg-orange-900/20', text: 'text-orange-700 dark:text-orange-300', border: 'border-orange-200 dark:border-orange-800' },
-                                            retention: { bg: 'bg-blue-50 dark:bg-blue-900/20', text: 'text-blue-700 dark:text-blue-300', border: 'border-blue-200 dark:border-blue-800' },
-                                            conversion: { bg: 'bg-green-50 dark:bg-green-900/20', text: 'text-green-700 dark:text-green-300', border: 'border-green-200 dark:border-green-800' },
-                                        };
-
-                                        const colors = labelColors[label] || labelColors.engagement;
-
+                            {showSavedMonetizationPlans && (
+                                <div className="space-y-3 max-h-64 overflow-y-auto">
+                                    {savedMonetizationPlans.map((saved, index) => {
+                                        const mediaUrl = saved.data?.mediaUrl;
+                                        const mediaType = saved.data?.mediaType || 'image';
                                         return (
-                                            <div key={label} className={`${colors.bg} border ${colors.border} rounded-lg p-4`}>
-                                                <h4 className={`text-lg font-semibold ${colors.text} mb-3 capitalize`}>
-                                                    {label} Ideas ({categoryIdeas.length})
-                                                </h4>
-                                                <div className="space-y-3">
-                                                    {categoryIdeas.map((idea: any, index: number) => (
-                                                        <div key={index} className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                                                            <div className="flex items-start justify-between mb-2">
-                                                                <h5 className="font-semibold text-gray-900 dark:text-white">{idea.idea}</h5>
-                                                                <span className={`px-2 py-1 rounded text-xs font-medium ${
-                                                                    idea.pricing === 'free' ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' :
-                                                                    idea.pricing === 'teaser' ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300' :
-                                                                    'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
-                                                                }`}>
-                                                                    {idea.pricing === 'free' ? 'FREE' : idea.pricing === 'teaser' ? 'TEASER' : 'PAID'}
-                                                                </span>
-                                                            </div>
-                                                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{idea.description}</p>
-                                                            <div className="flex flex-wrap gap-2 text-xs">
-                                                                <span className="text-gray-500 dark:text-gray-400">📅 {idea.suggestedTiming}</span>
-                                                                {idea.cta && (
-                                                                    <span className="text-primary-600 dark:text-primary-400">💬 CTA: {idea.cta}</span>
-                                                                )}
-                                                                {idea.priority && (
-                                                                    <span className="text-gray-500 dark:text-gray-400">⭐ Priority: {idea.priority}/5</span>
-                                                                )}
-                                                            </div>
-                                                            <button
-                                                                onClick={() => copyToClipboard(`${idea.idea}\n\n${idea.description}\n\nPricing: ${idea.pricing}\nTiming: ${idea.suggestedTiming}\nCTA: ${idea.cta}`)}
-                                                                className="mt-2 text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                                            >
-                                                                Copy Details
-                                                            </button>
+                                            <div
+                                                key={saved.id || index}
+                                                className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
+                                            >
+                                                <div className="flex items-start justify-between mb-2 gap-3">
+                                                    {mediaUrl && (
+                                                        <div className="flex-shrink-0">
+                                                            {mediaType === 'video' ? (
+                                                                <video src={mediaUrl} className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
+                                                            ) : (
+                                                                <img src={mediaUrl} alt="Preview" className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
+                                                            )}
                                                         </div>
-                                                    ))}
+                                                    )}
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                                            {saved.title || `Saved ${new Date(saved.createdAt?.toDate?.() || saved.createdAt).toLocaleDateString()}`}
+                                                        </p>
+                                                        {saved.data?.summary && (
+                                                            <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                                                                {saved.data.summary.substring(0, 100)}...
+                                                            </p>
+                                                        )}
+                                                        <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                                            {saved.createdAt?.toDate?.() ? new Date(saved.createdAt.toDate()).toLocaleString() : 'Recently'}
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                                                        <button
+                                                            onClick={() => {
+                                                                setViewingSavedItem(saved);
+                                                                setShowSavedItemModal(true);
+                                                            }}
+                                                            className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                                        >
+                                                            View
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleDeleteSavedItem(saved.id, 'monetization_plan');
+                                                            }}
+                                                            className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                                                            title="Delete"
+                                                        >
+                                                            <TrashIcon className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         );
                                     })}
                                 </div>
                             )}
-
-                            {/* Weekly Distribution */}
-                            {generatedMonetizationPlan.weeklyDistribution && generatedMonetizationPlan.weeklyDistribution.length > 0 && (
-                                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Weekly Distribution</h3>
-                                    <div className="space-y-3">
-                                        {generatedMonetizationPlan.weeklyDistribution.map((day: any, index: number) => (
-                                            <div key={index} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                                                <div className="flex items-start justify-between mb-2">
-                                                    <h4 className="font-semibold text-gray-900 dark:text-white">{day.day}</h4>
-                                                    <span className="text-xs text-primary-600 dark:text-primary-400">{day.focus}</span>
-                                                </div>
-                                                <ul className="list-disc list-inside space-y-1 text-sm text-gray-600 dark:text-gray-400">
-                                                    {day.ideas.map((idea: string, ideaIndex: number) => (
-                                                        <li key={ideaIndex}>{idea}</li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
                         </div>
+                    )}
+
+                    {/* Generated Monetization Plan */}
+                    {generatedMonetizationPlan && (
+                        <MonetizationPlanFormatter plan={generatedMonetizationPlan} />
                     )}
                 </div>
             )}
@@ -3126,7 +4087,11 @@ export const OnlyFansContentBrain: React.FC = () => {
                     onSave={async () => {
                         if (predictResult) {
                             try {
-                                await savePredictToHistory(predictResult);
+                                await savePredictToHistory({
+                                    ...predictResult,
+                                    mediaUrl: uploadedMediaUrl,
+                                    mediaType: uploadedMediaType || 'image',
+                                });
                                 showToast?.('Prediction saved to history!', 'success');
                             } catch (error) {
                                 showToast?.('Failed to save to history', 'error');
@@ -3149,7 +4114,11 @@ export const OnlyFansContentBrain: React.FC = () => {
                     onSave={async () => {
                         if (repurposeResult) {
                             try {
-                                await saveRepurposeToHistory(repurposeResult);
+                                await saveRepurposeToHistory({
+                                    ...repurposeResult,
+                                    mediaUrl: uploadedMediaUrl,
+                                    mediaType: uploadedMediaType || 'image',
+                                });
                                 showToast?.('Repurposed content saved to history!', 'success');
                             } catch (error) {
                                 showToast?.('Failed to save to history', 'error');
@@ -3258,9 +4227,150 @@ export const OnlyFansContentBrain: React.FC = () => {
                                 </div>
                             )}
                         </div>
-                        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+                        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
                             <button
                                 onClick={() => setShowGapAnalysisModal(false)}
+                                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Saved Item Modal */}
+            {showSavedItemModal && viewingSavedItem && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+                        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                                {viewingSavedItem.title || 'Saved Item'}
+                            </h2>
+                            <button
+                                onClick={() => {
+                                    setShowSavedItemModal(false);
+                                    setViewingSavedItem(null);
+                                }}
+                                className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                            >
+                                <XMarkIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-6">
+                            <div className="space-y-4">
+                                {/* Media Thumbnail */}
+                                {viewingSavedItem.data?.mediaUrl && (
+                                    <div className="mb-4">
+                                        {viewingSavedItem.data?.mediaType === 'video' ? (
+                                            <video 
+                                                src={viewingSavedItem.data.mediaUrl} 
+                                                className="w-full max-w-md mx-auto rounded-lg border border-gray-200 dark:border-gray-600"
+                                                controls
+                                            />
+                                        ) : (
+                                            <img 
+                                                src={viewingSavedItem.data.mediaUrl} 
+                                                alt="Content preview" 
+                                                className="w-full max-w-md mx-auto rounded-lg border border-gray-200 dark:border-gray-600"
+                                            />
+                                        )}
+                                    </div>
+                                )}
+                                
+                                {/* Post Ideas */}
+                                {viewingSavedItem.type === 'post_ideas' && viewingSavedItem.data?.ideas && Array.isArray(viewingSavedItem.data.ideas) && (
+                                    <div className="space-y-3">
+                                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Post Ideas</h3>
+                                        {viewingSavedItem.data.ideas.map((idea: string, idx: number) => (
+                                            <div key={idx} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                                <p className="text-gray-900 dark:text-white whitespace-pre-wrap">{idea}</p>
+                                                <button
+                                                    onClick={() => {
+                                                        copyToClipboard(idea);
+                                                    }}
+                                                    className="mt-2 text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                                >
+                                                    Copy
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                
+                                {/* Shoot Concepts */}
+                                {viewingSavedItem.type === 'shoot_concepts' && viewingSavedItem.data?.concepts && Array.isArray(viewingSavedItem.data.concepts) && (
+                                    <div className="space-y-3">
+                                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Shoot Concepts</h3>
+                                        {viewingSavedItem.data.concepts.map((concept: string, idx: number) => (
+                                            <div key={idx} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                                <p className="text-gray-900 dark:text-white whitespace-pre-wrap">{concept}</p>
+                                                <button
+                                                    onClick={() => {
+                                                        copyToClipboard(concept);
+                                                    }}
+                                                    className="mt-2 text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                                >
+                                                    Copy
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                
+                                {/* Weekly Plan */}
+                                {viewingSavedItem.type === 'weekly_plan' && viewingSavedItem.data?.plan && (
+                                    <div>
+                                        <div className="flex items-center justify-between mb-3">
+                                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Weekly Plan</h3>
+                                            <button
+                                                onClick={() => {
+                                                    const planToCopy = typeof viewingSavedItem.data.plan === 'string' 
+                                                        ? viewingSavedItem.data.plan 
+                                                        : JSON.stringify(viewingSavedItem.data.plan, null, 2);
+                                                    copyToClipboard(planToCopy);
+                                                }}
+                                                className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-1"
+                                            >
+                                                <CopyIcon className="w-4 h-4" />
+                                                Copy
+                                            </button>
+                                        </div>
+                                        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                            <WeeklyPlanFormatter plan={viewingSavedItem.data.plan} />
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                {/* Monetization Plan */}
+                                {viewingSavedItem.type === 'monetization_plan' && viewingSavedItem.data && (
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Monetization Plan</h3>
+                                        {/* Use the same formatter as generated plans */}
+                                        {/* When saved, we use ...data.plan which spreads the plan properties into data */}
+                                        {/* So viewingSavedItem.data should already be the plan object */}
+                                        <MonetizationPlanFormatter plan={viewingSavedItem.data} />
+                                    </div>
+                                )}
+                                
+                                {/* Date */}
+                                <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                                        Saved: {viewingSavedItem.createdAt?.toDate?.() 
+                                            ? new Date(viewingSavedItem.createdAt.toDate()).toLocaleString() 
+                                            : (viewingSavedItem.createdAt 
+                                                ? new Date(viewingSavedItem.createdAt).toLocaleString() 
+                                                : 'Recently')}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+                            <button
+                                onClick={() => {
+                                    setShowSavedItemModal(false);
+                                    setViewingSavedItem(null);
+                                }}
                                 className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
                             >
                                 Close
