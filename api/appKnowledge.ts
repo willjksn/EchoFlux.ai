@@ -41,10 +41,10 @@ EchoFlux.ai is an **AI Content Studio & Campaign Planner for creators**.
   - Choose **platforms to plan for** (label is "Plan for platforms", not "Publish to").
   - Attach media from the media library.
   - Use **"Analyze Content Gaps"** button (replaces the old "Optimize" button) to analyze content gaps across all social platforms (Instagram, TikTok, X, LinkedIn, Facebook, Threads, YouTube) - this analyzes the user's content strategy and identifies gaps, then saves to history.
-- **Content Gap Analysis** (Dashboard & Compose):
-  - **Shared history**: Dashboard and Compose share the same content gap analysis history (stored in `content_gap_analysis_history` collection).
-  - History section titled: **"Recent: Analyze Content Gaps, Predictions & Repurposes"**
-  - Gap analysis results include: summary, identified gaps with severity levels, and content suggestions to fill gaps.
+  - **Content Gap Analysis** (Dashboard & Compose):
+    - **Shared history**: Dashboard and Compose share the same content gap analysis history (stored in content_gap_analysis_history collection).
+    - History section titled: **"Recent: Analyze Content Gaps, Predictions & Repurposes"**
+    - Gap analysis results include: summary, identified gaps with severity levels, and content suggestions to fill gaps.
   - Automatically saved to history when analysis completes.
 - **History Section**:
   - Shows predictions, repurposes, and content gap analyses.
@@ -76,7 +76,7 @@ EchoFlux.ai is an **AI Content Studio & Campaign Planner for creators**.
       - Each item has "View" button and trash icon for deletion.
       - Gap analysis automatically saves to history (no manual save button needed).
   - **Content Gap Analysis** (OnlyFans Studio):
-    - **Separate history**: OnlyFans Studio has its own content gap analysis history (stored in `onlyfans_content_brain_history` collection with type `gap_analysis`).
+    - **Separate history**: OnlyFans Studio has its own content gap analysis history (stored in onlyfans_content_brain_history collection with type gap_analysis).
     - Completely separate from Dashboard/Compose gap analysis history.
     - Analyzes OnlyFans-specific content gaps, calendar events, and posts.
     - Results include OnlyFans-specific content suggestions and gap identification.
