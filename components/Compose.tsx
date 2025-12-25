@@ -225,8 +225,8 @@ const CaptionGenerator: React.FC = () => {
       });
       setRepurposeHistory(repurposeItems.slice(0, 10)); // Keep only last 10
 
-      // Load gap analysis history
-      const gapAnalysisRef = collection(db, 'users', user.id, 'compose_gap_analysis_history');
+      // Load gap analysis history (shared with dashboard - uses content_gap_analysis_history)
+      const gapAnalysisRef = collection(db, 'users', user.id, 'content_gap_analysis_history');
       try {
         const gapAnalysisQuery = query(gapAnalysisRef, orderBy('createdAt', 'desc'));
         const gapAnalysisSnapshot = await getDocs(gapAnalysisQuery);
@@ -292,9 +292,9 @@ const CaptionGenerator: React.FC = () => {
       if (data.success) {
         setGapAnalysisResult(data);
         setShowGapAnalysisModal(true);
-        // Auto-save to compose gap analysis history
+        // Auto-save to content gap analysis history (shared with dashboard)
         try {
-          await addDoc(collection(db, 'users', user.id, 'compose_gap_analysis_history'), {
+          await addDoc(collection(db, 'users', user.id, 'content_gap_analysis_history'), {
             type: 'gap_analysis',
             title: `Content Gap Analysis - ${new Date().toLocaleDateString()}`,
             data: data,
@@ -3610,7 +3610,7 @@ const CaptionGenerator: React.FC = () => {
       {user?.plan !== 'Free' && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Analyze Content Gaps, Predictions & Repurposes</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent: Analyze Content Gaps, Predictions & Repurposes</h3>
             <button
               onClick={() => setShowHistory(!showHistory)}
               className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
