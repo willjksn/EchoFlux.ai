@@ -200,10 +200,16 @@ export const VoiceAssistant: React.FC = () => {
         - Dashboard: high-level planning snapshot + quick actions
         - Strategy: generate multi-week content roadmaps (Free: 1/month basic, Pro: 2/month with live research, Elite: 5/month with enhanced research)
         - Compose: refine captions and plan for platforms (not \"publish\")
+          - AI-generated captions are automatically optimized for the selected platform (Instagram, TikTok, X, etc.)
+          - \"Analyze Content Gaps\" button analyzes content strategy across all social platforms and saves to shared history with Dashboard
+          - History section shows \"Recent: Analyze Content Gaps, Predictions & Repurposes\" with gap analyses, predictions, and repurposes
         - Calendar: visual planning calendar for scheduled content
         - Media Library: find and reuse assets
         - Link-in-Bio: build link-in-bio pages (Free: 1 link, Pro: 5 links, Elite: unlimited)
         - OnlyFans Studio (Elite only): plan and review OF content
+          - AI Captions tab includes \"Analyze Content Gaps\" (OnlyFans-specific), \"Predict Performance\", and \"Repurpose Content\" buttons
+          - History section shows \"Recent: Analyze Content Gaps, Predictions & Repurposes\" with OnlyFans-specific analyses (separate from main app history)
+          - Gap analysis automatically saves to OnlyFans history (separate collection from Dashboard/Compose)
         - Settings: brand voice, AI behavior, voice mode
       - Help the user by providing COMPREHENSIVE, DETAILED explanations:
         - Explain WHERE to find features (which page, which section, which button)
@@ -246,6 +252,7 @@ export const VoiceAssistant: React.FC = () => {
         - Series concepts and content pillars
         - Hooks, captions, call-to-actions, and scripts
         - Remixing or improving ideas they already have
+      - **Platform-Optimized Captions**: When users generate captions in Compose, they are automatically optimized for the selected platform (Instagram, TikTok, X, LinkedIn, etc.) - the AI considers character limits, style, hashtags, and best practices for each platform.
       - Match their **tone and boundaries**:
         - If they mention being explicit/NSFW, you may lean into that style but stay within normal AI policy limits.
         - If they ask for safe/brand-friendly content, keep it clean and professional.

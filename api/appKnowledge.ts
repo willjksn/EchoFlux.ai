@@ -37,8 +37,19 @@ EchoFlux.ai is an **AI Content Studio & Campaign Planner for creators**.
 - Main **caption/editor & content planning** surface.
 - Users can:
   - Write or refine captions.
+  - **AI-generated captions are automatically optimized for the selected platform** - when a user selects a platform (Instagram, TikTok, X, etc.) and generates captions, the AI optimizes them specifically for that platform's best practices, character limits, and engagement patterns.
   - Choose **platforms to plan for** (label is "Plan for platforms", not "Publish to").
   - Attach media from the media library.
+  - Use **"Analyze Content Gaps"** button (replaces the old "Optimize" button) to analyze content gaps across all social platforms (Instagram, TikTok, X, LinkedIn, Facebook, Threads, YouTube) - this analyzes the user's content strategy and identifies gaps, then saves to history.
+- **Content Gap Analysis** (Dashboard & Compose):
+  - **Shared history**: Dashboard and Compose share the same content gap analysis history (stored in `content_gap_analysis_history` collection).
+  - History section titled: **"Recent: Analyze Content Gaps, Predictions & Repurposes"**
+  - Gap analysis results include: summary, identified gaps with severity levels, and content suggestions to fill gaps.
+  - Automatically saved to history when analysis completes.
+- **History Section**:
+  - Shows predictions, repurposes, and content gap analyses.
+  - Each item has a "View" button to see full details.
+  - Users can see their recent AI-powered content analyses.
 - **Image/Video generation tabs are currently hidden/disabled in the UI**:
   - The app may still have backend endpoints for generation, but live product copy says these are temporarily disabled.
 - Publishing and scheduling buttons are **guarded by OFFLINE_MODE** and show a non-destructive message instead of posting.
@@ -55,6 +66,20 @@ EchoFlux.ai is an **AI Content Studio & Campaign Planner for creators**.
 - **Media Library**: stores images, videos, and assets used in content.
 - **OnlyFans Studio** (Elite or dedicated OF plan):
   - Specialized tools for planning and analyzing OnlyFans content.
+  - **AI Captions Tab** includes:
+    - Generate AI captions for OnlyFans content.
+    - **"Analyze Content Gaps"** button - analyzes OnlyFans content strategy specifically (separate from main app gap analysis).
+    - **"Predict Performance"** button - predicts how content will perform on OnlyFans.
+    - **"Repurpose Content"** button - repurposes content for other platforms.
+    - **History section** titled: **"Recent: Analyze Content Gaps, Predictions & Repurposes"**
+      - Shows gap analyses, predictions, and repurposes specific to OnlyFans.
+      - Each item has "View" button and trash icon for deletion.
+      - Gap analysis automatically saves to history (no manual save button needed).
+  - **Content Gap Analysis** (OnlyFans Studio):
+    - **Separate history**: OnlyFans Studio has its own content gap analysis history (stored in `onlyfans_content_brain_history` collection with type `gap_analysis`).
+    - Completely separate from Dashboard/Compose gap analysis history.
+    - Analyzes OnlyFans-specific content gaps, calendar events, and posts.
+    - Results include OnlyFans-specific content suggestions and gap identification.
   - Media editing tools like blur/eraser are currently **disabled** with clear "temporarily disabled" messages.
   - Analytics are limited by available data and API constraints; do not promise real-time, perfect analytics.
 
@@ -129,6 +154,17 @@ EchoFlux.ai is an **AI Content Studio & Campaign Planner for creators**.
 - "Where do I see my content calendar?":
   - Point to the **planning calendar** and clarify it shows planned content, not verified posted content.
 - "How do I use OnlyFans Studio?":
-  - Mention it’s available on **Elite/OnlyFans Studio** plans.
+  - Mention it's available on **Elite/OnlyFans Studio** plans.
+  - Explain the AI Captions tab with Analyze Content Gaps, Predict Performance, and Repurpose Content buttons.
+  - The history section shows "Recent: Analyze Content Gaps, Predictions & Repurposes" with ability to view and delete items.
+  - OnlyFans gap analysis is separate from main app gap analysis (has its own history).
   - Focus on planning, content organization, and any available analytics, but remind them that some media tools and deeper analytics are temporarily limited.
+- "How do captions work in Compose?":
+  - Explain that when users select a platform and generate captions, they are **automatically optimized for that platform** (character limits, style, best practices).
+  - Users can use the "Analyze Content Gaps" button to analyze their overall content strategy across platforms.
+  - Gap analysis history is shared between Dashboard and Compose pages.
+- "What's the difference between Dashboard/Compose gap analysis and OnlyFans gap analysis?":
+  - Dashboard and Compose share the same gap analysis history (analyzes Instagram, TikTok, X, LinkedIn, Facebook, Threads, YouTube).
+  - OnlyFans Studio has completely separate gap analysis history (analyzes OnlyFans-specific content only).
+  - They are stored in different collections and do not overlap.
 `;
