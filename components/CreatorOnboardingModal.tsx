@@ -20,7 +20,7 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
     const isElitePlan = userPlan === 'Elite';
     
     // Plan-specific step counts
-    const totalSteps = isFreePlan ? 5 : isProPlan ? 6 : 7; // Free: 5 (Welcome, Niche, Audience, Goal, Completion), Pro: 6, Elite: 7
+    const totalSteps = isFreePlan ? 5 : isProPlan ? 6 : 8; // Free: 5, Pro: 6, Elite: 8 (adds OnlyFans Studio + Completion)
 
     const handleSaveAndComplete = async () => {
         if (user) {
@@ -188,6 +188,12 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                             <li>• Upload media to your library (100MB storage)</li>
                         </ul>
                     </div>
+                    <div className="mt-4 p-4 border border-gray-200 dark:border-gray-600 rounded-lg bg-white/60 dark:bg-gray-800/40 text-left">
+                        <p className="text-sm text-gray-700 dark:text-gray-300">
+                            <strong>Where to start:</strong> use the sidebar to open <strong>Strategy</strong> (your plan), <strong>Compose</strong> (captions),
+                            and <strong>Link in Bio</strong> (your bio page).
+                        </p>
+                    </div>
                 </div>
             );
         }
@@ -208,6 +214,12 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                             </p>
                         </div>
                         <div className="p-4 bg-primary-50 dark:bg-primary-900/20 rounded-lg">
+                            <h3 className="font-semibold text-primary-900 dark:text-primary-200 mb-2">Live Trend Research</h3>
+                            <p className="text-sm text-primary-800 dark:text-primary-300">
+                                Strategy generation includes live research so your plan aligns with what’s trending right now in your niche.
+                            </p>
+                        </div>
+                        <div className="p-4 bg-primary-50 dark:bg-primary-900/20 rounded-lg">
                             <h3 className="font-semibold text-primary-900 dark:text-primary-200 mb-2">Visual Content Calendar</h3>
                             <p className="text-sm text-primary-800 dark:text-primary-300">
                                 Plan and visualize your content schedule. See your posting strategy at a glance.
@@ -225,6 +237,18 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                                 Generate engaging captions at scale. Perfect for maintaining a consistent posting schedule.
                             </p>
                         </div>
+                        <div className="p-4 bg-primary-50 dark:bg-primary-900/20 rounded-lg">
+                            <h3 className="font-semibold text-primary-900 dark:text-primary-200 mb-2">5GB Media Library</h3>
+                            <p className="text-sm text-primary-800 dark:text-primary-300">
+                                Upload and organize your content assets so you can reuse them quickly when planning and scheduling.
+                            </p>
+                        </div>
+                    </div>
+                    <div className="mt-4 p-4 border border-primary-200 dark:border-primary-800 rounded-lg bg-white/60 dark:bg-gray-800/40">
+                        <p className="text-sm text-gray-700 dark:text-gray-300">
+                            <strong>Where to find it:</strong> open <strong>Strategy</strong> (AI plans), <strong>Calendar</strong> (schedule),
+                            <strong>Compose</strong> (captions), and <strong>Link in Bio</strong> (bio builder).
+                        </p>
                     </div>
                 </div>
             );
@@ -266,27 +290,32 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
         if (step === 7 && isElitePlan) {
             return (
                 <div className="animate-fade-in">
-                    <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-white">OnlyFans Studio</h2>
+                    <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-white">OnlyFans Studio (Elite)</h2>
                     <p className="mt-2 text-center text-gray-500 dark:text-gray-400">
-                        Your Elite plan includes exclusive OnlyFans management tools:
+                        Your Elite plan unlocks OnlyFans-specific tools designed to help you plan, organize, and scale faster.
                     </p>
                     <div className="mt-6 space-y-4">
                         <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                            <h3 className="font-semibold text-purple-900 dark:text-purple-200 mb-2">Content Management</h3>
+                            <h3 className="font-semibold text-purple-900 dark:text-purple-200 mb-2">Content Brain + Planning</h3>
                             <p className="text-sm text-purple-800 dark:text-purple-300">
-                                Organize and schedule your OnlyFans content with advanced tools.
+                                Generate roleplay ideas, spicy caption sets, and structured content plans tailored to your niche and audience.
                             </p>
                         </div>
                         <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                            <h3 className="font-semibold text-purple-900 dark:text-purple-200 mb-2">Analytics & Insights</h3>
+                            <h3 className="font-semibold text-purple-900 dark:text-purple-200 mb-2">Studio Calendar + Workflow</h3>
                             <p className="text-sm text-purple-800 dark:text-purple-300">
-                                Track performance and optimize your content strategy.
+                                Organize what to post, when to post it, and how to repurpose it—so your content engine stays consistent.
                             </p>
                         </div>
                         <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                            <h3 className="font-semibold text-purple-900 dark:text-purple-200 mb-2">Export Hub</h3>
+                            <h3 className="font-semibold text-purple-900 dark:text-purple-200 mb-2">Media Vault + Export Hub</h3>
                             <p className="text-sm text-purple-800 dark:text-purple-300">
-                                Export and repurpose your content across platforms.
+                                Store, tag, and reuse your media, then export/repurpose content for other platforms without redoing the work.
+                            </p>
+                        </div>
+                        <div className="p-4 border border-purple-200 dark:border-purple-800 rounded-lg bg-white/60 dark:bg-gray-800/40">
+                            <p className="text-sm text-gray-700 dark:text-gray-300">
+                                <strong>Where to find it:</strong> open the sidebar and click <strong>OnlyFans Studio</strong>.
                             </p>
                         </div>
                     </div>
@@ -295,7 +324,7 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
         }
 
         // Final step: Completion (Pro and Elite)
-        if ((step === 6 && isProPlan) || (step === 7 && isElitePlan)) {
+        if ((step === 6 && isProPlan) || (step === 8 && isElitePlan)) {
             return (
                 <div className="text-center animate-fade-in">
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white">You're All Set!</h2>
@@ -311,7 +340,7 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                             <li>• Set up your Link-in-Bio page</li>
                             <li>• Upload media to your library</li>
                             {isProPlan && <li>• Explore your Visual Content Calendar</li>}
-                            {isElitePlan && <li>• Check out OnlyFans Studio features</li>}
+                            {isElitePlan && <li>• Explore OnlyFans Studio (Content Brain, Studio Calendar, Media Vault)</li>}
                         </ul>
                     </div>
                 </div>
