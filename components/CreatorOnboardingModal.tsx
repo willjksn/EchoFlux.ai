@@ -359,8 +359,11 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm" aria-modal="true">
-            <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-lg w-full m-4 p-8 flex flex-col justify-between min-h-[400px]">
-                <div>{renderStepContent()}</div>
+            <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-lg w-full m-4 p-8 flex flex-col min-h-[400px] max-h-[90vh] overflow-hidden">
+                {/* Content area can overflow on smaller screens — make it scrollable */}
+                <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+                    {renderStepContent()}
+                </div>
                 <div className="mt-8 flex justify-between items-center">
                     {step > 1 ? (
                         <button
