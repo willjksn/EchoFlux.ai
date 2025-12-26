@@ -269,10 +269,24 @@ export const PaymentModal: React.FC = () => {
                 </div>
                 <form onSubmit={handleSubmit}>
                     <div className="p-6 space-y-4">
+                        {(() => {
+                          const isAnnual = paymentPlan.cycle === 'annually' || paymentPlan.cycle === 'annual' || paymentPlan.cycle === 'yearly';
+                          const dueToday = isAnnual ? paymentPlan.price * 12 : paymentPlan.price;
+                          const cycleLabel = isAnnual ? 'yr' : 'mo';
+                          return (
                         <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg flex justify-between items-center">
                             <span className="font-semibold text-gray-800 dark:text-gray-200">Amount Due Today</span>
-                            <span className="text-2xl font-bold text-gray-900 dark:text-white">${paymentPlan.price} <span className="text-base font-medium">/{paymentPlan.cycle === 'monthly' ? 'mo' : 'yr'}</span></span>
+                            <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                              ${dueToday.toFixed(2)} <span className="text-base font-medium">/{cycleLabel}</span>
+                            </span>
                         </div>
+                          );
+                        })()}
+                        {paymentPlan.cycle === 'annually' && paymentPlan.price > 0 && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            ${paymentPlan.price.toFixed(2)}/mo billed annually (${(paymentPlan.price * 12).toFixed(2)}/year)
+                          </div>
+                        )}
                         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                             <p className="text-sm text-blue-800 dark:text-blue-200">
                                 <strong>Secure Checkout:</strong> You'll be redirected to Stripe's secure payment page to complete your purchase.
@@ -284,7 +298,7 @@ export const PaymentModal: React.FC = () => {
                             <span className="text-sm text-gray-600 dark:text-gray-400">Total:</span>
                             <div className="text-right">
                                 <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                                    ${paymentPlan.price.toFixed(2)}
+                                    ${(paymentPlan.cycle === 'annually' ? paymentPlan.price * 12 : paymentPlan.price).toFixed(2)}
                                 </div>
                             </div>
                         </div>
@@ -292,7 +306,7 @@ export const PaymentModal: React.FC = () => {
                             You can enter a promotion code during checkout on Stripe's secure payment page.
                         </p>
                          <button type="submit" disabled={isLoading} className="w-full flex justify-center py-3 px-4 border border-transparent text-base font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50">
-                            {isLoading ? 'Redirecting to checkout...' : `Continue to Checkout - $${paymentPlan.price.toFixed(2)}`}
+                            {isLoading ? 'Redirecting to checkout...' : `Continue to Checkout - $${(paymentPlan.cycle === 'annually' ? paymentPlan.price * 12 : paymentPlan.price).toFixed(2)}`}
                         </button>
                         <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">
                             Secure payment powered by Stripe

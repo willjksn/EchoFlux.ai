@@ -201,6 +201,7 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
                     {pricingTiers.map((tier) => {
                         const isCurrentPlan = currentPlan === tier.name;
                         const price = billingCycle === 'monthly' ? tier.priceMonthly : tier.priceAnnually;
+                        const annualTotal = billingCycle === 'annually' ? (tier.priceAnnually * 12) : null;
                         
                         const handleButtonClick = () => {
                             if (isCurrentPlan) return;
@@ -231,8 +232,13 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
                                 <div className="mt-6">
                                     <>
                                         <span className="text-4xl font-extrabold text-gray-900 dark:text-white">${price}</span>
-                                        <span className="text-base font-medium text-gray-500 dark:text-gray-400">/{billingCycle === 'monthly' ? 'mo' : 'yr'}</span>
+                                        <span className="text-base font-medium text-gray-500 dark:text-gray-400">/{billingCycle === 'monthly' ? 'mo' : 'mo'}</span>
                                     </>
+                                    {billingCycle === 'annually' && tier.priceAnnually > 0 && (
+                                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        Billed annually (${annualTotal?.toFixed(0)}/year)
+                                      </div>
+                                    )}
                                 </div>
                                 <ul className="mt-6 space-y-4 flex-1">
                                     {tier.features.map((feature) => (

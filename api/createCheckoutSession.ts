@@ -136,6 +136,14 @@ const PLAN_PRICE_IDS: Record<string, { monthly: string; annually: string }> = {
   },
 };
 
+// Annual pricing overrides (in cents) to ensure "amount due today" matches the billed-annual totals.
+// This avoids relying on potentially misconfigured Stripe annual Price IDs (e.g. $23/yr instead of $276/yr).
+// If you change annual pricing, update these values.
+const ANNUAL_TOTAL_OVERRIDE_CENTS: Record<string, number> = {
+  Pro: 27600,
+  Elite: 56400,
+};
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -238,12 +246,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: 'subscription',
       payment_method_types: ['card'],
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
-        },
-      ],
+      line_items: [],
       customer_email: decodedToken.email || undefined,
       client_reference_id: decodedToken.uid,
       metadata: {
@@ -259,6 +262,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let session;
     try {
+      // For Pro/Elite annual, charge the full annual amount due today.
+      // We build an inline annual price using the existing product from the monthly Price ID,
+      // so Stripe Checkout shows: "$276/yr due today" (not "$23/yr").
+      if (isAnnual && (planName === 'Pro' || planName === 'Elite')) {
+        const overrideCents = ANNUAL_TOTAL_OVERRIDE_CENTS[planName];
+        const monthlyPriceId = planPrices.monthly;
+
+        if (overrideCents && monthlyPriceId) {
+          const monthlyPrice = await stripe.prices.retrieve(monthlyPriceId);
+          const currency = monthlyPrice.currency || 'usd';
+          const product = typeof monthlyPrice.product === 'string' ? monthlyPrice.product : monthlyPrice.product?.id;
+
+          if (!product) {
+            console.warn(`Could not resolve Stripe product for ${planName} monthly price. Falling back to configured annual priceId.`);
+            sessionParams.line_items = [{ price: priceId, quantity: 1 }];
+          } else {
+            sessionParams.line_items = [
+              {
+                price_data: {
+                  currency,
+                  product,
+                  unit_amount: overrideCents,
+                  recurring: { interval: 'year' },
+                },
+                quantity: 1,
+              },
+            ];
+          }
+        } else {
+          sessionParams.line_items = [{ price: priceId, quantity: 1 }];
+        }
+      } else {
+        sessionParams.line_items = [{ price: priceId, quantity: 1 }];
+      }
+
       console.log('Creating Stripe checkout session with params:', {
         planName,
         billingCycle,
