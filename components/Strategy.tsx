@@ -1088,7 +1088,7 @@ export const Strategy: React.FC = () => {
                             <option value="LinkedIn">LinkedIn Focus</option>
                             <option value="Facebook">Facebook Focus</option>
                             <option value="Pinterest">Pinterest Focus</option>
-                            <option value="OnlyFans">OnlyFans Focus</option>
+                            {/* OnlyFans removed - use OnlyFans Studio for OnlyFans content */}
                         </select>
                     </div>
                 </div>
