@@ -1462,7 +1462,7 @@ export const Strategy: React.FC = () => {
                                                                 <p className="text-xs font-semibold text-blue-900 dark:text-blue-200 mb-1.5">
                                                                     💡 Suggestions:
                                                                 </p>
-                                                                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                                                                <div className="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar">
                                                                     {day.imageIdeas && day.imageIdeas.length > 0 && (
                                                                         <div className="text-xs text-blue-800 dark:text-blue-300">
                                                                             <span className="font-medium">📸 Images:</span>
@@ -1997,7 +1997,7 @@ export const Strategy: React.FC = () => {
             {/* Media Library Modal */}
             {showMediaLibrary && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-xl max-w-4xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-xl max-w-4xl w-full mx-4 max-h-[80vh] overflow-y-auto custom-scrollbar">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-xl font-bold text-gray-900 dark:text-white">Select from Media Library</h3>
                             <button

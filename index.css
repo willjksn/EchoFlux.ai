@@ -6,6 +6,17 @@ body {
   @apply bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white;
 }
 
+/* Tell the browser which color scheme we're in.
+   This helps iOS/iPadOS/Safari render system UI (including scrollbars) in dark mode. */
+html {
+  color-scheme: light;
+}
+
+html.dark,
+[data-theme="dark"] {
+  color-scheme: dark;
+}
+
 /* Global scrollbar styling for body and html */
 html {
   scrollbar-width: thin;
@@ -180,6 +191,48 @@ main {
 html.dark main,
 [data-theme="dark"] main {
     scrollbar-color: #4b5563 transparent !important;
+}
+
+/* Universal scrollbar styling so nested scroll containers match dark mode too */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}
+
+.dark *,
+html.dark *,
+[data-theme="dark"] * {
+  scrollbar-color: #4b5563 transparent !important;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+.dark *::-webkit-scrollbar-thumb,
+html.dark *::-webkit-scrollbar-thumb,
+[data-theme="dark"] *::-webkit-scrollbar-thumb {
+  background: #4b5563 !important;
+}
+
+.dark *::-webkit-scrollbar-thumb:hover,
+html.dark *::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] *::-webkit-scrollbar-thumb:hover {
+  background: #6b7280 !important;
 }
 
 /* Animation utilities */
