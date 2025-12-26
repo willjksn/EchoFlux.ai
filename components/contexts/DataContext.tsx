@@ -53,6 +53,7 @@ import {
   MOCK_TEAM_MEMBERS,
   MOCK_POSTS,
 } from "../../constants";
+import { OFFLINE_MODE } from "../../constants";
 
 import { categorizeMessage } from "../../src/services/geminiService";
 import { checkAllUsageLimits } from "../../src/utils/usageNotifications";
@@ -139,7 +140,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [clients, setClients] = useState<Client[]>(MOCK_CLIENTS);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(MOCK_TEAM_MEMBERS);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-  const [notifications, setNotifications] = useState<Notification[]>(MOCK_NOTIFICATIONS);
+  // In offline/studio mode, we don't have live inbox/DM/comment events yet.
+  // Seed notifications as empty so users don't get routed into hidden flows.
+  const [notifications, setNotifications] = useState<Notification[]>(OFFLINE_MODE ? [] : MOCK_NOTIFICATIONS);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);

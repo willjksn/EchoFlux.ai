@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { SunIcon, MoonIcon, BellIcon, MenuIcon, LogoutIcon, ChatIcon, BriefcaseIcon, WarningIcon } from './icons/UIIcons';
 import { Client, Notification } from '../types';
 import { useAppContext } from './AppContext';
+import { OFFLINE_MODE } from '../constants';
 
 interface HeaderProps {
   pageTitle: string;
@@ -27,7 +28,14 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
   const clientSwitcherRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
   
-  const hasUnreadNotifications = useMemo(() => notifications.some(n => !n.read), [notifications]);
+  // In offline/studio mode we don't support inbox/DM/comment notifications yet.
+  // Keep the bell usable by showing only usage/system alerts (messageId starts with 'usage-').
+  const visibleNotifications = useMemo(() => {
+    if (!OFFLINE_MODE) return notifications;
+    return notifications.filter(n => n.messageId?.startsWith('usage-'));
+  }, [notifications]);
+
+  const hasUnreadNotifications = useMemo(() => visibleNotifications.some(n => !n.read), [visibleNotifications]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -78,6 +86,17 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
       return;
     }
     
+    // In offline/studio mode, suppress DM/comment navigation (feature not available)
+    if (OFFLINE_MODE) {
+      setNotifications(prevNotifications => 
+        prevNotifications.map(n => 
+          n.id === notification.id ? { ...n, read: true } : n
+        )
+      );
+      setIsNotificationsOpen(false);
+      return;
+    }
+
     // Handle regular message notifications (DMs/comments)
     setSelectedClient(null); // Switch to main account to ensure message is visible
     navigateToDashboardWithFilter(
@@ -174,10 +193,12 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
             {isNotificationsOpen && (
                 <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 z-20 flex flex-col">
                     <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                        <h3 className="font-semibold text-gray-900 dark:text-white">Notifications</h3>
+                        <h3 className="font-semibold text-gray-900 dark:text-white">
+                          {OFFLINE_MODE ? 'Reminders' : 'Notifications'}
+                        </h3>
                     </div>
                     <div className="py-1 max-h-80 overflow-y-auto">
-                        {notifications.length > 0 ? notifications.map(notification => {
+                        {visibleNotifications.length > 0 ? visibleNotifications.map(notification => {
                             const isUsageNotification = notification.messageId?.startsWith('usage-');
                             return (
                                 <button key={notification.id} onClick={() => handleNotificationClick(notification)} className="w-full text-left px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
@@ -198,7 +219,9 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
                                 </button>
                             );
                         }) : (
-                           <p className="text-center text-sm text-gray-500 dark:text-gray-400 py-6">You're all caught up!</p> 
+                           <p className="text-center text-sm text-gray-500 dark:text-gray-400 py-6">
+                             {OFFLINE_MODE ? "No reminders yet." : "You're all caught up!"}
+                           </p> 
                         )}
                     </div>
                     {hasUnreadNotifications && (
