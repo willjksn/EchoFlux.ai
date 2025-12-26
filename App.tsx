@@ -201,6 +201,7 @@ const AppContent: React.FC = () => {
     const [loginModalInitialView, setLoginModalInitialView] = useState<'login' | 'signup'>('login');
     const [onboardingStep, setOnboardingStep] = useState<'plan-selector' | 'creator' | 'none'>('none');
     const [bypassMaintenance, setBypassMaintenance] = useState(false);
+    const [isFinalizingCheckout, setIsFinalizingCheckout] = useState(false);
 
     // Auto-bypass maintenance for whitelisted users
     useEffect(() => {
@@ -266,45 +267,13 @@ const AppContent: React.FC = () => {
         const sessionId = urlParams.get('session_id');
         
         if (paymentSuccess === 'success' && sessionId) {
+            // Persist session ID so we can finalize even if auth/user loads after redirect.
+            try {
+                localStorage.setItem('postCheckoutSessionId', sessionId);
+            } catch {}
+
             // Clean URL
             window.history.replaceState({}, '', window.location.pathname);
-            
-            // Clear payment attempt info and pending signup on success
-            localStorage.removeItem('paymentAttempt');
-            localStorage.removeItem('pendingSignup');
-            
-            // Refresh user data to get updated plan from webhook
-            // The webhook may have already updated the plan, but there might be a small delay
-            if (isAuthenticated && user) {
-                // Wait a moment for webhook to process, then refresh user data
-                setTimeout(async () => {
-                    try {
-                        const { doc, getDoc } = await import('firebase/firestore');
-                        const { db } = await import('./firebaseConfig');
-                        const userRef = doc(db, 'users', user.id);
-                        const userSnap = await getDoc(userRef);
-                        
-                        if (userSnap.exists()) {
-                            const updatedUser = userSnap.data() as typeof user;
-                            await setUser(updatedUser);
-                            
-                            // Check if user has paid plan and trigger onboarding
-                            const hasPaidPlan = updatedUser.plan === 'Pro' || updatedUser.plan === 'Elite' || updatedUser.plan === 'Agency';
-                            if (hasPaidPlan && !updatedUser.hasCompletedOnboarding) {
-                                // Payment successful - proceed to onboarding
-                                setOnboardingStep('creator');
-                            }
-                        }
-                    } catch (error) {
-                        console.error('Error refreshing user data after payment:', error);
-                        // Fallback: check current user state
-                        const hasPaidPlan = user.plan === 'Pro' || user.plan === 'Elite' || user.plan === 'Agency';
-                        if (hasPaidPlan && !user.hasCompletedOnboarding) {
-                            setOnboardingStep('creator');
-                        }
-                    }
-                }, 2000); // Wait 2 seconds for webhook to process
-            }
         } else if (paymentCanceled === 'true') {
             // Payment was canceled - clean URL
             window.history.replaceState({}, '', window.location.pathname);
@@ -350,6 +319,16 @@ const AppContent: React.FC = () => {
                 setUser({ ...user, userType: 'Creator' });
             }
             
+            // If we just returned from Stripe, suppress plan selector until we finalize the session.
+            // This prevents showing "Confirm plan" with Free selected while the plan is being applied.
+            const postCheckoutSessionId = (() => {
+                try { return localStorage.getItem('postCheckoutSessionId'); } catch { return null; }
+            })();
+            if (postCheckoutSessionId) {
+                setOnboardingStep('none');
+                return;
+            }
+
             // New signup flow: Show plan selector first for users who haven't completed onboarding
             // Exception: If they already have a paid plan (Pro/Elite), they've already selected,
             // so proceed directly to onboarding
@@ -384,6 +363,76 @@ const AppContent: React.FC = () => {
             setOnboardingStep('none');
         }
     }, [isAuthenticated, user, setUser, selectedPlan, openPaymentModal]);
+
+    useEffect(() => {
+        // Finalize Stripe checkout after redirect:
+        // - works even if auth/user becomes available after redirect
+        // - applies the correct plan immediately (no "Free confirm" modal)
+        const postCheckoutSessionId = (() => {
+            try { return localStorage.getItem('postCheckoutSessionId'); } catch { return null; }
+        })();
+
+        if (!postCheckoutSessionId) return;
+        if (!isAuthenticated || !user) return;
+        if (isFinalizingCheckout) return;
+
+        const finalize = async () => {
+            setIsFinalizingCheckout(true);
+            try {
+                // Get auth token for API call
+                const { auth: fbAuth } = await import('./firebaseConfig');
+                const token = fbAuth.currentUser ? await fbAuth.currentUser.getIdToken(true) : null;
+                if (!token) throw new Error('Not authenticated');
+
+                // Verify and apply plan immediately (server-side)
+                const resp = await fetch('/api/verifyCheckoutSession', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({ sessionId: postCheckoutSessionId }),
+                });
+
+                if (!resp.ok) {
+                    let msg = 'Failed to verify checkout';
+                    try {
+                        const j = await resp.json();
+                        msg = j?.message || j?.error || msg;
+                    } catch {}
+                    throw new Error(msg);
+                }
+
+                // Refresh user data from Firestore so UI has the updated plan
+                const { doc, getDoc } = await import('firebase/firestore');
+                const { db } = await import('./firebaseConfig');
+                const userRef = doc(db, 'users', user.id);
+                const userSnap = await getDoc(userRef);
+                if (userSnap.exists()) {
+                    const updatedUser = userSnap.data() as typeof user;
+                    await setUser(updatedUser);
+                }
+
+                // Clear only after successful verification so this is safe/reversible.
+                try {
+                    localStorage.removeItem('postCheckoutSessionId');
+                    localStorage.removeItem('paymentAttempt');
+                    localStorage.removeItem('pendingSignup');
+                } catch {}
+
+                // Start onboarding on the dashboard for the paid plan the user chose.
+                setOnboardingStep('creator');
+            } catch (err: any) {
+                console.error('Failed to finalize checkout session:', err);
+                // Keep postCheckoutSessionId so we can retry on next render/auth refresh.
+                showToast('We’re finalizing your subscription. If this doesn’t complete in a moment, refresh the page.', 'error');
+            } finally {
+                setIsFinalizingCheckout(false);
+            }
+        };
+
+        finalize();
+    }, [isAuthenticated, user, isFinalizingCheckout, setUser, showToast]);
 
     const handleOnboardingComplete = async () => {
         if (user) {
