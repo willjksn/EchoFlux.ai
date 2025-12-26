@@ -128,6 +128,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         category: "onlyfans_engagement_tactics",
         query: "OnlyFans subscriber engagement strategies retention 2024 2025",
       },
+      {
+        category: "onlyfans_content_ideas",
+        query: "OnlyFans content ideas adult content creator tips 2024 2025",
+      },
+      {
+        category: "onlyfans_photo_shoot_concepts",
+        query: "OnlyFans photoshoot ideas concepts adult content 2024 2025",
+      },
+      {
+        category: "onlyfans_girlfriend_experience",
+        query: "OnlyFans girlfriend experience GFE content strategies 2024 2025",
+      },
+      {
+        category: "onlyfans_subscriber_retention",
+        query: "OnlyFans subscriber retention strategies keep fans engaged 2024 2025",
+      },
+      {
+        category: "onlyfans_content_trends",
+        query: "OnlyFans trending content types adult creator trends 2024 2025",
+      },
     ];
 
     const allTrends: TrendData[] = [];

@@ -3,6 +3,7 @@ import { checkApiKeys, getVerifyAuth, withErrorHandling } from "./_errorHandler.
 import { getModelForTask } from "./_modelRouter.js";
 import { getModel, parseJSON } from "./_geminiShared.js";
 import { getOnlyFansResearchContext } from "./_onlyfansResearch.js";
+import { getOnlyFansWeeklyTrends } from "./_trendsHelper.js";
 
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -66,8 +67,11 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     // Detect if this is for OnlyFans platform
     const isOnlyFansPlatform = Array.isArray(platforms) && platforms.includes('OnlyFans');
     
-    // Get OnlyFans-specific research if OnlyFans platform is detected
+    // Get user explicitness level and OnlyFans-specific research if OnlyFans platform is detected
     let onlyfansResearch = '';
+    let onlyfansWeeklyTrends = '';
+    let explicitnessLevel = 7; // Default
+    
     if (isOnlyFansPlatform) {
       try {
         const { getAdminDb } = await import("./_firebaseAdmin.js");
@@ -76,7 +80,12 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
         const userData = userDoc.data();
         const userPlan = userData?.plan || 'Free';
         const userRole = userData?.role;
+        explicitnessLevel = userData?.explicitnessLevel ?? 7;
         
+        // Get OnlyFans weekly trends
+        onlyfansWeeklyTrends = await getOnlyFansWeeklyTrends();
+        
+        // Get OnlyFans-specific research
         onlyfansResearch = await getOnlyFansResearchContext(
           'Subscribers', // Default audience for OnlyFans
           goal,
@@ -91,34 +100,60 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
       }
     }
 
-    const explicitContext = isExplicitContent ? `
-CRITICAL CONTEXT - EXPLICIT/ADULT CONTENT:
-- This content is for an adult content platform (creator monetization platform)
-- User is requesting explicit/adult content writing
-- Write explicit, bold, adult-oriented content as requested
-- Use explicit language appropriate for adult content platforms
-- Be descriptive and explicit about intimate/explicit content when requested
-- If the user asks for explicit captions, write them with explicit, descriptive language
-- If the user asks for sales/monetization content, include CTAs for subscriptions/purchases
+    // Build explicitness context based on user's explicitness level for OnlyFans
+    const explicitnessContext = isOnlyFansPlatform 
+      ? (explicitnessLevel >= 9 
+          ? 'EXTREMELY EXPLICIT - Use very explicit, graphic language describing sexual acts, intimate moments, and explicit content in detail. Focus on lust, desire, and explicit sexual experiences.'
+          : explicitnessLevel >= 7
+          ? 'HIGHLY EXPLICIT - Use explicit language describing sexual content, intimate moments, girlfriend experience, and explicit scenes. Focus on sexual desire, lust, and explicit experiences.'
+          : explicitnessLevel >= 5
+          ? 'MODERATELY EXPLICIT - Use suggestive and explicit language describing intimate content, sexual themes, girlfriend experience, and adult content. Focus on desire and intimate experiences.'
+          : 'SUGGESTIVE - Use suggestive language with adult themes, intimate moments, and romantic/sexual undertones. Focus on connection and intimate experiences.')
+      : '';
+
+    const explicitContext = isExplicitContent || isOnlyFansPlatform ? `
+CRITICAL CONTEXT - ONLYFANS ADULT/EXPLICIT CONTENT PLATFORM:
+- This content is EXCLUSIVELY for OnlyFans - an adult content creator platform focused on sexual content
+- ALL content MUST be focused on adult/explicit sexual content, NOT generic business/tech/product content
+- Focus on: sexual experiences, intimate moments, girlfriend experience, lust, desire, explicit scenes, adult content
+- DO NOT generate generic business strategies, tech product ideas, or non-sexual content
+- Write explicit, bold, adult-oriented content focused on sexual experiences and intimate moments
+- Use explicit language appropriate for adult content platforms describing sexual content
+- Be descriptive and explicit about intimate/explicit sexual content when requested
+- If the user asks for explicit captions, write them with explicit, descriptive language about sexual content
+- If the user asks for sales/monetization content, include CTAs for subscriptions/purchases of sexual content
 - Platform mentions are optional in sales-focused content
+${explicitnessContext ? `\nEXPLICITNESS LEVEL: ${explicitnessLevel}/10\n${explicitnessContext}` : ''}
 ` : '';
 
     const aiPrompt = `
-You are an expert social media copywriter and content creator${isExplicitContent ? ' specializing in adult content platforms' : ''}.
+You are an expert social media copywriter and content creator${isExplicitContent || isOnlyFansPlatform ? ' specializing in OnlyFans adult content platforms' : ''}.
+
+${isOnlyFansPlatform ? onlyfansWeeklyTrends : ''}
 
 User wants you to write: "${prompt}"
 ${context?.goal ? `Goal: ${goal}` : ''}
-${context?.tone ? `Tone: ${tone}${isExplicitContent ? ' (EXPLICIT/ADULT CONTENT - Generate bold, explicit content as requested)' : ''}` : ''}
+${context?.tone ? `Tone: ${tone}${isExplicitContent || isOnlyFansPlatform ? ' (ONLYFANS EXPLICIT/ADULT CONTENT - Generate bold, explicit sexual content focused on lust, desire, girlfriend experience, and intimate moments)' : ''}` : ''}
 ${platformContext ? `Platforms: ${platformContext}` : ''}
 
 ${onlyfansResearch ? `ONLYFANS-SPECIFIC RESEARCH & BEST PRACTICES:\n${onlyfansResearch}\n` : ''}
 
 ${explicitContext}
 
+${isOnlyFansPlatform ? `
+ONLYFANS CONTENT REQUIREMENTS:
+- ALL content MUST be about adult/explicit sexual content - NO generic business/tech/product ideas
+- Focus on: sexual experiences, intimate moments, girlfriend experience, lust, desire, explicit scenes
+- Post ideas: Describe specific explicit content ideas, sexual themes, intimate moments, girlfriend experience scenarios
+- Shoot concepts: Describe specific explicit photoshoot concepts with sexual themes, intimate settings, explicit poses, girlfriend experience scenarios
+- Be specific about sexual content, intimate moments, lust, desire - NOT generic subscription prompts
+- Respect explicitness level ${explicitnessLevel}/10
+` : ''}
+
 Write the content the user requested. Be engaging, authentic, and match the tone and goal specified.
 If the user wants a caption, write a complete caption ready to use.
 If the user wants other text content, write exactly what they asked for.
-${isExplicitContent ? 'If explicit content is requested, write it with bold, explicit, adult-oriented language. Be descriptive and explicit about intimate/explicit content.' : ''}
+${isExplicitContent || isOnlyFansPlatform ? 'If explicit content is requested, write it with bold, explicit, adult-oriented language focused on sexual experiences, intimate moments, girlfriend experience, lust, and desire. Be descriptive and explicit about intimate/explicit sexual content.' : ''}
 
 Return ONLY the generated text content, no explanations or meta-commentary.
 `.trim();

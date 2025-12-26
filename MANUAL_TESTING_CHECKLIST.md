@@ -215,3 +215,4 @@ When you find issues, document them:
 ---
 
 **Testing Priority**: Focus on Authentication, Onboarding, Compose, Strategy, and Calendar first - these are the core user flows.
+

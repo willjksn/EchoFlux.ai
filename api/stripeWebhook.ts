@@ -14,9 +14,25 @@ if (!getApps().length) {
   });
 }
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+// Check STRIPE_USE_TEST_MODE toggle first, then select appropriate key
+// Set STRIPE_USE_TEST_MODE=true in Vercel to use test mode, false or unset for live mode
+const useTestMode = process.env.STRIPE_USE_TEST_MODE === 'true' || process.env.STRIPE_USE_TEST_MODE === '1';
+
+const stripeSecretKey = useTestMode
+  ? (process.env.STRIPE_SECRET_KEY_Test || process.env.STRIPE_SECRET_KEY)
+  : (process.env.STRIPE_SECRET_KEY_LIVE || process.env.STRIPE_SECRET_KEY);
+
+if (!stripeSecretKey) {
+  const mode = useTestMode ? 'test' : 'live';
+  throw new Error(`STRIPE_SECRET_KEY_${useTestMode ? 'Test' : 'LIVE'} or STRIPE_SECRET_KEY must be set for ${mode} mode`);
+}
+
+const stripe = new Stripe(stripeSecretKey, {
   apiVersion: '2024-06-20' as any, // Type assertion to handle Stripe types
 });
+
+// Log which mode is being used
+console.log(`Stripe webhook initialized in ${useTestMode ? 'TEST' : 'LIVE'} mode (STRIPE_USE_TEST_MODE=${process.env.STRIPE_USE_TEST_MODE || 'not set'})`);
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
@@ -57,6 +73,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             await userRef.set({
               plan: planName,
+              userType: 'Creator', // Ensure userType is set for onboarding flow
               stripeCustomerId: subscription.customer as string,
               stripeSubscriptionId: subscription.id,
               subscriptionStatus: subscription.status,
@@ -93,8 +110,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const planName = subscription.metadata?.planName || 'Free';
           const billingCycle = subscription.items.data[0]?.price.recurring?.interval === 'year' ? 'annual' : 'monthly';
 
-          const subscriptionData = subscription as Stripe.Subscription;
-          const periodEnd = subscriptionData.current_period_end;
+          const periodEnd = subscription.current_period_end;
           
           await userDoc.ref.set({
             plan: planName,

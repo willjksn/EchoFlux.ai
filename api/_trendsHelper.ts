@@ -65,3 +65,62 @@ KEY INSIGHTS FOR AI SUGGESTIONS:
   }
 }
 
+/**
+ * Helper function to get OnlyFans-specific weekly trends
+ * Filters trends to only include OnlyFans-related categories
+ */
+export async function getOnlyFansWeeklyTrends(): Promise<string> {
+  try {
+    const app = getAdminApp();
+    const db = getFirestore(app);
+    
+    const latestDoc = await db.collection("weekly_trends").doc("latest").get();
+    
+    if (!latestDoc.exists) {
+      return "OnlyFans trend data unavailable. Using general OnlyFans best practices.";
+    }
+
+    const data = latestDoc.data();
+    if (!data || !data.trends || !Array.isArray(data.trends)) {
+      return "OnlyFans trend data format invalid. Using general OnlyFans best practices.";
+    }
+
+    // Filter to only OnlyFans-related categories
+    const onlyfansTrends = data.trends.filter((trend: TrendData) => 
+      trend.category.toLowerCase().includes('onlyfans')
+    );
+
+    if (onlyfansTrends.length === 0) {
+      return "OnlyFans-specific trend data unavailable. Using general OnlyFans best practices.";
+    }
+
+    // Format OnlyFans trends for AI consumption
+    const formattedTrends = onlyfansTrends.map((trend: TrendData) => {
+      const results = trend.results
+        .slice(0, 3) // Top 3 results per category
+        .map((r, idx) => `${idx + 1}. ${r.title}\n   ${r.snippet}\n   Source: ${r.link}`)
+        .join("\n\n");
+      
+      return `\n${trend.category.toUpperCase().replace(/_/g, " ")}:\n${results}`;
+    }).join("\n\n");
+
+    return `
+CURRENT ONLYFANS-SPECIFIC TRENDS & BEST PRACTICES (Fetched: ${data.fetchedAt || "Unknown"}):
+${formattedTrends}
+
+KEY INSIGHTS FOR ONLYFANS CREATORS:
+- Stay current with OnlyFans platform updates and new features
+- Adapt content to trending OnlyFans content types and formats
+- Use proven OnlyFans monetization strategies and engagement tactics
+- Follow OnlyFans-specific best practices for subscriber retention
+- Consider OnlyFans content trends and what subscribers are responding to
+- Optimize content for OnlyFans platform preferences and subscriber behavior
+- Focus on adult/explicit content strategies, girlfriend experience, and sexual content monetization
+`;
+  } catch (error: any) {
+    console.error("[getOnlyFansWeeklyTrends] Error:", error);
+    return "OnlyFans trend data unavailable. Using general OnlyFans best practices.";
+  }
+}
+
+

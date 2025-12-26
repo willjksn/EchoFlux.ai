@@ -119,3 +119,4 @@ STRIPE_PRICE_AGENCY_ANNUALLY=price_1BCD890yza...
 - Check that you're using the correct Stripe account (test vs live)
 - Verify the price is active (not archived)
 
+

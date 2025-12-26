@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useAppContext } from './AppContext';
 import { SparklesIcon, RefreshIcon, XMarkIcon, CheckCircleIcon } from './icons/UIIcons';
-import { auth } from '../firebaseConfig';
+import { auth, db } from '../firebaseConfig';
+import { collection, addDoc, Timestamp } from 'firebase/firestore';
 
 export const ContentGapAnalysis: React.FC = () => {
     const { user, showToast } = useAppContext();
@@ -40,6 +41,18 @@ export const ContentGapAnalysis: React.FC = () => {
             if (data.success) {
                 setAnalysis(data);
                 setShowModal(true);
+                // Auto-save to history
+                try {
+                    await addDoc(collection(db, 'users', user.id, 'content_gap_analysis_history'), {
+                        type: 'gap_analysis',
+                        title: `Content Gap Analysis - ${new Date().toLocaleDateString()}`,
+                        data: data,
+                        createdAt: Timestamp.now(),
+                    });
+                } catch (saveError) {
+                    console.error('Failed to auto-save content gap analysis:', saveError);
+                    // Don't block showing the analysis if save fails
+                }
                 showToast('Content gap analysis complete!', 'success');
             }
         } catch (error: any) {
@@ -170,7 +183,28 @@ export const ContentGapAnalysis: React.FC = () => {
                             )}
                         </div>
 
-                        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+                        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+                            <button
+                                onClick={async () => {
+                                    if (analysis) {
+                                        try {
+                                            await addDoc(collection(db, 'users', user.id, 'content_gap_analysis_history'), {
+                                                type: 'gap_analysis',
+                                                title: `Content Gap Analysis - ${new Date().toLocaleDateString()}`,
+                                                data: analysis,
+                                                createdAt: Timestamp.now(),
+                                            });
+                                            showToast('Content gap analysis saved to history!', 'success');
+                                        } catch (error) {
+                                            console.error('Failed to save content gap analysis:', error);
+                                            showToast('Failed to save to history', 'error');
+                                        }
+                                    }
+                                }}
+                                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                            >
+                                Save
+                            </button>
                             <button
                                 onClick={() => setShowModal(false)}
                                 className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"

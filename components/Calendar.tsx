@@ -103,7 +103,7 @@ export const Calendar: React.FC = () => {
                     id: p.id,
                     status: p.status,
                     scheduledDate: p.scheduledDate,
-                    dateFormatted: new Date(p.scheduledDate).toLocaleString(),
+                    dateFormatted: p.scheduledDate ? new Date(p.scheduledDate).toLocaleString() : 'No date',
                     platforms: p.platforms,
                     hasMediaUrl: !!p.mediaUrl
                 })));
@@ -113,16 +113,22 @@ export const Calendar: React.FC = () => {
                 const currentMonth = currentDate.getMonth();
                 const currentYear = currentDate.getFullYear();
                 const draftInCurrentMonth = draftPosts.filter(p => {
+                    if (!p.scheduledDate) return false;
                     const postDate = new Date(p.scheduledDate);
                     return postDate.getMonth() === currentMonth && postDate.getFullYear() === currentYear;
                 });
                 const scheduledInCurrentMonth = scheduledPosts.filter(p => {
+                    if (!p.scheduledDate) return false;
                     const postDate = new Date(p.scheduledDate);
                     return postDate.getMonth() === currentMonth && postDate.getFullYear() === currentYear;
                 });
                 console.log('Calendar: Current month view - Draft:', draftInCurrentMonth.length, 'Scheduled:', scheduledInCurrentMonth.length, 'Month:', currentMonth + 1, 'Year:', currentYear);
                 if (draftPosts.length > 0) {
-                    console.log('Calendar: Draft post dates:', draftPosts.map(p => ({ id: p.id, date: new Date(p.scheduledDate).toLocaleDateString(), day: new Date(p.scheduledDate).getDate(), month: new Date(p.scheduledDate).getMonth() + 1 })));
+                    console.log('Calendar: Draft post dates:', draftPosts.map(p => {
+                        if (!p.scheduledDate) return { id: p.id, date: 'No date', day: 0, month: 0 };
+                        const date = new Date(p.scheduledDate);
+                        return { id: p.id, date: date.toLocaleDateString(), day: date.getDate(), month: date.getMonth() + 1 };
+                    }));
                 }
             }
         }
@@ -156,11 +162,20 @@ export const Calendar: React.FC = () => {
             return platforms.map((platform, idx) => {
                 const eventDate = post.scheduledDate || new Date().toISOString();
                 const parsedDate = new Date(eventDate);
+                // Determine type: 'Post' | 'Story' | 'Reel'
+                let eventType: 'Post' | 'Story' | 'Reel' = 'Post';
+                if (post.mediaType === 'video') {
+                    eventType = 'Reel';
+                } else if ((post as any).instagramPostType === 'Story') {
+                    eventType = 'Story';
+                } else if ((post as any).instagramPostType === 'Reel') {
+                    eventType = 'Reel';
+                }
                 return {
                     id: `post-${post.id}-${platform}-${idx}`,
                     title: post.content?.substring(0, 30) + '...' || 'Post',
                     date: eventDate,
-                    type: post.mediaType === 'video' ? 'Reel' : 'Post',
+                    type: eventType,
                     platform: platform,
                     status: post.status as 'Scheduled' | 'Published' | 'Draft',
                     thumbnail: post.mediaUrl || undefined,
@@ -500,7 +515,12 @@ export const Calendar: React.FC = () => {
                             // Check if this is a reminder
                             const isReminder = evt.id.startsWith('reminder-') || (evt as any).reminderType;
                             
-                            const statusColors = {
+                            const statusColors: Record<'Published' | 'Scheduled' | 'Draft' | 'In Review', {
+                                bg: string;
+                                border: string;
+                                dot: string;
+                                text: string;
+                            }> = {
                                 Published: {
                                     bg: 'bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30',
                                     border: 'border-l-4 border-green-500 dark:border-green-400',
@@ -513,11 +533,11 @@ export const Calendar: React.FC = () => {
                                     dot: 'bg-blue-500 dark:bg-blue-400',
                                     text: 'text-blue-700 dark:text-blue-300'
                                 },
-                                Ready: {
-                                    bg: 'bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-900/30 dark:to-yellow-900/30',
-                                    border: 'border-l-4 border-amber-500 dark:border-amber-400',
-                                    dot: 'bg-amber-500 dark:bg-amber-400',
-                                    text: 'text-amber-700 dark:text-amber-300'
+                                'In Review': {
+                                    bg: 'bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/30 dark:to-indigo-900/30',
+                                    border: 'border-l-4 border-purple-500 dark:border-purple-400',
+                                    dot: 'bg-purple-500 dark:bg-purple-400',
+                                    text: 'text-purple-700 dark:text-purple-300'
                                 },
                                 Draft: {
                                     bg: 'bg-gray-100 dark:bg-gray-700/50',
@@ -861,17 +881,17 @@ export const Calendar: React.FC = () => {
                                                 </div>
 
                                                 {/* Media Preview */}
-                                                {(associatedPost?.mediaUrl || evt.thumbnail) && (
+                                                {(associatedPost?.mediaUrl || ('thumbnail' in evt && evt.thumbnail)) && (
                                                     <div className="mb-3 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
                                                         {(associatedPost?.mediaType === 'video' || evt.type === 'Reel') ? (
                                                             <video 
-                                                                src={associatedPost?.mediaUrl || evt.thumbnail} 
+                                                                src={associatedPost?.mediaUrl || ('thumbnail' in evt ? evt.thumbnail : undefined)} 
                                                                 className="w-full h-32 object-cover bg-gray-100 dark:bg-gray-900"
                                                                 muted
                                                             />
                                                         ) : (
                                                             <img 
-                                                                src={associatedPost?.mediaUrl || evt.thumbnail} 
+                                                                src={associatedPost?.mediaUrl || ('thumbnail' in evt ? evt.thumbnail : undefined)} 
                                                                 alt="Post preview" 
                                                                 className="w-full h-32 object-cover bg-gray-100 dark:bg-gray-900" 
                                                             />
@@ -1406,7 +1426,7 @@ export const Calendar: React.FC = () => {
                                         <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Select one platform for this post</p>
                                         <div className="flex flex-wrap gap-2">
                                             {(Object.keys(platformIcons) as Platform[])
-                                                .filter(platform => platform !== 'OnlyFans')
+                                                .filter((platform): platform is Platform => platform !== 'OnlyFans' as any)
                                                 .map((platform) => {
                                                     // Check if this platform is in the original post
                                                     const originalPlatforms = selectedEvent.post?.platforms || [selectedEvent.event.platform];

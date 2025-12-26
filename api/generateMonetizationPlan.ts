@@ -3,7 +3,7 @@ import { checkApiKeys, getVerifyAuth, withErrorHandling } from "./_errorHandler.
 import { getModelForTask } from "./_modelRouter.js";
 import { parseJSON } from "./_geminiShared.js";
 import { getGoalFramework, getGoalSpecificCTAs, getGoalSpecificContentGuidance } from "./_goalFrameworks.js";
-import { getLatestTrends } from "./_trendsHelper.js";
+import { getLatestTrends, getOnlyFansWeeklyTrends } from "./_trendsHelper.js";
 import { getOnlyFansResearchContext } from "./_onlyfansResearch.js";
 
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
@@ -74,16 +74,27 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
       ? `Current subscriber count: ${subscriberCount}. ` 
       : "";
 
-    // Get goal-specific framework for Sales Conversion (primary OnlyFans goal)
-    const goalFramework = getGoalFramework('Sales Conversion');
-    
-    // Get latest trends from weekly Tavily updates
-    let currentTrends = '';
+    // Get user explicitness level from Firestore
+    let explicitnessLevel = 7; // Default to moderate-high
     try {
-      currentTrends = await getLatestTrends();
+      const { getAdminDb } = await import("./_firebaseAdmin.js");
+      const db = getAdminDb();
+      const userDoc = await db.collection("users").doc(user.uid).get();
+      if (userDoc.exists) {
+        const userData = userDoc.data();
+        explicitnessLevel = userData?.explicitnessLevel ?? 7;
+      }
     } catch (error) {
-      console.error('[generateMonetizationPlan] Error fetching trends:', error);
-      currentTrends = 'Trend data unavailable. Using general best practices.';
+      console.error('[generateMonetizationPlan] Error fetching explicitness level:', error);
+    }
+
+    // Get OnlyFans-specific weekly trends (not general trends)
+    let onlyfansWeeklyTrends = '';
+    try {
+      onlyfansWeeklyTrends = await getOnlyFansWeeklyTrends();
+    } catch (error) {
+      console.error('[generateMonetizationPlan] Error fetching OnlyFans weekly trends:', error);
+      onlyfansWeeklyTrends = 'OnlyFans trend data unavailable. Using general OnlyFans best practices.';
     }
 
     // Get OnlyFans-specific research (this is for OnlyFans monetization planning)
@@ -144,24 +155,44 @@ Use this analytics data to inform the monetization plan:
 `;
     }
 
+    // Build explicitness context based on user's explicitness level
+    const explicitnessContext = explicitnessLevel >= 9 
+      ? 'EXTREMELY EXPLICIT - Use very explicit, graphic language describing sexual acts, intimate moments, and explicit content in detail. Focus on lust, desire, and explicit sexual experiences.'
+      : explicitnessLevel >= 7
+      ? 'HIGHLY EXPLICIT - Use explicit language describing sexual content, intimate moments, girlfriend experience, and explicit scenes. Focus on sexual desire, lust, and explicit experiences.'
+      : explicitnessLevel >= 5
+      ? 'MODERATELY EXPLICIT - Use suggestive and explicit language describing intimate content, sexual themes, girlfriend experience, and adult content. Focus on desire and intimate experiences.'
+      : 'SUGGESTIVE - Use suggestive language with adult themes, intimate moments, and romantic/sexual undertones. Focus on connection and intimate experiences.';
+
     const prompt = `
-You are an expert monetization strategist for OnlyFans creators.
+You are an expert monetization strategist for OnlyFans creators specializing in adult/explicit content monetization.
 
-${goalFramework}
-
-${currentTrends}
+${onlyfansWeeklyTrends}
 
 ${onlyfansResearch ? `ONLYFANS-SPECIFIC RESEARCH & BEST PRACTICES:\n${onlyfansResearch}\n` : ''}
 
 ${analyticsContext ? analyticsContext : 'Note: No analytics data available. Use best practices for OnlyFans monetization.'}
 
-CRITICAL CONTEXT - EXPLICIT/ADULT CONTENT PLATFORM:
-- This monetization plan is for an adult content creator platform (OnlyFans)
-- Content must be explicit, adult-oriented, and describe actual explicit/intimate content
-- Focus on strategic monetization: balancing free engagement content with paid premium content
-- Help creators understand when to post free vs paid content, when to tease vs upsell
-- Prevent over-selling by balancing content types intelligently
-- PRIMARY GOAL: Sales Conversion - Every content idea should ultimately support revenue generation
+CRITICAL CONTEXT - ONLYFANS ADULT/EXPLICIT CONTENT PLATFORM:
+- This is EXCLUSIVELY for OnlyFans - an adult content creator platform focused on sexual content and intimate experiences
+- ALL content ideas MUST be focused on adult/explicit sexual content, NOT generic business/tech/product content
+- Content must describe actual explicit/intimate sexual content, girlfriend experience, lust, desire, and sexual experiences
+- Focus on: sexual experiences, intimate moments, girlfriend experience, lust, desire, explicit scenes, adult content monetization
+- DO NOT generate generic business strategies, tech product ideas, or non-sexual content
+- PRIMARY GOAL: Sales Conversion through sexual content - Every idea should support revenue from adult/explicit content
+
+EXPLICITNESS LEVEL: ${explicitnessLevel}/10
+${explicitnessContext}
+
+Content Focus Areas (ALL ideas must relate to these):
+- Sexual experiences and intimate moments
+- Girlfriend experience (GFE) content
+- Lust, desire, and sexual attraction
+- Explicit photosets and videos
+- Intimate conversations and interactions
+- Adult content themes and scenarios
+- Sexual fantasy fulfillment
+- Intimate connection building
 
 Creator Goals: ${goals.join(', ')}
 Content Preferences: ${contentPreferences || 'No specific preferences'}
@@ -212,15 +243,18 @@ Return ONLY valid JSON in this exact structure:
   "tips": ["2-3 actionable tips for maximizing monetization"]
 }
 
-IMPORTANT:
-- Make ideas SPECIFIC and explicit (describe actual content, not generic "subscribe" messages)
-- Engagement ideas should be FREE and build connection
-- Upsell ideas should TEASE premium content without being pushy
-- Retention ideas should reward existing subscribers
-- Conversion ideas should have clear CTAs but not be annoying
+CRITICAL REQUIREMENTS:
+- ALL ideas MUST be about adult/explicit sexual content - NO generic business/tech/product ideas
+- Make ideas SPECIFIC and explicit - describe actual sexual content, intimate moments, girlfriend experience, lust, desire
+- Engagement ideas should be FREE sexual content that builds intimate connection
+- Upsell ideas should TEASE explicit premium sexual content, girlfriend experience, intimate moments
+- Retention ideas should reward subscribers with exclusive sexual content, intimate experiences
+- Conversion ideas should offer specific sexual content, girlfriend experience, explicit scenes with clear CTAs
+- Focus on sexual experiences, lust, desire, intimate moments, girlfriend experience - NOT generic monetization
 - Distribute ideas across the week intelligently
 - Include warnings if balance might be problematic
-- Make descriptions detailed and actionable
+- Make descriptions detailed and actionable with explicit sexual content details
+- Respect explicitness level ${explicitnessLevel}/10: ${explicitnessContext}
 `;
 
     const result = await model.generateContent({

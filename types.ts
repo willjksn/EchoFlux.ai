@@ -670,6 +670,8 @@ export interface AppContextType {
   updateMessage: (id: string, data: Partial<Message>) => void;
   deleteMessage: (id: string) => void;
   categorizeAllMessages: () => void;
+  updatePost: (post: Post) => Promise<void>;
+  deletePost: (postId: string) => Promise<void>;
   openCRM: (user: { name: string; avatar: string }) => void;
   closeCRM: () => void;
   ensureCRMProfile: (user: { name: string; avatar: string }) => Promise<void>;

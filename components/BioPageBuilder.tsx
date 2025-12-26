@@ -399,10 +399,10 @@ export const BioPageBuilder: React.FC = () => {
     const handleAddLink = () => {
         if (!newLinkTitle || !newLinkUrl) return;
         
-        // Check link limit based on plan
-        const customLinksCount = (bioPage.customLinks || bioPage.links || []).length;
-        const socialLinksCount = (bioPage.socialLinks || []).length;
-        const totalLinks = customLinksCount + socialLinksCount;
+        // Check link limit based on plan - only count ACTIVE links
+        const customLinksCount = (bioPage.customLinks || bioPage.links || []).filter((l: BioLink) => l.isActive).length;
+        const socialLinksCount = (bioPage.socialLinks || []).filter((l: SocialBioLink) => l.isActive).length;
+        const totalActiveLinks = customLinksCount + socialLinksCount;
         
         // Get plan limits
         let linkLimit: number | null = null;
@@ -410,8 +410,8 @@ export const BioPageBuilder: React.FC = () => {
         else if (user?.plan === 'Pro') linkLimit = 5;
         else if (user?.plan === 'Elite' || user?.plan === 'Agency') linkLimit = null; // Unlimited
         
-        if (linkLimit !== null && totalLinks >= linkLimit) {
-            showToast(`Link limit reached. ${user?.plan === 'Free' ? 'Upgrade to Pro for 5 links or Elite for unlimited.' : 'Upgrade to Elite for unlimited links.'}`, 'error');
+        if (linkLimit !== null && totalActiveLinks >= linkLimit) {
+            showToast(`Link limit reached (${totalActiveLinks}/${linkLimit}). ${user?.plan === 'Free' ? 'Upgrade to Pro for 5 links or Elite for unlimited.' : 'Upgrade to Elite for unlimited links.'}`, 'error');
             return;
         }
         
@@ -448,10 +448,10 @@ export const BioPageBuilder: React.FC = () => {
     const autoPopulateSocialLinks = () => {
         if (!socialAccounts) return;
         
-        // Check link limit based on plan
-        const customLinksCount = (bioPage.customLinks || bioPage.links || []).length;
-        const socialLinksCount = (bioPage.socialLinks || []).length;
-        const totalLinks = customLinksCount + socialLinksCount;
+        // Check link limit based on plan - only count ACTIVE links
+        const customLinksCount = (bioPage.customLinks || bioPage.links || []).filter((l: BioLink) => l.isActive).length;
+        const socialLinksCount = (bioPage.socialLinks || []).filter((l: SocialBioLink) => l.isActive).length;
+        const totalActiveLinks = customLinksCount + socialLinksCount;
         
         // Get plan limits
         let linkLimit: number | null = null;
@@ -469,8 +469,8 @@ export const BioPageBuilder: React.FC = () => {
                 // Check if this social link already exists
                 const existingLinks = bioPage.socialLinks || [];
                 if (!existingLinks.find(l => l.platform === platform)) {
-                    // Check limit before adding
-                    if (linkLimit === null || (totalLinks + newSocialLinks.length) < linkLimit) {
+                    // Check limit before adding - only count active links
+                    if (linkLimit === null || (totalActiveLinks + newSocialLinks.length) < linkLimit) {
                         newSocialLinks.push({
                             id: `social-${platform}-${Date.now()}`,
                             platform: platform as Platform,
@@ -491,8 +491,8 @@ export const BioPageBuilder: React.FC = () => {
                 socialLinks: [...(bioPage.socialLinks || []), ...newSocialLinks] 
             });
             showToast(`Added ${newSocialLinks.length} social link(s)!`, 'success');
-        } else if (linkLimit !== null && totalLinks >= linkLimit) {
-            showToast(`Link limit reached. ${user?.plan === 'Free' ? 'Upgrade to Pro for 5 links or Elite for unlimited.' : 'Upgrade to Elite for unlimited links.'}`, 'error');
+        } else if (linkLimit !== null && totalActiveLinks >= linkLimit) {
+            showToast(`Link limit reached (${totalActiveLinks}/${linkLimit}). ${user?.plan === 'Free' ? 'Upgrade to Pro for 5 links or Elite for unlimited.' : 'Upgrade to Elite for unlimited links.'}`, 'error');
         } else {
             showToast('No new social accounts to add. Connect accounts in Settings.', 'info');
         }
@@ -718,6 +718,38 @@ export const BioPageBuilder: React.FC = () => {
         try {
             // Normalize username before saving (remove @, lowercase, trim)
             const normalizedUsername = bioPage.username.replace('@', '').toLowerCase().trim();
+            
+            if (!normalizedUsername) {
+                showToast('Username cannot be empty', 'error');
+                setIsSaving(false);
+                return;
+            }
+            
+            // Check username availability (uniqueness across all users)
+            const auth = (await import('../firebaseConfig')).auth;
+            const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+            
+            const availabilityResponse = await fetch(
+                `/api/checkUsernameAvailability?username=${encodeURIComponent(normalizedUsername)}&userId=${user?.id || ''}`,
+                {
+                    headers: {
+                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                }
+            );
+            
+            if (!availabilityResponse.ok) {
+                throw new Error('Failed to check username availability');
+            }
+            
+            const availabilityData = await availabilityResponse.json();
+            
+            if (!availabilityData.available) {
+                showToast(availabilityData.message || 'This username is already taken. Please choose a different username.', 'error');
+                setIsSaving(false);
+                return;
+            }
+            
             const normalizedBioPage = {
                 ...bioPage,
                 username: normalizedUsername,
@@ -733,9 +765,9 @@ export const BioPageBuilder: React.FC = () => {
             } catch {
                 showToast(`Bio page published! Your URL: ${bioPageUrl}`, 'success');
             }
-        } catch (e) {
+        } catch (e: any) {
             console.error('Error publishing bio page:', e);
-            showToast('Failed to publish bio page', 'error');
+            showToast(e.message || 'Failed to publish bio page', 'error');
         } finally {
             setIsSaving(false);
         }
@@ -851,6 +883,9 @@ export const BioPageBuilder: React.FC = () => {
                                         placeholder="@username"
                                         className="w-full p-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
                                     />
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        Username must be unique. Your bio page will be at: {window.location.origin}/{bioPage.username ? bioPage.username.replace('@', '').toLowerCase().trim() : 'username'}
+                                    </p>
                                 </div>
                             </div>
                             <div className="relative">
@@ -980,7 +1015,24 @@ export const BioPageBuilder: React.FC = () => {
 
                 {/* Links Section */}
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm">
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Links</h3>
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Links</h3>
+                        {(() => {
+                            const customLinksCount = (bioPage.customLinks || bioPage.links || []).filter((l: BioLink) => l.isActive).length;
+                            const socialLinksCount = (bioPage.socialLinks || []).filter((l: SocialBioLink) => l.isActive).length;
+                            const totalActiveLinks = customLinksCount + socialLinksCount;
+                            let linkLimit: number | null = null;
+                            if (user?.plan === 'Free') linkLimit = 1;
+                            else if (user?.plan === 'Pro') linkLimit = 5;
+                            else if (user?.plan === 'Elite' || user?.plan === 'Agency') linkLimit = null;
+                            
+                            return (
+                                <span className="text-sm text-gray-500 dark:text-gray-400">
+                                    {linkLimit !== null ? `${totalActiveLinks}/${linkLimit} links` : `${totalActiveLinks} links (unlimited)`}
+                                </span>
+                            );
+                        })()}
+                    </div>
                     
                     {/* Social Links Section */}
                     <div className="mb-6">

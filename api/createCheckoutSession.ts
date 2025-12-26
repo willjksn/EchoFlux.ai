@@ -3,38 +3,136 @@ import Stripe from 'stripe';
 import { verifyAuth } from './verifyAuth.js';
 
 // Initialize Stripe only if secret key is available
+// Environment variable priority (for testing/sandbox support):
+// 1. STRIPE_USE_TEST_MODE=true/false - Master toggle to switch between test and live mode
+//    - Set to "true" to use test keys and test Price IDs
+//    - Set to "false" or leave unset to use live keys and live Price IDs
+// 2. STRIPE_SECRET_KEY_Test (for testing/sandbox)
+// 3. STRIPE_SECRET_KEY_LIVE (production)
+// 4. STRIPE_SECRET_KEY (fallback)
+// - STRIPE_PUBLISHABLE_KEY_LIVE (production) or STRIPE_PUBLISHABLE_KEY (fallback) - for frontend use if needed
+// - STRIPE_PUBLISHABLE_KEY_Test - for test mode
+
+// Check master toggle first (optional - if not set, use original behavior)
+// Make comparison more robust - handle various string formats
+const stripeUseTestModeEnv = (process.env.STRIPE_USE_TEST_MODE || '').toString().toLowerCase().trim();
+const useTestMode = stripeUseTestModeEnv === 'true' || stripeUseTestModeEnv === '1' || stripeUseTestModeEnv === 'yes';
+
+// Select key with priority matching original working behavior:
+// Original: STRIPE_SECRET_KEY_LIVE || STRIPE_SECRET_KEY
+// Now: If STRIPE_USE_TEST_MODE=true, MUST use test key (no fallback to live)
+//      Otherwise use original logic
+let stripeSecretKey: string | null = null;
+if (useTestMode) {
+  // Test mode: only use test key, no fallback
+  stripeSecretKey = process.env.STRIPE_SECRET_KEY_Test || null;
+} else {
+  // Live mode: use original logic
+  stripeSecretKey = process.env.STRIPE_SECRET_KEY_LIVE || process.env.STRIPE_SECRET_KEY || null;
+}
+
+// If we have a key, verify it matches the expected mode
+// If STRIPE_USE_TEST_MODE is set but key doesn't match, warn and potentially override
+if (stripeSecretKey && useTestMode && !stripeSecretKey.startsWith('sk_test_')) {
+  console.error(`⚠️ CRITICAL: STRIPE_USE_TEST_MODE is true but key starts with ${stripeSecretKey.substring(0, 7)}... (not sk_test_)`);
+  console.error(`   This will cause test cards to fail! Setting stripeSecretKey to null to force error.`);
+  stripeSecretKey = null; // Force error to prevent using wrong key
+}
+
+// Determine if using test or live keys based on actual key format (most reliable)
+const isUsingTestKey = stripeSecretKey?.startsWith('sk_test_') === true;
+const isUsingLiveKey = stripeSecretKey?.startsWith('sk_live_') === true;
+
 let stripe: Stripe | null = null;
-if (process.env.STRIPE_SECRET_KEY) {
+if (stripeSecretKey) {
   try {
-    stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+    stripe = new Stripe(stripeSecretKey, {
       apiVersion: '2024-06-20' as Stripe.LatestApiVersion,
     });
+    // Log which mode is being used with detailed info
+    console.log(`Stripe initialized in ${useTestMode ? 'TEST' : 'LIVE'} mode`);
+    console.log(`  STRIPE_USE_TEST_MODE env var: "${process.env.STRIPE_USE_TEST_MODE}" (type: ${typeof process.env.STRIPE_USE_TEST_MODE})`);
+    console.log(`  useTestMode calculated: ${useTestMode}`);
+    console.log(`  Using key: ${stripeSecretKey ? (stripeSecretKey.substring(0, 12) + '...') : 'none'}`);
+    console.log(`  Key type detected: ${stripeSecretKey?.startsWith('sk_test_') ? 'test' : stripeSecretKey?.startsWith('sk_live_') ? 'live' : 'unknown'}`);
+    console.log(`  isUsingTestKey: ${isUsingTestKey}, isUsingLiveKey: ${isUsingLiveKey}`);
+    
+    // Warn if there's a mismatch
+    if (useTestMode && !stripeSecretKey?.startsWith('sk_test_')) {
+      console.warn(`⚠️ WARNING: STRIPE_USE_TEST_MODE=true but using ${stripeSecretKey?.startsWith('sk_live_') ? 'LIVE' : 'unknown'} key!`);
+      console.warn(`   This will cause test cards to fail. Check your STRIPE_SECRET_KEY_Test environment variable.`);
+    }
   } catch (error) {
     console.error('Failed to initialize Stripe:', error);
   }
 }
 
-// Map plan names to Stripe Price IDs (you'll need to create these in Stripe Dashboard)
+// Helper function to get Price ID with proper priority based on mode toggle
+const getPriceId = (planName: string, cycle: 'monthly' | 'annually'): string => {
+  const suffix = cycle === 'monthly' ? 'MONTHLY' : 'ANNUALLY';
+  const envVarBase = `STRIPE_PRICE_${planName.toUpperCase()}_${suffix}`;
+  
+  let priceId = '';
+  let source = '';
+  
+  // Simplified logic matching original behavior:
+  // If using test key, prefer test Price IDs
+  // Otherwise, use original behavior: prefer _LIVE if set, otherwise regular (no _LIVE suffix)
+  if (isUsingTestKey) {
+    priceId = process.env[`${envVarBase}_Test`] || process.env[envVarBase] || '';
+    source = priceId ? (process.env[`${envVarBase}_Test`] ? `${envVarBase}_Test` : envVarBase) : 'none';
+  } else {
+    // Original behavior: STRIPE_PRICE_PRO_MONTHLY (or STRIPE_PRICE_PRO_MONTHLY_LIVE if set)
+    priceId = process.env[`${envVarBase}_LIVE`] || process.env[envVarBase] || '';
+    source = priceId ? (process.env[`${envVarBase}_LIVE`] ? `${envVarBase}_LIVE` : envVarBase) : 'none';
+  }
+  
+  // Log Price ID selection for debugging
+  if (priceId) {
+    console.log(`Price ID for ${planName} ${cycle}: ${priceId.substring(0, 20)}... (from ${source})`);
+    
+    // Validate Price ID format
+    // Test Price IDs typically start with "price_" (no "1" after "price_")
+    // Live Price IDs start with "price_1"
+    const isTestPriceId = priceId.startsWith('price_') && !priceId.startsWith('price_1');
+    const isLivePriceId = priceId.startsWith('price_1');
+    
+    // Warn if there's a mismatch (but allow it since Stripe format can vary)
+    if ((useTestMode || isUsingTestKey) && isLivePriceId) {
+      console.warn(`⚠️ WARNING: Using live Price ID format in test mode! Price ID: ${priceId.substring(0, 20)}...`);
+      console.warn(`   Make sure this Price ID exists in your test Stripe account.`);
+    } else if (isUsingLiveKey && isTestPriceId) {
+      console.warn(`⚠️ WARNING: Using test Price ID format in live mode! Price ID: ${priceId.substring(0, 20)}...`);
+      console.warn(`   Make sure this Price ID exists in your live Stripe account.`);
+    }
+  } else {
+    console.warn(`⚠️ No Price ID found for ${planName} ${cycle} (checked ${source})`);
+  }
+  
+  return priceId;
+};
+
+// Map plan names to Stripe Price IDs
 const PLAN_PRICE_IDS: Record<string, { monthly: string; annually: string }> = {
   Caption: {
-    monthly: process.env.STRIPE_PRICE_CAPTION_MONTHLY || '',
-    annually: process.env.STRIPE_PRICE_CAPTION_ANNUALLY || '',
+    monthly: getPriceId('Caption', 'monthly'),
+    annually: getPriceId('Caption', 'annually'),
   },
   OnlyFansStudio: {
-    monthly: process.env.STRIPE_PRICE_ONLYFANS_MONTHLY || '',
-    annually: process.env.STRIPE_PRICE_ONLYFANS_ANNUALLY || '',
+    monthly: getPriceId('OnlyFansStudio', 'monthly'),
+    annually: getPriceId('OnlyFansStudio', 'annually'),
   },
   Pro: {
-    monthly: process.env.STRIPE_PRICE_PRO_MONTHLY || '',
-    annually: process.env.STRIPE_PRICE_PRO_ANNUALLY || '',
+    monthly: getPriceId('Pro', 'monthly'),
+    annually: getPriceId('Pro', 'annually'),
   },
   Elite: {
-    monthly: process.env.STRIPE_PRICE_ELITE_MONTHLY || '',
-    annually: process.env.STRIPE_PRICE_ELITE_ANNUALLY || '',
+    monthly: getPriceId('Elite', 'monthly'),
+    annually: getPriceId('Elite', 'annually'),
   },
   Agency: {
-    monthly: process.env.STRIPE_PRICE_AGENCY_MONTHLY || '',
-    annually: process.env.STRIPE_PRICE_AGENCY_ANNUALLY || '',
+    monthly: getPriceId('Agency', 'monthly'),
+    annually: getPriceId('Agency', 'annually'),
   },
 };
 
@@ -45,15 +143,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     // Check if Stripe is configured
-    if (!stripe) {
-      console.error('STRIPE_SECRET_KEY not configured');
-      return res.status(500).json({ 
-        error: 'Payment system not configured',
-        message: 'Stripe payment system is not configured. Please ensure STRIPE_SECRET_KEY is set in your environment variables. If you are the site administrator, check your deployment settings (Vercel, etc.) and add the Stripe secret key. If you are a user, please contact support.',
-        details: process.env.NODE_ENV === 'development' 
-          ? 'Missing STRIPE_SECRET_KEY environment variable. See STRIPE_SETUP_GUIDE.md for setup instructions.'
-          : undefined
-      });
+    if (!stripe || !stripeSecretKey) {
+      if (useTestMode) {
+        console.error('STRIPE_USE_TEST_MODE is true but STRIPE_SECRET_KEY_Test is not set!');
+        return res.status(500).json({ 
+          error: 'Payment system not configured',
+          message: 'Stripe test mode is enabled but STRIPE_SECRET_KEY_Test is not configured. Please set STRIPE_SECRET_KEY_Test in your Vercel environment variables, or set STRIPE_USE_TEST_MODE=false to use live mode.',
+          details: 'Test mode requires STRIPE_SECRET_KEY_Test to be set. Check your Vercel environment variables.'
+        });
+      } else {
+        console.error('STRIPE_SECRET_KEY_LIVE or STRIPE_SECRET_KEY not configured');
+        return res.status(500).json({ 
+          error: 'Payment system not configured',
+          message: 'Stripe payment system is not configured. Please ensure STRIPE_SECRET_KEY_LIVE (or STRIPE_SECRET_KEY) is set in your environment variables. If you are the site administrator, check your deployment settings (Vercel, etc.) and add the Stripe secret key. If you are a user, please contact support.',
+          details: process.env.NODE_ENV === 'development' 
+            ? 'Missing STRIPE_SECRET_KEY_LIVE or STRIPE_SECRET_KEY environment variable. See STRIPE_SETUP_GUIDE.md for setup instructions.'
+            : undefined
+        });
+      }
     }
 
     // Verify authentication
@@ -90,12 +197,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     if (!priceId || priceId.trim() === '') {
       const cycleDisplay = isAnnual ? 'annual' : 'monthly';
+      const suffix = isAnnual ? 'ANNUALLY' : 'MONTHLY';
+      const envVarBase = `STRIPE_PRICE_${planName.toUpperCase()}_${suffix}`;
+      
+      // Determine which env var to suggest based on mode
+      let suggestedEnvVar = envVarBase;
+      if (useTestMode || isUsingTestKey) {
+        suggestedEnvVar = `${envVarBase}_Test`;
+      } else if (isUsingLiveKey) {
+        suggestedEnvVar = `${envVarBase}_LIVE`;
+      }
+      
+      // Determine mode status for error message
+      let modeStatus = 'unknown mode';
+      if (useTestMode) {
+        modeStatus = 'test mode (STRIPE_USE_TEST_MODE=true)';
+      } else if (isUsingTestKey) {
+        modeStatus = 'test mode (detected from test key)';
+      } else if (isUsingLiveKey) {
+        modeStatus = 'live mode';
+      } else if (stripeSecretKey) {
+        modeStatus = stripeSecretKey.startsWith('sk_test_') ? 'test mode (detected from key prefix)' : 
+                     stripeSecretKey.startsWith('sk_live_') ? 'live mode (detected from key prefix)' : 
+                     'unknown mode (key format unrecognized)';
+      }
+      
       console.error(`Missing Price ID for ${planName} ${cycleDisplay}. Check environment variables.`);
-      console.error(`Expected env var: STRIPE_PRICE_${planName.toUpperCase()}_${isAnnual ? 'ANNUALLY' : 'MONTHLY'}`);
+      console.error(`Expected env var: ${suggestedEnvVar} (or ${envVarBase})`);
+      console.error(`Current mode: ${modeStatus}`);
+      console.error(`STRIPE_USE_TEST_MODE: ${process.env.STRIPE_USE_TEST_MODE || 'not set'}`);
+      console.error(`Using key: ${stripeSecretKey ? (stripeSecretKey.substring(0, 10) + '...') : 'none'}`);
       return res.status(500).json({ 
         error: 'Payment configuration error',
         message: `Stripe Price ID not configured for ${planName} ${cycleDisplay} plan. Please contact support or check STRIPE_SETUP_GUIDE.md for setup instructions.`,
-        details: `Missing environment variable: STRIPE_PRICE_${planName.toUpperCase()}_${isAnnual ? 'ANNUALLY' : 'MONTHLY'}`
+        details: `Missing environment variable: ${suggestedEnvVar} (or ${envVarBase}). Currently using ${modeStatus}.`
       });
     }
 
@@ -117,7 +252,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         billingCycle,
         userType: 'Creator', // Default to Creator for now
       },
-      success_url: `${req.headers.origin || process.env.NEXT_PUBLIC_APP_URL || 'https://engagesuite.ai'}/pricing?success=true&session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${req.headers.origin || process.env.NEXT_PUBLIC_APP_URL || 'https://engagesuite.ai'}/dashboard?payment=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${req.headers.origin || process.env.NEXT_PUBLIC_APP_URL || 'https://engagesuite.ai'}/pricing?canceled=true`,
       allow_promotion_codes: true, // Users can enter promotion codes directly in Stripe Checkout
     };
@@ -162,18 +297,55 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Provide more specific error messages
       let errorMessage = stripeError.message || 'Failed to create checkout session';
       if (stripeError.type === 'StripeInvalidRequestError') {
-        if (stripeError.message?.includes('No such price')) {
-          errorMessage = `Invalid Price ID: ${priceId}. Please check your Stripe Price IDs in environment variables.`;
+        if (stripeError.message?.includes('No such price') || stripeError.message?.includes('Invalid price')) {
+          const cycleDisplay = isAnnual ? 'annual' : 'monthly';
+          const suffix = isAnnual ? 'ANNUALLY' : 'MONTHLY';
+          const envVarBase = `STRIPE_PRICE_${planName.toUpperCase()}_${suffix}`;
+          
+          // Determine which env var to suggest based on mode
+          let suggestedEnvVar = envVarBase;
+          if (useTestMode || isUsingTestKey) {
+            suggestedEnvVar = `${envVarBase}_Test`;
+          } else if (isUsingLiveKey) {
+            suggestedEnvVar = `${envVarBase}_LIVE`;
+          }
+          
+          // Determine mode status for error message
+          let modeStatus = 'unknown mode';
+          if (useTestMode) {
+            modeStatus = 'test mode (STRIPE_USE_TEST_MODE=true)';
+          } else if (isUsingTestKey) {
+            modeStatus = 'test mode (detected from test key)';
+          } else if (isUsingLiveKey) {
+            modeStatus = 'live mode';
+          } else if (stripeSecretKey) {
+            modeStatus = stripeSecretKey.startsWith('sk_test_') ? 'test mode (detected from key prefix)' : 
+                         stripeSecretKey.startsWith('sk_live_') ? 'live mode (detected from key prefix)' : 
+                         'unknown mode (key format unrecognized)';
+          }
+          
+          errorMessage = `Invalid Price ID for ${planName} ${cycleDisplay} plan: ${priceId}. This Price ID doesn't exist in your Stripe account. Please check your Stripe Dashboard and update the ${suggestedEnvVar} (or ${envVarBase}) environment variable with a valid Price ID. Currently using ${modeStatus} - make sure your Price IDs match (test Price IDs with test keys, live Price IDs with live keys).`;
         } else if (stripeError.message?.includes('Invalid API Key')) {
-          errorMessage = 'Invalid Stripe API key. Please check your STRIPE_SECRET_KEY environment variable.';
+          errorMessage = 'Invalid Stripe API key. Please check your STRIPE_SECRET_KEY_LIVE (or STRIPE_SECRET_KEY) environment variable. Ensure you are using live API keys with live Price IDs, or test API keys with test Price IDs.';
         } else if (stripeError.param) {
           errorMessage = `Invalid parameter: ${stripeError.param}. ${stripeError.message}`;
         }
       } else if (stripeError.type === 'StripeAuthenticationError') {
-        errorMessage = 'Stripe authentication failed. Please check your STRIPE_SECRET_KEY environment variable.';
+        errorMessage = 'Stripe authentication failed. Please check your STRIPE_SECRET_KEY_LIVE (or STRIPE_SECRET_KEY) environment variable.';
       } else if (stripeError.type === 'StripeAPIError') {
         errorMessage = `Stripe API error: ${stripeError.message}`;
       }
+      
+      // Log additional context for debugging
+      console.error('Checkout session creation failed:', {
+        planName,
+        billingCycle,
+        isAnnual,
+        priceId,
+        errorType: stripeError.type,
+        errorCode: stripeError.code,
+        errorMessage: stripeError.message,
+      });
       
       return res.status(500).json({
         error: 'Failed to create checkout session',

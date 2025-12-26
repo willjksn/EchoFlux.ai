@@ -4,9 +4,10 @@ import { verifyAuth } from "./verifyAuth.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { getModelForTask } from "./_modelRouter.js";
 import { getGoalFramework, getGoalSpecificCTAs, getGoalSpecificContentGuidance } from "./_goalFrameworks.js";
-import { getLatestTrends } from "./_trendsHelper.js";
+import { getLatestTrends, getOnlyFansWeeklyTrends } from "./_trendsHelper.js";
 import { researchNicheStrategy } from "./_nicheResearch.js";
 import { canGenerateStrategy, recordStrategyGeneration } from "./_strategyUsage.js";
+import { getOnlyFansResearchContext } from "./_onlyfansResearch.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -56,16 +57,74 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     // Use strategy task type for better model routing
     const model = await getModelForTask("strategy", authUser.uid);
     
-    const durationWeeks = duration ? parseInt(duration.replace(/\D/g, '')) || 4 : 4;
+    // Parse duration - ensure it's a number
+    let durationWeeks = 4; // default
+    if (duration !== undefined && duration !== null) {
+      const parsed = parseInt(String(duration).replace(/\D/g, ''));
+      if (!isNaN(parsed) && parsed > 0) {
+        durationWeeks = parsed;
+      }
+    }
     const platforms = platformFocus && platformFocus !== 'Mixed / All' 
       ? [platformFocus] 
       : ['Instagram', 'TikTok', 'X', 'LinkedIn', 'Facebook', 'Threads', 'YouTube', 'Pinterest'];
+    
+    // Detect if this is for OnlyFans platform
+    const isOnlyFansPlatform = platformFocus === 'OnlyFans' || 
+                               (Array.isArray(platforms) && platforms.includes('OnlyFans')) ||
+                               niche?.toLowerCase().includes('onlyfans') ||
+                               niche?.toLowerCase().includes('adult content creator');
     
     // Detect explicit content context
     const isExplicitContent = tone === 'Explicit/Adult Content' || 
                              tone === 'Explicit' ||
                              tone === 'Sexy / Explicit' ||
-                             tone === 'Sexy / Bold';
+                             tone === 'Sexy / Bold' ||
+                             isOnlyFansPlatform;
+
+    // Get user explicitness level and OnlyFans-specific research if OnlyFans platform
+    let explicitnessLevel = 7; // Default
+    let onlyfansWeeklyTrends = '';
+    let onlyfansResearch = '';
+    
+    if (isOnlyFansPlatform) {
+      try {
+        explicitnessLevel = userData?.explicitnessLevel ?? 7;
+        
+        // Get OnlyFans weekly trends with timeout
+        try {
+          const trendsPromise = getOnlyFansWeeklyTrends();
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('OnlyFans trends timeout')), 10000) // 10 second timeout
+          );
+          onlyfansWeeklyTrends = await Promise.race([trendsPromise, timeoutPromise]) as string;
+        } catch (error) {
+          console.error('[generateContentStrategy] Error fetching OnlyFans trends:', error);
+        }
+        
+        // Get OnlyFans-specific research with timeout
+        try {
+          const researchPromise = getOnlyFansResearchContext(
+            audience || 'Subscribers',
+            goal || 'Sales Conversion',
+            authUser.uid,
+            userPlan,
+            userRole
+          );
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('OnlyFans research timeout')), 15000) // 15 second timeout
+          );
+          onlyfansResearch = await Promise.race([researchPromise, timeoutPromise]) as string;
+          console.log('[generateContentStrategy] OnlyFans research context fetched');
+        } catch (error) {
+          console.error('[generateContentStrategy] Error fetching OnlyFans research:', error);
+          // Continue without OnlyFans research - not critical
+        }
+      } catch (error) {
+        console.error('[generateContentStrategy] Error in OnlyFans platform setup:', error);
+        // Continue without OnlyFans research - not critical
+      }
+    }
 
     // Build analytics context for AI
     let analyticsContext = '';
@@ -93,48 +152,98 @@ Use this analytics data to inform your strategy:
 `;
     }
 
+    // Build explicitness context based on user's explicitness level for OnlyFans
+    const explicitnessContext = isOnlyFansPlatform 
+      ? (explicitnessLevel >= 9 
+          ? 'EXTREMELY EXPLICIT - Use very explicit, graphic language describing sexual acts, intimate moments, and explicit content in detail. Focus on lust, desire, and explicit sexual experiences.'
+          : explicitnessLevel >= 7
+          ? 'HIGHLY EXPLICIT - Use explicit language describing sexual content, intimate moments, girlfriend experience, and explicit scenes. Focus on sexual desire, lust, and explicit experiences.'
+          : explicitnessLevel >= 5
+          ? 'MODERATELY EXPLICIT - Use suggestive and explicit language describing intimate content, sexual themes, girlfriend experience, and adult content. Focus on desire and intimate experiences.'
+          : 'SUGGESTIVE - Use suggestive language with adult themes, intimate moments, and romantic/sexual undertones. Focus on connection and intimate experiences.')
+      : '';
+
     // Build explicit content context for AI
-    const explicitContentContext = isExplicitContent ? `
-CRITICAL CONTEXT - EXPLICIT/ADULT CONTENT PLATFORM:
-- This content strategy is for an adult content creator platform (creator monetization platform)
-- Content must be explicit, adult-oriented, and describe actual explicit/intimate content
-- Topics should be SPECIFIC explicit content ideas (not just "subscribe" prompts):
-  * Describe specific intimate scenes, poses, outfits, settings, moods
-  * Be explicit about what content will be shown (not generic subscription messages)
-  * Focus on specific explicit themes: intimate moments, behind-the-scenes of explicit shoots, specific content types
-- Captions should DESCRIBE the explicit content shown, not just promote subscriptions
-- Image/video ideas should suggest SPECIFIC explicit visual concepts:
-  * Describe specific poses, outfits, settings, lighting, moods for explicit content
-  * Be detailed about what explicit/intimate content will be created
-  * Focus on variety: different themes, settings, outfits, poses for explicit content
-- Content should focus on creating explicit, descriptive content that shows actual intimate/explicit moments
-- Use bold, direct language that describes explicit content in detail
-- Include themes like: specific intimate scenes, explicit photosets with details, behind-the-scenes of explicit content creation, specific explicit video concepts
-- Avoid generic "subscribe" topics - create specific, explicit content ideas that describe what will be shown
+    const explicitContentContext = isExplicitContent || isOnlyFansPlatform ? `
+CRITICAL CONTEXT - ONLYFANS ADULT/EXPLICIT CONTENT PLATFORM:
+- This content strategy is EXCLUSIVELY for OnlyFans - an adult content creator platform focused on sexual content
+- ALL content ideas MUST be focused on adult/explicit sexual content, NOT generic business/tech/product content
+- Focus on: sexual experiences, intimate moments, girlfriend experience, lust, desire, explicit scenes, adult content
+- DO NOT generate generic business strategies, tech product ideas, or non-sexual content
+- Topics should be SPECIFIC explicit sexual content ideas (not just "subscribe" prompts):
+  * Describe specific intimate sexual scenes, poses, outfits, settings, moods, girlfriend experience scenarios
+  * Be explicit about what sexual content will be shown (not generic subscription messages)
+  * Focus on specific explicit themes: intimate moments, sexual experiences, girlfriend experience, lust, desire, explicit shoots
+- Captions should DESCRIBE the explicit sexual content shown, not just promote subscriptions
+- Image/video ideas should suggest SPECIFIC explicit sexual visual concepts:
+  * Describe specific poses, outfits, settings, lighting, moods for explicit sexual content
+  * Be detailed about what explicit/intimate sexual content will be created
+  * Focus on variety: different sexual themes, settings, outfits, poses, girlfriend experience scenarios
+- Content should focus on creating explicit, descriptive sexual content that shows actual intimate/explicit sexual moments
+- Use bold, direct language that describes explicit sexual content in detail
+- Include themes like: specific intimate sexual scenes, explicit photosets with sexual details, girlfriend experience content, behind-the-scenes of explicit sexual content creation, specific explicit sexual video concepts
+- Avoid generic "subscribe" topics - create specific, explicit sexual content ideas that describe what will be shown
+${explicitnessContext ? `\nEXPLICITNESS LEVEL: ${explicitnessLevel}/10\n${explicitnessContext}` : ''}
 ` : '';
 
     // Get goal-specific strategic framework
     const goalFramework = getGoalFramework(goal);
     
-    // Get latest social media trends from weekly Tavily job
+    // Get trends - use OnlyFans weekly trends if OnlyFans platform, otherwise general trends
+    // Add timeout to prevent trends from taking too long
     let currentTrends = '';
-    try {
-      currentTrends = await getLatestTrends();
-    } catch (error) {
-      console.error('[generateContentStrategy] Error fetching trends:', error);
-      currentTrends = 'Trend data unavailable. Using general best practices.';
+    if (isOnlyFansPlatform && onlyfansWeeklyTrends) {
+      currentTrends = onlyfansWeeklyTrends;
+    } else {
+      try {
+        const trendsPromise = getLatestTrends();
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Trends timeout')), 10000) // 10 second timeout
+        );
+        currentTrends = await Promise.race([trendsPromise, timeoutPromise]) as string;
+      } catch (error) {
+        console.error('[generateContentStrategy] Error fetching trends:', error);
+        currentTrends = 'Trend data unavailable. Using general best practices.';
+      }
     }
 
     // Perform niche-specific research using Tavily (primary strategy input)
     // Note: This uses 8 Tavily searches per strategy generation
+    // Add timeout to prevent research from taking too long
     let nicheResearch = '';
     try {
-      nicheResearch = await researchNicheStrategy(niche, audience, goal, platformFocus, authUser.uid, userPlan, userRole);
+      const researchPromise = researchNicheStrategy(niche, audience, goal, platformFocus, authUser.uid, userPlan, userRole);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Research timeout')), 20000) // 20 second timeout
+      );
+      nicheResearch = await Promise.race([researchPromise, timeoutPromise]) as string;
       console.log('[generateContentStrategy] Niche research completed');
     } catch (error) {
       console.error('[generateContentStrategy] Error performing niche research:', error);
       nicheResearch = 'Niche research unavailable. Using general best practices.';
     }
+
+    // Build JSON schema description based on duration
+    const contentItemSchema = durationWeeks === 1 
+      ? `{
+          "dayOffset": 0,
+          "topic": "Specific content topic/idea (e.g., 'Behind the scenes of our process')",
+          "format": "Post" | "Reel" | "Story",
+          "platform": "Instagram" | "TikTok" | "X" | "LinkedIn" | "Facebook" | "Threads" | "YouTube" | "Pinterest" | "Discord" | "Telegram" | "Reddit" | "Fanvue" | "OnlyFans",
+          "description": "Detailed description of the content idea with specific angles and execution details",
+          "angle": "What makes this post compelling and unique - detailed angle description",
+          "cta": "Specific call-to-action tailored to the content and goal",
+          "imageIdeas": ["Idea 1 for images", "Idea 2 for images", "Idea 3 for images"],
+          "videoIdeas": ["Idea 1 for videos", "Idea 2 for videos"]
+        }`
+      : `{
+          "dayOffset": 0,
+          "topic": "Specific content topic/idea (e.g., 'Behind the scenes of our process')",
+          "format": "Post" | "Reel" | "Story",
+          "platform": "Instagram" | "TikTok" | "X" | "LinkedIn" | "Facebook" | "Threads" | "YouTube" | "Pinterest" | "Discord" | "Telegram" | "Reddit" | "Fanvue" | "OnlyFans",
+          "imageIdeas": ["Idea 1 for images", "Idea 2 for images", "Idea 3 for images"],
+          "videoIdeas": ["Idea 1 for videos", "Idea 2 for videos"]
+        }`;
 
     const prompt = `
 You are an elite content strategist specializing in ${niche} for ${audience}. Your expertise is creating data-driven strategies that achieve specific business goals.
@@ -143,6 +252,8 @@ ${explicitContentContext}
 
 ${goalFramework}
 
+${isOnlyFansPlatform && onlyfansResearch ? `ONLYFANS-SPECIFIC RESEARCH & BEST PRACTICES:\n${onlyfansResearch}\n` : ''}
+
 ${nicheResearch}
 
 ${currentTrends}
@@ -150,6 +261,7 @@ ${currentTrends}
 ${analyticsContext ? analyticsContext : 'Note: No analytics data available. Use best practices for this niche and audience.'}
 
 PRIMARY OBJECTIVE: Create a ${durationWeeks}-week content strategy specifically designed to achieve: ${goal}
+${durationWeeks === 1 ? '\n⚠️ IMPORTANT: This is a ONE-WEEK plan. Generate EXACTLY 1 week (7 days) with 10-14 detailed content items. Do NOT generate multiple weeks.' : ''}
 
 Strategy Parameters:
 - Primary Goal: ${goal} (THIS IS THE MOST IMPORTANT - every content piece should directly support this goal)
@@ -157,7 +269,7 @@ Strategy Parameters:
 - Platform Focus: ${platformFocus || 'Mixed / All'}
 - Target Audience: ${audience}
 - Niche: ${niche}
-- Duration: ${durationWeeks} weeks
+- Duration: ${durationWeeks} week${durationWeeks === 1 ? '' : 's'}${durationWeeks === 1 ? ' (ONE WEEK ONLY - generate content for 7 days, not multiple weeks)' : ''}
 
 CRITICAL INSTRUCTIONS FOR GOAL ACHIEVEMENT:
 1. Every content piece must directly contribute to achieving "${goal}" - evaluate each topic against: "Does this help achieve ${goal}?"
@@ -167,10 +279,11 @@ CRITICAL INSTRUCTIONS FOR GOAL ACHIEVEMENT:
    - Adapt successful strategies from the research to fit the goal: ${goal}
    - Incorporate proven content formats, engagement tactics, and platform strategies from the research
    - Use trending topics and hashtags identified in the research
-4. Create a strategic progression:
-   - Week 1-2: Foundation building (awareness, trust, value delivery)
+4. Create a strategic progression:${durationWeeks === 1 ? 
+   '\n   - For one-week plans, focus on a balanced mix: foundation building, engagement, and action-driving content all within the single week' :
+   `\n   - Week 1-2: Foundation building (awareness, trust, value delivery)
    - Week 3-4: Engagement and relationship building
-   - Week 5+: Action-driving content that directly moves toward ${goal}
+   - Week 5+: Action-driving content that directly moves toward ${goal}`}
 5. Include specific CTAs and engagement tactics aligned with ${goal}:
    ${getGoalSpecificCTAs(goal)}
 6. Balance content types to maximize goal achievement:
@@ -190,7 +303,7 @@ CRITICAL INSTRUCTIONS FOR GOAL ACHIEVEMENT:
    - YouTube: Educational deep-dives, tutorials, long-form value
    - Adapt content format to platform strengths while maintaining goal focus
 
-Return ONLY valid JSON in this exact structure:
+Return ONLY valid JSON in this exact structure:${durationWeeks === 1 ? '\n⚠️ CRITICAL: The "weeks" array must contain EXACTLY ONE object. Do NOT add multiple week objects.' : ''}
 
 {
   "weeks": [
@@ -198,14 +311,7 @@ Return ONLY valid JSON in this exact structure:
       "weekNumber": 1,
       "theme": "Week theme/focus (e.g., 'Brand Introduction' or 'Product Showcase')",
       "content": [
-        {
-          "dayOffset": 0,
-          "topic": "Specific content topic/idea (e.g., 'Behind the scenes of our process')",
-          "format": "Post" | "Reel" | "Story",
-          "platform": "Instagram" | "TikTok" | "X" | "LinkedIn" | "Facebook" | "Threads" | "YouTube" | "Pinterest" | "Discord" | "Telegram" | "Reddit" | "Fanvue" | "OnlyFans",
-          "imageIdeas": ["Idea 1 for images", "Idea 2 for images", "Idea 3 for images"],
-          "videoIdeas": ["Idea 1 for videos", "Idea 2 for videos"]
-        }
+        ${contentItemSchema}
       ]
     }
   ],
@@ -227,9 +333,16 @@ Return ONLY valid JSON in this exact structure:
 }
 
 Requirements:
-- Generate ${durationWeeks} weeks of content
-- Each week should have 5-7 content items (mix of Posts, Reels, and Stories)
+${durationWeeks === 1 ? '⚠️ CRITICAL: Generate EXACTLY 1 WEEK (7 days) of content. DO NOT generate 2 or more weeks.' : `- Generate ${durationWeeks} weeks of content`}
+- ${durationWeeks === 1 ? 'Generate 10-14 detailed content items for the single week' : `Each week should have 5-7 content items`} (mix of Posts, Reels, and Stories)
+${durationWeeks === 1 ? '- Each content item MUST include ALL of these fields with detailed information:' : ''}
+${durationWeeks === 1 ? '  * topic: Specific, detailed content idea (not just a one-word topic)' : ''}
+${durationWeeks === 1 ? '  * description: Detailed description with specific angles and execution details (2-3 sentences minimum)' : ''}
+${durationWeeks === 1 ? '  * angle: What makes this post compelling and unique - detailed explanation' : ''}
+${durationWeeks === 1 ? '  * cta: Specific call-to-action tailored to the content and goal' : ''}
+${durationWeeks === 1 ? '- Provide comprehensive, detailed content across all 7 days with variety' : ''}
 - Distribute content across platforms: ${platforms.join(', ')}
+${durationWeeks === 1 ? '- DO NOT just provide topic names - provide FULL detailed descriptions for each content item' : ''}
 - Content should align with goal: ${goal}
 - Use tone: ${tone}${isExplicitContent ? ' - EXPLICIT/ADULT CONTENT: Generate bold, explicit content ideas that describe specific explicit/intimate content to be created (not generic subscription prompts)' : ''}
 - Make topics specific and actionable${isExplicitContent ? ' - describe specific explicit scenes, intimate moments, explicit photoset concepts with details (outfits, settings, poses, moods) - NOT generic "subscribe for more" type topics' : ''}
@@ -296,12 +409,18 @@ IMPORTANT: When generating imageIdeas and videoIdeas:
       }
 
       // Ensure each week has the correct structure
-      plan.weeks = plan.weeks.map((week: any, weekIndex: number) => ({
+      // For one-week plans, limit to exactly 1 week
+      const weeksToProcess = durationWeeks === 1 ? plan.weeks.slice(0, 1) : plan.weeks;
+      
+      plan.weeks = weeksToProcess.map((week: any, weekIndex: number) => ({
         weekNumber: week.weekNumber || weekIndex + 1,
         theme: week.theme || week.focus || `Week ${weekIndex + 1} Theme`,
         content: (week.content || []).map((day: any, dayIndex: number) => ({
           dayOffset: day.dayOffset !== undefined ? day.dayOffset : (weekIndex * 7) + dayIndex,
           topic: day.topic || day.postIdea || `Content idea ${dayIndex + 1}`,
+          description: day.description || '', // Include description for one-week plans
+          angle: day.angle || '', // Include angle for one-week plans
+          cta: day.cta || '', // Include CTA for one-week plans
           format: day.format || (day.postType === 'Reel' ? 'Reel' : day.postType === 'Story' ? 'Story' : 'Post'),
           platform: day.platform || (Array.isArray(day.platforms) ? day.platforms[0] : platforms[0] || 'Instagram'),
           imageIdeas: day.imageIdeas || [],

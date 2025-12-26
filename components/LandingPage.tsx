@@ -215,13 +215,28 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         </div>
                         <h3 className="text-2xl font-bold text-center text-gray-900 dark:text-white mb-4">For Creators</h3>
                         <p className="text-gray-600 dark:text-gray-300 text-center mb-6">
-                            Build your personal brand, grow your audience, and monetize your passion.
+                            Build your personal brand, grow your audience, and monetize your passion. Everything you need to go from idea to published content in one powerful platform.
                         </p>
-                        <ul className="space-y-3 text-sm text-gray-500 dark:text-gray-400">
-                            <li className="flex items-center"><SparklesIcon className="w-4 h-4 mr-2 text-purple-500" /> AI Content Assistant</li>
-                            <li className="flex items-center"><SparklesIcon className="w-4 h-4 mr-2 text-purple-500" /> Growth & Engagement Analytics</li>
-                            <li className="flex items-center"><SparklesIcon className="w-4 h-4 mr-2 text-purple-500" /> Brand Partnership Finder</li>
-                        </ul>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+                            <div className="space-y-4">
+                                <h4 className="font-semibold text-gray-900 dark:text-white text-lg">Content Creation</h4>
+                                <ul className="space-y-3 text-sm text-gray-500 dark:text-gray-400">
+                                    <li className="flex items-start"><SparklesIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>AI Content Assistant with platform-optimized captions</span></li>
+                                    <li className="flex items-start"><TargetIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Multi-week content roadmaps & campaign planning</span></li>
+                                    <li className="flex items-start"><ImageIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Media Library for organizing all your assets</span></li>
+                                    <li className="flex items-start"><CalendarIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Visual content calendar to plan ahead</span></li>
+                                </ul>
+                            </div>
+                            <div className="space-y-4">
+                                <h4 className="font-semibold text-gray-900 dark:text-white text-lg">Growth & Monetization</h4>
+                                <ul className="space-y-3 text-sm text-gray-500 dark:text-gray-400">
+                                    <li className="flex items-start"><div className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0 flex items-center"><AnalyticsIcon /></div> <span>Growth & Engagement Analytics</span></li>
+                                    <li className="flex items-start"><GlobeIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Smart Link-in-Bio with email capture</span></li>
+                                    <li className="flex items-start"><ChatIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Creator Assistant for brainstorming & ideas</span></li>
+                                    <li className="flex items-start"><SparklesIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Brand Partnership Finder (coming soon)</span></li>
+                                </ul>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -239,9 +254,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                 </div>
                 <div className="mt-12">
                     <dl className="space-y-10 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-x-8 md:gap-y-10">
-                        <Feature icon={<RocketIcon />} title="AI Campaign Studio (Autopilot)">
-                           Define a goal and let EchoFlux.ai generate a complete multi-week content campaign with ready-to-use posts, captions, and prompts.
-                        </Feature>
                         <Feature icon={<TargetIcon />} title="AI Content Strategist">
                            Generate multi-week content roadmaps tailored to your niche and goals. Push ideas into campaigns and see them as planned content on your calendar.
                         </Feature>
@@ -286,8 +298,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                     </div>
 
                     <div className="relative">
-                        <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">2. Train Your AI</h3>
-                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Upload past content or notes to match your writing style, and optionally add media and voice samples for richer ideas.</p>
+                        <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">2. Create Your Content</h3>
+                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Use AI to generate captions, plan multi-week campaigns, and organize everything in your media library. Everything is tailored to your niche and goals.</p>
                     </div>
 
                      <div className="mt-10 -mx-4 relative lg:mt-0" aria-hidden="true">

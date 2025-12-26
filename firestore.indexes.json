@@ -46,6 +46,22 @@
       "fields": [
         { "fieldPath": "bioPage.username", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "onlyfans_predict_history",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "createdAt", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "onlyfans_repurpose_history",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "createdAt", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

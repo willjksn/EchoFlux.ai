@@ -171,3 +171,4 @@ If you want to use your custom Firestore promotion system:
 **Issue**: Code works in Stripe but not in PaymentModal
 - **Solution**: Update PaymentModal to pass Stripe Coupon ID instead of Firestore promotion ID
 
+

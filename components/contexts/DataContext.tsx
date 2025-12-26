@@ -635,6 +635,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       username: config.username ? config.username.replace("@", "").toLowerCase().trim() : config.username,
     };
 
+    // Validate link limits before saving
+    const customLinksCount = (normalizedConfig.customLinks || normalizedConfig.links || []).filter((l: any) => l.isActive).length;
+    const socialLinksCount = (normalizedConfig.socialLinks || []).filter((l: any) => l.isActive).length;
+    const totalActiveLinks = customLinksCount + socialLinksCount;
+    
+    let linkLimit: number | null = null;
+    if (user.plan === 'Free') linkLimit = 1;
+    else if (user.plan === 'Pro') linkLimit = 5;
+    else if (user.plan === 'Elite' || user.plan === 'Agency') linkLimit = null; // Unlimited
+    
+    if (linkLimit !== null && totalActiveLinks > linkLimit) {
+      showToast(`Cannot save: You have ${totalActiveLinks} active links, but your ${user.plan} plan only allows ${linkLimit}. Please deactivate some links or upgrade.`, 'error');
+      return;
+    }
+
     await updateDoc(doc(db, "users", user.id), { bioPage: normalizedConfig });
 
     setBioPageState(normalizedConfig);

@@ -3,7 +3,7 @@ import { checkApiKeys, getVerifyAuth, withErrorHandling } from "./_errorHandler.
 import { getModelForTask } from "./_modelRouter.js";
 import { parseJSON } from "./_geminiShared.js";
 import { getOnlyFansResearchContext } from "./_onlyfansResearch.js";
-import { getLatestTrends } from "./_trendsHelper.js";
+import { getLatestTrends, getOnlyFansWeeklyTrends } from "./_trendsHelper.js";
 
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -47,13 +47,14 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   try {
     const model = await getModelForTask("strategy", user.uid);
     
-    // Get user plan for research context
+    // Get user plan and explicitness level for research context
     const { getAdminDb } = await import("./_firebaseAdmin.js");
     const db = getAdminDb();
     const userDoc = await db.collection("users").doc(user.uid).get();
     const userData = userDoc.data();
     const userPlan = userData?.plan || 'Free';
     const userRole = userData?.role;
+    const explicitnessLevel = userData?.explicitnessLevel ?? 7; // Default to moderate-high
 
     // Get OnlyFans research context
     const onlyfansResearch = await getOnlyFansResearchContext(
@@ -64,13 +65,13 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
       userRole
     );
 
-    // Get weekly trends
-    let weeklyTrends = '';
+    // Get OnlyFans-specific weekly trends (not general trends)
+    let onlyfansWeeklyTrends = '';
     try {
-      weeklyTrends = await getLatestTrends();
+      onlyfansWeeklyTrends = await getOnlyFansWeeklyTrends();
     } catch (error) {
-      console.error('[getOnlyFansGuides] Error fetching trends:', error);
-      weeklyTrends = 'Trend data unavailable. Using general best practices.';
+      console.error('[getOnlyFansGuides] Error fetching OnlyFans weekly trends:', error);
+      onlyfansWeeklyTrends = 'OnlyFans trend data unavailable. Using general OnlyFans best practices.';
     }
 
     // Build analytics context if provided
@@ -101,20 +102,41 @@ Use this data to tailor the guides and tips to what's working for this creator.
 `;
     }
 
-    const prompt = `
-You are an OnlyFans content strategy expert. Generate current, actionable guides and tips for OnlyFans creators.
+    // Build explicitness context based on user's explicitness level
+    const explicitnessContext = explicitnessLevel >= 9 
+      ? 'EXTREMELY EXPLICIT - Use very explicit, graphic language describing sexual acts, intimate moments, and explicit content in detail. Focus on lust, desire, and explicit sexual experiences.'
+      : explicitnessLevel >= 7
+      ? 'HIGHLY EXPLICIT - Use explicit language describing sexual content, intimate moments, girlfriend experience, and explicit scenes. Focus on sexual desire, lust, and explicit experiences.'
+      : explicitnessLevel >= 5
+      ? 'MODERATELY EXPLICIT - Use suggestive and explicit language describing intimate content, sexual themes, girlfriend experience, and adult content. Focus on desire and intimate experiences.'
+      : 'SUGGESTIVE - Use suggestive language with adult themes, intimate moments, and romantic/sexual undertones. Focus on connection and intimate experiences.';
 
-${weeklyTrends}
+    const prompt = `
+You are an OnlyFans content strategy expert specializing in adult/explicit content monetization. Generate current, actionable guides and tips for OnlyFans creators.
+
+${onlyfansWeeklyTrends}
 
 ${onlyfansResearch}
 
-${analyticsContext ? analyticsContext : 'Note: No analytics data available. Provide general best practices.'}
+${analyticsContext ? analyticsContext : 'Note: No analytics data available. Provide general OnlyFans best practices.'}
+
+CRITICAL CONTEXT - ONLYFANS ADULT/EXPLICIT CONTENT PLATFORM:
+- This is EXCLUSIVELY for OnlyFans - an adult content creator platform focused on sexual content and intimate experiences
+- ALL guides and tips MUST be focused on adult/explicit sexual content, NOT generic business/tech/product advice
+- Focus on: sexual experiences, intimate moments, girlfriend experience, lust, desire, explicit scenes, adult content monetization
+- DO NOT generate generic business strategies, tech product tips, or non-sexual content advice
+- Include roleplay ideas, interactive content ideas, and engagement tactics specific to adult/explicit content
+- Guides should cover: explicit content creation, sexual content monetization, girlfriend experience strategies, roleplay scenarios, interactive adult content
+
+EXPLICITNESS LEVEL: ${explicitnessLevel}/10
+${explicitnessContext}
 
 Generate comprehensive guides and tips that are:
-1. CURRENT - Based on the latest research and trends provided above
-2. SPECIFIC - Actionable advice for OnlyFans creators
-3. PRACTICAL - Tips that can be implemented immediately
+1. CURRENT - Based on the latest OnlyFans research and trends provided above
+2. SPECIFIC - Actionable advice for OnlyFans creators focused on adult/explicit sexual content
+3. PRACTICAL - Tips that can be implemented immediately for sexual content creation and monetization
 4. DATA-DRIVEN - Use insights from successful OnlyFans creators when available
+5. ADULT-FOCUSED - All advice must relate to adult/explicit sexual content, girlfriend experience, roleplay, and sexual monetization
 
 Return ONLY valid JSON in this exact structure:
 {
@@ -157,11 +179,15 @@ Return ONLY valid JSON in this exact structure:
 
 Requirements:
 - Generate 5-7 items per category
-- Make all suggestions current and based on the research provided
-- Be specific and actionable - not generic advice
-- Focus on OnlyFans platform specifically
+- Make all suggestions current and based on the OnlyFans research provided
+- Be specific and actionable - not generic business advice
+- Focus on OnlyFans platform specifically and adult/explicit sexual content
+- Include roleplay ideas, interactive content ideas, girlfriend experience strategies
+- All tips must relate to sexual content, intimate moments, lust, desire, explicit scenes
 - Use insights from the analytics data if provided
-- Update suggestions based on latest trends and research
+- Update suggestions based on latest OnlyFans trends and research
+- Respect explicitness level ${explicitnessLevel}/10: ${explicitnessContext}
+- DO NOT include generic business/tech/product advice - only adult/explicit content strategies
 `;
 
     const result = await model.generateContent({
@@ -213,4 +239,5 @@ Requirements:
 }
 
 export default withErrorHandling(handler);
+
 

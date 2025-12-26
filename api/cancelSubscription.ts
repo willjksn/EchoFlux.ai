@@ -2,7 +2,13 @@ import { VercelRequest, VercelResponse } from '@vercel/node';
 import Stripe from 'stripe';
 import { verifyAuth } from './verifyAuth.js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+// Check for STRIPE_SECRET_KEY_LIVE first (for production), then STRIPE_SECRET_KEY
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY_LIVE || process.env.STRIPE_SECRET_KEY;
+if (!stripeSecretKey) {
+  throw new Error('STRIPE_SECRET_KEY_LIVE or STRIPE_SECRET_KEY must be set');
+}
+
+const stripe = new Stripe(stripeSecretKey, {
   apiVersion: '2024-06-20' as any, // Type assertion to handle Stripe types
 });
 

@@ -74,6 +74,10 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
     // Creator-focused: always show creator plans
     const plans = creatorPlans;
 
+    // If user exists, they've already created their account, so this is a confirmation step
+    // Otherwise, they're choosing a plan before creating their account
+    const isConfirmingPlan = !!user;
+
     const handleContinue = async () => {
         if (!selectedPlan) return;
         
@@ -81,30 +85,46 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
         
         try {
             // Check if there's a pending signup (user not yet created)
-            const pendingSignup = localStorage.getItem('pendingSignup');
+            const pendingSignup = typeof window !== 'undefined' ? localStorage.getItem('pendingSignup') : null;
             
             if (pendingSignup) {
-                // User hasn't created account yet - create it now
-                const result = await createAccountFromPendingSignup();
-                
-                if (!result.success) {
-                    showToast(result.error || 'Failed to create account. Please try again.', 'error');
-                    setIsLoading(false);
-                    return;
-                }
-                
-                // Wait a moment for auth state to update and user document to be created
-                await new Promise(resolve => setTimeout(resolve, 1500));
-                
-                // For Free plan, we need to wait for user to be available, then set plan
+                // For Free plan, create account immediately (no payment needed)
                 if (selectedPlan === 'Free') {
+                    const result = await createAccountFromPendingSignup();
+                    
+                    if (!result.success) {
+                        showToast(result.error || 'Failed to create account. Please try again.', 'error');
+                        setIsLoading(false);
+                        return;
+                    }
+                    
+                    // Wait a moment for auth state to update and user document to be created
+                    await new Promise(resolve => setTimeout(resolve, 1500));
                     // Reload to get the new user object, then set plan
-                    // The AuthContext will create the user document, then we can update it
                     window.location.reload();
                     return;
                 } else {
-                    // For paid plans, open payment modal
-                    // User should be authenticated now, so payment modal can proceed
+                    // For paid plans, create account first (needed for Stripe auth)
+                    // If payment fails, user can sign in and retry
+                    const result = await createAccountFromPendingSignup();
+                    
+                    if (!result.success) {
+                        // Handle case where account already exists (from previous failed attempt)
+                        if (result.error?.includes('email-already-in-use') || result.error?.includes('already registered')) {
+                            showToast('This email is already registered. Please sign in to continue with plan selection.', 'error');
+                            setIsLoading(false);
+                            return;
+                        }
+                        showToast(result.error || 'Failed to create account. Please try again.', 'error');
+                        setIsLoading(false);
+                        return;
+                    }
+                    
+                    // Wait a moment for auth state to update
+                    await new Promise(resolve => setTimeout(resolve, 1500));
+                    
+                    // Open payment modal
+                    // If payment fails, user will be authenticated and can sign in to retry
                     const planData = plans.find(p => p.name === selectedPlan);
                     if (planData && openPaymentModal) {
                         const price = billingCycle === 'annually' ? planData.priceAnnually : planData.priceMonthly;
@@ -151,10 +171,10 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-4xl w-full m-4 p-8 animate-fade-in-up max-h-[90vh] overflow-y-auto">
                 <div className="text-center mb-8">
                     <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-                        Choose Your Plan
+                        {isConfirmingPlan ? 'Confirm Your Plan' : 'Choose Your Plan'}
                     </h2>
                     <p className="mt-2 text-gray-500 dark:text-gray-400">
-                        Select the creator plan that fits your needs.
+                        {isConfirmingPlan ? 'Confirm your plan selection to continue.' : 'Select the creator plan that fits your needs.'}
                     </p>
                 </div>
 
