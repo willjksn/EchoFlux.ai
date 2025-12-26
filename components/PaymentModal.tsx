@@ -116,6 +116,45 @@ export const PaymentModal: React.FC = () => {
             const auth = (await import('../firebaseConfig')).auth;
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
 
+            const stripeSubscriptionId = (user as any)?.stripeSubscriptionId as string | undefined;
+
+            // If the user already has an active subscription, change the subscription in place.
+            // This is required for proration/credit logic on upgrades (including cross-interval).
+            if (stripeSubscriptionId) {
+                const response = await fetch('/api/changeSubscriptionPlan', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                    body: JSON.stringify({
+                        planName: paymentPlan.name,
+                        billingCycle: paymentPlan.cycle,
+                    }),
+                });
+
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    const msg = data?.message || data?.error || 'Failed to change subscription';
+                    throw new Error(msg);
+                }
+
+                // If Stripe requires the user to complete payment manually, send them to the hosted invoice.
+                const hostedInvoiceUrl = data?.invoice?.hosted_invoice_url as string | null | undefined;
+                const amountDue = data?.invoice?.amount_due as number | undefined;
+                const status = data?.invoice?.status as string | undefined;
+
+                if (hostedInvoiceUrl && amountDue && amountDue > 0 && status !== 'paid') {
+                    window.location.href = hostedInvoiceUrl;
+                    return;
+                }
+
+                showToast('Plan updated successfully (proration applied).', 'success');
+                setIsLoading(false);
+                closePaymentModal();
+                return;
+            }
+
             // Create Stripe checkout session
             const response = await fetch('/api/createCheckoutSession', {
                 method: 'POST',
@@ -207,9 +246,55 @@ export const PaymentModal: React.FC = () => {
 
     const handleFreePlanConfirm = async () => {
         setIsLoading(true);
-        setTimeout(() => {
-            handleSuccess();
-        }, 1000);
+        try {
+            if (!user) {
+                showToast('Please sign in to continue.', 'error');
+                setIsLoading(false);
+                return;
+            }
+
+            const stripeSubscriptionId = (user as any)?.stripeSubscriptionId as string | undefined;
+            const auth = (await import('../firebaseConfig')).auth;
+            const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+
+            // If user has a subscription, switching to Free means "cancel at period end" (no refunds).
+            if (stripeSubscriptionId) {
+                const response = await fetch('/api/cancelSubscription', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                    body: JSON.stringify({ action: 'cancel' }),
+                });
+
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    const msg = data?.message || data?.error || 'Failed to cancel subscription';
+                    throw new Error(msg);
+                }
+
+                showToast(data?.message || 'Subscription will cancel at period end.', 'success');
+                // Update local state so the Billing UI reflects the cancellation immediately.
+                await setUser({
+                    ...(user as any),
+                    cancelAtPeriodEnd: true,
+                    subscriptionEndDate: data?.subscriptionEndDate || (user as any)?.subscriptionEndDate || null,
+                });
+                setIsLoading(false);
+                closePaymentModal();
+                return;
+            }
+
+            // No subscription: free plan is immediate.
+            setTimeout(() => {
+                handleSuccess();
+            }, 500);
+        } catch (err: any) {
+            console.error('Failed to switch to Free:', err);
+            showToast(err?.message || 'Failed to switch to Free. Please try again.', 'error');
+            setIsLoading(false);
+        }
     }
 
     const handleClose = () => {

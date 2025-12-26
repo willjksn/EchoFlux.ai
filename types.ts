@@ -303,10 +303,15 @@ export interface User {
   };
   bioPage?: BioPageConfig;
   socialAccounts?: SocialAccount[]; // OAuth-connected social media accounts
+  stripeCustomerId?: string; // Stripe Customer ID (set by webhook)
+  stripeSubscriptionId?: string; // Stripe Subscription ID (set by webhook)
   subscriptionEndDate?: string; // ISO timestamp when subscription ends (if cancelled)
   cancelAtPeriodEnd?: boolean; // Whether subscription is set to cancel at period end
   subscriptionStartDate?: string; // ISO timestamp when current subscription started
   billingCycle?: 'monthly' | 'annually'; // Billing cycle for current plan
+  pendingPlan?: Plan | null; // Scheduled downgrade plan (effective at next renewal)
+  pendingBillingCycle?: 'monthly' | 'annually' | null; // Scheduled downgrade billing cycle
+  pendingPlanEffectiveDate?: string | null; // ISO timestamp when scheduled plan takes effect
   claimedReferralRewards?: Array<{
     milestone: number;
     type: string;

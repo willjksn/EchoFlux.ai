@@ -249,6 +249,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       line_items: [],
       customer_email: decodedToken.email || undefined,
       client_reference_id: decodedToken.uid,
+      // Ensure the resulting subscription carries plan metadata, so future subscription.updated events
+      // can reliably map back to the correct plan (without needing price→plan reverse mapping).
+      subscription_data: {
+        metadata: {
+          planName,
+          billingCycle,
+          userId: decodedToken.uid,
+        },
+      },
       metadata: {
         userId: decodedToken.uid,
         planName,
