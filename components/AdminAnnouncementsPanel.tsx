@@ -20,6 +20,7 @@ export const AdminAnnouncementsPanel: React.FC = () => {
   const [type, setType] = useState<Announcement['type']>('info');
   const [isActive, setIsActive] = useState(true);
   const [isBanner, setIsBanner] = useState(true);
+  const [isPublic, setIsPublic] = useState(true);
   const [targetPlans, setTargetPlans] = useState<Plan[]>([]);
   const [startsAt, setStartsAt] = useState<string>('');
   const [endsAt, setEndsAt] = useState<string>('');
@@ -41,6 +42,7 @@ export const AdminAnnouncementsPanel: React.FC = () => {
     setType('info');
     setIsActive(true);
     setIsBanner(true);
+    setIsPublic(true);
     setTargetPlans([]);
     setStartsAt('');
     setEndsAt('');
@@ -60,6 +62,7 @@ export const AdminAnnouncementsPanel: React.FC = () => {
     setType(a.type || 'info');
     setIsActive(Boolean(a.isActive));
     setIsBanner(Boolean(a.isBanner));
+    setIsPublic(Boolean(a.isPublic));
     setTargetPlans(Array.isArray(a.targetPlans) ? a.targetPlans : []);
     setStartsAt(a.startsAt || '');
     setEndsAt(a.endsAt || '');
@@ -107,6 +110,7 @@ export const AdminAnnouncementsPanel: React.FC = () => {
           type,
           isActive,
           isBanner,
+          isPublic,
           targetPlans,
           startsAt: startsAt || null,
           endsAt: endsAt || null,
@@ -435,6 +439,10 @@ export const AdminAnnouncementsPanel: React.FC = () => {
                     <input type="checkbox" checked={isBanner} onChange={(e) => setIsBanner(e.target.checked)} />
                     Banner
                   </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} />
+                    Public
+                  </label>
                 </div>
               </div>
 
@@ -455,6 +463,9 @@ export const AdminAnnouncementsPanel: React.FC = () => {
                   ))}
                 </div>
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Leave empty to show to all plans.</p>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  <strong>Public</strong> shows on the landing page too (unauthenticated). Target plans apply only after login.
+                </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -38,6 +38,7 @@ import { PaymentModal } from './components/PaymentModal';
 import { Toast } from './components/Toast';
 import { Chatbot } from './components/Chatbot';
 import { AnnouncementBanner } from './components/AnnouncementBanner';
+import { PublicAnnouncementBanner } from './components/PublicAnnouncementBanner';
 import { Page, UserType, Plan } from './types';
 import { Pricing } from './components/Pricing';
 import { CRMSidebar } from './components/CRMSidebar';
@@ -533,6 +534,7 @@ const AppContent: React.FC = () => {
         if (pendingSignup && onboardingStep === 'plan-selector') {
             return (
                 <>
+                    <PublicAnnouncementBanner />
                     <LandingPage 
                         onLoginClick={() => {
                             setLoginModalInitialView('login');
@@ -565,6 +567,7 @@ const AppContent: React.FC = () => {
         
         return (
             <>
+                <PublicAnnouncementBanner />
                 <LandingPage 
                     onLoginClick={() => {
                         setLoginModalInitialView('login');

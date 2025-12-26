@@ -330,6 +330,7 @@ export interface Announcement {
   type: 'info' | 'warning' | 'success';
   isActive: boolean;
   isBanner: boolean; // show as top banner if true
+  isPublic?: boolean; // if true, show to unauthenticated visitors (landing page)
   targetPlans?: Plan[]; // empty/undefined = all plans
   targetUserIds?: string[]; // empty/undefined = all users
   startsAt?: string; // ISO timestamp
