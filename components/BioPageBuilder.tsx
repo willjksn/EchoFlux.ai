@@ -523,7 +523,26 @@ export const BioPageBuilder: React.FC = () => {
         } else if (bioPage && !bioPage.customLinks) {
             setBioPage({ ...bioPage, customLinks: [] });
         }
-    }, []);
+        // Initialize theme with default white button color if not set or if it's black (legacy default)
+        if (bioPage && (!bioPage.theme || !bioPage.theme.buttonColor || bioPage.theme.buttonColor === '#000000')) {
+            const updatedTheme = {
+                ...bioPage.theme,
+                buttonColor: bioPage.theme?.buttonColor === '#000000' ? '#ffffff' : (bioPage.theme?.buttonColor || '#ffffff'),
+                textColor: bioPage.theme?.textColor || '#000000',
+                backgroundColor: bioPage.theme?.backgroundColor || '#ffffff',
+                pageBackgroundColor: bioPage.theme?.pageBackgroundColor || bioPage.theme?.backgroundColor || '#f5f7fb',
+                cardBackgroundColor: bioPage.theme?.cardBackgroundColor || '#ffffff',
+                buttonStyle: bioPage.theme?.buttonStyle || 'rounded',
+            };
+            // Only update if buttonColor actually needs to change to avoid unnecessary updates
+            if (bioPage.theme?.buttonColor !== updatedTheme.buttonColor) {
+                setBioPage({ 
+                    ...bioPage, 
+                    theme: updatedTheme
+                });
+            }
+        }
+    }, [bioPage]);
 
     // Calculate and update follower count when social accounts change
     useEffect(() => {
@@ -1129,11 +1148,11 @@ export const BioPageBuilder: React.FC = () => {
                         </div>
                         <div>
                             <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Buttons</label>
-                            <input type="color" value={bioPage.theme.buttonColor} onChange={e => updateTheme('buttonColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent" />
+                            <input type="color" value={bioPage.theme.buttonColor || '#ffffff'} onChange={e => updateTheme('buttonColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent" />
                         </div>
                         <div>
                             <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Text</label>
-                            <input type="color" value={bioPage.theme.textColor} onChange={e => updateTheme('textColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent" />
+                            <input type="color" value={bioPage.theme.textColor || '#000000'} onChange={e => updateTheme('textColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent" />
                         </div>
                     </div>
                     <div>
