@@ -195,7 +195,7 @@ const AppContent: React.FC = () => {
     const allowedEmail = getAllowedEmail();
     
     // Hooks must be called unconditionally at the top level
-    const { isAuthenticated, isAuthLoading, user, setUser, activePage, setActivePage, startTour, isTourActive, toast, isCRMOpen, setPricingView, handleLogout, selectedPlan, setSelectedPlan, openPaymentModal } = useAppContext();
+    const { isAuthenticated, isAuthLoading, user, setUser, activePage, setActivePage, startTour, isTourActive, toast, showToast, isCRMOpen, setPricingView, handleLogout, selectedPlan, setSelectedPlan, openPaymentModal } = useAppContext();
     
     const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
     const [loginModalInitialView, setLoginModalInitialView] = useState<'login' | 'signup'>('login');
@@ -259,6 +259,77 @@ const AppContent: React.FC = () => {
     }, [activePage]);
 
     useEffect(() => {
+        // Check for payment success or cancellation redirect from Stripe
+        const urlParams = new URLSearchParams(window.location.search);
+        const paymentSuccess = urlParams.get('payment');
+        const paymentCanceled = urlParams.get('canceled');
+        const sessionId = urlParams.get('session_id');
+        
+        if (paymentSuccess === 'success' && sessionId) {
+            // Clean URL
+            window.history.replaceState({}, '', window.location.pathname);
+            
+            // Clear payment attempt info and pending signup on success
+            localStorage.removeItem('paymentAttempt');
+            localStorage.removeItem('pendingSignup');
+            
+            // Refresh user data to get updated plan from webhook
+            // The webhook may have already updated the plan, but there might be a small delay
+            if (isAuthenticated && user) {
+                // Wait a moment for webhook to process, then refresh user data
+                setTimeout(async () => {
+                    try {
+                        const { doc, getDoc } = await import('firebase/firestore');
+                        const { db } = await import('./firebaseConfig');
+                        const userRef = doc(db, 'users', user.id);
+                        const userSnap = await getDoc(userRef);
+                        
+                        if (userSnap.exists()) {
+                            const updatedUser = userSnap.data() as typeof user;
+                            await setUser(updatedUser);
+                            
+                            // Check if user has paid plan and trigger onboarding
+                            const hasPaidPlan = updatedUser.plan === 'Pro' || updatedUser.plan === 'Elite' || updatedUser.plan === 'Agency';
+                            if (hasPaidPlan && !updatedUser.hasCompletedOnboarding) {
+                                // Payment successful - proceed to onboarding
+                                setOnboardingStep('creator');
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error refreshing user data after payment:', error);
+                        // Fallback: check current user state
+                        const hasPaidPlan = user.plan === 'Pro' || user.plan === 'Elite' || user.plan === 'Agency';
+                        if (hasPaidPlan && !user.hasCompletedOnboarding) {
+                            setOnboardingStep('creator');
+                        }
+                    }
+                }, 2000); // Wait 2 seconds for webhook to process
+            }
+        } else if (paymentCanceled === 'true') {
+            // Payment was canceled - clean URL
+            window.history.replaceState({}, '', window.location.pathname);
+            
+            // Check if account was created but user is not authenticated
+            const paymentAttemptStr = localStorage.getItem('paymentAttempt');
+            if (paymentAttemptStr) {
+                try {
+                    const paymentAttempt = JSON.parse(paymentAttemptStr);
+                    if (paymentAttempt.accountCreated && !isAuthenticated) {
+                        // Account exists but user not logged in - show helpful message
+                        showToast(
+                            'Your account was created but payment was canceled. Please sign in to complete your plan selection.',
+                            'info'
+                        );
+                        // Open login modal
+                        setLoginModalInitialView('login');
+                        setIsLoginModalOpen(true);
+                    }
+                } catch (e) {
+                    console.error('Error parsing payment attempt:', e);
+                }
+            }
+        }
+
         // Check for pending signup - if user is not authenticated but has pending signup, show plan selector
         const pendingSignup = localStorage.getItem('pendingSignup');
         if (!isAuthenticated && pendingSignup) {

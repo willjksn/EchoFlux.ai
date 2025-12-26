@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from './AppContext';
-import { XMarkIcon } from './icons/UIIcons';
+import { XMarkIcon, CheckCircleIcon } from './icons/UIIcons';
 import { auth, db } from '../firebaseConfig';
 import {
   createUserWithEmailAndPassword,
@@ -10,6 +10,7 @@ import {
   signInWithPopup,
   GoogleAuthProvider,
   signOut,
+  fetchSignInMethodsForEmail,
 } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import type { Plan } from '../types';
@@ -104,8 +105,17 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const [errorModal, setErrorModal] = useState<{ show: boolean; message: string }>({ show: false, message: '' });
 
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [showPasswordRequirements, setShowPasswordRequirements] = useState(false);
+  const [passwordRequirements, setPasswordRequirements] = useState({
+    hasUppercase: false,
+    hasLowercase: false,
+    hasSpecialChar: false,
+    hasNumeric: false,
+    hasMinLength: false,
+  });
 
   // keep internal state in sync if parent changes initialView
   useEffect(() => {
@@ -114,7 +124,37 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     setValidationErrors({});
     // Reset terms acceptance when switching views
     setAcceptedTerms(false);
+    // Reset password requirements when switching views
+    setPasswordRequirements({
+      hasUppercase: false,
+      hasLowercase: false,
+      hasSpecialChar: false,
+      hasNumeric: false,
+      hasMinLength: false,
+    });
+    setShowPasswordRequirements(false);
   }, [initialView]);
+
+  // Check password requirements in real-time
+  useEffect(() => {
+    if (!isLogin && password) {
+      setPasswordRequirements({
+        hasUppercase: /[A-Z]/.test(password),
+        hasLowercase: /[a-z]/.test(password),
+        hasSpecialChar: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password),
+        hasNumeric: /[0-9]/.test(password),
+        hasMinLength: password.length >= 8,
+      });
+    } else if (!isLogin && !password) {
+      setPasswordRequirements({
+        hasUppercase: false,
+        hasLowercase: false,
+        hasSpecialChar: false,
+        hasNumeric: false,
+        hasMinLength: false,
+      });
+    }
+  }, [password, isLogin]);
 
   if (!isOpen) return null;
 
@@ -135,11 +175,28 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       errors.email = 'Please enter a valid email address';
     }
 
-    // Validate password
+    // Validate password with all requirements
     if (!password) {
       errors.password = 'Password is required';
-    } else if (password.length < 6) {
-      errors.password = 'Password must be at least 6 characters';
+    } else {
+      const requirements = {
+        hasUppercase: /[A-Z]/.test(password),
+        hasLowercase: /[a-z]/.test(password),
+        hasSpecialChar: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password),
+        hasNumeric: /[0-9]/.test(password),
+        hasMinLength: password.length >= 8,
+      };
+
+      const missingRequirements: string[] = [];
+      if (!requirements.hasUppercase) missingRequirements.push('uppercase character');
+      if (!requirements.hasLowercase) missingRequirements.push('lowercase character');
+      if (!requirements.hasSpecialChar) missingRequirements.push('special character');
+      if (!requirements.hasNumeric) missingRequirements.push('numeric character');
+      if (!requirements.hasMinLength) missingRequirements.push('minimum 8 characters');
+
+      if (missingRequirements.length > 0) {
+        errors.password = `Password must include: ${missingRequirements.join(', ')}`;
+      }
     }
 
     // Validate confirm password
@@ -189,6 +246,23 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
         // Sign in
         await signInWithEmailAndPassword(auth, email, password);
+        
+        // Clear pendingSignup if it exists (account already created)
+        // Keep paymentAttempt so user knows they need to complete payment
+        const pendingSignup = typeof window !== 'undefined' ? localStorage.getItem('pendingSignup') : null;
+        if (pendingSignup) {
+          try {
+            const pendingData = JSON.parse(pendingSignup);
+            // Only clear if this is the same email (account was already created)
+            if (pendingData.email === email) {
+              localStorage.removeItem('pendingSignup');
+            }
+          } catch (e) {
+            // If parse fails, just remove it
+            localStorage.removeItem('pendingSignup');
+          }
+        }
+        
         showToast('Logged in successfully!', 'success');
         onClose();
       } else {
@@ -208,6 +282,34 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           showToast('New sign-ups are currently disabled. The site is in maintenance mode.', 'error');
           setIsLoading(false);
           return;
+        }
+
+        // Check if email is already registered before storing as pending signup
+        try {
+          const signInMethods = await fetchSignInMethodsForEmail(auth, email);
+          if (signInMethods && signInMethods.length > 0) {
+            // Email is already registered - check if there's a payment attempt
+            const paymentAttemptStr = typeof window !== 'undefined' ? localStorage.getItem('paymentAttempt') : null;
+            let errorMessage = 'This email is already registered. Please sign in instead.';
+            
+            if (paymentAttemptStr) {
+              try {
+                const paymentAttempt = JSON.parse(paymentAttemptStr);
+                if (paymentAttempt.email === email && paymentAttempt.accountCreated) {
+                  errorMessage = 'Your account was created but payment was not completed. Please sign in to complete your plan selection.';
+                }
+              } catch (e) {
+                // Ignore parse errors
+              }
+            }
+            
+            setErrorModal({ show: true, message: errorMessage });
+            setIsLoading(false);
+            return;
+          }
+        } catch (checkError: any) {
+          // If check fails, we'll proceed anyway - the actual signup will catch the error
+          console.warn('Could not check if email exists:', checkError);
         }
 
         // Store signup info temporarily - don't create account yet
@@ -540,6 +642,17 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                         setValidationErrors(prev => ({ ...prev, confirmPassword: '' }));
                       }
                     }}
+                    onFocus={() => {
+                      if (!isLogin) {
+                        setShowPasswordRequirements(true);
+                      }
+                    }}
+                    onBlur={() => {
+                      // Delay hiding to allow clicking on the popover
+                      setTimeout(() => {
+                        setShowPasswordRequirements(false);
+                      }, 200);
+                    }}
                     placeholder="••••••••"
                     className={`${inputClasses} pr-10 ${validationErrors.password ? 'border-red-500 focus:ring-red-500' : ''}`}
                     autoComplete={isLogin ? 'current-password' : 'new-password'}
@@ -547,10 +660,79 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setShowPassword((prev) => !prev)}
-                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
                   >
                     {showPassword ? 'Hide' : 'Show'}
                   </button>
+                  
+                  {/* Password Requirements Popover */}
+                  {!isLogin && showPasswordRequirements && (
+                    <div 
+                      className="absolute z-10 mt-2 w-72 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-4"
+                      onMouseDown={(e) => e.preventDefault()}
+                    >
+                      <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
+                        Password requirements
+                      </h4>
+                      <ul className="space-y-2 text-sm">
+                        <li className="flex items-center">
+                          {passwordRequirements.hasUppercase ? (
+                            <CheckCircleIcon className="w-4 h-4 mr-2 text-green-500 flex-shrink-0" />
+                          ) : (
+                            <div className="w-4 h-4 mr-2 flex-shrink-0" />
+                          )}
+                          <span className={passwordRequirements.hasUppercase ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}>
+                            Require uppercase character
+                          </span>
+                        </li>
+                        <li className="flex items-center">
+                          {passwordRequirements.hasLowercase ? (
+                            <CheckCircleIcon className="w-4 h-4 mr-2 text-green-500 flex-shrink-0" />
+                          ) : (
+                            <div className="w-4 h-4 mr-2 flex-shrink-0" />
+                          )}
+                          <span className={passwordRequirements.hasLowercase ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}>
+                            Require lowercase character
+                          </span>
+                        </li>
+                        <li className="flex items-center">
+                          {passwordRequirements.hasSpecialChar ? (
+                            <CheckCircleIcon className="w-4 h-4 mr-2 text-green-500 flex-shrink-0" />
+                          ) : (
+                            <div className="w-4 h-4 mr-2 flex-shrink-0" />
+                          )}
+                          <span className={passwordRequirements.hasSpecialChar ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}>
+                            Require special character
+                          </span>
+                        </li>
+                        <li className="flex items-center">
+                          {passwordRequirements.hasNumeric ? (
+                            <CheckCircleIcon className="w-4 h-4 mr-2 text-green-500 flex-shrink-0" />
+                          ) : (
+                            <div className="w-4 h-4 mr-2 flex-shrink-0" />
+                          )}
+                          <span className={passwordRequirements.hasNumeric ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}>
+                            Require numeric character
+                          </span>
+                        </li>
+                        <li className="flex items-center">
+                          {passwordRequirements.hasMinLength ? (
+                            <CheckCircleIcon className="w-4 h-4 mr-2 text-green-500 flex-shrink-0" />
+                          ) : (
+                            <div className="w-4 h-4 mr-2 flex-shrink-0" />
+                          )}
+                          <span className={passwordRequirements.hasMinLength ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}>
+                            Password length requirements
+                          </span>
+                        </li>
+                        <li className="flex items-center pl-6">
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            Minimum password length: 8
+                          </span>
+                        </li>
+                      </ul>
+                    </div>
+                  )}
                 </div>
                 {validationErrors.password && (
                   <p className="mt-1 text-sm text-red-600 dark:text-red-400">{validationErrors.password}</p>
@@ -562,23 +744,32 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Confirm Password
                   </label>
-                  <input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => {
-                      setConfirmPassword(e.target.value);
-                      if (validationErrors.confirmPassword) {
-                        setValidationErrors(prev => ({ ...prev, confirmPassword: '' }));
-                      }
-                      // Clear error if passwords now match
-                      if (password && e.target.value === password) {
-                        setValidationErrors(prev => ({ ...prev, confirmPassword: '' }));
-                      }
-                    }}
-                    placeholder="Re-enter password"
-                    className={`${inputClasses} ${validationErrors.confirmPassword ? 'border-red-500 focus:ring-red-500' : ''}`}
-                    autoComplete="new-password"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      value={confirmPassword}
+                      onChange={(e) => {
+                        setConfirmPassword(e.target.value);
+                        if (validationErrors.confirmPassword) {
+                          setValidationErrors(prev => ({ ...prev, confirmPassword: '' }));
+                        }
+                        // Clear error if passwords now match
+                        if (password && e.target.value === password) {
+                          setValidationErrors(prev => ({ ...prev, confirmPassword: '' }));
+                        }
+                      }}
+                      placeholder="Re-enter password"
+                      className={`${inputClasses} pr-10 ${validationErrors.confirmPassword ? 'border-red-500 focus:ring-red-500' : ''}`}
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword((prev) => !prev)}
+                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                    >
+                      {showConfirmPassword ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
                   {validationErrors.confirmPassword && (
                     <p className="mt-1 text-sm text-red-600 dark:text-red-400">{validationErrors.confirmPassword}</p>
                   )}

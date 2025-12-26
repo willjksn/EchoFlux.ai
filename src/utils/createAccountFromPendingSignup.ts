@@ -122,8 +122,24 @@ export async function createAccountFromPendingSignup(): Promise<{ success: boole
       currentUser = userCredential.user;
     }
 
-    // Clear pending signup data after account/document is created
-    localStorage.removeItem('pendingSignup');
+    // For paid plans, don't clear pendingSignup yet - wait for payment to succeed
+    // This allows user to retry payment if it fails
+    const selectedPlan = pendingSignup.selectedPlan as Plan;
+    const isPaidPlan = selectedPlan && selectedPlan !== 'Free';
+    
+    if (!isPaidPlan) {
+      // Free plan - clear pendingSignup immediately since no payment needed
+      localStorage.removeItem('pendingSignup');
+    } else {
+      // Paid plan - store payment attempt info but keep pendingSignup
+      // This allows user to sign in and retry if payment fails
+      localStorage.setItem('paymentAttempt', JSON.stringify({
+        email: pendingSignup.email,
+        plan: selectedPlan,
+        timestamp: Date.now(),
+        accountCreated: true
+      }));
+    }
 
     return { success: true };
   } catch (error: any) {
