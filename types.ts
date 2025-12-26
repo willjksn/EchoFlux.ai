@@ -323,6 +323,24 @@ export interface Notification {
   messageId?: string; // Optional - used for DM/comment links, or usage limit notifications
 }
 
+export interface Announcement {
+  id: string;
+  title: string;
+  body: string;
+  type: 'info' | 'warning' | 'success';
+  isActive: boolean;
+  isBanner: boolean; // show as top banner if true
+  targetPlans?: Plan[]; // empty/undefined = all plans
+  targetUserIds?: string[]; // empty/undefined = all users
+  startsAt?: string; // ISO timestamp
+  endsAt?: string; // ISO timestamp
+  createdAt: string; // ISO timestamp
+  createdBy: string; // admin uid
+  updatedAt?: string; // ISO timestamp
+  actionLabel?: string;
+  actionPage?: Page; // internal navigation target
+}
+
 export type DashboardFilters = {
   platform: Platform | 'All';
   messageType: MessageType | 'All';
@@ -613,6 +631,8 @@ export interface AppContextType {
   teamMembers: TeamMember[];
   selectedClient: Client | null;
   notifications: Notification[];
+  announcements: Announcement[];
+  dismissAnnouncement: (announcementId: string) => void;
   activePage: Page;
   isSidebarOpen: boolean;
   dashboardNavState: DashboardNavState | null;

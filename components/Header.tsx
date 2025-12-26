@@ -32,7 +32,9 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
   // Keep the bell usable by showing only usage/system alerts (messageId starts with 'usage-').
   const visibleNotifications = useMemo(() => {
     if (!OFFLINE_MODE) return notifications;
-    return notifications.filter(n => n.messageId?.startsWith('usage-'));
+    return notifications.filter(n =>
+      n.messageId?.startsWith('usage-') || n.messageId?.startsWith('announcement-')
+    );
   }, [notifications]);
 
   const hasUnreadNotifications = useMemo(() => visibleNotifications.some(n => !n.read), [visibleNotifications]);
@@ -82,6 +84,17 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
         )
       );
       
+      setIsNotificationsOpen(false);
+      return;
+    }
+
+    // Announcement reminders (offline/studio friendly)
+    if (notification.messageId?.startsWith('announcement-')) {
+      setNotifications(prevNotifications => 
+        prevNotifications.map(n => 
+          n.id === notification.id ? { ...n, read: true } : n
+        )
+      );
       setIsNotificationsOpen(false);
       return;
     }

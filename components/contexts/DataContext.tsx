@@ -12,6 +12,7 @@ import {
   TeamMember,
   Client,
   Notification,
+  Announcement,
   CustomVoice,
   ComposeState,
   Message,
@@ -42,6 +43,7 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../../firebaseConfig";
+import { auth } from "../../firebaseConfig";
 import { useAuth } from "./AuthContext";
 import { useUI } from "./UIContext";
 
@@ -75,6 +77,9 @@ interface DataContextType {
 
   notifications: Notification[];
   setNotifications: React.Dispatch<React.SetStateAction<Notification[]>>;
+
+  announcements: Announcement[];
+  dismissAnnouncement: (announcementId: string) => void;
 
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
@@ -143,6 +148,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // In offline/studio mode, we don't have live inbox/DM/comment events yet.
   // Seed notifications as empty so users don't get routed into hidden flows.
   const [notifications, setNotifications] = useState<Notification[]>(OFFLINE_MODE ? [] : MOCK_NOTIFICATIONS);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
@@ -186,6 +192,26 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     strategy: { count: number; limit: number; remaining: number };
   } | null>(null);
 
+  const getDismissedAnnouncementsKey = (userId: string) => `dismissedAnnouncements:${userId}`;
+
+  const dismissAnnouncement = (announcementId: string) => {
+    if (!user?.id) return;
+    try {
+      const key = getDismissedAnnouncementsKey(user.id);
+      const existing = JSON.parse(localStorage.getItem(key) || "[]");
+      const next = Array.from(new Set([...(Array.isArray(existing) ? existing : []), announcementId]));
+      localStorage.setItem(key, JSON.stringify(next));
+    } catch {}
+
+    // Remove from visible banner list immediately
+    setAnnouncements((prev) => prev.filter((a) => a.id !== announcementId));
+
+    // Mark related reminder as read if present
+    setNotifications((prev) =>
+      prev.map((n) => (n.messageId === `announcement-${announcementId}` ? { ...n, read: true } : n))
+    );
+  };
+
   // Fetch usage stats periodically for strategy notifications
   useEffect(() => {
     if (!user?.id) return;
@@ -213,6 +239,73 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const interval = setInterval(fetchUsageStats, 5 * 60 * 1000);
 
     return () => clearInterval(interval);
+  }, [user?.id]);
+
+  // Fetch announcements (global banners + reminders)
+  useEffect(() => {
+    if (!user?.id) {
+      setAnnouncements([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchAnnouncements = async () => {
+      try {
+        const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+        if (!token) return;
+
+        const res = await fetch("/api/getAnnouncements", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!res.ok) return;
+        const data = await res.json();
+        const list: Announcement[] = Array.isArray(data?.announcements) ? data.announcements : [];
+
+        // Apply local dismissals
+        let dismissed: string[] = [];
+        try {
+          dismissed = JSON.parse(localStorage.getItem(getDismissedAnnouncementsKey(user.id)) || "[]");
+          if (!Array.isArray(dismissed)) dismissed = [];
+        } catch {
+          dismissed = [];
+        }
+        const visible = list.filter((a) => !dismissed.includes(a.id));
+
+        if (cancelled) return;
+        setAnnouncements(visible);
+
+        // Add announcements into reminders dropdown as notifications
+        setNotifications((prev) => {
+          const existingByMsgId = new Set(prev.map((n) => n.messageId).filter(Boolean) as string[]);
+          const announcementNotifs: Notification[] = visible.map((a) => ({
+            id: `announcement-${a.id}`,
+            text: `📣 ${a.title}`,
+            timestamp: a.createdAt ? new Date(a.createdAt).toLocaleString() : "Just now",
+            read: false,
+            messageId: `announcement-${a.id}`,
+          }));
+
+          const toAdd = announcementNotifs.filter((n) => !existingByMsgId.has(n.messageId || ""));
+          return [...toAdd, ...prev];
+        });
+      } catch (err) {
+        // Silent failure - announcements are non-critical
+        if (process.env.NODE_ENV === "development") {
+          console.warn("Failed to fetch announcements:", err);
+        }
+      }
+    };
+
+    fetchAnnouncements();
+    const interval = setInterval(fetchAnnouncements, 60 * 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [user?.id]);
 
   // Check usage limits when user data changes
@@ -789,6 +882,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     notifications,
     setNotifications,
+    announcements,
+    dismissAnnouncement,
 
     messages,
     setMessages,

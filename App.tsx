@@ -37,6 +37,7 @@ import { InteractiveTour } from './components/InteractiveTour';
 import { PaymentModal } from './components/PaymentModal';
 import { Toast } from './components/Toast';
 import { Chatbot } from './components/Chatbot';
+import { AnnouncementBanner } from './components/AnnouncementBanner';
 import { Page, UserType, Plan } from './types';
 import { Pricing } from './components/Pricing';
 import { CRMSidebar } from './components/CRMSidebar';
@@ -629,6 +630,7 @@ const AppContent: React.FC = () => {
             {isTourActive && <InteractiveTour />}
             <Sidebar />
             <div className="flex-1 flex flex-col overflow-hidden relative">
+                <AnnouncementBanner />
                 <Header pageTitle={pageTitle} />
                 <main className="flex-1 overflow-x-hidden overflow-y-auto p-6 custom-scrollbar dark:custom-scrollbar">
                     <MainContent />
