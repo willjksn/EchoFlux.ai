@@ -107,7 +107,7 @@ const BioPreview: React.FC<{ config: any }> = ({ config }) => {
         backgroundColor: config?.theme?.backgroundColor || '#ffffff',
         pageBackgroundColor: config?.theme?.pageBackgroundColor || config?.theme?.backgroundColor || '#f5f7fb',
         cardBackgroundColor: config?.theme?.cardBackgroundColor || '#ffffff',
-        buttonColor: config?.theme?.buttonColor || '#000000',
+        buttonColor: config?.theme?.buttonColor || '#ffffff', // Changed from black to white for better contrast with default black text
         textColor: config?.theme?.textColor || '#000000',
         buttonStyle: config?.theme?.buttonStyle || 'rounded',
     };
@@ -255,10 +255,8 @@ export const BioPageBuilder: React.FC = () => {
     const [newLinkUrl, setNewLinkUrl] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
-    const [editingSocialLinkId, setEditingSocialLinkId] = useState<string | null>(null);
     const [editLinkTitle, setEditLinkTitle] = useState('');
     const [editLinkUrl, setEditLinkUrl] = useState('');
-    const [editSocialLinkUrl, setEditSocialLinkUrl] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
     const teaserImagesInputRef = useRef<HTMLInputElement>(null);
     
@@ -399,10 +397,8 @@ export const BioPageBuilder: React.FC = () => {
     const handleAddLink = () => {
         if (!newLinkTitle || !newLinkUrl) return;
         
-        // Check link limit based on plan - only count ACTIVE links
+        // Check link limit based on plan - only count ACTIVE custom links (social links removed from UI)
         const customLinksCount = (bioPage.customLinks || bioPage.links || []).filter((l: BioLink) => l.isActive).length;
-        const socialLinksCount = (bioPage.socialLinks || []).filter((l: SocialBioLink) => l.isActive).length;
-        const totalActiveLinks = customLinksCount + socialLinksCount;
         
         // Get plan limits
         let linkLimit: number | null = null;
@@ -410,8 +406,8 @@ export const BioPageBuilder: React.FC = () => {
         else if (user?.plan === 'Pro') linkLimit = 5;
         else if (user?.plan === 'Elite' || user?.plan === 'Agency') linkLimit = null; // Unlimited
         
-        if (linkLimit !== null && totalActiveLinks >= linkLimit) {
-            showToast(`Link limit reached (${totalActiveLinks}/${linkLimit}). ${user?.plan === 'Free' ? 'Upgrade to Pro for 5 links or Elite for unlimited.' : 'Upgrade to Elite for unlimited links.'}`, 'error');
+        if (linkLimit !== null && customLinksCount >= linkLimit) {
+            showToast(`Link limit reached (${customLinksCount}/${linkLimit}). ${user?.plan === 'Free' ? 'Upgrade to Pro for 5 links or Elite for unlimited.' : 'Upgrade to Elite for unlimited links.'}`, 'error');
             return;
         }
         
@@ -1019,8 +1015,6 @@ export const BioPageBuilder: React.FC = () => {
                         <h3 className="text-lg font-bold text-gray-900 dark:text-white">Links</h3>
                         {(() => {
                             const customLinksCount = (bioPage.customLinks || bioPage.links || []).filter((l: BioLink) => l.isActive).length;
-                            const socialLinksCount = (bioPage.socialLinks || []).filter((l: SocialBioLink) => l.isActive).length;
-                            const totalActiveLinks = customLinksCount + socialLinksCount;
                             let linkLimit: number | null = null;
                             if (user?.plan === 'Free') linkLimit = 1;
                             else if (user?.plan === 'Pro') linkLimit = 5;
@@ -1028,60 +1022,10 @@ export const BioPageBuilder: React.FC = () => {
                             
                             return (
                                 <span className="text-sm text-gray-500 dark:text-gray-400">
-                                    {linkLimit !== null ? `${totalActiveLinks}/${linkLimit} links` : `${totalActiveLinks} links (unlimited)`}
+                                    {linkLimit !== null ? `${customLinksCount}/${linkLimit} links` : `${customLinksCount} links (unlimited)`}
                                 </span>
                             );
                         })()}
-                    </div>
-                    
-                    {/* Social Links Section */}
-                    <div className="mb-6">
-                        <div className="flex items-center justify-between mb-3">
-                            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Social Links</h4>
-                        </div>
-                        <div className="space-y-2 mb-4">
-                            {(bioPage.socialLinks || []).filter((l: SocialBioLink) => l.isActive).map((link: SocialBioLink) => (
-                                editingSocialLinkId === link.id ? (
-                                    <div key={link.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700">
-                                        <div>{platformIcons[link.platform]}</div>
-                                        <div className="flex-1">
-                                            <p className="font-semibold text-gray-900 dark:text-white mb-2">{link.platform}</p>
-                                            <input
-                                                type="text"
-                                                value={editSocialLinkUrl}
-                                                onChange={e => setEditSocialLinkUrl(e.target.value)}
-                                                placeholder="URL"
-                                                className="w-full p-2 border rounded-md bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 dark:text-white text-sm"
-                                            />
-                                        </div>
-                                        <button onClick={handleSaveEditSocialLink} className="px-3 py-1.5 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700">
-                                            Save
-                                        </button>
-                                        <button onClick={() => { setEditingSocialLinkId(null); setEditSocialLinkUrl(''); }} className="px-3 py-1.5 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600">
-                                            Cancel
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div key={link.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700">
-                                        <div>{platformIcons[link.platform]}</div>
-                                        <div className="flex-1">
-                                            <p className="font-semibold text-gray-900 dark:text-white">{link.platform}</p>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400">{link.url}</p>
-                                        </div>
-                                        <div className="text-xs font-bold text-gray-500 dark:text-gray-400">{link.clicks} clicks</div>
-                                        <button onClick={() => handleEditSocialLink(link)} className="text-gray-400 hover:text-primary-500">
-                                            <EditIcon className="w-4 h-4" />
-                                        </button>
-                                        <button onClick={() => handleRemoveSocialLink(link.id)} className="text-gray-400 hover:text-red-500">
-                                            <TrashIcon />
-                                        </button>
-                                    </div>
-                                )
-                            ))}
-                            {(!bioPage.socialLinks || bioPage.socialLinks.length === 0) && (
-                                <p className="text-center text-sm text-gray-500 dark:text-gray-400 py-2">No social links added yet.</p>
-                            )}
-                        </div>
                     </div>
 
                     {/* Custom Links Section */}
