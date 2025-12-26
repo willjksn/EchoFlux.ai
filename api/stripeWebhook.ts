@@ -2,6 +2,7 @@ import { VercelRequest, VercelResponse } from '@vercel/node';
 import Stripe from 'stripe';
 import { getFirestore } from 'firebase-admin/firestore';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import { recordPlanChangeEvent } from './_planChangeEvents.js';
 
 // Initialize Firebase Admin if not already initialized
 if (!getApps().length) {
@@ -71,6 +72,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const userRef = db.collection('users').doc(userId);
             const now = new Date().toISOString();
 
+            // Read existing plan for cohort tracking
+            let fromPlan: string | null = null;
+            try {
+              const existing = await userRef.get();
+              fromPlan = (existing.data() as any)?.plan || null;
+            } catch {}
+
             await userRef.set({
               plan: planName,
               userType: 'Creator', // Ensure userType is set for onboarding flow
@@ -85,6 +93,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               monthlyImageGenerationsUsed: 0,
               monthlyVideoGenerationsUsed: 0,
             }, { merge: true });
+
+            // Record plan change event (promo cohort tracking)
+            if (fromPlan !== planName) {
+              try {
+                await recordPlanChangeEvent({
+                  userId,
+                  fromPlan,
+                  toPlan: planName,
+                  changedAtIso: now,
+                  source: 'stripe_webhook',
+                  stripeSessionId: session.id || null,
+                  stripeSubscriptionId: subscription.id || null,
+                });
+              } catch (err) {
+                console.warn('Failed to record plan change event from webhook:', err);
+              }
+            }
 
             console.log(`Subscription created for user ${userId}: ${planName}`);
           }

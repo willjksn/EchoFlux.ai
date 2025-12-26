@@ -2,6 +2,7 @@ import { VercelRequest, VercelResponse } from '@vercel/node';
 import Stripe from 'stripe';
 import { verifyAuth } from './verifyAuth.js';
 import { getAdminDb } from './_firebaseAdmin.js';
+import { recordPlanChangeEvent } from './_planChangeEvents.js';
 
 // Stripe init mirrors api/createCheckoutSession.ts so behavior stays consistent.
 const stripeUseTestModeEnv = (process.env.STRIPE_USE_TEST_MODE || '').toString().toLowerCase().trim();
@@ -70,6 +71,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const db = getAdminDb();
     const now = new Date().toISOString();
 
+    // Record plan change event (promo cohort tracking). We intentionally do this in the same call
+    // that applies the plan so the event is available immediately after redirect.
+    let fromPlan: string | null = null;
+    try {
+      const existing = await db.collection('users').doc(decoded.uid).get();
+      fromPlan = (existing.data() as any)?.plan || null;
+    } catch {}
+
     await db.collection('users').doc(decoded.uid).set(
       {
         plan: planName,
@@ -84,6 +93,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
       { merge: true }
     );
+
+    // Only record when plan actually changes (avoid noise on repeated calls)
+    if (fromPlan !== planName) {
+      try {
+        await recordPlanChangeEvent({
+          userId: decoded.uid,
+          fromPlan,
+          toPlan: planName,
+          changedAtIso: now,
+          source: 'verify_checkout_session',
+          stripeSessionId: sessionId,
+          stripeSubscriptionId: null,
+        });
+      } catch (err) {
+        console.warn('Failed to record plan change event:', err);
+      }
+    }
 
     return res.status(200).json({
       success: true,

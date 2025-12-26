@@ -22,8 +22,9 @@ export const AdminAnnouncementsPanel: React.FC = () => {
   const [isBanner, setIsBanner] = useState(true);
   const [isPublic, setIsPublic] = useState(true);
   const [targetPlans, setTargetPlans] = useState<Plan[]>([]);
-  const [startsAt, setStartsAt] = useState<string>('');
-  const [endsAt, setEndsAt] = useState<string>('');
+  // Store as ISO for backend; use datetime-local inputs for admin convenience.
+  const [startsAtIso, setStartsAtIso] = useState<string>('');
+  const [endsAtIso, setEndsAtIso] = useState<string>('');
   const [actionLabel, setActionLabel] = useState<string>('');
   const [actionPage, setActionPage] = useState<string>('pricing');
 
@@ -33,7 +34,31 @@ export const AdminAnnouncementsPanel: React.FC = () => {
   const [bulkReason, setBulkReason] = useState<string>('');
   const [isBulkGranting, setIsBulkGranting] = useState(false);
 
+  const [cohortAnnouncementId, setCohortAnnouncementId] = useState<string>('');
+  const [cohortUpgradedToPlans, setCohortUpgradedToPlans] = useState<Plan[]>(['Pro', 'Elite']);
+  const [cohortRewardType, setCohortRewardType] = useState<RewardType>('storage_boost');
+  const [cohortRewardAmount, setCohortRewardAmount] = useState<number>(5);
+  const [cohortReason, setCohortReason] = useState<string>('');
+  const [isCohortGranting, setIsCohortGranting] = useState(false);
+
   const canUse = user?.role === 'Admin';
+
+  const isoToLocalInput = (iso?: string | null) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    // YYYY-MM-DDTHH:mm in local time
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const localInputToIso = (local: string) => {
+    if (!local) return '';
+    // Date(...) interprets datetime-local as local timezone
+    const d = new Date(local);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toISOString();
+  };
 
   const resetEditor = () => {
     setEditing(null);
@@ -44,8 +69,8 @@ export const AdminAnnouncementsPanel: React.FC = () => {
     setIsBanner(true);
     setIsPublic(true);
     setTargetPlans([]);
-    setStartsAt('');
-    setEndsAt('');
+    setStartsAtIso('');
+    setEndsAtIso('');
     setActionLabel('');
     setActionPage('pricing');
   };
@@ -64,8 +89,8 @@ export const AdminAnnouncementsPanel: React.FC = () => {
     setIsBanner(Boolean(a.isBanner));
     setIsPublic(Boolean(a.isPublic));
     setTargetPlans(Array.isArray(a.targetPlans) ? a.targetPlans : []);
-    setStartsAt(a.startsAt || '');
-    setEndsAt(a.endsAt || '');
+    setStartsAtIso(a.startsAt || '');
+    setEndsAtIso(a.endsAt || '');
     setActionLabel(a.actionLabel || '');
     setActionPage(a.actionPage || 'pricing');
     setIsEditorOpen(true);
@@ -112,8 +137,8 @@ export const AdminAnnouncementsPanel: React.FC = () => {
           isBanner,
           isPublic,
           targetPlans,
-          startsAt: startsAt || null,
-          endsAt: endsAt || null,
+          startsAt: startsAtIso || null,
+          endsAt: endsAtIso || null,
           actionLabel: actionLabel || null,
           actionPage: actionLabel ? actionPage : null,
         }),
@@ -203,6 +228,46 @@ export const AdminAnnouncementsPanel: React.FC = () => {
       showToast(err?.message || 'Bulk grant failed', 'error');
     } finally {
       setIsBulkGranting(false);
+    }
+  };
+
+  const runCohortGrant = async () => {
+    if (!cohortAnnouncementId) {
+      showToast('Select an announcement', 'error');
+      return;
+    }
+    if (cohortUpgradedToPlans.length === 0) {
+      showToast('Select at least one upgraded-to plan', 'error');
+      return;
+    }
+    if (!cohortRewardAmount || cohortRewardAmount <= 0) {
+      showToast('Enter a valid amount', 'error');
+      return;
+    }
+    setIsCohortGranting(true);
+    try {
+      const token = await auth.currentUser?.getIdToken(true);
+      const res = await fetch('/api/adminGrantPromoCohort', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          announcementId: cohortAnnouncementId,
+          upgradedToPlans: cohortUpgradedToPlans,
+          rewardType: cohortRewardType,
+          rewardAmount: cohortRewardAmount,
+          reason: cohortReason || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || data?.message || 'Cohort grant failed');
+      showToast(`Cohort grant: ${data.granted || 0} granted (${data.skippedAlreadyGranted || 0} already granted)`, 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Cohort grant failed', 'error');
+    } finally {
+      setIsCohortGranting(false);
     }
   };
 
@@ -379,6 +444,97 @@ export const AdminAnnouncementsPanel: React.FC = () => {
         </div>
       </div>
 
+      <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
+        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Promo Cohort Grants (upgraded during window)</h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          Grant rewards only to users who upgraded during an announcement’s start/end window (based on recorded plan-change events).
+        </p>
+
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Announcement</label>
+            <select
+              value={cohortAnnouncementId}
+              onChange={(e) => setCohortAnnouncementId(e.target.value)}
+              className="w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
+            >
+              <option value="">Select…</option>
+              {announcements.map(a => (
+                <option key={a.id} value={a.id}>
+                  {a.title} {a.startsAt ? `(starts ${new Date(a.startsAt).toLocaleString()})` : ''} {a.endsAt ? `(ends ${new Date(a.endsAt).toLocaleString()})` : ''}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Uses the announcement’s <strong>Starts At</strong> and <strong>Ends At</strong>. If Ends At is blank, “now” is used.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Eligible upgraded-to plans</label>
+            <div className="grid grid-cols-2 gap-2">
+              {(['Pro', 'Elite', 'OnlyFansStudio'] as Plan[]).map(p => (
+                <label key={p} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={cohortUpgradedToPlans.includes(p)}
+                    onChange={(e) => {
+                      setCohortUpgradedToPlans(prev => e.target.checked ? Array.from(new Set([...prev, p])) : prev.filter(x => x !== p));
+                    }}
+                  />
+                  {p}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Reward</label>
+            <select
+              value={cohortRewardType}
+              onChange={(e) => setCohortRewardType(e.target.value as RewardType)}
+              className="w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
+            >
+              <option value="storage_boost">Storage Boost (GB)</option>
+              <option value="extra_generations">Extra AI Generations</option>
+              <option value="free_month">Free Month(s)</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Amount</label>
+            <input
+              type="number"
+              min={1}
+              value={cohortRewardAmount}
+              onChange={(e) => setCohortRewardAmount(Number(e.target.value))}
+              className="w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
+            />
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Reason (optional)</label>
+          <input
+            value={cohortReason}
+            onChange={(e) => setCohortReason(e.target.value)}
+            className="w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
+            placeholder="e.g., Holiday promo cohort reward"
+          />
+        </div>
+
+        <div className="mt-4 flex justify-end">
+          <button
+            onClick={runCohortGrant}
+            disabled={isCohortGranting}
+            className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 disabled:opacity-50"
+          >
+            {isCohortGranting ? 'Granting…' : 'Grant Cohort Reward'}
+          </button>
+        </div>
+      </div>
+
       {isEditorOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
@@ -472,22 +628,25 @@ export const AdminAnnouncementsPanel: React.FC = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Starts At (optional)</label>
                   <input
-                    value={startsAt}
-                    onChange={(e) => setStartsAt(e.target.value)}
-                    placeholder="2026-01-01T00:00:00Z"
+                    type="datetime-local"
+                    value={isoToLocalInput(startsAtIso)}
+                    onChange={(e) => setStartsAtIso(localInputToIso(e.target.value))}
                     className="w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Ends At (optional)</label>
                   <input
-                    value={endsAt}
-                    onChange={(e) => setEndsAt(e.target.value)}
-                    placeholder="2026-01-07T00:00:00Z"
+                    type="datetime-local"
+                    value={isoToLocalInput(endsAtIso)}
+                    onChange={(e) => setEndsAtIso(localInputToIso(e.target.value))}
                     className="w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
                   />
                 </div>
               </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Uses your browser’s local time (recommended: set your system to Eastern Time). Stored internally as UTC ISO.
+              </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -512,6 +671,9 @@ export const AdminAnnouncementsPanel: React.FC = () => {
                     <option value="onlyfansStudio">OnlyFans Studio</option>
                     <option value="settings">Settings</option>
                   </select>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Action Page is the in-app destination when the banner button is clicked (e.g. <strong>Settings</strong> opens the Settings page).
+                  </p>
                 </div>
               </div>
 
