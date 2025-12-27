@@ -17,6 +17,22 @@ interface TrendData {
   timestamp: string;
 }
 
+interface TrendPresetDoc {
+  presetId: string;
+  platform: string;
+  category: string;
+  label: string;
+  query: string;
+  results: Array<{
+    title: string;
+    link: string;
+    snippet: string;
+  }>;
+  fetchedAt?: string;
+  updatedBy?: string;
+  source?: string;
+}
+
 function isComplianceCategory(category: string): boolean {
   const c = (category || "").toLowerCase();
   return c.startsWith("compliance_") || c.includes("policy") || c.includes("guidelines");
@@ -31,6 +47,51 @@ function formatTrendBlock(trend: TrendData): string {
   return `\n${trend.category.toUpperCase().replace(/_/g, " ")}:\n${results}`;
 }
 
+function formatPresetBlock(preset: TrendPresetDoc): string {
+  const results = (preset.results || [])
+    .slice(0, 3)
+    .map((r, idx) => `${idx + 1}. ${r.title}\n   ${r.snippet}\n   Source: ${r.link}`)
+    .join("\n\n");
+
+  const header = preset.label
+    ? `${preset.platform.toUpperCase()} — ${preset.label}`
+    : preset.category.toUpperCase().replace(/_/g, " ");
+
+  return `\n${header}:\n${results}`;
+}
+
+async function getAdminViralPresets(db: FirebaseFirestore.Firestore, platform?: string): Promise<TrendPresetDoc[]> {
+  try {
+    const snapshot = await db.collection("trend_presets").get();
+    const all = snapshot.docs
+      .map((d) => d.data() as TrendPresetDoc)
+      .filter((p) => p && Array.isArray(p.results) && p.results.length > 0);
+
+    const filtered = platform
+      ? all.filter((p) => (p.platform || "").toLowerCase() === platform.toLowerCase())
+      : all;
+
+    // Only include recent preset runs (avoid stale prompts)
+    const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
+    const recent = filtered.filter((p) => {
+      const t = p.fetchedAt ? Date.parse(p.fetchedAt) : NaN;
+      return Number.isFinite(t) ? t >= cutoff : true;
+    });
+
+    // Sort newest first
+    recent.sort((a, b) => {
+      const ta = a.fetchedAt ? Date.parse(a.fetchedAt) : 0;
+      const tb = b.fetchedAt ? Date.parse(b.fetchedAt) : 0;
+      return tb - ta;
+    });
+
+    return recent;
+  } catch (err) {
+    console.warn("[getAdminViralPresets] Failed to load admin presets:", err);
+    return [];
+  }
+}
+
 /**
  * Helper function to get latest trends from Firestore
  * This can be called by other API endpoints to get current trends
@@ -41,6 +102,7 @@ export async function getLatestTrends(): Promise<string> {
     const db = getFirestore(app);
     
     const latestDoc = await db.collection("weekly_trends").doc("latest").get();
+    const adminPresets = await getAdminViralPresets(db);
     
     if (!latestDoc.exists) {
       return "No trend data available. Using general best practices.";
@@ -57,9 +119,11 @@ export async function getLatestTrends(): Promise<string> {
 
     const formattedCompliance = compliance.map(formatTrendBlock).join("\n\n");
     const formattedTrends = nonCompliance.map(formatTrendBlock).join("\n\n");
+    const formattedAdminPresets = adminPresets.length ? adminPresets.map(formatPresetBlock).join("\n\n") : "";
 
     return `
 CURRENT SOCIAL MEDIA TRENDS & BEST PRACTICES (Fetched: ${data.fetchedAt || "Unknown"}):
+${formattedAdminPresets ? `\n\nADMIN “WHAT’S VIRAL THIS WEEK” PRESETS (Manual refresh):\n${formattedAdminPresets}\n` : ""}
 ${formattedCompliance ? `\n\nCOMPLIANCE & POLICY UPDATES (Weekly check):\n${formattedCompliance}\n` : ""}
 ${formattedTrends}
 
@@ -88,6 +152,7 @@ export async function getOnlyFansWeeklyTrends(): Promise<string> {
     const db = getFirestore(app);
     
     const latestDoc = await db.collection("weekly_trends").doc("latest").get();
+    const adminOnlyFansPresets = await getAdminViralPresets(db, "onlyfans");
     
     if (!latestDoc.exists) {
       return "OnlyFans trend data unavailable. Using general OnlyFans best practices.";
@@ -113,9 +178,11 @@ export async function getOnlyFansWeeklyTrends(): Promise<string> {
     const nonCompliance = onlyfansTrends.filter((t) => !isComplianceCategory(t.category));
     const formattedCompliance = compliance.map(formatTrendBlock).join("\n\n");
     const formattedTrends = nonCompliance.map(formatTrendBlock).join("\n\n");
+    const formattedAdminPresets = adminOnlyFansPresets.length ? adminOnlyFansPresets.map(formatPresetBlock).join("\n\n") : "";
 
     return `
 CURRENT ONLYFANS-SPECIFIC TRENDS & BEST PRACTICES (Fetched: ${data.fetchedAt || "Unknown"}):
+${formattedAdminPresets ? `\n\nADMIN “WHAT’S VIRAL THIS WEEK” PRESETS (Manual refresh):\n${formattedAdminPresets}\n` : ""}
 ${formattedCompliance ? `\n\nCOMPLIANCE & POLICY UPDATES (Weekly check):\n${formattedCompliance}\n` : ""}
 ${formattedTrends}
 
