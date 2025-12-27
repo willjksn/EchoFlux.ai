@@ -178,6 +178,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const subscriptionResp = await stripe.subscriptions.retrieve(subscriptionId, { expand: ['items.data.price'] });
     const subscription = subscriptionResp as unknown as Stripe.Subscription;
+    const scheduleId = (subscription as any)?.schedule as string | null | undefined;
+
+    // If a schedule exists (e.g. a downgrade already scheduled), Stripe can reject invoice previews or return confusing results.
+    // Don't throw a 500 here; just tell the UI to show "Calculated at checkout".
+    if (scheduleId) {
+      return res.status(409).json({
+        error: 'Proration preview unavailable while a scheduled subscription change is active.',
+        message: 'Calculated at checkout.',
+        scheduleId,
+      });
+    }
     const itemId = subscription.items.data[0]?.id;
     if (!itemId) return res.status(500).json({ error: 'Unable to identify subscription item' });
 

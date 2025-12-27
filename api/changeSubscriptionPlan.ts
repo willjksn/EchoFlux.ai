@@ -147,9 +147,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // If user is moving to Free, treat it like cancel-at-period-end (no refunds).
     if (planName === 'Free') {
-      const updatedResp = await stripe.subscriptions.update(subscriptionId, { cancel_at_period_end: true });
-      // Stripe SDK types can be `Stripe.Response<Stripe.Subscription>` which doesn't always expose
-      // fields cleanly in TS builds. Cast to Subscription for safe access.
+      // If subscription is managed by a subscription schedule, Stripe does not allow
+      // updating cancellation behavior directly on the subscription.
+      const subForCancelResp = await stripe.subscriptions.retrieve(subscriptionId);
+      const subForCancel = subForCancelResp as unknown as Stripe.Subscription;
+      const scheduleId = (subForCancel as any)?.schedule as string | null | undefined;
+
+      if (scheduleId) {
+        const schedule = await stripe.subscriptionSchedules.retrieve(scheduleId, { expand: ['phases'] });
+        const currentPeriodStart = (subForCancel as any)?.current_period_start as number | null | undefined;
+        const currentPeriodEnd = (subForCancel as any)?.current_period_end as number | null | undefined;
+
+        // Keep only the current phase, then cancel at the end of it.
+        const items =
+          (subForCancel as any).items?.data?.map((i: any) => ({
+            price: typeof i.price === 'string' ? i.price : i.price?.id,
+            quantity: i.quantity || 1,
+          })) || [];
+
+        await stripe.subscriptionSchedules.update(scheduleId, {
+          end_behavior: 'cancel',
+          phases: [
+            {
+              start_date: (schedule as any)?.phases?.[0]?.start_date || currentPeriodStart,
+              ...(currentPeriodEnd ? { end_date: currentPeriodEnd } : {}),
+              items,
+            },
+          ],
+        });
+      } else {
+        await stripe.subscriptions.update(subscriptionId, { cancel_at_period_end: true });
+      }
+
+      const updatedResp = await stripe.subscriptions.retrieve(subscriptionId);
       const updated = updatedResp as unknown as Stripe.Subscription;
       const periodEnd = (updated as any).current_period_end as number | null;
 
@@ -174,6 +204,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       expand: ['items.data.price', 'latest_invoice'],
     });
     const subscription = subscriptionResp as unknown as Stripe.Subscription;
+
+    // If a schedule exists (previous downgrade scheduling), release it before making
+    // an immediate upgrade change. Otherwise Stripe will throw:
+    // "subscription is managed by the subscription schedule ... updating cancelation behavior ... not allowed"
+    const existingScheduleId = (subscription as any)?.schedule as string | null | undefined;
 
     const currentPlanName: string = userData?.plan || 'Free';
     const currentRank = PLAN_RANK[currentPlanName] ?? 0;
@@ -226,32 +261,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (isDowngrade) {
       // Create or re-use a schedule and add a next phase.
       const scheduleId =
-        (subscription as any).schedule ||
+        existingScheduleId ||
         (await stripe.subscriptionSchedules.create({ from_subscription: subscriptionId })).id;
 
-      const schedule = await stripe.subscriptionSchedules.retrieve(scheduleId, { expand: ['phases'] });
-      const currentPhase = schedule.phases?.[0];
-      const effectiveStart = currentPhase?.end_date || (subscription as any).current_period_end;
+      // Always anchor to the subscription period boundaries (more reliable than schedule.phases[0] if it already had future phases).
+      const periodStart = (subscription as any).current_period_start as number | null | undefined;
+      const periodEnd = (subscription as any).current_period_end as number | null | undefined;
+      const effectiveStart = periodEnd;
 
       if (!effectiveStart) {
         return res.status(500).json({ error: 'Unable to determine period end for scheduling downgrade' });
       }
 
-      const currentPhaseItems =
-        currentPhase?.items?.map((i: any) => ({
-          price: typeof i.price === 'string' ? i.price : i.price?.id,
-          quantity: i.quantity || 1,
-        })) ||
-        subscription.items.data.map((i) => ({
-          price: typeof i.price === 'string' ? i.price : i.price.id,
-          quantity: i.quantity || 1,
-        }));
+      const currentPhaseItems = subscription.items.data.map((i) => ({
+        price: typeof i.price === 'string' ? i.price : i.price.id,
+        quantity: i.quantity || 1,
+      }));
 
       await stripe.subscriptionSchedules.update(scheduleId, {
         end_behavior: 'release',
         phases: [
           {
-            start_date: currentPhase?.start_date || (subscription as any).current_period_start,
+            start_date: periodStart || (subscription as any).current_period_start,
             end_date: effectiveStart,
             items: currentPhaseItems,
           },
@@ -284,14 +315,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Upgrades (including cross-interval): prorate unused time and charge the difference.
+    if (existingScheduleId) {
+      try {
+        await stripe.subscriptionSchedules.release(existingScheduleId);
+      } catch (e) {
+        // Best-effort: if release fails, return a useful error rather than a 500.
+        return res.status(409).json({
+          error: 'This subscription has a scheduled change. Please wait for it to take effect or cancel the scheduled change before upgrading.',
+          message: 'Subscription is managed by a subscription schedule.',
+          scheduleId: existingScheduleId,
+        });
+      }
+    }
+
+    // Re-retrieve after schedule release to ensure updates are allowed and item IDs are current.
+    const subscriptionAfterReleaseResp = await stripe.subscriptions.retrieve(subscriptionId, {
+      expand: ['items.data.price', 'latest_invoice'],
+    });
+    const subscriptionAfterRelease = subscriptionAfterReleaseResp as unknown as Stripe.Subscription;
+
     const itemId = subscription.items.data[0]?.id;
-    if (!itemId) return res.status(500).json({ error: 'Unable to identify subscription item' });
+    const safeItemId = subscriptionAfterRelease.items.data[0]?.id || itemId;
+    if (!safeItemId) return res.status(500).json({ error: 'Unable to identify subscription item' });
 
     await stripe.subscriptions.update(subscriptionId, {
       cancel_at_period_end: false,
       proration_behavior: 'create_prorations',
       billing_cycle_anchor: currentInterval === targetInterval ? 'unchanged' : 'now',
-      items: [{ id: itemId, price: targetPriceId }],
+      items: [{ id: safeItemId, price: targetPriceId }],
       metadata: {
         ...(subscription.metadata || {}),
         planName,
