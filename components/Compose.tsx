@@ -174,7 +174,6 @@ const CaptionGenerator: React.FC = () => {
     suggestedTime?: string;
   }>>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [autoConfirmEnabled, setAutoConfirmEnabled] = useState(false);
   
   // Upgrade modal state
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
@@ -3361,18 +3360,7 @@ const CaptionGenerator: React.FC = () => {
             </div>
 
             <div className="mb-4 flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="auto-confirm"
-                  checked={autoConfirmEnabled}
-                  onChange={(e) => setAutoConfirmEnabled(e.target.checked)}
-                  className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500"
-                />
-                <label htmlFor="auto-confirm" className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
-                  Auto-confirm recommendations
-                </label>
-              </div>
+              <div />
               <button
                 onClick={handleApplyAISchedule}
                 disabled={isSaving}
@@ -3514,13 +3502,6 @@ const CaptionGenerator: React.FC = () => {
               })}
             </div>
 
-            {autoConfirmEnabled && (
-              <div className="mt-6 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-                <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                  ⚠️ Auto-confirm is enabled. Clicking "Confirm & Schedule All" will automatically schedule all posts with AI recommendations.
-                </p>
-              </div>
-            )}
           </div>
         </div>
       )}
