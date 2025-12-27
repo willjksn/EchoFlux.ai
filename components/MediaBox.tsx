@@ -957,8 +957,8 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
         </div>
       )}
 
-      {/* AI Action Buttons - Show when caption exists */}
-      {mediaItem.captionText && mediaItem.captionText.trim() && (
+      {/* AI Action Buttons - Always visible for Pro/Elite+ (Predict/Repurpose require media uploaded) */}
+      {user && user.plan !== 'Free' && (
         <div className="mb-3 flex flex-wrap gap-2">
           {/*
             Match OnlyFans Studio button colors:
@@ -1092,9 +1092,9 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
                 setIsGenerating(false);
               }
             }}
-            disabled={isGenerating || !user || user?.plan === 'Free'}
+            disabled={isGenerating || !user || user?.plan === 'Free' || !mediaItem.previewUrl}
             className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-all shadow-sm flex items-center justify-center gap-1 ${
-              user?.plan === 'Free'
+              user?.plan === 'Free' || !mediaItem.previewUrl
                 ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
                 : 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:from-blue-700 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed'
             }`}
@@ -1196,9 +1196,9 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
                 setIsGenerating(false);
               }
             }}
-            disabled={isGenerating || !user || user?.plan === 'Free'}
+            disabled={isGenerating || !user || user?.plan === 'Free' || !mediaItem.previewUrl}
             className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center justify-center gap-1 ${
-              user?.plan === 'Free'
+              user?.plan === 'Free' || !mediaItem.previewUrl
                 ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
                 : 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed'
             }`}

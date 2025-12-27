@@ -615,7 +615,20 @@ export const OnlyFansContentBrain: React.FC = () => {
     
     // Caption generation state
     const [captionPrompt, setCaptionPrompt] = useState('');
-    const [captionTone, setCaptionTone] = useState<'Playful' | 'Flirty' | 'Confident' | 'Teasing' | 'Intimate' | 'Explicit'>('Teasing');
+    const [captionTone, setCaptionTone] = useState<
+        | 'Playful'
+        | 'Flirty'
+        | 'Confident'
+        | 'Teasing'
+        | 'Intimate'
+        | 'Seductive'
+        | 'Erotic'
+        | 'Raw/Uncensored'
+        | 'Provocative'
+        | 'Dominant/Dominant-focused'
+        | 'Submissive/Submissive-focused'
+        | 'Explicit'
+    >('Teasing');
     const [captionGoal, setCaptionGoal] = useState('engagement');
     const [generatedCaptions, setGeneratedCaptions] = useState<string[]>([]);
     
@@ -637,7 +650,20 @@ export const OnlyFansContentBrain: React.FC = () => {
     // Media caption generation state (kept for backward compatibility)
     const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
-    const [mediaCaptionTone, setMediaCaptionTone] = useState<'Playful' | 'Flirty' | 'Confident' | 'Teasing' | 'Intimate' | 'Explicit'>('Teasing');
+    const [mediaCaptionTone, setMediaCaptionTone] = useState<
+        | 'Playful'
+        | 'Flirty'
+        | 'Confident'
+        | 'Teasing'
+        | 'Intimate'
+        | 'Seductive'
+        | 'Erotic'
+        | 'Raw/Uncensored'
+        | 'Provocative'
+        | 'Dominant/Dominant-focused'
+        | 'Submissive/Submissive-focused'
+        | 'Explicit'
+    >('Teasing');
     const [mediaCaptionGoal, setMediaCaptionGoal] = useState('engagement');
     const [mediaCaptionPrompt, setMediaCaptionPrompt] = useState('');
     const [generatedMediaCaptions, setGeneratedMediaCaptions] = useState<{caption: string; hashtags: string[]}[]>([]);
@@ -2774,6 +2800,10 @@ export const OnlyFansContentBrain: React.FC = () => {
                                     >
                                         <option value="engagement">Engagement</option>
                                         <option value="sales">Sales/Monetization</option>
+                                        <option value="subscriber-retention">Subscriber Retention</option>
+                                        <option value="ppv-promotion">PPV Promotion</option>
+                                        <option value="tips-donations">Tips/Donations</option>
+                                        <option value="content-upsell">Content Upsell</option>
                                         <option value="brand">Brand Awareness</option>
                                         <option value="followers">Increase Followers/Fans</option>
                                     </select>
@@ -2784,7 +2814,22 @@ export const OnlyFansContentBrain: React.FC = () => {
                                         Tone:
                                     </label>
                                     <div className="grid grid-cols-3 gap-2">
-                                        {(['Playful', 'Flirty', 'Confident', 'Teasing', 'Intimate', 'Explicit'] as const).map((tone) => (
+                                        {(
+                                            [
+                                                'Playful',
+                                                'Flirty',
+                                                'Confident',
+                                                'Teasing',
+                                                'Intimate',
+                                                'Seductive',
+                                                'Erotic',
+                                                'Raw/Uncensored',
+                                                'Provocative',
+                                                'Dominant/Dominant-focused',
+                                                'Submissive/Submissive-focused',
+                                                'Explicit',
+                                            ] as const
+                                        ).map((tone) => (
                                             <button
                                                 key={tone}
                                                 onClick={() => setCaptionTone(tone)}
@@ -3153,6 +3198,10 @@ export const OnlyFansContentBrain: React.FC = () => {
                                     >
                                         <option value="engagement">Engagement</option>
                                         <option value="sales">Sales/Monetization</option>
+                                        <option value="subscriber-retention">Subscriber Retention</option>
+                                        <option value="ppv-promotion">PPV Promotion</option>
+                                        <option value="tips-donations">Tips/Donations</option>
+                                        <option value="content-upsell">Content Upsell</option>
                                         <option value="brand">Brand Awareness</option>
                                         <option value="followers">Increase Followers/Fans</option>
                                     </select>
@@ -3163,7 +3212,22 @@ export const OnlyFansContentBrain: React.FC = () => {
                                         Tone:
                                     </label>
                                     <div className="grid grid-cols-3 gap-2">
-                                        {(['Playful', 'Flirty', 'Confident', 'Teasing', 'Intimate', 'Explicit'] as const).map((tone) => (
+                                        {(
+                                            [
+                                                'Playful',
+                                                'Flirty',
+                                                'Confident',
+                                                'Teasing',
+                                                'Intimate',
+                                                'Seductive',
+                                                'Erotic',
+                                                'Raw/Uncensored',
+                                                'Provocative',
+                                                'Dominant/Dominant-focused',
+                                                'Submissive/Submissive-focused',
+                                                'Explicit',
+                                            ] as const
+                                        ).map((tone) => (
                                             <button
                                                 key={tone}
                                                 onClick={() => setMediaCaptionTone(tone)}

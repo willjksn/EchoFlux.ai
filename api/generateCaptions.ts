@@ -171,13 +171,22 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   
   // Detect explicit content context - ONLY for truly explicit tones, NOT "sexy/bold"
   // "Sexy / Bold" should be suggestive but NOT explicit, and should NOT generate OnlyFans hashtags
-  const isExplicitContent = normalizedTone === 'explicit/adult content' || 
-                           normalizedTone === 'explicit' ||
-                           normalizedTone === 'sexy / explicit' ||
-                           normalizedTone === 'sexy-explicit' ||
-                           normalizedTone === 'sex-explicit' ||
-                           tone === 'Sexy / Explicit' || // Keep original case check for backwards compatibility
-                           tone === 'Explicit';
+  const isExplicitContent =
+    normalizedTone === 'explicit/adult content' ||
+    normalizedTone === 'explicit' ||
+    normalizedTone === 'sexy / explicit' ||
+    normalizedTone === 'sexy-explicit' ||
+    normalizedTone === 'sex-explicit' ||
+    normalizedTone === 'erotic' ||
+    normalizedTone === 'raw/uncensored' ||
+    normalizedTone === 'raw-uncensored' ||
+    normalizedTone === 'provocative' ||
+    normalizedTone === 'dominant/dominant-focused' ||
+    normalizedTone === 'dominant' ||
+    normalizedTone === 'submissive/submissive-focused' ||
+    normalizedTone === 'submissive' ||
+    tone === 'Sexy / Explicit' || // Keep original case check for backwards compatibility
+    tone === 'Explicit';
   
   // NEVER generate OnlyFans hashtags in compose - OnlyFans has its own studio
   // OnlyFans platform is hidden in compose, so it should never be selected here
@@ -230,8 +239,10 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   const isVideo = finalMedia?.mimeType?.startsWith('video/') || false;
 
   // Determine platform for context (if OnlyFans)
-  const targetPlatform = Array.isArray(platforms) && platforms.includes('OnlyFans') ? 'OnlyFans' 
-                        : null;
+  const isOnlyFansPlatform =
+    Array.isArray(platforms) &&
+    platforms.some((p) => String(p).toLowerCase().trim() === "onlyfans");
+  const targetPlatform = isOnlyFansPlatform ? "OnlyFans" : null;
 
   // Build explicit content context - only for truly explicit content
   const explicitContext = isExplicitContent ? `
@@ -257,10 +268,6 @@ ${shouldGenerateOnlyFansHashtags ? '- HASHTAGS MUST BE EXPLICIT AND MATCH THE CA
   let goalContext = '';
   let currentTrends = '';
   let onlyfansResearch = '';
-  
-  // Detect if this is for OnlyFans platform
-  const isOnlyFansPlatform = targetPlatform === 'OnlyFans' || 
-                             (Array.isArray(platforms) && platforms.includes('OnlyFans'));
   
   // Always get latest trends from weekly Tavily job (no Tavily calls needed here)
   try {
@@ -299,6 +306,45 @@ ${shouldGenerateOnlyFansHashtags ? '- HASHTAGS MUST BE EXPLICIT AND MATCH THE CA
     goalContext = getGoalFramework(goal);
   }
 
+  const onlyFansPlatformContext = isOnlyFansPlatform
+    ? `
+ONLYFANS MODE (STRICT):
+- This caption is for OnlyFans ONLY (not Instagram/TikTok/X/etc.)
+- Do NOT generate hashtags. OnlyFans does not use hashtags. Return "hashtags": [] for every caption.
+- Use keywords naturally INSIDE the caption (searchable words/phrases), not hashtags.
+- Caption length guidance:
+  - Optimal: 150–500 characters (punchy, engaging, monetization-focused)
+  - Soft maximum: ~2000 characters (only go longer when truly needed)
+- Write for subscriber conversion + retention:
+  - Make it feel personal and subscriber-focused ("you"/"your" + first-person creator voice)
+  - Include tasteful monetization CTAs that fit the goal: subscribe, tip, PPV unlock, customs, bundles, VIP
+- Example CTAs (mix, don’t spam):
+  - "Tip if you want the full set"
+  - "Reply 'VIP' for customs"
+  - "Unlock the PPV in DMs"
+  - "Subscribe for daily drops"
+  - "Want the uncensored version? Check your messages"
+  - "Custom video requests open — DM me"
+- Goal mapping (use at least one CTA aligned with selected goal when it fits):
+  - engagement: questions, playful hooks, teasing prompts
+  - sales / monetization: subscribe + PPV + bundle offers
+  - subscriber-retention: gratitude, routine, loyalty rewards, VIP perks
+  - ppv-promotion: tease + direct "unlock" CTA + value framing
+  - tips-donations: tip framing + gratitude + incentive
+  - content-upsell: upsell a premium set/video, bundles, customs
+`
+    : "";
+
+  const onlyFansExplicitBoost = isOnlyFansPlatform && isExplicitContent
+    ? `
+ONLYFANS EXPLICIT MODE (HIGH INTENSITY):
+- The user selected an explicit adult tone. Be VERY explicit and sexually graphic (adult, consensual).
+- Use direct, erotic language and describe what is visually shown in detail (especially if media is provided).
+- Avoid censorship, euphemisms, or vague "safe" language. Be bold, raw, and explicit.
+- Keep it natural and enticing (not repetitive, not robotic).
+`
+    : "";
+
   // Build prompt
   const prompt = `
 ${isExplicitContent ? `
@@ -320,10 +366,16 @@ ${currentTrends ? `CURRENT SOCIAL MEDIA TRENDS (from weekly research):\n${curren
 
 ${onlyfansResearch ? `ONLYFANS-SPECIFIC RESEARCH & BEST PRACTICES:\n${onlyfansResearch}\n` : ''}
 
+${onlyFansPlatformContext}
+${onlyFansExplicitBoost}
+
 ${Array.isArray(platforms) && platforms.length > 0 ? `
 PLATFORM-SPECIFIC OPTIMIZATION REQUIREMENTS:
 ${platforms.map(platform => {
   const platformName = platform.toLowerCase();
+  if (platformName === 'onlyfans') {
+    return `- OnlyFans: Do NOT generate hashtags. Optimize for 150–500 characters (soft max ~2000). Add subscriber-focused monetization CTAs (subscribe, tip, PPV unlock, customs) when appropriate.`;
+  }
   if (platformName.includes('instagram')) {
     return `- Instagram: Maximum 2,200 characters for captions. Optimal length: 125-150 characters for engagement. Include 10-30 relevant hashtags for maximum reach. Hashtags should be relevant to content, niche, and trending topics.`;
   } else if (platformName.includes('tiktok')) {
@@ -345,7 +397,7 @@ ${platforms.map(platform => {
   }
 }).join('\n')}
 
-CRITICAL: Ensure all captions respect the character limits and hashtag counts specified for the target platform(s).
+CRITICAL: Ensure all captions respect the character limits and hashtag counts specified for the target platform(s). If OnlyFans is selected, hashtags MUST be empty.
 ` : ''}
 
 CRITICAL - PERSPECTIVE REQUIREMENT:
@@ -594,6 +646,14 @@ ${shouldGenerateOnlyFansHashtags ? `HASHTAG REQUIREMENTS:
     captions = parsed.captions;
   } else {
     captions = [{ caption: rawText, hashtags: [] }];
+  }
+
+  // OnlyFans does not use hashtags. Enforce empty hashtags to keep output clean and consistent.
+  if (isOnlyFansPlatform) {
+    captions = (captions || []).map((c: any) => ({
+      ...c,
+      hashtags: [],
+    }));
   }
 
   // Record caption generation usage (only after successful generation)
