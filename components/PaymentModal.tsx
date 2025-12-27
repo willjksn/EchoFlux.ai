@@ -10,6 +10,12 @@ export const PaymentModal: React.FC = () => {
     const { paymentPlan, closePaymentModal, user, setUser, selectedClient, setClients, showToast, setPricingView, setActivePage } = useAppContext();
     const [isLoading, setIsLoading] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
+    const [isProrationPreviewLoading, setIsProrationPreviewLoading] = useState(false);
+    const [prorationPreview, setProrationPreview] = useState<{
+        amountDue: number;
+        currency: string;
+        message?: string;
+    } | null>(null);
     const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
 
@@ -21,6 +27,70 @@ export const PaymentModal: React.FC = () => {
             }
         };
     }, []);
+
+    // Preview prorated "due today" amount for users who already have a Stripe subscription
+    useEffect(() => {
+        let cancelled = false;
+
+        const run = async () => {
+            try {
+                setProrationPreview(null);
+
+                if (!paymentPlan) return;
+                if (!user) return;
+
+                const stripeSubscriptionId = (user as any)?.stripeSubscriptionId as string | undefined;
+                if (!stripeSubscriptionId) return; // New subscribers: Stripe Checkout handles it
+
+                // Free is cancel-at-period-end, not a prorated due-today payment
+                if (paymentPlan.price === 0) return;
+
+                setIsProrationPreviewLoading(true);
+
+                const auth = (await import('../firebaseConfig')).auth;
+                const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+
+                const response = await fetch('/api/previewSubscriptionChange', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                    body: JSON.stringify({
+                        planName: paymentPlan.name,
+                        billingCycle: paymentPlan.cycle,
+                    }),
+                });
+
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    // Preview failures should never block checkout/upgrade; just hide preview.
+                    console.warn('Proration preview failed:', data);
+                    return;
+                }
+
+                const amountDue = typeof data?.amount_due === 'number' ? data.amount_due : 0;
+                const currency = typeof data?.currency === 'string' ? data.currency : 'usd';
+                const message = typeof data?.message === 'string' ? data.message : undefined;
+
+                if (cancelled) return;
+                setProrationPreview({
+                    amountDue,
+                    currency,
+                    message,
+                });
+            } catch (err) {
+                console.warn('Proration preview error:', err);
+            } finally {
+                if (!cancelled) setIsProrationPreviewLoading(false);
+            }
+        };
+
+        run();
+        return () => {
+            cancelled = true;
+        };
+    }, [paymentPlan?.name, paymentPlan?.cycle, paymentPlan?.price, user?.id]);
 
     if (!paymentPlan) return null;
 
@@ -343,6 +413,7 @@ export const PaymentModal: React.FC = () => {
             : isHighestPlan 
                 ? 'Complete Your Purchase' 
                 : 'Upgrade Your Plan';
+        const hasStripeSubscription = Boolean((user as any)?.stripeSubscriptionId);
 
         return (
             <>
@@ -354,19 +425,39 @@ export const PaymentModal: React.FC = () => {
                 </div>
                 <form onSubmit={handleSubmit}>
                     <div className="p-6 space-y-4">
-                        {(() => {
-                          const isAnnual = paymentPlan.cycle === 'annually' || paymentPlan.cycle === 'annual' || paymentPlan.cycle === 'yearly';
-                          const dueToday = isAnnual ? paymentPlan.price * 12 : paymentPlan.price;
-                          const cycleLabel = isAnnual ? 'yr' : 'mo';
-                          return (
-                        <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg flex justify-between items-center">
-                            <span className="font-semibold text-gray-800 dark:text-gray-200">Amount Due Today</span>
-                            <span className="text-2xl font-bold text-gray-900 dark:text-white">
-                              ${dueToday.toFixed(2)} <span className="text-base font-medium">/{cycleLabel}</span>
-                            </span>
-                        </div>
-                          );
-                        })()}
+                        {hasStripeSubscription ? (
+                            <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg">
+                                <div className="flex justify-between items-center">
+                                    <span className="font-semibold text-gray-800 dark:text-gray-200">Prorated Due Today</span>
+                                    <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                                        {isProrationPreviewLoading ? (
+                                            '...'
+                                        ) : prorationPreview ? (
+                                            `$${(prorationPreview.amountDue / 100).toFixed(2)}`
+                                        ) : (
+                                            'Calculated at checkout'
+                                        )}
+                                    </span>
+                                </div>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                                    We credit your unused time on your current plan and charge only the difference. Final amount is calculated by Stripe.
+                                </p>
+                            </div>
+                        ) : (
+                            (() => {
+                              const isAnnual = paymentPlan.cycle === 'annually' || paymentPlan.cycle === 'annual' || paymentPlan.cycle === 'yearly';
+                              const dueToday = isAnnual ? paymentPlan.price * 12 : paymentPlan.price;
+                              const cycleLabel = isAnnual ? 'yr' : 'mo';
+                              return (
+                            <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg flex justify-between items-center">
+                                <span className="font-semibold text-gray-800 dark:text-gray-200">Amount Due Today</span>
+                                <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                                  ${dueToday.toFixed(2)} <span className="text-base font-medium">/{cycleLabel}</span>
+                                </span>
+                            </div>
+                              );
+                            })()
+                        )}
                         {paymentPlan.cycle === 'annually' && paymentPlan.price > 0 && (
                           <div className="text-xs text-gray-500 dark:text-gray-400">
                             ${paymentPlan.price.toFixed(2)}/mo billed annually (${(paymentPlan.price * 12).toFixed(2)}/year)
@@ -374,7 +465,10 @@ export const PaymentModal: React.FC = () => {
                         )}
                         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                             <p className="text-sm text-blue-800 dark:text-blue-200">
-                                <strong>Secure Checkout:</strong> You'll be redirected to Stripe's secure payment page to complete your purchase.
+                                <strong>{hasStripeSubscription ? 'Proration Preview:' : 'Secure Checkout:'}</strong>{' '}
+                                {hasStripeSubscription
+                                    ? 'Your final prorated amount due today is calculated by Stripe at confirmation.'
+                                    : "You'll be redirected to Stripe's secure payment page to complete your purchase."}
                             </p>
                         </div>
                     </div>
@@ -383,7 +477,13 @@ export const PaymentModal: React.FC = () => {
                             <span className="text-sm text-gray-600 dark:text-gray-400">Total:</span>
                             <div className="text-right">
                                 <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                                    ${(paymentPlan.cycle === 'annually' ? paymentPlan.price * 12 : paymentPlan.price).toFixed(2)}
+                                    {hasStripeSubscription
+                                        ? (isProrationPreviewLoading
+                                            ? '...'
+                                            : prorationPreview
+                                                ? `$${(prorationPreview.amountDue / 100).toFixed(2)}`
+                                                : 'Calculated at checkout')
+                                        : `$${(paymentPlan.cycle === 'annually' ? paymentPlan.price * 12 : paymentPlan.price).toFixed(2)}`}
                                 </div>
                             </div>
                         </div>
@@ -391,10 +491,12 @@ export const PaymentModal: React.FC = () => {
                             You can enter a promotion code during checkout on Stripe's secure payment page.
                         </p>
                          <button type="submit" disabled={isLoading} className="w-full flex justify-center py-3 px-4 border border-transparent text-base font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50">
-                            {isLoading ? 'Redirecting to checkout...' : `Continue to Checkout - $${(paymentPlan.cycle === 'annually' ? paymentPlan.price * 12 : paymentPlan.price).toFixed(2)}`}
+                            {isLoading
+                                ? (hasStripeSubscription ? 'Updating plan...' : 'Redirecting to checkout...')
+                                : (hasStripeSubscription ? 'Confirm Upgrade (Proration Applied)' : `Continue to Checkout - $${(paymentPlan.cycle === 'annually' ? paymentPlan.price * 12 : paymentPlan.price).toFixed(2)}`)}
                         </button>
                         <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">
-                            Secure payment powered by Stripe
+                            {hasStripeSubscription ? 'Proration & billing powered by Stripe' : 'Secure payment powered by Stripe'}
                         </p>
                     </div>
                 </form>
