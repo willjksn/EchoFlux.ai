@@ -57,13 +57,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (action === 'cancel') {
-      // Cancel subscription at period end (user keeps access until then)
-      await stripe.subscriptions.update(subscriptionId, {
-        cancel_at_period_end: true,
-      });
-
-      // Retrieve the updated subscription to get current_period_end
+      // Cancel subscription at period end (user keeps access until then).
+      // IMPORTANT: If this subscription is managed by a subscription schedule, Stripe
+      // does NOT allow updating cancellation behavior directly on the subscription.
       const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+      const scheduleId = (subscription as any)?.schedule as string | null | undefined;
+
+      if (scheduleId) {
+        // Remove future phases and cancel at the end of the current phase/period.
+        const schedule = await stripe.subscriptionSchedules.retrieve(scheduleId, { expand: ['phases'] });
+        const currentPeriodEnd = (subscription as any)?.current_period_end as number | null | undefined;
+        const currentPeriodStart = (subscription as any)?.current_period_start as number | null | undefined;
+
+        const currentPhase = (schedule as any)?.phases?.[0];
+        const start_date = currentPhase?.start_date || currentPeriodStart;
+        const end_date = currentPhase?.end_date || currentPeriodEnd;
+        const items =
+          currentPhase?.items?.map((i: any) => ({
+            price: typeof i.price === 'string' ? i.price : i.price?.id,
+            quantity: i.quantity || 1,
+          })) ||
+          (subscription as any).items?.data?.map((i: any) => ({
+            price: typeof i.price === 'string' ? i.price : i.price?.id,
+            quantity: i.quantity || 1,
+          })) ||
+          [];
+
+        await stripe.subscriptionSchedules.update(scheduleId, {
+          end_behavior: 'cancel',
+          phases: [
+            {
+              start_date,
+              ...(end_date ? { end_date } : {}),
+              items,
+            },
+          ],
+        });
+      } else {
+        await stripe.subscriptions.update(subscriptionId, {
+          cancel_at_period_end: true,
+        });
+      }
+
       const periodEnd = (subscription as any).current_period_end as number | null;
       
       // Update user document
@@ -87,8 +122,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           : null,
       });
     } else if (action === 'reactivate') {
-      // Reactivate subscription (remove cancellation)
-      const subscription = await stripe.subscriptions.update(subscriptionId, {
+      // Reactivate subscription (remove cancellation).
+      // If managed by a subscription schedule, release the schedule so the subscription
+      // can be managed directly again.
+      let subscription = await stripe.subscriptions.retrieve(subscriptionId);
+      const scheduleId = (subscription as any)?.schedule as string | null | undefined;
+
+      if (scheduleId) {
+        try {
+          await stripe.subscriptionSchedules.release(scheduleId);
+        } catch (e) {
+          // If release fails for any reason, fall back to best-effort update of schedule.
+          try {
+            await stripe.subscriptionSchedules.update(scheduleId, { end_behavior: 'release' });
+          } catch {}
+        }
+        subscription = await stripe.subscriptions.retrieve(subscriptionId);
+      }
+
+      subscription = await stripe.subscriptions.update(subscriptionId, {
         cancel_at_period_end: false,
       });
 

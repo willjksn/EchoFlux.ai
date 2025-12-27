@@ -503,7 +503,7 @@ export const PaymentModal: React.FC = () => {
                 <div className="p-8 text-center">
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Switch to Free Plan?</h2>
                      <p className="mt-4 text-gray-600 dark:text-gray-300">
-                        You will lose access to premium features like Autopilot, Custom Voice Training, and extended generation limits. Are you sure you want to continue?
+                        Your paid features and higher limits will end after your current billing period. You’ll keep access until then, and you won’t be charged again.
                     </p>
                     <div className="mt-8 flex justify-center space-x-4">
                         <button onClick={handleClose} className="px-6 py-2 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500">Cancel</button>
