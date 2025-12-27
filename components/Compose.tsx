@@ -3653,11 +3653,11 @@ const CaptionGenerator: React.FC = () => {
                   Gaps {user.plan === 'Pro' ? `${user.monthlyContentGapsUsed || 0}/2` : `${user.monthlyContentGapsUsed || 0}${(user.plan === 'Elite' || user.plan === 'Agency' || user.role === 'Admin') ? ' (unlimited)' : ''}`}
                 </span>
                 {' • '}
-                <span className="font-semibold text-purple-700 dark:text-purple-300">
+                <span className="font-semibold text-blue-700 dark:text-blue-300">
                   Predict {user.plan === 'Pro' ? `${user.monthlyPredictionsUsed || 0}/5` : `${user.monthlyPredictionsUsed || 0}${(user.plan === 'Elite' || user.plan === 'Agency' || user.role === 'Admin') ? ' (unlimited)' : ''}`}
                 </span>
                 {' • '}
-                <span className="font-semibold text-indigo-700 dark:text-indigo-300">
+                <span className="font-semibold text-emerald-700 dark:text-emerald-300">
                   Repurpose {user.plan === 'Pro' ? `${user.monthlyRepurposesUsed || 0}/5` : `${user.monthlyRepurposesUsed || 0}${(user.plan === 'Elite' || user.plan === 'Agency' || user.role === 'Admin') ? ' (unlimited)' : ''}`}
                 </span>
               </p>

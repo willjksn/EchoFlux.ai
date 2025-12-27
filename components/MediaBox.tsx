@@ -959,6 +959,12 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
       {/* AI Action Buttons - Show when caption exists */}
       {mediaItem.captionText && mediaItem.captionText.trim() && (
         <div className="mb-3 flex flex-wrap gap-2">
+          {/*
+            Match OnlyFans Studio button colors:
+            - Gaps: purple -> indigo
+            - Predict: blue -> cyan
+            - Repurpose: emerald -> teal
+          */}
           <button
             onClick={() => {
               if (onAnalyzeContentGaps) {
@@ -971,10 +977,10 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
               user.plan === 'Free' ||
               ((user.plan !== 'Pro' && user.plan !== 'Elite' && user.plan !== 'Agency' && user.plan !== 'OnlyFansStudio' && user.role !== 'Admin'))
             }
-            className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center justify-center gap-1 ${
+            className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-all shadow-sm flex items-center justify-center gap-1 ${
               (!user || user?.plan === 'Free' || (user.plan !== 'Pro' && user.plan !== 'Elite' && user.plan !== 'Agency' && user.plan !== 'OnlyFansStudio' && user.role !== 'Admin'))
                 ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
-                : 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/50 disabled:opacity-50'
+                : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed'
             }`}
           >
             {isAnalyzingGaps ? (
@@ -1086,10 +1092,10 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
               }
             }}
             disabled={isGenerating || !user || user?.plan === 'Free'}
-            className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center justify-center gap-1 ${
+            className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-all shadow-sm flex items-center justify-center gap-1 ${
               user?.plan === 'Free'
                 ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
-                : 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/50 disabled:opacity-50'
+                : 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:from-blue-700 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed'
             }`}
           >
             <SparklesIcon className="w-3 h-3" />
@@ -1193,7 +1199,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
             className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center justify-center gap-1 ${
               user?.plan === 'Free'
                 ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
-                : 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 disabled:opacity-50'
+                : 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed'
             }`}
           >
             <SparklesIcon className="w-3 h-3" />
