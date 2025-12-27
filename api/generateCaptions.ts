@@ -320,6 +320,34 @@ ${currentTrends ? `CURRENT SOCIAL MEDIA TRENDS (from weekly research):\n${curren
 
 ${onlyfansResearch ? `ONLYFANS-SPECIFIC RESEARCH & BEST PRACTICES:\n${onlyfansResearch}\n` : ''}
 
+${Array.isArray(platforms) && platforms.length > 0 ? `
+PLATFORM-SPECIFIC OPTIMIZATION REQUIREMENTS:
+${platforms.map(platform => {
+  const platformName = platform.toLowerCase();
+  if (platformName.includes('instagram')) {
+    return `- Instagram: Maximum 2,200 characters for captions. Optimal length: 125-150 characters for engagement. Include 10-30 relevant hashtags for maximum reach. Hashtags should be relevant to content, niche, and trending topics.`;
+  } else if (platformName.includes('tiktok')) {
+    return `- TikTok: Maximum 2,200 characters, but optimal length is 100-300 characters for better engagement. Include 3-5 trending hashtags plus 3-5 niche-specific hashtags. Keep captions concise and engaging.`;
+  } else if (platformName.includes('twitter') || platformName === 'x') {
+    return `- X (Twitter): Maximum 280 characters. Keep captions concise and punchy. Use 1-2 highly relevant hashtags maximum. Focus on clarity and impact within character limit.`;
+  } else if (platformName.includes('linkedin')) {
+    return `- LinkedIn: Maximum 3,000 characters. Professional tone recommended. Optimal length: 150-300 characters for best engagement. Include 3-5 professional, industry-relevant hashtags.`;
+  } else if (platformName.includes('facebook')) {
+    return `- Facebook: No strict limit (63,206 characters max), but optimal length is 40-80 characters for feed posts. Include 2-5 relevant hashtags. Keep captions conversational and engaging.`;
+  } else if (platformName.includes('threads')) {
+    return `- Threads: Maximum 500 characters. Similar to Instagram but shorter. Include 5-10 relevant hashtags. Keep captions concise and engaging.`;
+  } else if (platformName.includes('youtube')) {
+    return `- YouTube: Up to 5,000 characters in description. First 125 characters are most important (shown in preview). Include 3-5 highly relevant hashtags in description. Format with clear sections.`;
+  } else if (platformName.includes('pinterest')) {
+    return `- Pinterest: Optimal caption length is 100-500 characters. Include 5-10 relevant keywords and hashtags. Focus on descriptive, searchable language.`;
+  } else {
+    return `- ${platform}: Optimize for platform best practices. Include relevant hashtags.`;
+  }
+}).join('\n')}
+
+CRITICAL: Ensure all captions respect the character limits and hashtag counts specified for the target platform(s).
+` : ''}
+
 CRITICAL - PERSPECTIVE REQUIREMENT:
 - Write captions FROM THE CONTENT CREATOR'S PERSPECTIVE (first person: "I", "my", "me")
 - The captions are what the CONTENT CREATOR is posting, NOT what fans/followers are saying or wanting

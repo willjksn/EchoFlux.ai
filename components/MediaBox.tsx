@@ -618,6 +618,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
             checked={isSelected}
             onChange={() => onToggleSelect(index)}
             className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 dark:focus:ring-primary-400 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+            style={{ display: 'none' }}
           />
           <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
             Post {index + 1}
