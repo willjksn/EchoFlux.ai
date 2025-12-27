@@ -210,7 +210,8 @@ export const ContentIntelligence: React.FC = () => {
                 const mediaUrl = await getDownloadURL(storageRef);
                 
                 // Generate caption
-                const response = await fetch('/api/generateCaptions', {
+                const captionsUrl = new URL('/api/generateCaptions', window.location.origin);
+                const response = await fetch(captionsUrl.toString(), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -321,7 +322,8 @@ export const ContentIntelligence: React.FC = () => {
                 await uploadBytes(storageRef, mediaFile, { contentType: mediaFile.type });
                 const mediaUrl = await getDownloadURL(storageRef);
                 
-                const response = await fetch('/api/generateCaptions', {
+                const captionsUrl = new URL('/api/generateCaptions', window.location.origin);
+                const response = await fetch(captionsUrl.toString(), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -432,7 +434,8 @@ export const ContentIntelligence: React.FC = () => {
                 await uploadBytes(storageRef, mediaFile, { contentType: mediaFile.type });
                 const mediaUrl = await getDownloadURL(storageRef);
                 
-                const response = await fetch('/api/generateCaptions', {
+                const captionsUrl = new URL('/api/generateCaptions', window.location.origin);
+                const response = await fetch(captionsUrl.toString(), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -638,7 +641,8 @@ export const ContentIntelligence: React.FC = () => {
                 }
             }
             
-            const response = await fetch('/api/generateCaptions', {
+            const captionsUrl = new URL('/api/generateCaptions', window.location.origin);
+            const response = await fetch(captionsUrl.toString(), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

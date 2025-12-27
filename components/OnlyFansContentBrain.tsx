@@ -951,7 +951,8 @@ export const OnlyFansContentBrain: React.FC = () => {
                 finalTone = captionTone === 'Explicit' ? 'Explicit' : captionTone;
             }
 
-            const response = await fetch('/api/generateCaptions', {
+            const captionsUrl = new URL('/api/generateCaptions', window.location.origin);
+            const response = await fetch(captionsUrl.toString(), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1392,11 +1393,14 @@ export const OnlyFansContentBrain: React.FC = () => {
             const gapAnalysisItems: any[] = [];
             try {
                 const gapAnalysisRef = collection(db, 'users', user.id, 'onlyfans_content_brain_history');
-                const gapAnalysisQuery = query(gapAnalysisRef, where('type', '==', 'gap_analysis'), orderBy('createdAt', 'desc'));
+                // Avoid composite index requirement (type + createdAt). Fetch by createdAt and filter by type in-memory.
+                const gapAnalysisQuery = query(gapAnalysisRef, orderBy('createdAt', 'desc'));
                 const gapAnalysisSnapshot = await getDocs(gapAnalysisQuery);
                 gapAnalysisSnapshot.forEach((doc) => {
                     const data = doc.data();
-                    gapAnalysisItems.push({ id: doc.id, ...data });
+                    if (data?.type === 'gap_analysis') {
+                        gapAnalysisItems.push({ id: doc.id, ...data });
+                    }
                 });
             } catch (error: any) {
                 console.error('Error loading gap analysis history:', error);
@@ -1404,11 +1408,13 @@ export const OnlyFansContentBrain: React.FC = () => {
                 if (error.code === 'failed-precondition' || error.message?.includes('index')) {
                     try {
                         const gapAnalysisRef = collection(db, 'users', user.id, 'onlyfans_content_brain_history');
-                        const fallbackQuery = query(gapAnalysisRef, where('type', '==', 'gap_analysis'));
+                        const fallbackQuery = query(gapAnalysisRef);
                         const fallbackSnapshot = await getDocs(fallbackQuery);
                         fallbackSnapshot.forEach((doc) => {
                             const data = doc.data();
-                            gapAnalysisItems.push({ id: doc.id, ...data });
+                            if (data?.type === 'gap_analysis') {
+                                gapAnalysisItems.push({ id: doc.id, ...data });
+                            }
                         });
                         // Sort manually by createdAt
                         gapAnalysisItems.sort((a, b) => {
@@ -1956,7 +1962,8 @@ export const OnlyFansContentBrain: React.FC = () => {
                 throw new Error(`Failed to upload media: ${uploadError.message || 'Please try again'}`);
             }
             
-            const response = await fetch('/api/generateCaptions', {
+            const captionsUrl = new URL('/api/generateCaptions', window.location.origin);
+            const response = await fetch(captionsUrl.toString(), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -2117,7 +2124,8 @@ export const OnlyFansContentBrain: React.FC = () => {
                 finalTone = captionTone === 'Explicit' ? 'Explicit' : captionTone;
             }
             
-            const response = await fetch('/api/generateCaptions', {
+            const captionsUrl = new URL('/api/generateCaptions', window.location.origin);
+            const response = await fetch(captionsUrl.toString(), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

@@ -12,7 +12,10 @@ async function callFunction(path: string, data: any, timeoutMs: number = 30000) 
     : null;
 
   try {
-    const res = await fetch(`/api/${path}`, {
+    // Use an absolute URL to avoid issues when the app is accessed via a URL that includes credentials
+    // (e.g. Basic Auth). Relative URLs can inherit credentials from the document URL and fetch will reject them.
+    const url = new URL(`/api/${path}`, window.location.origin);
+    const res = await fetch(url.toString(), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -213,7 +216,9 @@ export async function getVideoStatus(operationId: string): Promise<{ videoUrl?: 
     ? await auth.currentUser.getIdToken(true)
     : null;
 
-  const res = await fetch(`/api/getVideoStatus?operationId=${encodeURIComponent(operationId)}`, {
+  const url = new URL('/api/getVideoStatus', window.location.origin);
+  url.searchParams.set('operationId', operationId);
+  const res = await fetch(url.toString(), {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
