@@ -40,7 +40,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'sessionId is required' });
     }
 
-    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    const session = await stripe.checkout.sessions.retrieve(sessionId, { expand: ['subscription'] });
 
     const sessionUserId = session.metadata?.userId || session.client_reference_id || null;
     if (!sessionUserId || sessionUserId !== decoded.uid) {
@@ -79,6 +79,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       fromPlan = (existing.data() as any)?.plan || null;
     } catch {}
 
+    // Pull Stripe identifiers from the completed session so upgrades can be prorated immediately,
+    // even if webhooks are delayed/misconfigured in sandbox.
+    let stripeSubscriptionId: string | null = null;
+    let stripeCustomerId: string | null = null;
+    let subscriptionStatus: string | null = null;
+
+    try {
+      const subObj = session.subscription;
+      const subscription =
+        typeof subObj === 'string'
+          ? await stripe.subscriptions.retrieve(subObj)
+          : (subObj as Stripe.Subscription | null);
+
+      if (subscription) {
+        stripeSubscriptionId = subscription.id;
+        stripeCustomerId = subscription.customer as string;
+        subscriptionStatus = subscription.status;
+      }
+    } catch (err) {
+      console.warn('verifyCheckoutSession: failed to resolve subscription from session:', err);
+    }
+
     await db.collection('users').doc(decoded.uid).set(
       {
         plan: planName,
@@ -87,6 +109,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         subscriptionStartDate: now,
         cancelAtPeriodEnd: false,
         subscriptionEndDate: null,
+        subscriptionStatus: subscriptionStatus || undefined,
+        stripeCustomerId: stripeCustomerId || undefined,
+        stripeSubscriptionId: stripeSubscriptionId || undefined,
         monthlyCaptionGenerationsUsed: 0,
         monthlyImageGenerationsUsed: 0,
         monthlyVideoGenerationsUsed: 0,
@@ -104,7 +129,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           changedAtIso: now,
           source: 'verify_checkout_session',
           stripeSessionId: sessionId,
-          stripeSubscriptionId: null,
+          stripeSubscriptionId,
         });
       } catch (err) {
         console.warn('Failed to record plan change event:', err);

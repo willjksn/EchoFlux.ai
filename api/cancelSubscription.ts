@@ -2,15 +2,25 @@ import { VercelRequest, VercelResponse } from '@vercel/node';
 import Stripe from 'stripe';
 import { verifyAuth } from './verifyAuth.js';
 
-// Check for STRIPE_SECRET_KEY_LIVE first (for production), then STRIPE_SECRET_KEY
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY_LIVE || process.env.STRIPE_SECRET_KEY;
-if (!stripeSecretKey) {
-  throw new Error('STRIPE_SECRET_KEY_LIVE or STRIPE_SECRET_KEY must be set');
+// Stripe init mirrors api/createCheckoutSession.ts so sandbox cancel/reactivate works.
+const stripeUseTestModeEnv = (process.env.STRIPE_USE_TEST_MODE || '').toString().toLowerCase().trim();
+const useTestMode = stripeUseTestModeEnv === 'true' || stripeUseTestModeEnv === '1' || stripeUseTestModeEnv === 'yes';
+
+let stripeSecretKey: string | null = null;
+if (useTestMode) {
+  stripeSecretKey = process.env.STRIPE_SECRET_KEY_Test || null;
+} else {
+  stripeSecretKey = process.env.STRIPE_SECRET_KEY_LIVE || process.env.STRIPE_SECRET_KEY || null;
 }
 
-const stripe = new Stripe(stripeSecretKey, {
-  apiVersion: '2024-06-20' as any, // Type assertion to handle Stripe types
-});
+if (stripeSecretKey && useTestMode && !stripeSecretKey.startsWith('sk_test_')) {
+  console.error(`⚠️ CRITICAL: STRIPE_USE_TEST_MODE is true but key does not start with sk_test_. Refusing to cancel subscription.`);
+  stripeSecretKey = null;
+}
+
+const stripe = stripeSecretKey
+  ? new Stripe(stripeSecretKey, { apiVersion: '2024-06-20' as Stripe.LatestApiVersion })
+  : null;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -18,6 +28,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    if (!stripe) {
+      return res.status(500).json({ error: 'Payment system not configured' });
+    }
     // Verify authentication
     const decodedToken = await verifyAuth(req);
     if (!decodedToken || !decodedToken.uid) {
