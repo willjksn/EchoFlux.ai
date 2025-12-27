@@ -1,0 +1,5 @@
+# Keep deployments lean — exclude docs from upload (not needed for build/runtime)
+*.md
+!README.md
+
+
