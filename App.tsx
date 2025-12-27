@@ -353,12 +353,10 @@ const AppContent: React.FC = () => {
                     // Don't set onboarding step yet - wait for payment to complete
                     return;
                 }
-            } else if (hasPaidPlan) {
-                // User already selected a paid plan, proceed to onboarding
-                setOnboardingStep('creator');
             } else {
-                // User has Free plan (auto-assigned) or no plan - show plan selector so they can choose
-                setOnboardingStep('plan-selector');
+                // For authenticated users, proceed directly to onboarding.
+                // We only use the plan selector during the unauthenticated signup flow (pendingSignup).
+                setOnboardingStep('creator');
             }
         } else if (!isAuthenticated) {
             // Not authenticated and no pending signup - clear onboarding

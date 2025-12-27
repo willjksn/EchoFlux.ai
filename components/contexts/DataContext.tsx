@@ -629,7 +629,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         pageBackgroundColor: "#f9fafb",
         cardBackgroundColor: "#ffffff",
         buttonColor: "#000000",
-        textColor: "#000000",
+        // Default to white text so it is readable on the default black buttons.
+        textColor: "#ffffff",
         buttonStyle: "rounded",
       },
       emailCapture: defaultEmail,

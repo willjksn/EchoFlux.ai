@@ -524,21 +524,41 @@ export const BioPageBuilder: React.FC = () => {
         } else if (bioPage && !bioPage.customLinks) {
             setBioPage({ ...bioPage, customLinks: [] });
         }
-        // Ensure theme defaults exist (no users yet, so we can set a clean default)
-        if (bioPage && (!bioPage.theme || !bioPage.theme.buttonColor || !bioPage.theme.textColor)) {
+        // Ensure theme defaults exist (and fix common unreadable default combos).
+        if (bioPage) {
             const updatedTheme = {
                 ...bioPage.theme,
                 backgroundColor: bioPage.theme?.backgroundColor || '#ffffff',
                 pageBackgroundColor: bioPage.theme?.pageBackgroundColor || bioPage.theme?.backgroundColor || '#f5f7fb',
                 cardBackgroundColor: bioPage.theme?.cardBackgroundColor || '#ffffff',
                 buttonColor: bioPage.theme?.buttonColor || '#000000',
-                textColor: bioPage.theme?.textColor || '#ffffff',
+                // If textColor is missing OR the user is on the default black button color and text is also black,
+                // default to white text so buttons are readable.
+                textColor:
+                    !bioPage.theme?.textColor ||
+                    ((bioPage.theme?.buttonColor || '#000000') === '#000000' &&
+                        bioPage.theme?.textColor === '#000000')
+                        ? '#ffffff'
+                        : bioPage.theme.textColor,
                 buttonStyle: bioPage.theme?.buttonStyle || 'rounded',
             };
-            setBioPage({
-                ...bioPage,
-                theme: updatedTheme,
-            });
+
+            // Only update when needed (avoid loops)
+            const needsUpdate =
+                !bioPage.theme ||
+                bioPage.theme.buttonColor !== updatedTheme.buttonColor ||
+                bioPage.theme.textColor !== updatedTheme.textColor ||
+                bioPage.theme.backgroundColor !== updatedTheme.backgroundColor ||
+                bioPage.theme.pageBackgroundColor !== updatedTheme.pageBackgroundColor ||
+                bioPage.theme.cardBackgroundColor !== updatedTheme.cardBackgroundColor ||
+                bioPage.theme.buttonStyle !== updatedTheme.buttonStyle;
+
+            if (needsUpdate) {
+                setBioPage({
+                    ...bioPage,
+                    theme: updatedTheme,
+                });
+            }
         }
     }, [bioPage]);
 

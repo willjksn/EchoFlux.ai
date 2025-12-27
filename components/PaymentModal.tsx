@@ -220,6 +220,32 @@ export const PaymentModal: React.FC = () => {
                 }
 
                 showToast('Plan updated successfully (proration applied).', 'success');
+                // Update local user immediately so Pricing/headers reflect the new plan without requiring a reload.
+                try {
+                    const nextPlan = paymentPlan.name as User['plan'];
+                    await setUser({
+                        ...(user as any),
+                        plan: nextPlan,
+                        billingCycle: paymentPlan.cycle,
+                        cancelAtPeriodEnd: false,
+                        subscriptionEndDate: null,
+                        pendingPlan: null,
+                        pendingBillingCycle: null,
+                        pendingPlanEffectiveDate: null,
+                    });
+                } catch {}
+
+                // Also refresh from Firestore to keep all subscription fields in sync.
+                try {
+                    const { doc, getDoc } = await import('firebase/firestore');
+                    const { db } = await import('../firebaseConfig');
+                    const userRef = doc(db, 'users', user.id);
+                    const userSnap = await getDoc(userRef);
+                    if (userSnap.exists()) {
+                        const updatedUser = userSnap.data() as any;
+                        await setUser(updatedUser);
+                    }
+                } catch {}
                 setIsLoading(false);
                 closePaymentModal();
                 return;
