@@ -14,16 +14,36 @@ export interface WebSearchResponse {
   usageLimitReached?: boolean;
 }
 
+export interface WebSearchOptions {
+  maxResults?: number;
+  searchDepth?: "basic" | "advanced";
+  bypassCache?: boolean;
+}
+
 // Simple in-memory cache for Tavily results (resets on server restart)
 // Cache key: query string, value: { results, timestamp }
 const tavilyCache = new Map<string, { results: WebSearchResult[]; timestamp: number }>();
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour cache (trends change slowly)
 
+function clampMaxResults(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return 5;
+  return Math.max(1, Math.min(10, Math.floor(n)));
+}
+
+function normalizeSearchDepth(value: unknown): "basic" | "advanced" {
+  return value === "advanced" ? "advanced" : "basic";
+}
+
+function makeCacheKey(query: string, maxResults: number, searchDepth: "basic" | "advanced"): string {
+  return `${query.toLowerCase().trim()}::${maxResults}::${searchDepth}`;
+}
+
 /**
  * Get cached result if available and fresh
  */
-function getCachedResult(query: string): WebSearchResult[] | null {
-  const cached = tavilyCache.get(query.toLowerCase().trim());
+function getCachedResult(cacheKey: string): WebSearchResult[] | null {
+  const cached = tavilyCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     return cached.results;
   }
@@ -33,8 +53,8 @@ function getCachedResult(query: string): WebSearchResult[] | null {
 /**
  * Store result in cache
  */
-function setCachedResult(query: string, results: WebSearchResult[]): void {
-  tavilyCache.set(query.toLowerCase().trim(), {
+function setCachedResult(cacheKey: string, results: WebSearchResult[]): void {
+  tavilyCache.set(cacheKey, {
     results,
     timestamp: Date.now(),
   });
@@ -62,7 +82,8 @@ export async function searchWeb(
   query: string,
   userId?: string,
   userPlan?: string,
-  userRole?: string
+  userRole?: string,
+  options?: WebSearchOptions
 ): Promise<WebSearchResponse> {
   const apiKey = process.env.TAVILY_API_KEY;
 
@@ -75,14 +96,20 @@ export async function searchWeb(
     };
   }
 
-  // Check cache first (skip cache for admins if needed, but generally cache is fine)
-  const cachedResults = getCachedResult(query);
-  if (cachedResults) {
-    console.log('[Tavily] Using cached result for:', query);
-    return {
-      success: true,
-      results: cachedResults,
-    };
+  const maxResults = clampMaxResults(options?.maxResults);
+  const searchDepth = normalizeSearchDepth(options?.searchDepth);
+  const cacheKey = makeCacheKey(query, maxResults, searchDepth);
+
+  // Check cache first
+  if (!options?.bypassCache) {
+    const cachedResults = getCachedResult(cacheKey);
+    if (cachedResults) {
+      console.log("[Tavily] Using cached result for:", query);
+      return {
+        success: true,
+        results: cachedResults,
+      };
+    }
   }
 
   // Check usage limits if user info provided
@@ -108,8 +135,8 @@ export async function searchWeb(
       },
       body: JSON.stringify({
         query,
-        max_results: 5,
-        search_depth: "basic",
+        max_results: maxResults,
+        search_depth: searchDepth,
       }),
     });
 
@@ -142,7 +169,7 @@ export async function searchWeb(
 
     // Cache the results (even if empty, to avoid repeated failed searches)
     if (results.length > 0) {
-      setCachedResult(query, results);
+      setCachedResult(cacheKey, results);
     }
 
     // Record usage if user info provided (only count actual API calls, not cache hits)
