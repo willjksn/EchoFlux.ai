@@ -314,6 +314,12 @@ ONLYFANS MODE (STRICT):
 - Caption length guidance:
   - Optimal: 150–500 characters (punchy, engaging, monetization-focused)
   - Soft maximum: ~2000 characters (only go longer when truly needed)
+- Emoji guidance (OnlyFans-style, creative but tasteful):
+  - Use emojis naturally to amplify tone and tease (don’t spam).
+  - Prefer 1–4 emojis per caption (up to ~6 when it truly fits).
+  - Common playful mappings are OK when appropriate: 🍆, 🍒, 🍑, 💦, 😈, 🔥, 👅, 🫦, 🥵, 💋, 👀
+  - IMPORTANT: Only use an emoji if it matches what the caption is describing; avoid random or repetitive emoji strings.
+  - Vary emoji choices across captions for uniqueness.
 - Write for subscriber conversion + retention:
   - Make it feel personal and subscriber-focused ("you"/"your" + first-person creator voice)
   - Include tasteful monetization CTAs that fit the goal: subscribe, tip, PPV unlock, customs, bundles, VIP
