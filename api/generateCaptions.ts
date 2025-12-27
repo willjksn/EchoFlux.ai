@@ -382,17 +382,17 @@ ${platforms.map(platform => {
     return `- OnlyFans: Do NOT generate hashtags. Optimize for 150–500 characters (soft max ~2000). Add subscriber-focused monetization CTAs (subscribe, tip, PPV unlock, customs) when appropriate.`;
   }
   if (platformName.includes('instagram')) {
-    return `- Instagram: Maximum 2,200 characters for captions. Optimal length: 125-150 characters for engagement. Include 10-30 relevant hashtags for maximum reach. Hashtags should be relevant to content, niche, and trending topics.`;
+    return `- Instagram: Maximum 2,200 characters for captions. Optimal length: 125-150 characters for engagement. Include 10-30 relevant hashtags for maximum reach. Hashtags should be relevant to content, niche, and trending topics. Use 1–4 creative, relevant emojis (don’t spam) to enhance tone.`;
   } else if (platformName.includes('tiktok')) {
-    return `- TikTok: Maximum 2,200 characters, but optimal length is 100-300 characters for better engagement. Include 3-5 trending hashtags plus 3-5 niche-specific hashtags. Keep captions concise and engaging.`;
+    return `- TikTok: Maximum 2,200 characters, but optimal length is 100-300 characters for better engagement. Include 3-5 trending hashtags plus 3-5 niche-specific hashtags. Keep captions concise and engaging. Use 1–5 creative emojis naturally (don’t spam); match emojis to what’s being described.`;
   } else if (platformName.includes('twitter') || platformName === 'x') {
-    return `- X (Twitter): Maximum 280 characters. Keep captions concise and punchy. Use 1-2 highly relevant hashtags maximum. Focus on clarity and impact within character limit.`;
+    return `- X (Twitter): Maximum 280 characters. Keep captions concise and punchy. Use 1-2 highly relevant hashtags maximum. Focus on clarity and impact within character limit. Emojis are optional; if used, keep to 0–2 and make them meaningful.`;
   } else if (platformName.includes('linkedin')) {
     return `- LinkedIn: Maximum 3,000 characters. Professional tone recommended. Optimal length: 150-300 characters for best engagement. Include 3-5 professional, industry-relevant hashtags.`;
   } else if (platformName.includes('facebook')) {
-    return `- Facebook: No strict limit (63,206 characters max), but optimal length is 40-80 characters for feed posts. Include 2-5 relevant hashtags. Keep captions conversational and engaging.`;
+    return `- Facebook: No strict limit (63,206 characters max), but optimal length is 40-80 characters for feed posts. Include 2-5 relevant hashtags. Keep captions conversational and engaging. Use 0–3 emojis to add personality (don’t overdo it).`;
   } else if (platformName.includes('threads')) {
-    return `- Threads: Maximum 500 characters. Similar to Instagram but shorter. Include 5-10 relevant hashtags. Keep captions concise and engaging.`;
+    return `- Threads: Maximum 500 characters. Similar to Instagram but shorter. Include 5-10 relevant hashtags. Keep captions concise and engaging. Emojis are optional; if used, keep to 0–3 and make them relevant.`;
   } else if (platformName.includes('youtube')) {
     return `- YouTube: Up to 5,000 characters in description. First 125 characters are most important (shown in preview). Include 3-5 highly relevant hashtags in description. Format with clear sections.`;
   } else if (platformName.includes('pinterest')) {
@@ -403,6 +403,11 @@ ${platforms.map(platform => {
 }).join('\n')}
 
 CRITICAL: Ensure all captions respect the character limits and hashtag counts specified for the target platform(s). If OnlyFans is selected, hashtags MUST be empty.
+
+EMOJI GUIDELINES (ALL SOCIAL PLATFORMS):
+- Use emojis intentionally to enhance tone/clarity (don’t spam).
+- Prefer 0–4 emojis depending on platform; match emoji to the caption content.
+- Avoid long repeated emoji strings. Vary across captions so each feels unique.
 ` : ''}
 
 CRITICAL - PERSPECTIVE REQUIREMENT:
