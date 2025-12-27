@@ -254,6 +254,48 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
             );
         }
 
+        // Step 5: Elite Quick Start (Elite only)
+        if (step === 5 && isElitePlan) {
+            return (
+                <div className="animate-fade-in">
+                    <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-white">Elite Quick Start</h2>
+                    <p className="mt-2 text-center text-gray-500 dark:text-gray-400">
+                        Here’s the fastest way to start using Elite and get results this week.
+                    </p>
+
+                    <div className="mt-6 space-y-4">
+                        <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                            <h3 className="font-semibold text-purple-900 dark:text-purple-200 mb-2">1) Build your plan</h3>
+                            <p className="text-sm text-purple-800 dark:text-purple-300">
+                                Open <strong>Strategy</strong> to generate a roadmap (Elite: 5 strategies/month + enhanced trend research).
+                            </p>
+                        </div>
+
+                        <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                            <h3 className="font-semibold text-purple-900 dark:text-purple-200 mb-2">2) Schedule your week</h3>
+                            <p className="text-sm text-purple-800 dark:text-purple-300">
+                                Open <strong>Calendar</strong> to plan and organize what you’ll post and when.
+                            </p>
+                        </div>
+
+                        <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                            <h3 className="font-semibold text-purple-900 dark:text-purple-200 mb-2">3) Create faster</h3>
+                            <p className="text-sm text-purple-800 dark:text-purple-300">
+                                Use <strong>Compose</strong> for captions and <strong>Media Library</strong> to store/tag content.
+                            </p>
+                        </div>
+
+                        <div className="p-4 border border-purple-200 dark:border-purple-800 rounded-lg bg-white/60 dark:bg-gray-800/40">
+                            <p className="text-sm text-gray-700 dark:text-gray-300">
+                                <strong>Where to find it:</strong> use the sidebar to open <strong>Strategy</strong>, <strong>Calendar</strong>,
+                                <strong>Compose</strong>, <strong>Media Library</strong>, and <strong>Link in Bio</strong>.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
         // Step 6: Elite Plan Features (Elite only)
         if (step === 6 && isElitePlan) {
             return (
