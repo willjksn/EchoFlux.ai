@@ -11,6 +11,22 @@ initEnvValidation();
 // Initialize Sentry BEFORE React renders
 initSentry();
 
+// If the site is accessed via a credentialed URL (e.g. https://user@host/...),
+// some third-party SDKs will crash when parsing URLs (userinfo is disallowed).
+// Normalize to a credential-free URL early.
+(() => {
+  if (typeof window === 'undefined') return;
+  const href = window.location.href;
+  // Detect userinfo in the authority portion.
+  if (/^https?:\/\/[^/]*@/.test(href)) {
+    const safe =
+      `${window.location.protocol}//${window.location.host}` +
+      `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    // Use replace to avoid adding an extra history entry.
+    window.location.replace(safe);
+  }
+})();
+
 // Patch fetch so relative `/api/*` calls don't inherit credentials from the current page URL.
 // This prevents errors like:
 // "Request cannot be constructed from a URL that includes credentials: /api/getUsageStats"
