@@ -939,12 +939,16 @@ export const OnlyFansContentBrain: React.FC = () => {
                 console.error('Error loading explicitness level:', e);
             }
 
-            // Determine tone based on explicitness level
+            // Determine tone based on explicitness level.
+            // Important: do NOT downgrade the user's selected tone (e.g. Dominant/Erotic/etc.) to "Intimate".
+            // Only escalate upward when explicitness is high enough.
             let finalTone = captionTone;
             if (explicitnessLevel >= 8) {
+                // Force fully explicit when user explicitness is high.
                 finalTone = 'Explicit';
             } else if (explicitnessLevel >= 6) {
-                finalTone = captionTone === 'Explicit' ? 'Explicit' : 'Intimate';
+                // Respect chosen tone; allow Explicit only when selected.
+                finalTone = captionTone === 'Explicit' ? 'Explicit' : captionTone;
             }
 
             const response = await fetch('/api/generateCaptions', {
@@ -2103,12 +2107,14 @@ export const OnlyFansContentBrain: React.FC = () => {
                 console.error('Error loading explicitness level:', e);
             }
 
-            // Determine tone based on explicitness level
+            // Determine tone based on explicitness level.
+            // Important: do NOT downgrade the user's selected tone (e.g. Dominant/Erotic/etc.) to "Intimate".
+            // Only escalate upward when explicitness is high enough.
             let finalTone = captionTone;
             if (explicitnessLevel >= 8) {
                 finalTone = 'Explicit';
             } else if (explicitnessLevel >= 6) {
-                finalTone = captionTone === 'Explicit' ? 'Explicit' : 'Intimate';
+                finalTone = captionTone === 'Explicit' ? 'Explicit' : captionTone;
             }
             
             const response = await fetch('/api/generateCaptions', {

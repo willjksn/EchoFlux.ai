@@ -7,7 +7,7 @@ import {
   withErrorHandling,
 } from "./_errorHandler.js";
 import { getGoalFramework, getGoalSpecificCTAs } from "./_goalFrameworks.js";
-import { getLatestTrends } from "./_trendsHelper.js";
+import { getLatestTrends, getOnlyFansWeeklyTrends } from "./_trendsHelper.js";
 import { getOnlyFansResearchContext } from "./_onlyfansResearch.js";
 
 async function getGeminiShared() {
@@ -269,7 +269,8 @@ ${shouldGenerateOnlyFansHashtags ? '- HASHTAGS MUST BE EXPLICIT AND MATCH THE CA
   
   // Always get latest trends from weekly Tavily job (no Tavily calls needed here)
   try {
-    currentTrends = await getLatestTrends();
+    // If this is OnlyFans, prefer OnlyFans-filtered weekly trends for relevance.
+    currentTrends = isOnlyFansPlatform ? await getOnlyFansWeeklyTrends() : await getLatestTrends();
   } catch (error) {
     console.error('[generateCaptions] Error fetching trends:', error);
     currentTrends = 'Trend data unavailable. Using general best practices.';
