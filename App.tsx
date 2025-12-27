@@ -47,6 +47,7 @@ import { AdGenerator } from './components/AdGenerator';
 import { VoiceAssistant } from './components/VoiceAssistant';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { BioPageView } from './components/BioPageView';
+import { ResetPassword } from './components/ResetPassword';
 import { lazy, Suspense } from 'react';
 
 // Lazy load heavy components for code splitting
@@ -178,7 +179,7 @@ const AppContent: React.FC = () => {
     const pathname = window.location.pathname;
     
     // Exclude known app routes and API routes to avoid conflicts
-    const knownRoutes = ['/', '/dashboard', '/inbox', '/analytics', '/settings', '/compose', '/calendar', '/approvals', '/team', '/opportunities', '/profile', '/about', '/contact', '/pricing', '/clients', '/faq', '/terms', '/privacy', '/dataDeletion', '/admin', '/automation', '/bio', '/strategy', '/ads', '/mediaLibrary', '/autopilot', '/onlyfansStudio'];
+    const knownRoutes = ['/', '/dashboard', '/inbox', '/analytics', '/settings', '/compose', '/calendar', '/approvals', '/team', '/opportunities', '/profile', '/about', '/contact', '/pricing', '/clients', '/faq', '/terms', '/privacy', '/dataDeletion', '/admin', '/automation', '/bio', '/strategy', '/ads', '/mediaLibrary', '/autopilot', '/onlyfansStudio', '/reset-password'];
     
     // Check if it's a direct username path (not a known route) or legacy /u/ or /link/ path
     // Also exclude paths that start with /api or contain dots (likely static files)
@@ -512,6 +513,29 @@ const AppContent: React.FC = () => {
         }
         // If maintenance is enabled but user can bypass, continue normally
         console.log('🔧 Maintenance Mode Active but user can bypass');
+    }
+
+    // Check for Firebase password reset actions BEFORE auth checks.
+    // Important: Firebase may redirect back to:
+    // - /reset-password?mode=resetPassword&oobCode=...
+    // - /reset-password/#mode=resetPassword&oobCode=...
+    // - /?mode=resetPassword&oobCode=...   (depending on template / config)
+    // and users may already be logged in, so we must force-show the reset UI.
+    if (typeof window !== 'undefined') {
+        const normalizedPath = window.location.pathname.replace(/\/+$/, '');
+        const searchParams = new URLSearchParams(window.location.search);
+        const hashParams = new URLSearchParams((window.location.hash || '').replace(/^#/, ''));
+
+        const mode = searchParams.get('mode') || hashParams.get('mode');
+        const oobCode = searchParams.get('oobCode') || hashParams.get('oobCode');
+
+        const isResetPasswordAction =
+            (normalizedPath === '/reset-password') ||
+            (mode === 'resetPassword' && !!oobCode);
+
+        if (isResetPasswordAction) {
+            return <ResetPassword />;
+        }
     }
 
     // Debug logging

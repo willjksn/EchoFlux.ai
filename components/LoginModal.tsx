@@ -116,6 +116,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     hasNumeric: false,
     hasMinLength: false,
   });
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
 
   // keep internal state in sync if parent changes initialView
   useEffect(() => {
@@ -133,6 +135,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       hasMinLength: false,
     });
     setShowPasswordRequirements(false);
+    // Reset forgot password state when switching views
+    setShowForgotPassword(false);
+    setForgotPasswordEmail('');
   }, [initialView]);
 
   // Check password requirements in real-time
@@ -390,16 +395,38 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   };
 
   const handleForgotPassword = async () => {
-    if (!email) {
-      showToast('Please enter your email first.', 'error');
+    // Use the email from forgot password form, or fall back to the main email field
+    const emailToUse = forgotPasswordEmail || email;
+    
+    if (!emailToUse || !emailToUse.trim()) {
+      // If no email in either field, show the forgot password form
+      if (!showForgotPassword) {
+        setShowForgotPassword(true);
+        return;
+      }
+      showToast('Please enter your email address.', 'error');
       return;
     }
+
     try {
-      await sendPasswordResetEmail(auth, email);
-      showToast('Password reset email sent!', 'success');
+      const actionCodeSettings = {
+        url: `${window.location.origin}/reset-password?email=${encodeURIComponent(emailToUse)}`,
+        handleCodeInApp: false, // Open link in email client, not app
+      };
+      await sendPasswordResetEmail(auth, emailToUse.trim(), actionCodeSettings);
+      showToast('Password reset email sent! Please check your email and click the link to reset your password.', 'success');
+      // Reset state after successful send
+      setShowForgotPassword(false);
+      setForgotPasswordEmail('');
     } catch (error: any) {
       console.error('Reset error:', error);
-      showToast(error.message || 'Failed to send reset email', 'error');
+      if (error.code === 'auth/user-not-found') {
+        showToast('No account found with this email address.', 'error');
+      } else if (error.code === 'auth/invalid-email') {
+        showToast('Please enter a valid email address.', 'error');
+      } else {
+        showToast(error.message || 'Failed to send reset email', 'error');
+      }
     }
   };
 
@@ -816,22 +843,82 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               )}
 
               {isLogin && (
-                <div className="flex items-center justify-between">
-                  <label className="flex items-center text-xs text-gray-500 dark:text-gray-400">
-                    <input
-                      type="checkbox"
-                      className="h-3 w-3 text-primary-600 border-gray-300 rounded mr-2"
-                    />
-                    Remember me
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleForgotPassword}
-                    className="text-xs text-primary-600 hover:underline"
-                  >
-                    Forgot password?
-                  </button>
-                </div>
+                <>
+                  {showForgotPassword ? (
+                    <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-200">
+                          Reset Your Password
+                        </h3>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowForgotPassword(false);
+                            setForgotPasswordEmail('');
+                          }}
+                          className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200"
+                        >
+                          <XMarkIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <p className="text-xs text-blue-800 dark:text-blue-300 mb-3">
+                        Enter your email address and we&apos;ll send you a link to reset your password. This works even if you forgot your username.
+                      </p>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-xs font-medium text-blue-900 dark:text-blue-200 mb-1">
+                            Email Address
+                          </label>
+                          <input
+                            type="email"
+                            value={forgotPasswordEmail}
+                            onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                            placeholder="Enter your email"
+                            className={inputClasses}
+                            autoComplete="email"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleForgotPassword();
+                              }
+                            }}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleForgotPassword}
+                          disabled={isLoading || !forgotPasswordEmail.trim()}
+                          className="w-full py-2 px-4 bg-primary-600 text-white text-sm font-semibold rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          {isLoading ? 'Sending...' : 'Send Reset Link'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <label className="flex items-center text-xs text-gray-500 dark:text-gray-400">
+                        <input
+                          type="checkbox"
+                          className="h-3 w-3 text-primary-600 border-gray-300 rounded mr-2"
+                        />
+                        Remember me
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowForgotPassword(true);
+                          // Pre-populate with email if it's already entered
+                          if (email && !forgotPasswordEmail) {
+                            setForgotPasswordEmail(email);
+                          }
+                        }}
+                        className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium hover:underline"
+                      >
+                        Forgot password?
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
 
               {/* Divider */}

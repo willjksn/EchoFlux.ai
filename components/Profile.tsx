@@ -222,10 +222,15 @@ export const Profile: React.FC = () => {
     const handlePasswordReset = async () => {
         if(user && user.email) {
             try {
-                await sendPasswordResetEmail(auth, user.email);
-                showToast('Password reset email sent.', 'success');
-            } catch (error) {
-                showToast('Failed to send password reset email.', 'error');
+                const actionCodeSettings = {
+                    url: `${window.location.origin}/reset-password?email=${encodeURIComponent(user.email)}`,
+                    handleCodeInApp: false, // Open link in email client, not app
+                };
+                await sendPasswordResetEmail(auth, user.email, actionCodeSettings);
+                showToast('Password reset email sent. Please check your email and click the link to reset your password.', 'success');
+            } catch (error: any) {
+                console.error('Error sending password reset email:', error);
+                showToast(error.message || 'Failed to send password reset email.', 'error');
             }
         }
     }

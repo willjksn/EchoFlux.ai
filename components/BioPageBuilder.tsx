@@ -517,7 +517,8 @@ export const BioPageBuilder: React.FC = () => {
         if (bioPage && !bioPage.verified && bioPage.verified !== false) {
             setBioPage({ ...bioPage, verified: false });
         }
-        if (bioPage && !bioPage.username) {
+        // Only initialize username if it's undefined/null, not if it's an empty string (which allows user to type)
+        if (bioPage && (bioPage.username === undefined || bioPage.username === null)) {
             setBioPage({ ...bioPage, username: '' });
         }
         if (bioPage && !bioPage.socialLinks) {
@@ -782,14 +783,17 @@ export const BioPageBuilder: React.FC = () => {
             const auth = (await import('../firebaseConfig')).auth;
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             
-            const availabilityResponse = await fetch(
-                `/api/checkUsernameAvailability?username=${encodeURIComponent(normalizedUsername)}&userId=${user?.id || ''}`,
-                {
-                    headers: {
-                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                    },
-                }
-            );
+            // Build an absolute URL to avoid browser URL parsing edge-cases
+            // (e.g. "Request cannot be constructed from a URL that includes credentials")
+            const availabilityUrl = new URL('/api/checkUsernameAvailability', window.location.origin);
+            availabilityUrl.searchParams.set('username', normalizedUsername);
+            availabilityUrl.searchParams.set('userId', user?.id || '');
+
+            const availabilityResponse = await fetch(availabilityUrl.toString(), {
+                headers: {
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+            });
             
             if (!availabilityResponse.ok) {
                 throw new Error('Failed to check username availability');
