@@ -1,5 +1,5 @@
 import fetch from "node-fetch";
-import { canUseTavily, recordTavilyUsage } from "./_tavilyUsage.js";
+import { canUseTavily, recordTavilyApiCall, recordTavilyUsage } from "./_tavilyUsage.js";
 
 export interface WebSearchResult {
   title: string;
@@ -140,6 +140,15 @@ export async function searchWeb(
       }),
     });
 
+    // Count every real Tavily API call (exclude cache hits by design).
+    // Count calls even if Tavily responds with a non-2xx status.
+    await recordTavilyApiCall({
+      userId,
+      userPlan,
+      userRole,
+      callerType: userRole === "Admin" ? "admin" : userId ? "user" : "system",
+    });
+
     if (!res.ok) {
       const errorText = await res.text().catch(() => 'Unknown error');
       console.error('[Tavily] API error:', res.status, errorText);
@@ -172,8 +181,9 @@ export async function searchWeb(
       setCachedResult(cacheKey, results);
     }
 
-    // Record usage if user info provided (only count actual API calls, not cache hits)
-    if (userId && userPlan && results.length > 0) {
+    // Record per-user usage (non-admin) for monthly limit enforcement.
+    // Count every real API call (excluding cache hits), even if results are empty.
+    if (userId && userPlan) {
       await recordTavilyUsage(userId, userPlan, userRole);
     }
 

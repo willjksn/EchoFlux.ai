@@ -10,7 +10,7 @@
  */
 
 import { getAdminDb } from "./_firebaseAdmin.js";
-import { Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 export interface TavilyUsage {
   userId: string;
@@ -35,6 +35,21 @@ const TAVILY_LIMITS: Record<string, number> = {
 function getCurrentMonth(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+export function getCurrentMonthKey(): string {
+  return getCurrentMonth();
+}
+
+export type TavilyCallerType = "admin" | "user" | "system";
+
+export interface TavilyCallTotals {
+  month?: string;
+  totalCalls: number;
+  adminCalls: number;
+  userCalls: number;
+  systemCalls: number;
+  lastUpdated?: Timestamp;
 }
 
 /**
@@ -146,6 +161,84 @@ export async function recordTavilyUsage(
   } catch (error) {
     console.error('Error recording Tavily usage:', error);
     // Don't throw - usage tracking shouldn't break the feature
+  }
+}
+
+/**
+ * Record an actual Tavily API call (global totals + per-month totals + per-user totals).
+ * IMPORTANT: This should be called ONLY for real Tavily HTTP requests (not cache hits).
+ */
+export async function recordTavilyApiCall(params: {
+  userId?: string;
+  userPlan?: string;
+  userRole?: string;
+  callerType?: TavilyCallerType;
+}): Promise<void> {
+  const { userId, userPlan, userRole, callerType } = params || {};
+
+  const role = userRole === "Admin" ? "Admin" : "User";
+  const type: TavilyCallerType =
+    callerType ||
+    (userRole === "Admin" ? "admin" : userId ? "user" : "system");
+
+  const db = getAdminDb();
+  const month = getCurrentMonth();
+  const now = Timestamp.now();
+
+  const globalRef = db.collection("tavily_call_totals").doc("global");
+  const monthRef = db.collection("tavily_call_totals").doc(`month_${month}`);
+
+  try {
+    const incTotal: any = {
+      totalCalls: FieldValue.increment(1),
+      adminCalls: FieldValue.increment(type === "admin" ? 1 : 0),
+      userCalls: FieldValue.increment(type === "user" ? 1 : 0),
+      systemCalls: FieldValue.increment(type === "system" ? 1 : 0),
+      lastUpdated: now,
+    };
+
+    await Promise.all([
+      globalRef.set(incTotal, { merge: true }),
+      monthRef.set({ ...incTotal, month }, { merge: true }),
+    ]);
+  } catch (err) {
+    console.error("[recordTavilyApiCall] Failed to update totals:", err);
+  }
+
+  if (!userId) return;
+
+  // Per-user breakdown (month + lifetime), includes admins.
+  // Structure avoids Firestore composite indexes:
+  // tavily_user_totals/{month}/users/{userId}
+  // tavily_user_totals/lifetime/users/{userId}
+  const monthUserRef = db
+    .collection("tavily_user_totals")
+    .doc(month)
+    .collection("users")
+    .doc(userId);
+
+  const lifetimeUserRef = db
+    .collection("tavily_user_totals")
+    .doc("lifetime")
+    .collection("users")
+    .doc(userId);
+
+  const payload: any = {
+    userId,
+    role,
+    plan: userPlan || null,
+    callerType: type,
+    count: FieldValue.increment(1),
+    lastUpdated: now,
+  };
+
+  try {
+    await Promise.all([
+      monthUserRef.set(payload, { merge: true }),
+      lifetimeUserRef.set(payload, { merge: true }),
+    ]);
+  } catch (err) {
+    console.error("[recordTavilyApiCall] Failed to update per-user totals:", err);
   }
 }
 

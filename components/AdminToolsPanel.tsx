@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { auth } from "../firebaseConfig";
 import { useAppContext } from "./AppContext";
 
@@ -56,9 +56,41 @@ export const AdminToolsPanel: React.FC = () => {
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [response, setResponse] = useState<TavilyResponse | null>(null);
   const [selectedPresetId, setSelectedPresetId] = useState<string>(PRESETS[0]?.id || "");
+  const [usageStats, setUsageStats] = useState<any>(null);
+  const [isLoadingUsage, setIsLoadingUsage] = useState<boolean>(false);
 
   const hasResults = useMemo(() => (response?.results?.length ?? 0) > 0, [response]);
   const selectedPreset = useMemo(() => PRESETS.find((p) => p.id === selectedPresetId) || null, [selectedPresetId]);
+  const topThisMonth = useMemo(() => (usageStats?.topUsersThisMonth || []).slice(0, 10), [usageStats]);
+
+  const refreshUsage = async () => {
+    setIsLoadingUsage(true);
+    try {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+      const res = await fetch("/api/adminGetTavilyTotals", {
+        method: "GET",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || "Failed to load Tavily usage totals");
+      }
+      setUsageStats(data);
+    } catch (err: any) {
+      console.error("Failed to load Tavily usage totals:", err);
+      showToast(err?.message || "Failed to load Tavily usage totals", "error");
+    } finally {
+      setIsLoadingUsage(false);
+    }
+  };
+
+  useEffect(() => {
+    // Load totals once when the admin opens the tools panel
+    refreshUsage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const runSearch = async () => {
     const q = query.trim();
@@ -176,6 +208,78 @@ export const AdminToolsPanel: React.FC = () => {
           >
             Run Weekly Trends Now
           </button>
+        </div>
+
+        <div className="mt-6 p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h4 className="font-semibold text-gray-900 dark:text-white">Tavily Usage (Real API calls)</h4>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                Totals exclude cache hits. Includes weekly job + admin tools + user searches.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={refreshUsage}
+              disabled={isLoadingUsage}
+              className="px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50"
+            >
+              {isLoadingUsage ? "Refreshing..." : "Refresh Totals"}
+            </button>
+          </div>
+
+          {usageStats && (
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
+                <div className="text-sm text-gray-600 dark:text-gray-300">Overall Total Calls</div>
+                <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {Number(usageStats?.totals?.overall?.totalCalls || 0).toLocaleString()}
+                </div>
+                <div className="mt-2 text-xs text-gray-600 dark:text-gray-300">
+                  Admin: {Number(usageStats?.totals?.overall?.adminCalls || 0).toLocaleString()} · Users:{" "}
+                  {Number(usageStats?.totals?.overall?.userCalls || 0).toLocaleString()} · Weekly/System:{" "}
+                  {Number(usageStats?.totals?.overall?.systemCalls || 0).toLocaleString()}
+                </div>
+              </div>
+
+              <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
+                <div className="text-sm text-gray-600 dark:text-gray-300">This Month ({usageStats?.month})</div>
+                <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {Number(usageStats?.totals?.thisMonth?.totalCalls || 0).toLocaleString()}
+                </div>
+                <div className="mt-2 text-xs text-gray-600 dark:text-gray-300">
+                  Admin: {Number(usageStats?.totals?.thisMonth?.adminCalls || 0).toLocaleString()} · Users:{" "}
+                  {Number(usageStats?.totals?.thisMonth?.userCalls || 0).toLocaleString()} · Weekly/System:{" "}
+                  {Number(usageStats?.totals?.thisMonth?.systemCalls || 0).toLocaleString()}
+                </div>
+              </div>
+
+              <div className="md:col-span-2 p-4 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold text-gray-900 dark:text-white">Top users this month</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-300">Top 10</div>
+                </div>
+                {topThisMonth.length === 0 ? (
+                  <div className="text-sm text-gray-600 dark:text-gray-300 mt-2">No usage recorded yet.</div>
+                ) : (
+                  <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {topThisMonth.map((u: any) => (
+                      <div key={u.id} className="flex items-center justify-between text-sm text-gray-700 dark:text-gray-200">
+                        <div className="truncate">
+                          <span className="font-semibold">{String(u.userId || u.id).slice(0, 10)}</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {" "}
+                            · {u.role || "User"} · {u.plan || "—"}
+                          </span>
+                        </div>
+                        <div className="font-bold">{Number(u.count || 0).toLocaleString()}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="mt-6 p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
