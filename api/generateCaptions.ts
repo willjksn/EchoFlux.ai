@@ -181,9 +181,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     normalizedTone === 'raw/uncensored' ||
     normalizedTone === 'raw-uncensored' ||
     normalizedTone === 'provocative' ||
-    normalizedTone === 'dominant/dominant-focused' ||
     normalizedTone === 'dominant' ||
-    normalizedTone === 'submissive/submissive-focused' ||
     normalizedTone === 'submissive' ||
     tone === 'Sexy / Explicit' || // Keep original case check for backwards compatibility
     tone === 'Explicit';

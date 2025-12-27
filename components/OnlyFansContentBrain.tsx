@@ -625,8 +625,8 @@ export const OnlyFansContentBrain: React.FC = () => {
         | 'Erotic'
         | 'Raw/Uncensored'
         | 'Provocative'
-        | 'Dominant/Dominant-focused'
-        | 'Submissive/Submissive-focused'
+        | 'Dominant'
+        | 'Submissive'
         | 'Explicit'
     >('Teasing');
     const [captionGoal, setCaptionGoal] = useState('engagement');
@@ -660,8 +660,8 @@ export const OnlyFansContentBrain: React.FC = () => {
         | 'Erotic'
         | 'Raw/Uncensored'
         | 'Provocative'
-        | 'Dominant/Dominant-focused'
-        | 'Submissive/Submissive-focused'
+        | 'Dominant'
+        | 'Submissive'
         | 'Explicit'
     >('Teasing');
     const [mediaCaptionGoal, setMediaCaptionGoal] = useState('engagement');
@@ -2813,36 +2813,24 @@ export const OnlyFansContentBrain: React.FC = () => {
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                         Tone:
                                     </label>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {(
-                                            [
-                                                'Playful',
-                                                'Flirty',
-                                                'Confident',
-                                                'Teasing',
-                                                'Intimate',
-                                                'Seductive',
-                                                'Erotic',
-                                                'Raw/Uncensored',
-                                                'Provocative',
-                                                'Dominant/Dominant-focused',
-                                                'Submissive/Submissive-focused',
-                                                'Explicit',
-                                            ] as const
-                                        ).map((tone) => (
-                                            <button
-                                                key={tone}
-                                                onClick={() => setCaptionTone(tone)}
-                                                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                                                    captionTone === tone
-                                                        ? 'bg-primary-600 text-white'
-                                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                                                }`}
-                                            >
-                                                {tone}
-                                            </button>
-                                        ))}
-                                    </div>
+                                    <select
+                                        value={captionTone}
+                                        onChange={(e) => setCaptionTone(e.target.value as any)}
+                                        className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    >
+                                        <option value="Playful">Playful</option>
+                                        <option value="Flirty">Flirty</option>
+                                        <option value="Confident">Confident</option>
+                                        <option value="Teasing">Teasing</option>
+                                        <option value="Intimate">Intimate</option>
+                                        <option value="Seductive">Seductive</option>
+                                        <option value="Erotic">Erotic</option>
+                                        <option value="Raw/Uncensored">Raw/Uncensored</option>
+                                        <option value="Provocative">Provocative</option>
+                                        <option value="Dominant">Dominant</option>
+                                        <option value="Submissive">Submissive</option>
+                                        <option value="Explicit">Explicit</option>
+                                    </select>
                                 </div>
                             </div>
 
@@ -3211,36 +3199,24 @@ export const OnlyFansContentBrain: React.FC = () => {
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                         Tone:
                                     </label>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {(
-                                            [
-                                                'Playful',
-                                                'Flirty',
-                                                'Confident',
-                                                'Teasing',
-                                                'Intimate',
-                                                'Seductive',
-                                                'Erotic',
-                                                'Raw/Uncensored',
-                                                'Provocative',
-                                                'Dominant/Dominant-focused',
-                                                'Submissive/Submissive-focused',
-                                                'Explicit',
-                                            ] as const
-                                        ).map((tone) => (
-                                            <button
-                                                key={tone}
-                                                onClick={() => setMediaCaptionTone(tone)}
-                                                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                                                    mediaCaptionTone === tone
-                                                        ? 'bg-primary-600 text-white'
-                                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                                                }`}
-                                            >
-                                                {tone}
-                                            </button>
-                                        ))}
-                                    </div>
+                                    <select
+                                        value={mediaCaptionTone}
+                                        onChange={(e) => setMediaCaptionTone(e.target.value as any)}
+                                        className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    >
+                                        <option value="Playful">Playful</option>
+                                        <option value="Flirty">Flirty</option>
+                                        <option value="Confident">Confident</option>
+                                        <option value="Teasing">Teasing</option>
+                                        <option value="Intimate">Intimate</option>
+                                        <option value="Seductive">Seductive</option>
+                                        <option value="Erotic">Erotic</option>
+                                        <option value="Raw/Uncensored">Raw/Uncensored</option>
+                                        <option value="Provocative">Provocative</option>
+                                        <option value="Dominant">Dominant</option>
+                                        <option value="Submissive">Submissive</option>
+                                        <option value="Explicit">Explicit</option>
+                                    </select>
                                 </div>
                             </div>
 
