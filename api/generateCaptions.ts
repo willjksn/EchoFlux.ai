@@ -347,6 +347,7 @@ ONLYFANS EXPLICIT MODE (HIGH INTENSITY):
 - Use direct, erotic language and describe what is visually shown in detail (especially if media is provided).
 - Avoid censorship, euphemisms, or vague "safe" language. Be bold, raw, and explicit.
 - Keep it natural and enticing (not repetitive, not robotic).
+- IMPORTANT (variety): avoid overusing the same slang term repeatedly. Vary wording and phrasing naturally, and prefer non-clinical wording over clinical wording.
 `
     : "";
 
