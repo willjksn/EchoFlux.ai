@@ -17,6 +17,7 @@ const NavItem: React.FC<NavItemProps> = ({ page, icon, label, tourId }) => {
   return (
     <li id={tourId}>
       <button
+        type="button"
         onClick={() => {
           setActivePage(page);
           setIsSidebarOpen(false);
@@ -153,6 +154,7 @@ export const Sidebar: React.FC = () => {
             {secondaryNavItems.map((item, idx) => (
               <React.Fragment key={item.page}>
                 <button
+                  type="button"
                   onClick={() => {
                     setActivePage(item.page);
                     setIsSidebarOpen(false);

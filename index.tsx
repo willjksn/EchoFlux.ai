@@ -33,6 +33,31 @@ initSentry();
   };
 })();
 
+// Defensive DOM patch: avoid rare "Failed to execute 'removeChild' on 'Node'" crashes
+// that can occur due to browser quirks/races when temporary nodes are already detached.
+(() => {
+  if (typeof window === 'undefined') return;
+  const proto = (window as any).Node?.prototype as any;
+  if (!proto || typeof proto.removeChild !== 'function') return;
+  if (proto.__echofluxPatchedRemoveChild) return;
+
+  const originalRemoveChild = proto.removeChild;
+  proto.removeChild = function removeChildPatched(child: any) {
+    try {
+      return originalRemoveChild.call(this, child);
+    } catch (e: any) {
+      const name = e?.name;
+      const msg = String(e?.message || '');
+      // Ignore only the specific "not a child" failure; rethrow everything else.
+      if (name === 'NotFoundError' || msg.includes('not a child of this node')) {
+        return child;
+      }
+      throw e;
+    }
+  };
+  proto.__echofluxPatchedRemoveChild = true;
+})();
+
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error("Could not find root element to mount to");
