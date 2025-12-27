@@ -629,8 +629,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         pageBackgroundColor: "#f9fafb",
         cardBackgroundColor: "#ffffff",
         buttonColor: "#000000",
-        // Default to white text so it is readable on the default black buttons.
+        // Legacy: used historically for both page text and button text. Keep as button text for backward compatibility.
         textColor: "#ffffff",
+        // New: make page text readable on white cards by default.
+        pageTextColor: "#2563eb",
+        // New: keep button text readable on black buttons by default.
+        buttonTextColor: "#ffffff",
         buttonStyle: "rounded",
       },
       emailCapture: defaultEmail,

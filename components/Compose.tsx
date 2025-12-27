@@ -266,6 +266,26 @@ const CaptionGenerator: React.FC = () => {
       showToast('Please sign in to analyze content gaps', 'error');
       return;
     }
+    // Enforce Pro monthly limits (server also enforces)
+    const monthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+    const isNewMonth = user.composeInsightsUsageMonth !== monthKey;
+    const currentGapsUsed = isNewMonth ? 0 : (user.monthlyContentGapsUsed || 0);
+    const gapsLimit = user.role === 'Admin' || user.plan === 'Elite' || user.plan === 'Agency' || user.plan === 'OnlyFansStudio'
+      ? Infinity
+      : user.plan === 'Pro'
+        ? 2
+        : 0;
+
+    if (!isFinite(gapsLimit) ? false : currentGapsUsed >= gapsLimit) {
+      showToast('Monthly limit reached. Upgrade to Elite for unlimited access.', 'info');
+      setActivePage('pricing');
+      return;
+    }
+    if (gapsLimit === 0) {
+      showToast('Upgrade to Pro or Elite to unlock Analyze Content Gaps', 'info');
+      setActivePage('pricing');
+      return;
+    }
 
     setIsAnalyzingGaps(true);
     try {
@@ -290,6 +310,21 @@ const CaptionGenerator: React.FC = () => {
 
       const data = await response.json();
       if (data.success) {
+        // Optimistically bump local usage so UI indicators update immediately.
+        setUser(prev => {
+          if (!prev) return prev;
+          const newMonthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+          const monthChanged = prev.composeInsightsUsageMonth !== newMonthKey;
+          const base: any = monthChanged
+            ? { monthlyContentGapsUsed: 0, monthlyPredictionsUsed: 0, monthlyRepurposesUsed: 0, composeInsightsUsageMonth: newMonthKey }
+            : { composeInsightsUsageMonth: prev.composeInsightsUsageMonth || newMonthKey };
+          return {
+            ...prev,
+            ...base,
+            monthlyContentGapsUsed: (monthChanged ? 0 : (prev.monthlyContentGapsUsed || 0)) + 1,
+          };
+        });
+
         setGapAnalysisResult(data);
         setShowGapAnalysisModal(true);
         // Auto-save to content gap analysis history (shared with dashboard)
@@ -3610,7 +3645,23 @@ const CaptionGenerator: React.FC = () => {
       {user?.plan !== 'Free' && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent: Analyze Content Gaps, Predictions & Repurposes</h3>
+            <div className="min-w-0">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent: Analyze Content Gaps, Predictions & Repurposes</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                Usage this month:{' '}
+                <span className="font-semibold text-purple-700 dark:text-purple-300">
+                  Gaps {user.plan === 'Pro' ? `${user.monthlyContentGapsUsed || 0}/2` : `${user.monthlyContentGapsUsed || 0}${(user.plan === 'Elite' || user.plan === 'Agency' || user.role === 'Admin') ? ' (unlimited)' : ''}`}
+                </span>
+                {' • '}
+                <span className="font-semibold text-purple-700 dark:text-purple-300">
+                  Predict {user.plan === 'Pro' ? `${user.monthlyPredictionsUsed || 0}/5` : `${user.monthlyPredictionsUsed || 0}${(user.plan === 'Elite' || user.plan === 'Agency' || user.role === 'Admin') ? ' (unlimited)' : ''}`}
+                </span>
+                {' • '}
+                <span className="font-semibold text-indigo-700 dark:text-indigo-300">
+                  Repurpose {user.plan === 'Pro' ? `${user.monthlyRepurposesUsed || 0}/5` : `${user.monthlyRepurposesUsed || 0}${(user.plan === 'Elite' || user.plan === 'Agency' || user.role === 'Admin') ? ' (unlimited)' : ''}`}
+                </span>
+              </p>
+            </div>
             <button
               onClick={() => setShowHistory(!showHistory)}
               className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"

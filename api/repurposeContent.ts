@@ -3,6 +3,8 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { checkApiKeys, getVerifyAuth, withErrorHandling } from "./_errorHandler.js";
 import { getModelForTask, getModelNameForTask, getCostTierForTask } from "./_modelRouter.js";
 import { trackModelUsage } from "./trackModelUsage.js";
+import { getAdminDb } from "./_firebaseAdmin.js";
+import { ComposeInsightLimitError, enforceAndRecordComposeInsightUsage } from "./_composeInsightsUsage.js";
 
 /**
  * AI Content Repurposing Engine
@@ -51,6 +53,15 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   }
 
   try {
+    const db = getAdminDb();
+
+    // Enforce Pro limits (5/mo) and record usage attempt (counts toward monthly usage)
+    await enforceAndRecordComposeInsightUsage({
+      db,
+      userId: user.uid,
+      feature: "repurpose",
+    });
+
     // Get trending context if Elite user (optional - works without trends too)
     let trendContext = '';
     if (user.plan === 'Elite' || user.role === 'Admin') {
@@ -216,6 +227,15 @@ ${tone ? `- Maintain ${tone} tone where appropriate` : ''}
     });
   } catch (error: any) {
     console.error("Error repurposing content:", error);
+    if (error instanceof ComposeInsightLimitError) {
+      res.status(403).json({
+        error: error.message,
+        feature: error.feature,
+        used: error.used,
+        limit: error.limit,
+      });
+      return;
+    }
     res.status(500).json({ 
       error: error?.message || "Failed to repurpose content",
       note: "Please try again or contact support if the issue persists.",

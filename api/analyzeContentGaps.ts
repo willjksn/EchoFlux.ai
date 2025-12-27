@@ -5,6 +5,7 @@ import { getModelForTask, getModelNameForTask, getCostTierForTask } from "./_mod
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { trackModelUsage } from "./trackModelUsage.js";
 import { getLatestTrends } from "./_trendsHelper.js";
+import { ComposeInsightLimitError, enforceAndRecordComposeInsightUsage } from "./_composeInsightsUsage.js";
 
 /**
  * Smart Content Gap Analysis
@@ -46,6 +47,13 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
 
   try {
     const db = getAdminDb();
+
+    // Enforce Pro limits (2/mo) and record usage attempt (counts toward monthly usage)
+    await enforceAndRecordComposeInsightUsage({
+      db,
+      userId: user.uid,
+      feature: "content_gaps",
+    });
     
     let posts: any[] = [];
     
@@ -276,7 +284,16 @@ GUIDELINES:
     });
   } catch (error: any) {
     console.error("Error analyzing content gaps:", error);
-    res.status(500).json({ 
+    if (error instanceof ComposeInsightLimitError) {
+      res.status(403).json({
+        error: error.message,
+        feature: error.feature,
+        used: error.used,
+        limit: error.limit,
+      });
+      return;
+    }
+    res.status(500).json({
       error: error?.message || "Failed to analyze content gaps",
       note: "Please try again or contact support if the issue persists.",
     });

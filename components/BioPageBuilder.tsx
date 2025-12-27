@@ -109,16 +109,21 @@ const BioPreview: React.FC<{ config: any }> = ({ config }) => {
         cardBackgroundColor: config?.theme?.cardBackgroundColor || '#ffffff',
         // Default: black buttons + white text (high contrast on white card background)
         buttonColor: config?.theme?.buttonColor || '#000000',
+        // Legacy field - treat as button text if newer fields aren't present
         textColor: config?.theme?.textColor || '#ffffff',
+        pageTextColor: config?.theme?.pageTextColor,
+        buttonTextColor: config?.theme?.buttonTextColor,
         buttonStyle: config?.theme?.buttonStyle || 'rounded',
     };
+    const pageTextColor = theme.pageTextColor || (theme.textColor === '#ffffff' ? '#2563eb' : theme.textColor) || '#2563eb';
+    const buttonTextColor = theme.buttonTextColor || theme.textColor || '#ffffff';
     const emailTheme = {
         formBackgroundColor: config?.emailCapture?.formBackgroundColor || '#ffffff',
-        titleColor: config?.emailCapture?.titleColor || theme.textColor,
+        titleColor: config?.emailCapture?.titleColor || pageTextColor,
         inputBackgroundColor: config?.emailCapture?.inputBackgroundColor || '#f9fafb',
         inputTextColor: config?.emailCapture?.inputTextColor || '#111827',
         buttonBackgroundColor: config?.emailCapture?.buttonBackgroundColor || theme.buttonColor,
-        buttonTextColor: config?.emailCapture?.buttonTextColor || theme.textColor,
+        buttonTextColor: config?.emailCapture?.buttonTextColor || buttonTextColor,
     };
     
     return (
@@ -135,16 +140,16 @@ const BioPreview: React.FC<{ config: any }> = ({ config }) => {
                         className="w-20 h-20 rounded-full object-cover border-2 border-white shadow-md mb-3"
                     />
                     <div className="mb-1">
-                        <h3 className="text-xl font-bold inline" style={{ color: theme.textColor }}>
+                        <h3 className="text-xl font-bold inline" style={{ color: pageTextColor }}>
                             {config?.displayName || 'Display Name'}
                         </h3>
                     </div>
                     {config?.username && (
-                        <p className="text-sm mb-1 opacity-80" style={{ color: theme.textColor }}>
+                        <p className="text-sm mb-1 opacity-80" style={{ color: pageTextColor }}>
                             @{String(config.username).replace('@', '')}
                         </p>
                     )}
-                    <p className="text-sm mb-6 px-4 opacity-90" style={{ color: theme.textColor }}>{config?.bio || 'Bio description'}</p>
+                    <p className="text-sm mb-6 px-4 opacity-90" style={{ color: pageTextColor }}>{config?.bio || 'Bio description'}</p>
 
                     {/* Teaser Images */}
                     {config?.teaserImages && config.teaserImages.length > 0 && (
@@ -178,7 +183,7 @@ const BioPreview: React.FC<{ config: any }> = ({ config }) => {
                                 className={`flex items-center justify-center gap-2 w-full py-3 px-4 text-center font-medium transition-transform active:scale-95 ${theme.buttonStyle === 'rounded' ? 'rounded-lg' : theme.buttonStyle === 'pill' ? 'rounded-full' : 'rounded-none'}`}
                                 style={{ 
                                     backgroundColor: theme.buttonColor, 
-                                    color: theme.textColor 
+                                    color: buttonTextColor
                                 }}
                             >
                                 <span className="flex-shrink-0">{platformIcons[link.platform] || <span>{link.platform}</span>}</span>
@@ -195,7 +200,7 @@ const BioPreview: React.FC<{ config: any }> = ({ config }) => {
                                 className={`block w-full py-3 px-4 text-center font-medium transition-transform active:scale-95 ${theme.buttonStyle === 'rounded' ? 'rounded-lg' : theme.buttonStyle === 'pill' ? 'rounded-full' : 'rounded-none'}`}
                                 style={{ 
                                     backgroundColor: theme.buttonColor, 
-                                    color: theme.textColor 
+                                    color: buttonTextColor
                                 }}
                             >
                                 {link.title}
@@ -242,7 +247,7 @@ const BioPreview: React.FC<{ config: any }> = ({ config }) => {
                     )}
 
                     <div className="mt-auto pt-8 pb-4">
-                        <p className="text-[10px] font-bold opacity-50" style={{ color: theme.textColor }}>POWERED BY ECHOFLUX.AI</p>
+                        <p className="text-[10px] font-bold opacity-50" style={{ color: pageTextColor }}>POWERED BY ECHOFLUX.AI</p>
                     </div>
                  </div>
              </div>
@@ -526,20 +531,24 @@ export const BioPageBuilder: React.FC = () => {
         }
         // Ensure theme defaults exist (and fix common unreadable default combos).
         if (bioPage) {
+            const legacyTextColor = bioPage.theme?.textColor;
+            const legacyLooksDefault = legacyTextColor === '#ffffff' || legacyTextColor === '#000000' || !legacyTextColor;
             const updatedTheme = {
                 ...bioPage.theme,
                 backgroundColor: bioPage.theme?.backgroundColor || '#ffffff',
                 pageBackgroundColor: bioPage.theme?.pageBackgroundColor || bioPage.theme?.backgroundColor || '#f5f7fb',
                 cardBackgroundColor: bioPage.theme?.cardBackgroundColor || '#ffffff',
                 buttonColor: bioPage.theme?.buttonColor || '#000000',
-                // If textColor is missing OR the user is on the default black button color and text is also black,
-                // default to white text so buttons are readable.
+                // Legacy field: keep as button text color fallback
                 textColor:
                     !bioPage.theme?.textColor ||
                     ((bioPage.theme?.buttonColor || '#000000') === '#000000' &&
                         bioPage.theme?.textColor === '#000000')
                         ? '#ffffff'
                         : bioPage.theme.textColor,
+                // New fields: make defaults readable (blue page text on white cards, white button text on black buttons)
+                pageTextColor: bioPage.theme?.pageTextColor || (legacyLooksDefault ? '#2563eb' : legacyTextColor),
+                buttonTextColor: bioPage.theme?.buttonTextColor || (legacyLooksDefault ? '#ffffff' : legacyTextColor),
                 buttonStyle: bioPage.theme?.buttonStyle || 'rounded',
             };
 
@@ -548,6 +557,8 @@ export const BioPageBuilder: React.FC = () => {
                 !bioPage.theme ||
                 bioPage.theme.buttonColor !== updatedTheme.buttonColor ||
                 bioPage.theme.textColor !== updatedTheme.textColor ||
+                bioPage.theme.pageTextColor !== updatedTheme.pageTextColor ||
+                bioPage.theme.buttonTextColor !== updatedTheme.buttonTextColor ||
                 bioPage.theme.backgroundColor !== updatedTheme.backgroundColor ||
                 bioPage.theme.pageBackgroundColor !== updatedTheme.pageBackgroundColor ||
                 bioPage.theme.cardBackgroundColor !== updatedTheme.cardBackgroundColor ||
@@ -728,6 +739,15 @@ export const BioPageBuilder: React.FC = () => {
     };
 
     const updateTheme = (key: string, value: string) => {
+        if (key === 'buttonTextColor') {
+            // Keep legacy `textColor` in sync with button text so older renders remain correct.
+            setBioPage({ ...bioPage, theme: { ...bioPage.theme, buttonTextColor: value, textColor: value } });
+            return;
+        }
+        if (key === 'pageTextColor') {
+            setBioPage({ ...bioPage, theme: { ...bioPage.theme, pageTextColor: value } });
+            return;
+        }
         setBioPage({ ...bioPage, theme: { ...bioPage.theme, [key]: value } });
     };
     
@@ -1169,8 +1189,22 @@ export const BioPageBuilder: React.FC = () => {
                             <input type="color" value={bioPage.theme.buttonColor || '#000000'} onChange={e => updateTheme('buttonColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent" />
                         </div>
                         <div>
-                            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Text</label>
-                            <input type="color" value={bioPage.theme.textColor || '#ffffff'} onChange={e => updateTheme('textColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent" />
+                            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Page Text</label>
+                            <input
+                                type="color"
+                                value={bioPage.theme.pageTextColor || (bioPage.theme.textColor === '#ffffff' ? '#2563eb' : bioPage.theme.textColor) || '#2563eb'}
+                                onChange={e => updateTheme('pageTextColor', e.target.value)}
+                                className="h-10 w-full rounded cursor-pointer bg-transparent"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Button Text</label>
+                            <input
+                                type="color"
+                                value={bioPage.theme.buttonTextColor || bioPage.theme.textColor || '#ffffff'}
+                                onChange={e => updateTheme('buttonTextColor', e.target.value)}
+                                className="h-10 w-full rounded cursor-pointer bg-transparent"
+                            />
                         </div>
                     </div>
                     <div>

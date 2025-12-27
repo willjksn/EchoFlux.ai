@@ -296,16 +296,21 @@ export const BioPageView: React.FC = () => {
         pageBackgroundColor: bioPage.theme?.pageBackgroundColor || bioPage.theme?.backgroundColor || '#f5f7fb',
         cardBackgroundColor: bioPage.theme?.cardBackgroundColor || '#ffffff',
         buttonColor: bioPage.theme?.buttonColor || '#000000',
-        textColor: bioPage.theme?.textColor || '#000000',
+        // Legacy field - treat as button text if newer fields aren't present
+        textColor: bioPage.theme?.textColor || '#ffffff',
+        pageTextColor: bioPage.theme?.pageTextColor,
+        buttonTextColor: bioPage.theme?.buttonTextColor,
         buttonStyle: bioPage.theme?.buttonStyle || 'rounded',
     };
+    const pageTextColor = theme.pageTextColor || (theme.textColor === '#ffffff' ? '#2563eb' : theme.textColor) || '#2563eb';
+    const buttonTextColor = theme.buttonTextColor || theme.textColor || '#ffffff';
     const emailTheme = {
         formBackgroundColor: bioPage.emailCapture?.formBackgroundColor || '#ffffff',
-        titleColor: bioPage.emailCapture?.titleColor || theme.textColor,
+        titleColor: bioPage.emailCapture?.titleColor || pageTextColor,
         inputBackgroundColor: bioPage.emailCapture?.inputBackgroundColor || '#f9fafb',
         inputTextColor: bioPage.emailCapture?.inputTextColor || '#111827',
         buttonBackgroundColor: bioPage.emailCapture?.buttonBackgroundColor || theme.buttonColor,
-        buttonTextColor: bioPage.emailCapture?.buttonTextColor || theme.textColor,
+        buttonTextColor: bioPage.emailCapture?.buttonTextColor || buttonTextColor,
     };
 
     return (
@@ -319,16 +324,16 @@ export const BioPageView: React.FC = () => {
                             className="w-20 h-20 rounded-full object-cover border-2 border-white shadow-md mb-3"
                         />
                         <div className="mb-1">
-                            <h1 className="text-xl font-bold inline" style={{ color: theme.textColor }}>
+                            <h1 className="text-xl font-bold inline" style={{ color: pageTextColor }}>
                                 {bioPage.displayName || 'Display Name'}
                             </h1>
                         </div>
                         {bioPage.username && (
-                            <p className="text-sm mb-1 opacity-80" style={{ color: theme.textColor }}>
+                            <p className="text-sm mb-1 opacity-80" style={{ color: pageTextColor }}>
                                 @{String(bioPage.username).replace('@', '')}
                             </p>
                         )}
-                        <p className="text-sm mb-6 px-4 opacity-90" style={{ color: theme.textColor }}>
+                        <p className="text-sm mb-6 px-4 opacity-90" style={{ color: pageTextColor }}>
                             {bioPage.bio || 'Bio description'}
                         </p>
 
@@ -385,7 +390,7 @@ export const BioPageView: React.FC = () => {
                                         className={`flex items-center justify-center gap-2 w-full py-3 px-4 text-center font-medium transition-transform active:scale-95 ${theme.buttonStyle === 'rounded' ? 'rounded-lg' : theme.buttonStyle === 'pill' ? 'rounded-full' : 'rounded-none'}`}
                                         style={{ 
                                             backgroundColor: theme.buttonColor, 
-                                            color: theme.textColor 
+                                            color: buttonTextColor
                                         }}
                                     >
                                         <span className="flex-shrink-0">{platformIcons[link.platform] || <span>{link.platform}</span>}</span>
@@ -413,7 +418,7 @@ export const BioPageView: React.FC = () => {
                                         className={`block w-full py-3 px-4 text-center font-medium transition-transform active:scale-95 ${theme.buttonStyle === 'rounded' ? 'rounded-lg' : theme.buttonStyle === 'pill' ? 'rounded-full' : 'rounded-none'}`}
                                         style={{ 
                                             backgroundColor: theme.buttonColor, 
-                                            color: theme.textColor 
+                                            color: buttonTextColor
                                         }}
                                     >
                                         {link.title}
@@ -468,7 +473,7 @@ export const BioPageView: React.FC = () => {
                         )}
 
                         <div className="mt-auto pt-8 pb-4">
-                            <p className="text-[10px] font-bold opacity-50" style={{ color: theme.textColor }}>POWERED BY ECHOFLUX.AI</p>
+                            <p className="text-[10px] font-bold opacity-50" style={{ color: pageTextColor }}>POWERED BY ECHOFLUX.AI</p>
                         </div>
                     </div>
                 </div>

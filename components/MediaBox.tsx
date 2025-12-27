@@ -129,7 +129,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   platformIcons,
   onUpgradeClick,
 }) => {
-  const { user, showToast, setActivePage } = useAppContext();
+  const { user, setUser, showToast, setActivePage } = useAppContext();
   const [isGenerating, setIsGenerating] = useState(false);
   const [showMediaLibraryModal, setShowMediaLibraryModal] = useState(false);
   const [libraryMediaItems, setLibraryMediaItems] = useState<MediaLibraryItem[]>([]);
@@ -965,9 +965,14 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
                 onAnalyzeContentGaps();
               }
             }}
-            disabled={isAnalyzingGaps || user?.plan === 'Free'}
+            disabled={
+              isAnalyzingGaps ||
+              !user ||
+              user.plan === 'Free' ||
+              ((user.plan !== 'Pro' && user.plan !== 'Elite' && user.plan !== 'Agency' && user.plan !== 'OnlyFansStudio' && user.role !== 'Admin'))
+            }
             className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center justify-center gap-1 ${
-              user?.plan === 'Free'
+              (!user || user?.plan === 'Free' || (user.plan !== 'Pro' && user.plan !== 'Elite' && user.plan !== 'Agency' && user.plan !== 'OnlyFansStudio' && user.role !== 'Admin'))
                 ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
                 : 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/50 disabled:opacity-50'
             }`}
@@ -980,14 +985,32 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
             ) : (
               <>
                 <SparklesIcon className="w-3 h-3" />
-                Analyze Content Gaps
+                {user?.plan === 'Pro'
+                  ? `Analyze Content Gaps (${user.monthlyContentGapsUsed || 0}/2)`
+                  : 'Analyze Content Gaps'}
               </>
             )}
           </button>
           <button
             onClick={async () => {
-              if (user?.plan === 'Free') {
+              if (!user) return;
+
+              const monthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+              const monthChanged = user.composeInsightsUsageMonth !== monthKey;
+              const used = monthChanged ? 0 : (user.monthlyPredictionsUsed || 0);
+              const limit = user.role === 'Admin' || user.plan === 'Elite' || user.plan === 'Agency' || user.plan === 'OnlyFansStudio'
+                ? Infinity
+                : user.plan === 'Pro'
+                  ? 5
+                  : 0;
+
+              if (limit === 0) {
                 showToast('Upgrade to Pro or Elite to unlock Predict', 'info');
+                setActivePage('pricing');
+                return;
+              }
+              if (isFinite(limit) && used >= limit) {
+                showToast('Monthly Predict limit reached. Upgrade to Elite for unlimited access.', 'info');
                 setActivePage('pricing');
                 return;
               }
@@ -1022,9 +1045,27 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
                     scheduledDate: mediaItem.scheduledDate,
                   }),
                 });
-                if (!response.ok) throw new Error('Failed to predict performance');
+                if (!response.ok) {
+                  const err = await response.json().catch(() => ({}));
+                  throw new Error(err?.error || 'Failed to predict performance');
+                }
                 const data = await response.json();
                 if (data.success) {
+                  // Optimistically bump local usage
+                  setUser(prev => {
+                    if (!prev) return prev;
+                    const newMonthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+                    const monthChanged2 = prev.composeInsightsUsageMonth !== newMonthKey;
+                    const base: any = monthChanged2
+                      ? { monthlyContentGapsUsed: 0, monthlyPredictionsUsed: 0, monthlyRepurposesUsed: 0, composeInsightsUsageMonth: newMonthKey }
+                      : { composeInsightsUsageMonth: prev.composeInsightsUsageMonth || newMonthKey };
+                    return {
+                      ...prev,
+                      ...base,
+                      monthlyPredictionsUsed: (monthChanged2 ? 0 : (prev.monthlyPredictionsUsed || 0)) + 1,
+                    };
+                  });
+
                   // Save to history
                   await savePredictToHistory({
                     ...data,
@@ -1044,7 +1085,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
                 setIsGenerating(false);
               }
             }}
-            disabled={isGenerating || user?.plan === 'Free'}
+            disabled={isGenerating || !user || user?.plan === 'Free'}
             className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center justify-center gap-1 ${
               user?.plan === 'Free'
                 ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
@@ -1052,12 +1093,28 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
             }`}
           >
             <SparklesIcon className="w-3 h-3" />
-            Predict
+            {user?.plan === 'Pro' ? `Predict (${user.monthlyPredictionsUsed || 0}/5)` : 'Predict'}
           </button>
           <button
             onClick={async () => {
-              if (user?.plan === 'Free') {
+              if (!user) return;
+
+              const monthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+              const monthChanged = user.composeInsightsUsageMonth !== monthKey;
+              const used = monthChanged ? 0 : (user.monthlyRepurposesUsed || 0);
+              const limit = user.role === 'Admin' || user.plan === 'Elite' || user.plan === 'Agency' || user.plan === 'OnlyFansStudio'
+                ? Infinity
+                : user.plan === 'Pro'
+                  ? 5
+                  : 0;
+
+              if (limit === 0) {
                 showToast('Upgrade to Pro or Elite to unlock Repurpose', 'info');
+                setActivePage('pricing');
+                return;
+              }
+              if (isFinite(limit) && used >= limit) {
+                showToast('Monthly Repurpose limit reached. Upgrade to Elite for unlimited access.', 'info');
                 setActivePage('pricing');
                 return;
               }
@@ -1092,9 +1149,27 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
                     mediaType: mediaItem.type,
                   }),
                 });
-                if (!response.ok) throw new Error('Failed to repurpose content');
+                if (!response.ok) {
+                  const err = await response.json().catch(() => ({}));
+                  throw new Error(err?.error || 'Failed to repurpose content');
+                }
                 const data = await response.json();
                 if (data.success && data.repurposedContent) {
+                  // Optimistically bump local usage
+                  setUser(prev => {
+                    if (!prev) return prev;
+                    const newMonthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+                    const monthChanged2 = prev.composeInsightsUsageMonth !== newMonthKey;
+                    const base: any = monthChanged2
+                      ? { monthlyContentGapsUsed: 0, monthlyPredictionsUsed: 0, monthlyRepurposesUsed: 0, composeInsightsUsageMonth: newMonthKey }
+                      : { composeInsightsUsageMonth: prev.composeInsightsUsageMonth || newMonthKey };
+                    return {
+                      ...prev,
+                      ...base,
+                      monthlyRepurposesUsed: (monthChanged2 ? 0 : (prev.monthlyRepurposesUsed || 0)) + 1,
+                    };
+                  });
+
                   // Save to history
                   await saveRepurposeToHistory({
                     ...data,
@@ -1114,7 +1189,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
                 setIsGenerating(false);
               }
             }}
-            disabled={isGenerating || user?.plan === 'Free'}
+            disabled={isGenerating || !user || user?.plan === 'Free'}
             className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center justify-center gap-1 ${
               user?.plan === 'Free'
                 ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
@@ -1122,7 +1197,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
             }`}
           >
             <SparklesIcon className="w-3 h-3" />
-            Repurpose
+            {user?.plan === 'Pro' ? `Repurpose (${user.monthlyRepurposesUsed || 0}/5)` : 'Repurpose'}
           </button>
         </div>
       )}

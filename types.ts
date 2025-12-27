@@ -163,7 +163,15 @@ export interface BioPageConfig {
         pageBackgroundColor?: string;
         cardBackgroundColor?: string;
         buttonColor: string;
+        /**
+         * Legacy text color field used historically for both page text and button text.
+         * Prefer `pageTextColor` + `buttonTextColor` going forward.
+         */
         textColor: string;
+        /** Text color used for page/card text (name, username, bio, headings). */
+        pageTextColor?: string;
+        /** Text color used on buttons (link labels). */
+        buttonTextColor?: string;
         buttonStyle: 'rounded' | 'square' | 'pill';
     };
     emailCapture?: EmailCaptureConfig;
@@ -290,6 +298,12 @@ export interface User {
   monthlyAdGenerationsUsed?: number;
   monthlyVideoAdGenerationsUsed?: number;
   monthlyRepliesUsed?: number; // Track AI reply usage for Free plan limit
+  /** Compose advanced features usage (resets monthly; enforced server-side) */
+  monthlyContentGapsUsed?: number;
+  monthlyPredictionsUsed?: number;
+  monthlyRepurposesUsed?: number;
+  /** Month key (YYYY-MM) used to reset compose advanced usage counters */
+  composeInsightsUsageMonth?: string;
   storageUsed: number; 
   storageLimit: number; 
   mediaLibrary: MediaItem[];

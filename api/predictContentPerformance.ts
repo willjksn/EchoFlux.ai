@@ -4,6 +4,7 @@ import { checkApiKeys, getVerifyAuth, withErrorHandling } from "./_errorHandler.
 import { getModelForTask, getModelNameForTask, getCostTierForTask } from "./_modelRouter.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { trackModelUsage } from "./trackModelUsage.js";
+import { ComposeInsightLimitError, enforceAndRecordComposeInsightUsage } from "./_composeInsightsUsage.js";
 
 /**
  * AI Content Performance Predictor
@@ -55,6 +56,13 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
 
   try {
     const db = getAdminDb();
+
+    // Enforce Pro limits (5/mo) and record usage attempt (counts toward monthly usage)
+    await enforceAndRecordComposeInsightUsage({
+      db,
+      userId: user.uid,
+      feature: "predict",
+    });
     
     // Get user's historical performance data (if available)
     const postsRef = db.collection("users").doc(user.uid).collection("posts");
@@ -250,7 +258,16 @@ ${tone ? `- Maintain ${tone} tone in suggestions` : ''}
     });
   } catch (error: any) {
     console.error("Error predicting performance:", error);
-    res.status(500).json({ 
+    if (error instanceof ComposeInsightLimitError) {
+      res.status(403).json({
+        error: error.message,
+        feature: error.feature,
+        used: error.used,
+        limit: error.limit,
+      });
+      return;
+    }
+    res.status(500).json({
       error: error?.message || "Failed to predict performance",
       note: "Please try again or contact support if the issue persists.",
     });
