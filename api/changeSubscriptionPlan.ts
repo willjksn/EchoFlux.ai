@@ -147,7 +147,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // If user is moving to Free, treat it like cancel-at-period-end (no refunds).
     if (planName === 'Free') {
-      const updated = await stripe.subscriptions.update(subscriptionId, { cancel_at_period_end: true });
+      const updatedResp = await stripe.subscriptions.update(subscriptionId, { cancel_at_period_end: true });
+      // Stripe SDK types can be `Stripe.Response<Stripe.Subscription>` which doesn't always expose
+      // fields cleanly in TS builds. Cast to Subscription for safe access.
+      const updated = updatedResp as unknown as Stripe.Subscription;
       const periodEnd = (updated as any).current_period_end as number | null;
 
       await userRef.set(
@@ -167,9 +170,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
+    const subscriptionResp = await stripe.subscriptions.retrieve(subscriptionId, {
       expand: ['items.data.price', 'latest_invoice'],
     });
+    const subscription = subscriptionResp as unknown as Stripe.Subscription;
 
     const currentPlanName: string = userData?.plan || 'Free';
     const currentRank = PLAN_RANK[currentPlanName] ?? 0;
@@ -217,7 +221,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const schedule = await stripe.subscriptionSchedules.retrieve(scheduleId, { expand: ['phases'] });
       const currentPhase = schedule.phases?.[0];
-      const effectiveStart = currentPhase?.end_date || subscription.current_period_end;
+      const effectiveStart = currentPhase?.end_date || (subscription as any).current_period_end;
 
       if (!effectiveStart) {
         return res.status(500).json({ error: 'Unable to determine period end for scheduling downgrade' });
@@ -237,7 +241,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         end_behavior: 'release',
         phases: [
           {
-            start_date: currentPhase?.start_date || subscription.current_period_start,
+            start_date: currentPhase?.start_date || (subscription as any).current_period_start,
             end_date: effectiveStart,
             items: currentPhaseItems,
           },

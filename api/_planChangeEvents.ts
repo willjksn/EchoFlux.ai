@@ -1,6 +1,11 @@
 import { getAdminDb } from './_firebaseAdmin.js';
 
-export type PlanChangeSource = 'stripe_webhook' | 'verify_checkout_session' | 'admin_override' | 'unknown';
+export type PlanChangeSource =
+  | 'stripe_webhook'
+  | 'verify_checkout_session'
+  | 'subscription_change_api'
+  | 'admin_override'
+  | 'unknown';
 
 export async function recordPlanChangeEvent(params: {
   userId: string;
