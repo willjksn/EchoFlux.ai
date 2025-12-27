@@ -353,7 +353,7 @@ export const OnlyFansExportHub: React.FC = () => {
             a.download = `onlyfans-export-${pkg.id || Date.now()}.txt`;
             document.body.appendChild(a);
             a.click();
-            document.body.removeChild(a);
+            a.remove();
             URL.revokeObjectURL(url);
 
             // On mobile, show a message instead of auto-downloading all media files
@@ -377,7 +377,7 @@ export const OnlyFansExportHub: React.FC = () => {
                             mediaLink.download = fileName;
                             document.body.appendChild(mediaLink);
                             mediaLink.click();
-                            document.body.removeChild(mediaLink);
+                            mediaLink.remove();
                             URL.revokeObjectURL(downloadUrl);
                             // Small delay between downloads
                             await new Promise(resolve => setTimeout(resolve, 100));
@@ -798,7 +798,7 @@ export const OnlyFansExportHub: React.FC = () => {
                                                                 mediaLink.download = name;
                                                                 document.body.appendChild(mediaLink);
                                                                 mediaLink.click();
-                                                                document.body.removeChild(mediaLink);
+                                                                mediaLink.remove();
                                                                 URL.revokeObjectURL(downloadUrl);
                                                                 showToast(`Downloaded ${name}`, 'success');
                                                             } catch (error) {

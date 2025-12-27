@@ -339,7 +339,8 @@ export const Profile: React.FC = () => {
         a.download = `ad-${ad.adType}-${ad.id}.txt`;
         document.body.appendChild(a);
         a.click();
-        document.body.removeChild(a);
+        // Safe removal (can be triggered twice in some browsers / race conditions)
+        a.remove();
         URL.revokeObjectURL(url);
         showToast('Ad downloaded!', 'success');
     };

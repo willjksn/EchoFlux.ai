@@ -472,7 +472,7 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
       a.download = filename;
       document.body.appendChild(a);
       a.click();
-      document.body.removeChild(a);
+      a.remove();
       window.URL.revokeObjectURL(url);
       showToast(generatedAudioUrl ? 'Video with voiceover downloaded!' : 'Video downloaded!', 'success');
     } catch (error: any) {

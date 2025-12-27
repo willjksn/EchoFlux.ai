@@ -1483,7 +1483,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                         a.download = `post-export-${post.id || Date.now()}.txt`;
                                         document.body.appendChild(a);
                                         a.click();
-                                        document.body.removeChild(a);
+                                        a.remove();
                                         URL.revokeObjectURL(url);
                                         showToast('Text file downloaded!', 'success');
                                     }}
@@ -1507,7 +1507,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                 a.download = `post-media-${exportPreview.post.id || Date.now()}.${extension}`;
                                                 document.body.appendChild(a);
                                                 a.click();
-                                                document.body.removeChild(a);
+                                                a.remove();
                                                 URL.revokeObjectURL(url);
                                                 showToast('Media downloaded!', 'success');
                                             } catch (error) {

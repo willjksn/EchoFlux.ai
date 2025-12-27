@@ -303,7 +303,7 @@ Generate multiple compelling captions (at least 5) that leverage this trend. Eac
         a.download = `generated-captions-${selectedOpportunity?.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${Date.now()}.txt`;
         document.body.appendChild(a);
         a.click();
-        document.body.removeChild(a);
+        a.remove();
         URL.revokeObjectURL(url);
         
         showToast('Captions downloaded!', 'success');

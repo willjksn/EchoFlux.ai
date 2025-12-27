@@ -533,7 +533,7 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, usag
                                     a.download = `image-${Date.now()}.png`;
                                     document.body.appendChild(a);
                                     a.click();
-                                    document.body.removeChild(a);
+                                    a.remove();
                                     showToast('Image downloaded!', 'success');
                                 }}
                                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/50 rounded-md hover:bg-blue-200 dark:hover:bg-blue-900"

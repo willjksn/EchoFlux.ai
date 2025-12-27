@@ -2753,7 +2753,7 @@ const CaptionGenerator: React.FC = () => {
     a.download = `caption-${Date.now()}.txt`;
     document.body.appendChild(a);
     a.click();
-    document.body.removeChild(a);
+    a.remove();
     URL.revokeObjectURL(url);
     showToast('Caption downloaded!', 'success');
   };
@@ -2767,7 +2767,7 @@ const CaptionGenerator: React.FC = () => {
     a.download = `${composeState.media.type}-${Date.now()}.${extension}`;
     document.body.appendChild(a);
     a.click();
-    document.body.removeChild(a);
+    a.remove();
     showToast('Media downloaded!', 'success');
   };
 
