@@ -17,6 +17,20 @@ interface TrendData {
   timestamp: string;
 }
 
+function isComplianceCategory(category: string): boolean {
+  const c = (category || "").toLowerCase();
+  return c.startsWith("compliance_") || c.includes("policy") || c.includes("guidelines");
+}
+
+function formatTrendBlock(trend: TrendData): string {
+  const results = trend.results
+    .slice(0, 3) // Top 3 results per category
+    .map((r, idx) => `${idx + 1}. ${r.title}\n   ${r.snippet}\n   Source: ${r.link}`)
+    .join("\n\n");
+
+  return `\n${trend.category.toUpperCase().replace(/_/g, " ")}:\n${results}`;
+}
+
 /**
  * Helper function to get latest trends from Firestore
  * This can be called by other API endpoints to get current trends
@@ -37,22 +51,21 @@ export async function getLatestTrends(): Promise<string> {
       return "Trend data format invalid. Using general best practices.";
     }
 
-    // Format trends for AI consumption
-    const formattedTrends = data.trends.map((trend: TrendData) => {
-      const results = trend.results
-        .slice(0, 3) // Top 3 results per category
-        .map((r, idx) => `${idx + 1}. ${r.title}\n   ${r.snippet}\n   Source: ${r.link}`)
-        .join("\n\n");
-      
-      return `\n${trend.category.toUpperCase().replace(/_/g, " ")}:\n${results}`;
-    }).join("\n\n");
+    const allTrends = data.trends as TrendData[];
+    const compliance = allTrends.filter((t) => isComplianceCategory(t.category));
+    const nonCompliance = allTrends.filter((t) => !isComplianceCategory(t.category));
+
+    const formattedCompliance = compliance.map(formatTrendBlock).join("\n\n");
+    const formattedTrends = nonCompliance.map(formatTrendBlock).join("\n\n");
 
     return `
 CURRENT SOCIAL MEDIA TRENDS & BEST PRACTICES (Fetched: ${data.fetchedAt || "Unknown"}):
+${formattedCompliance ? `\n\nCOMPLIANCE & POLICY UPDATES (Weekly check):\n${formattedCompliance}\n` : ""}
 ${formattedTrends}
 
 KEY INSIGHTS FOR AI SUGGESTIONS:
 - Stay current with algorithm changes and platform updates
+- Respect platform policies and community guidelines (avoid risky claims/content)
 - Adapt content to trending formats and styles
 - Use trending hashtags and topics when relevant
 - Follow platform-specific best practices

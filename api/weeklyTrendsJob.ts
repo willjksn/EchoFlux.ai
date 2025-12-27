@@ -84,6 +84,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         category: "general_social_media_trends",
         query: "social media trends 2024 2025 algorithm updates",
       },
+      // Weekly compliance / policy checks (to keep guidance current)
+      {
+        category: "compliance_general",
+        query: "social media policy updates 2024 2025 community guidelines changes creator compliance",
+      },
+      {
+        category: "compliance_instagram",
+        query: "Instagram community guidelines policy updates 2024 2025 creator content restrictions",
+      },
+      {
+        category: "compliance_tiktok",
+        query: "TikTok community guidelines policy updates 2024 2025 creator content restrictions",
+      },
+      {
+        category: "compliance_x",
+        query: "X (Twitter) policy updates 2024 2025 sensitive media rules creator guidelines",
+      },
+      {
+        category: "compliance_threads",
+        query: "Threads policy updates 2024 2025 community guidelines changes",
+      },
+      {
+        category: "compliance_facebook",
+        query: "Facebook community standards policy updates 2024 2025 content rules",
+      },
       {
         category: "instagram_trends",
         query: "Instagram algorithm updates 2024 2025 best practices Reels",

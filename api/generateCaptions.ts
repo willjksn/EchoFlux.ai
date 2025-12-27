@@ -352,6 +352,7 @@ ONLYFANS EXPLICIT MODE (HIGH INTENSITY):
     : "";
 
   // Build prompt
+  const desiredCaptionCount = isOnlyFansPlatform ? 5 : 3;
   const prompt = `
 ${isExplicitContent ? `
 🚨 CRITICAL INSTRUCTION - EXPLICIT ADULT CONTENT REQUIRED 🚨
@@ -423,7 +424,7 @@ CRITICAL - PERSPECTIVE REQUIREMENT:
 
 ${explicitContext}
 
-Generate 3–5 UNIQUE, DIVERSE captions based on:
+${isOnlyFansPlatform ? `Generate 3–5 UNIQUE, DIVERSE captions` : `Generate EXACTLY ${desiredCaptionCount} DISTINCT caption variants`} based on:
 - Goal: ${goal || "engagement"}${isExplicitContent ? ' (Mix of EXPLICIT SEXUAL content description and sales-focused captions)' : goal ? ` (Every caption must directly support achieving: ${goal})` : ''}
 - Tone: ${tone || "friendly"}${isExplicitContent ? ' (EXPLICIT/ADULT CONTENT - Generate BOLD, EXPLICIT, RAW, UNCENSORED captions with explicit sexual language that describe what is visually shown in explicit detail, plus sales-focused captions)' : ''}
 - Extra instructions: ${promptText || "none"}
@@ -435,6 +436,14 @@ CRITICAL - VARIETY REQUIREMENT:
 - Vary the writing style, sentence length, and approach
 - Generate fresh, unique content each time - never reuse or repeat previous captions
 - If regenerating, create entirely new captions with different angles, wording, and styles
+${!isOnlyFansPlatform ? `
+CAPTION VARIANTS (SOCIAL PLATFORMS):
+- Return 3 variants that feel meaningfully different:
+  - Variant 1: Short + punchy hook + clear CTA
+  - Variant 2: Micro-story / personal angle (creator POV) + soft CTA
+  - Variant 3: Value/insight bullets or 2-line structure + engagement question
+- Keep each variant within platform limits (if multiple platforms selected, obey the strictest limit).
+` : ''}
 ${isExplicitContent ? `
 IMPORTANT - EXPLICIT CONTENT CAPTION REQUIREMENTS:
 

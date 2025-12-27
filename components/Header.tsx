@@ -4,6 +4,7 @@ import { SunIcon, MoonIcon, BellIcon, MenuIcon, LogoutIcon, ChatIcon, BriefcaseI
 import { Client, Notification } from '../types';
 import { useAppContext } from './AppContext';
 import { OFFLINE_MODE } from '../constants';
+import { ReportProblemModal } from './ReportProblemModal';
 
 interface HeaderProps {
   pageTitle: string;
@@ -23,6 +24,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isClientSwitcherOpen, setIsClientSwitcherOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isReportOpen, setIsReportOpen] = useState(false);
 
   const profileRef = useRef<HTMLDivElement>(null);
   const clientSwitcherRef = useRef<HTMLDivElement>(null);
@@ -177,6 +179,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
 
   return (
     <header className="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+      <ReportProblemModal isOpen={isReportOpen} onClose={() => setIsReportOpen(false)} />
       <div className="flex items-center justify-between p-4 h-20">
         <div className="flex items-center space-x-4">
             <button
@@ -261,6 +264,12 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
             {isProfileOpen && (
                 <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg py-1 ring-1 ring-black ring-opacity-5 z-50">
                     <button onClick={() => { setActivePage('profile'); setIsProfileOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">Your Profile</button>
+                    <button
+                        onClick={() => { setIsReportOpen(true); setIsProfileOpen(false); }}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    >
+                        Report a Problem
+                    </button>
                     <button 
                         onClick={handleLogout}
                         className="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"

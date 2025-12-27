@@ -65,7 +65,10 @@ const PrivacyPolicy: React.FC = () => (
     <p>
       We may analyze your content, posting history, and engagement data to provide recommendations
       and optimize your social media strategy. This data is used only within the platform and is
-      not sold to third parties.
+      not sold or shared with third parties for advertising/marketing.
+    </p>
+    <p>
+      <strong>We do not share your personal information with other users.</strong> Your uploaded media and generated content remain private to your account unless you explicitly share it.
     </p>
     <p>
       You may request deletion of your account and associated data at any time by contacting

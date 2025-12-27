@@ -42,7 +42,10 @@ export const Privacy: React.FC = () => {
                     
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">4. Sharing Your Information</h3>
                     <p>
-                        We will not rent or sell your personal information to third parties. We may share your personal information with third-party service providers (e.g., payment processors, cloud hosting) for the purpose of providing the Service to you.
+                        We will not rent or sell your personal information to third parties. We do not share your personal information with other users. We may share limited information with third-party service providers (e.g., payment processors, cloud hosting, analytics) only as needed to provide the Service to you.
+                    </p>
+                    <p className="mt-2">
+                        <strong>No selling of user data:</strong> We do not sell your personal information or user-generated content to advertisers or data brokers.
                     </p>
 
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">5. Your Choices About Your Information</h3>
@@ -50,10 +53,10 @@ export const Privacy: React.FC = () => {
                         You can, of course, decline to submit personal information through the Service, in which case we may not be able to provide certain services to you. You can review and correct the information about you that we keep on file by contacting us directly.
                     </p>
                     
-                    <div className="mt-8 p-6 border-l-4 border-red-400 bg-red-50 dark:bg-red-900/30 rounded-r-lg">
-                        <h4 className="text-xl font-bold text-red-800 dark:text-red-200">Disclaimer</h4>
-                        <p className="mt-2 text-red-900 dark:text-red-100">
-                           This is a template privacy policy and not legal advice. You should consult with a legal professional to ensure your privacy policy is compliant with all applicable laws and regulations for your specific business case.
+                    <div className="mt-8 p-6 border-l-4 border-blue-400 bg-blue-50 dark:bg-blue-900/30 rounded-r-lg">
+                        <h4 className="text-xl font-bold text-blue-800 dark:text-blue-200">Questions</h4>
+                        <p className="mt-2 text-blue-900 dark:text-blue-100">
+                           If you have questions about privacy, data retention, or deletion, contact us at <strong>contact@echoflux.ai</strong>.
                         </p>
                     </div>
 
