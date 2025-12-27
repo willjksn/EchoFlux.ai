@@ -98,31 +98,30 @@ export async function getOnlyFansWeeklyTrends(): Promise<string> {
       return "OnlyFans trend data format invalid. Using general OnlyFans best practices.";
     }
 
-    // Filter to only OnlyFans-related categories
-    const onlyfansTrends = data.trends.filter((trend: TrendData) => 
-      trend.category.toLowerCase().includes('onlyfans')
-    );
+    // Filter to OnlyFans-related categories + OnlyFans compliance categories.
+    // (weeklyTrendsJob stores compliance_onlyfans, which should always be included here)
+    const onlyfansTrends = (data.trends as TrendData[]).filter((trend: TrendData) => {
+      const c = trend.category.toLowerCase();
+      return c.includes('onlyfans') || (c.startsWith('compliance_') && c.includes('onlyfans'));
+    });
 
     if (onlyfansTrends.length === 0) {
       return "OnlyFans-specific trend data unavailable. Using general OnlyFans best practices.";
     }
 
-    // Format OnlyFans trends for AI consumption
-    const formattedTrends = onlyfansTrends.map((trend: TrendData) => {
-      const results = trend.results
-        .slice(0, 3) // Top 3 results per category
-        .map((r, idx) => `${idx + 1}. ${r.title}\n   ${r.snippet}\n   Source: ${r.link}`)
-        .join("\n\n");
-      
-      return `\n${trend.category.toUpperCase().replace(/_/g, " ")}:\n${results}`;
-    }).join("\n\n");
+    const compliance = onlyfansTrends.filter((t) => isComplianceCategory(t.category));
+    const nonCompliance = onlyfansTrends.filter((t) => !isComplianceCategory(t.category));
+    const formattedCompliance = compliance.map(formatTrendBlock).join("\n\n");
+    const formattedTrends = nonCompliance.map(formatTrendBlock).join("\n\n");
 
     return `
 CURRENT ONLYFANS-SPECIFIC TRENDS & BEST PRACTICES (Fetched: ${data.fetchedAt || "Unknown"}):
+${formattedCompliance ? `\n\nCOMPLIANCE & POLICY UPDATES (Weekly check):\n${formattedCompliance}\n` : ""}
 ${formattedTrends}
 
 KEY INSIGHTS FOR ONLYFANS CREATORS:
 - Stay current with OnlyFans platform updates and new features
+- Respect OnlyFans policies and content restrictions (avoid risky/non-compliant guidance)
 - Adapt content to trending OnlyFans content types and formats
 - Use proven OnlyFans monetization strategies and engagement tactics
 - Follow OnlyFans-specific best practices for subscriber retention

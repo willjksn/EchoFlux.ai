@@ -110,6 +110,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         query: "Facebook community standards policy updates 2024 2025 content rules",
       },
       {
+        category: "compliance_onlyfans",
+        query: "OnlyFans terms policy updates 2024 2025 prohibited content rules compliance creator guidelines",
+      },
+      {
         category: "instagram_trends",
         query: "Instagram algorithm updates 2024 2025 best practices Reels",
       },
