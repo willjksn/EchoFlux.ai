@@ -212,6 +212,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    // Fetch the recurring price details for reminder notifications.
+    // (unit_amount is in cents)
+    const targetPrice = await stripe.prices.retrieve(targetPriceId);
+    const newPrice = {
+      unitAmount: (targetPrice as any)?.unit_amount ?? null,
+      currency: (targetPrice as any)?.currency ?? 'usd',
+      interval: (targetPrice as any)?.recurring?.interval ?? null, // 'month' | 'year'
+      priceId: targetPriceId,
+    };
+
     // Downgrades: no refunds; schedule change at period end.
     if (isDowngrade) {
       // Create or re-use a schedule and add a next phase.
@@ -267,6 +277,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         type: 'downgrade_scheduled',
         message: 'Downgrade scheduled for period end. No refunds for unused time.',
         effectiveDate: new Date(effectiveStart * 1000).toISOString(),
+        newPlan: planName,
+        newBillingCycle: billingCycle,
+        newPrice,
       });
     }
 
@@ -346,6 +359,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: true,
       type: currentInterval === targetInterval ? 'upgrade_prorated' : 'upgrade_cross_interval_prorated',
       message: 'Plan updated with proration credit applied to unused time.',
+      newPlan: planName,
+      newBillingCycle: billingCycle,
+      newPrice,
       invoice: {
         id: paidOrFinal.id,
         status: paidOrFinal.status,

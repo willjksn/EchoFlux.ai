@@ -7,7 +7,7 @@ import { db } from '../firebaseConfig';
 import { createAccountFromPendingSignup } from '../src/utils/createAccountFromPendingSignup';
 
 export const PaymentModal: React.FC = () => {
-    const { paymentPlan, closePaymentModal, user, setUser, selectedClient, setClients, showToast, setPricingView, setActivePage } = useAppContext();
+    const { paymentPlan, closePaymentModal, user, setUser, setNotifications, selectedClient, setClients, showToast, setPricingView, setActivePage } = useAppContext();
     const [isLoading, setIsLoading] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
     const [isProrationPreviewLoading, setIsProrationPreviewLoading] = useState(false);
@@ -17,6 +17,39 @@ export const PaymentModal: React.FC = () => {
         message?: string;
     } | null>(null);
     const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    const pushReminder = (text: string) => {
+        try {
+            const messageId = `plan-change-${Date.now()}`;
+            setNotifications(prev => [
+                {
+                    id: messageId,
+                    text,
+                    timestamp: new Date().toLocaleString(),
+                    read: false,
+                    messageId,
+                },
+                ...prev,
+            ]);
+        } catch {}
+    };
+
+    const formatMoney = (cents: number | null | undefined, currency: string | null | undefined) => {
+        if (typeof cents !== 'number') return null;
+        const amount = cents / 100;
+        const cur = (currency || 'usd').toUpperCase();
+        try {
+            return new Intl.NumberFormat(undefined, { style: 'currency', currency: cur }).format(amount);
+        } catch {
+            return `$${amount.toFixed(2)}`;
+        }
+    };
+
+    const formatInterval = (interval: string | null | undefined) => {
+        if (interval === 'month') return '/mo';
+        if (interval === 'year') return '/yr';
+        return '';
+    };
 
 
     // Cleanup timeout on unmount
@@ -219,14 +252,61 @@ export const PaymentModal: React.FC = () => {
                     return;
                 }
 
+                const newPlan = (data?.newPlan || paymentPlan.name) as User['plan'];
+                const newBillingCycle = (data?.newBillingCycle || paymentPlan.cycle) as any;
+                const newUnitAmount = data?.newPrice?.unitAmount as number | null | undefined;
+                const newCurrency = data?.newPrice?.currency as string | undefined;
+                const newInterval = data?.newPrice?.interval as string | undefined;
+                const dueNowCents = data?.invoice?.amount_due as number | undefined;
+                const dueNowCurrency = (data?.invoice?.currency as string | undefined) || newCurrency;
+
+                if (data?.type === 'downgrade_scheduled') {
+                    const effectiveIso = data?.effectiveDate as string | undefined;
+                    const effectiveText = effectiveIso ? new Date(effectiveIso).toLocaleString() : 'your next renewal';
+                    const recurringText = (formatMoney(newUnitAmount, newCurrency) || 'your new price') + formatInterval(newInterval);
+
+                    showToast(data?.message || 'Downgrade scheduled.', 'success');
+                    pushReminder(`Downgrade scheduled: ${newPlan} ${newBillingCycle} (${recurringText}) • Effective ${effectiveText}`);
+
+                    // Do NOT switch plan immediately; keep current plan and set pending fields.
+                    try {
+                        await setUser({
+                            ...(user as any),
+                            pendingPlan: newPlan,
+                            pendingBillingCycle: newBillingCycle,
+                            pendingPlanEffectiveDate: effectiveIso || null,
+                        });
+                    } catch {}
+
+                    // Also refresh from Firestore to keep all subscription fields in sync.
+                    try {
+                        const { doc, getDoc } = await import('firebase/firestore');
+                        const { db } = await import('../firebaseConfig');
+                        const userRef = doc(db, 'users', user.id);
+                        const userSnap = await getDoc(userRef);
+                        if (userSnap.exists()) {
+                            const updatedUser = userSnap.data() as any;
+                            await setUser(updatedUser);
+                        }
+                    } catch {}
+
+                    setIsLoading(false);
+                    closePaymentModal();
+                    return;
+                }
+
+                // Upgrade: immediate change with proration invoice.
                 showToast('Plan updated successfully (proration applied).', 'success');
+                const dueNowText = formatMoney(dueNowCents, dueNowCurrency) || 'Calculated at checkout';
+                const recurringText = (formatMoney(newUnitAmount, newCurrency) || 'your new price') + formatInterval(newInterval);
+                pushReminder(`Upgrade complete: ${newPlan} ${newBillingCycle} • Due today: ${dueNowText} • Next renew: ${recurringText}`);
+
                 // Update local user immediately so Pricing/headers reflect the new plan without requiring a reload.
                 try {
-                    const nextPlan = paymentPlan.name as User['plan'];
                     await setUser({
                         ...(user as any),
-                        plan: nextPlan,
-                        billingCycle: paymentPlan.cycle,
+                        plan: newPlan,
+                        billingCycle: newBillingCycle,
                         cancelAtPeriodEnd: false,
                         subscriptionEndDate: null,
                         pendingPlan: null,
@@ -371,6 +451,9 @@ export const PaymentModal: React.FC = () => {
                 }
 
                 showToast(data?.message || 'Subscription will cancel at period end.', 'success');
+                const endIso = data?.subscriptionEndDate as string | null | undefined;
+                const endText = endIso ? new Date(endIso).toLocaleString() : 'the end of your billing period';
+                pushReminder(`Plan change: Cancellation scheduled • Access until ${endText} • No further renewal charges after that`);
                 // Update local state so the Billing UI reflects the cancellation immediately.
                 await setUser({
                     ...(user as any),
