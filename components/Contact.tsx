@@ -33,9 +33,9 @@ export const Contact: React.FC = () => {
                  <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-md">
                     <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Contact Information</h3>
                     <div className="space-y-4 text-gray-700 dark:text-gray-300">
-                        <p><strong>Support:</strong> <a href="mailto:support@engagesuite.ai" className="text-primary-600 dark:text-primary-400">support@echoflux.ai</a></p>
-                        <p><strong>Sales:</strong> <a href="mailto:sales@engagesuite.ai" className="text-primary-600 dark:text-primary-400">sales@echoflux.ai</a></p>
-                        <p><strong>Address:</strong><br/>123 Innovation Drive<br/>Tech City, CA 94105</p>
+                        <p><strong>Support:</strong> <a href="mailto:contact@echoflux.ai" className="text-primary-600 dark:text-primary-400">contact@echoflux.ai</a></p>
+                        <p><strong>Sales:</strong> <a href="mailto:sales@echoflux.ai" className="text-primary-600 dark:text-primary-400">sales@echoflux.ai</a></p>
+                        <p><strong>Address:</strong><br/>Remote (home office)<br/>Mailing address available upon request</p>
                     </div>
                 </div>
             </div>
