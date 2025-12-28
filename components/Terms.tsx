@@ -5,7 +5,7 @@ export const Terms: React.FC = () => {
         <div className="max-w-4xl mx-auto space-y-8">
             <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-md">
                 <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Terms of Service & Fair Use Policy</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Last updated: January 2025</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Last updated: December 2025</p>
 
                 <div className="mt-6 prose prose-lg dark:prose-invert max-w-none text-gray-700 dark:text-gray-300">
                     <p>
@@ -52,7 +52,7 @@ export const Terms: React.FC = () => {
                     <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
                         <strong>Compliance with Laws:</strong> EchoFlux.ai complies with applicable laws including the Children's Online 
                         Privacy Protection Act (COPPA) and other age-related regulations. If you are aware of a user under 13 using our 
-                        service, please contact us immediately at support@echoflux.ai.
+                        service, please contact us immediately at contact@echoflux.ai.
                     </p>
 
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">
@@ -105,9 +105,9 @@ export const Terms: React.FC = () => {
                         4. Subscription Plans and Pricing
                     </h3>
                     <p>
-                        Plan names, limits, and prices are shown in the Pricing section of the app or on our website. We are
-                        currently focused on creator‑oriented plans; agency/business features may be paused or hidden in this
-                        version.
+                        Plan names, limits, and prices are shown in the Pricing section of the app or on our website. EchoFlux.ai
+                        is currently focused on creator‑oriented planning tools; business/agency features may be paused or hidden
+                        in this version.
                     </p>
                     <ul className="list-disc pl-6 space-y-2 mt-2">
                         <li>
@@ -130,19 +130,19 @@ export const Terms: React.FC = () => {
                     
                     <h4>AI Strategy Generation</h4>
                     <p>
-                        AI Content Strategist generates multi-week content roadmaps based on your goals, niche, and audience. Each strategy uses live web research to provide current trends and niche-specific insights. Monthly limits are as follows:
+                        AI Content Strategist generates multi-week content roadmaps based on your goals, niche, and audience.
+                        Strategy generation uses shared trend research collected by EchoFlux.ai and does not guarantee real‑time
+                        web results for each individual user request.
                     </p>
-                    <ul>
-                        <li><strong>Free Plan:</strong> 1 AI strategy generation per month (basic - uses general trends only, no live research).</li>
-                        <li><strong>Pro Plan:</strong> 2 AI strategy generations per month (includes live trend research - 16 Tavily searches/month).</li>
-                        <li><strong>Elite Plan:</strong> 5 AI strategy generations per month (includes enhanced live trend research - 40 Tavily searches/month).</li>
-                        <li><strong>Agency Plan:</strong> 5 AI strategy generations per month (includes enhanced live trend research - 40 Tavily searches/month).</li>
-                    </ul>
+                    <p className="mt-2">
+                        Your monthly strategy generation allowance (if any) is shown in-app and may vary by plan and product version.
+                    </p>
                     <p>
                         Strategy generations reset on your monthly billing date. Unused generations do not roll over to the next month.
                     </p>
                     <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                        <strong>Note:</strong> Strategy generation uses a combination of weekly trend data (updated every Monday, free for all users) and live web research (via Tavily) for niche-specific insights. Pro and Elite plans get Tavily searches for real-time research, while Free plans use general trend data from our weekly updates. Each strategy generation uses approximately 5 Tavily searches for niche-specific research.
+                        <strong>Note:</strong> Trend research used for strategy generation is refreshed on a recurring schedule
+                        (currently twice weekly).
                     </p>
 
                     <h4>AI Caption Generation</h4>
@@ -173,18 +173,11 @@ export const Terms: React.FC = () => {
                         Media uploaded to your Media Library remains stored until you delete it. Storage usage is calculated across all uploaded media including profile pictures, link-in-bio images, and media library items.
                     </p>
 
-                    <h4>AI Reply Generation</h4>
+                    <h4>AI Reply Generation (DMs / Comments)</h4>
                     <p>
-                        All plans include AI-powered reply generation for DMs and comments. Monthly limits are as follows:
-                    </p>
-                    <ul>
-                        <li><strong>Free Plan:</strong> 25 AI Replies per month.</li>
-                        <li><strong>Caption Pro Plan:</strong> Not included (caption generation only).</li>
-                        <li><strong>Creator Pro Plan:</strong> 250 AI Replies per month.</li>
-                        <li><strong>Creator Elite Plan:</strong> 750 AI Replies per month.</li>
-                    </ul>
-                    <p>
-                        Credits reset on your monthly billing date. Unused credits do not roll over to the next month.
+                        EchoFlux.ai may include reply-generation features in the future. At this time, automated DM/comment reply
+                        generation and any live inbox integrations may be unavailable, limited, or in testing depending on your plan
+                        and product version.
                     </p>
 
 

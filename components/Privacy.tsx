@@ -5,31 +5,45 @@ export const Privacy: React.FC = () => {
         <div className="max-w-4xl mx-auto space-y-8">
             <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-md">
                 <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Privacy Policy</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Last updated: January 2025</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Last updated: December 2025</p>
 
                 <div className="mt-6 prose prose-lg dark:prose-invert max-w-none text-gray-700 dark:text-gray-300">
                     <p>EchoFlux.ai ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how your personal information is collected, used, and disclosed by EchoFlux.ai.</p>
 
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">1. Information We Collect</h3>
                     <p>
-                        We may collect personal information from you, such as your name, email address, payment information, and social media profile information when you register for an account and connect your social media profiles. We also collect media files (images and videos) that you upload to our platform, including those stored in your Media Library, profile pictures, and link-in-bio images.
+                        We may collect personal information from you, such as your name, email address, and payment information when you
+                        register for an account. We also collect media files (images and videos) that you upload to our platform, including
+                        those stored in your Media Library, profile pictures, and link-in-bio images.
                     </p>
 
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">2. How We Use Your Information</h3>
                     <p>
-                        We use the information we collect to operate, maintain, and provide to you the features and functionality of the Service. This includes connecting to your social media accounts via their official APIs to retrieve messages and post replies on your behalf. We store your uploaded media files securely and use them to provide features such as AI Content Generation, Media Library, content scheduling, and strategy roadmaps. We may use your email address to send you service-related notices.
+                        We use the information we collect to operate, maintain, and provide to you the features and functionality of the Service.
+                        EchoFlux.ai is currently focused on planning and content creation workflows. Social platform connections, inbox syncing,
+                        and automated posting/reply features may be unavailable, limited, or in testing depending on your product version.
+                        We store your uploaded media files securely and use them to provide features such as caption generation, Media Library,
+                        content planning, and strategy roadmaps. We may use your email address to send you service-related notices.
                     </p>
                     
                      <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">3. Data Sent to AI Models & User Content</h3>
                      <h4>a. Data Sent to AI Models</h4>
                     <p>
-                        To provide our core service, message content (DMs, comments), uploaded media files, and prompts you enter are sent to third-party AI models (like Google's Gemini) to generate replies, captions, hashtags, content strategies, and analyze media for optimal posting times. We do not use this data to train our own models. Please refer to the privacy policies of these third-party providers for more information on how they handle data.
+                        To provide our core service, prompts you enter and (when you choose) uploaded media files may be sent to third-party AI
+                        models (like Google's Gemini) to generate captions, hashtags, content strategies, and other planning suggestions.
+                        We do not use this data to train our own models. Please refer to the privacy policies of these third-party providers
+                        for more information on how they handle data.
                     </p>
                     <p className="mt-2">
-                        <strong>Weekly Trends Data:</strong> We collect and store general social media trends data weekly (updated every Monday) using Tavily web search. This data is stored in our database and used to provide current trend information to all users at no cost. This shared trend data does not contain any personal information and is used to enhance AI-generated content strategies and suggestions.
+                        <strong>Weekly Trends Data:</strong> We collect and store general social media trends data on a recurring schedule
+                        (currently twice weekly) using Tavily web search. This data is stored in our database and used to provide current trend
+                        information to all users. This shared trend data does not contain any personal information and is used to enhance
+                        AI-generated strategies and suggestions.
                     </p>
                     <p className="mt-2">
-                        <strong>Tavily Web Search:</strong> Pro and Elite users may use Tavily web search for niche-specific research. When you use features that require Tavily (like Strategy generation or Voice Assistant web search), your search queries are sent to Tavily's API. Please refer to Tavily's privacy policy for information on how they handle search queries.
+                        <strong>Tavily Web Search:</strong> EchoFlux.ai may use Tavily web search for system jobs (like the scheduled trends
+                        refresh) and admin tools. End users do not currently trigger Tavily searches directly as part of strategy generation.
+                        If we add user-initiated web research in the future, we will update this policy to describe what is sent and when.
                     </p>
                     
                     <h4>b. User-Uploaded Media Content</h4>
