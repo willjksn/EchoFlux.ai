@@ -33,9 +33,31 @@ export const Contact: React.FC = () => {
                  <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-md">
                     <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Contact Information</h3>
                     <div className="space-y-4 text-gray-700 dark:text-gray-300">
-                        <p><strong>Support:</strong> <a href="mailto:contact@echoflux.ai" className="text-primary-600 dark:text-primary-400">contact@echoflux.ai</a></p>
-                        <p><strong>Sales:</strong> <a href="mailto:sales@echoflux.ai" className="text-primary-600 dark:text-primary-400">sales@echoflux.ai</a></p>
-                        <p><strong>Address:</strong><br/>Remote (home office)<br/>Mailing address available upon request</p>
+                        <div className="flex items-start gap-3">
+                            <div className="mt-1">
+                                <MailIcon className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                            </div>
+                            <div>
+                                <p className="font-semibold text-gray-900 dark:text-white">Support</p>
+                                <a href="mailto:contact@echoflux.ai" className="text-primary-600 dark:text-primary-400 font-medium">contact@echoflux.ai</a>
+                                <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                                    Fastest way to reach us. Include your account email + a screenshot if you can.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="p-4 bg-gray-50 dark:bg-gray-700/40 rounded-lg border border-gray-200 dark:border-gray-600">
+                            <p className="text-sm font-semibold text-gray-900 dark:text-white mb-2">To help us fix it faster</p>
+                            <ul className="text-sm text-gray-700 dark:text-gray-300 space-y-1 list-disc pl-5">
+                                <li>What page you were on (ex: Calendar → Edit Post)</li>
+                                <li>What you clicked + what you expected</li>
+                                <li>Any error text (copy/paste) + screenshot</li>
+                            </ul>
+                        </div>
+
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Tip: You can also use the in-app <span className="font-semibold">Report a Problem</span> button for bugs.
+                        </p>
                     </div>
                 </div>
             </div>
