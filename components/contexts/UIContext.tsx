@@ -65,7 +65,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         return true;
     });
     
-    const [activePage, setActivePage] = useState<Page>('dashboard');
+    const [activePageState, setActivePageState] = useState<Page>('dashboard');
     const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
     
     const [dashboardNavState, setDashboardNavState] = useState<DashboardNavState | null>(null);
@@ -96,6 +96,122 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     }, [isDarkMode]);
 
     const toggleTheme = () => setIsDarkMode(prev => !prev);
+
+    /*--------------------------------------------------------------------
+      ROUTING: Persist current page across refresh
+    --------------------------------------------------------------------*/
+    const LAST_ACTIVE_PAGE_KEY = 'lastActivePage';
+
+    const normalizePath = (p: string) => (p || '/').split('?')[0].split('#')[0].replace(/\/+$/, '') || '/';
+
+    // Keep this list aligned with App.tsx `knownRoutes` to avoid bio-page collisions.
+    const pageToPath: Partial<Record<Page, string>> = {
+        dashboard: '/dashboard',
+        inbox: '/inbox',
+        analytics: '/analytics',
+        settings: '/settings',
+        compose: '/compose',
+        calendar: '/calendar',
+        approvals: '/approvals',
+        team: '/team',
+        opportunities: '/opportunities',
+        profile: '/profile',
+        about: '/about',
+        contact: '/contact',
+        pricing: '/pricing',
+        clients: '/clients',
+        faq: '/faq',
+        terms: '/terms',
+        privacy: '/privacy',
+        dataDeletion: '/dataDeletion',
+        admin: '/admin',
+        automation: '/automation',
+        bio: '/bio',
+        strategy: '/strategy',
+        ads: '/ads',
+        mediaLibrary: '/mediaLibrary',
+        autopilot: '/autopilot',
+        onlyfansStudio: '/onlyfansStudio',
+    };
+
+    const pathToPage: Record<string, Page> = Object.entries(pageToPath).reduce((acc, [page, path]) => {
+        if (path) acc[normalizePath(path)] = page as Page;
+        return acc;
+    }, {} as Record<string, Page>);
+
+    const isRoutableAppPath = (path: string) => {
+        const p = normalizePath(path);
+        return p === '/' || !!pathToPage[p];
+    };
+
+    // Wrapper so all navigation goes through a single place.
+    const setActivePage = (page: Page) => {
+        setActivePageState(page);
+    };
+
+    // Initialize active page from URL (or last saved page) after auth resolves.
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        const currentPath = normalizePath(window.location.pathname);
+
+        // Never hijack public bio pages (e.g. /username) or special flows (e.g. /reset-password).
+        if (!isRoutableAppPath(currentPath)) return;
+        if (currentPath === '/reset-password') return;
+
+        // If URL explicitly maps to a page, honor it.
+        const fromUrl = pathToPage[currentPath];
+        if (fromUrl) {
+            setActivePageState(fromUrl);
+            return;
+        }
+
+        // If user is authenticated and URL is '/', restore last page.
+        if (user?.id && currentPath === '/') {
+            try {
+                const saved = localStorage.getItem(LAST_ACTIVE_PAGE_KEY) as Page | null;
+                if (saved) {
+                    setActivePageState(saved);
+                }
+            } catch {}
+        }
+    }, [user?.id]);
+
+    // Persist page + keep URL in sync so refresh stays on current page.
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        if (!user?.id) return; // only do this for authenticated app navigation
+
+        const currentPath = normalizePath(window.location.pathname);
+        // Avoid rewriting public bio pages / special flows.
+        if (!isRoutableAppPath(currentPath) || currentPath === '/reset-password') return;
+
+        try {
+            localStorage.setItem(LAST_ACTIVE_PAGE_KEY, activePageState);
+        } catch {}
+
+        const targetPath = pageToPath[activePageState];
+        if (!targetPath) return;
+
+        if (normalizePath(window.location.pathname) !== normalizePath(targetPath)) {
+            window.history.pushState({}, '', targetPath);
+        }
+    }, [activePageState, user?.id]);
+
+    // Support browser back/forward navigation.
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        if (!user?.id) return;
+
+        const onPopState = () => {
+            const p = normalizePath(window.location.pathname);
+            const mapped = pathToPage[p];
+            if (mapped) setActivePageState(mapped);
+        };
+
+        window.addEventListener('popstate', onPopState);
+        return () => window.removeEventListener('popstate', onPopState);
+    }, [user?.id]);
     
     const navigateToDashboardWithFilter = (filters: Partial<any>, highlightId?: string) => {
         setDashboardNavState({ filters, highlightId });
@@ -117,7 +233,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         const firstStepPage = steps[0]?.page;
         
         // If first step requires a specific page, navigate there first
-        if (firstStepPage && activePage !== firstStepPage) {
+        if (firstStepPage && activePageState !== firstStepPage) {
             setActivePage(firstStepPage);
             // Wait for page to render before starting tour
             setTimeout(() => {
@@ -143,7 +259,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         if (tourStep < tourSteps.length - 1) {
             const next = tourSteps[tourStep + 1];
             // Navigate to the page for the next step if needed
-            if (next.page && activePage !== next.page) {
+            if (next.page && activePageState !== next.page) {
                 setActivePage(next.page);
                 // Wait a bit for the page to render before moving to next step
                 setTimeout(() => {
@@ -185,7 +301,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     };
     
     const value = {
-        isDarkMode, toggleTheme, activePage, setActivePage, isSidebarOpen, setIsSidebarOpen,
+        isDarkMode, toggleTheme, activePage: activePageState, setActivePage, isSidebarOpen, setIsSidebarOpen,
         dashboardNavState, navigateToDashboardWithFilter, clearDashboardNavState,
         composeContext, setComposeContext, clearComposeContext,
         isTourActive, tourStep, tourSteps, startTour, nextTourStep, endTour,
