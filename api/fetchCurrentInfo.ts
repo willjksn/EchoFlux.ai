@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { withErrorHandling, getVerifyAuth } from "./_errorHandler.js";
-import { searchWeb } from "./_webSearch.js";
+import { getLatestTrends } from "./_trendsHelper.js";
 import { trackModelUsage } from "./trackModelUsage.js";
 
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
@@ -28,44 +28,32 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
 
   const searchQuery = topic.trim();
 
-  console.log('[fetchCurrentInfo] Tavily search requested for topic:', searchQuery, 'user:', user?.uid || 'anonymous');
-  const result = await searchWeb(
-    searchQuery,
-    user?.uid,
-    user?.plan,
-    user?.role
-  );
-  console.log('[fetchCurrentInfo] Tavily search result:', {
-    success: result.success,
-    resultCount: result.results?.length || 0,
-    note: result.note,
-    topic: searchQuery
-  });
+  // Live Tavily search is disabled (cost control). Return cached weekly trends context instead.
+  const cached = await getLatestTrends().catch(() => 'Trend data unavailable. Use general best practices.');
 
-  // Track Tavily usage for admin analytics (only when we know the user)
+  // Track as a cache read (no cost)
   if (user?.uid) {
     try {
       await trackModelUsage({
         userId: user.uid,
-        taskType: "trends", // reuse trends/task bucket for external web insights
-        modelName: "tavily-web-search",
+        taskType: "trends",
+        modelName: "weekly-trends-cache",
         costTier: "low",
-        // Tavily is billed per query – approximate a tiny fixed cost here
-        estimatedCost: result.success ? 0.0005 : 0,
-        success: result.success,
+        estimatedCost: 0,
+        success: true,
       });
     } catch (err) {
-      // Do not fail the request if tracking fails
-      console.error("Failed to track Tavily usage from fetchCurrentInfo:", err);
+      console.error("Failed to track cached trend usage from fetchCurrentInfo:", err);
     }
   }
 
   res.status(200).json({
-    success: result.success,
-    note: result.note,
-    results: result.results,
+    success: true,
+    note: "Live web search is disabled. Returning cached weekly trends context only.",
+    results: [],
     topic: searchQuery,
     uid: user?.uid ?? null,
+    cachedTrendContext: cached,
   });
 }
 

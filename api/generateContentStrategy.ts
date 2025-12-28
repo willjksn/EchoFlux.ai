@@ -419,6 +419,51 @@ IMPORTANT: When generating imageIdeas and videoIdeas:
         }))
       }));
 
+      // Post-validate: ensure required fields are always present/non-empty for UI reliability
+      const safeString = (v: any) => (typeof v === "string" ? v.trim() : "");
+      const ensureMin = (v: any, fallback: string, minLen = 8) => {
+        const s = safeString(v);
+        return s.length >= minLen ? s : fallback;
+      };
+
+      const defaultCta = (() => {
+        const ctas = getGoalSpecificCTAs(goal);
+        return typeof ctas === "string" && ctas.trim().length > 0 ? ctas.split("\n")[0].trim() : "Comment your thoughts and share this with someone who needs it.";
+      })();
+
+      plan.weeks = plan.weeks.map((week: any) => ({
+        ...week,
+        content: (week.content || []).map((item: any) => {
+          const topic = ensureMin(item.topic, "Content idea");
+          const format = safeString(item.format) || "Post";
+          const platform = safeString(item.platform) || (platforms[0] || "Instagram");
+
+          const descriptionFallback = `Create a ${format} about "${topic}" for ${audience}. Include specific talking points, how to present it, and what to show/do on-screen.`;
+          const angleFallback = `Hook with a bold claim or question about "${topic}", then deliver 2-3 concrete insights tailored to ${audience}.`;
+          const ctaFallback = defaultCta;
+
+          const imageIdeas = Array.isArray(item.imageIdeas) ? item.imageIdeas.filter((x: any) => safeString(x).length > 0) : [];
+          const videoIdeas = Array.isArray(item.videoIdeas) ? item.videoIdeas.filter((x: any) => safeString(x).length > 0) : [];
+
+          return {
+            ...item,
+            topic,
+            format,
+            platform,
+            description: ensureMin(item.description, descriptionFallback, 20),
+            angle: ensureMin(item.angle, angleFallback, 12),
+            cta: ensureMin(item.cta, ctaFallback, 6),
+            imageIdeas: imageIdeas.length > 0 ? imageIdeas : [
+              `On-brand visual concept for "${topic}" (clean composition, clear focal point, text overlay with hook)`,
+              `Behind-the-scenes style image supporting "${topic}" (authentic, candid, process-oriented)`,
+            ],
+            videoIdeas: videoIdeas.length > 0 ? videoIdeas : [
+              `Short video: hook → 3 quick points → CTA, centered on "${topic}"`,
+            ],
+          };
+        }),
+      }));
+
       // Ensure metrics structure
       if (!plan.metrics) {
         plan.metrics = {

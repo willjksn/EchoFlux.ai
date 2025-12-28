@@ -87,6 +87,22 @@ export async function searchWeb(
 ): Promise<WebSearchResponse> {
   const apiKey = process.env.TAVILY_API_KEY;
 
+  // COST CONTROL / POLICY:
+  // Only allow Tavily for:
+  // - system jobs (no userId), e.g. weeklyTrendsJob
+  // - Admin users
+  // All end-user requests (including anonymous/public) must NOT trigger Tavily.
+  const isSystemCaller = !userId;
+  const isAdminCaller = userRole === "Admin";
+  if (!isSystemCaller && !isAdminCaller) {
+    return {
+      success: false,
+      note:
+        "Live web search is disabled. This app uses cached weekly trend research only.",
+      results: [],
+    };
+  }
+
   if (!apiKey) {
     return {
       success: false,

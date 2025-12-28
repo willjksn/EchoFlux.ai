@@ -30,7 +30,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const { strategy, name, goal, niche, audience } = req.body || {};
+    const { strategy, name, goal, niche, audience, tone, duration, platformFocus } = req.body || {};
 
     if (!strategy || !name) {
       return res.status(400).json({
@@ -44,6 +44,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const getDb = await getAdminDbFunction();
       const db = getDb();
       const strategyId = `strategy_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const nowIso = new Date().toISOString();
+
+      // Ensure only ONE active strategy per user.
+      // This prevents older opportunity-based strategies from reloading after a user generates a new one.
+      try {
+        const activeSnap = await db
+          .collection("users")
+          .doc(user.uid)
+          .collection("strategies")
+          .where("status", "==", "active")
+          .get();
+
+        if (!activeSnap.empty) {
+          const batch = db.batch();
+          activeSnap.docs.forEach((d: any) => {
+            batch.set(d.ref, { status: "archived", updatedAt: nowIso }, { merge: true });
+          });
+          await batch.commit();
+        }
+      } catch (archiveErr: any) {
+        // Don't fail saving if archival fails; still continue to write the new strategy.
+        console.error("Failed to archive existing active strategies:", archiveErr);
+      }
       
       const strategyData = {
         id: strategyId,
@@ -51,8 +74,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         goal: goal || "Content Strategy",
         niche: niche || "",
         audience: audience || "",
+        tone: tone || undefined,
+        duration: duration || undefined,
+        platformFocus: platformFocus || undefined,
         plan: strategy,
-        createdAt: new Date().toISOString(),
+        createdAt: nowIso,
         status: "active", // active, completed, archived
         userId: user.uid,
       };

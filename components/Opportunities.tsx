@@ -314,18 +314,20 @@ Generate multiple compelling captions (at least 5) that leverage this trend. Eac
         if (!selectedOpportunity) return;
         
         // Save opportunity context for Strategy
+        const inferredNiche = niche || (selectedOpportunity as any).category || selectedOpportunity.title || '';
         localStorage.setItem(`opportunity_for_strategy_${user.id}`, JSON.stringify({
             opportunity: selectedOpportunity,
-            niche: niche,
-            goal: `Create content around: ${selectedOpportunity.title}`,
+            niche: inferredNiche,
             platformFocus: selectedOpportunity.platform,
             // Provide a reasonable default audience without overwriting "audience" with a platform name.
             // The Strategy page can still be edited before generating.
-            audience: niche ? `People interested in ${niche}` : 'General Audience'
+            audience: inferredNiche ? `People interested in ${inferredNiche}` : 'General Audience'
         }));
         
         setShowContentModal(false);
         setActivePage('strategy');
+        // Ensure Strategy picks up the payload even if it is already mounted
+        window.dispatchEvent(new CustomEvent('strategyOpportunityReceived'));
         showToast('Opportunity sent to Strategy! Generate your roadmap.', 'success');
     };
 

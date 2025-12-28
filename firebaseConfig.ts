@@ -7,7 +7,7 @@ import {
   browserLocalPersistence,
   setPersistence,
 } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getAnalytics, isSupported } from "firebase/analytics";
 import { getFunctions } from "firebase/functions";
@@ -51,7 +51,11 @@ onAuthStateChanged(auth, async (user) => {
 // ------------------------------------------------------------
 // Firestore & Storage
 // ------------------------------------------------------------
-export const db = getFirestore(app);
+// Firestore: enable long-polling auto-detect to avoid `Listen/channel` 400 errors
+// in certain networks/browsers (proxies, strict privacy settings, etc.).
+export const db = initializeFirestore(app, {
+  experimentalAutoDetectLongPolling: true,
+});
 export const storage = getStorage(app);
 
 // ------------------------------------------------------------

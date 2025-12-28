@@ -159,7 +159,8 @@ export async function getModelForTask(
   
   // Track usage asynchronously (don't await - fire and forget)
   if (userId) {
-    import('./trackModelUsage.ts').then(({ trackModelUsage }) => {
+    // IMPORTANT: Vercel runtime bundles JS, not TS. Import the built JS module.
+    import('./trackModelUsage.js').then(({ trackModelUsage }) => {
       trackModelUsage({
         userId,
         taskType,

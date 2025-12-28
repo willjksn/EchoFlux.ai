@@ -62,6 +62,16 @@ service cloud.firestore {
     }
 
     /** -------------------------------------------------------
+     *  ADMIN CONFIG COLLECTION
+     *  -------------------------------------------------------
+     *  - Admins can read/write admin configuration docs
+     *  - Regular users cannot access this collection
+     *  ------------------------------------------------------- */
+    match /admin/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    /** -------------------------------------------------------
      *  DEFAULT DENY RULE
      *  ------------------------------------------------------- 
      *  Deny all other collections to prevent unauthorized access

@@ -100,8 +100,14 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
         return;
     }
 
-    // Track manually granted reward
-    const manualRewards = userData?.manualReferralRewards || [];
+    // Track manually granted reward (ensure array)
+    const existing = (userData as any)?.manualReferralRewards;
+    const manualRewards: any[] = Array.isArray(existing)
+      ? existing
+      : existing && typeof existing === 'object'
+        ? Object.values(existing)
+        : [];
+
     manualRewards.push({
       rewardType,
       rewardAmount,

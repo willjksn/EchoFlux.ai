@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { searchWeb } from "./_webSearch.js";
 import { getVerifyAuth } from "./_errorHandler.js";
+import { getLatestTrends } from "./_trendsHelper.js";
 
 /**
  * Fetches trending context for a specific niche/topic to inform AI suggestions.
@@ -23,46 +23,12 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     return;
   }
 
-  // Check if user has access to Tavily (Elite-only)
-  const hasTrendAccess = user.plan === 'Elite' || user.role === 'Admin';
-
   const { niche, platforms, context } = (req.body as any) || {};
 
   try {
-    let allResults: any[] = [];
-    
-    // Only fetch trends if user has Elite access
-    if (hasTrendAccess) {
-      // Build search queries for trending information
-      const queries = [
-        niche ? `${niche} social media trends 2024` : 'social media trends 2024',
-        niche ? `${niche} content creator tips` : 'content creator best practices 2024',
-        'social media algorithm updates 2024',
-        platforms && platforms.length > 0 
-          ? `${platforms.join(' ')} posting best practices 2024`
-          : 'social media posting best practices 2024',
-      ];
-
-      // Fetch trends from Tavily (with usage tracking)
-      const trendResults = await Promise.all(
-        queries.map(query => searchWeb(query, user.uid, user.plan, user.role))
-      );
-
-      // Combine and summarize results
-      allResults = trendResults
-        .filter(r => r.success)
-        .flatMap(r => r.results)
-        .slice(0, 20); // Limit to top 20 results
-    }
-
-    // Build context summary for Gemini
-    const trendContext = hasTrendAccess && allResults.length > 0
-      ? allResults.map((r, idx) => 
-          `${idx + 1}. ${r.title}\n   ${r.snippet}\n   Source: ${r.link}`
-        ).join('\n\n')
-      : hasTrendAccess 
-        ? 'No current trend data available. Use general best practices.'
-        : 'Trend data requires Elite plan. Using general best practices.';
+    // Cached weekly trends (system job) — no user-triggered Tavily
+    const cached = await getLatestTrends().catch(() => 'Trend data unavailable. Use general best practices.');
+    const trendContext = cached;
 
     const summary = `
 CURRENT SOCIAL MEDIA TRENDS & BEST PRACTICES (${new Date().toLocaleDateString()}):
@@ -81,7 +47,7 @@ ${context ? `\nADDITIONAL CONTEXT: ${context}` : ''}
     res.status(200).json({
       success: true,
       trendContext: summary,
-      resultsCount: allResults.length,
+      resultsCount: 0,
       timestamp: new Date().toISOString(),
     });
   } catch (error: any) {

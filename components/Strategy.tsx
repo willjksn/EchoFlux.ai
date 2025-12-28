@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from './AppContext';
 import { StrategyPlan, Platform, WeekPlan, DayPlan, Post, CalendarEvent, MediaLibraryItem } from '../types';
-import { generateContentStrategy, saveStrategy, getStrategies, updateStrategyStatus, analyzeMediaForPost, generateCaptions } from "../src/services/geminiService";
+import { generateContentStrategy, getStrategies, saveStrategy, updateStrategyStatus, analyzeMediaForPost, generateCaptions } from "../src/services/geminiService";
 import { TargetIcon, SparklesIcon, CalendarIcon, CheckCircleIcon, RocketIcon, DownloadIcon, TrashIcon, ClockIcon, UploadIcon, ImageIcon, XMarkIcon, CopyIcon } from './icons/UIIcons';
 import { UpgradePrompt } from './UpgradePrompt';
 import { storage } from '../firebaseConfig';
@@ -36,23 +36,29 @@ export const Strategy: React.FC = () => {
     const [tone, setTone] = useState('Professional');
     const [platformFocus, setPlatformFocus] = useState('Mixed / All');
     
-    // Auto-set explicit tone when OnlyFans/Fanvue is selected
+    // Auto-set explicit tone when OnlyFans/Fanvue is selected.
+    // IMPORTANT: Do not override user-selected tones like "Sexy / Explicit" for normal platforms.
     useEffect(() => {
-        if ((platformFocus === 'OnlyFans' || platformFocus === 'Fanvue') && 
-            tone !== 'Explicit/Adult Content' && 
-            tone !== 'Sexy / Explicit' && 
+        if ((platformFocus === 'OnlyFans' || platformFocus === 'Fanvue') &&
+            tone !== 'Explicit/Adult Content' &&
+            tone !== 'Sexy / Explicit' &&
             tone !== 'Sexy / Bold') {
             setTone('Explicit/Adult Content');
-        } else if (platformFocus !== 'OnlyFans' && 
-                   platformFocus !== 'Fanvue' && 
-                   (tone === 'Explicit/Adult Content' || tone === 'Sexy / Explicit')) {
+            return;
+        }
+        // If user previously had OnlyFans explicit tone selected and switches away,
+        // reset ONLY the explicit-only tone (not Sexy/Bold variants).
+        if (platformFocus !== 'OnlyFans' &&
+            platformFocus !== 'Fanvue' &&
+            tone === 'Explicit/Adult Content') {
             setTone('Professional');
         }
-    }, [platformFocus, tone]);
+    }, [platformFocus]); // intentionally exclude tone to avoid fighting user selection
     const [isLoading, setIsLoading] = useState(false);
     const [plan, setPlan] = useState<StrategyPlan | null>(null);
     const [savedStrategies, setSavedStrategies] = useState<any[]>([]);
     const [showHistory, setShowHistory] = useState(false);
+    // Manual save is deprecated (autosave). Keep state for now to avoid large UI refactors.
     const [isSaving, setIsSaving] = useState(false);
     const [strategyName, setStrategyName] = useState('');
     const [showSaveModal, setShowSaveModal] = useState(false);
@@ -63,6 +69,7 @@ export const Strategy: React.FC = () => {
     const [generatingCaption, setGeneratingCaption] = useState<{ weekIndex: number; dayIndex: number } | null>(null);
     const [loadingMediaItem, setLoadingMediaItem] = useState<string | null>(null);
     const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
+    const autosaveSuspendedRef = useRef(false);
     
     // Usage stats
     const [usageStats, setUsageStats] = useState<{
@@ -117,43 +124,112 @@ export const Strategy: React.FC = () => {
         }
     };
 
-    // Track if we should auto-generate from opportunity
-    const [shouldAutoGenerate, setShouldAutoGenerate] = useState(false);
+    // Keep usage stats fresh (so admin-granted strategy rewards reflect without requiring a hard reload)
+    useEffect(() => {
+        if (!user?.id) return;
+
+        // Refresh when user returns to the tab/window
+        const onFocus = () => loadUsageStats();
+        const onVisibility = () => {
+            if (document.visibilityState === 'visible') loadUsageStats();
+        };
+        window.addEventListener('focus', onFocus);
+        document.addEventListener('visibilitychange', onVisibility);
+
+        // Periodic refresh as a safety net
+        const intervalId = window.setInterval(() => {
+            loadUsageStats();
+        }, 30000); // 30s
+
+        return () => {
+            window.removeEventListener('focus', onFocus);
+            document.removeEventListener('visibilitychange', onVisibility);
+            window.clearInterval(intervalId);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.id]);
+
+    const [showOpportunityModal, setShowOpportunityModal] = useState(false);
+    const [opportunityContext, setOpportunityContext] = useState<{ title?: string; platform?: string } | null>(null);
+
+    const isLikelyPlatformAudience = (value: string | undefined | null): boolean => {
+        const v = (value || '').trim().toLowerCase();
+        if (!v) return false;
+        const platforms = [
+            'instagram', 'tiktok', 'x', 'twitter', 'threads', 'youtube', 'linkedin', 'facebook', 'pinterest',
+            'instagram focus', 'tiktok focus', 'x (twitter) focus', 'threads focus', 'youtube focus', 'linkedin focus', 'facebook focus', 'pinterest focus',
+            'mixed / all', 'mixed', 'all'
+        ];
+        return platforms.includes(v);
+    };
+
+    const applyOpportunityFromStorage = (): boolean => {
+        if (!user?.id) return false;
+        const opportunityData = localStorage.getItem(`opportunity_for_strategy_${user.id}`);
+        if (!opportunityData) return false;
+
+        try {
+            const data = JSON.parse(opportunityData);
+            if (!data?.opportunity) return false;
+
+            // Clear immediately so it won't re-apply on future renders.
+            localStorage.removeItem(`opportunity_for_strategy_${user.id}`);
+
+            const computedNiche = (data.niche || data.opportunity?.category || data.opportunity?.title || '').toString();
+            const incomingAudience = (data.audience || '').toString();
+
+            // IMPORTANT: Override previous inputs when coming from Opportunities.
+            setNiche(computedNiche);
+            setAudience(isLikelyPlatformAudience(incomingAudience) ? 'General Audience' : (incomingAudience || 'General Audience'));
+
+            // Platform is expected to be platform-specific when the opportunity is platform-specific.
+            if (data.platformFocus) {
+                setPlatformFocus(data.platformFocus);
+            } else if (data.opportunity?.platform) {
+                setPlatformFocus(data.opportunity.platform);
+            }
+
+            // Do NOT auto-generate; give user a chance to set goal/tone/duration.
+            setOpportunityContext({
+                title: data.opportunity?.title,
+                platform: data.platformFocus || data.opportunity?.platform,
+            });
+            // Clear any previously shown plan so the user is not looking at stale strategy while reviewing.
+            setPlan(null);
+            setSelectedStrategy(null);
+            setShowOpportunityModal(true);
+            return true;
+        } catch (error) {
+            console.error('Failed to load opportunity for strategy:', error);
+            localStorage.removeItem(`opportunity_for_strategy_${user.id}`);
+            return false;
+        }
+    };
 
     // Load saved strategies and active roadmap on mount
     useEffect(() => {
         loadStrategies();
-        loadActiveRoadmap();
         loadMediaLibrary();
         loadUsageStats();
-        
-        // Check for opportunity sent from Opportunities page
-        if (user?.id) {
-            const opportunityData = localStorage.getItem(`opportunity_for_strategy_${user.id}`);
-            if (opportunityData) {
-                try {
-                    const data = JSON.parse(opportunityData);
-                    if (data.opportunity && data.niche) {
-                        setNiche(data.niche);
-                        setGoal(data.goal || 'Increase Followers/Fans');
-                        // IMPORTANT: Audience must never be overwritten with a platform name.
-                        // Use explicit audience field if present, otherwise fall back to a sane default.
-                        setAudience(data.audience || 'General Audience');
-                        // If the opportunity has a platform, treat it as platform focus (not audience).
-                        if (data.platformFocus) {
-                            setPlatformFocus(data.platformFocus);
-                        } else if (data.opportunity?.platform) {
-                            setPlatformFocus(data.opportunity.platform);
-                        }
-                        // Set flag to auto-generate after state updates
-                        setShouldAutoGenerate(true);
-                    }
-                } catch (error) {
-                    console.error('Failed to load opportunity for strategy:', error);
-                    localStorage.removeItem(`opportunity_for_strategy_${user.id}`);
-                }
-            }
+
+        const applied = applyOpportunityFromStorage();
+        if (!applied) {
+            loadActiveRoadmap();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.id]);
+
+    // If Strategy is already mounted, still allow Opportunities to push a new payload.
+    useEffect(() => {
+        const handler = () => {
+            const applied = applyOpportunityFromStorage();
+            if (applied) {
+                showToast('Opportunity loaded. Review goal/tone/duration, then generate.', 'success');
+            }
+        };
+        window.addEventListener('strategyOpportunityReceived', handler as any);
+        return () => window.removeEventListener('strategyOpportunityReceived', handler as any);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user?.id]);
 
 
@@ -194,6 +270,13 @@ export const Strategy: React.FC = () => {
         if (!user) return;
         
         try {
+            // If user explicitly cleared the plan recently, don't auto-load an active strategy.
+            // They can still load from History, or generate a new strategy.
+            const skipKey = `strategy_skip_autoload_${user.id}`;
+            if (localStorage.getItem(skipKey)) {
+                return;
+            }
+
             // Try to load the most recent active strategy
             const strategiesSnapshot = await getStrategies();
             if (strategiesSnapshot.success && strategiesSnapshot.strategies) {
@@ -221,6 +304,10 @@ export const Strategy: React.FC = () => {
                     setNiche(activeStrategy.niche || '');
                     setAudience(activeStrategy.audience || '');
                     setGoal(activeStrategy.goal || 'Increase Followers/Fans');
+                    // Restore other strategy parameters if present (prevents "tone stuck on Professional" after re-enter)
+                    if (activeStrategy.tone) setTone(activeStrategy.tone);
+                    if (activeStrategy.duration) setDuration(activeStrategy.duration);
+                    if (activeStrategy.platformFocus) setPlatformFocus(activeStrategy.platformFocus);
                 }
             }
         } catch (error) {
@@ -238,6 +325,14 @@ export const Strategy: React.FC = () => {
             return;
         }
         setIsLoading(true);
+        autosaveSuspendedRef.current = true;
+
+        // User is generating intentionally; allow auto-load again in the future.
+        if (user?.id) {
+            localStorage.removeItem(`strategy_skip_autoload_${user.id}`);
+        }
+        // Clear any previously applied opportunity context to avoid "mixing" on later generations.
+        setOpportunityContext(null);
         
         // Clear opportunity data after starting generation
         if (user?.id) {
@@ -245,6 +340,46 @@ export const Strategy: React.FC = () => {
         }
         
         try {
+            // Ensure we don't keep multiple "active" strategies around.
+            // This prevents old opportunity-based strategies (with uploaded media) from reappearing later.
+            // NOTE: OFFLINE_MODE should disable *posting*, not strategy persistence.
+            if (user?.id) {
+                try {
+                    const snap = await getStrategies();
+                    const actives = (snap.success && Array.isArray(snap.strategies))
+                        ? snap.strategies.filter((s: any) => s?.userId === user.id && s?.status === 'active')
+                        : [];
+                    for (const s of actives) {
+                        const sid = String(s.id || '');
+                        if (!sid) continue;
+                        // Archive everything currently active (we're about to create a new active one).
+                        await setDoc(
+                            doc(db, 'users', user.id, 'strategies', sid),
+                            { status: 'archived', updatedAt: new Date().toISOString() },
+                            { merge: true }
+                        );
+                    }
+                } catch (e) {
+                    console.warn('Failed to archive existing active strategies:', e);
+                }
+            }
+
+            // Archive the previously active strategy so we don't keep reloading old context.
+            if (user?.id && selectedStrategy?.id) {
+                const prevId = String(selectedStrategy.id);
+                if (!prevId.startsWith('temp_') && !prevId.startsWith('local_')) {
+                    try {
+                        await setDoc(
+                            doc(db, 'users', user.id, 'strategies', prevId),
+                            { status: 'archived', updatedAt: new Date().toISOString() },
+                            { merge: true }
+                        );
+                    } catch (e) {
+                        console.warn('Failed to archive previous strategy before generating new one:', e);
+                    }
+                }
+            }
+
             const result = await generateContentStrategy(niche, audience, goal, duration, tone, platformFocus, null, undefined);
             if (result && result.weeks) {
                 // Initialize status for all content items
@@ -253,33 +388,86 @@ export const Strategy: React.FC = () => {
                     weeks: result.weeks.map((week: WeekPlan) => ({
                         ...week,
                         content: week.content.map((day: DayPlan) => ({
-                            ...day,
+                            // IMPORTANT: Do not carry over any media/caption fields into a fresh strategy.
+                            // (Prevents previously used images/captions from showing up after generating a new plan.)
+                            dayOffset: day.dayOffset,
+                            topic: day.topic,
+                            description: day.description,
+                            angle: day.angle,
+                            cta: day.cta,
+                            format: day.format,
+                            platform: day.platform,
                             status: 'draft' as const,
-                            imageIdeas: [],
-                            videoIdeas: []
+                            // Preserve model output when present; never wipe these fields
+                            imageIdeas: Array.isArray((day as any).imageIdeas) ? (day as any).imageIdeas : [],
+                            videoIdeas: Array.isArray((day as any).videoIdeas) ? (day as any).videoIdeas : []
                         }))
                     }))
                 };
                 
                 // Set the plan first
                 setPlan(planWithStatus);
-                // Create a new temporary strategy object for the newly generated roadmap
-                // This ensures the plan persists on the page until a new one is generated
-                // Note: This is NOT saved to Firestore - user must click "Save Strategy" to save it
-                const strategyId = `temp_${Date.now()}`;
-                const strategyData = {
-                    id: strategyId,
-                    name: 'Current Strategy',
-                    plan: planWithStatus,
-                    goal: goal,
-                    niche: niche,
-                    audience: audience,
-                    status: 'active',
-                    linkedPostIds: [],
-                    createdAt: new Date().toISOString(),
-                    userId: user?.id
-                };
-                setSelectedStrategy(strategyData);
+                
+                // AUTOSAVE: Persist the generated strategy via server API (Admin SDK),
+                // so it works even if client Firestore listeners fail.
+                // NOTE: OFFLINE_MODE should not prevent saving strategies.
+                if (user?.id) {
+                    const autoName = `${niche} • ${goal} • ${new Date().toLocaleDateString()}`.slice(0, 80);
+                    try {
+                        const saved = await saveStrategy(planWithStatus, autoName, goal, niche, audience, {
+                            tone,
+                            duration,
+                            platformFocus,
+                        });
+                        if (saved?.success && saved.strategyId) {
+                            const strategyData = {
+                                id: saved.strategyId,
+                                name: autoName,
+                                plan: planWithStatus,
+                                goal,
+                                niche,
+                                audience,
+                                tone,
+                                duration,
+                                platformFocus,
+                                status: 'active',
+                                linkedPostIds: [],
+                                createdAt: new Date().toISOString(),
+                                userId: user.id,
+                            };
+                            setSelectedStrategy(strategyData);
+                            // Refresh history from server so loadActiveRoadmap sees the right one.
+                            await loadStrategies();
+                        } else {
+                            throw new Error(saved?.error || 'Failed to save strategy');
+                        }
+                    } catch (e) {
+                        console.error('Failed to autosave strategy via API:', e);
+                        showToast('Strategy generated, but failed to save. Please try again.', 'error');
+                    }
+                } else {
+                    // Offline fallback: keep in localStorage so navigation doesn't lose it.
+                    const fallbackId = `local_${Date.now()}`;
+                    const strategyData = {
+                        id: fallbackId,
+                        name: `${niche} • ${goal} • ${new Date().toLocaleDateString()}`.slice(0, 80),
+                        plan: planWithStatus,
+                        goal,
+                        niche,
+                        audience,
+                        tone,
+                        duration,
+                        platformFocus,
+                        status: 'active',
+                        linkedPostIds: [],
+                        createdAt: new Date().toISOString(),
+                        userId: user?.id,
+                    };
+                    setSelectedStrategy(strategyData);
+                    if (user?.id) {
+                        localStorage.setItem(`strategy_autosave_${user.id}`, JSON.stringify(strategyData));
+                    }
+                }
                 
                 // Reload usage stats to reflect the new generation
                 // Add a small delay to ensure Firestore has updated
@@ -287,7 +475,7 @@ export const Strategy: React.FC = () => {
                     await loadUsageStats();
                 }, 1000);
                 
-                showToast('Strategy generated! Click "Save Strategy" to save it to your history.', 'success');
+                showToast('Strategy generated and auto-saved to your history.', 'success');
             } else {
                 throw new Error('Invalid strategy response');
             }
@@ -296,19 +484,49 @@ export const Strategy: React.FC = () => {
             showToast(error?.note || error?.message || 'Failed to generate strategy. Please try again.', 'error');
         } finally {
             setIsLoading(false);
+            autosaveSuspendedRef.current = false;
         }
     };
 
-    // Auto-generate when opportunity is loaded
+    // Debounced autosave for edits (captions, statuses, etc.) so leaving/reloading doesn’t lose changes.
+    const autosaveTimerRef = useRef<number | null>(null);
     useEffect(() => {
-        if (shouldAutoGenerate && niche && audience && !isLoading) {
-            setShouldAutoGenerate(false);
-            // Small delay to ensure state is updated
-            setTimeout(() => {
-                handleGenerate();
-            }, 300);
+        if (!user?.id) return;
+        if (!selectedStrategy?.id) return;
+        if (!plan) return;
+        // NOTE: OFFLINE_MODE should not disable saving strategy edits.
+        if (autosaveSuspendedRef.current) return;
+        // Don't autosave placeholder temp strategies (should not happen anymore after generation)
+        if (String(selectedStrategy.id).startsWith('temp_')) return;
+
+        if (autosaveTimerRef.current) {
+            window.clearTimeout(autosaveTimerRef.current);
         }
-    }, [shouldAutoGenerate, niche, audience, isLoading]);
+
+        autosaveTimerRef.current = window.setTimeout(() => {
+            const payload = {
+                ...selectedStrategy,
+                plan,
+                niche,
+                audience,
+                goal,
+                tone,
+                duration,
+                platformFocus,
+                updatedAt: new Date().toISOString(),
+            };
+            setDoc(doc(db, 'users', user.id, 'strategies', selectedStrategy.id), payload, { merge: true })
+                .catch(err => console.error('Autosave failed:', err));
+        }, 1000);
+
+        return () => {
+            if (autosaveTimerRef.current) {
+                window.clearTimeout(autosaveTimerRef.current);
+            }
+        };
+    }, [user?.id, selectedStrategy?.id, plan, niche, audience, goal, tone, duration, platformFocus]);
+
+    // Auto-generate from opportunity removed: user must confirm after setting goal/tone/duration.
 
     const handleSaveStrategy = async () => {
         if (!plan || !strategyName.trim()) {
@@ -352,9 +570,47 @@ export const Strategy: React.FC = () => {
         setNiche(strategy.niche || '');
         setAudience(strategy.audience || '');
         setGoal(strategy.goal || goal);
+        if (strategy.tone) setTone(strategy.tone);
+        if (strategy.duration) setDuration(strategy.duration);
+        if (strategy.platformFocus) setPlatformFocus(strategy.platformFocus);
         setSelectedStrategy(strategy);
         setShowHistory(false);
+        if (user?.id) {
+            localStorage.removeItem(`strategy_skip_autoload_${user.id}`);
+        }
         showToast('Strategy loaded!', 'success');
+    };
+
+    const handleClearPlan = async () => {
+        // Clear UI state
+        setPlan(null);
+        setSelectedStrategy(null);
+        setOpportunityContext(null);
+        setShowOpportunityModal(false);
+
+        if (user?.id) {
+            // Prevent auto-loading an active strategy when user returns to this page.
+            localStorage.setItem(`strategy_skip_autoload_${user.id}`, '1');
+        }
+
+        // Archive currently selected strategy so it won't come back as "active".
+        // NOTE: OFFLINE_MODE should not disable clearing/archiving strategies.
+        if (user?.id && selectedStrategy?.id) {
+            const sid = String(selectedStrategy.id);
+            if (!sid.startsWith('temp_') && !sid.startsWith('local_')) {
+                try {
+                    await setDoc(
+                        doc(db, 'users', user.id, 'strategies', sid),
+                        { status: 'archived', updatedAt: new Date().toISOString() },
+                        { merge: true }
+                    );
+                } catch (e) {
+                    console.warn('Failed to archive strategy during clear plan:', e);
+                }
+            }
+        }
+
+        showToast('Strategy cleared. You can generate a new roadmap anytime.', 'success');
     };
 
     const handleMediaUpload = async (weekIndex: number, dayIndex: number, file: File) => {
@@ -593,18 +849,38 @@ export const Strategy: React.FC = () => {
             let suggestedMediaType: 'image' | 'video' | undefined = mediaType;
 
             try {
-                const analysis = await analyzeMediaForPost({
+                const promptText = [
+                    `You are generating a caption for a roadmap item inside a content strategy.`,
+                    `Niche: ${niche || 'N/A'}`,
+                    `Target audience: ${audience || 'N/A'}`,
+                    `Primary goal: ${goal || 'engagement'}`,
+                    `Tone: ${tone || 'friendly'}`,
+                    `Platform focus: ${platformFocus || 'Mixed / All'}`,
+                    `Planned platform for this post: ${currentDay.platform || 'Instagram'}`,
+                    `Post topic: ${currentDay.topic || ''}`,
+                    currentDay.description ? `Post description: ${currentDay.description}` : '',
+                    currentDay.angle ? `Angle/hook: ${currentDay.angle}` : '',
+                    currentDay.cta ? `CTA: ${currentDay.cta}` : '',
+                    `Important: Analyze the uploaded media and write a caption that matches what's in the image/video AND the strategy details above.`,
+                ].filter(Boolean).join('\n');
+
+                const captions = await generateCaptions({
                     mediaUrl: item.url,
-                    goal: goal,
-                    tone: tone,
+                    goal: goal || 'engagement',
+                    tone: tone || 'friendly',
+                    promptText,
+                    platforms: [currentDay.platform as any],
                 });
 
-                generatedCaption = analysis.caption || generatedCaption;
-                if (analysis.hashtags && analysis.hashtags.length > 0) {
-                    generatedCaption += '\n\n' + analysis.hashtags.join(' ');
+                const first = Array.isArray(captions) ? captions[0] : null;
+                if (first?.caption) {
+                    generatedCaption = first.caption;
+                    if (Array.isArray(first.hashtags) && first.hashtags.length > 0) {
+                        generatedCaption += '\n\n' + first.hashtags.join(' ');
+                    }
                 }
             } catch (error) {
-                console.error('Failed to analyze media from library:', error);
+                console.error('Failed to generate captions from media library item:', error);
                 // Fall back to topic / existing caption
             }
 
@@ -713,23 +989,8 @@ export const Strategy: React.FC = () => {
         }
     };
 
-    // When a plan exists but no selectedStrategy, create one to ensure plan persists
-    useEffect(() => {
-        if (plan && !selectedStrategy) {
-            // Create a temporary strategy object for newly generated strategies
-            setSelectedStrategy({
-                id: `temp_${Date.now()}`,
-                name: 'Current Strategy',
-                plan: plan,
-                goal: goal,
-                niche: niche,
-                audience: audience,
-                status: 'active',
-                linkedPostIds: [],
-                createdAt: new Date().toISOString()
-            });
-        }
-    }, [plan]);
+    // NOTE: Removed legacy "Current Strategy" temp object creation.
+    // Strategies are now persisted via `/api/saveStrategy` (autosave) and loaded from History/active record.
 
     const handleDeleteStrategy = async (strategyId: string) => {
         if (!window.confirm('Are you sure you want to delete this strategy? This action cannot be undone.')) {
@@ -1121,25 +1382,13 @@ export const Strategy: React.FC = () => {
                             {plan ? (
                                 <span className="flex items-center gap-2 text-green-600 dark:text-green-400">
                                     <CheckCircleIcon className="w-5 h-5" />
-                                    Strategy generated! Save it to use later.
+                                    Strategy generated and auto-saved.
                                 </span>
                             ) : (
                                 'Fill in all required fields (*) and click Generate to create your strategy'
                             )}
                         </div>
                         <div className="flex gap-3 flex-shrink-0 overflow-x-auto pb-2 -mx-6 px-6 sm:mx-0 sm:px-0 sm:pb-0">
-                            {plan && (
-                                <button
-                                    onClick={() => {
-                                        setStrategyName('');
-                                        setShowSaveModal(true);
-                                    }}
-                                    className="px-5 py-2.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-2 font-semibold shadow-sm whitespace-nowrap flex-shrink-0"
-                                >
-                                    <DownloadIcon className="w-4 h-4" />
-                                    Save Strategy
-                                </button>
-                            )}
                             <button 
                                 onClick={handleGenerate} 
                                 disabled={isLoading || !niche || !audience || (usageStats?.strategy.remaining === 0)} 
@@ -1183,12 +1432,6 @@ export const Strategy: React.FC = () => {
                         <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex-shrink-0">Your Strategy Plan</h2>
                         <div className="flex items-center gap-3 overflow-x-auto pb-2 -mx-6 px-6 sm:mx-0 sm:px-0 sm:pb-0">
                             <button 
-                                onClick={() => setShowSaveModal(true)}
-                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm whitespace-nowrap flex-shrink-0"
-                            >
-                                <CheckCircleIcon className="w-5 h-5" /> Save Strategy
-                            </button>
-                            <button 
                                 onClick={handleExportStrategy}
                                 className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors shadow-sm whitespace-nowrap flex-shrink-0"
                             >
@@ -1207,11 +1450,7 @@ export const Strategy: React.FC = () => {
                                 <CalendarIcon className="w-5 h-5" /> Populate Calendar
                             </button>
                             <button 
-                                onClick={() => {
-                                    setPlan(null);
-                                    setSelectedStrategy(null);
-                                    showToast('Strategy cleared. You can generate a new roadmap anytime.', 'success');
-                                }}
+                                onClick={handleClearPlan}
                                 className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors shadow-sm whitespace-nowrap flex-shrink-0"
                             >
                                 <TrashIcon className="w-5 h-5" /> Clear Plan
@@ -1388,8 +1627,8 @@ export const Strategy: React.FC = () => {
                             : 0;
                         
                         return (
-                        <div key={weekIndex} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden border border-gray-100 dark:border-gray-700">
-                            <div className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900/50 dark:to-gray-800/50 p-4 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+                        <div key={weekIndex} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden border border-primary-100 dark:border-primary-800/60">
+                            <div className="bg-gradient-to-r from-primary-50 to-indigo-50 dark:from-primary-900/20 dark:to-indigo-900/20 p-4 border-b border-primary-100 dark:border-primary-800/60 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                                 <div className="flex-1 min-w-0">
                                     <div className="flex flex-wrap items-center gap-3 mb-1">
                                         <h4 className="font-bold text-lg text-gray-800 dark:text-gray-200 break-words">Week {week.weekNumber}: {week.theme}</h4>
@@ -1413,7 +1652,9 @@ export const Strategy: React.FC = () => {
                                         ></div>
                                     </div>
                                 </div>
-                                <span className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider bg-white dark:bg-gray-700 px-3 py-1 rounded-full flex-shrink-0">{week.content.length} Total</span>
+                                <span className="text-xs text-primary-700 dark:text-primary-300 font-semibold uppercase tracking-wider bg-white/70 dark:bg-gray-800/60 px-3 py-1 rounded-full flex-shrink-0 border border-primary-100 dark:border-primary-800/60">
+                                    {week.content.length} Total
+                                </span>
                             </div>
                             <div className="divide-y divide-gray-100 dark:divide-gray-700">
                                 {week.content.map((day, dayIndex) => {
@@ -1427,11 +1668,19 @@ export const Strategy: React.FC = () => {
                                         posted: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
                                     };
 
-                                    // Only grey out if status is 'draft' or 'scheduled' - NOT 'ready'
-                                    const isActionTaken = (status === 'draft' || status === 'scheduled');
+                                    // "Used" visual: darker once it has been turned into a Draft/Scheduled/Posted post (linkedPostId),
+                                    // or when user uploaded media and created a post.
+                                    const isUsed = Boolean(day.linkedPostId) || status === 'scheduled' || status === 'posted' || (status === 'draft' && Boolean(day.mediaUrl));
                                     
                                     return (
-                                    <div key={dayIndex} className={`p-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors ${isActionTaken ? 'opacity-60 bg-gray-100 dark:bg-gray-800/50' : ''}`}>
+                                    <div
+                                        key={dayIndex}
+                                        className={`p-4 transition-colors ${
+                                            isUsed
+                                                ? 'bg-gray-100/70 dark:bg-gray-800/60 border-l-4 border-primary-500'
+                                                : 'hover:bg-gray-50 dark:hover:bg-gray-700/30'
+                                        }`}
+                                    >
                                         <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                                             <div className="flex items-center gap-3 min-w-[120px]">
                                                 <div>
@@ -1975,45 +2224,7 @@ export const Strategy: React.FC = () => {
                 </div>
             )}
 
-            {/* Save Strategy Modal */}
-            {showSaveModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-xl max-w-md w-full mx-4">
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Save Strategy</h3>
-                        <div className="mb-4">
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Strategy Name
-                            </label>
-                            <input
-                                type="text"
-                                value={strategyName}
-                                onChange={(e) => setStrategyName(e.target.value)}
-                                placeholder="e.g., Q1 Content Strategy"
-                                className="w-full p-3 border rounded-lg bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-primary-500 dark:text-white"
-                                autoFocus
-                            />
-                        </div>
-                        <div className="flex gap-3 justify-end">
-                            <button
-                                onClick={() => {
-                                    setShowSaveModal(false);
-                                    setStrategyName('');
-                                }}
-                                className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleSaveStrategy}
-                                disabled={isSaving || !strategyName.trim()}
-                                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                            >
-                                {isSaving ? 'Saving...' : 'Save'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            {/* Save Strategy Modal removed (autosave enabled) */}
 
             {/* Media Library Modal */}
             {showMediaLibrary && (
@@ -2087,6 +2298,167 @@ export const Strategy: React.FC = () => {
                                 })}
                             </div>
                         )}
+                    </div>
+                </div>
+            )}
+
+            {/* Opportunity → Strategy Modal (review before generating) */}
+            {showOpportunityModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-xl max-w-lg w-full">
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                            Create strategy from trend
+                        </h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                            We prefilled your niche/audience from the opportunity{opportunityContext?.platform ? ` (${opportunityContext.platform})` : ''}. Adjust goal, tone, and duration before generating.
+                        </p>
+
+                        {opportunityContext?.title && (
+                            <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700/40 rounded-lg border border-gray-200 dark:border-gray-600">
+                                <p className="text-sm font-semibold text-gray-900 dark:text-white">Opportunity</p>
+                                <p className="text-sm text-gray-700 dark:text-gray-200">{opportunityContext.title}</p>
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 dark:text-white mb-2">
+                                    Brand Niche
+                                </label>
+                                <input
+                                    type="text"
+                                    value={niche}
+                                    onChange={e => setNiche(e.target.value)}
+                                    className="w-full p-3 border-2 rounded-xl bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 dark:text-white mb-2">
+                                    Target Audience
+                                </label>
+                                <input
+                                    type="text"
+                                    value={audience}
+                                    onChange={e => setAudience(e.target.value)}
+                                    className="w-full p-3 border-2 rounded-xl bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 dark:text-white mb-2">
+                                    Primary Goal
+                                </label>
+                                <select
+                                    value={goal}
+                                    onChange={e => setGoal(e.target.value)}
+                                    className="w-full p-3 border-2 rounded-xl bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
+                                >
+                                    {isBusiness ? (
+                                        <>
+                                            <option>Lead Generation</option>
+                                            <option>Sales Conversion</option>
+                                            <option>Brand Awareness</option>
+                                            <option>Customer Engagement</option>
+                                            {isAgencyPlan && <option>Increase Followers/Fans</option>}
+                                        </>
+                                    ) : (
+                                        <>
+                                            <option>Increase Followers/Fans</option>
+                                            <option>Brand Awareness</option>
+                                            <option>Community Engagement</option>
+                                            <option>Increase Engagement</option>
+                                            <option>Sales Conversion</option>
+                                        </>
+                                    )}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 dark:text-white mb-2">
+                                    Duration
+                                </label>
+                                <select
+                                    value={duration}
+                                    onChange={e => setDuration(e.target.value)}
+                                    className="w-full p-3 border-2 rounded-xl bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
+                                >
+                                    <option>1 Week</option>
+                                    <option>2 Weeks</option>
+                                    <option>3 Weeks</option>
+                                    <option>4 Weeks</option>
+                                    <option>6 Weeks</option>
+                                    <option>8 Weeks</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 dark:text-white mb-2">
+                                    Tone
+                                </label>
+                                <select
+                                    value={tone}
+                                    onChange={e => setTone(e.target.value)}
+                                    className="w-full p-3 border-2 rounded-xl bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
+                                >
+                                    <option>Professional</option>
+                                    <option>Casual & Friendly</option>
+                                    <option>Edgy & Bold</option>
+                                    <option>Educational</option>
+                                    <option>Inspirational</option>
+                                    {(platformFocus === 'OnlyFans' || platformFocus === 'Fanvue') && (
+                                        <option value="Explicit/Adult Content">Explicit/Adult Content 🌶️</option>
+                                    )}
+                                    {showAdvancedOptions && (
+                                        <>
+                                            <option>Sexy / Bold</option>
+                                            <option>Sexy / Explicit</option>
+                                        </>
+                                    )}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 dark:text-white mb-2">
+                                    Platform Focus
+                                </label>
+                                <select
+                                    value={platformFocus}
+                                    onChange={e => setPlatformFocus(e.target.value)}
+                                    className="w-full p-3 border-2 rounded-xl bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
+                                >
+                                    <option>Mixed / All</option>
+                                    <option value="Instagram">Instagram Focus</option>
+                                    <option value="TikTok">TikTok Focus</option>
+                                    <option value="X">X (Twitter) Focus</option>
+                                    <option value="Threads">Threads Focus</option>
+                                    <option value="YouTube">YouTube Focus</option>
+                                    <option value="LinkedIn">LinkedIn Focus</option>
+                                    <option value="Facebook">Facebook Focus</option>
+                                    <option value="Pinterest">Pinterest Focus</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={() => {
+                                    setShowOpportunityModal(false);
+                                    setOpportunityContext(null);
+                                }}
+                                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    setShowOpportunityModal(false);
+                                    await handleGenerate();
+                                }}
+                                disabled={isLoading || !niche || !audience || (usageStats?.strategy.remaining === 0)}
+                                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                Generate Strategy
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

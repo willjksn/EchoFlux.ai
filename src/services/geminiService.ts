@@ -449,7 +449,8 @@ export async function saveStrategy(
   name: string,
   goal: string,
   niche: string,
-  audience: string
+  audience: string,
+  opts?: { tone?: string; duration?: string; platformFocus?: string }
 ): Promise<{ success: boolean; strategyId?: string; error?: string }> {
   return await callFunction("saveStrategy", {
     strategy,
@@ -457,6 +458,9 @@ export async function saveStrategy(
     goal,
     niche,
     audience,
+    tone: opts?.tone,
+    duration: opts?.duration,
+    platformFocus: opts?.platformFocus,
   });
 }
 

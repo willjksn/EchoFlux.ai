@@ -201,6 +201,14 @@ export interface Client {
   bioPage?: BioPageConfig;
   referralCode?: string;
   referralStats?: ReferralStats;
+  /** Admin-granted rewards history (manual adjustments via Admin Dashboard). */
+  manualReferralRewards?: Array<{
+    rewardType: 'extra_generations' | 'strategy_generations' | 'free_month' | 'storage_boost' | string;
+    rewardAmount: number;
+    grantedAt: string;
+    grantedBy: string;
+    reason?: string;
+  }>;
 }
 
 export interface MediaItem {
