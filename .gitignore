@@ -28,3 +28,8 @@ dist-ssr
 # Large files
 *.zip
 engagesuite.zip
+
+# Secrets and credentials
+serviceAccount/
+service-account.jsonl
+*.jsonl
