@@ -23,6 +23,7 @@ export interface StrategyUsage {
   userId: string;
   month: string; // Format: "2024-01"
   count: number;
+  bonus?: number; // Extra strategies granted this month by admin/rewards
   lastReset: Timestamp;
   lastUpdated: Timestamp;
 }
@@ -57,9 +58,9 @@ export async function canGenerateStrategy(
     return { allowed: true, remaining: 999999, limit: 999999 };
   }
 
-  // Check plan limit
-  const limit = STRATEGY_LIMITS[userPlan] || 0;
-  if (limit === 0) {
+  // Base plan limit (bonus is applied per-month via strategy_usage doc)
+  const baseLimit = STRATEGY_LIMITS[userPlan] || 0;
+  if (baseLimit === 0) {
     return { allowed: false, remaining: 0, limit: 0 };
   }
 
@@ -78,10 +79,11 @@ export async function canGenerateStrategy(
         userId,
         month,
         count: 0,
+        bonus: 0,
         lastReset: now,
         lastUpdated: now,
       });
-      return { allowed: true, remaining: limit, limit };
+      return { allowed: true, remaining: baseLimit, limit: baseLimit };
     }
 
     const usage = usageDoc.data() as StrategyUsage;
@@ -94,22 +96,25 @@ export async function canGenerateStrategy(
         userId,
         month,
         count: 0,
+        bonus: 0,
         lastReset: now,
         lastUpdated: now,
       });
-      return { allowed: true, remaining: limit, limit };
+      return { allowed: true, remaining: baseLimit, limit: baseLimit };
     }
 
-    const remaining = Math.max(0, limit - usage.count);
+    const bonus = Number(usage.bonus || 0);
+    const effectiveLimit = baseLimit + bonus;
+    const remaining = Math.max(0, effectiveLimit - usage.count);
     return {
       allowed: remaining > 0,
       remaining,
-      limit,
+      limit: effectiveLimit,
     };
   } catch (error) {
     console.error('Error checking strategy usage:', error);
     // On error, allow but log (fail open to not break user experience)
-    return { allowed: true, remaining: limit, limit };
+    return { allowed: true, remaining: baseLimit, limit: baseLimit };
   }
 }
 
@@ -140,6 +145,7 @@ export async function recordStrategyGeneration(
         userId,
         month,
         count: 1,
+        bonus: 0,
         lastReset: now,
         lastUpdated: now,
       });
@@ -168,7 +174,7 @@ export async function getStrategyUsageStats(
     return { count: 0, limit: 999999, remaining: 999999, month: getCurrentMonth() };
   }
 
-  const limit = STRATEGY_LIMITS[userPlan] || 0;
+  const baseLimit = STRATEGY_LIMITS[userPlan] || 0;
   const db = getAdminDb();
   const month = getCurrentMonth();
   const usageRef = db.collection('strategy_usage').doc(`${userId}_${month}`);
@@ -176,20 +182,22 @@ export async function getStrategyUsageStats(
   try {
     const usageDoc = await usageRef.get();
     if (!usageDoc.exists) {
-      return { count: 0, limit, remaining: limit, month };
+      return { count: 0, limit: baseLimit, remaining: baseLimit, month };
     }
 
     const usage = usageDoc.data() as StrategyUsage;
-    const remaining = Math.max(0, limit - usage.count);
+    const bonus = Number(usage.bonus || 0);
+    const effectiveLimit = baseLimit + bonus;
+    const remaining = Math.max(0, effectiveLimit - usage.count);
     return {
       count: usage.count,
-      limit,
+      limit: effectiveLimit,
       remaining,
       month: usage.month,
     };
   } catch (error) {
     console.error('Error getting strategy usage stats:', error);
-    return { count: 0, limit, remaining: limit, month };
+    return { count: 0, limit: baseLimit, remaining: baseLimit, month };
   }
 }
 

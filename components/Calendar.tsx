@@ -1043,6 +1043,8 @@ export const Calendar: React.FC = () => {
 
             setIsEditing(false);
             showToast('Post updated successfully!', 'success');
+            // Auto-close modal after successful save (no click-off required)
+            setSelectedEvent(null);
         } catch (error) {
             console.error('Failed to update post:', error);
             showToast('Failed to update post. Please try again.', 'error');
@@ -1186,6 +1188,9 @@ export const Calendar: React.FC = () => {
 
             showToast(selectedReminder ? 'Reminder updated!' : 'Reminder created!', 'success');
             resetReminderForm();
+            // Ensure modal closes immediately after save/update
+            setIsCreatingReminder(false);
+            setSelectedReminder(null);
         } catch (error) {
             console.error('Error saving reminder:', error);
             showToast('Failed to save reminder', 'error');
@@ -1300,6 +1305,8 @@ export const Calendar: React.FC = () => {
                                                             const updatedPost: Post = {
                                                                 ...selectedEvent.post,
                                                                 status: 'Published',
+                                                                // Used by Dashboard insights to compute recent posting frequency
+                                                                publishedAt: new Date().toISOString(),
                                                             };
                                                             await updatePost(updatedPost);
                                                             
@@ -1315,6 +1322,8 @@ export const Calendar: React.FC = () => {
                                                                 post: updatedPost,
                                                             });
                                                             showToast('Marked as Published!', 'success');
+                                                            // Auto-close modal after update (no click-off required)
+                                                            setSelectedEvent(null);
                                                         } catch (error) {
                                                             console.error('Failed to mark as published:', error);
                                                             showToast('Failed to mark as published', 'error');

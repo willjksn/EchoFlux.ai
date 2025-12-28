@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { withErrorHandling, getVerifyAuth } from "./_errorHandler.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
+import { FieldValue } from "firebase-admin/firestore";
 
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -49,6 +50,23 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
         const currentUsed = userData?.monthlyCaptionGenerationsUsed || 0;
         updates.monthlyCaptionGenerationsUsed = Math.max(0, currentUsed - rewardAmount);
         break;
+
+      case 'strategy_generations': {
+        // Add a per-month "bonus" to strategy generation limit (does not affect plan limits permanently).
+        const now = new Date();
+        const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const usageRef = db.collection('strategy_usage').doc(`${userId}_${month}`);
+        await usageRef.set(
+          {
+            userId,
+            month,
+            bonus: FieldValue.increment(rewardAmount),
+            lastUpdated: new Date().toISOString(),
+          } as any,
+          { merge: true }
+        );
+        break;
+      }
 
       case 'free_month':
         const currentPlan = userData?.plan || 'Free';
@@ -110,6 +128,8 @@ function getRewardDescription(type: string, amount: number): string {
   switch (type) {
     case 'extra_generations':
       return `Granted ${amount} free AI generations`;
+    case 'strategy_generations':
+      return `Granted ${amount} extra strategy generation${amount > 1 ? 's' : ''} this month`;
     case 'free_month':
       return `Granted ${amount} free month${amount > 1 ? 's' : ''} of subscription`;
     case 'storage_boost':

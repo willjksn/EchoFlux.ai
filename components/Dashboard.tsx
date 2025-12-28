@@ -1456,12 +1456,22 @@ export const Dashboard: React.FC = () => {
               // Generate actionable recommendations based on user data
               const recommendations: Array<{ type: 'success' | 'info' | 'warning' | 'tip'; title: string; description: string; action?: () => void; actionLabel?: string }> = [];
               
-              // Check posting frequency
-              const postsThisWeek = posts.filter(p => {
-                const postDate = new Date(p.createdAt || 0);
-                const weekAgo = new Date();
-                weekAgo.setDate(weekAgo.getDate() - 7);
-                return postDate > weekAgo;
+              // Check posting frequency based on the most relevant timestamp.
+              // createdAt doesn't change when you publish, so prefer publishedAt.
+              const getPostActivityDate = (p: any) => {
+                const ts =
+                  p?.publishedAt ||
+                  p?.updatedAt ||
+                  p?.scheduledDate ||
+                  p?.createdAt;
+                const d = ts ? new Date(ts) : new Date(0);
+                return isNaN(d.getTime()) ? new Date(0) : d;
+              };
+              const weekAgo = new Date();
+              weekAgo.setDate(weekAgo.getDate() - 7);
+              const postsThisWeek = posts.filter((p: any) => {
+                if (p?.status !== 'Published') return false;
+                return getPostActivityDate(p) > weekAgo;
               }).length;
               
               if (postsThisWeek < 3) {
@@ -1502,14 +1512,14 @@ export const Dashboard: React.FC = () => {
                 });
               }
               
-              // Suggest automation for users who haven't used it
+              // Automation page is not part of the current tester-ready workflow; route users to Compose instead.
               if (user?.plan !== 'Free') {
                 recommendations.push({
                   type: 'tip',
                   title: 'Try AI Content Generation',
-                  description: 'Upload images or videos and let AI automatically generate captions and hashtags tailored to your content and platforms.',
-                  action: () => setActivePage('automation'),
-                  actionLabel: 'Try Automation'
+                  description: 'Upload images or videos and let AI generate captions tailored to your content and platforms.',
+                  action: () => setActivePage('compose'),
+                  actionLabel: 'Generate Captions'
                 });
               }
               

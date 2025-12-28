@@ -591,6 +591,9 @@ export interface Post {
     status: ApprovalStatus;
     author: { name: string; avatar: string };
     scheduledDate?: string;
+    createdAt?: string;
+    updatedAt?: string;
+    publishedAt?: string;
     comments: PostComment[];
     clientId?: string; 
 }

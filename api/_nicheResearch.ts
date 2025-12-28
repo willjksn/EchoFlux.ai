@@ -10,7 +10,7 @@
  */
 
 import { searchWeb } from "./_webSearch.js";
-import { canUseTavily, recordTavilyUsage } from "./_tavilyUsage.js";
+import { canUseTavily } from "./_tavilyUsage.js";
 import { getLatestTrends } from "./_trendsHelper.js";
 
 interface NicheResearchResult {
@@ -50,6 +50,15 @@ export async function researchNicheStrategy(
       weeklyTrends = await getLatestTrends();
     } catch (error) {
       console.log('[NicheResearch] Could not fetch weekly trends, continuing with Tavily only');
+    }
+
+    // Cost control: non-admin users should NOT trigger live Tavily research.
+    // They rely on twice-weekly stored trends for strategy generation.
+    if (userId && userRole !== 'Admin') {
+      if (weeklyTrends) {
+        return `WEEKLY TRENDS (Mon/Thu) — NO LIVE RESEARCH:\n${weeklyTrends}\n\nNote: Live niche research is disabled for user strategy generation to control costs.`;
+      }
+      return "Trend data unavailable. Live niche research is disabled for user strategy generation to control costs.";
     }
 
     // Detect OnlyFans niche
@@ -137,11 +146,6 @@ export async function researchNicheStrategy(
         
         // Use searchWeb with user tracking if provided
         const searchResult = await searchWeb(query, userId, userPlan, userRole);
-        
-        // Record Tavily usage if user info provided and search was successful
-        if (userId && userPlan && searchResult.success && searchResult.results.length > 0) {
-          await recordTavilyUsage(userId, userPlan, userRole);
-        }
         
         if (searchResult.success && searchResult.results.length > 0) {
           allResearch.push({

@@ -8,7 +8,7 @@
 
 import { getLatestTrends } from "./_trendsHelper.js";
 import { searchWeb } from "./_webSearch.js";
-import { canUseTavily, recordTavilyUsage } from "./_tavilyUsage.js";
+import { canUseTavily } from "./_tavilyUsage.js";
 
 interface OnlyFansResearchResult {
   category: string;
@@ -43,6 +43,15 @@ export async function getOnlyFansResearchContext(
       weeklyTrends = await getLatestTrends();
     } catch (error) {
       console.log('[OnlyFansResearch] Could not fetch weekly trends, continuing with Tavily only');
+    }
+
+    // Cost control: non-admin users should NOT trigger live Tavily research.
+    // They rely on twice-weekly stored trends.
+    if (userId && userRole !== 'Admin') {
+      if (weeklyTrends) {
+        return `ONLYFANS RESEARCH CONTEXT (Mon/Thu trends) — NO LIVE RESEARCH:\n${weeklyTrends}\n\nNote: Live OnlyFans research is disabled for non-admin users to control costs.`;
+      }
+      return "OnlyFans research unavailable. Live research is disabled for non-admin users to control costs.";
     }
 
     // OnlyFans-specific research queries
@@ -88,11 +97,6 @@ export async function getOnlyFansResearchContext(
         
         // Use searchWeb with user tracking if provided
         const searchResult = await searchWeb(query, userId, userPlan, userRole);
-        
-        // Record Tavily usage if user info provided and search was successful
-        if (userId && userPlan && searchResult.success && searchResult.results.length > 0) {
-          await recordTavilyUsage(userId, userPlan, userRole);
-        }
         
         if (searchResult.success && searchResult.results.length > 0) {
           allResearch.push({

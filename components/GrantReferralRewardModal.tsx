@@ -21,7 +21,7 @@ export const GrantReferralRewardModal: React.FC<GrantReferralRewardModalProps> =
   onSuccess,
 }) => {
   const { showToast } = useAppContext();
-  const [rewardType, setRewardType] = useState<'extra_generations' | 'free_month' | 'storage_boost'>('extra_generations');
+  const [rewardType, setRewardType] = useState<'extra_generations' | 'strategy_generations' | 'free_month' | 'storage_boost'>('extra_generations');
   const [rewardAmount, setRewardAmount] = useState<number>(50);
   const [reason, setReason] = useState<string>('');
   const [isGranting, setIsGranting] = useState(false);
@@ -70,6 +70,8 @@ export const GrantReferralRewardModal: React.FC<GrantReferralRewardModalProps> =
     switch (type) {
       case 'extra_generations':
         return 50;
+      case 'strategy_generations':
+        return 1;
       case 'free_month':
         return 1;
       case 'storage_boost':
@@ -79,7 +81,7 @@ export const GrantReferralRewardModal: React.FC<GrantReferralRewardModalProps> =
     }
   };
 
-  const handleTypeChange = (newType: 'extra_generations' | 'free_month' | 'storage_boost') => {
+  const handleTypeChange = (newType: 'extra_generations' | 'strategy_generations' | 'free_month' | 'storage_boost') => {
     setRewardType(newType);
     setRewardAmount(getDefaultAmount(newType));
   };
@@ -120,6 +122,7 @@ export const GrantReferralRewardModal: React.FC<GrantReferralRewardModalProps> =
               className="w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
             >
               <option value="extra_generations">Extra AI Generations</option>
+              <option value="strategy_generations">Strategy Generations</option>
               <option value="free_month">Free Month(s)</option>
               <option value="storage_boost">Storage Boost (GB)</option>
             </select>
@@ -138,6 +141,7 @@ export const GrantReferralRewardModal: React.FC<GrantReferralRewardModalProps> =
             />
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
               {rewardType === 'extra_generations' && 'Number of free AI caption generations'}
+              {rewardType === 'strategy_generations' && 'Number of extra strategy generations this month'}
               {rewardType === 'free_month' && 'Number of free subscription months'}
               {rewardType === 'storage_boost' && 'Number of GB to add to storage limit'}
             </p>
