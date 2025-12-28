@@ -32,7 +32,8 @@ import { Inbox } from './components/Inbox';
 import { CreatorOnboardingModal } from './components/CreatorOnboardingModal';
 import { PlanSelectorModal } from './components/PlanSelectorModal';
 import { MaintenancePage } from './components/MaintenancePage';
-import { isMaintenanceMode, getAllowedEmail, canBypassMaintenance } from './src/utils/maintenance';
+import { InviteOnlyPage } from './components/InviteOnlyPage';
+import { isMaintenanceMode, getAllowedEmail, canBypassMaintenance, isInviteOnlyMode, isInvitedEmail } from './src/utils/maintenance';
 import { InteractiveTour } from './components/InteractiveTour';
 import { PaymentModal } from './components/PaymentModal';
 import { Toast } from './components/Toast';
@@ -545,6 +546,14 @@ const AppContent: React.FC = () => {
 
     if (isAuthLoading) {
         return <div className="h-screen w-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900"><p className="text-gray-500 dark:text-gray-400">Loading...</p></div>;
+    }
+
+    // Invite-only gate: authenticated users must be allowlisted (prevents refresh/deep-link access)
+    if (isInviteOnlyMode() && isAuthenticated && user) {
+        const allowed = isInvitedEmail(user.email);
+        if (!allowed) {
+            return <InviteOnlyPage email={user.email} onSignOut={handleLogout} />;
+        }
     }
 
     // Check for pending signup - if exists, show plan selector instead of landing page

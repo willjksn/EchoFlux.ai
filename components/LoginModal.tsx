@@ -14,7 +14,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import type { Plan } from '../types';
-import { isMaintenanceMode, canBypassMaintenance } from '../src/utils/maintenance';
+import { isMaintenanceMode, canBypassMaintenance, isInviteOnlyMode, isInvitedEmail } from '../src/utils/maintenance';
 
 /* ---------- Terms & Privacy content (unchanged) ---------- */
 
@@ -229,6 +229,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     setValidationErrors({}); // Clear previous errors
 
     try {
+      // Invite-only gate: prevent login/signup with non-invited emails
+      if (isInviteOnlyMode() && !isInvitedEmail(email)) {
+        showToast('Invite-only beta: this email is not approved yet. Contact contact@echoflux.ai for access.', 'error');
+        setIsLoading(false);
+        return;
+      }
+
       // Check maintenance mode
       if (isMaintenanceMode()) {
         // Allow bypass for whitelisted email
@@ -452,6 +459,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
+
+      // Invite-only gate: immediately sign out non-invited Google accounts
+      if (isInviteOnlyMode() && !isInvitedEmail(result.user.email)) {
+        await signOut(auth);
+        showToast('Invite-only beta: this Google account is not approved yet. Contact contact@echoflux.ai for access.', 'error');
+        setIsLoading(false);
+        return;
+      }
       
       // Check if user can bypass after Google sign-in
       if (isMaintenanceMode() && !canBypassMaintenance(result.user.email)) {
