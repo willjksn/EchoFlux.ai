@@ -11,7 +11,7 @@ const faqData = [
     },
     {
         question: "What is AI Content Generation?",
-        answer: "Upload your images or videos, set your goal and tone, and our AI automatically generates engaging captions and relevant hashtags tailored to your content and target platforms. You can then schedule your posts or save them as drafts for manual posting when you're ready."
+        answer: "Upload your images or videos, set your goal and tone, and our AI generates captions and relevant hashtags tailored to your content and target platforms. You can save the result as a draft and plan it in your calendar, then copy/export and post manually on your socials."
     },
     {
         question: "How does the AI Content Strategist work?",
@@ -23,11 +23,15 @@ const faqData = [
     },
     {
         question: "Do you offer social listening or competitor tracking?",
-        answer: "We’ve removed social listening and competitor tracking for now. Current focus: AI content creation, campaign planning, inbox/CRM, analytics-style insights, link-in-bio, and OnlyFans Studio."
+        answer: "Not right now. Social listening and competitor tracking are not available in the current creator-planning version. Current focus: AI content creation, campaign planning, calendar workflows, link-in-bio, and OnlyFans Studio."
+    },
+    {
+        question: "Do you have an AI assistant or chatbot?",
+        answer: "Not right now. We’re keeping the product focused on creator planning and content generation. If you run into an issue, use the in-app “Report a Problem” button or email support."
     },
     {
         question: "Can I use EchoFlux.ai without connecting social accounts?",
-        answer: "Yes. Right now EchoFlux.ai is designed as an AI Content Studio & Campaign Planner—you plan campaigns, generate content, and organize everything in a calendar, then copy and post to your social platforms manually. Direct posting and deep analytics will come in a future version."
+        answer: "Yes. EchoFlux.ai is currently designed as an AI Content Studio & Campaign Planner—you generate content and organize everything in a calendar, then copy/export and post to your social platforms manually. Direct posting, deeper analytics, and social listening are planned for a future version."
     }
 ];
 
