@@ -136,7 +136,15 @@ export const Strategy: React.FC = () => {
                     if (data.opportunity && data.niche) {
                         setNiche(data.niche);
                         setGoal(data.goal || 'Increase Followers/Fans');
-                        setAudience(data.opportunity.platform || 'General Audience');
+                        // IMPORTANT: Audience must never be overwritten with a platform name.
+                        // Use explicit audience field if present, otherwise fall back to a sane default.
+                        setAudience(data.audience || 'General Audience');
+                        // If the opportunity has a platform, treat it as platform focus (not audience).
+                        if (data.platformFocus) {
+                            setPlatformFocus(data.platformFocus);
+                        } else if (data.opportunity?.platform) {
+                            setPlatformFocus(data.opportunity.platform);
+                        }
                         // Set flag to auto-generate after state updates
                         setShouldAutoGenerate(true);
                     }
@@ -396,32 +404,45 @@ export const Strategy: React.FC = () => {
             // Get the current day to use for analysis
             const currentDay = plan.weeks[weekIndex].content[dayIndex];
             
-            // Analyze media and generate caption using AI
+            // Generate caption using AI with BOTH the actual media + the user's strategy inputs.
+            // (This prevents generic captions that ignore the roadmap required fields.)
             let generatedCaption = currentDay.topic; // Default to topic
             let suggestedMediaType: 'image' | 'video' | undefined = fileType;
-            
+
             try {
-                const analysis = await analyzeMediaForPost({
+                const promptText = [
+                    `You are generating a caption for a roadmap item inside a content strategy.`,
+                    `Niche: ${niche || 'N/A'}`,
+                    `Target audience: ${audience || 'N/A'}`,
+                    `Primary goal: ${goal || 'engagement'}`,
+                    `Tone: ${tone || 'friendly'}`,
+                    `Platform focus: ${platformFocus || 'Mixed / All'}`,
+                    `Planned platform for this post: ${currentDay.platform || 'Instagram'}`,
+                    `Post topic: ${currentDay.topic || ''}`,
+                    currentDay.description ? `Post description: ${currentDay.description}` : '',
+                    currentDay.angle ? `Angle/hook: ${currentDay.angle}` : '',
+                    currentDay.cta ? `CTA: ${currentDay.cta}` : '',
+                    `Important: Analyze the uploaded media and write a caption that matches what's in the image/video AND the strategy details above.`,
+                ].filter(Boolean).join('\n');
+
+                const captions = await generateCaptions({
                     mediaUrl,
-                    goal: goal,
-                    tone: tone,
+                    goal: goal || 'engagement',
+                    tone: tone || 'friendly',
+                    promptText,
+                    platforms: [currentDay.platform as any],
                 });
-                
-                generatedCaption = analysis.caption || currentDay.topic;
-                // Add hashtags to caption if provided
-                if (analysis.hashtags && analysis.hashtags.length > 0) {
-                    generatedCaption += '\n\n' + analysis.hashtags.join(' ');
-                }
-                
-                // Determine suggested media type based on analysis
-                // If videoIdeas exist and are more relevant, suggest video
-                if (currentDay.videoIdeas && currentDay.videoIdeas.length > 0 && fileType === 'image') {
-                    // Could suggest video based on content analysis
-                    suggestedMediaType = fileType; // Keep uploaded type for now
+
+                const first = Array.isArray(captions) ? captions[0] : null;
+                if (first?.caption) {
+                    generatedCaption = first.caption;
+                    if (Array.isArray(first.hashtags) && first.hashtags.length > 0) {
+                        generatedCaption += '\n\n' + first.hashtags.join(' ');
+                    }
                 }
             } catch (error) {
-                console.error('Failed to analyze media:', error);
-                // Continue with default caption if analysis fails
+                console.error('Failed to generate captions from media:', error);
+                // Continue with default caption if generation fails
             }
 
             // Update plan with media and generated caption

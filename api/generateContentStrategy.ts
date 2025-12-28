@@ -223,9 +223,8 @@ ${explicitnessContext ? `\nEXPLICITNESS LEVEL: ${explicitnessLevel}/10\n${explic
       nicheResearch = 'Niche research unavailable. Using general best practices.';
     }
 
-    // Build JSON schema description based on duration
-    const contentItemSchema = durationWeeks === 1 
-      ? `{
+    // Build JSON schema description (always include description/angle/cta so UI has consistent fields)
+    const contentItemSchema = `{
           "dayOffset": 0,
           "topic": "Specific content topic/idea (e.g., 'Behind the scenes of our process')",
           "format": "Post" | "Reel" | "Story",
@@ -233,14 +232,6 @@ ${explicitnessContext ? `\nEXPLICITNESS LEVEL: ${explicitnessLevel}/10\n${explic
           "description": "Detailed description of the content idea with specific angles and execution details",
           "angle": "What makes this post compelling and unique - detailed angle description",
           "cta": "Specific call-to-action tailored to the content and goal",
-          "imageIdeas": ["Idea 1 for images", "Idea 2 for images", "Idea 3 for images"],
-          "videoIdeas": ["Idea 1 for videos", "Idea 2 for videos"]
-        }`
-      : `{
-          "dayOffset": 0,
-          "topic": "Specific content topic/idea (e.g., 'Behind the scenes of our process')",
-          "format": "Post" | "Reel" | "Story",
-          "platform": "Instagram" | "TikTok" | "X" | "LinkedIn" | "Facebook" | "Threads" | "YouTube" | "Pinterest" | "Discord" | "Telegram" | "Reddit" | "Fanvue" | "OnlyFans",
           "imageIdeas": ["Idea 1 for images", "Idea 2 for images", "Idea 3 for images"],
           "videoIdeas": ["Idea 1 for videos", "Idea 2 for videos"]
         }`;
@@ -335,14 +326,14 @@ Return ONLY valid JSON in this exact structure:${durationWeeks === 1 ? '\n⚠️
 Requirements:
 ${durationWeeks === 1 ? '⚠️ CRITICAL: Generate EXACTLY 1 WEEK (7 days) of content. DO NOT generate 2 or more weeks.' : `- Generate ${durationWeeks} weeks of content`}
 - ${durationWeeks === 1 ? 'Generate 10-14 detailed content items for the single week' : `Each week should have 5-7 content items`} (mix of Posts, Reels, and Stories)
-${durationWeeks === 1 ? '- Each content item MUST include ALL of these fields with detailed information:' : ''}
-${durationWeeks === 1 ? '  * topic: Specific, detailed content idea (not just a one-word topic)' : ''}
-${durationWeeks === 1 ? '  * description: Detailed description with specific angles and execution details (2-3 sentences minimum)' : ''}
-${durationWeeks === 1 ? '  * angle: What makes this post compelling and unique - detailed explanation' : ''}
-${durationWeeks === 1 ? '  * cta: Specific call-to-action tailored to the content and goal' : ''}
+ - Each content item MUST include ALL of these fields with detailed information:
+   * topic: Specific, detailed content idea (not just a one-word topic)
+   * description: Detailed description with specific angles and execution details (2-3 sentences minimum)
+   * angle: What makes this post compelling and unique - detailed explanation
+   * cta: Specific call-to-action tailored to the content and goal
 ${durationWeeks === 1 ? '- Provide comprehensive, detailed content across all 7 days with variety' : ''}
 - Distribute content across platforms: ${platforms.join(', ')}
-${durationWeeks === 1 ? '- DO NOT just provide topic names - provide FULL detailed descriptions for each content item' : ''}
+ - DO NOT just provide topic names - provide FULL detailed descriptions for each content item
 - Content should align with goal: ${goal}
 - Use tone: ${tone}${isExplicitContent ? ' - EXPLICIT/ADULT CONTENT: Generate bold, explicit content ideas that describe specific explicit/intimate content to be created (not generic subscription prompts)' : ''}
 - Make topics specific and actionable${isExplicitContent ? ' - describe specific explicit scenes, intimate moments, explicit photoset concepts with details (outfits, settings, poses, moods) - NOT generic "subscribe for more" type topics' : ''}
@@ -418,9 +409,9 @@ IMPORTANT: When generating imageIdeas and videoIdeas:
         content: (week.content || []).map((day: any, dayIndex: number) => ({
           dayOffset: day.dayOffset !== undefined ? day.dayOffset : (weekIndex * 7) + dayIndex,
           topic: day.topic || day.postIdea || `Content idea ${dayIndex + 1}`,
-          description: day.description || '', // Include description for one-week plans
-          angle: day.angle || '', // Include angle for one-week plans
-          cta: day.cta || '', // Include CTA for one-week plans
+          description: day.description || day.details || '', 
+          angle: day.angle || day.hook || '', 
+          cta: day.cta || day.callToAction || '', 
           format: day.format || (day.postType === 'Reel' ? 'Reel' : day.postType === 'Story' ? 'Story' : 'Post'),
           platform: day.platform || (Array.isArray(day.platforms) ? day.platforms[0] : platforms[0] || 'Instagram'),
           imageIdeas: day.imageIdeas || [],

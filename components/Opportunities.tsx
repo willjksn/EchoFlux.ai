@@ -318,7 +318,10 @@ Generate multiple compelling captions (at least 5) that leverage this trend. Eac
             opportunity: selectedOpportunity,
             niche: niche,
             goal: `Create content around: ${selectedOpportunity.title}`,
-            platform: selectedOpportunity.platform
+            platformFocus: selectedOpportunity.platform,
+            // Provide a reasonable default audience without overwriting "audience" with a platform name.
+            // The Strategy page can still be edited before generating.
+            audience: niche ? `People interested in ${niche}` : 'General Audience'
         }));
         
         setShowContentModal(false);
