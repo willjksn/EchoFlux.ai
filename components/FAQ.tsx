@@ -27,7 +27,7 @@ const faqData = [
     },
     {
         question: "Do you have an AI assistant or chatbot?",
-        answer: "Not right now. We’re keeping the product focused on creator planning and content generation. If you run into an issue, use the in-app “Report a Problem” button or email support."
+        answer: "Yes. EchoFlux.ai includes an in-app chatbot and (on supported plans) a voice assistant to help with content ideas, planning workflows, and how to use the app. Note: they do not provide social listening or competitor tracking in the current version."
     },
     {
         question: "Can I use EchoFlux.ai without connecting social accounts?",

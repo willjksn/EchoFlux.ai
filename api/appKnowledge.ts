@@ -18,7 +18,7 @@ EchoFlux.ai is an **AI Content Studio & Campaign Planner for creators**.
   - Users **do not need to connect social accounts**.
   - The app focuses on **strategy, campaign planning, content packs, and calendars**.
   - Creators **copy content out** to post manually wherever they like.
-- "Business"/"Agency" modes, social listening, competitor tracking, and deep analytics are **paused/hidden for now** but may return later.
+- "Business"/"Agency" modes, **social listening**, **competitor tracking**, and deep analytics are **paused/hidden for now** (not available in the current version) but may return later.
 
 ## Key Surfaces & Workflows
 
@@ -27,7 +27,7 @@ EchoFlux.ai is an **AI Content Studio & Campaign Planner for creators**.
 - It generates:
   - A **multi-week content roadmap** (campaigns, themes, and example posts).
   - Suggested **posting cadence** and content types (reels, carousels, stories, etc.).
-- Uses weekly trends (free, updated every Monday) + Tavily searches (Pro/Elite only) for niche-specific research.
+- Uses shared trend research collected by EchoFlux.ai on a recurring schedule (currently Mon/Thu). Users do not trigger live web research for strategy generation in the current version.
 - From a good strategy, the user can:
   - Save it.
   - Use it to create posts in Compose.
@@ -103,10 +103,10 @@ EchoFlux.ai is an **AI Content Studio & Campaign Planner for creators**.
 ### 9. Pricing & Plans (Pricing.tsx, PlanSelectorModal.tsx)
 - Visible creator plans:
   - **Free** – 1 AI strategy generation/month (basic), 10 AI captions/month, Basic Link-in-Bio (1 link), 100 MB storage.
-  - **Pro** – AI Content Strategist, 2 AI strategy generations/month, Live trend research (16 Tavily searches/month), 500 AI captions/month, Link-in-Bio Builder (5 links), Media Library, Visual Content Calendar, 5 GB storage.
-  - **Elite** – Advanced Strategy options, 5 AI strategy generations/month, Enhanced live trend research (40 Tavily searches/month), 1,500 AI captions/month, Link-in-Bio Builder (unlimited links), Media Library, 10 GB storage, **OnlyFans Studio included**.
+  - **Pro** – AI Content Strategist, 2 AI strategy generations/month, 500 AI captions/month, Link-in-Bio Builder (5 links), Media Library, Visual Content Calendar, 5 GB storage.
+  - **Elite** – Advanced Strategy options, 5 AI strategy generations/month, 1,500 AI captions/month, Link-in-Bio Builder (unlimited links), Media Library, 10 GB storage, **OnlyFans Studio included**.
 - Business/Agency plans and "for businesses" positioning are **hidden/paused**.
-- **Note:** Strategy generation uses weekly trends (free, updated every Monday) + Tavily searches (Pro/Elite only) for niche-specific research. Free plans use weekly trends only.
+- **Note:** Trend context is refreshed on a recurring schedule (currently Mon/Thu). The current version does not provide user-triggered live web research for strategy generation.
 
 ### 10. Settings (Settings.tsx)
 - Central place for:
@@ -129,10 +129,7 @@ EchoFlux.ai is an **AI Content Studio & Campaign Planner for creators**.
     - Help brainstorm content ideas, hooks, scripts, and captions.
     - Suggest workflows (e.g., "start in Strategy to generate a roadmap, then use Compose to create posts").
     - Navigate to pages like dashboard, strategy, compose, approvals, media library, settings.
-  - **Live Web Search (Elite only):**
-    - Elite users can ask for current trends/info via fetch_current_info function.
-    - Uses Tavily web search (counts against Elite's 40 searches/month limit).
-    - Can also use weekly trends data (free, no Tavily cost) for general social media trends.
+  - Trend guidance is based on the stored trends feed and general best practices. It should not claim social listening or competitor tracking.
 
 ## Important Constraints & Messaging
 

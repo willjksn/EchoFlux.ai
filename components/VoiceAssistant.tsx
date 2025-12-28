@@ -189,6 +189,9 @@ export const VoiceAssistant: React.FC = () => {
         - Real-time analytics, competitor tracking, or social listening
         - Team/client management for agencies
         - Autopilot features (removed from app)
+      - If asked about social listening or competitor tracking:
+        - Clearly say they are not available in the current version.
+        - Offer planning-based alternatives (Opportunities, Strategy, weekly trends, and best practices).
       - Emphasize:
         - Strategy and campaign planning
         - Generating content packs (captions, hooks, ideas)
@@ -198,7 +201,7 @@ export const VoiceAssistant: React.FC = () => {
       YOUR CORE JOB:
       - Know the main surfaces in the app and how they relate:
         - Dashboard: high-level planning snapshot + quick actions
-        - Strategy: generate multi-week content roadmaps (Free: 1/month basic, Pro: 2/month with live research, Elite: 5/month with enhanced research)
+        - Strategy: generate multi-week content roadmaps (monthly allowances vary by plan and are shown in-app)
         - Compose: refine captions and plan for platforms (not \"publish\")
           - AI-generated captions are automatically optimized for the selected platform (Instagram, TikTok, X, etc.)
           - \"Analyze Content Gaps\" button analyzes content strategy across all social platforms and saves to shared history with Dashboard
@@ -222,11 +225,8 @@ export const VoiceAssistant: React.FC = () => {
         - When asked "how do I...", provide thorough, detailed instructions that cover the entire process
 
       PRICING & FEATURES:
-      - Free Plan: 1 AI strategy/month (basic), 10 AI captions/month, 1 link-in-bio, 100 MB storage
-      - Pro Plan: 2 strategies/month, 500 captions/month, 5 links, 5 GB storage, Live trend research (16 Tavily searches/month), AI Voice Assistant
-      - Elite Plan: 5 strategies/month, 1,500 captions/month, unlimited links, 10 GB storage, Enhanced trend research (40 Tavily searches/month), AI Voice Assistant, OnlyFans Studio
-      - Strategy generation uses weekly trends (free, updated every Monday) + Tavily searches (Pro/Elite only) for niche-specific research
-      - Voice Assistant is available for Pro and Elite users to provide detailed explanations and guidance on using all features
+      - Plan names and limits can change; if asked about exact limits, tell users to check the Pricing page / in-app usage stats.
+      - Voice Assistant is available on supported plans and provides detailed guidance on using the app and creating content.
 
       WHEN ASKED \"HOW DO I ...\" ABOUT THE APP:
       - Provide detailed, step-by-step instructions on how to accomplish tasks and use features.
@@ -267,19 +267,17 @@ export const VoiceAssistant: React.FC = () => {
       - Use examples when helpful (e.g., show 2–3 alternative hooks).
       - If something is not available in this version (e.g., analytics, auto-posting), say so honestly and offer a planning-based workaround.
 
-      WEEKLY TRENDS & TAVILY:
-      - All users have access to weekly social media trends (updated every Monday, free, no Tavily cost).
+      WEEKLY TRENDS:
+      - All users benefit from shared social media trends refreshed on a recurring schedule (currently Monday and Thursday).
       - Weekly trends cover: general social media trends, platform updates, content creator tips, engagement strategies, hashtag strategies, video content trends.
-      - Elite users (40 Tavily searches/month) can use fetch_current_info for specific, niche-specific, or very recent topics.
-      - Pro users (16 Tavily searches/month) can use Tavily in Strategy generation but not in Voice Assistant.
-      - When asked about trends, first use weekly trends knowledge (general), then use Tavily only if needed for specific/niche topics.
+      - You do NOT have live web access in the voice assistant. If asked for \"what's trending today\", be honest and provide reliable evergreen best practices plus how to use Opportunities/Strategy in-app.
 
       FIRST GREETING:
       - When you first connect, greet them as the EchoFlux.ai voice assistant and offer help like:
         - \"Hi! I'm your EchoFlux.ai voice assistant. I can explain how to use any feature in the app, help you create content, answer questions about social media strategy, and more. What would you like to learn about or work on today?\"
     `;
 
-    // Define available tools/functions
+    // Define available tools/functions (no live web search in current version)
     const tools = [
       {
         name: 'show_help',
@@ -288,20 +286,6 @@ export const VoiceAssistant: React.FC = () => {
           type: 'object',
           properties: {},
           required: []
-        }
-      },
-      {
-        name: 'fetch_current_info',
-        description: 'Fetch current web information about a topic using Tavily web search (Elite only, counts against 40 searches/month limit). Use this when the user asks about time-sensitive or "what is trending now" questions. Note: All users have access to weekly social media trends (updated every Monday, free) - use general knowledge for those. Only use this function for specific, niche-specific, or very recent topics that weekly trends don\'t cover.',
-        parameters: {
-          type: 'object',
-          properties: {
-            topic: {
-              type: 'string',
-              description: 'The topic or question to search the web for.'
-            }
-          },
-          required: ['topic']
         }
       }
     ];
@@ -363,64 +347,12 @@ export const VoiceAssistant: React.FC = () => {
 - Explaining how to use any feature in the app with detailed step-by-step instructions
 - Providing comprehensive guides on creating content, generating strategies, using the calendar, and more
 - Answering questions about social media strategy, content creation, marketing, and best practices
-- Sharing trending topics and what's popular (using weekly trends or live search for Elite users)
+- Sharing what tends to work (best practices) and how to use the in-app trends/opportunities tools
 - Giving detailed feedback on your content ideas and strategies
 - Explaining workflows and helping you understand the full functionality of each feature
 
 Just ask me how to do something or what you'd like to learn about!`;
                   break;
-                
-                case 'fetch_current_info': {
-                  // Elite-only: live web insights via Tavily are reserved for Elite creators
-                  // Note: All users have access to weekly trends (updated every Monday, free)
-                  // This function uses Tavily for specific topic searches (counts against Elite's 40 searches/month)
-                  if (user?.plan !== 'Elite') {
-                    result =
-                      'Live web search is available for Elite creators (40 Tavily searches/month). All users have access to weekly social media trends (updated every Monday). You can still ask me for strategy and evergreen best practices based on weekly trends.';
-                    break;
-                  }
-
-                  const topic = (args?.topic as string | undefined)?.trim();
-                  if (!topic) {
-                    result = 'No topic provided for web search.';
-                    break;
-                  }
-
-                  try {
-                    const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
-                    const res = await fetch('/api/fetchCurrentInfo', {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                      },
-                      body: JSON.stringify({ topic }),
-                    });
-
-                    if (!res.ok) {
-                      result = `Web search failed with status ${res.status}.`;
-                    } else {
-                      const data: any = await res.json();
-                      if (data.success && Array.isArray(data.results) && data.results.length > 0) {
-                        const lines = data.results.slice(0, 5).map((r: any, idx: number) => {
-                          const title = r.title || 'Result';
-                          const snippet = r.snippet || '';
-                          const link = r.link || '';
-                          return `${idx + 1}. ${title}\n${snippet}\n${link}`;
-                        });
-                        result = `Here are some current findings I can use:\n\n${lines.join('\n\n')}`;
-                      } else if (data.note) {
-                        result = `Web search note: ${data.note}`;
-                      } else {
-                        result = 'No useful web results were found for that topic.';
-                      }
-                    }
-                  } catch (err: any) {
-                    console.error('fetch_current_info error:', err);
-                    result = err?.message || 'Failed to fetch current information from the web.';
-                  }
-                  break;
-                }
                   
                 default:
                   result = `Unknown function: ${name}`;
