@@ -183,9 +183,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         // Update Firestore
         try {
+            const authUid = auth.currentUser?.uid || null;
+            if (!authUid) {
+                // Auth may not be fully ready yet (transient during sign-in). Skip write to avoid rules failures.
+                console.warn("Firestore update skipped: auth.currentUser is not available yet", { targetUserId: update.id });
+                return;
+            }
+            if (authUid !== update.id) {
+                // Never attempt to write another user's doc from the client context.
+                // This avoids permission errors and protects against accidental cross-user writes.
+                console.warn("Firestore update skipped: auth UID mismatch", { authUid, targetUserId: update.id });
+                return;
+            }
+
             await setDoc(doc(db, 'users', update.id), clean, { merge: true });
         } catch (err) {
-            console.error("Firestore update failed:", err);
+            console.error("Firestore update failed:", {
+                err,
+                authUid: auth.currentUser?.uid || null,
+                targetUserId: update.id,
+                keys: Object.keys(clean || {}),
+            });
         }
     };
 
