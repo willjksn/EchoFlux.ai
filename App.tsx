@@ -412,9 +412,24 @@ const AppContent: React.FC = () => {
         const finalize = async () => {
             setIsFinalizingCheckout(true);
             try {
+                // Prevent rapid retry loops (which can trigger Firebase auth/quota-exceeded).
+                // We lock per sessionId for a short period; user can always refresh to retry after the lock expires.
+                const lockKey = `postCheckoutFinalizeLock:${postCheckoutSessionId}`;
+                const nowMs = Date.now();
+                try {
+                    const lockRaw = localStorage.getItem(lockKey);
+                    const lockUntil = lockRaw ? Number(lockRaw) : NaN;
+                    if (Number.isFinite(lockUntil) && lockUntil > nowMs) {
+                        return;
+                    }
+                    // lock for 30s
+                    localStorage.setItem(lockKey, String(nowMs + 30_000));
+                } catch {}
+
                 // Get auth token for API call
                 const { auth: fbAuth } = await import('./firebaseConfig');
-                const token = fbAuth.currentUser ? await fbAuth.currentUser.getIdToken(true) : null;
+                // Don't force refresh; repeated forced refresh can hit securetoken rate limits.
+                const token = fbAuth.currentUser ? await fbAuth.currentUser.getIdToken(false) : null;
                 if (!token) throw new Error('Not authenticated');
 
                 // Verify and apply plan immediately (server-side)
@@ -448,6 +463,7 @@ const AppContent: React.FC = () => {
 
                 // Clear only after successful verification so this is safe/reversible.
                 try {
+                    localStorage.removeItem(`postCheckoutFinalizeLock:${postCheckoutSessionId}`);
                     localStorage.removeItem('postCheckoutSessionId');
                     localStorage.removeItem('paymentAttempt');
                     localStorage.removeItem('paymentAttemptPrompted');
