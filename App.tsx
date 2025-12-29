@@ -337,9 +337,15 @@ const AppContent: React.FC = () => {
             try {
                 const attemptRaw = localStorage.getItem('paymentAttempt');
                 const attempt = attemptRaw ? JSON.parse(attemptRaw) : null;
-                const alreadyPrompted = localStorage.getItem('paymentAttemptPrompted') === 'true';
+                const attemptTs = typeof attempt?.timestamp === 'number' ? attempt.timestamp : null;
+                const promptedAt = (() => {
+                    const v = localStorage.getItem('paymentAttemptPromptedAt');
+                    const n = v ? Number(v) : NaN;
+                    return Number.isFinite(n) ? n : null;
+                })();
+                const alreadyPromptedForThisAttempt = !!attemptTs && !!promptedAt && attemptTs === promptedAt;
 
-                if (!alreadyPrompted && attempt?.accountCreated && attempt?.resumeCheckout && (attempt?.plan === 'Pro' || attempt?.plan === 'Elite')) {
+                if (!alreadyPromptedForThisAttempt && attempt?.accountCreated && attempt?.resumeCheckout && (attempt?.plan === 'Pro' || attempt?.plan === 'Elite')) {
                     const cycle = (attempt?.billingCycle === 'annually' ? 'annually' : 'monthly') as 'monthly' | 'annually';
                     const planName = attempt.plan as Plan;
                     const planData = planName === 'Pro'
@@ -347,7 +353,12 @@ const AppContent: React.FC = () => {
                         : { name: 'Elite', price: cycle === 'annually' ? 47 : 59, cycle };
 
                     openPaymentModal(planData);
-                    localStorage.setItem('paymentAttemptPrompted', 'true');
+                    if (attemptTs) {
+                        localStorage.setItem('paymentAttemptPromptedAt', String(attemptTs));
+                    } else {
+                        // Backward compatibility: if timestamp missing, fall back to simple flag.
+                        localStorage.setItem('paymentAttemptPrompted', 'true');
+                    }
                     setOnboardingStep('none');
                     return;
                 }
@@ -439,6 +450,8 @@ const AppContent: React.FC = () => {
                 try {
                     localStorage.removeItem('postCheckoutSessionId');
                     localStorage.removeItem('paymentAttempt');
+                    localStorage.removeItem('paymentAttemptPrompted');
+                    localStorage.removeItem('paymentAttemptPromptedAt');
                     localStorage.removeItem('pendingSignup');
                 } catch {}
 

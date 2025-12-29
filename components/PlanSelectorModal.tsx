@@ -151,6 +151,9 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
                             timestamp: Date.now(),
                             resumeCheckout: true,
                         }));
+                        // Ensure App.tsx will prompt for this new attempt even if a prior attempt already set the flag.
+                        localStorage.removeItem('paymentAttemptPromptedAt');
+                        localStorage.removeItem('paymentAttemptPrompted');
                     } catch {}
 
                     // Close plan selector modal in the current render, then reload to resume checkout reliably.
