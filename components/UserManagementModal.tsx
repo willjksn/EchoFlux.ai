@@ -114,7 +114,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, 
                             </select>
                         </div>
                         <p className="text-xs text-gray-500 dark:text-gray-400">
-                            Changing a user's plan here will override their current subscription status. This is useful for granting complimentary access to beta testers or partners.
+                            Changing a user's plan here will override their current subscription status. This is useful for granting complimentary access to selected users or partners.
                         </p>
                     </div>
 

@@ -4,6 +4,7 @@ import { getModelForTask } from "./_modelRouter.js";
 import { getModel, parseJSON } from "./_geminiShared.js";
 import { getOnlyFansResearchContext } from "./_onlyfansResearch.js";
 import { getOnlyFansWeeklyTrends } from "./_trendsHelper.js";
+import { checkRateLimit, getRateLimitHeaders } from "./_rateLimiter.js";
 
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -39,6 +40,20 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
+
+  // Rate limiting: 10 requests per minute per user
+  const rateLimit = checkRateLimit(user.uid, 10, 60000);
+  if (!rateLimit.allowed) {
+    res.status(429).json({
+      error: "Rate limit exceeded",
+      note: `Too many text generation requests. Please try again after ${new Date(rateLimit.resetTime).toLocaleTimeString()}`,
+      retryAfter: Math.ceil((rateLimit.resetTime - Date.now()) / 1000),
+    });
+    return;
+  }
+  // Add rate limit headers
+  Object.entries(getRateLimitHeaders(rateLimit.remaining, rateLimit.resetTime, 10))
+    .forEach(([key, value]) => res.setHeader(key, value));
 
   const { prompt, context } = req.body || {};
 

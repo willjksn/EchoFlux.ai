@@ -216,6 +216,48 @@ const AppContent: React.FC = () => {
         }
     }, [isAuthenticated, user]);
 
+    // Safety: if a user becomes unauthenticated while on an authenticated route (e.g. sign out, token expiry),
+    // ensure the browser URL doesn't stay stuck on /dashboard while we render the public landing UI.
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        if (isAuthLoading) return;
+        if (isAuthenticated) return;
+
+        const path = window.location.pathname || '/';
+        const isProtectedRoute = path === '/dashboard' ||
+            path === '/inbox' ||
+            path === '/analytics' ||
+            path === '/settings' ||
+            path === '/compose' ||
+            path === '/calendar' ||
+            path === '/approvals' ||
+            path === '/team' ||
+            path === '/opportunities' ||
+            path === '/profile' ||
+            path === '/clients' ||
+            path === '/admin' ||
+            path === '/automation' ||
+            path === '/strategy' ||
+            path === '/ads' ||
+            path === '/mediaLibrary' ||
+            path === '/autopilot' ||
+            path === '/onlyfansStudio';
+
+        if (isProtectedRoute) {
+            window.history.replaceState({}, '', '/');
+        }
+    }, [isAuthenticated, isAuthLoading]);
+
+    // If invite-granted access expired, route user to Pricing to upgrade (Stripe flow remains unchanged).
+    useEffect(() => {
+        if (!isAuthenticated || !user) return;
+        const status = (user as any)?.subscriptionStatus as string | undefined;
+        if (status === 'invite_grant_expired') {
+            showToast('Your access has expired. Please upgrade to continue.', 'error');
+            setActivePage('pricing');
+        }
+    }, [isAuthenticated, user, showToast, setActivePage]);
+
     // Sync URL with active page for direct access (e.g., /privacy, /terms)
     useEffect(() => {
         // Only map URL to page when not authenticated (public pages)
@@ -409,27 +451,57 @@ const AppContent: React.FC = () => {
         if (!isAuthenticated || !user) return;
         if (isFinalizingCheckout) return;
 
+        // Prevent runaway loops (which can hammer Firebase token refresh and trip auth quota limits).
+        // We retry a few times with exponential backoff; 401/403 are treated as terminal.
+        const MAX_FINALIZE_ATTEMPTS = 5;
+        const attemptCount = (() => {
+            try {
+                const n = Number(localStorage.getItem('postCheckoutFinalizeAttemptCount') || '0');
+                return Number.isFinite(n) ? n : 0;
+            } catch {
+                return 0;
+            }
+        })();
+        const nextAttemptAt = (() => {
+            try {
+                const n = Number(localStorage.getItem('postCheckoutFinalizeNextAttemptAt') || '0');
+                return Number.isFinite(n) ? n : 0;
+            } catch {
+                return 0;
+            }
+        })();
+        const nowMs = Date.now();
+        if (nextAttemptAt && nowMs < nextAttemptAt) return;
+        if (attemptCount >= MAX_FINALIZE_ATTEMPTS) {
+            try {
+                localStorage.removeItem('postCheckoutSessionId');
+                localStorage.removeItem('postCheckoutFinalizeAttemptCount');
+                localStorage.removeItem('postCheckoutFinalizeNextAttemptAt');
+            } catch {}
+            showToast('We couldn’t finalize your subscription automatically. Please restart checkout from the Pricing page.', 'error');
+            return;
+        }
+
         const finalize = async () => {
             setIsFinalizingCheckout(true);
-            try {
-                // Prevent rapid retry loops (which can trigger Firebase auth/quota-exceeded).
-                // We lock per sessionId for a short period; user can always refresh to retry after the lock expires.
-                const lockKey = `postCheckoutFinalizeLock:${postCheckoutSessionId}`;
-                const nowMs = Date.now();
+            let backoffRecorded = false;
+            const recordBackoff = () => {
+                if (backoffRecorded) return;
+                backoffRecorded = true;
                 try {
-                    const lockRaw = localStorage.getItem(lockKey);
-                    const lockUntil = lockRaw ? Number(lockRaw) : NaN;
-                    if (Number.isFinite(lockUntil) && lockUntil > nowMs) {
-                        return;
-                    }
-                    // lock for 30s
-                    localStorage.setItem(lockKey, String(nowMs + 30_000));
+                    const current = Number(localStorage.getItem('postCheckoutFinalizeAttemptCount') || '0');
+                    const currentCount = Number.isFinite(current) ? current : 0;
+                    const nextCount = currentCount + 1;
+                    const backoffMs = Math.min(30000, 1000 * Math.pow(2, Math.max(0, nextCount - 1))); // 1s,2s,4s,8s,16s,30s...
+                    localStorage.setItem('postCheckoutFinalizeAttemptCount', String(nextCount));
+                    localStorage.setItem('postCheckoutFinalizeNextAttemptAt', String(Date.now() + backoffMs));
                 } catch {}
-
+            };
+            try {
                 // Get auth token for API call
                 const { auth: fbAuth } = await import('./firebaseConfig');
-                // Don't force refresh; repeated forced refresh can hit securetoken rate limits.
-                const token = fbAuth.currentUser ? await fbAuth.currentUser.getIdToken(false) : null;
+                // Do NOT force refresh (`true`) here — on repeated failures that can quickly hit Firebase Auth quotas.
+                const token = fbAuth.currentUser ? await fbAuth.currentUser.getIdToken() : null;
                 if (!token) throw new Error('Not authenticated');
 
                 // Verify and apply plan immediately (server-side)
@@ -444,10 +516,45 @@ const AppContent: React.FC = () => {
 
                 if (!resp.ok) {
                     let msg = 'Failed to verify checkout';
+                    let code: string | null = null;
                     try {
                         const j = await resp.json();
                         msg = j?.message || j?.error || msg;
+                        code = j?.code || null;
                     } catch {}
+
+                    // Terminal cases: stop retrying (prevents endless 401/403 spam).
+                    if (resp.status === 401) {
+                        try {
+                            localStorage.removeItem('postCheckoutSessionId');
+                            localStorage.removeItem('postCheckoutFinalizeAttemptCount');
+                            localStorage.removeItem('postCheckoutFinalizeNextAttemptAt');
+                        } catch {}
+                        showToast('Please sign in again to finalize your subscription.', 'error');
+                        return;
+                    }
+                    if (resp.status === 403) {
+                        try {
+                            localStorage.removeItem('postCheckoutSessionId');
+                            localStorage.removeItem('postCheckoutFinalizeAttemptCount');
+                            localStorage.removeItem('postCheckoutFinalizeNextAttemptAt');
+                        } catch {}
+                        showToast(
+                            msg || 'This checkout session belongs to a different account. Please sign in with the correct account and try again.',
+                            'error'
+                        );
+                        return;
+                    }
+
+                    // Retryable cases: record backoff so we don’t hammer the API/Firebase.
+                    recordBackoff();
+
+                    // If Stripe says the session isn’t complete yet, avoid a scary error toast.
+                    if (resp.status === 409 || code === 'CHECKOUT_NOT_COMPLETE') {
+                        showToast('Finalizing your subscription… please wait a moment.', 'info');
+                        return;
+                    }
+
                     throw new Error(msg);
                 }
 
@@ -463,20 +570,22 @@ const AppContent: React.FC = () => {
 
                 // Clear only after successful verification so this is safe/reversible.
                 try {
-                    localStorage.removeItem(`postCheckoutFinalizeLock:${postCheckoutSessionId}`);
                     localStorage.removeItem('postCheckoutSessionId');
                     localStorage.removeItem('paymentAttempt');
                     localStorage.removeItem('paymentAttemptPrompted');
                     localStorage.removeItem('paymentAttemptPromptedAt');
                     localStorage.removeItem('pendingSignup');
+                    localStorage.removeItem('postCheckoutFinalizeAttemptCount');
+                    localStorage.removeItem('postCheckoutFinalizeNextAttemptAt');
                 } catch {}
 
                 // Start onboarding on the dashboard for the paid plan the user chose.
                 setOnboardingStep('creator');
             } catch (err: any) {
                 console.error('Failed to finalize checkout session:', err);
-                // Keep postCheckoutSessionId so we can retry on next render/auth refresh.
-                showToast('We’re finalizing your subscription. If this doesn’t complete in a moment, refresh the page.', 'error');
+                // Keep postCheckoutSessionId so we can retry later, but rate-limited by the backoff above.
+                recordBackoff();
+                showToast('We’re finalizing your subscription. If this doesn’t complete shortly, refresh the page.', 'error');
             } finally {
                 setIsFinalizingCheckout(false);
             }

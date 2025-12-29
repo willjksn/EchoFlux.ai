@@ -172,3 +172,4 @@ If you want to use your custom Firestore promotion system:
 - **Solution**: Update PaymentModal to pass Stripe Coupon ID instead of Firestore promotion ID
 
 
+

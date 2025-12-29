@@ -138,7 +138,7 @@ export const MaintenancePage: React.FC<MaintenancePageProps> = ({ allowedEmail, 
                     )}
 
                     <div className="mt-8 text-sm text-gray-500 dark:text-gray-400">
-                        <p>Questions? Contact us at <a href="mailto:contact@echoflux.ai" className="text-primary-600 dark:text-primary-400 hover:underline">contact@echoflux.ai</a></p>
+                        <p>Questions? Contact us at <a href="mailto:support@echoflux.ai" className="text-primary-600 dark:text-primary-400 hover:underline">support@echoflux.ai</a></p>
                     </div>
                 </div>
 

@@ -103,6 +103,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
+  const [isValidatingInvite, setIsValidatingInvite] = useState(false);
+  const [inviteCodeValid, setInviteCodeValid] = useState<boolean | null>(null);
+  const [inviteGrantPlan, setInviteGrantPlan] = useState<'Pro' | 'Elite' | null>(null);
+  const [inviteExpiresAt, setInviteExpiresAt] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [viewingPolicy, setViewingPolicy] = useState<'terms' | 'privacy' | null>(null);
   const [errorModal, setErrorModal] = useState<{ show: boolean; message: string }>({ show: false, message: '' });
@@ -141,6 +146,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     // Reset forgot password state when switching views
     setShowForgotPassword(false);
     setForgotPasswordEmail('');
+    // Reset invite code when switching views
+    setInviteCode('');
+    setInviteCodeValid(null);
+    setInviteGrantPlan(null);
+    setInviteExpiresAt(null);
   }, [initialView]);
 
   // Check password requirements in real-time
@@ -171,6 +181,15 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   // Validate signup form
   const validateSignup = (): boolean => {
     const errors: Record<string, string> = {};
+
+    // Invite code (required)
+    if (!inviteCode || inviteCode.trim() === '') {
+      errors.inviteCode = 'Invite code is required';
+    } else if (inviteCodeValid === false) {
+      errors.inviteCode = 'Invalid invite code. Please check and try again.';
+    } else if (!inviteGrantPlan) {
+      errors.inviteCode = 'Invite code is not configured with access. Please contact support.';
+    }
 
     // Validate full name
     if (!fullName || fullName.trim().length < 2) {
@@ -320,28 +339,61 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           console.warn('Could not check if email exists:', checkError);
         }
 
-        // Store signup info temporarily - don't create account yet
-        // We'll create the account after plan selection
-        const signupData = {
-          email,
-          password,
-          fullName: fullName.trim(),
-          selectedPlan: selectedPlan || null,
-          timestamp: Date.now(),
-        };
-
-        // Store in localStorage temporarily (will be cleared after account creation)
-        localStorage.setItem('pendingSignup', JSON.stringify(signupData));
-
-        // Close modal and let the plan selection flow handle account creation
-        onClose();
-        
-        // Show message that they need to select a plan
-        if (selectedPlan) {
-          showToast(`Please complete your ${selectedPlan} plan selection to create your account.`, 'success');
-        } else {
-          showToast('Please select a plan to complete your signup.', 'success');
+        // Re-validate invite code on submit and fetch grant metadata (plan + expiry)
+        let grantPlan: 'Pro' | 'Elite' | null = inviteGrantPlan;
+        let expiresAt: string | null = inviteExpiresAt;
+        try {
+          const resp = await fetch('/api/validateInviteCode', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ inviteCode: inviteCode.trim() }),
+          });
+          const data = await resp.json().catch(() => ({}));
+          if (!data?.valid || (data?.grantPlan !== 'Pro' && data?.grantPlan !== 'Elite')) {
+            setInviteCodeValid(false);
+            setInviteGrantPlan(null);
+            setInviteExpiresAt(null);
+            setValidationErrors(prev => ({ ...prev, inviteCode: data?.error || 'Invalid invite code' }));
+            setIsLoading(false);
+            return;
+          }
+          grantPlan = data.grantPlan;
+          expiresAt = data.expiresAt || null;
+          setInviteCodeValid(true);
+          setInviteGrantPlan(grantPlan);
+          setInviteExpiresAt(expiresAt);
+        } catch {
+          setValidationErrors(prev => ({ ...prev, inviteCode: 'Failed to validate invite code' }));
+          setIsLoading(false);
+          return;
         }
+
+        // Create Firebase Auth account immediately and redeem invite (no plan picker, no Stripe).
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        await updateProfile(userCredential.user, { displayName: fullName.trim() || 'New User' });
+
+        const token = await userCredential.user.getIdToken();
+        const redeemResp = await fetch('/api/redeemInviteCode', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ inviteCode: inviteCode.trim(), fullName: fullName.trim() }),
+        });
+        const redeemData = await redeemResp.json().catch(() => ({}));
+        if (!redeemResp.ok || !redeemData?.success) {
+          try { await signOut(auth); } catch {}
+          setErrorModal({ show: true, message: redeemData?.error || 'Failed to redeem invite code. Please contact support.' });
+          setIsLoading(false);
+          return;
+        }
+
+        // Ensure no legacy pending signup state lingers (we no longer use plan selection in this flow)
+        try { localStorage.removeItem('pendingSignup'); } catch {}
+
+        showToast(`Account created. You now have ${grantPlan} access.`, 'success');
+        onClose();
       }
     } catch (error: any) {
       console.error('Auth error:', error);
@@ -451,30 +503,37 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         return;
       }
 
-      // IMPORTANT: For Google sign-up, Firebase auth completes immediately, which can race AuthContext.
-      // We pre-write a minimal pendingSignup so AuthContext will NOT auto-create a Free user doc.
-      // We'll update this object with real Google profile data after sign-in completes.
+      // Invite code is required for sign-up (not required for login)
       if (startedGoogleSignup) {
+        if (!inviteCode || inviteCode.trim() === '') {
+          setValidationErrors({ inviteCode: 'Invite code is required' });
+          setIsLoading(false);
+          return;
+        }
+
+        // Validate invite before opening popup (fast fail)
         try {
-          const existingPending = localStorage.getItem('pendingSignup');
-          if (!existingPending) {
-            localStorage.setItem(
-              'pendingSignup',
-              JSON.stringify({
-                email: '',
-                password: '',
-                fullName: '',
-                selectedPlan: selectedPlan || null,
-                timestamp: Date.now(),
-                isGoogleSignup: true,
-                googleUid: null,
-                googlePhotoURL: null,
-              })
-            );
+          const resp = await fetch('/api/validateInviteCode', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ inviteCode: inviteCode.trim() }),
+          });
+          const data = await resp.json().catch(() => ({}));
+          if (!data?.valid || (data?.grantPlan !== 'Pro' && data?.grantPlan !== 'Elite')) {
+            setInviteCodeValid(false);
+            setInviteGrantPlan(null);
+            setInviteExpiresAt(null);
+            setValidationErrors({ inviteCode: data?.error || 'Invalid invite code' });
+            setIsLoading(false);
+            return;
           }
+          setInviteCodeValid(true);
+          setInviteGrantPlan(data.grantPlan);
+          setInviteExpiresAt(data.expiresAt || null);
         } catch {
-          // If storage is unavailable, we can't safely defer doc creation;
-          // allow flow to proceed (worst case: user gets Free onboarding).
+          setValidationErrors({ inviteCode: 'Failed to validate invite code' });
+          setIsLoading(false);
+          return;
         }
       }
 
@@ -501,25 +560,30 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         const userSnap = await getDoc(userRef);
         
         if (!userSnap.exists()) {
-          // New user during signup - store as pending signup
-          // AuthContext will see this and not create the document yet
-          const signupData = {
-            email: result.user.email || '',
-            password: '', // Google sign-in doesn't have password
-            fullName: result.user.displayName || 'New User',
-            selectedPlan: selectedPlan || null,
-            timestamp: Date.now(),
-            isGoogleSignup: true, // Flag to indicate Google signup
-            googleUid: result.user.uid, // Store the UID for later
-            googlePhotoURL: result.user.photoURL || null,
-          };
-          
-          localStorage.setItem('pendingSignup', JSON.stringify(signupData));
-          
-          // Close modal - AuthContext will handle not creating the document
-          // and App.tsx will show the plan selector
+          // New user: redeem invite and grant access (no plan selector, no Stripe)
+          const token = await result.user.getIdToken();
+          const redeemResp = await fetch('/api/redeemInviteCode', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              inviteCode: inviteCode.trim(),
+              fullName: result.user.displayName || 'New User',
+            }),
+          });
+          const redeemData = await redeemResp.json().catch(() => ({}));
+          if (!redeemResp.ok || !redeemData?.success) {
+            await signOut(auth);
+            setErrorModal({ show: true, message: redeemData?.error || 'Failed to redeem invite code. Please contact support.' });
+            setIsLoading(false);
+            return;
+          }
+
+          try { localStorage.removeItem('pendingSignup'); } catch {}
+          showToast(`Account created. You now have ${redeemData.grantPlan} access.`, 'success');
           onClose();
-          showToast('Please select a plan to complete your signup.', 'success');
           setIsLoading(false);
           return;
         } else {
@@ -650,27 +714,99 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               {!isLogin && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Full Name
-                  </label>
-                  <input
-                    type="text"
-                    value={fullName}
-                    onChange={(e) => {
-                      setFullName(e.target.value);
-                      if (validationErrors.fullName) {
-                        setValidationErrors(prev => ({ ...prev, fullName: '' }));
-                      }
-                    }}
-                    placeholder="Full Name"
-                    className={`${inputClasses} ${validationErrors.fullName ? 'border-red-500 focus:ring-red-500' : ''}`}
-                    autoComplete="name"
-                  />
-                  {validationErrors.fullName && (
-                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{validationErrors.fullName}</p>
-                  )}
-                </div>
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Invite Code <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={inviteCode}
+                      onChange={(e) => {
+                        const value = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 9);
+                        setInviteCode(value);
+                        setInviteCodeValid(null);
+                        if (validationErrors.inviteCode) {
+                          setValidationErrors(prev => ({ ...prev, inviteCode: '' }));
+                        }
+                      }}
+                      onBlur={async () => {
+                        if (inviteCode.trim().length >= 4) {
+                          setIsValidatingInvite(true);
+                          try {
+                            const resp = await fetch('/api/validateInviteCode', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ inviteCode: inviteCode.trim() }),
+                            });
+                            const data = await resp.json();
+                            setInviteCodeValid(data.valid === true);
+                            if (!data.valid) {
+                              setInviteGrantPlan(null);
+                              setInviteExpiresAt(null);
+                              setValidationErrors(prev => ({ ...prev, inviteCode: data.error || 'Invalid invite code' }));
+                            } else {
+                              const gp = data?.grantPlan;
+                              if (gp === 'Pro' || gp === 'Elite') {
+                                setInviteGrantPlan(gp);
+                                setInviteExpiresAt(data?.expiresAt || null);
+                              } else {
+                                setInviteCodeValid(false);
+                                setInviteGrantPlan(null);
+                                setInviteExpiresAt(null);
+                                setValidationErrors(prev => ({ ...prev, inviteCode: 'Invite code is not configured with access.' }));
+                              }
+                            }
+                          } catch (err) {
+                            setInviteCodeValid(false);
+                            setInviteGrantPlan(null);
+                            setInviteExpiresAt(null);
+                            setValidationErrors(prev => ({ ...prev, inviteCode: 'Failed to validate invite code' }));
+                          } finally {
+                            setIsValidatingInvite(false);
+                          }
+                        }
+                      }}
+                      placeholder="XXXX-XXXX"
+                      className={`${inputClasses} ${validationErrors.inviteCode ? 'border-red-500 focus:ring-red-500' : inviteCodeValid === true ? 'border-green-500 focus:ring-green-500' : ''} ${isValidatingInvite ? 'opacity-50' : ''}`}
+                      autoComplete="off"
+                      disabled={isValidatingInvite}
+                    />
+                    {isValidatingInvite && (
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Validating...</p>
+                    )}
+                    {inviteCodeValid === true && !isValidatingInvite && (
+                      <p className="mt-1 text-xs text-green-600 dark:text-green-400">✓ Invite code is valid</p>
+                    )}
+                    {validationErrors.inviteCode && (
+                      <p className="mt-1 text-sm text-red-600 dark:text-red-400">{validationErrors.inviteCode}</p>
+                    )}
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      An invite code is required. Contact support if you need one.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Full Name
+                    </label>
+                    <input
+                      type="text"
+                      value={fullName}
+                      onChange={(e) => {
+                        setFullName(e.target.value);
+                        if (validationErrors.fullName) {
+                          setValidationErrors(prev => ({ ...prev, fullName: '' }));
+                        }
+                      }}
+                      placeholder="Full Name"
+                      className={`${inputClasses} ${validationErrors.fullName ? 'border-red-500 focus:ring-red-500' : ''}`}
+                      autoComplete="name"
+                    />
+                    {validationErrors.fullName && (
+                      <p className="mt-1 text-sm text-red-600 dark:text-red-400">{validationErrors.fullName}</p>
+                    )}
+                  </div>
+                </>
               )}
 
               <div>

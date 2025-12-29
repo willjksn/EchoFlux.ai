@@ -9,6 +9,7 @@ interface PendingSignupData {
   email: string;
   password: string;
   fullName: string;
+  inviteCode?: string;
   selectedPlan: string | null;
   timestamp: number;
   isGoogleSignup?: boolean;
@@ -120,6 +121,24 @@ export async function createAccountFromPendingSignup(): Promise<{ success: boole
       });
       
       currentUser = userCredential.user;
+    }
+
+    // Mark invite code as used (if provided)
+    if (pendingSignup.inviteCode && currentUser) {
+      try {
+        const token = await currentUser.getIdToken();
+        await fetch('/api/useInviteCode', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({ inviteCode: pendingSignup.inviteCode }),
+        });
+      } catch (inviteError) {
+        console.error('Failed to mark invite code as used:', inviteError);
+        // Don't fail account creation if invite marking fails - log it
+      }
     }
 
     // For paid plans, don't clear pendingSignup yet - wait for payment to succeed

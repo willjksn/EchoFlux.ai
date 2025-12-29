@@ -120,3 +120,4 @@ The Sentry configuration is in `src/sentry.ts`. Key settings:
 **Note**: Error tracking will be disabled if `VITE_SENTRY_DSN` is not set, so the app will work normally during development without Sentry configured.
 
 
+

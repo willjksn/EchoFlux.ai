@@ -94,6 +94,35 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         socialStats: loaded.socialStats || generateMockSocialStats(),
                     };
 
+                    // Expire invite-granted access (do not affect Stripe subscribers).
+                    // If expired, downgrade to Free and force user to upgrade via Stripe (Pricing).
+                    try {
+                        const status = (mergedUser as any)?.subscriptionStatus as string | undefined;
+                        const inviteGrantPlan = (mergedUser as any)?.inviteGrantPlan as string | undefined;
+                        const expiresAtIso = (mergedUser as any)?.inviteGrantExpiresAt as string | null | undefined;
+                        const hasStripeSubscription = !!(mergedUser as any)?.stripeSubscriptionId;
+
+                        const isInviteGrant = status === 'invite_grant' || !!inviteGrantPlan;
+                        if (isInviteGrant && !hasStripeSubscription && typeof expiresAtIso === 'string' && expiresAtIso) {
+                            const expiresMs = new Date(expiresAtIso).getTime();
+                            if (Number.isFinite(expiresMs) && expiresMs < Date.now()) {
+                                const nowIso = new Date().toISOString();
+                                (mergedUser as any).plan = 'Free';
+                                (mergedUser as any).subscriptionStatus = 'invite_grant_expired';
+                                (mergedUser as any).inviteGrantExpiredAt = nowIso;
+
+                                // Persist downgrade so it stays consistent across refresh/devices.
+                                await setDoc(ref, {
+                                    plan: 'Free',
+                                    subscriptionStatus: 'invite_grant_expired',
+                                    inviteGrantExpiredAt: nowIso,
+                                } as any, { merge: true });
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('Invite grant expiry check failed:', e);
+                    }
+
                     setUserState(mergedUser);
 
                 } else {
@@ -208,6 +237,49 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const handleLogout = async () => {
+        // Clear any signup/checkout state that should never survive a manual logout.
+        // This prevents showing the plan-selector modal (pendingSignup) on next visit,
+        // and avoids stale Stripe finalize attempts tied to a different user.
+        if (typeof window !== 'undefined') {
+            try {
+                localStorage.removeItem('pendingSignup');
+                localStorage.removeItem('pendingPlan');
+                localStorage.removeItem('paymentAttempt');
+                localStorage.removeItem('paymentAttemptPrompted');
+                localStorage.removeItem('paymentAttemptPromptedAt');
+                localStorage.removeItem('postCheckoutSessionId');
+                localStorage.removeItem('postCheckoutFinalizeAttemptCount');
+                localStorage.removeItem('postCheckoutFinalizeNextAttemptAt');
+            } catch {}
+
+            // If the user logs out while on an authenticated route, force URL back to landing.
+            // (UIContext only keeps the URL in sync while authenticated.)
+            try {
+                const path = window.location.pathname || '/';
+                const isAuthenticatedRoute = path.startsWith('/dashboard') ||
+                    path.startsWith('/inbox') ||
+                    path.startsWith('/analytics') ||
+                    path.startsWith('/settings') ||
+                    path.startsWith('/compose') ||
+                    path.startsWith('/calendar') ||
+                    path.startsWith('/approvals') ||
+                    path.startsWith('/team') ||
+                    path.startsWith('/opportunities') ||
+                    path.startsWith('/profile') ||
+                    path.startsWith('/clients') ||
+                    path.startsWith('/admin') ||
+                    path.startsWith('/automation') ||
+                    path.startsWith('/strategy') ||
+                    path.startsWith('/ads') ||
+                    path.startsWith('/mediaLibrary') ||
+                    path.startsWith('/autopilot') ||
+                    path.startsWith('/onlyfansStudio');
+                if (isAuthenticatedRoute) {
+                    window.history.replaceState({}, '', '/');
+                }
+            } catch {}
+        }
+
         await signOut(auth);
         setUserState(null);
     };

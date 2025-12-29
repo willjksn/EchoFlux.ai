@@ -8,6 +8,7 @@ import { getLatestTrends, getOnlyFansWeeklyTrends } from "./_trendsHelper.js";
 import { researchNicheStrategy } from "./_nicheResearch.js";
 import { canGenerateStrategy, recordStrategyGeneration } from "./_strategyUsage.js";
 import { getOnlyFansResearchContext } from "./_onlyfansResearch.js";
+import { checkRateLimit, getRateLimitHeaders } from "./_rateLimiter.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -20,6 +21,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
+
+  // Rate limiting: 5 requests per minute per user (strategy generation is expensive)
+  const rateLimit = checkRateLimit(authUser.uid, 5, 60000);
+  if (!rateLimit.allowed) {
+    res.status(429).json({
+      error: "Rate limit exceeded",
+      note: `Too many strategy generation requests. Please try again after ${new Date(rateLimit.resetTime).toLocaleTimeString()}`,
+      retryAfter: Math.ceil((rateLimit.resetTime - Date.now()) / 1000),
+    });
+    return;
+  }
+  // Add rate limit headers
+  Object.entries(getRateLimitHeaders(rateLimit.remaining, rateLimit.resetTime, 5))
+    .forEach(([key, value]) => res.setHeader(key, value));
 
   // Fetch user's plan and role from Firestore
   const db = getAdminDb();

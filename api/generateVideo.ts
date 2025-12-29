@@ -1,6 +1,7 @@
 // api/generateVideo.ts
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { verifyAuth } from "./verifyAuth.js";
+import { checkRateLimit, getRateLimitHeaders } from "./_rateLimiter.js";
 import Replicate from "replicate";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -12,6 +13,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!user) {
     return res.status(401).json({ error: "Unauthorized" });
   }
+
+  // Rate limiting: 3 requests per minute per user (video generation is very expensive)
+  const rateLimit = checkRateLimit(user.uid, 3, 60000);
+  if (!rateLimit.allowed) {
+    return res.status(429).json({
+      success: false,
+      error: "Rate limit exceeded",
+      note: `Too many video generation requests. Please try again after ${new Date(rateLimit.resetTime).toLocaleTimeString()}`,
+      retryAfter: Math.ceil((rateLimit.resetTime - Date.now()) / 1000),
+    });
+  }
+  // Add rate limit headers
+  Object.entries(getRateLimitHeaders(rateLimit.remaining, rateLimit.resetTime, 3))
+    .forEach(([key, value]) => res.setHeader(key, value));
 
   const { prompt, baseImage, aspectRatio = "9:16", allowExplicit = false } = (req.body as any) || {};
 

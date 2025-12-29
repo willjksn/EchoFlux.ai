@@ -6,6 +6,7 @@ import { getAdminDb } from "./_firebaseAdmin.js";
 import { trackModelUsage } from "./trackModelUsage.js";
 import { getLatestTrends } from "./_trendsHelper.js";
 import { ComposeInsightLimitError, enforceAndRecordComposeInsightUsage } from "./_composeInsightsUsage.js";
+import { checkRateLimit, getRateLimitHeaders } from "./_rateLimiter.js";
 
 /**
  * Smart Content Gap Analysis
@@ -35,6 +36,21 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
+
+  // Rate limiting: 5 requests per minute per user (content gap analysis is expensive)
+  const rateLimit = checkRateLimit(user.uid, 5, 60000);
+  if (!rateLimit.allowed) {
+    res.status(429).json({
+      success: false,
+      error: "Rate limit exceeded",
+      note: `Too many content gap analysis requests. Please try again after ${new Date(rateLimit.resetTime).toLocaleTimeString()}`,
+      retryAfter: Math.ceil((rateLimit.resetTime - Date.now()) / 1000),
+    });
+    return;
+  }
+  // Add rate limit headers
+  Object.entries(getRateLimitHeaders(rateLimit.remaining, rateLimit.resetTime, 5))
+    .forEach(([key, value]) => res.setHeader(key, value));
 
   const { 
     daysToAnalyze = 90,

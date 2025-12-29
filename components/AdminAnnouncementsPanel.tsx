@@ -429,7 +429,7 @@ export const AdminAnnouncementsPanel: React.FC = () => {
             value={bulkReason}
             onChange={(e) => setBulkReason(e.target.value)}
             className="w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
-            placeholder="e.g., Launch promo, goodwill credit, beta testers"
+            placeholder="e.g., Launch promo, goodwill credit, early access users"
           />
         </div>
 

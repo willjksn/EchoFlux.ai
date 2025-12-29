@@ -47,7 +47,3 @@ export const canBypassMaintenance = (email: string | null | undefined): boolean 
     return email.toLowerCase() === allowedEmail.toLowerCase();
 };
 
-// NOTE:
-// Invite-only allowlisting is intentionally NOT implemented here because this file is bundled
-// into the browser when using VITE_ variables. Invite-only allowlists must remain server-side.
-
