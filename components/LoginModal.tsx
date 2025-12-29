@@ -97,21 +97,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 }) => {
   const { showToast } = useAppContext();
 
-  const checkInvite = async (emailToCheck: string): Promise<{ inviteOnly: boolean; allowed: boolean }> => {
-    try {
-      const res = await fetch('/api/checkInvite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: emailToCheck }),
-      });
-      const data: any = await res.json();
-      return { inviteOnly: !!data.inviteOnly, allowed: !!data.allowed };
-    } catch {
-      // Fail open on transient network issues
-      return { inviteOnly: false, allowed: true };
-    }
-  };
-
   // derive initial mode from initialView
   const [isLogin, setIsLogin] = useState(initialView === 'login');
   const [fullName, setFullName] = useState('');
@@ -244,16 +229,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     setValidationErrors({}); // Clear previous errors
 
     try {
-      // Invite-only gate (server-side allowlist): prevent login/signup with non-invited emails
-      if (email) {
-        const invite = await checkInvite(email);
-        if (invite.inviteOnly && !invite.allowed) {
-          showToast('Invite-only beta: this email is not approved yet. Contact contact@echoflux.ai for access.', 'error');
-          setIsLoading(false);
-          return;
-        }
-      }
-
       // Check maintenance mode
       if (isMaintenanceMode()) {
         // Allow bypass for whitelisted email
@@ -363,9 +338,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         
         // Show message that they need to select a plan
         if (selectedPlan) {
-          showToast(`Please complete your ${selectedPlan} plan selection to create your account.`, 'info');
+          showToast(`Please complete your ${selectedPlan} plan selection to create your account.`, 'success');
         } else {
-          showToast('Please select a plan to complete your signup.', 'info');
+          showToast('Please select a plan to complete your signup.', 'success');
         }
       }
     } catch (error: any) {
@@ -460,6 +435,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
+    const startedGoogleSignup = !isLogin; // capture current mode at click time
     try {
       // Check maintenance mode
       if (isMaintenanceMode()) {
@@ -468,9 +444,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         return;
       }
 
-      // Invite-only gate (server-side allowlist): validate Google email post-auth
-      // (We cannot pre-check before the popup because we don't know which account they'll pick.)
-
       // Validate terms acceptance for signup
       if (!isLogin && !acceptedTerms) {
         setValidationErrors({ terms: 'You must accept the Terms of Service and Privacy Policy to continue' });
@@ -478,24 +451,44 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         return;
       }
 
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-
-      // Invite-only gate (server-side allowlist): immediately sign out non-invited Google accounts
-      if (result.user.email) {
-        const invite = await checkInvite(result.user.email);
-        if (invite.inviteOnly && !invite.allowed) {
-          await signOut(auth);
-          showToast('Invite-only beta: this Google account is not approved yet. Contact contact@echoflux.ai for access.', 'error');
-          setIsLoading(false);
-          return;
+      // IMPORTANT: For Google sign-up, Firebase auth completes immediately, which can race AuthContext.
+      // We pre-write a minimal pendingSignup so AuthContext will NOT auto-create a Free user doc.
+      // We'll update this object with real Google profile data after sign-in completes.
+      if (startedGoogleSignup) {
+        try {
+          const existingPending = localStorage.getItem('pendingSignup');
+          if (!existingPending) {
+            localStorage.setItem(
+              'pendingSignup',
+              JSON.stringify({
+                email: '',
+                password: '',
+                fullName: '',
+                selectedPlan: selectedPlan || null,
+                timestamp: Date.now(),
+                isGoogleSignup: true,
+                googleUid: null,
+                googlePhotoURL: null,
+              })
+            );
+          }
+        } catch {
+          // If storage is unavailable, we can't safely defer doc creation;
+          // allow flow to proceed (worst case: user gets Free onboarding).
         }
       }
+
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
       
       // Check if user can bypass after Google sign-in
       if (isMaintenanceMode() && !canBypassMaintenance(result.user.email)) {
         // Sign them out if they can't bypass
         await signOut(auth);
+        // Cleanup pending signup marker if we created it
+        if (startedGoogleSignup) {
+          try { localStorage.removeItem('pendingSignup'); } catch {}
+        }
         showToast('The site is currently in maintenance mode. Please check back soon.', 'error');
         setIsLoading(false);
         return;
@@ -526,9 +519,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           // Close modal - AuthContext will handle not creating the document
           // and App.tsx will show the plan selector
           onClose();
-          showToast('Please select a plan to complete your signup.', 'info');
+          showToast('Please select a plan to complete your signup.', 'success');
           setIsLoading(false);
           return;
+        } else {
+          // Existing user clicked Google on the sign-up tab — treat as login and cleanup any pending marker.
+          try { localStorage.removeItem('pendingSignup'); } catch {}
         }
       }
       
@@ -541,6 +537,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       
       if (error.code === 'auth/popup-closed-by-user') {
         // User closed the popup - don't show error, just stop loading
+        if (startedGoogleSignup) {
+          try { localStorage.removeItem('pendingSignup'); } catch {}
+        }
         setIsLoading(false);
         return;
       } else if (error.code === 'auth/popup-blocked') {
@@ -553,6 +552,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         errorMessage = error.message;
       }
       
+      if (startedGoogleSignup) {
+        try { localStorage.removeItem('pendingSignup'); } catch {}
+      }
       showToast(errorMessage, 'error');
     } finally {
       setIsLoading(false);
