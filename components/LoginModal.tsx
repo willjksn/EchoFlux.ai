@@ -14,7 +14,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import type { Plan } from '../types';
-import { isMaintenanceMode, canBypassMaintenance, isInviteOnlyMode, isInvitedEmail } from '../src/utils/maintenance';
+import { isMaintenanceMode, canBypassMaintenance } from '../src/utils/maintenance';
 
 /* ---------- Terms & Privacy content (unchanged) ---------- */
 
@@ -96,6 +96,21 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   selectedPlan,
 }) => {
   const { showToast } = useAppContext();
+
+  const checkInvite = async (emailToCheck: string): Promise<{ inviteOnly: boolean; allowed: boolean }> => {
+    try {
+      const res = await fetch('/api/checkInvite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailToCheck }),
+      });
+      const data: any = await res.json();
+      return { inviteOnly: !!data.inviteOnly, allowed: !!data.allowed };
+    } catch {
+      // Fail open on transient network issues
+      return { inviteOnly: false, allowed: true };
+    }
+  };
 
   // derive initial mode from initialView
   const [isLogin, setIsLogin] = useState(initialView === 'login');
@@ -229,11 +244,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     setValidationErrors({}); // Clear previous errors
 
     try {
-      // Invite-only gate: prevent login/signup with non-invited emails
-      if (isInviteOnlyMode() && !isInvitedEmail(email)) {
-        showToast('Invite-only beta: this email is not approved yet. Contact contact@echoflux.ai for access.', 'error');
-        setIsLoading(false);
-        return;
+      // Invite-only gate (server-side allowlist): prevent login/signup with non-invited emails
+      if (email) {
+        const invite = await checkInvite(email);
+        if (invite.inviteOnly && !invite.allowed) {
+          showToast('Invite-only beta: this email is not approved yet. Contact contact@echoflux.ai for access.', 'error');
+          setIsLoading(false);
+          return;
+        }
       }
 
       // Check maintenance mode
@@ -450,6 +468,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         return;
       }
 
+      // Invite-only gate (server-side allowlist): validate Google email post-auth
+      // (We cannot pre-check before the popup because we don't know which account they'll pick.)
+
       // Validate terms acceptance for signup
       if (!isLogin && !acceptedTerms) {
         setValidationErrors({ terms: 'You must accept the Terms of Service and Privacy Policy to continue' });
@@ -460,12 +481,15 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
 
-      // Invite-only gate: immediately sign out non-invited Google accounts
-      if (isInviteOnlyMode() && !isInvitedEmail(result.user.email)) {
-        await signOut(auth);
-        showToast('Invite-only beta: this Google account is not approved yet. Contact contact@echoflux.ai for access.', 'error');
-        setIsLoading(false);
-        return;
+      // Invite-only gate (server-side allowlist): immediately sign out non-invited Google accounts
+      if (result.user.email) {
+        const invite = await checkInvite(result.user.email);
+        if (invite.inviteOnly && !invite.allowed) {
+          await signOut(auth);
+          showToast('Invite-only beta: this Google account is not approved yet. Contact contact@echoflux.ai for access.', 'error');
+          setIsLoading(false);
+          return;
+        }
       }
       
       // Check if user can bypass after Google sign-in

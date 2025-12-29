@@ -33,7 +33,7 @@ import { CreatorOnboardingModal } from './components/CreatorOnboardingModal';
 import { PlanSelectorModal } from './components/PlanSelectorModal';
 import { MaintenancePage } from './components/MaintenancePage';
 import { InviteOnlyPage } from './components/InviteOnlyPage';
-import { isMaintenanceMode, getAllowedEmail, canBypassMaintenance, isInviteOnlyMode, isInvitedEmail } from './src/utils/maintenance';
+import { isMaintenanceMode, getAllowedEmail, canBypassMaintenance } from './src/utils/maintenance';
 import { InteractiveTour } from './components/InteractiveTour';
 import { PaymentModal } from './components/PaymentModal';
 import { Toast } from './components/Toast';
@@ -205,6 +205,11 @@ const AppContent: React.FC = () => {
     const [loginModalInitialView, setLoginModalInitialView] = useState<'login' | 'signup'>('login');
     const [onboardingStep, setOnboardingStep] = useState<'plan-selector' | 'creator' | 'none'>('none');
     const [bypassMaintenance, setBypassMaintenance] = useState(false);
+    const [inviteStatus, setInviteStatus] = useState<{ checked: boolean; inviteOnly: boolean; allowed: boolean }>({
+        checked: false,
+        inviteOnly: false,
+        allowed: true,
+    });
     const [isFinalizingCheckout, setIsFinalizingCheckout] = useState(false);
 
     // Auto-bypass maintenance for whitelisted users
@@ -216,6 +221,44 @@ const AppContent: React.FC = () => {
             }
         }
     }, [isAuthenticated, user]);
+
+    // Invite-only gate (server-side allowlist): check once after auth resolves.
+    useEffect(() => {
+        let cancelled = false;
+        const run = async () => {
+            if (!isAuthenticated || !user?.email) {
+                if (!cancelled) setInviteStatus({ checked: true, inviteOnly: false, allowed: true });
+                return;
+            }
+            try {
+                const { auth: fbAuth } = await import('./firebaseConfig');
+                const token = fbAuth.currentUser ? await fbAuth.currentUser.getIdToken(true) : null;
+                const res = await fetch('/api/checkInvite', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                    body: JSON.stringify({ email: user.email }),
+                });
+                const data: any = await res.json();
+                if (!cancelled) {
+                    setInviteStatus({
+                        checked: true,
+                        inviteOnly: !!data.inviteOnly,
+                        allowed: !!data.allowed,
+                    });
+                }
+            } catch (e) {
+                // Fail open to avoid blocking legitimate users due to transient errors
+                if (!cancelled) setInviteStatus({ checked: true, inviteOnly: false, allowed: true });
+            }
+        };
+        run();
+        return () => {
+            cancelled = true;
+        };
+    }, [isAuthenticated, user?.email]);
 
     // Sync URL with active page for direct access (e.g., /privacy, /terms)
     useEffect(() => {
@@ -548,12 +591,12 @@ const AppContent: React.FC = () => {
         return <div className="h-screen w-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900"><p className="text-gray-500 dark:text-gray-400">Loading...</p></div>;
     }
 
-    // Invite-only gate: authenticated users must be allowlisted (prevents refresh/deep-link access)
-    if (isInviteOnlyMode() && isAuthenticated && user) {
-        const allowed = isInvitedEmail(user.email);
-        if (!allowed) {
-            return <InviteOnlyPage email={user.email} onSignOut={handleLogout} />;
-        }
+    if (isAuthenticated && !inviteStatus.checked) {
+        return <div className="h-screen w-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900"><p className="text-gray-500 dark:text-gray-400">Loading...</p></div>;
+    }
+
+    if (inviteStatus.inviteOnly && isAuthenticated && user && !inviteStatus.allowed) {
+        return <InviteOnlyPage email={user.email} onSignOut={handleLogout} />;
     }
 
     // Check for pending signup - if exists, show plan selector instead of landing page
