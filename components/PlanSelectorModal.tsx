@@ -88,6 +88,21 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
             const pendingSignup = typeof window !== 'undefined' ? localStorage.getItem('pendingSignup') : null;
             
             if (pendingSignup) {
+                // Persist the chosen plan into pendingSignup BEFORE creating the account.
+                // This is required because createAccountFromPendingSignup reads selectedPlan from pendingSignup.
+                try {
+                    const parsed = JSON.parse(pendingSignup);
+                    const updated = {
+                        ...parsed,
+                        selectedPlan,
+                        billingCycle, // used to resume checkout after reload
+                        timestamp: Date.now(),
+                    };
+                    localStorage.setItem('pendingSignup', JSON.stringify(updated));
+                } catch {
+                    // If parsing fails, continue; account creation will handle missing data gracefully.
+                }
+
                 // For Free plan, create account immediately (no payment needed)
                 if (selectedPlan === 'Free') {
                     const result = await createAccountFromPendingSignup();
@@ -122,20 +137,25 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
                     
                     // Wait a moment for auth state to update
                     await new Promise(resolve => setTimeout(resolve, 1500));
-                    
-                    // Open payment modal
-                    // If payment fails, user will be authenticated and can sign in to retry
-                    const planData = plans.find(p => p.name === selectedPlan);
-                    if (planData && openPaymentModal) {
-                        const price = billingCycle === 'annually' ? planData.priceAnnually : planData.priceMonthly;
-                        openPaymentModal({ 
-                            name: selectedPlan, 
-                            price: price,
-                            cycle: billingCycle
-                        });
-                        // Close plan selector modal
-                        onSelect(selectedPlan);
-                    }
+
+                    // Persist checkout intent and reload so AuthContext picks up the newly created user doc.
+                    // This avoids a race where the user state is still null on this render, dropping back to landing.
+                    try {
+                        const attemptRaw = localStorage.getItem('paymentAttempt');
+                        const attempt = attemptRaw ? JSON.parse(attemptRaw) : {};
+                        localStorage.setItem('paymentAttempt', JSON.stringify({
+                            ...attempt,
+                            plan: selectedPlan,
+                            billingCycle,
+                            accountCreated: true,
+                            timestamp: Date.now(),
+                            resumeCheckout: true,
+                        }));
+                    } catch {}
+
+                    // Close plan selector modal in the current render, then reload to resume checkout reliably.
+                    onSelect(selectedPlan);
+                    window.location.reload();
                 }
                 return;
             } else if (user) {

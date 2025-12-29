@@ -515,13 +515,26 @@ export const PaymentModal: React.FC = () => {
             )
         }
 
+        const getPlanRank = (p: string | null | undefined) => {
+            if (!p) return 0;
+            if (p === 'Free') return 0;
+            if (p === 'Pro') return 1;
+            if (p === 'Elite') return 2;
+            return 0;
+        };
+        const currentPlan = (user as any)?.plan as string | undefined;
+        const targetPlan = paymentPlan.name as string;
+        const isDowngrade = getPlanRank(targetPlan) < getPlanRank(currentPlan);
+
         // Check if this is the highest plan (Elite) to avoid showing "Upgrade"
         const isHighestPlan = paymentPlan.name === 'Elite';
-        const headingText = paymentPlan.name.includes('Add-on') 
-            ? 'Activate Add-on' 
-            : isHighestPlan 
-                ? 'Complete Your Purchase' 
-                : 'Upgrade Your Plan';
+        const headingText = paymentPlan.name.includes('Add-on')
+            ? 'Activate Add-on'
+            : isDowngrade
+                ? 'Downgrade Your Plan'
+                : isHighestPlan
+                    ? 'Complete Your Purchase'
+                    : 'Upgrade Your Plan';
         const hasStripeSubscription = Boolean((user as any)?.stripeSubscriptionId);
 
         return (
@@ -530,7 +543,13 @@ export const PaymentModal: React.FC = () => {
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
                         {headingText}
                     </h2>
-                    <p className="mt-1 text-gray-500 dark:text-gray-400">You are purchasing the <span className="font-semibold text-primary-600 dark:text-primary-400">{paymentPlan.name}</span>.</p>
+                    <p className="mt-1 text-gray-500 dark:text-gray-400">
+                        {isDowngrade ? (
+                            <>You are switching to the <span className="font-semibold text-primary-600 dark:text-primary-400">{paymentPlan.name}</span> plan.</>
+                        ) : (
+                            <>You are purchasing the <span className="font-semibold text-primary-600 dark:text-primary-400">{paymentPlan.name}</span>.</>
+                        )}
+                    </p>
                 </div>
                 <form onSubmit={handleSubmit}>
                     <div className="p-6 space-y-4">
@@ -602,7 +621,9 @@ export const PaymentModal: React.FC = () => {
                          <button type="submit" disabled={isLoading} className="w-full flex justify-center py-3 px-4 border border-transparent text-base font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50">
                             {isLoading
                                 ? (hasStripeSubscription ? 'Updating plan...' : 'Redirecting to checkout...')
-                                : (hasStripeSubscription ? 'Confirm Upgrade (Proration Applied)' : `Continue to Checkout - $${(paymentPlan.cycle === 'annually' ? paymentPlan.price * 12 : paymentPlan.price).toFixed(2)}`)}
+                                : (hasStripeSubscription
+                                    ? (isDowngrade ? 'Confirm Downgrade' : 'Confirm Upgrade (Proration Applied)')
+                                    : `Continue to Checkout - $${(paymentPlan.cycle === 'annually' ? paymentPlan.price * 12 : paymentPlan.price).toFixed(2)}`)}
                         </button>
                         <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">
                             {hasStripeSubscription ? 'Proration & billing powered by Stripe' : 'Secure payment powered by Stripe'}

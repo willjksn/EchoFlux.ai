@@ -32,7 +32,6 @@ import { Inbox } from './components/Inbox';
 import { CreatorOnboardingModal } from './components/CreatorOnboardingModal';
 import { PlanSelectorModal } from './components/PlanSelectorModal';
 import { MaintenancePage } from './components/MaintenancePage';
-import { InviteOnlyPage } from './components/InviteOnlyPage';
 import { isMaintenanceMode, getAllowedEmail, canBypassMaintenance } from './src/utils/maintenance';
 import { InteractiveTour } from './components/InteractiveTour';
 import { PaymentModal } from './components/PaymentModal';
@@ -205,11 +204,6 @@ const AppContent: React.FC = () => {
     const [loginModalInitialView, setLoginModalInitialView] = useState<'login' | 'signup'>('login');
     const [onboardingStep, setOnboardingStep] = useState<'plan-selector' | 'creator' | 'none'>('none');
     const [bypassMaintenance, setBypassMaintenance] = useState(false);
-    const [inviteStatus, setInviteStatus] = useState<{ checked: boolean; inviteOnly: boolean; allowed: boolean }>({
-        checked: false,
-        inviteOnly: false,
-        allowed: true,
-    });
     const [isFinalizingCheckout, setIsFinalizingCheckout] = useState(false);
 
     // Auto-bypass maintenance for whitelisted users
@@ -221,44 +215,6 @@ const AppContent: React.FC = () => {
             }
         }
     }, [isAuthenticated, user]);
-
-    // Invite-only gate (server-side allowlist): check once after auth resolves.
-    useEffect(() => {
-        let cancelled = false;
-        const run = async () => {
-            if (!isAuthenticated || !user?.email) {
-                if (!cancelled) setInviteStatus({ checked: true, inviteOnly: false, allowed: true });
-                return;
-            }
-            try {
-                const { auth: fbAuth } = await import('./firebaseConfig');
-                const token = fbAuth.currentUser ? await fbAuth.currentUser.getIdToken(true) : null;
-                const res = await fetch('/api/checkInvite', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                    },
-                    body: JSON.stringify({ email: user.email }),
-                });
-                const data: any = await res.json();
-                if (!cancelled) {
-                    setInviteStatus({
-                        checked: true,
-                        inviteOnly: !!data.inviteOnly,
-                        allowed: !!data.allowed,
-                    });
-                }
-            } catch (e) {
-                // Fail open to avoid blocking legitimate users due to transient errors
-                if (!cancelled) setInviteStatus({ checked: true, inviteOnly: false, allowed: true });
-            }
-        };
-        run();
-        return () => {
-            cancelled = true;
-        };
-    }, [isAuthenticated, user?.email]);
 
     // Sync URL with active page for direct access (e.g., /privacy, /terms)
     useEffect(() => {
@@ -375,6 +331,27 @@ const AppContent: React.FC = () => {
                 setOnboardingStep('none');
                 return;
             }
+
+            // If the user just created an account during plan selection (pendingSignup flow),
+            // resume checkout automatically (so we don't drop back to the landing page).
+            try {
+                const attemptRaw = localStorage.getItem('paymentAttempt');
+                const attempt = attemptRaw ? JSON.parse(attemptRaw) : null;
+                const alreadyPrompted = localStorage.getItem('paymentAttemptPrompted') === 'true';
+
+                if (!alreadyPrompted && attempt?.accountCreated && attempt?.resumeCheckout && (attempt?.plan === 'Pro' || attempt?.plan === 'Elite')) {
+                    const cycle = (attempt?.billingCycle === 'annually' ? 'annually' : 'monthly') as 'monthly' | 'annually';
+                    const planName = attempt.plan as Plan;
+                    const planData = planName === 'Pro'
+                        ? { name: 'Pro', price: cycle === 'annually' ? 23 : 29, cycle }
+                        : { name: 'Elite', price: cycle === 'annually' ? 47 : 59, cycle };
+
+                    openPaymentModal(planData);
+                    localStorage.setItem('paymentAttemptPrompted', 'true');
+                    setOnboardingStep('none');
+                    return;
+                }
+            } catch {}
 
             // New signup flow: Show plan selector first for users who haven't completed onboarding
             // Exception: If they already have a paid plan (Pro/Elite), they've already selected,
@@ -589,14 +566,6 @@ const AppContent: React.FC = () => {
 
     if (isAuthLoading) {
         return <div className="h-screen w-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900"><p className="text-gray-500 dark:text-gray-400">Loading...</p></div>;
-    }
-
-    if (isAuthenticated && !inviteStatus.checked) {
-        return <div className="h-screen w-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900"><p className="text-gray-500 dark:text-gray-400">Loading...</p></div>;
-    }
-
-    if (inviteStatus.inviteOnly && isAuthenticated && user && !inviteStatus.allowed) {
-        return <InviteOnlyPage email={user.email} onSignOut={handleLogout} />;
     }
 
     // Check for pending signup - if exists, show plan selector instead of landing page
