@@ -3,6 +3,7 @@ import { LogoIcon, SparklesIcon, AutomationIcon, ChatIcon, AnalyticsIcon, Calend
 import { InstagramIcon, TikTokIcon, XIcon, FacebookIcon, YouTubeIcon } from './icons/PlatformIcons';
 import { Pricing } from './Pricing';
 import { Page } from '../types';
+import { WaitlistInlineForm } from './WaitlistInlineForm';
 
 interface LandingPageProps {
   onLoginClick: () => void;
@@ -110,6 +111,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         Explore features
                       </button>
                     </div>
+
+                    <WaitlistInlineForm />
 
                     <div className="mt-6 flex flex-col gap-3">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">

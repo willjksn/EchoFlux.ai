@@ -634,8 +634,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     'focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md mx-4 relative">
+    <div className="fixed inset-0 z-50 flex justify-center bg-black/60 backdrop-blur-sm overflow-y-auto py-6">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md mx-4 relative my-auto max-h-[calc(100vh-3rem)] overflow-hidden flex flex-col">
         {/* Close Button */}
         <button
           onClick={onClose}
@@ -645,7 +645,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         </button>
 
         {/* Header + Login/Signup toggle */}
-        <div className="px-6 pt-6 pb-4 border-b border-gray-200 dark:border-gray-800">
+        <div className="px-6 pt-6 pb-4 border-b border-gray-200 dark:border-gray-800 flex-none">
           <div className="flex items-center justify-center mb-2">
             <span className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-primary-100 dark:bg-primary-900 text-primary-600 dark:text-primary-300 font-bold text-xl">
               EF
@@ -695,7 +695,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         </div>
 
         {/* Body */}
-        <div className="px-6 pb-6 pt-4 max-h-[80vh] overflow-y-auto">
+        <div className="px-6 pb-6 pt-4 overflow-y-auto flex-1 min-h-0">
           {viewingPolicy ? (
             <>
               <h2 className="text-2xl font-bold mb-4">

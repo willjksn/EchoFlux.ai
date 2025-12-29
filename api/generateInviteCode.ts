@@ -32,7 +32,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       maxUses?: number;
       expiresInDays?: number;
       expiresAt?: string | null;
-      grantPlan?: "Pro" | "Elite";
+      grantPlan?: "Free" | "Pro" | "Elite";
     };
 
     // Validate inputs
@@ -44,8 +44,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: "maxUses must be between 1 and 100" });
     }
 
-    if (grantPlan !== "Pro" && grantPlan !== "Elite") {
-      return res.status(400).json({ error: "grantPlan must be 'Pro' or 'Elite'" });
+    if (grantPlan !== "Free" && grantPlan !== "Pro" && grantPlan !== "Elite") {
+      return res.status(400).json({ error: "grantPlan must be 'Free', 'Pro' or 'Elite'" });
     }
 
     // Generate invite codes

@@ -48,6 +48,8 @@ import { VoiceAssistant } from './components/VoiceAssistant';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { BioPageView } from './components/BioPageView';
 import { ResetPassword } from './components/ResetPassword';
+import { InviteRequiredPage } from './components/InviteRequiredPage';
+import { isInviteOnlyMode } from './src/utils/inviteOnly';
 import { lazy, Suspense } from 'react';
 
 // Lazy load heavy components for code splitting
@@ -784,6 +786,16 @@ const AppContent: React.FC = () => {
     if (!user && isAuthenticated) {
         console.warn('User is authenticated but user object is null - waiting for user data...');
         return <div className="h-screen w-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900"><p className="text-gray-500 dark:text-gray-400">Loading user data...</p></div>;
+    }
+
+    // Invite-only mode gate: allow only Admins and users who have redeemed an invite.
+    if (isAuthenticated && user) {
+        const inviteOnly = isInviteOnlyMode();
+        const isAdmin = (user as any)?.role === 'Admin';
+        const invitedWithCode = (user as any)?.invitedWithCode;
+        if (inviteOnly && !isAdmin && !invitedWithCode) {
+            return <InviteRequiredPage />;
+        }
     }
 
     // Safety check - if user is still null after being authenticated, show error

@@ -34,7 +34,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Ensure invite has a plan grant configured
     const grantPlan = (inviteData as any)?.grantPlan as string | undefined;
-    if (grantPlan !== "Pro" && grantPlan !== "Elite") {
+    if (grantPlan !== "Free" && grantPlan !== "Pro" && grantPlan !== "Elite") {
       return res.status(200).json({
         valid: false,
         error: "This invite code is not configured with access. Please contact support.",

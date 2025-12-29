@@ -37,7 +37,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const inviteData = inviteSnap.data() as any;
       const grantPlan = inviteData?.grantPlan as string | undefined;
-      if (grantPlan !== "Pro" && grantPlan !== "Elite") {
+      if (grantPlan !== "Free" && grantPlan !== "Pro" && grantPlan !== "Elite") {
         return { ok: false as const, status: 400 as const, error: "Invite is not configured with access" };
       }
 

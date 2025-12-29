@@ -6,7 +6,7 @@ interface InviteCode {
   code: string;
   createdAt: string;
   createdBy: string;
-  grantPlan: 'Pro' | 'Elite' | null;
+  grantPlan: 'Free' | 'Pro' | 'Elite' | null;
   used: boolean;
   usedCount: number;
   maxUses: number;
@@ -31,12 +31,12 @@ export const InviteCodeManager: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateCount, setGenerateCount] = useState(1);
-  const [generateGrantPlan, setGenerateGrantPlan] = useState<'Pro' | 'Elite'>('Pro');
+  const [generateGrantPlan, setGenerateGrantPlan] = useState<'Free' | 'Pro' | 'Elite'>('Free');
   const [generateMaxUses, setGenerateMaxUses] = useState(1);
   const [generateExpiresAt, setGenerateExpiresAt] = useState<string>(''); // YYYY-MM-DD
 
   const [editingInvite, setEditingInvite] = useState<InviteCode | null>(null);
-  const [editGrantPlan, setEditGrantPlan] = useState<'Pro' | 'Elite'>('Pro');
+  const [editGrantPlan, setEditGrantPlan] = useState<'Free' | 'Pro' | 'Elite'>('Free');
   const [editMaxUses, setEditMaxUses] = useState<number>(1);
   const [editExpiresAt, setEditExpiresAt] = useState<string>(''); // YYYY-MM-DD
   const [isSavingEdit, setIsSavingEdit] = useState(false);
@@ -112,7 +112,7 @@ export const InviteCodeManager: React.FC = () => {
       
       // Reset form
       setGenerateCount(1);
-      setGenerateGrantPlan('Pro');
+      setGenerateGrantPlan('Free');
       setGenerateMaxUses(1);
       setGenerateExpiresAt('');
       
@@ -133,7 +133,13 @@ export const InviteCodeManager: React.FC = () => {
 
   const openEdit = (invite: InviteCode) => {
     setEditingInvite(invite);
-    setEditGrantPlan((invite.grantPlan === 'Elite' ? 'Elite' : 'Pro') as 'Pro' | 'Elite');
+    setEditGrantPlan(
+      (invite.grantPlan === 'Elite'
+        ? 'Elite'
+        : invite.grantPlan === 'Pro'
+          ? 'Pro'
+          : 'Free') as 'Free' | 'Pro' | 'Elite'
+    );
     setEditMaxUses(invite.maxUses || 1);
     setEditExpiresAt(invite.expiresAt ? invite.expiresAt.slice(0, 10) : '');
   };
@@ -264,9 +270,10 @@ export const InviteCodeManager: React.FC = () => {
             </label>
             <select
               value={generateGrantPlan}
-              onChange={(e) => setGenerateGrantPlan(e.target.value as 'Pro' | 'Elite')}
+              onChange={(e) => setGenerateGrantPlan(e.target.value as 'Free' | 'Pro' | 'Elite')}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             >
+              <option value="Free">Free</option>
               <option value="Pro">Pro</option>
               <option value="Elite">Elite</option>
             </select>
@@ -421,9 +428,10 @@ export const InviteCodeManager: React.FC = () => {
                 </label>
                 <select
                   value={editGrantPlan}
-                  onChange={(e) => setEditGrantPlan(e.target.value as 'Pro' | 'Elite')}
+                  onChange={(e) => setEditGrantPlan(e.target.value as 'Free' | 'Pro' | 'Elite')}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 >
+                  <option value="Free">Free</option>
                   <option value="Pro">Pro</option>
                   <option value="Elite">Elite</option>
                 </select>

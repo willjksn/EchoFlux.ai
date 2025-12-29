@@ -33,6 +33,17 @@ const OPTIONAL_VARS = [
   'OPENAI_API_KEY',
   'REPLICATE_API_TOKEN',
   'VITE_SENTRY_DSN',
+  'VITE_INVITE_ONLY_MODE',
+  'SMTP_HOST',
+  'SMTP_PORT',
+  'SMTP_USER',
+  'SMTP_PASS',
+  'SMTP_SECURE',
+  'SMTP_FROM',
+  'POSTMARK_SERVER_TOKEN',
+  'POSTMARK_FROM',
+  'POSTMARK_MESSAGE_STREAM',
+  'CRON_SECRET',
 ];
 
 export function validateEnvVars(): EnvValidationResult {

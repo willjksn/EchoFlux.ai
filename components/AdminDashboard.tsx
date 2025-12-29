@@ -7,6 +7,7 @@ import { GrantReferralRewardModal } from './GrantReferralRewardModal';
 import { AdminAnnouncementsPanel } from './AdminAnnouncementsPanel';
 import { AdminToolsPanel } from './AdminToolsPanel';
 import { InviteCodeManager } from './InviteCodeManager';
+import { WaitlistManager } from './WaitlistManager';
 import { TeamIcon, DollarSignIcon, UserPlusIcon, ArrowUpCircleIcon, ImageIcon, VideoIcon, LockIcon, TrendingIcon, TrashIcon } from './icons/UIIcons';
 import { db, auth } from '../firebaseConfig';
 import { collection, query, orderBy, onSnapshot, setDoc, doc } from 'firebase/firestore';
@@ -96,7 +97,7 @@ export const AdminDashboard: React.FC = () => {
     const [modelUsageStats, setModelUsageStats] = useState<ModelUsageStats | null>(null);
     const [isLoadingModelStats, setIsLoadingModelStats] = useState(true);
     const [modelStatsDays, setModelStatsDays] = useState<number>(30);
-    const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'referralRewards' | 'announcements' | 'tools' | 'invites'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'referralRewards' | 'announcements' | 'tools' | 'invites' | 'waitlist'>('overview');
 
     // Fetch model usage analytics
     useEffect(() => {
@@ -400,6 +401,16 @@ export const AdminDashboard: React.FC = () => {
                     >
                         Invite Codes
                     </button>
+                    <button
+                        onClick={() => setActiveTab('waitlist')}
+                        className={`px-4 py-2 rounded-md transition-colors ${
+                            activeTab === 'waitlist'
+                                ? 'bg-primary-600 text-white'
+                                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                        }`}
+                    >
+                        Waitlist
+                    </button>
                 </div>
             </div>
 
@@ -407,6 +418,7 @@ export const AdminDashboard: React.FC = () => {
             {activeTab === 'announcements' && <AdminAnnouncementsPanel />}
             {activeTab === 'tools' && <AdminToolsPanel />}
             {activeTab === 'invites' && <InviteCodeManager />}
+            {activeTab === 'waitlist' && <WaitlistManager />}
             {activeTab === 'overview' && (
                 <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
