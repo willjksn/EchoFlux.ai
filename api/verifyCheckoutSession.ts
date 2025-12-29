@@ -43,7 +43,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const session = await stripe.checkout.sessions.retrieve(sessionId, { expand: ['subscription'] });
 
     const sessionUserId = session.metadata?.userId || session.client_reference_id || null;
-    if (!sessionUserId || sessionUserId !== decoded.uid) {
+    const sessionEmail =
+      (session.customer_details && (session.customer_details as any).email) ||
+      (session.customer_email as string | null | undefined) ||
+      null;
+
+    // Primary check: session is tied to this Firebase UID (expected path)
+    const uidMatches = !!sessionUserId && sessionUserId === decoded.uid;
+
+    // Safe fallback: sometimes sessions may be created with the correct email but missing/incorrect UID metadata.
+    // Since session IDs are unguessable and we're still requiring an authenticated user, matching email is a reasonable fallback.
+    const emailMatches =
+      !!sessionEmail &&
+      !!decoded.email &&
+      String(sessionEmail).toLowerCase() === String(decoded.email).toLowerCase();
+
+    if (!uidMatches && !emailMatches) {
       return res.status(403).json({ error: 'Checkout session does not belong to this user' });
     }
 
