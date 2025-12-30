@@ -71,7 +71,13 @@ export const WaitlistManager: React.FC = () => {
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(data?.error || 'Failed to approve');
       if (data.emailPreview) setEmailPreview(data.emailPreview);
-      showToast(data.emailSent ? 'Approved + email sent.' : 'Approved. SMTP not configured — copy the email preview.', data.emailSent ? 'success' : 'error');
+      if (data.emailSent) {
+        showToast('Approved + email sent.', 'success');
+      } else {
+        const provider = data?.emailProvider ? String(data.emailProvider).toUpperCase() : 'EMAIL';
+        const msg = data?.emailError?.message || data?.emailError || 'Email failed to send';
+        showToast(`Approved, but ${provider} delivery failed: ${msg}. Copy the email preview below.`, 'error');
+      }
       setApproveEmail(null);
       await load();
     } catch (e: any) {
@@ -123,7 +129,7 @@ export const WaitlistManager: React.FC = () => {
 
       {emailPreview && (
         <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-          <div className="font-semibold text-yellow-900 dark:text-yellow-100">Email preview (SMTP not configured)</div>
+          <div className="font-semibold text-yellow-900 dark:text-yellow-100">Email preview (not sent)</div>
           <pre className="mt-2 text-xs whitespace-pre-wrap text-yellow-900 dark:text-yellow-100">{emailPreview}</pre>
         </div>
       )}

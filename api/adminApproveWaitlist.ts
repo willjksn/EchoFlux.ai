@@ -108,7 +108,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       {
         email: normalizedEmail,
         lastEmailedAt: nowIso,
-        emailStatus: mail.sent ? "sent" : "preview",
+        emailStatus: mail.sent ? "sent" : "failed",
+        ...(mail.sent ? {} : { emailError: (mail as any)?.error || (mail as any)?.reason || "Email send failed" }),
       } as any,
       { merge: true }
     );
@@ -120,6 +121,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       expiresAt: normalizedExpiresAt,
       emailSent: mail.sent === true,
       emailPreview: mail.sent ? null : instructions,
+      emailError: mail.sent ? null : ((mail as any)?.error || (mail as any)?.reason || null),
+      emailProvider: (mail as any)?.provider ?? null,
     });
   } catch (e: any) {
     console.error("adminApproveWaitlist error:", e);

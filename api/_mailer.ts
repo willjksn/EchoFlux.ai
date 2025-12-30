@@ -38,10 +38,24 @@ export async function sendEmail(params: SendEmailParams) {
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok) {
       console.error("Postmark send failed:", { status: resp.status, data });
-      return { sent: false as const, previewOnly: true as const, reason: "Postmark send failed" };
+      return {
+        sent: false as const,
+        previewOnly: true as const,
+        reason: "Postmark send failed",
+        provider: "postmark" as const,
+        error: {
+          status: resp.status,
+          message: (data as any)?.Message || (data as any)?.message || "Postmark request failed",
+          errorCode: (data as any)?.ErrorCode ?? (data as any)?.errorCode ?? null,
+        },
+      };
     }
 
-    return { sent: true as const, messageId: data?.MessageID || data?.MessageId || "postmark" };
+    return {
+      sent: true as const,
+      provider: "postmark" as const,
+      messageId: data?.MessageID || data?.MessageId || "postmark",
+    };
   }
 
   // Fallback to SMTP (nodemailer)
@@ -50,6 +64,7 @@ export async function sendEmail(params: SendEmailParams) {
       sent: false as const,
       previewOnly: true as const,
       reason: "Mailer not configured",
+      provider: null as const,
     };
   }
 
@@ -75,7 +90,7 @@ export async function sendEmail(params: SendEmailParams) {
     html: params.html,
   });
 
-  return { sent: true as const, messageId: info.messageId };
+  return { sent: true as const, provider: "smtp" as const, messageId: info.messageId };
 }
 
 
