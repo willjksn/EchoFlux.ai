@@ -2,6 +2,8 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { verifyAuth } from "./verifyAuth.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { sendEmail } from "./_mailer.js";
+import { WAITLIST_EMAIL_TEMPLATES } from "./_waitlistEmailTemplates.js";
+import { logEmailHistory } from "./_emailHistory.js";
 
 function generateInviteCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -19,10 +21,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const adminDoc = await db.collection("users").doc(admin.uid).get();
   if ((adminDoc.data() as any)?.role !== "Admin") return res.status(403).json({ error: "Admin access required" });
 
-  const { email, grantPlan = "Free", expiresAt } = (req.body || {}) as {
+  const { email, grantPlan = "Free", expiresAt, name } = (req.body || {}) as {
     email?: string;
     grantPlan?: "Free" | "Pro" | "Elite";
     expiresAt?: string | null;
+    name?: string | null;
   };
 
   if (!email || typeof email !== "string") return res.status(400).json({ error: "email is required" });
@@ -44,12 +47,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    // Get existing waitlist entry to preserve name if not provided
+    const waitSnap = await waitRef.get();
+    const existingData = waitSnap.exists ? (waitSnap.data() as any) : null;
+    const userName = name || existingData?.name || null;
+
     // Create invite + mark waitlist approved
     await db.runTransaction(async (tx) => {
       const waitSnap = await tx.get(waitRef);
       if (!waitSnap.exists) {
         tx.set(waitRef, {
           email: normalizedEmail,
+          name: userName,
           status: "approved",
           approvedAt: nowIso,
           approvedBy: admin.uid,
@@ -67,6 +76,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           inviteCode,
           grantPlan,
           expiresAt: normalizedExpiresAt,
+          ...(userName ? { name: userName } : {}),
         } as any);
       }
 
@@ -82,26 +92,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } as any);
     });
 
-    const instructions = [
-      `You've been granted access to EchoFlux.`,
-      ``,
-      `Invite Code: ${inviteCode}`,
-      `Plan: ${grantPlan}`,
-      normalizedExpiresAt ? `Expires: ${new Date(normalizedExpiresAt).toLocaleString()}` : `Expires: (no expiration)`,
-      ``,
-      `How to get in:`,
-      `1) Go to https://echoflux.ai`,
-      `2) Click “Sign in” → “Sign Up” (or “Continue with Google”)`,
-      `3) Enter the invite code when prompted`,
-      `4) Complete onboarding`,
-      ``,
-      `If you have issues, reply to this email.`,
-    ].join("\n");
+    const emailText = WAITLIST_EMAIL_TEMPLATES.selected(
+      inviteCode,
+      grantPlan,
+      normalizedExpiresAt || null,
+      userName || null
+    );
 
     const mail = await sendEmail({
       to: normalizedEmail,
-      subject: "Your EchoFlux access invite",
-      text: instructions,
+      subject: "You've Been Selected for Early Testing — EchoFlux.ai",
+      text: emailText,
     });
 
     await waitRef.set(
@@ -114,13 +115,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       { merge: true }
     );
 
+    // Log to email history
+    await logEmailHistory({
+      sentBy: admin.uid,
+      to: normalizedEmail,
+      subject: "You've Been Selected for Early Testing — EchoFlux.ai",
+      body: emailText,
+      status: mail.sent ? "sent" : "failed",
+      provider: (mail as any)?.provider || null,
+      error: mail.sent ? undefined : ((mail as any)?.error || (mail as any)?.reason || "Email send failed"),
+      category: "waitlist",
+      metadata: { waitlistId: waitlistId, inviteCode, grantPlan },
+    });
+
     return res.status(200).json({
       success: true,
       inviteCode,
       grantPlan,
       expiresAt: normalizedExpiresAt,
       emailSent: mail.sent === true,
-      emailPreview: mail.sent ? null : instructions,
+      emailPreview: mail.sent ? null : emailText,
       emailError: mail.sent ? null : ((mail as any)?.error || (mail as any)?.reason || null),
       emailProvider: (mail as any)?.provider ?? null,
     });

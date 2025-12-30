@@ -146,11 +146,18 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     // Reset forgot password state when switching views
     setShowForgotPassword(false);
     setForgotPasswordEmail('');
-    // Reset invite code when switching views
-    setInviteCode('');
-    setInviteCodeValid(null);
-    setInviteGrantPlan(null);
-    setInviteExpiresAt(null);
+    // Reset invite code when switching views, but check localStorage for pending invite code
+    const pendingCode = typeof window !== 'undefined' ? localStorage.getItem('pendingInviteCode') : null;
+    if (pendingCode && !isLogin) {
+      setInviteCode(pendingCode);
+      // Validate it automatically
+      validateInviteCode(pendingCode);
+    } else {
+      setInviteCode('');
+      setInviteCodeValid(null);
+      setInviteGrantPlan(null);
+      setInviteExpiresAt(null);
+    }
   }, [initialView]);
 
   // Check password requirements in real-time
@@ -173,6 +180,40 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       });
     }
   }, [password, isLogin]);
+
+  // Check localStorage for pending invite code when component mounts
+  useEffect(() => {
+    if (!isLogin && typeof window !== 'undefined') {
+      const pendingCode = localStorage.getItem('pendingInviteCode');
+      if (pendingCode && pendingCode.trim()) {
+        setInviteCode(pendingCode.trim().toUpperCase());
+        // Auto-validate the invite code
+        setIsValidatingInvite(true);
+        fetch('/api/validateInviteCode', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ inviteCode: pendingCode.trim().toUpperCase() }),
+        })
+          .then((resp) => resp.json().catch(() => ({})))
+          .then((data) => {
+            if (data?.valid) {
+              setInviteCodeValid(true);
+              setInviteGrantPlan(data.grantPlan);
+              setInviteExpiresAt(data.expiresAt || null);
+            } else {
+              setInviteCodeValid(false);
+              localStorage.removeItem('pendingInviteCode'); // Remove invalid code
+            }
+          })
+          .catch(() => {
+            setInviteCodeValid(false);
+          })
+          .finally(() => {
+            setIsValidatingInvite(false);
+          });
+      }
+    }
+  }, [isLogin]);
 
   if (!isOpen) return null;
 

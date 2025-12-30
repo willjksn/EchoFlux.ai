@@ -8,6 +8,9 @@ import { AdminAnnouncementsPanel } from './AdminAnnouncementsPanel';
 import { AdminToolsPanel } from './AdminToolsPanel';
 import { InviteCodeManager } from './InviteCodeManager';
 import { WaitlistManager } from './WaitlistManager';
+import { MassEmailComposer } from './MassEmailComposer';
+import { BioPageEmailDashboard } from './BioPageEmailDashboard';
+import { EmailHistory } from './EmailHistory';
 import { TeamIcon, DollarSignIcon, UserPlusIcon, ArrowUpCircleIcon, ImageIcon, VideoIcon, LockIcon, TrendingIcon, TrashIcon } from './icons/UIIcons';
 import { db, auth } from '../firebaseConfig';
 import { collection, query, orderBy, onSnapshot, setDoc, doc } from 'firebase/firestore';
@@ -97,7 +100,8 @@ export const AdminDashboard: React.FC = () => {
     const [modelUsageStats, setModelUsageStats] = useState<ModelUsageStats | null>(null);
     const [isLoadingModelStats, setIsLoadingModelStats] = useState(true);
     const [modelStatsDays, setModelStatsDays] = useState<number>(30);
-    const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'referralRewards' | 'announcements' | 'tools' | 'invites' | 'waitlist'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'referralRewards' | 'announcements' | 'tools' | 'invites' | 'waitlist' | 'bioEmails' | 'emailHistory'>('overview');
+    const [isMassEmailOpen, setIsMassEmailOpen] = useState(false);
 
     // Fetch model usage analytics
     useEffect(() => {
@@ -411,14 +415,51 @@ export const AdminDashboard: React.FC = () => {
                     >
                         Waitlist
                     </button>
+                    <button
+                        onClick={() => setActiveTab('bioEmails')}
+                        className={`px-4 py-2 rounded-md transition-colors ${
+                            activeTab === 'bioEmails'
+                                ? 'bg-primary-600 text-white'
+                                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                        }`}
+                    >
+                        Bio Emails
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('emailHistory')}
+                        className={`px-4 py-2 rounded-md transition-colors ${
+                            activeTab === 'emailHistory'
+                                ? 'bg-primary-600 text-white'
+                                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                        }`}
+                    >
+                        Email History
+                    </button>
                 </div>
             </div>
 
             {activeTab === 'referralRewards' && <ReferralRewardsConfig />}
             {activeTab === 'announcements' && <AdminAnnouncementsPanel />}
-            {activeTab === 'tools' && <AdminToolsPanel />}
+            {activeTab === 'tools' && (
+                <div className="space-y-6">
+                    <div className="flex justify-between items-center">
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Admin Tools</h3>
+                        <button
+                            onClick={() => setIsMassEmailOpen(true)}
+                            className="px-4 py-2 rounded-md bg-primary-600 text-white hover:bg-primary-700"
+                        >
+                            Send Mass Email
+                        </button>
+                    </div>
+                    <AdminToolsPanel />
+                </div>
+            )}
             {activeTab === 'invites' && <InviteCodeManager />}
             {activeTab === 'waitlist' && <WaitlistManager />}
+            {activeTab === 'bioEmails' && <BioPageEmailDashboard />}
+            {activeTab === 'emailHistory' && <EmailHistory />}
+            
+            <MassEmailComposer isOpen={isMassEmailOpen} onClose={() => setIsMassEmailOpen(false)} />
             {activeTab === 'overview' && (
                 <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">

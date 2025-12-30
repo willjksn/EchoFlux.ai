@@ -1,6 +1,9 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { checkRateLimit, getRateLimitHeaders } from "./_rateLimiter.js";
+import { sendEmail } from "./_mailer.js";
+import { WAITLIST_EMAIL_TEMPLATES } from "./_waitlistEmailTemplates.js";
+import { logEmailHistory } from "./_emailHistory.js";
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -58,6 +61,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       source: "landing",
       ip,
     });
+
+    // Send confirmation email
+    try {
+      const emailText = WAITLIST_EMAIL_TEMPLATES.confirmation(safeName || null);
+      const mail = await sendEmail({
+        to: normalized,
+        subject: "You're on the EchoFlux.ai waitlist",
+        text: emailText,
+      });
+
+      // Update waitlist entry with email status
+      await ref.set(
+        {
+          lastEmailedAt: nowIso,
+          emailStatus: mail.sent ? "sent" : "failed",
+          ...(mail.sent ? {} : { emailError: (mail as any)?.error || (mail as any)?.reason || "Email send failed" }),
+        } as any,
+        { merge: true }
+      );
+
+      // Log to email history
+      await logEmailHistory({
+        sentBy: null, // System email
+        to: normalized,
+        subject: "You're on the EchoFlux.ai waitlist",
+        body: emailText,
+        status: mail.sent ? "sent" : "failed",
+        provider: (mail as any)?.provider || null,
+        error: mail.sent ? undefined : ((mail as any)?.error || (mail as any)?.reason || "Email send failed"),
+        category: "waitlist",
+        metadata: { waitlistId: docId },
+      });
+    } catch (emailError: any) {
+      console.error("Failed to send waitlist confirmation email:", emailError);
+      // Don't fail the request if email fails - user is still on the waitlist
+    }
 
     return res.status(200).json({ success: true, status: "pending", message: "You're on the list. We'll email you if you're selected." });
   } catch (e: any) {
