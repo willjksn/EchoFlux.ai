@@ -31,7 +31,7 @@ export const WaitlistInlineForm: React.FC = () => {
         setStatus('idle');
         return;
       }
-      setMessage(data?.message || 'You're on the list.');
+      setMessage(data?.message || "You're on the list.");
       setStatus('done');
     } catch {
       setMessage('Failed to join.');
