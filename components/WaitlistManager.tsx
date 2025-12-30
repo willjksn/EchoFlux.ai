@@ -22,6 +22,7 @@ export const WaitlistManager: React.FC = () => {
   const [items, setItems] = useState<WaitlistItem[]>([]);
   const [status, setStatus] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const [approveEmail, setApproveEmail] = useState<string | null>(null);
   const [approvePlan, setApprovePlan] = useState<'Free' | 'Pro' | 'Elite'>('Free');
@@ -50,6 +51,11 @@ export const WaitlistManager: React.FC = () => {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
+
+  useEffect(() => {
+    // Clear selection when switching tabs/status or refreshing list.
+    setSelectedIds(new Set());
   }, [status]);
 
   const approve = async () => {
@@ -106,6 +112,45 @@ export const WaitlistManager: React.FC = () => {
     }
   };
 
+  const toggleSelected = (id: string, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (checked: boolean) => {
+    if (!checked) {
+      setSelectedIds(new Set());
+      return;
+    }
+    setSelectedIds(new Set(items.map((it) => it.id)));
+  };
+
+  const deleteSelected = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Delete ${selectedIds.size} waitlist entr${selectedIds.size === 1 ? 'y' : 'ies'}? This cannot be undone.`)) return;
+
+    try {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+      if (!token) throw new Error('Not authenticated');
+      const resp = await fetch('/api/adminDeleteWaitlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ids: Array.from(selectedIds) }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data?.error || 'Failed to delete');
+      showToast(`Deleted ${data?.deleted ?? selectedIds.size} entr${(data?.deleted ?? selectedIds.size) === 1 ? 'y' : 'ies'}.`, 'success');
+      setSelectedIds(new Set());
+      await load();
+    } catch (e: any) {
+      showToast(e?.message || 'Failed to delete', 'error');
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -127,6 +172,21 @@ export const WaitlistManager: React.FC = () => {
         ))}
       </div>
 
+      {(status === 'approved' || status === 'rejected') && items.length > 0 && (
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            Selected: <span className="font-semibold">{selectedIds.size}</span>
+          </div>
+          <button
+            onClick={deleteSelected}
+            disabled={selectedIds.size === 0}
+            className="px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Delete selected
+          </button>
+        </div>
+      )}
+
       {emailPreview && (
         <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
           <div className="font-semibold text-yellow-900 dark:text-yellow-100">Email preview (not sent)</div>
@@ -142,6 +202,15 @@ export const WaitlistManager: React.FC = () => {
             <table className="w-full">
               <thead className="bg-gray-50 dark:bg-gray-900">
                 <tr>
+                  {(status === 'approved' || status === 'rejected') && (
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                      <input
+                        type="checkbox"
+                        checked={items.length > 0 && selectedIds.size === items.length}
+                        onChange={(e) => toggleSelectAll(e.target.checked)}
+                      />
+                    </th>
+                  )}
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Email</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Name</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Created</th>
@@ -152,13 +221,22 @@ export const WaitlistManager: React.FC = () => {
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                 {items.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
+                    <td colSpan={(status === 'approved' || status === 'rejected') ? 6 : 5} className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
                       No items.
                     </td>
                   </tr>
                 ) : (
                   items.map((it) => (
                     <tr key={it.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                      {(status === 'approved' || status === 'rejected') && (
+                        <td className="px-4 py-4">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(it.id)}
+                            onChange={(e) => toggleSelected(it.id, e.target.checked)}
+                          />
+                        </td>
+                      )}
                       <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">{it.email}</td>
                       <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{it.name || '—'}</td>
                       <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
@@ -185,7 +263,29 @@ export const WaitlistManager: React.FC = () => {
                             </button>
                           </div>
                         ) : (
-                          <span className="text-gray-400">—</span>
+                          <button
+                            onClick={async () => {
+                              if (!window.confirm(`Delete ${it.email}? This cannot be undone.`)) return;
+                              try {
+                                const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+                                if (!token) throw new Error('Not authenticated');
+                                const resp = await fetch('/api/adminDeleteWaitlist', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                                  body: JSON.stringify({ ids: [it.id] }),
+                                });
+                                const data = await resp.json().catch(() => ({}));
+                                if (!resp.ok) throw new Error(data?.error || 'Failed to delete');
+                                showToast('Deleted.', 'success');
+                                await load();
+                              } catch (e: any) {
+                                showToast(e?.message || 'Failed to delete', 'error');
+                              }
+                            }}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            Delete
+                          </button>
                         )}
                       </td>
                     </tr>
