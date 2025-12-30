@@ -5,11 +5,16 @@ import { useAppContext } from './AppContext';
 export const InviteRequiredPage: React.FC = () => {
   const { showToast } = useAppContext();
   const [inviteCode, setInviteCode] = useState('');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const redeem = async () => {
     if (!inviteCode.trim()) {
       showToast('Invite code is required.', 'error');
+      return;
+    }
+    if (!acceptedTerms) {
+      showToast('You must accept the Terms of Service and Privacy Policy to continue.', 'error');
       return;
     }
     setIsSubmitting(true);
@@ -66,10 +71,30 @@ export const InviteRequiredPage: React.FC = () => {
           />
         </div>
 
+        <div className="mt-4 flex items-start gap-2">
+          <input
+            id="invite-accept-terms"
+            type="checkbox"
+            checked={acceptedTerms}
+            onChange={(e) => setAcceptedTerms(e.target.checked)}
+            className="mt-1 h-4 w-4 rounded border-gray-300 dark:border-gray-600"
+          />
+          <label htmlFor="invite-accept-terms" className="text-sm text-gray-600 dark:text-gray-400">
+            I accept the{' '}
+            <a href="/terms" target="_blank" className="underline">
+              Terms of Service
+            </a>{' '}
+            and{' '}
+            <a href="/privacy" target="_blank" className="underline">
+              Privacy Policy
+            </a>
+          </label>
+        </div>
+
         <div className="mt-5 flex gap-3">
           <button
             onClick={redeem}
-            disabled={isSubmitting}
+            disabled={isSubmitting || !acceptedTerms}
             className="flex-1 px-4 py-2 rounded-md bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50"
           >
             {isSubmitting ? 'Verifying…' : 'Continue'}

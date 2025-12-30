@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { auth } from '../firebaseConfig';
 import { useAppContext } from './AppContext';
 import { XIcon } from './icons/UIIcons';
@@ -12,6 +12,11 @@ export const MassEmailComposer: React.FC<MassEmailComposerProps> = ({ isOpen, on
   const { showToast } = useAppContext();
   const [subject, setSubject] = useState('');
   const [text, setText] = useState('');
+  const [html, setHtml] = useState('');
+  const [useHtml, setUseHtml] = useState(false);
+  const [templates, setTemplates] = useState<Array<{ id: string; name: string; subject: string; text: string; html?: string | null }>>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [filterBy, setFilterBy] = useState<{
     plan?: 'Free' | 'Pro' | 'Elite';
@@ -24,6 +29,29 @@ export const MassEmailComposer: React.FC<MassEmailComposerProps> = ({ isOpen, on
   } | null>(null);
 
   if (!isOpen) return null;
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const loadTemplates = async () => {
+      setIsLoadingTemplates(true);
+      try {
+        const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+        if (!token) return;
+        const resp = await fetch('/api/listEmailTemplates', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (resp.ok) {
+          setTemplates((data.templates || []) as any);
+        }
+      } finally {
+        setIsLoadingTemplates(false);
+      }
+    };
+
+    loadTemplates();
+  }, [isOpen]);
 
   const handleSend = async () => {
     if (!subject.trim() || !text.trim()) {
@@ -44,6 +72,8 @@ export const MassEmailComposer: React.FC<MassEmailComposerProps> = ({ isOpen, on
         body: JSON.stringify({
           subject: subject.trim(),
           text: text.trim(),
+          html: useHtml && html.trim() ? html.trim() : undefined,
+          templateId: selectedTemplateId || undefined,
           filterBy: Object.keys(filterBy).length > 0 ? filterBy : undefined,
         }),
       });
@@ -83,6 +113,58 @@ export const MassEmailComposer: React.FC<MassEmailComposerProps> = ({ isOpen, on
         </div>
 
         <div className="px-6 py-6 space-y-6">
+          {/* Templates */}
+          <div className="space-y-2">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Template (Optional)</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <select
+                value={selectedTemplateId}
+                onChange={(e) => setSelectedTemplateId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              >
+                <option value="">(No template)</option>
+                {templates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                disabled={!selectedTemplateId || isLoadingTemplates}
+                onClick={() => {
+                  const t = templates.find((x) => x.id === selectedTemplateId);
+                  if (!t) return;
+                  setSubject(t.subject || '');
+                  setText(t.text || '');
+                  if (t.html) {
+                    setUseHtml(true);
+                    setHtml(t.html || '');
+                  } else {
+                    setUseHtml(false);
+                    setHtml('');
+                  }
+                  showToast(`Loaded template: ${t.name}`, 'success');
+                }}
+                className="px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:opacity-50"
+              >
+                {isLoadingTemplates ? 'Loading…' : 'Load'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedTemplateId('');
+                }}
+                className="px-4 py-2 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+              >
+                Clear
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Templates are managed in Admin → Email Templates. This composer supports both plain text and HTML.
+            </p>
+          </div>
+
           {/* Filters */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Filters (Optional)</h3>
@@ -159,6 +241,34 @@ export const MassEmailComposer: React.FC<MassEmailComposerProps> = ({ isOpen, on
               Use {'{name}'} to personalize. Plain text only.
             </p>
           </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={useHtml}
+              onChange={(e) => setUseHtml(e.target.checked)}
+              className="h-4 w-4"
+              id="useHtmlMass"
+            />
+            <label htmlFor="useHtmlMass" className="text-sm text-gray-700 dark:text-gray-300">
+              Include HTML version (optional)
+            </label>
+          </div>
+
+          {useHtml && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                HTML (optional)
+              </label>
+              <textarea
+                value={html}
+                onChange={(e) => setHtml(e.target.value)}
+                placeholder="<p>HTML version here...</p>"
+                rows={10}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-mono text-sm"
+              />
+            </div>
+          )}
 
           {/* Results */}
           {results && (

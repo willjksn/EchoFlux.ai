@@ -22,6 +22,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     subject?: string;
     text?: string;
     html?: string;
+    templateId?: string;
     filterBy?: {
       plan?: "Free" | "Pro" | "Elite";
       hasCompletedOnboarding?: boolean;
@@ -67,6 +68,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       sent: boolean;
       error?: string;
     }> = [];
+    const templateId = (req.body as any)?.templateId as string | undefined;
 
     // Send emails with rate limiting (batch of 10 at a time)
     const BATCH_SIZE = 10;
@@ -103,7 +105,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               provider: (mail as any)?.provider || null,
               error: mail.sent ? undefined : ((mail as any)?.error || (mail as any)?.reason || "Email send failed"),
               category: "mass",
-              metadata: { campaignId: "mass_email", userId: user.id },
+              metadata: { campaignId: "mass_email", userId: user.id, ...(templateId ? { templateId } : {}) },
             });
 
             // Small delay to avoid rate limits

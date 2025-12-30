@@ -150,8 +150,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     const pendingCode = typeof window !== 'undefined' ? localStorage.getItem('pendingInviteCode') : null;
     if (pendingCode && !isLogin) {
       setInviteCode(pendingCode);
-      // Validate it automatically
-      validateInviteCode(pendingCode);
+      // Auto-validation is handled by the mount effect below (fetch to /api/validateInviteCode)
+      setInviteCodeValid(null);
+      setInviteGrantPlan(null);
+      setInviteExpiresAt(null);
     } else {
       setInviteCode('');
       setInviteCodeValid(null);

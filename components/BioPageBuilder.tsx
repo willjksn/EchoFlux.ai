@@ -4,6 +4,7 @@ import { useAppContext } from './AppContext';
 import { BioLink, SocialBioLink, Platform } from '../types';
 import { TrashIcon, PlusIcon, UploadIcon, LinkIcon, CheckCircleIcon, MailIcon, CameraIcon, UserIcon, EmojiIcon, FaceSmileIcon, CatIcon, PizzaIcon, SoccerBallIcon, CarIcon, LightbulbIcon, HeartIcon, EditIcon } from './icons/UIIcons';
 import { EMOJIS, EMOJI_CATEGORIES, Emoji } from './emojiData';
+import { BioPageSubscribersPanel } from './BioPageSubscribersPanel';
 import { storage } from '../firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
@@ -1305,6 +1306,9 @@ export const BioPageBuilder: React.FC = () => {
                         </div>
                     )}
                 </div>
+
+                {/* Subscribers (view/export only) */}
+                <BioPageSubscribersPanel />
             </div>
 
             {/* Right Preview */}

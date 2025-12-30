@@ -11,6 +11,8 @@ import { WaitlistManager } from './WaitlistManager';
 import { MassEmailComposer } from './MassEmailComposer';
 import { BioPageEmailDashboard } from './BioPageEmailDashboard';
 import { EmailHistory } from './EmailHistory';
+import { EmailTemplatesManager } from './EmailTemplatesManager';
+import { ScheduledEmailManager } from './ScheduledEmailManager';
 import { TeamIcon, DollarSignIcon, UserPlusIcon, ArrowUpCircleIcon, ImageIcon, VideoIcon, LockIcon, TrendingIcon, TrashIcon } from './icons/UIIcons';
 import { db, auth } from '../firebaseConfig';
 import { collection, query, orderBy, onSnapshot, setDoc, doc } from 'firebase/firestore';
@@ -100,7 +102,7 @@ export const AdminDashboard: React.FC = () => {
     const [modelUsageStats, setModelUsageStats] = useState<ModelUsageStats | null>(null);
     const [isLoadingModelStats, setIsLoadingModelStats] = useState(true);
     const [modelStatsDays, setModelStatsDays] = useState<number>(30);
-    const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'referralRewards' | 'announcements' | 'tools' | 'invites' | 'waitlist' | 'bioEmails' | 'emailHistory'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'referralRewards' | 'announcements' | 'tools' | 'invites' | 'waitlist' | 'bioEmails' | 'emailHistory' | 'emailTemplates' | 'scheduledEmails'>('overview');
     const [isMassEmailOpen, setIsMassEmailOpen] = useState(false);
 
     // Fetch model usage analytics
@@ -435,6 +437,26 @@ export const AdminDashboard: React.FC = () => {
                     >
                         Email History
                     </button>
+                    <button
+                        onClick={() => setActiveTab('emailTemplates')}
+                        className={`px-4 py-2 rounded-md transition-colors ${
+                            activeTab === 'emailTemplates'
+                                ? 'bg-primary-600 text-white'
+                                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                        }`}
+                    >
+                        Email Templates
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('scheduledEmails')}
+                        className={`px-4 py-2 rounded-md transition-colors ${
+                            activeTab === 'scheduledEmails'
+                                ? 'bg-primary-600 text-white'
+                                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                        }`}
+                    >
+                        Scheduled Emails
+                    </button>
                 </div>
             </div>
 
@@ -458,6 +480,8 @@ export const AdminDashboard: React.FC = () => {
             {activeTab === 'waitlist' && <WaitlistManager />}
             {activeTab === 'bioEmails' && <BioPageEmailDashboard />}
             {activeTab === 'emailHistory' && <EmailHistory />}
+            {activeTab === 'emailTemplates' && <EmailTemplatesManager />}
+            {activeTab === 'scheduledEmails' && <ScheduledEmailManager />}
             
             <MassEmailComposer isOpen={isMassEmailOpen} onClose={() => setIsMassEmailOpen(false)} />
             {activeTab === 'overview' && (

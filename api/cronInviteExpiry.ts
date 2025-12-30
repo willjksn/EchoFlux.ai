@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { sendEmail } from "./_mailer.js";
+import { logEmailHistory } from "./_emailHistory.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -76,6 +77,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         text,
       });
 
+      await logEmailHistory({
+        sentBy: null,
+        to: email,
+        subject: "EchoFlux access expires in 3 days",
+        body: text,
+        status: mail.sent ? "sent" : "failed",
+        provider: (mail as any)?.provider || null,
+        error: mail.sent ? undefined : ((mail as any)?.error || (mail as any)?.reason || "Email send failed"),
+        category: "other",
+        metadata: {
+          type: "invite_expiry_reminder",
+          userId: doc.id,
+          daysLeft,
+          inviteGrantPlan: plan,
+          inviteGrantExpiresAt: expiresAtIso,
+        },
+      });
+
       await doc.ref.set(
         {
           inviteExpiryReminderSentAt: nowIso,
@@ -102,6 +121,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         to: email,
         subject: "Your EchoFlux access has expired",
         text,
+      });
+
+      await logEmailHistory({
+        sentBy: null,
+        to: email,
+        subject: "Your EchoFlux access has expired",
+        body: text,
+        status: mail.sent ? "sent" : "failed",
+        provider: (mail as any)?.provider || null,
+        error: mail.sent ? undefined : ((mail as any)?.error || (mail as any)?.reason || "Email send failed"),
+        category: "other",
+        metadata: {
+          type: "invite_expired",
+          userId: doc.id,
+          inviteGrantPlan: plan,
+          inviteGrantExpiresAt: expiresAtIso,
+        },
       });
 
       await doc.ref.set(
