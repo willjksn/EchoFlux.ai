@@ -131,7 +131,6 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
 }) => {
   const { user, setUser, showToast, setActivePage } = useAppContext();
   const [isGenerating, setIsGenerating] = useState(false);
-  const [activeCaptionAsset, setActiveCaptionAsset] = useState<string>('primary'); // 'primary' | additional image id
   const [showMediaLibraryModal, setShowMediaLibraryModal] = useState(false);
   const [libraryMediaItems, setLibraryMediaItems] = useState<MediaLibraryItem[]>([]);
   const [isLoadingLibrary, setIsLoadingLibrary] = useState(false);
@@ -157,13 +156,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   const [repurposeResult, setRepurposeResult] = useState<any>(null);
   const [showRepurposeModal, setShowRepurposeModal] = useState(false);
 
-  // Keep active caption selection valid if additional images are removed.
-  useEffect(() => {
-    if (activeCaptionAsset === 'primary') return;
-    const exists = (mediaItem.additionalImages || []).some((img) => img.id === activeCaptionAsset);
-    if (!exists) setActiveCaptionAsset('primary');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mediaItem.additionalImages?.length]);
+  // (carousel captions are summarized across all media; no per-image caption selection)
 
   // Save predict to history (limit to last 10)
   const savePredictToHistory = async (data: any) => {
@@ -472,7 +465,6 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   };
 
   const handleGenerate = async () => {
-    // Multi-image posts: generate captions for the primary + each additional image.
     const additional = mediaItem.additionalImages || [];
     const hasAdditional = additional.length > 0;
 
@@ -488,6 +480,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
       return;
     }
 
+    // Carousel: generate ONE caption set that summarizes ALL images.
     if (!canGenerate || !user) {
       if (onUpgradeClick) onUpgradeClick();
       else showToast('You have reached your monthly caption generation limit. Upgrade to get more!', 'error');
@@ -505,37 +498,37 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
         return;
       }
 
-      // Primary
+      // Resolve URLs for all media items (primary + additional images)
       const primaryUrl = await resolveMediaUrl(mediaItem.data || null, mediaItem.mimeType || 'image/jpeg', mediaItem.previewUrl);
       if (!primaryUrl) {
         showToast('Failed to get media URL for caption generation.', 'error');
         return;
       }
-      const primaryOut = await generateCaptionsForSingleUrl(primaryUrl, selectedPlatform);
-      onGenerateComplete();
 
-      // Additional images
-      const updatedAdditional = additional.map((img) => ({ ...img }));
-      for (let i = 0; i < updatedAdditional.length; i++) {
-        const img = updatedAdditional[i];
+      const additionalUrls: string[] = [];
+      for (const img of additional) {
         const url = await resolveMediaUrl(img.data || null, img.mimeType || 'image/jpeg', img.previewUrl);
-        if (!url) continue;
-        const out = await generateCaptionsForSingleUrl(url, selectedPlatform);
-        updatedAdditional[i] = {
-          ...img,
-          results: out.results,
-          captionText: out.firstCaptionText,
-        };
-        onGenerateComplete();
+        if (url) additionalUrls.push(url);
       }
 
-      onUpdate(index, {
-        results: primaryOut.results,
-        captionText: primaryOut.firstCaptionText,
-        additionalImages: updatedAdditional,
+      const mediaUrls = [primaryUrl, ...additionalUrls];
+      const res = await generateCaptions({
+        mediaUrls,
+        goal: mediaItem.postGoal,
+        tone: mediaItem.postTone,
+        promptText: undefined,
+        platforms: [selectedPlatform],
       });
-      setActiveCaptionAsset('primary');
-      showToast('Generated captions for all images in this post.', 'success');
+
+      const generatedResults = normalizeCaptionResults(res);
+      const firstCaptionText = firstCaptionTextFromResults(generatedResults);
+      onUpdate(index, {
+        results: generatedResults,
+        captionText: firstCaptionText,
+      });
+
+      onGenerateComplete();
+      showToast('Generated a caption that summarizes all images in this post.', 'success');
     } catch (e: any) {
       console.error(e);
       showToast(e?.message || 'Failed to generate captions.', 'error');
@@ -550,11 +543,6 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
     onUpdate(index, { captionText });
   };
 
-  const activeResults: CaptionResult[] = useMemo(() => {
-    if (activeCaptionAsset === 'primary') return mediaItem.results || [];
-    const img = (mediaItem.additionalImages || []).find((i) => i.id === activeCaptionAsset) as any;
-    return (img?.results || []) as CaptionResult[];
-  }, [activeCaptionAsset, mediaItem.results, mediaItem.additionalImages]);
 
   const filteredEmojis = useMemo(() => {
     let emojis = EMOJIS;
@@ -792,14 +780,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
           {mediaItem.type === 'image' && mediaItem.additionalImages && mediaItem.additionalImages.length > 0 && (
             <div className="grid grid-cols-3 gap-2 mb-2">
               {mediaItem.additionalImages.map((additionalImg) => (
-            <div
-              key={additionalImg.id}
-              className={`relative group aspect-square cursor-pointer ${
-                activeCaptionAsset === additionalImg.id ? 'ring-2 ring-primary-400 rounded-lg' : ''
-              }`}
-              onClick={() => setActiveCaptionAsset(additionalImg.id)}
-              title="Click to view captions generated for this image"
-            >
+            <div key={additionalImg.id} className="relative group aspect-square">
                   <img
                     src={additionalImg.previewUrl}
                     alt="Additional image"
@@ -1005,13 +986,13 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
           {isGenerating
             ? 'Generating...'
             : (mediaItem.additionalImages && mediaItem.additionalImages.length > 0
-              ? '(Re)Generate Captions (all images)'
+              ? '(Re)Generate Captions (summarize carousel)'
               : '(Re)Generate Captions')}
         </button>
       )}
 
       {/* Caption Results */}
-      {activeResults.length > 0 && (
+      {mediaItem.results.length > 0 && (
         <div className="mb-3 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
@@ -1019,7 +1000,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
             </span>
           </div>
           <div className="space-y-1 max-h-28 overflow-y-auto">
-            {activeResults.slice(0, 2).map((result, idx) => (
+            {mediaItem.results.slice(0, 2).map((result, idx) => (
               <button
                 key={idx}
                 onClick={() => handleSelectCaption(result)}

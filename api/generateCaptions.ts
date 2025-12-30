@@ -167,6 +167,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
 
   const {
     mediaUrl,
+    mediaUrls,
     mediaData,
     goal,
     tone,
@@ -174,6 +175,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     platforms, // Array of selected platforms for platform-specific hashtags
   }: {
     mediaUrl?: string;
+    mediaUrls?: string[];
     mediaData?: MediaData;
     goal?: string;
     tone?: string;
@@ -226,8 +228,22 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   // Attach image/video if provided
   // Prefer mediaUrl over mediaData to avoid payload size limits
   let finalMedia: MediaData | undefined;
+  let finalMediaList: MediaData[] = [];
 
-  if (mediaUrl) {
+  const normalizedMediaUrls = Array.isArray(mediaUrls)
+    ? mediaUrls
+        .map((u) => (typeof u === "string" ? u.trim() : ""))
+        .filter(Boolean)
+        .slice(0, 6)
+    : [];
+
+  if (normalizedMediaUrls.length > 0) {
+    // Carousel: fetch each media item
+    for (const u of normalizedMediaUrls) {
+      const fetched = await fetchMediaFromUrl(u);
+      if (fetched) finalMediaList.push(fetched);
+    }
+  } else if (mediaUrl) {
     // Always use URL if available (avoids payload size issues)
     const fetched = await fetchMediaFromUrl(mediaUrl);
     if (fetched) finalMedia = fetched;
@@ -249,7 +265,10 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   }
 
   // Detect if media is video or image (after finalMedia is determined)
-  const isVideo = finalMedia?.mimeType?.startsWith('video/') || false;
+  const isCarousel = finalMediaList.length > 1;
+  const isVideo =
+    (finalMedia?.mimeType?.startsWith("video/") || false) ||
+    (finalMediaList.some((m) => m.mimeType?.startsWith("video/")) || false);
 
   // Determine platform for context (if OnlyFans)
   const isOnlyFansPlatform =
@@ -368,6 +387,7 @@ ONLYFANS EXPLICIT MODE (HIGH INTENSITY):
 
   // Build prompt
   const desiredCaptionCount = isOnlyFansPlatform ? 5 : 3;
+  // For carousels, we generate the same number of variants, but each must summarize all media.
   const prompt = `
 ${isExplicitContent ? `
 🚨 CRITICAL INSTRUCTION - EXPLICIT ADULT CONTENT REQUIRED 🚨
@@ -526,6 +546,12 @@ ${isExplicitContent ? `
 ` : ''}
 
 Create captions that capture the full video experience, not just a single frame.
+` : isCarousel ? `
+IMPORTANT: You are analyzing a CAROUSEL (multiple images/videos) for a single post.
+- You will be given multiple media items representing one coherent post.
+- Do NOT write separate captions per image.
+- Write captions that summarize the overall story/vibe across ALL media items in the carousel.
+- It is OK to reference changes over time (e.g., day → night outfit change) if that matches the media.
 ` : `
 If an image is provided, analyze the visual content:
 - Describe what you see, the mood, colors, composition, and key elements
@@ -622,7 +648,19 @@ ${shouldGenerateOnlyFansHashtags ? `HASHTAG REQUIREMENTS:
 
   const parts: any[] = [{ text: prompt }];
 
-  if (finalMedia) {
+  // Attach media:
+  // - Single media: attach inlineData
+  // - Carousel: attach ALL media items so the model can summarize the set
+  if (finalMediaList.length > 0) {
+    for (const m of finalMediaList) {
+      parts.push({
+        inlineData: {
+          data: m.data,
+          mimeType: m.mimeType,
+        },
+      });
+    }
+  } else if (finalMedia) {
     parts.push({
       inlineData: {
         data: finalMedia.data,

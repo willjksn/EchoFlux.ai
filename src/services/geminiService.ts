@@ -112,16 +112,18 @@ export async function generateReply(
 ---------------------------------------------------- */
 export async function generateCaptions(opts: {
   mediaUrl?: string | null;
+  mediaUrls?: string[] | null; // Multiple media URLs (carousel)
   mediaData?: { data: string; mimeType: string } | null;
   goal?: string | null;
   tone?: string | null;
   promptText?: string | null;
   platforms?: string[] | null; // Selected platforms for platform-specific hashtags
 }) {
-  const { mediaUrl, mediaData, goal, tone, promptText, platforms } = opts;
+  const { mediaUrl, mediaUrls, mediaData, goal, tone, promptText, platforms } = opts;
 
   return await callFunction("generateCaptions", {
     mediaUrl: mediaUrl || null,
+    mediaUrls: Array.isArray(mediaUrls) ? mediaUrls : null,
     mediaData: mediaData || null,
     goal: goal || null,
     tone: tone || null,
