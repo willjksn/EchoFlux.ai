@@ -28,8 +28,6 @@ export const MassEmailComposer: React.FC<MassEmailComposerProps> = ({ isOpen, on
     failed: number;
   } | null>(null);
 
-  if (!isOpen) return null;
-
   useEffect(() => {
     if (!isOpen) return;
 
@@ -52,6 +50,9 @@ export const MassEmailComposer: React.FC<MassEmailComposerProps> = ({ isOpen, on
 
     loadTemplates();
   }, [isOpen]);
+
+  // IMPORTANT: keep hooks unconditional (React invariant #310 fix)
+  if (!isOpen) return null;
 
   const handleSend = async () => {
     if (!subject.trim() || !text.trim()) {
