@@ -524,6 +524,8 @@ export interface MediaItemState {
         previewUrl: string;
         data: string;
         mimeType: string;
+        results?: CaptionResult[];
+        captionText?: string;
     }>;
     results: CaptionResult[];
     captionText: string;

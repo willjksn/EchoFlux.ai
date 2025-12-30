@@ -1,6 +1,7 @@
 export function isInviteOnlyMode(): boolean {
-  const v = (import.meta as any)?.env?.VITE_INVITE_ONLY_MODE;
-  const s = String(v ?? "").toLowerCase().trim();
+  // IMPORTANT: Use direct `import.meta.env.*` access so Vite can replace it at build time.
+  // Optional chaining/casting patterns can prevent replacement, leaving `import.meta.env` undefined in production.
+  const s = String(import.meta.env.VITE_INVITE_ONLY_MODE ?? "").toLowerCase().trim();
 
   // Preferred values (human-friendly)
   if (s === "on") return true;

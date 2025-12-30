@@ -131,6 +131,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
 }) => {
   const { user, setUser, showToast, setActivePage } = useAppContext();
   const [isGenerating, setIsGenerating] = useState(false);
+  const [activeCaptionAsset, setActiveCaptionAsset] = useState<string>('primary'); // 'primary' | additional image id
   const [showMediaLibraryModal, setShowMediaLibraryModal] = useState(false);
   const [libraryMediaItems, setLibraryMediaItems] = useState<MediaLibraryItem[]>([]);
   const [isLoadingLibrary, setIsLoadingLibrary] = useState(false);
@@ -155,6 +156,14 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   const [showPredictModal, setShowPredictModal] = useState(false);
   const [repurposeResult, setRepurposeResult] = useState<any>(null);
   const [showRepurposeModal, setShowRepurposeModal] = useState(false);
+
+  // Keep active caption selection valid if additional images are removed.
+  useEffect(() => {
+    if (activeCaptionAsset === 'primary') return;
+    const exists = (mediaItem.additionalImages || []).some((img) => img.id === activeCaptionAsset);
+    if (!exists) setActiveCaptionAsset('primary');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mediaItem.additionalImages?.length]);
 
   // Save predict to history (limit to last 10)
   const savePredictToHistory = async (data: any) => {
@@ -369,6 +378,52 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
     showToast('Image removed', 'success');
   };
 
+  const normalizeCaptionResults = (res: any): CaptionResult[] => {
+    if (Array.isArray(res)) return res as CaptionResult[];
+    if (Array.isArray(res?.captions)) return res.captions as CaptionResult[];
+    if (res?.caption) return [{ caption: res.caption, hashtags: res.hashtags || [] }];
+    return [];
+  };
+
+  const firstCaptionTextFromResults = (results: CaptionResult[]) => {
+    return results.length > 0 ? results[0].caption + '\n\n' + (results[0].hashtags || []).join(' ') : '';
+  };
+
+  const resolveMediaUrl = async (base64Data: string | null, mimeType: string, mediaUrl?: string) => {
+    let finalMediaUrl = mediaUrl;
+
+    // If we don't have a URL yet, upload the base64 data to Firebase Storage
+    if (!finalMediaUrl && base64Data && user) {
+      const timestamp = Date.now();
+      const extension = mimeType.split('/')[1] || 'png';
+      const storagePath = `users/${user.id}/uploads/${timestamp}.${extension}`;
+      const storageRef = ref(storage, storagePath);
+
+      const bytes = base64ToBytes(base64Data);
+      await uploadBytes(storageRef, bytes, {
+        contentType: mimeType,
+      });
+
+      finalMediaUrl = await getDownloadURL(storageRef);
+    }
+
+    return finalMediaUrl || null;
+  };
+
+  const generateCaptionsForSingleUrl = async (finalMediaUrl: string, selectedPlatform: Platform) => {
+    const res = await generateCaptions({
+      mediaUrl: finalMediaUrl,
+      goal: mediaItem.postGoal,
+      tone: mediaItem.postTone,
+      promptText: undefined,
+      platforms: [selectedPlatform], // platform-optimized captions
+    });
+
+    const results = normalizeCaptionResults(res);
+    const firstCaptionText = firstCaptionTextFromResults(results);
+    return { results, firstCaptionText };
+  };
+
   const generateCaptionsForMedia = async (base64Data: string | null, mimeType: string, mediaUrl?: string) => {
     if (!canGenerate || !user) {
       // Show upgrade modal if callback is provided
@@ -382,23 +437,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
 
     setIsGenerating(true);
     try {
-      let finalMediaUrl = mediaUrl;
-      
-      // If we don't have a URL yet, upload the base64 data to Firebase Storage
-      if (!finalMediaUrl && base64Data) {
-        const timestamp = Date.now();
-        const extension = mimeType.split('/')[1] || 'png';
-        const storagePath = `users/${user.id}/uploads/${timestamp}.${extension}`;
-        const storageRef = ref(storage, storagePath);
-
-        const bytes = base64ToBytes(base64Data);
-        await uploadBytes(storageRef, bytes, {
-          contentType: mimeType,
-        });
-
-        finalMediaUrl = await getDownloadURL(storageRef);
-      }
-      
+      const finalMediaUrl = await resolveMediaUrl(base64Data, mimeType, mediaUrl);
       if (!finalMediaUrl) {
         showToast('Failed to get media URL for caption generation.', 'error');
         setIsGenerating(false);
@@ -416,35 +455,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
         return;
       }
       
-      const res = await generateCaptions({
-        mediaUrl: finalMediaUrl,
-        goal: mediaItem.postGoal,
-        tone: mediaItem.postTone,
-        promptText: undefined,
-        platforms: [selectedPlatform], // Pass single platform for platform-optimized caption generation
-      });
-
-      let generatedResults: CaptionResult[] = [];
-
-      if (Array.isArray(res)) {
-        generatedResults = res as CaptionResult[];
-      } else if (Array.isArray(res?.captions)) {
-        generatedResults = res.captions as CaptionResult[];
-      } else if (res?.caption) {
-        generatedResults = [
-          {
-            caption: res.caption,
-            hashtags: res.hashtags || [],
-          },
-        ];
-      }
-
-      const firstCaptionText =
-        generatedResults.length > 0
-          ? generatedResults[0].caption +
-            '\n\n' +
-            (generatedResults[0].hashtags || []).join(' ')
-          : '';
+      const { results: generatedResults, firstCaptionText } = await generateCaptionsForSingleUrl(finalMediaUrl, selectedPlatform);
 
       onUpdate(index, {
         results: generatedResults,
@@ -461,16 +472,75 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   };
 
   const handleGenerate = async () => {
-    // Check if we have media - either base64 data or a preview URL
-    if (mediaItem.data) {
-      // We have base64 data (uploaded file)
-      generateCaptionsForMedia(mediaItem.data, mediaItem.mimeType || 'image/jpeg');
-    } else if (mediaItem.previewUrl) {
-      // We have a URL (from media library or already uploaded)
-      // Use the URL directly - no need to convert to base64 and re-upload
-      generateCaptionsForMedia(null, mediaItem.mimeType || 'image/jpeg', mediaItem.previewUrl);
-    } else {
-      showToast('Please upload media first.', 'error');
+    // Multi-image posts: generate captions for the primary + each additional image.
+    const additional = mediaItem.additionalImages || [];
+    const hasAdditional = additional.length > 0;
+
+    if (!hasAdditional) {
+      // Single media - keep existing behavior
+      if (mediaItem.data) {
+        generateCaptionsForMedia(mediaItem.data, mediaItem.mimeType || 'image/jpeg');
+      } else if (mediaItem.previewUrl) {
+        generateCaptionsForMedia(null, mediaItem.mimeType || 'image/jpeg', mediaItem.previewUrl);
+      } else {
+        showToast('Please upload media first.', 'error');
+      }
+      return;
+    }
+
+    if (!canGenerate || !user) {
+      if (onUpgradeClick) onUpgradeClick();
+      else showToast('You have reached your monthly caption generation limit. Upgrade to get more!', 'error');
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      // Platform must be selected
+      const selectedPlatform = (Object.keys(mediaItem.selectedPlatforms || {}) as Platform[]).find(
+        p => mediaItem.selectedPlatforms?.[p]
+      );
+      if (!selectedPlatform) {
+        showToast('Please select a platform first to generate platform-optimized captions', 'error');
+        return;
+      }
+
+      // Primary
+      const primaryUrl = await resolveMediaUrl(mediaItem.data || null, mediaItem.mimeType || 'image/jpeg', mediaItem.previewUrl);
+      if (!primaryUrl) {
+        showToast('Failed to get media URL for caption generation.', 'error');
+        return;
+      }
+      const primaryOut = await generateCaptionsForSingleUrl(primaryUrl, selectedPlatform);
+      onGenerateComplete();
+
+      // Additional images
+      const updatedAdditional = additional.map((img) => ({ ...img }));
+      for (let i = 0; i < updatedAdditional.length; i++) {
+        const img = updatedAdditional[i];
+        const url = await resolveMediaUrl(img.data || null, img.mimeType || 'image/jpeg', img.previewUrl);
+        if (!url) continue;
+        const out = await generateCaptionsForSingleUrl(url, selectedPlatform);
+        updatedAdditional[i] = {
+          ...img,
+          results: out.results,
+          captionText: out.firstCaptionText,
+        };
+        onGenerateComplete();
+      }
+
+      onUpdate(index, {
+        results: primaryOut.results,
+        captionText: primaryOut.firstCaptionText,
+        additionalImages: updatedAdditional,
+      });
+      setActiveCaptionAsset('primary');
+      showToast('Generated captions for all images in this post.', 'success');
+    } catch (e: any) {
+      console.error(e);
+      showToast(e?.message || 'Failed to generate captions.', 'error');
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -479,6 +549,12 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
       result.caption + '\n\n' + (result.hashtags || []).join(' ');
     onUpdate(index, { captionText });
   };
+
+  const activeResults: CaptionResult[] = useMemo(() => {
+    if (activeCaptionAsset === 'primary') return mediaItem.results || [];
+    const img = (mediaItem.additionalImages || []).find((i) => i.id === activeCaptionAsset) as any;
+    return (img?.results || []) as CaptionResult[];
+  }, [activeCaptionAsset, mediaItem.results, mediaItem.additionalImages]);
 
   const filteredEmojis = useMemo(() => {
     let emojis = EMOJIS;
@@ -716,7 +792,14 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
           {mediaItem.type === 'image' && mediaItem.additionalImages && mediaItem.additionalImages.length > 0 && (
             <div className="grid grid-cols-3 gap-2 mb-2">
               {mediaItem.additionalImages.map((additionalImg) => (
-                <div key={additionalImg.id} className="relative group aspect-square">
+            <div
+              key={additionalImg.id}
+              className={`relative group aspect-square cursor-pointer ${
+                activeCaptionAsset === additionalImg.id ? 'ring-2 ring-primary-400 rounded-lg' : ''
+              }`}
+              onClick={() => setActiveCaptionAsset(additionalImg.id)}
+              title="Click to view captions generated for this image"
+            >
                   <img
                     src={additionalImg.previewUrl}
                     alt="Additional image"
@@ -919,12 +1002,16 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
           className="w-full mb-3 flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/30 border border-primary-200 dark:border-primary-800 rounded-md hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors disabled:opacity-50"
         >
           <RefreshIcon className={`w-3 h-3 ${isGenerating ? 'animate-spin' : ''}`} />
-          {isGenerating ? 'Generating...' : '(Re)Generate Captions'}
+          {isGenerating
+            ? 'Generating...'
+            : (mediaItem.additionalImages && mediaItem.additionalImages.length > 0
+              ? '(Re)Generate Captions (all images)'
+              : '(Re)Generate Captions')}
         </button>
       )}
 
       {/* Caption Results */}
-      {mediaItem.results.length > 0 && (
+      {activeResults.length > 0 && (
         <div className="mb-3 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
@@ -932,7 +1019,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
             </span>
           </div>
           <div className="space-y-1 max-h-28 overflow-y-auto">
-            {mediaItem.results.slice(0, 2).map((result, idx) => (
+            {activeResults.slice(0, 2).map((result, idx) => (
               <button
                 key={idx}
                 onClick={() => handleSelectCaption(result)}
