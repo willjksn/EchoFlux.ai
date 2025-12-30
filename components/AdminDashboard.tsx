@@ -98,7 +98,8 @@ export const AdminDashboard: React.FC = () => {
     const [modelUsageStats, setModelUsageStats] = useState<ModelUsageStats | null>(null);
     const [isLoadingModelStats, setIsLoadingModelStats] = useState(true);
     const [modelStatsDays, setModelStatsDays] = useState<number>(30);
-    const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'referralRewards' | 'announcements' | 'tools' | 'invites' | 'waitlist' | 'email'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'tools'>('overview');
+    const [toolsTab, setToolsTab] = useState<'toolsHome' | 'referralRewards' | 'announcements' | 'invites' | 'waitlist' | 'email'>('toolsHome');
 
     // Fetch model usage analytics
     useEffect(() => {
@@ -363,27 +364,10 @@ export const AdminDashboard: React.FC = () => {
                         Users
                     </button>
                     <button
-                        onClick={() => setActiveTab('referralRewards')}
-                        className={`px-4 py-2 rounded-md transition-colors ${
-                            activeTab === 'referralRewards'
-                                ? 'bg-primary-600 text-white'
-                                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                        }`}
-                    >
-                        Referral Rewards
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('announcements')}
-                        className={`px-4 py-2 rounded-md transition-colors ${
-                            activeTab === 'announcements'
-                                ? 'bg-primary-600 text-white'
-                                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                        }`}
-                    >
-                        Announcements
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('tools')}
+                        onClick={() => {
+                            setActiveTab('tools');
+                            setToolsTab('toolsHome');
+                        }}
                         className={`px-4 py-2 rounded-md transition-colors ${
                             activeTab === 'tools'
                                 ? 'bg-primary-600 text-white'
@@ -392,52 +376,89 @@ export const AdminDashboard: React.FC = () => {
                     >
                         Tools
                     </button>
-                    <button
-                        onClick={() => setActiveTab('invites')}
-                        className={`px-4 py-2 rounded-md transition-colors ${
-                            activeTab === 'invites'
-                                ? 'bg-primary-600 text-white'
-                                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                        }`}
-                    >
-                        Invite Codes
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('waitlist')}
-                        className={`px-4 py-2 rounded-md transition-colors ${
-                            activeTab === 'waitlist'
-                                ? 'bg-primary-600 text-white'
-                                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                        }`}
-                    >
-                        Waitlist
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('email')}
-                        className={`px-4 py-2 rounded-md transition-colors ${
-                            activeTab === 'email'
-                                ? 'bg-primary-600 text-white'
-                                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                        }`}
-                    >
-                        Email
-                    </button>
                 </div>
             </div>
 
-            {activeTab === 'referralRewards' && <ReferralRewardsConfig />}
-            {activeTab === 'announcements' && <AdminAnnouncementsPanel />}
             {activeTab === 'tools' && (
                 <div className="space-y-6">
-                    <div className="flex justify-between items-center">
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Admin Tools</h3>
+                    <div className="flex flex-wrap gap-2 border-b border-gray-200 dark:border-gray-700 pb-2">
+                        <button
+                            onClick={() => setToolsTab('toolsHome')}
+                            className={`px-4 py-2 rounded-md transition-colors ${
+                                toolsTab === 'toolsHome'
+                                    ? 'bg-primary-600 text-white'
+                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                            }`}
+                        >
+                            Tools Home
+                        </button>
+                        <button
+                            onClick={() => setToolsTab('referralRewards')}
+                            className={`px-4 py-2 rounded-md transition-colors ${
+                                toolsTab === 'referralRewards'
+                                    ? 'bg-primary-600 text-white'
+                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                            }`}
+                        >
+                            Referral Rewards
+                        </button>
+                        <button
+                            onClick={() => setToolsTab('announcements')}
+                            className={`px-4 py-2 rounded-md transition-colors ${
+                                toolsTab === 'announcements'
+                                    ? 'bg-primary-600 text-white'
+                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                            }`}
+                        >
+                            Announcements
+                        </button>
+                        <button
+                            onClick={() => setToolsTab('invites')}
+                            className={`px-4 py-2 rounded-md transition-colors ${
+                                toolsTab === 'invites'
+                                    ? 'bg-primary-600 text-white'
+                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                            }`}
+                        >
+                            Invite Codes
+                        </button>
+                        <button
+                            onClick={() => setToolsTab('waitlist')}
+                            className={`px-4 py-2 rounded-md transition-colors ${
+                                toolsTab === 'waitlist'
+                                    ? 'bg-primary-600 text-white'
+                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                            }`}
+                        >
+                            Waitlist
+                        </button>
+                        <button
+                            onClick={() => setToolsTab('email')}
+                            className={`px-4 py-2 rounded-md transition-colors ${
+                                toolsTab === 'email'
+                                    ? 'bg-primary-600 text-white'
+                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                            }`}
+                        >
+                            Email
+                        </button>
                     </div>
-                    <AdminToolsPanel />
+
+                    {toolsTab === 'toolsHome' && (
+                        <div className="space-y-6">
+                            <div className="flex justify-between items-center">
+                                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Admin Tools</h3>
+                            </div>
+                            <AdminToolsPanel />
+                        </div>
+                    )}
+                    {toolsTab === 'referralRewards' && <ReferralRewardsConfig />}
+                    {toolsTab === 'announcements' && <AdminAnnouncementsPanel />}
+                    {toolsTab === 'invites' && <InviteCodeManager />}
+                    {toolsTab === 'waitlist' && <WaitlistManager />}
+                    {toolsTab === 'email' && <EmailCenter />}
                 </div>
             )}
-            {activeTab === 'invites' && <InviteCodeManager />}
-            {activeTab === 'waitlist' && <WaitlistManager />}
-            {activeTab === 'email' && <EmailCenter />}
             {activeTab === 'overview' && (
                 <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
