@@ -64,7 +64,7 @@ export async function sendEmail(params: SendEmailParams) {
       sent: false as const,
       previewOnly: true as const,
       reason: "Mailer not configured",
-      provider: null as const,
+      provider: null,
     };
   }
 
