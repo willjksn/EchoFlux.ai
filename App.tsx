@@ -415,9 +415,22 @@ const AppContent: React.FC = () => {
             
             // If user has a pre-selected plan from landing page, handle it
             if (selectedPlan) {
+                const isInviteGranted =
+                    (user as any)?.subscriptionStatus === 'invite_grant' ||
+                    !!(user as any)?.invitedWithCode ||
+                    !!(user as any)?.inviteGrantPlan;
+
+                // If the user has invite-granted access, never override it based on a landing-page selection.
+                if (isInviteGranted) {
+                    setSelectedPlan(null);
+                    setOnboardingStep('creator');
+                    return;
+                }
+
                 if (selectedPlan === 'Free') {
-                    // Free plan - set it and proceed to onboarding
-                    setUser({ ...user, plan: 'Free' });
+                    // Free plan - proceed to onboarding.
+                    // IMPORTANT: Do not write plan='Free' here, because it can accidentally overwrite an invite-granted Pro/Elite
+                    // if the invite redemption completes slightly after the landing selection is set.
                     setSelectedPlan(null); // Clear selected plan
                     setOnboardingStep('creator');
                 } else if (selectedPlan === 'Pro' || selectedPlan === 'Elite') {

@@ -15,14 +15,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const status = (req.query.status as string | undefined) || "pending";
 
   try {
-    const snap = await db
-      .collection("waitlist_requests")
-      .where("status", "==", status)
-      .orderBy("createdAt", "desc")
-      .limit(200)
-      .get();
+    // NOTE: A Firestore query with `.where('status', '==', ...)` + `.orderBy('createdAt', 'desc')`
+    // requires a composite index. To avoid operational friction during early testing,
+    // we instead order by createdAt and filter in-memory.
+    const normalizedStatus = status === "approved" || status === "rejected" || status === "pending" ? status : "pending";
+    const snap = await db.collection("waitlist_requests").orderBy("createdAt", "desc").limit(500).get();
 
-    const items = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+    const items = snap.docs
+      .map((d) => ({ id: d.id, ...(d.data() as any) }))
+      .filter((it) => (it as any)?.status === normalizedStatus);
     return res.status(200).json({ success: true, items });
   } catch (e: any) {
     console.error("adminListWaitlist error:", e);

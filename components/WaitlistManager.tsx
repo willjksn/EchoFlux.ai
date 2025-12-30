@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { auth } from '../firebaseConfig';
 import { useAppContext } from './AppContext';
+import { dateInputToIsoEndOfDay } from '../src/utils/dateInput';
 
 type WaitlistItem = {
   id: string;
@@ -64,7 +65,7 @@ export const WaitlistManager: React.FC = () => {
         body: JSON.stringify({
           email: approveEmail,
           grantPlan: approvePlan,
-          expiresAt: approveExpiresAt ? new Date(approveExpiresAt).toISOString() : null,
+          expiresAt: approveExpiresAt ? dateInputToIsoEndOfDay(approveExpiresAt) : null,
         }),
       });
       const data = await resp.json().catch(() => ({}));

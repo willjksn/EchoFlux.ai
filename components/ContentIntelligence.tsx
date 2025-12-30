@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from './AppContext';
+import { hasCalendarAccess } from '../src/utils/planAccess';
 import { SparklesIcon, RefreshIcon, XMarkIcon, ClockIcon, CopyIcon, TrashIcon, UploadIcon, DownloadIcon, ImageIcon } from './icons/UIIcons';
 import { auth, storage, db } from '../firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -797,7 +798,12 @@ export const ContentIntelligence: React.FC = () => {
                 if (isOnlyFansStudio && setActivePage) {
                     setActivePage('onlyfansStudio');
                 } else if (setActivePage) {
-                    setActivePage('calendar');
+                    if (!hasCalendarAccess(user)) {
+                        showToast('Upgrade to Pro or Elite to access the calendar', 'info');
+                        setActivePage('pricing');
+                    } else {
+                        setActivePage('calendar');
+                    }
                 }
             } else {
                 showToast('Saved to Drafts!', 'success');

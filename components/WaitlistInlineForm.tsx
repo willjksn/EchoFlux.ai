@@ -6,8 +6,10 @@ export const WaitlistInlineForm: React.FC = () => {
   const [name, setName] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'done'>('idle');
   const [message, setMessage] = useState<string | null>(null);
+  const inviteOnly = isInviteOnlyMode();
 
-  if (!isInviteOnlyMode()) return null;
+  // Only show waitlist CTA during invite-only periods
+  if (!inviteOnly) return null;
 
   const submit = async () => {
     if (!email.trim()) {

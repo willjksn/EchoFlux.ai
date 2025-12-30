@@ -51,6 +51,7 @@ import { getAnalytics } from '../src/services/geminiService';
 import { MediaItemState } from '../types';
 import { publishInstagramPost, publishTweet, publishPinterestPin } from '../src/services/socialMediaService';
 import { PinterestBoardSelectionModal } from './PinterestBoardSelectionModal';
+import { hasCalendarAccess } from '../src/utils/planAccess';
 
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -2946,8 +2947,13 @@ const CaptionGenerator: React.FC = () => {
       await new Promise(resolve => setTimeout(resolve, 100));
 
       if (status === 'Scheduled') {
-        showToast('Added to Calendar!', 'success');
-        setActivePage('calendar');
+        if (!hasCalendarAccess(user)) {
+          showToast('Upgrade to Pro or Elite to access the calendar', 'info');
+          setActivePage('pricing');
+        } else {
+          showToast('Added to Calendar!', 'success');
+          setActivePage('calendar');
+        }
       } else {
         showToast('Saved to Drafts!', 'success');
         setActivePage('approvals');

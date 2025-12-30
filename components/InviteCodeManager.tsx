@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from './AppContext';
 import { auth } from '../firebaseConfig';
+import { dateInputToIsoEndOfDay, isoToDateInputLocal } from '../src/utils/dateInput';
 
 interface InviteCode {
   code: string;
@@ -98,7 +99,7 @@ export const InviteCodeManager: React.FC = () => {
           count: generateCount,
           grantPlan: generateGrantPlan,
           maxUses: generateMaxUses,
-          expiresAt: generateExpiresAt ? new Date(generateExpiresAt).toISOString() : null,
+          expiresAt: generateExpiresAt ? dateInputToIsoEndOfDay(generateExpiresAt) : null,
         }),
       });
 
@@ -141,7 +142,7 @@ export const InviteCodeManager: React.FC = () => {
           : 'Free') as 'Free' | 'Pro' | 'Elite'
     );
     setEditMaxUses(invite.maxUses || 1);
-    setEditExpiresAt(invite.expiresAt ? invite.expiresAt.slice(0, 10) : '');
+    setEditExpiresAt(invite.expiresAt ? isoToDateInputLocal(invite.expiresAt) : '');
   };
 
   const saveEdit = async () => {
@@ -164,7 +165,7 @@ export const InviteCodeManager: React.FC = () => {
           code: editingInvite.code,
           grantPlan: editGrantPlan,
           maxUses: editMaxUses,
-          expiresAt: editExpiresAt ? new Date(editExpiresAt).toISOString() : null,
+          expiresAt: editExpiresAt ? dateInputToIsoEndOfDay(editExpiresAt) : null,
         }),
       });
       const data = await resp.json().catch(() => ({}));

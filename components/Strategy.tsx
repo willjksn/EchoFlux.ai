@@ -10,6 +10,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db } from '../firebaseConfig';
 import { doc, setDoc, getDoc, collection, getDocs, query, orderBy, deleteDoc } from 'firebase/firestore';
 import { OFFLINE_MODE } from '../constants';
+import { hasCalendarAccess } from '../src/utils/planAccess';
 
 export const Strategy: React.FC = () => {
     const { 
@@ -70,6 +71,7 @@ export const Strategy: React.FC = () => {
     const [loadingMediaItem, setLoadingMediaItem] = useState<string | null>(null);
     const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
     const autosaveSuspendedRef = useRef(false);
+    const canUseCalendar = hasCalendarAccess(user);
     
     // Usage stats
     const [usageStats, setUsageStats] = useState<{
@@ -1090,6 +1092,11 @@ export const Strategy: React.FC = () => {
 
     const handlePopulateCalendar = async () => {
         if (!plan || !user) return;
+        if (!canUseCalendar) {
+            showToast('Upgrade to Pro or Elite to use the visual calendar', 'info');
+            setActivePage('pricing');
+            return;
+        }
 
         let eventsAdded = 0;
         const today = new Date();
@@ -1445,7 +1452,13 @@ export const Strategy: React.FC = () => {
                             </button>
                             <button 
                                 onClick={handlePopulateCalendar}
-                                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm whitespace-nowrap flex-shrink-0"
+                                disabled={!canUseCalendar}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors shadow-sm whitespace-nowrap flex-shrink-0 ${
+                                    !canUseCalendar
+                                        ? 'bg-gray-300 text-gray-600 cursor-not-allowed dark:bg-gray-700 dark:text-gray-300'
+                                        : 'bg-green-600 text-white hover:bg-green-700'
+                                }`}
+                                title={!canUseCalendar ? 'Upgrade to Pro or Elite to use the calendar' : 'Populate Calendar'}
                             >
                                 <CalendarIcon className="w-5 h-5" /> Populate Calendar
                             </button>
@@ -1912,6 +1925,11 @@ export const Strategy: React.FC = () => {
                                                         <button
                                                             onClick={async () => {
                                                                 if (!plan || !user) return;
+                                                                if (!canUseCalendar) {
+                                                                    showToast('Upgrade to Pro or Elite to access the calendar', 'info');
+                                                                    setActivePage('pricing');
+                                                                    return;
+                                                                }
                                                                 
                                                                 const currentDay = plan.weeks[weekIndex].content[dayIndex];
                                                                 if (!currentDay.mediaUrl) {
@@ -2035,7 +2053,7 @@ export const Strategy: React.FC = () => {
                                                                     showToast('Failed to save to draft', 'error');
                                                                 }
                                                             }}
-                                                            disabled={status === 'draft' || status === 'scheduled'}
+                                                            disabled={!canUseCalendar || status === 'draft' || status === 'scheduled'}
                                                             className="px-3 py-1.5 text-xs font-medium bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1"
                                                         >
                                                             <CheckCircleIcon className="w-3 h-3" />
@@ -2164,7 +2182,7 @@ export const Strategy: React.FC = () => {
                                                                     }
                                                                 }
                                                             }}
-                                                            disabled={status === 'draft' || status === 'scheduled'}
+                                                            disabled={!canUseCalendar || status === 'draft' || status === 'scheduled'}
                                                             className="px-3 py-1.5 text-xs font-medium bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1"
                                                         >
                                                             <CalendarIcon className="w-3 h-3" />

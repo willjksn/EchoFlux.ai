@@ -8,6 +8,8 @@ import { db } from '../firebaseConfig';
 import { doc, setDoc, deleteDoc, collection, query, orderBy, onSnapshot, getDocs } from 'firebase/firestore';
 import { hasCapability } from '../src/services/platformCapabilities';
 import { generateCaptions } from '../src/services/geminiService';
+import { UpgradePrompt } from './UpgradePrompt';
+import { hasCalendarAccess } from '../src/utils/planAccess';
 
 const platformIcons: Record<Platform, React.ReactNode> = {
   Instagram: <InstagramIcon />,
@@ -49,6 +51,20 @@ export const Calendar: React.FC = () => {
     const [reminderType, setReminderType] = useState<'post' | 'shoot'>('post');
     const [reminderDate, setReminderDate] = useState('');
     const [reminderTime, setReminderTime] = useState('');
+
+    // Calendar is Pro+ (or Admin). Free plan should not access any calendar features.
+    if (!hasCalendarAccess(user)) {
+        return (
+            <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full">
+                <div className="max-w-4xl mx-auto">
+                    <UpgradePrompt
+                        featureName="Calendar"
+                        onUpgradeClick={() => setActivePage('pricing')}
+                    />
+                </div>
+            </div>
+        );
+    }
 
     // Load reminders from Firestore
     useEffect(() => {

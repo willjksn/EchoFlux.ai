@@ -885,18 +885,21 @@ export const Settings: React.FC = () => {
 
                 {activeTab === 'general' && (
                     <>
-                        <SettingsSection title="General Automation">
-                            <ToggleSwitch label="Enable Auto-Suggest" enabled={settings.autoReply} onChange={(val) => updateSetting('autoReply', val)} />
-                            <p className="text-sm text-gray-500 dark:text-gray-400">When enabled, EchoFlux.ai will automatically generate a suggested reply for incoming messages.</p>
-                            <hr className="border-gray-200 dark:border-gray-700" />
-                            {/* Auto-Respond is disabled in AI Content Studio mode */}
-                            {false && (
-                              <>
-                                <ToggleSwitch label="Enable Auto-Respond" enabled={settings.autoRespond} onChange={(val) => updateSetting('autoRespond', val)} />
-                                <p className="text-sm text-gray-500 dark:text-gray-400">When enabled, EchoFlux.ai will automatically send the generated reply without manual approval. Use with caution.</p>
-                              </>
-                            )}
-                        </SettingsSection>
+                        {/* Inbox auto-suggest is not enabled in the current product scope */}
+                        {false && (
+                          <SettingsSection title="General Automation">
+                              <ToggleSwitch label="Enable Auto-Suggest" enabled={settings.autoReply} onChange={(val) => updateSetting('autoReply', val)} />
+                              <p className="text-sm text-gray-500 dark:text-gray-400">When enabled, EchoFlux.ai will automatically generate a suggested reply for incoming messages.</p>
+                              <hr className="border-gray-200 dark:border-gray-700" />
+                              {/* Auto-Respond is disabled in AI Content Studio mode */}
+                              {false && (
+                                <>
+                                  <ToggleSwitch label="Enable Auto-Respond" enabled={settings.autoRespond} onChange={(val) => updateSetting('autoRespond', val)} />
+                                  <p className="text-sm text-gray-500 dark:text-gray-400">When enabled, EchoFlux.ai will automatically send the generated reply without manual approval. Use with caution.</p>
+                                </>
+                              )}
+                          </SettingsSection>
+                        )}
                         <SettingsSection title="Safety & Accessibility">
                             <ToggleSwitch label="Safe Mode" enabled={settings.safeMode} onChange={(val) => updateSetting('safeMode', val)} />
                             <p className="text-sm text-gray-500 dark:text-gray-400">Prevents the AI from generating replies with profanity or discussing sensitive topics.</p>
