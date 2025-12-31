@@ -23,20 +23,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const db = getAdminDb();
   const nowIso = new Date().toISOString();
 
-  // Pull a bounded set to avoid timeouts; repeated cron runs will drain the queue.
-  const dueSnap = await db
-    .collection("scheduled_emails")
-    .where("status", "==", "scheduled")
-    .where("sendAt", "<=", nowIso)
-    .orderBy("sendAt", "asc")
-    .limit(10)
-    .get();
+  // Avoid composite index requirements during early stage:
+  // order by sendAt and filter in-memory for status + due time.
+  const baseSnap = await db.collection("scheduled_emails").orderBy("sendAt", "asc").limit(50).get();
+  const dueDocs = baseSnap.docs.filter((d) => {
+    const data = d.data() as any;
+    if (data?.status !== "scheduled") return false;
+    const sendAt = String(data?.sendAt || "");
+    return !!sendAt && sendAt <= nowIso;
+  });
 
   let processed = 0;
   let sentEmails = 0;
   let failedEmails = 0;
 
-  for (const schedDoc of dueSnap.docs) {
+  for (const schedDoc of dueDocs.slice(0, 10)) {
     const schedRef = schedDoc.ref;
 
     // Acquire a simple lock (transaction): scheduled -> sending
@@ -185,7 +186,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   return res.status(200).json({
     success: true,
-    due: dueSnap.size,
+    due: dueDocs.length,
     processed,
     sentEmails,
     failedEmails,

@@ -29,12 +29,19 @@ export async function logEmailHistory(entry: Omit<EmailHistoryEntry, "id" | "sen
     const db = getAdminDb();
     const nowIso = new Date().toISOString();
     const docRef = db.collection("email_history").doc();
-    
-    await docRef.set({
+
+    // Firestore Admin SDK rejects `undefined` values.
+    // Normalize optional fields to either be omitted or set to null.
+    const clean: any = {
       ...entry,
       id: docRef.id,
       sentAt: nowIso,
-    });
+    };
+    if (clean.html === undefined) delete clean.html;
+    if (clean.error === undefined) delete clean.error;
+    if (clean.metadata === undefined) delete clean.metadata;
+
+    await docRef.set(clean);
     
     return docRef.id;
   } catch (e: any) {

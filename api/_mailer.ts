@@ -17,6 +17,7 @@ export function isMailerConfigured() {
 
 export async function sendEmail(params: SendEmailParams) {
   // Priority 1: Try Google SMTP first (most reliable for this setup)
+  let smtpFailure: any = null;
   if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
     const host = process.env.SMTP_HOST!;
     const port = Number(process.env.SMTP_PORT || "465");
@@ -44,7 +45,8 @@ export async function sendEmail(params: SendEmailParams) {
       return { sent: true as const, provider: "smtp" as const, messageId: info.messageId };
     } catch (e: any) {
       console.error("SMTP send failed:", e);
-      // Fall through to next provider
+      smtpFailure = e;
+      // Fall through to next provider (Resend/Postmark) if configured.
     }
   }
 
@@ -137,9 +139,16 @@ export async function sendEmail(params: SendEmailParams) {
   return {
     sent: false as const,
     previewOnly: true as const,
-    reason: "Mailer not configured",
+    reason: smtpFailure ? "SMTP send failed" : "Mailer not configured",
     provider: null,
-    error: "No email provider configured (SMTP, Resend, or Postmark)",
+    error: smtpFailure
+      ? {
+          message: smtpFailure?.message || "SMTP send failed",
+          code: smtpFailure?.code || null,
+          responseCode: smtpFailure?.responseCode || null,
+          response: smtpFailure?.response || null,
+        }
+      : "No email provider configured (SMTP, Resend, or Postmark)",
   };
 }
 
