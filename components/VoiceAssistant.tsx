@@ -277,26 +277,8 @@ export const VoiceAssistant: React.FC = () => {
         - \"Hi! I'm your EchoFlux.ai voice assistant. I can explain how to use any feature in the app, help you create content, answer questions about social media strategy, and more. What would you like to learn about or work on today?\"
     `;
 
-    // Define available tools/functions (no live web search in current version)
-    const tools = [
-      {
-        name: 'show_help',
-        description: 'Show available commands and what the assistant can do. Use this when the user asks what you can do, how to use you, or what commands are available.',
-        parameters: {
-          type: 'object',
-          properties: {},
-          required: []
-        }
-      }
-    ];
-
     sessionPromise.current = ai.live.connect({
       model: "gemini-2.5-flash-native-audio-preview-09-2025",
-      tools: tools,
-      generationConfig: {
-        // Default to English responses unless the user explicitly asks otherwise
-        language: "en",
-      },
       callbacks: {
         onopen: async () => {
           setIsConnecting(false);
@@ -397,10 +379,11 @@ Just ask me how to do something or what you'd like to learn about!`;
 
           // Extract text if available (for transcript)
           const textPart = msg.serverContent?.modelTurn?.parts?.find(p => p.text);
-          if (textPart?.text) {
+          const assistantText = typeof textPart?.text === 'string' ? textPart.text : null;
+          if (assistantText && assistantText.trim()) {
             setConversationHistory(prev => [...prev, {
               type: 'assistant',
-              text: textPart.text,
+              text: assistantText,
               timestamp: new Date()
             }]);
           }
@@ -436,7 +419,7 @@ Just ask me how to do something or what you'd like to learn about!`;
 
         onclose: () => {
           if (isOpen) {
-            showToast("Voice Assistant disconnected.", "info");
+            showToast("Voice Assistant disconnected.", "error");
             // Clear conversation history when disconnecting
             setConversationHistory([]);
           }
@@ -462,7 +445,7 @@ Just ask me how to do something or what you'd like to learn about!`;
       },
       config: {
         responseModalities: [Modality.AUDIO],
-        systemInstruction
+        systemInstruction,
       }
     });
   };
