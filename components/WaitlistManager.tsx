@@ -30,40 +30,22 @@ export const WaitlistManager: React.FC = () => {
   const [approveExpiresAt, setApproveExpiresAt] = useState<string>(''); // YYYY-MM-DD
   const [isApproving, setIsApproving] = useState(false);
   const [emailPreview, setEmailPreview] = useState<string | null>(null);
-  const [approveSubject, setApproveSubject] = useState<string>("You've Been Selected for Early Testing — EchoFlux.ai");
-  const [approveBody, setApproveBody] = useState<string>(
-    [
-      'Hi {name},',
-      '',
-      "Thanks for signing up — we'd love to bring you into the EchoFlux.ai early testing group 🎉",
-      '',
-      'Your Invite Code: {inviteCode}',
-      'Plan: {plan}{expiresAt}',
-      '',
-      'How to get started:',
-      '1) Go to https://echoflux.ai',
-      '2) Click \"Sign in\" → \"Sign Up\" (or \"Continue with Google\")',
-      '3) Enter the invite code when prompted',
-      '4) Complete onboarding',
-      '',
-      'If you have issues, reply to this email.',
-      '',
-      '— The EchoFlux Team',
-    ].join('\n')
-  );
 
-  const [rejectEmail, setRejectEmail] = useState<string | null>(null);
-  const [rejectName, setRejectName] = useState<string | null>(null);
-  const [isRejecting, setIsRejecting] = useState(false);
-  const [rejectSubject, setRejectSubject] = useState<string>('EchoFlux.ai waitlist update');
-  const [rejectBody, setRejectBody] = useState<string>(
+  // Feedback (editable; can be sent multiple times)
+  const [feedbackEmail, setFeedbackEmail] = useState<string | null>(null);
+  const [feedbackName, setFeedbackName] = useState<string | null>(null);
+  const [isSendingFeedback, setIsSendingFeedback] = useState(false);
+  const [feedbackSubject, setFeedbackSubject] = useState<string>('EchoFlux.ai — Feedback request');
+  const [feedbackBody, setFeedbackBody] = useState<string>(
     [
-      'Hi {name},',
+      'Thanks for testing EchoFlux so far — your feedback is incredibly valuable to us.',
       '',
-      'Thanks for joining the EchoFlux.ai testing waitlist.',
+      'When you’ve had time to explore, we’d love to know:',
+      '• What felt the most useful?',
+      '• What felt confusing or unnecessary?',
+      '• Where could the planning workflows improve?',
       '',
-      'At the moment, we’re onboarding a small group of early testers and we can’t invite everyone right away.',
-      'We’ll keep your request on file, and we’ll reach out if a spot opens up.',
+      'Reply anytime — we’re reading everything during this phase.',
       '',
       '— The EchoFlux Team',
     ].join('\n')
@@ -112,8 +94,6 @@ export const WaitlistManager: React.FC = () => {
           name: approveName,
           grantPlan: approvePlan,
           expiresAt: approveExpiresAt ? dateInputToIsoEndOfDay(approveExpiresAt) : null,
-          subjectOverride: approveSubject,
-          textOverride: approveBody,
         }),
       });
       const data = await resp.json().catch(() => ({}));
@@ -136,45 +116,65 @@ export const WaitlistManager: React.FC = () => {
     }
   };
 
-  const openReject = (email: string, name?: string | null) => {
-    setRejectEmail(email);
-    setRejectName(name || null);
-    setEmailPreview(null);
-  };
-
-  const reject = async () => {
-    if (!rejectEmail) return;
-    setIsRejecting(true);
+  const reject = async (email: string) => {
+    if (!window.confirm(`Reject ${email}?`)) return;
     try {
       const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       if (!token) throw new Error('Not authenticated');
       const resp = await fetch('/api/adminRejectWaitlist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          email: rejectEmail,
-          name: rejectName,
-          subjectOverride: rejectSubject,
-          textOverride: rejectBody,
-        }),
+        body: JSON.stringify({ email }),
       });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(data?.error || 'Failed to reject');
-      if (data.emailPreview) setEmailPreview(data.emailPreview);
-      if (data.emailSent) {
-        showToast('Rejected + email sent.', 'success');
-        setRejectEmail(null);
-        setRejectName(null);
-      } else {
-        const provider = data?.emailProvider ? String(data.emailProvider).toUpperCase() : 'EMAIL';
-        const msg = data?.emailError?.message || data?.emailError || 'Email failed to send';
-        showToast(`Rejected, but ${provider} delivery failed: ${msg}. Copy the email preview below.`, 'error');
-      }
+      showToast('Rejected.', 'success');
       await load();
     } catch (e: any) {
       showToast(e?.message || 'Failed to reject', 'error');
+    }
+  };
+
+  const openFeedback = (email: string, name?: string | null) => {
+    setFeedbackEmail(email);
+    setFeedbackName(name || null);
+    setEmailPreview(null);
+  };
+
+  const sendFeedback = async () => {
+    if (!feedbackEmail) return;
+    setIsSendingFeedback(true);
+    setEmailPreview(null);
+    try {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+      if (!token) throw new Error('Not authenticated');
+      const resp = await fetch('/api/adminSendWaitlistFeedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          email: feedbackEmail,
+          name: feedbackName,
+          subjectOverride: feedbackSubject,
+          textOverride: feedbackBody,
+        }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data?.error || 'Failed to send feedback');
+      if (data.emailPreview) setEmailPreview(data.emailPreview);
+      if (data.emailSent) {
+        showToast('Feedback email sent.', 'success');
+        setFeedbackEmail(null);
+        setFeedbackName(null);
+      } else {
+        const provider = data?.emailProvider ? String(data.emailProvider).toUpperCase() : 'EMAIL';
+        const msg = data?.emailError?.message || data?.emailError || 'Email failed to send';
+        showToast(`Feedback email failed via ${provider}: ${msg}. Copy the email preview below.`, 'error');
+      }
+      await load();
+    } catch (e: any) {
+      showToast(e?.message || 'Failed to send feedback', 'error');
     } finally {
-      setIsRejecting(false);
+      setIsSendingFeedback(false);
     }
   };
 
@@ -326,10 +326,16 @@ export const WaitlistManager: React.FC = () => {
                               Approve
                             </button>
                             <button
-                              onClick={() => openReject(it.email, it.name || null)}
+                              onClick={() => reject(it.email)}
                               className="text-red-600 hover:text-red-700"
                             >
                               Reject
+                            </button>
+                            <button
+                              onClick={() => openFeedback(it.email, it.name || null)}
+                              className="text-gray-700 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white"
+                            >
+                              Feedback
                             </button>
                           </div>
                         ) : (
@@ -370,7 +376,7 @@ export const WaitlistManager: React.FC = () => {
       {/* Approve Modal */}
       {approveEmail && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-2xl mx-4 p-6 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-md mx-4 p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Approve</h3>
               <button onClick={() => setApproveEmail(null)} className="text-gray-500 hover:text-gray-700 dark:text-gray-400">
@@ -401,32 +407,6 @@ export const WaitlistManager: React.FC = () => {
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 />
               </div>
-
-              <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
-                <div className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Email (editable)</div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                  Placeholders supported: {'{name}'}, {'{inviteCode}'}, {'{plan}'}, {'{expiresAt}'}.
-                </p>
-                <div className="space-y-2">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subject</label>
-                    <input
-                      value={approveSubject}
-                      onChange={(e) => setApproveSubject(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Body (plain text)</label>
-                    <textarea
-                      value={approveBody}
-                      onChange={(e) => setApproveBody(e.target.value)}
-                      rows={12}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-mono text-sm"
-                    />
-                  </div>
-                </div>
-              </div>
             </div>
 
             <div className="mt-6 flex justify-end gap-3">
@@ -448,36 +428,34 @@ export const WaitlistManager: React.FC = () => {
         </div>
       )}
 
-      {/* Reject Modal */}
-      {rejectEmail && (
+      {/* Feedback Modal */}
+      {feedbackEmail && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-2xl mx-4 p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Reject</h3>
-              <button onClick={() => setRejectEmail(null)} className="text-gray-500 hover:text-gray-700 dark:text-gray-400">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Send feedback request</h3>
+              <button onClick={() => setFeedbackEmail(null)} className="text-gray-500 hover:text-gray-700 dark:text-gray-400">
                 Close
               </button>
             </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">{rejectEmail}</div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">{feedbackEmail}</div>
 
             <div className="mt-4 space-y-2">
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Placeholders supported: {'{name}'}.
-              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Optional placeholders: {'{name}'}</p>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subject</label>
                 <input
-                  value={rejectSubject}
-                  onChange={(e) => setRejectSubject(e.target.value)}
+                  value={feedbackSubject}
+                  onChange={(e) => setFeedbackSubject(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Body (plain text)</label>
                 <textarea
-                  value={rejectBody}
-                  onChange={(e) => setRejectBody(e.target.value)}
-                  rows={10}
+                  value={feedbackBody}
+                  onChange={(e) => setFeedbackBody(e.target.value)}
+                  rows={12}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-mono text-sm"
                 />
               </div>
@@ -485,17 +463,17 @@ export const WaitlistManager: React.FC = () => {
 
             <div className="mt-6 flex justify-end gap-3">
               <button
-                onClick={() => setRejectEmail(null)}
+                onClick={() => setFeedbackEmail(null)}
                 className="px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               >
                 Cancel
               </button>
               <button
-                onClick={reject}
-                disabled={isRejecting}
-                className="px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                onClick={sendFeedback}
+                disabled={isSendingFeedback}
+                className="px-4 py-2 rounded-md bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:opacity-90 disabled:opacity-50"
               >
-                {isRejecting ? 'Rejecting…' : 'Reject + email'}
+                {isSendingFeedback ? 'Sending…' : 'Send feedback email'}
               </button>
             </div>
           </div>

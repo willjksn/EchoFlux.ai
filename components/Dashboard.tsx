@@ -110,6 +110,16 @@ export const Dashboard: React.FC = () => {
   const [generatedIdeas, setGeneratedIdeas] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<'trending' | 'engagement' | 'niche' | null>(null);
   const [showIdeasModal, setShowIdeasModal] = useState(false);
+
+  // First-login Early Testing onboarding (in-app)
+  const [showEarlyTestingOnboarding, setShowEarlyTestingOnboarding] = useState(false);
+  useEffect(() => {
+    if (!user?.id) return;
+    const key = `earlyTestingOnboardingSeen_${user.id}`;
+    if (localStorage.getItem(key) === 'true') return;
+    localStorage.setItem(key, 'true');
+    setShowEarlyTestingOnboarding(true);
+  }, [user?.id]);
   
   if (!user) return <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full flex items-center justify-center"><p className="text-gray-500 dark:text-gray-400">Loading...</p></div>;
 
@@ -2609,6 +2619,54 @@ export const Dashboard: React.FC = () => {
             );
           })()}
           
+          {/* First-login Early Testing onboarding */}
+          {showEarlyTestingOnboarding && (
+            <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" aria-modal="true">
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-2xl w-full p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">Welcome to EchoFlux.ai — Early Testing Access</h3>
+                    <p className="mt-2 text-gray-600 dark:text-gray-300">
+                      This version is focused on planning workflows only. Auto-posting and live analytics are intentionally disabled so creators stay fully in control of publishing.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowEarlyTestingOnboarding(false)}
+                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    aria-label="Close"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                <div className="mt-4 text-gray-700 dark:text-gray-200">
+                  <div className="font-semibold mb-2">Recommended first steps:</div>
+                  <ol className="list-decimal pl-5 space-y-1">
+                    <li>Generate a content strategy</li>
+                    <li>Move items onto your calendar</li>
+                    <li>Use Compose to generate captions</li>
+                    <li>Attach media from your library</li>
+                    <li>Copy + post manually to your platforms</li>
+                  </ol>
+                  <p className="mt-4 text-sm text-gray-600 dark:text-gray-300">
+                    Your feedback directly shapes upcoming releases — thanks for being part of this stage.
+                  </p>
+                </div>
+
+                <div className="mt-6 flex justify-end">
+                  <button
+                    onClick={() => setShowEarlyTestingOnboarding(false)}
+                    className="px-4 py-2 rounded-md bg-primary-600 text-white hover:bg-primary-700"
+                  >
+                    Got it
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Content Ideas Modal */}
           {showIdeasModal && (
             <div 
