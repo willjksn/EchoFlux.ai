@@ -1,22 +1,48 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { sendEmail } from "./_mailer.js";
-import { WAITLIST_EMAIL_TEMPLATES } from "./_waitlistEmailTemplates.js";
 import { logEmailHistory } from "./_emailHistory.js";
 
+function requireCronAuth(req: VercelRequest): boolean {
+  const secret = process.env.CRON_SECRET;
+  if (secret && secret.trim()) {
+    return req.headers.authorization === `Bearer ${secret}`;
+  }
+  // Fallback for environments without a configured secret.
+  return req.headers["x-vercel-cron"] === "1";
+}
+
+function getEasternTimeParts(d: Date) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+
+  const lookup: Record<string, string> = {};
+  for (const p of parts) {
+    if (p.type !== "literal") lookup[p.type] = p.value;
+  }
+  const hour = Number(lookup.hour);
+  const minute = Number(lookup.minute);
+  return { hour, minute };
+}
+
+function buildFeedbackLink(milestone: "day7" | "day14") {
+  // Keep this stable for production; it works even if user has to log in first.
+  const base = process.env.APP_BASE_URL || "https://echoflux.ai";
+  return `${base.replace(/\/$/, "")}/?feedback=${milestone}`;
+}
+
 /**
- * Cron job to send feedback requests to approved waitlist users
- * who have been active for X days but haven't received a feedback request yet
- * 
- * Run this daily via Vercel Cron or similar
+ * Cron job: send a short email nudge to open the in-app feedback modal.
+ * - Day 7 and Day 14 after invite grant redemption (inviteGrantRedeemedAt)
+ * - Only sends during a 10:00–10:15am ET window (run hourly via Vercel Cron; this gate prevents off-hour sends)
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Optional: Add cron secret verification
-  const cronSecret = req.headers["x-cron-secret"] || req.query.secret;
-  const expectedSecret = process.env.CRON_SECRET;
-  if (expectedSecret && cronSecret !== expectedSecret) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
+  if (req.method !== "GET" && req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+  if (!requireCronAuth(req)) return res.status(401).json({ error: "Unauthorized" });
 
   const db = getAdminDb();
   const nowIso = new Date().toISOString();
@@ -28,96 +54,91 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const cutoff14 = new Date();
   cutoff14.setDate(cutoff14.getDate() - DAY_14);
 
+  // ET send window gate
+  const { hour, minute } = getEasternTimeParts(new Date());
+  const inWindow = hour === 10 && minute >= 0 && minute <= 15;
+  if (!inWindow) {
+    return res.status(200).json({
+      success: true,
+      message: "Outside 10:00–10:15am ET send window",
+      sent: 0,
+      nowIso,
+    });
+  }
+
   try {
-    // Get approved waitlist entries that:
-    // 1. Were approved at least DAYS_AFTER_APPROVAL days ago
-    // 2. Haven't received a feedback request yet
-    const waitlistRef = db.collection("waitlist_requests");
-
-    // Robust approach (avoid composite indexes): fetch a bounded set and filter in-memory.
-    // ISO timestamps allow lexicographic comparisons.
-    const approvedSnapshot = await waitlistRef.orderBy("approvedAt", "desc").limit(500).get();
-
-    const entries = approvedSnapshot.docs
-      .map((doc) => ({
-        id: doc.id,
-        ...(doc.data() as any),
-      }))
-      .filter((entry) => {
-        return (
-          entry?.status === "approved" &&
-          typeof entry?.approvedAt === "string" &&
-          entry.approvedAt <= cutoff7.toISOString()
-        );
-      });
-
-    if (entries.length === 0) {
-      return res.status(200).json({
-        success: true,
-        message: "No eligible users for feedback requests",
-        sent: 0,
-      });
-    }
+    const usersSnap = await db.collection("users").where("subscriptionStatus", "==", "invite_grant").limit(500).get();
+    const users = usersSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
 
     const results: Array<{ email: string; sent: boolean; error?: string }> = [];
 
-    // Send day-7 and/or day-14 feedback requests
-    for (const entry of entries) {
-      const email = entry.email;
-      if (!email || typeof email !== "string") continue;
+    for (const u of users) {
+      const email = typeof u?.email === "string" ? u.email.trim().toLowerCase() : "";
+      if (!email) continue;
 
-      try {
-        const approvedAtIso = typeof entry.approvedAt === "string" ? entry.approvedAt : null;
-        const approvedAtMs = approvedAtIso ? new Date(approvedAtIso).getTime() : NaN;
-        const isAtLeast7Days = Number.isFinite(approvedAtMs) && approvedAtMs <= cutoff7.getTime();
-        const isAtLeast14Days = Number.isFinite(approvedAtMs) && approvedAtMs <= cutoff14.getTime();
+      const redeemedAtIso = typeof u?.inviteGrantRedeemedAt === "string" ? u.inviteGrantRedeemedAt : null;
+      const redeemedAtMs = redeemedAtIso ? new Date(redeemedAtIso).getTime() : NaN;
+      if (!Number.isFinite(redeemedAtMs)) continue;
 
-        const shouldSendDay7 = isAtLeast7Days && !entry.feedbackDay7SentAt;
-        const shouldSendDay14 = isAtLeast14Days && !entry.feedbackDay14SentAt;
+      const isAtLeast7Days = redeemedAtMs <= cutoff7.getTime();
+      const isAtLeast14Days = redeemedAtMs <= cutoff14.getTime();
 
-        // If a user is already at day 14 and we never sent day 7, we can send both in one run (day 7 first).
-        const sends: Array<{
-          key: "day7" | "day14";
-          subject: string;
-          body: string;
-          mark: Record<string, any>;
-        }> = [];
+      const shouldSendDay7 = isAtLeast7Days && !u.feedbackDay7NudgeSentAt && !u.feedbackDay7SubmittedAt;
+      const shouldSendDay14 = isAtLeast14Days && !u.feedbackDay14NudgeSentAt && !u.feedbackDay14SubmittedAt;
+      if (!shouldSendDay7 && !shouldSendDay14) continue;
 
-        if (shouldSendDay7) {
-          sends.push({
-            key: "day7",
-            subject: "EchoFlux early testing — quick feedback (2 minutes)",
-            body: WAITLIST_EMAIL_TEMPLATES.feedbackDay7(entry.name || null),
-            mark: { feedbackDay7SentAt: nowIso },
-          });
-        }
-        if (shouldSendDay14) {
-          sends.push({
-            key: "day14",
-            subject: "EchoFlux early testing — final feedback check-in",
-            body: WAITLIST_EMAIL_TEMPLATES.feedbackDay14(entry.name || null),
-            mark: { feedbackDay14SentAt: nowIso },
-          });
-        }
+      const name = typeof u?.name === "string" ? u.name : null;
 
-        if (sends.length === 0) continue;
+      const sends: Array<{ key: "day7" | "day14"; subject: string; body: string }> = [];
+      if (shouldSendDay7) {
+        const link = buildFeedbackLink("day7");
+        sends.push({
+          key: "day7",
+          subject: "EchoFlux — quick feedback (2 minutes)",
+          body: `${name ? `Hi ${name},` : "Hi there,"}
 
-        for (const s of sends) {
-          const mail = await sendEmail({
-            to: email,
-            subject: s.subject,
-            text: s.body,
-          });
+Quick check-in — we added a short in-app feedback form (mostly multiple-choice).
 
-          await waitlistRef.doc(entry.id).set(
-            {
-              lastEmailedAt: nowIso,
-              emailStatus: mail.sent ? "sent" : "failed",
-              ...(mail.sent ? {} : { emailError: (mail as any)?.error || (mail as any)?.reason || "Email send failed" }),
-              ...s.mark,
-            } as any,
-            { merge: true }
-          );
+Open your Day 7 feedback form:
+${link}
+
+If you’re not logged in, log in first and it will pop up automatically.
+
+— The EchoFlux Team`,
+        });
+      }
+      if (shouldSendDay14) {
+        const link = buildFeedbackLink("day14");
+        sends.push({
+          key: "day14",
+          subject: "EchoFlux — final feedback check-in",
+          body: `${name ? `Hi ${name},` : "Hi there,"}
+
+Final check-in — we’d love a last quick round of feedback (mostly multiple-choice).
+
+Open your Day 14 feedback form:
+${link}
+
+If you’re not logged in, log in first and it will pop up automatically.
+
+— The EchoFlux Team`,
+        });
+      }
+
+      // If already at day 14 and day 7 never sent, we can send both (day 7 first).
+      for (const s of sends) {
+        try {
+          const mail = await sendEmail({ to: email, subject: s.subject, text: s.body });
+
+          await db
+            .collection("users")
+            .doc(u.id)
+            .set(
+              {
+                ...(s.key === "day7" ? { feedbackDay7NudgeSentAt: nowIso } : { feedbackDay14NudgeSentAt: nowIso }),
+              } as any,
+              { merge: true }
+            );
 
           await logEmailHistory({
             sentBy: null,
@@ -128,7 +149,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             provider: (mail as any)?.provider || null,
             error: mail.sent ? undefined : ((mail as any)?.error || (mail as any)?.reason || "Email send failed"),
             category: "scheduled",
-            metadata: { waitlistId: entry.id, milestone: s.key, approvedAt: approvedAtIso || null },
+            metadata: { userId: u.id, milestone: s.key, inviteGrantRedeemedAt: redeemedAtIso },
           });
 
           results.push({
@@ -137,33 +158,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             ...(mail.sent ? {} : { error: (mail as any)?.error || (mail as any)?.reason || "Email send failed" }),
           });
 
-          // Rate limiting: small delay between emails
           await new Promise((resolve) => setTimeout(resolve, 500));
+        } catch (e: any) {
+          console.error(`Failed to send feedback nudge (${s.key}) to ${email}:`, e);
+          results.push({ email, sent: false, error: e?.message || "Failed to send email" });
         }
-
-      } catch (e: any) {
-        console.error(`Failed to send feedback request to ${email}:`, e);
-        results.push({
-          email,
-          sent: false,
-          error: e?.message || "Failed to send email",
-        });
       }
     }
 
     const successCount = results.filter((r) => r.sent).length;
-    const failCount = results.length - successCount;
-
     return res.status(200).json({
       success: true,
       total: results.length,
       sent: successCount,
-      failed: failCount,
-      results: results.slice(0, 50), // Return first 50 results
+      failed: results.length - successCount,
+      results: results.slice(0, 50),
+      nowIso,
     });
   } catch (e: any) {
     console.error("cronFeedbackRequests error:", e);
-    return res.status(500).json({ error: "Failed to process feedback requests" });
+    return res.status(500).json({ error: "Failed to process feedback nudges" });
   }
 }
 

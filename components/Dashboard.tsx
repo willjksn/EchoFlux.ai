@@ -7,6 +7,7 @@ import { useAppContext } from './AppContext';
 import { updateUserSocialStats } from '../src/services/socialStatsService';
 import { auth } from '../firebaseConfig';
 import { ContentGapAnalysis } from './ContentGapAnalysis';
+import { FeedbackSurveyModal, type FeedbackMilestone } from './FeedbackSurveyModal';
 
 const platformFilterIcons: { [key in Platform]: React.ReactNode } = {
   Instagram: <InstagramIcon />,
@@ -120,6 +121,142 @@ export const Dashboard: React.FC = () => {
     localStorage.setItem(key, 'true');
     setShowEarlyTestingOnboarding(true);
   }, [user?.id]);
+
+  // In-app feedback survey (Day 7 / Day 14) with 24h snooze
+  const [showFeedbackSurvey, setShowFeedbackSurvey] = useState(false);
+  const [feedbackMilestone, setFeedbackMilestone] = useState<FeedbackMilestone>('day7');
+
+  // Open feedback modal when arriving from an email link: ?feedback=day7|day14
+  useEffect(() => {
+    if (!user?.id) return;
+    if (typeof window === 'undefined') return;
+
+    const params = new URLSearchParams(window.location.search);
+    const m = params.get('feedback');
+    if (m !== 'day7' && m !== 'day14') return;
+
+    const milestone = m as FeedbackMilestone;
+    const submittedKey = milestone === 'day7' ? 'feedbackDay7SubmittedAt' : 'feedbackDay14SubmittedAt';
+    const alreadySubmitted = !!(user as any)?.[submittedKey];
+
+    // Remove the query param so refreshes don't keep re-opening the modal.
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('feedback');
+      window.history.replaceState({}, '', url.toString());
+    } catch {}
+
+    if (alreadySubmitted) {
+      showToast?.('Thanks — we already have your feedback for this check-in.', 'info');
+      return;
+    }
+
+    setFeedbackMilestone(milestone);
+    setShowFeedbackSurvey(true);
+  }, [user?.id]);
+
+  // Auto-prompt based on inviteGrantRedeemedAt, unless snoozed or already submitted.
+  useEffect(() => {
+    if (!user?.id) return;
+    if (showFeedbackSurvey) return;
+
+    const status = (user as any)?.subscriptionStatus as string | undefined;
+    const redeemedAtIso = (user as any)?.inviteGrantRedeemedAt as string | undefined;
+    if (!redeemedAtIso || status !== 'invite_grant') return;
+
+    const redeemedMs = new Date(redeemedAtIso).getTime();
+    if (!Number.isFinite(redeemedMs)) return;
+
+    const nowMs = Date.now();
+    const daysSince = (nowMs - redeemedMs) / (1000 * 60 * 60 * 24);
+
+    const day7Submitted = !!(user as any)?.feedbackDay7SubmittedAt;
+    const day14Submitted = !!(user as any)?.feedbackDay14SubmittedAt;
+
+    const day7SnoozeUntil = (user as any)?.feedbackDay7SnoozeUntil as string | undefined | null;
+    const day14SnoozeUntil = (user as any)?.feedbackDay14SnoozeUntil as string | undefined | null;
+    const day7Snoozed = !!day7SnoozeUntil && new Date(day7SnoozeUntil).getTime() > nowMs;
+    const day14Snoozed = !!day14SnoozeUntil && new Date(day14SnoozeUntil).getTime() > nowMs;
+
+    const day14Due = daysSince >= 14;
+    const day7Due = daysSince >= 7;
+
+    if (day7Due && !day7Submitted && !day7Snoozed) {
+      setFeedbackMilestone('day7');
+      setShowFeedbackSurvey(true);
+      return;
+    }
+    if (day14Due && !day14Submitted && !day14Snoozed) {
+      setFeedbackMilestone('day14');
+      setShowFeedbackSurvey(true);
+    }
+  }, [user, showFeedbackSurvey]);
+
+  const snoozeFeedback24h = async (milestone: FeedbackMilestone) => {
+    try {
+      if (!user?.id) return;
+      const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+      if (!token) {
+        showToast?.('Please sign in again to snooze.', 'error');
+        return;
+      }
+
+      const snoozeUntilIso = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      const res = await fetch('/api/snoozeFeedbackPrompt', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ milestone, snoozeUntil: snoozeUntilIso }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || 'Failed to snooze feedback prompt');
+      }
+
+      await setUser({
+        id: user.id,
+        ...(milestone === 'day7' ? { feedbackDay7SnoozeUntil: snoozeUntilIso } : { feedbackDay14SnoozeUntil: snoozeUntilIso }),
+      } as any);
+      setShowFeedbackSurvey(false);
+      showToast?.('Okay — we’ll remind you in 24 hours.', 'info');
+    } catch (e: any) {
+      console.error('Failed to snooze feedback:', e);
+      showToast?.(e?.message || 'Failed to snooze feedback prompt.', 'error');
+    }
+  };
+
+  const submitInAppFeedback = async (payload: { milestone: FeedbackMilestone; answers: Record<string, string>; openEnded: Record<string, string> }) => {
+    if (!user?.id) return;
+    const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+    if (!token) {
+      showToast?.('Please sign in again to submit feedback.', 'error');
+      throw new Error('Not authenticated');
+    }
+
+    const res = await fetch('/api/submitInAppFeedback', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data?.error || 'Failed to submit feedback');
+    }
+
+    const nowIso = new Date().toISOString();
+    await setUser({
+      id: user.id,
+      ...(payload.milestone === 'day7'
+        ? { feedbackDay7SubmittedAt: nowIso, feedbackDay7SnoozeUntil: null }
+        : { feedbackDay14SubmittedAt: nowIso, feedbackDay14SnoozeUntil: null }),
+    } as any);
+    showToast?.('Thanks — feedback submitted.', 'success');
+  };
   
   if (!user) return <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full flex items-center justify-center"><p className="text-gray-500 dark:text-gray-400">Loading...</p></div>;
 
@@ -2619,6 +2756,15 @@ export const Dashboard: React.FC = () => {
             );
           })()}
           
+          {/* In-app feedback survey (Day 7 / Day 14) */}
+          <FeedbackSurveyModal
+            isOpen={showFeedbackSurvey}
+            milestone={feedbackMilestone}
+            onClose={() => setShowFeedbackSurvey(false)}
+            onSnooze24h={snoozeFeedback24h}
+            onSubmit={submitInAppFeedback}
+          />
+
           {/* First-login Early Testing onboarding */}
           {showEarlyTestingOnboarding && (
             <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" aria-modal="true">
