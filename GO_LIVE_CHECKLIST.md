@@ -110,10 +110,10 @@ In Resend:
 - Create a scheduled email with send time **in the past** (e.g. 1 minute ago)
 
 **Trigger cron manually (smoke test)**
-- Run (replace `YOUR_DOMAIN` and `CRON_SECRET`):
+- Run (replace `CRON_SECRET`):
 
 ```bash
-curl -sS -H "Authorization: Bearer CRON_SECRET" https://YOUR_DOMAIN/api/cronSendScheduledEmails
+curl -sS -H "Authorization: Bearer CRON_SECRET" https://echoflux.ai/api/cronSendScheduledEmails
 ```
 
 - Expected:
@@ -129,7 +129,7 @@ curl -sS -H "Authorization: Bearer CRON_SECRET" https://YOUR_DOMAIN/api/cronSend
 This cron is time-gated to **10:00–10:15am ET**, so outside that window it will return `sent: 0`.
 
 ```bash
-curl -sS -H "Authorization: Bearer CRON_SECRET" https://YOUR_DOMAIN/api/cronFeedbackRequests
+curl -sS -H "Authorization: Bearer CRON_SECRET" https://echoflux.ai/api/cronFeedbackRequests
 ```
 
 Expected:
