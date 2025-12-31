@@ -452,6 +452,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
           showToast(`Account created. You now have ${grantPlan} access.`, 'success');
           onClose();
+          // Force reload so AuthContext rehydrates the user doc AFTER invite redemption.
+          // Without this, the app can briefly think invitedWithCode is missing and show InviteRequiredPage.
+          window.location.reload();
         } else {
           // STANDARD FLOW (no invite): store pending signup and continue to plan selector / Stripe (if paid).
           try {
@@ -665,6 +668,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             try { localStorage.removeItem('pendingInviteCode'); } catch {}
             showToast(`Account created. You now have ${redeemData.grantPlan} access.`, 'success');
             onClose();
+            // Force reload so AuthContext rehydrates with invitedWithCode and avoids the InviteRequiredPage gate.
+            window.location.reload();
             setIsLoading(false);
             return;
           }
