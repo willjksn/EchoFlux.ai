@@ -680,23 +680,40 @@ export const AdminDashboard: React.FC = () => {
                         {modelUsageStats.requestsByDay.length > 0 && (
                             <div>
                                 <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Daily Usage Trend</h4>
-                                <div className="space-y-2">
-                                    {modelUsageStats.requestsByDay.slice(-14).map((day: { date: string; count: number; cost: number }) => {
-                                        const maxCount = Math.max(...modelUsageStats.requestsByDay.map((d: { date: string; count: number; cost: number }) => d.count));
-                                        const percentage = maxCount > 0 ? (day.count / maxCount * 100) : 0;
+                                {/* Horizontal scroll so 30/90-day views don't make the container too tall */}
+                                <div className="overflow-x-auto -mx-2 px-2">
+                                    {(() => {
+                                        const daysToShow = [7, 30, 90].includes(modelStatsDays) ? modelStatsDays : 30;
+                                        const days = modelUsageStats.requestsByDay.slice(-daysToShow) as Array<{ date: string; count: number; cost: number }>;
+                                        const maxCount = Math.max(0, ...days.map((d) => d.count));
+
                                         return (
-                                            <div key={day.date} className="flex items-center gap-3">
-                                                <span className="text-xs text-gray-600 dark:text-gray-400 w-20">{new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                                                <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-4 relative">
-                                                    <div className="bg-gradient-to-r from-primary-500 to-primary-600 h-4 rounded-full" style={{ width: `${percentage}%` }}></div>
-                                                    <div className="absolute inset-0 flex items-center justify-between px-2 text-xs text-gray-700 dark:text-gray-300">
-                                                        <span>{day.count}</span>
-                                                        <span>${day.cost.toFixed(2)}</span>
-                                                    </div>
+                                            <div className="min-w-max">
+                                                <div className="flex items-end gap-2 pb-2">
+                                                    {days.map((day) => {
+                                                        const heightPct = maxCount > 0 ? (day.count / maxCount) : 0;
+                                                        const barHeight = Math.round(heightPct * 96); // px, max ~96
+                                                        const label = new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+                                                        return (
+                                                            <div key={day.date} className="w-16 flex flex-col items-center gap-2">
+                                                                <div className="h-28 w-full flex items-end justify-center bg-gray-100 dark:bg-gray-700/50 rounded-md border border-gray-200 dark:border-gray-600 px-2">
+                                                                    <div
+                                                                        className="w-full rounded-sm bg-gradient-to-t from-primary-600 to-primary-400"
+                                                                        style={{ height: `${Math.max(2, barHeight)}px` }}
+                                                                        title={`${label}\nRequests: ${day.count}\nCost: $${day.cost.toFixed(2)}`}
+                                                                    />
+                                                                </div>
+                                                                <div className="text-[11px] text-gray-600 dark:text-gray-400 whitespace-nowrap">{label}</div>
+                                                                <div className="text-[11px] text-gray-900 dark:text-gray-100 font-semibold">{day.count}</div>
+                                                                <div className="text-[11px] text-gray-600 dark:text-gray-400">${day.cost.toFixed(2)}</div>
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
                                         );
-                                    })}
+                                    })()}
                                 </div>
                             </div>
                         )}
