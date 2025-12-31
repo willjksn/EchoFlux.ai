@@ -16,44 +16,19 @@ export function isMailerConfigured() {
 }
 
 export async function sendEmail(params: SendEmailParams) {
-  // Priority 1: Try Google SMTP first (most reliable for this setup)
-  let smtpFailure: any = null;
-  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
-    const host = process.env.SMTP_HOST!;
-    const port = Number(process.env.SMTP_PORT || "465");
-    const secure = (process.env.SMTP_SECURE || "true").toLowerCase() !== "false";
-    const user = process.env.SMTP_USER!;
-    const pass = process.env.SMTP_PASS!;
-    const from = process.env.SMTP_FROM || `EchoFlux <${user}>`;
+  const failures: any[] = [];
 
-    try {
-      const transporter = nodemailer.createTransport({
-        host,
-        port,
-        secure,
-        auth: { user, pass },
-      });
+  const resolvedFrom =
+    process.env.EMAIL_FROM ||
+    process.env.RESEND_FROM ||
+    process.env.POSTMARK_FROM ||
+    process.env.SMTP_FROM ||
+    "EchoFlux <contact@echoflux.ai>";
 
-      const info = await transporter.sendMail({
-        from,
-        to: params.to,
-        subject: params.subject,
-        text: params.text,
-        html: params.html || params.text.replace(/\n/g, "<br>"),
-      });
-
-      return { sent: true as const, provider: "smtp" as const, messageId: info.messageId };
-    } catch (e: any) {
-      console.error("SMTP send failed:", e);
-      smtpFailure = e;
-      // Fall through to next provider (Resend/Postmark) if configured.
-    }
-  }
-
-  // Priority 2: Try Resend if configured
+  // Priority 1: Try Resend if configured (recommended)
   const resendApiKey = process.env.RESEND_API_KEY;
   if (resendApiKey && resendApiKey.trim()) {
-    const from = process.env.RESEND_FROM || process.env.SMTP_FROM || "contact@echoflux.ai";
+    const from = resolvedFrom;
 
     try {
       const resp = await fetch("https://api.resend.com/emails", {
@@ -75,7 +50,8 @@ export async function sendEmail(params: SendEmailParams) {
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) {
         console.error("Resend send failed:", { status: resp.status, data });
-        // Fall through to next provider
+        failures.push({ provider: "resend", status: resp.status, data });
+        // Fall through to next provider (Postmark/SMTP) if configured
       } else {
         return {
           sent: true as const,
@@ -85,14 +61,15 @@ export async function sendEmail(params: SendEmailParams) {
       }
     } catch (e: any) {
       console.error("Resend request error:", e);
-      // Fall through to next provider
+      failures.push({ provider: "resend", error: e });
+      // Fall through to next provider (Postmark/SMTP) if configured
     }
   }
 
-  // Priority 3: Try Postmark if configured
+  // Priority 2: Try Postmark if configured
   const postmarkToken = process.env.POSTMARK_SERVER_TOKEN;
   if (postmarkToken && postmarkToken.trim()) {
-    const from = process.env.POSTMARK_FROM || process.env.SMTP_FROM || "contact@echoflux.ai";
+    const from = resolvedFrom;
     const messageStream = process.env.POSTMARK_MESSAGE_STREAM || "outbound";
 
     const resp = await fetch("https://api.postmarkapp.com/email", {
@@ -135,19 +112,47 @@ export async function sendEmail(params: SendEmailParams) {
     };
   }
 
+  // Priority 3: Try SMTP if configured (fallback)
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    const host = process.env.SMTP_HOST!;
+    const port = Number(process.env.SMTP_PORT || "465");
+    const secure = (process.env.SMTP_SECURE || "true").toLowerCase() !== "false";
+    const user = process.env.SMTP_USER!;
+    const pass = process.env.SMTP_PASS!;
+    const from = resolvedFrom || `EchoFlux <${user}>`;
+
+    try {
+      const transporter = nodemailer.createTransport({
+        host,
+        port,
+        secure,
+        auth: { user, pass },
+      });
+
+      const info = await transporter.sendMail({
+        from,
+        to: params.to,
+        subject: params.subject,
+        text: params.text,
+        html: params.html || params.text.replace(/\n/g, "<br>"),
+      });
+
+      return { sent: true as const, provider: "smtp" as const, messageId: info.messageId };
+    } catch (e: any) {
+      console.error("SMTP send failed:", e);
+      failures.push({ provider: "smtp", error: e });
+      // Fall through to "previewOnly" below
+    }
+  }
+
   // No mailer configured
   return {
     sent: false as const,
     previewOnly: true as const,
-    reason: smtpFailure ? "SMTP send failed" : "Mailer not configured",
+    reason: failures.length ? "Email send failed" : "Mailer not configured",
     provider: null,
-    error: smtpFailure
-      ? {
-          message: smtpFailure?.message || "SMTP send failed",
-          code: smtpFailure?.code || null,
-          responseCode: smtpFailure?.responseCode || null,
-          response: smtpFailure?.response || null,
-        }
+    error: failures.length
+      ? failures[0]?.error?.message || failures[0]?.data || failures[0] || "Email send failed"
       : "No email provider configured (SMTP, Resend, or Postmark)",
   };
 }
