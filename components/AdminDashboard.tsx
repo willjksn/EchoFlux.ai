@@ -679,7 +679,18 @@ export const AdminDashboard: React.FC = () => {
                         {/* Daily Usage Chart */}
                         {modelUsageStats.requestsByDay.length > 0 && (
                             <div>
-                                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Daily Usage Trend</h4>
+                                <div className="flex items-center justify-between gap-3 mb-3">
+                                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Daily Usage Trend</h4>
+                                    <select
+                                        value={modelStatsDays}
+                                        onChange={(e) => setModelStatsDays(Number(e.target.value))}
+                                        className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                                    >
+                                        <option value={7}>Last 7 days</option>
+                                        <option value={30}>Last 30 days</option>
+                                        <option value={90}>Last 90 days</option>
+                                    </select>
+                                </div>
                                 {/* Horizontal scroll so 30/90-day views don't make the container too tall */}
                                 <div className="overflow-x-auto -mx-2 px-2">
                                     {(() => {

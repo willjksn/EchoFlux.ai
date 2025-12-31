@@ -21,11 +21,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const adminDoc = await db.collection("users").doc(admin.uid).get();
   if ((adminDoc.data() as any)?.role !== "Admin") return res.status(403).json({ error: "Admin access required" });
 
-  const { email, grantPlan = "Free", expiresAt, name } = (req.body || {}) as {
+  const { email, grantPlan = "Free", expiresAt, name, subjectOverride, textOverride, htmlOverride } = (req.body || {}) as {
     email?: string;
     grantPlan?: "Free" | "Pro" | "Elite";
     expiresAt?: string | null;
     name?: string | null;
+    subjectOverride?: string;
+    textOverride?: string;
+    htmlOverride?: string;
   };
 
   if (!email || typeof email !== "string") return res.status(400).json({ error: "email is required" });
@@ -45,6 +48,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!Number.isFinite(d.getTime())) return res.status(400).json({ error: "expiresAt must be a valid date" });
     normalizedExpiresAt = d.toISOString();
   }
+
+  const applyPlaceholders = (input: string, vars: Record<string, string>) => {
+    return input.replace(/\{(\w+)\}/g, (_m, key) => (vars[key] !== undefined ? vars[key] : `{${key}}`));
+  };
 
   try {
     // Get existing waitlist entry to preserve name if not provided
@@ -92,17 +99,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } as any);
     });
 
-    const emailText = WAITLIST_EMAIL_TEMPLATES.selected(
+    const vars: Record<string, string> = {
+      name: userName || "there",
+      email: normalizedEmail,
       inviteCode,
-      grantPlan,
-      normalizedExpiresAt || null,
-      userName || null
-    );
+      plan: grantPlan,
+      expiresAt: normalizedExpiresAt ? new Date(normalizedExpiresAt).toLocaleDateString() : "",
+      expiresAtIso: normalizedExpiresAt || "",
+    };
+
+    const defaultText = WAITLIST_EMAIL_TEMPLATES.selected(inviteCode, grantPlan, normalizedExpiresAt || null, userName || null);
+    const emailText =
+      typeof textOverride === "string" && textOverride.trim()
+        ? applyPlaceholders(textOverride, vars)
+        : defaultText;
+
+    const defaultSubject = "You've Been Selected for Early Testing — EchoFlux.ai";
+    const emailSubject =
+      typeof subjectOverride === "string" && subjectOverride.trim()
+        ? applyPlaceholders(subjectOverride, vars)
+        : defaultSubject;
+
+    const emailHtml =
+      typeof htmlOverride === "string" && htmlOverride.trim()
+        ? applyPlaceholders(htmlOverride, vars)
+        : undefined;
 
     const mail = await sendEmail({
       to: normalizedEmail,
-      subject: "You've Been Selected for Early Testing — EchoFlux.ai",
+      subject: emailSubject,
       text: emailText,
+      ...(emailHtml ? { html: emailHtml } : {}),
     });
 
     await waitRef.set(
@@ -119,8 +146,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await logEmailHistory({
       sentBy: admin.uid,
       to: normalizedEmail,
-      subject: "You've Been Selected for Early Testing — EchoFlux.ai",
+      subject: emailSubject,
       body: emailText,
+      ...(emailHtml ? { html: emailHtml } : {}),
       status: mail.sent ? "sent" : "failed",
       provider: (mail as any)?.provider || null,
       error: mail.sent ? undefined : ((mail as any)?.error || (mail as any)?.reason || "Email send failed"),
@@ -135,6 +163,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       expiresAt: normalizedExpiresAt,
       emailSent: mail.sent === true,
       emailPreview: mail.sent ? null : emailText,
+      emailSubject,
+      emailText,
+      emailHtml: emailHtml || null,
       emailError: mail.sent ? null : ((mail as any)?.error || (mail as any)?.reason || null),
       emailProvider: (mail as any)?.provider ?? null,
     });
