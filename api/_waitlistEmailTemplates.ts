@@ -89,4 +89,40 @@ Reply anytime — we’re reading everything during this phase.
 
 — The EchoFlux Team`;
   },
+
+  /**
+   * Automatic feedback request — 7 days after approval
+   */
+  feedbackDay7: (name?: string | null): string => {
+    return `Thanks for testing EchoFlux so far — your feedback is incredibly valuable to us.
+
+If you have 2 minutes, could you reply with a quick answer to these?
+• What was the first workflow you tried (Strategy / Calendar / Compose / Media)?
+• What felt the most useful so far?
+• What felt confusing or unnecessary?
+• What’s one improvement that would make you use EchoFlux every week?
+• Anything you expected to see but couldn’t find?
+
+Reply anytime — we’re reading everything during this phase.
+
+— The EchoFlux Team`;
+  },
+
+  /**
+   * Automatic final feedback — 14 days after approval
+   */
+  feedbackDay14: (name?: string | null): string => {
+    return `Final check-in — thanks again for being part of EchoFlux early testing.
+
+If you’re open to one more round of feedback, could you answer these?
+• On a scale of 1–10, how likely are you to keep using EchoFlux for planning? Why?
+• What planning workflow should we improve first (Strategy / Calendar / Compose / Media)?
+• What feature would make EchoFlux “must-have” for you?
+• What should we remove or simplify?
+• If EchoFlux had one “wow” moment, what should it be?
+
+Reply anytime — we’re reading everything during this phase.
+
+— The EchoFlux Team`;
+  },
 };

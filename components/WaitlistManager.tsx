@@ -51,8 +51,8 @@ export const WaitlistManager: React.FC = () => {
     ].join('\n')
   );
 
-  const load = async () => {
-    setIsLoading(true);
+  const load = async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setIsLoading(true);
     try {
       const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       if (!token) throw new Error('Not authenticated');
@@ -63,9 +63,11 @@ export const WaitlistManager: React.FC = () => {
       if (!resp.ok) throw new Error(data?.error || 'Failed to load waitlist');
       setItems((data.items || []) as WaitlistItem[]);
     } catch (e: any) {
-      showToast(e?.message || 'Failed to load waitlist', 'error');
+      if (!opts?.silent) {
+        showToast(e?.message || 'Failed to load waitlist', 'error');
+      }
     } finally {
-      setIsLoading(false);
+      if (!opts?.silent) setIsLoading(false);
     }
   };
 
@@ -77,6 +79,31 @@ export const WaitlistManager: React.FC = () => {
   useEffect(() => {
     // Clear selection when switching tabs/status or refreshing list.
     setSelectedIds(new Set());
+  }, [status]);
+
+  // Auto-refresh Pending list so admins see new entries without manual refresh.
+  useEffect(() => {
+    if (status !== 'pending') return;
+
+    let cancelled = false;
+    const INTERVAL_MS = 12_000;
+
+    const tick = async () => {
+      if (cancelled) return;
+      // Pause auto-refresh when tab is hidden to reduce noise and token refreshes.
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      await load({ silent: true });
+    };
+
+    const id = window.setInterval(tick, INTERVAL_MS);
+    // Run one silent refresh shortly after switching to pending.
+    window.setTimeout(tick, 800);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
   const approve = async () => {
