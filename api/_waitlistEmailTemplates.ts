@@ -28,7 +28,7 @@ We’ll reach out soon with next steps.
   selected: (inviteCode: string, grantPlan: string, expiresAt?: string | null, name?: string | null): string => {
     const expirationNote = expiresAt ? ` (expires ${new Date(expiresAt).toLocaleDateString()})` : '';
 
-    return `Thanks for signing up — we’d love to bring you into the EchoFlux.ai early testing group 🎉
+    return `You are now apart of the EchoFlux.ai early testing group 🎉
 
 EchoFlux is currently operating in offline / planning-first mode, with a focus on:
 • content strategy generation

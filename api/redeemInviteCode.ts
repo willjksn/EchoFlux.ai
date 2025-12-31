@@ -31,6 +31,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const result = await db.runTransaction(async (tx) => {
       const inviteSnap = await tx.get(inviteRef);
+      const userSnap = await tx.get(userRef);
       if (!inviteSnap.exists) {
         return { ok: false as const, status: 404 as const, error: "Invite code not found" };
       }
@@ -40,6 +41,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (grantPlan !== "Free" && grantPlan !== "Pro" && grantPlan !== "Elite") {
         return { ok: false as const, status: 400 as const, error: "Invite is not configured with access" };
       }
+
+      const existingUserData = userSnap.exists ? (userSnap.data() as any) : null;
+      const alreadyRedeemedThisCode =
+        existingUserData?.invitedWithCode === normalizedCode ||
+        existingUserData?.inviteGrantRedeemedAt ||
+        existingUserData?.subscriptionStatus === "invite_grant";
 
       // Expiry check
       const expiresAtIso = inviteData?.expiresAt
@@ -53,18 +60,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const maxUses = typeof inviteData?.maxUses === "number" ? inviteData.maxUses : 1;
       const usedCount = typeof inviteData?.usedCount === "number" ? inviteData.usedCount : 0;
       const isFullyUsed = inviteData?.used === true || usedCount >= maxUses;
-      if (isFullyUsed) {
+      // Idempotency: if the current user already redeemed this code, treat as success even if fully used.
+      if (isFullyUsed && !alreadyRedeemedThisCode && inviteData?.usedBy !== user.uid) {
         return { ok: false as const, status: 400 as const, error: "Invite code has already been used" };
       }
 
-      // Mark invite usage
-      const nextUsedCount = usedCount + 1;
-      tx.update(inviteRef, {
-        usedCount: FieldValue.increment(1),
-        usedBy: user.uid,
-        usedAt: nowIso,
-        used: nextUsedCount >= maxUses,
-      });
+      // Mark invite usage (only if this user hasn't redeemed it yet)
+      if (!alreadyRedeemedThisCode) {
+        const nextUsedCount = usedCount + 1;
+        tx.update(inviteRef, {
+          usedCount: FieldValue.increment(1),
+          usedBy: user.uid,
+          usedAt: nowIso,
+          used: nextUsedCount >= maxUses,
+        });
+      }
 
       // Grant access on user doc
       tx.set(
