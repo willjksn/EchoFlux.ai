@@ -55,6 +55,10 @@ onAuthStateChanged(auth, async (user) => {
 // in certain networks/browsers (proxies, strict privacy settings, etc.).
 export const db = initializeFirestore(app, {
   experimentalAutoDetectLongPolling: true,
+  // Some environments (enterprise networks, privacy tools) still fail auto-detect.
+  // For reliability, force long-polling and avoid fetch streaming.
+  experimentalForceLongPolling: true,
+  useFetchStreams: false,
 });
 export const storage = getStorage(app);
 
