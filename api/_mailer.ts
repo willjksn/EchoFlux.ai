@@ -18,12 +18,24 @@ export function isMailerConfigured() {
 export async function sendEmail(params: SendEmailParams) {
   const failures: any[] = [];
 
-  const resolvedFrom =
+  const normalizeFrom = (raw: string) => {
+    let s = String(raw || "").trim();
+    // Vercel env vars are often pasted with quotes; Resend rejects quoted strings.
+    if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+      s = s.slice(1, -1).trim();
+    }
+    // Collapse repeated whitespace
+    s = s.replace(/\s+/g, " ");
+    return s;
+  };
+
+  const resolvedFrom = normalizeFrom(
     process.env.EMAIL_FROM ||
-    process.env.RESEND_FROM ||
-    process.env.POSTMARK_FROM ||
-    process.env.SMTP_FROM ||
-    "EchoFlux <contact@echoflux.ai>";
+      process.env.RESEND_FROM ||
+      process.env.POSTMARK_FROM ||
+      process.env.SMTP_FROM ||
+      "EchoFlux <contact@echoflux.ai>"
+  );
 
   // Priority 1: Try Resend if configured (recommended)
   const resendApiKey = process.env.RESEND_API_KEY;
