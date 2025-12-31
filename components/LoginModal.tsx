@@ -106,7 +106,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const [inviteCode, setInviteCode] = useState('');
   const [isValidatingInvite, setIsValidatingInvite] = useState(false);
   const [inviteCodeValid, setInviteCodeValid] = useState<boolean | null>(null);
-  const [inviteGrantPlan, setInviteGrantPlan] = useState<'Pro' | 'Elite' | null>(null);
+  const [inviteGrantPlan, setInviteGrantPlan] = useState<'Free' | 'Pro' | 'Elite' | null>(null);
   const [inviteExpiresAt, setInviteExpiresAt] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [viewingPolicy, setViewingPolicy] = useState<'terms' | 'privacy' | null>(null);
@@ -383,7 +383,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         }
 
         // Re-validate invite code on submit and fetch grant metadata (plan + expiry)
-        let grantPlan: 'Pro' | 'Elite' | null = inviteGrantPlan;
+        let grantPlan: 'Free' | 'Pro' | 'Elite' | null = inviteGrantPlan;
         let expiresAt: string | null = inviteExpiresAt;
         try {
           const resp = await fetch('/api/validateInviteCode', {
@@ -392,7 +392,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             body: JSON.stringify({ inviteCode: inviteCode.trim() }),
           });
           const data = await resp.json().catch(() => ({}));
-          if (!data?.valid || (data?.grantPlan !== 'Pro' && data?.grantPlan !== 'Elite')) {
+          if (!data?.valid || (data?.grantPlan !== 'Free' && data?.grantPlan !== 'Pro' && data?.grantPlan !== 'Elite')) {
             setInviteCodeValid(false);
             setInviteGrantPlan(null);
             setInviteExpiresAt(null);
@@ -562,7 +562,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             body: JSON.stringify({ inviteCode: inviteCode.trim() }),
           });
           const data = await resp.json().catch(() => ({}));
-          if (!data?.valid || (data?.grantPlan !== 'Pro' && data?.grantPlan !== 'Elite')) {
+          if (!data?.valid || (data?.grantPlan !== 'Free' && data?.grantPlan !== 'Pro' && data?.grantPlan !== 'Elite')) {
             setInviteCodeValid(false);
             setInviteGrantPlan(null);
             setInviteExpiresAt(null);
