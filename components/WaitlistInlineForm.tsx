@@ -5,7 +5,6 @@ export const WaitlistInlineForm: React.FC = () => {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [inviteCode, setInviteCode] = useState('');
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [status, setStatus] = useState<'idle' | 'loading' | 'validating' | 'valid' | 'done'>('idle');
   const [message, setMessage] = useState<string | null>(null);
   const [inviteDetails, setInviteDetails] = useState<{ plan: string; expiresAt: string | null } | null>(null);
@@ -43,10 +42,6 @@ export const WaitlistInlineForm: React.FC = () => {
   const validateInviteCode = async () => {
     if (!inviteCode.trim()) {
       setMessage('Invite code is required.');
-      return;
-    }
-    if (!acceptedTerms) {
-      setMessage('You must accept the Terms of Service and Privacy Policy.');
       return;
     }
     setStatus('validating');
@@ -123,29 +118,10 @@ export const WaitlistInlineForm: React.FC = () => {
           placeholder="XXXX-XXXX"
           className="w-full rounded-md px-3 py-2 bg-white/10 border border-white/20 placeholder-white/50 text-white focus:outline-none focus:ring-2 focus:ring-white/30"
         />
-        <div className="flex items-start">
-          <input
-            type="checkbox"
-            id="acceptTerms"
-            checked={acceptedTerms}
-            onChange={(e) => setAcceptedTerms(e.target.checked)}
-            className="mt-1 mr-2 h-4 w-4 rounded border-white/20 bg-white/10 text-primary-600 focus:ring-primary-500"
-          />
-          <label htmlFor="acceptTerms" className="text-sm text-white/90">
-            I accept the{' '}
-            <a href="/terms" target="_blank" className="underline hover:text-white">
-              Terms of Service
-            </a>{' '}
-            and{' '}
-            <a href="/privacy" target="_blank" className="underline hover:text-white">
-              Privacy Policy
-            </a>
-          </label>
-        </div>
         <button
           type="button"
           onClick={validateInviteCode}
-          disabled={status === 'validating' || status === 'valid' || !acceptedTerms}
+          disabled={status === 'validating' || status === 'valid'}
           className="w-full rounded-md px-4 py-2 bg-white text-primary-700 font-semibold hover:bg-primary-50 disabled:opacity-70"
         >
           {status === 'validating' ? 'Validating…' : status === 'valid' ? 'Valid! Click Get Started' : 'Validate Invite Code'}
