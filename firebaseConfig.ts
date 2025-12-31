@@ -51,13 +51,12 @@ onAuthStateChanged(auth, async (user) => {
 // ------------------------------------------------------------
 // Firestore & Storage
 // ------------------------------------------------------------
-// Firestore: enable long-polling auto-detect to avoid `Listen/channel` 400 errors
+// Firestore: long-polling can avoid `Listen/channel` 400 errors
 // in certain networks/browsers (proxies, strict privacy settings, etc.).
+const FORCE_FIRESTORE_LONG_POLLING =
+  import.meta.env.VITE_FIRESTORE_FORCE_LONG_POLLING === "true";
 export const db = initializeFirestore(app, {
-  experimentalAutoDetectLongPolling: true,
-  // Some environments (enterprise networks, privacy tools) still fail auto-detect.
-  // For reliability, force long-polling and avoid fetch streaming.
-  experimentalForceLongPolling: true,
+  ...(FORCE_FIRESTORE_LONG_POLLING ? { experimentalForceLongPolling: true } : {}),
   useFetchStreams: false,
 });
 export const storage = getStorage(app);
