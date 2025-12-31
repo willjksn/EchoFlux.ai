@@ -15,6 +15,7 @@ import {
 import { doc, getDoc } from 'firebase/firestore';
 import type { Plan } from '../types';
 import { isMaintenanceMode, canBypassMaintenance } from '../src/utils/maintenance';
+import { isInviteOnlyMode } from '../src/utils/inviteOnly';
 
 /* ---------- Terms & Privacy content (unchanged) ---------- */
 
@@ -96,6 +97,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   selectedPlan,
 }) => {
   const { showToast } = useAppContext();
+  const inviteOnly = isInviteOnlyMode();
 
   // derive initial mode from initialView
   const [isLogin, setIsLogin] = useState(initialView === 'login');
@@ -106,7 +108,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const [inviteCode, setInviteCode] = useState('');
   const [isValidatingInvite, setIsValidatingInvite] = useState(false);
   const [inviteCodeValid, setInviteCodeValid] = useState<boolean | null>(null);
-  const [inviteGrantPlan, setInviteGrantPlan] = useState<'Free' | 'Pro' | 'Elite' | null>(null);
+  const [inviteGrantPlan, setInviteGrantPlan] = useState<'Pro' | 'Elite' | null>(null);
   const [inviteExpiresAt, setInviteExpiresAt] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [viewingPolicy, setViewingPolicy] = useState<'terms' | 'privacy' | null>(null);
@@ -198,13 +200,16 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         })
           .then((resp) => resp.json().catch(() => ({})))
           .then((data) => {
-            if (data?.valid) {
+            const gp = data?.grantPlan;
+            if (data?.valid && (gp === 'Pro' || gp === 'Elite')) {
               setInviteCodeValid(true);
-              setInviteGrantPlan(data.grantPlan);
+              setInviteGrantPlan(gp);
               setInviteExpiresAt(data.expiresAt || null);
             } else {
               setInviteCodeValid(false);
-              localStorage.removeItem('pendingInviteCode'); // Remove invalid code
+              setInviteGrantPlan(null);
+              setInviteExpiresAt(null);
+              localStorage.removeItem('pendingInviteCode'); // Remove invalid/unsupported code
             }
           })
           .catch(() => {
@@ -225,13 +230,18 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const validateSignup = (): boolean => {
     const errors: Record<string, string> = {};
 
-    // Invite code (required)
-    if (!inviteCode || inviteCode.trim() === '') {
+    // Invite code:
+    // - Required only when invite-only mode is ON
+    // - Optional when invite-only mode is OFF (used only to bypass Stripe for Pro/Elite)
+    const hasInviteCode = !!inviteCode && inviteCode.trim() !== '';
+    if (inviteOnly && !hasInviteCode) {
       errors.inviteCode = 'Invite code is required';
-    } else if (inviteCodeValid === false) {
-      errors.inviteCode = 'Invalid invite code. Please check and try again.';
-    } else if (!inviteGrantPlan) {
-      errors.inviteCode = 'Invite code is not configured with access. Please contact support.';
+    } else if (hasInviteCode) {
+      if (inviteCodeValid === false) {
+        errors.inviteCode = 'Invalid invite code. Please check and try again.';
+      } else if (!inviteGrantPlan) {
+        errors.inviteCode = 'Invite code is not configured with access. Please contact support.';
+      }
     }
 
     // Validate full name
@@ -382,61 +392,83 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           console.warn('Could not check if email exists:', checkError);
         }
 
-        // Re-validate invite code on submit and fetch grant metadata (plan + expiry)
-        let grantPlan: 'Free' | 'Pro' | 'Elite' | null = inviteGrantPlan;
-        let expiresAt: string | null = inviteExpiresAt;
-        try {
-          const resp = await fetch('/api/validateInviteCode', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ inviteCode: inviteCode.trim() }),
-          });
-          const data = await resp.json().catch(() => ({}));
-          if (!data?.valid || (data?.grantPlan !== 'Free' && data?.grantPlan !== 'Pro' && data?.grantPlan !== 'Elite')) {
-            setInviteCodeValid(false);
-            setInviteGrantPlan(null);
-            setInviteExpiresAt(null);
-            setValidationErrors(prev => ({ ...prev, inviteCode: data?.error || 'Invalid invite code' }));
+        const hasInviteCode = !!inviteCode && inviteCode.trim() !== '';
+
+        if (hasInviteCode) {
+          // INVITE FLOW (Pro/Elite): redeem invite and skip Stripe payment, but still requires signup + onboarding.
+          // Re-validate invite code on submit and fetch grant metadata (plan + expiry)
+          let grantPlan: 'Pro' | 'Elite' | null = inviteGrantPlan;
+          let expiresAt: string | null = inviteExpiresAt;
+          try {
+            const resp = await fetch('/api/validateInviteCode', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ inviteCode: inviteCode.trim() }),
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!data?.valid || (data?.grantPlan !== 'Pro' && data?.grantPlan !== 'Elite')) {
+              setInviteCodeValid(false);
+              setInviteGrantPlan(null);
+              setInviteExpiresAt(null);
+              setValidationErrors(prev => ({ ...prev, inviteCode: data?.error || 'Invalid invite code' }));
+              setIsLoading(false);
+              return;
+            }
+            grantPlan = data.grantPlan;
+            expiresAt = data.expiresAt || null;
+            setInviteCodeValid(true);
+            setInviteGrantPlan(grantPlan);
+            setInviteExpiresAt(expiresAt);
+          } catch {
+            setValidationErrors(prev => ({ ...prev, inviteCode: 'Failed to validate invite code' }));
             setIsLoading(false);
             return;
           }
-          grantPlan = data.grantPlan;
-          expiresAt = data.expiresAt || null;
-          setInviteCodeValid(true);
-          setInviteGrantPlan(grantPlan);
-          setInviteExpiresAt(expiresAt);
-        } catch {
-          setValidationErrors(prev => ({ ...prev, inviteCode: 'Failed to validate invite code' }));
-          setIsLoading(false);
-          return;
+
+          // Create Firebase Auth account immediately and redeem invite (no Stripe).
+          const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+          await updateProfile(userCredential.user, { displayName: fullName.trim() || 'New User' });
+
+          const token = await userCredential.user.getIdToken();
+          const redeemResp = await fetch('/api/redeemInviteCode', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ inviteCode: inviteCode.trim(), fullName: fullName.trim() }),
+          });
+          const redeemData = await redeemResp.json().catch(() => ({}));
+          if (!redeemResp.ok || !redeemData?.success) {
+            try { await signOut(auth); } catch {}
+            setErrorModal({ show: true, message: redeemData?.error || 'Failed to redeem invite code. Please contact support.' });
+            setIsLoading(false);
+            return;
+          }
+
+          // Ensure no legacy pending signup state lingers in the invite path
+          try { localStorage.removeItem('pendingSignup'); } catch {}
+          try { localStorage.removeItem('pendingInviteCode'); } catch {}
+
+          showToast(`Account created. You now have ${grantPlan} access.`, 'success');
+          onClose();
+        } else {
+          // STANDARD FLOW (no invite): store pending signup and continue to plan selector / Stripe (if paid).
+          try {
+            localStorage.setItem('pendingSignup', JSON.stringify({
+              email,
+              password,
+              fullName: fullName.trim(),
+              selectedPlan: selectedPlan || null,
+              timestamp: Date.now(),
+            }));
+          } catch {}
+
+          showToast('Almost there — choose your plan to continue.', 'success');
+          onClose();
+          // App.tsx will detect pendingSignup on load and show the plan selector.
+          window.location.reload();
         }
-
-        // Create Firebase Auth account immediately and redeem invite (no plan picker, no Stripe).
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        await updateProfile(userCredential.user, { displayName: fullName.trim() || 'New User' });
-
-        const token = await userCredential.user.getIdToken();
-        const redeemResp = await fetch('/api/redeemInviteCode', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ inviteCode: inviteCode.trim(), fullName: fullName.trim() }),
-        });
-        const redeemData = await redeemResp.json().catch(() => ({}));
-        if (!redeemResp.ok || !redeemData?.success) {
-          try { await signOut(auth); } catch {}
-          setErrorModal({ show: true, message: redeemData?.error || 'Failed to redeem invite code. Please contact support.' });
-          setIsLoading(false);
-          return;
-        }
-
-        // Ensure no legacy pending signup state lingers (we no longer use plan selection in this flow)
-        try { localStorage.removeItem('pendingSignup'); } catch {}
-
-        showToast(`Account created. You now have ${grantPlan} access.`, 'success');
-        onClose();
       }
     } catch (error: any) {
       console.error('Auth error:', error);
@@ -546,15 +578,18 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         return;
       }
 
-      // Invite code is required for sign-up (not required for login)
-      if (startedGoogleSignup) {
-        if (!inviteCode || inviteCode.trim() === '') {
-          setValidationErrors({ inviteCode: 'Invite code is required' });
-          setIsLoading(false);
-          return;
-        }
+      // Google sign-up:
+      // - If invite-only mode is ON: invite code required
+      // - If invite-only mode is OFF: invite code optional (used to skip payment via Pro/Elite grant)
+      const hasInviteCode = !!inviteCode && inviteCode.trim() !== '';
+      if (startedGoogleSignup && inviteOnly && !hasInviteCode) {
+        setValidationErrors({ inviteCode: 'Invite code is required' });
+        setIsLoading(false);
+        return;
+      }
 
-        // Validate invite before opening popup (fast fail)
+      // If an invite code is provided, validate it before opening popup (fast fail)
+      if (startedGoogleSignup && hasInviteCode) {
         try {
           const resp = await fetch('/api/validateInviteCode', {
             method: 'POST',
@@ -562,7 +597,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             body: JSON.stringify({ inviteCode: inviteCode.trim() }),
           });
           const data = await resp.json().catch(() => ({}));
-          if (!data?.valid || (data?.grantPlan !== 'Free' && data?.grantPlan !== 'Pro' && data?.grantPlan !== 'Elite')) {
+          if (!data?.valid || (data?.grantPlan !== 'Pro' && data?.grantPlan !== 'Elite')) {
             setInviteCodeValid(false);
             setInviteGrantPlan(null);
             setInviteExpiresAt(null);
@@ -603,31 +638,55 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         const userSnap = await getDoc(userRef);
         
         if (!userSnap.exists()) {
-          // New user: redeem invite and grant access (no plan selector, no Stripe)
-          const token = await result.user.getIdToken();
-          const redeemResp = await fetch('/api/redeemInviteCode', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              inviteCode: inviteCode.trim(),
-              fullName: result.user.displayName || 'New User',
-            }),
-          });
-          const redeemData = await redeemResp.json().catch(() => ({}));
-          if (!redeemResp.ok || !redeemData?.success) {
-            await signOut(auth);
-            setErrorModal({ show: true, message: redeemData?.error || 'Failed to redeem invite code. Please contact support.' });
+          const hasInviteCode = !!inviteCode && inviteCode.trim() !== '';
+          if (hasInviteCode) {
+            // New user: redeem invite and grant access (skip Stripe payment)
+            const token = await result.user.getIdToken();
+            const redeemResp = await fetch('/api/redeemInviteCode', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                inviteCode: inviteCode.trim(),
+                fullName: result.user.displayName || 'New User',
+              }),
+            });
+            const redeemData = await redeemResp.json().catch(() => ({}));
+            if (!redeemResp.ok || !redeemData?.success) {
+              await signOut(auth);
+              setErrorModal({ show: true, message: redeemData?.error || 'Failed to redeem invite code. Please contact support.' });
+              setIsLoading(false);
+              return;
+            }
+
+            try { localStorage.removeItem('pendingSignup'); } catch {}
+            try { localStorage.removeItem('pendingInviteCode'); } catch {}
+            showToast(`Account created. You now have ${redeemData.grantPlan} access.`, 'success');
+            onClose();
             setIsLoading(false);
             return;
           }
 
-          try { localStorage.removeItem('pendingSignup'); } catch {}
-          showToast(`Account created. You now have ${redeemData.grantPlan} access.`, 'success');
+          // No invite code: start standard pending signup flow for Google signups
+          try {
+            localStorage.setItem('pendingSignup', JSON.stringify({
+              email: result.user.email || '',
+              password: '', // not used for Google signup flow
+              fullName: result.user.displayName || 'New User',
+              selectedPlan: selectedPlan || null,
+              timestamp: Date.now(),
+              isGoogleSignup: true,
+              googleUid: result.user.uid,
+              googlePhotoURL: result.user.photoURL || null,
+            }));
+          } catch {}
+
+          showToast('Almost there — choose your plan to continue.', 'success');
           onClose();
           setIsLoading(false);
+          window.location.reload();
           return;
         } else {
           // Existing user clicked Google on the sign-up tab — treat as login and cleanup any pending marker.
@@ -760,7 +819,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 <>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Invite Code <span className="text-red-500">*</span>
+                      Invite Code{inviteOnly ? <span className="text-red-500"> *</span> : null}
                     </label>
                     <input
                       type="text"
@@ -825,7 +884,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                       <p className="mt-1 text-sm text-red-600 dark:text-red-400">{validationErrors.inviteCode}</p>
                     )}
                     <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      An invite code is required. Contact support if you need one.
+                      {inviteOnly
+                        ? 'An invite code is required. Contact support if you need one.'
+                        : 'Optional. Use a Pro/Elite invite code to skip payment (you will still sign up and complete onboarding).'}
                     </p>
                   </div>
                   <div>
