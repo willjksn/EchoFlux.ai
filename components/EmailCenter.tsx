@@ -4,6 +4,7 @@ import { EmailHistory } from './EmailHistory';
 import { EmailTemplatesManager } from './EmailTemplatesManager';
 import { ScheduledEmailManager } from './ScheduledEmailManager';
 import { MassEmailComposer } from './MassEmailComposer';
+import { SingleEmailComposer } from './SingleEmailComposer';
 
 type EmailSection = 'send' | 'history' | 'templates' | 'scheduled' | 'bio';
 
@@ -24,7 +25,7 @@ export const EmailCenter: React.FC = () => {
           onClick={() => setIsMassEmailOpen(true)}
           className="px-4 py-2 rounded-md bg-primary-600 text-white hover:bg-primary-700"
         >
-          Send Email
+          Mass Email
         </button>
       </div>
 
@@ -45,7 +46,7 @@ export const EmailCenter: React.FC = () => {
           onClick={() => setSection('scheduled')}
           className={`px-4 py-2 rounded-md transition-colors ${section === 'scheduled' ? 'bg-primary-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}`}
         >
-          Scheduled
+          Schedule
         </button>
         <button
           onClick={() => setSection('history')}
@@ -62,15 +63,12 @@ export const EmailCenter: React.FC = () => {
       </div>
 
       {section === 'send' && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
-          <div className="text-lg font-semibold text-gray-900 dark:text-white">Send emails</div>
-          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            Use the button above to send a mass email to users (with optional filters and templates).
-          </p>
-          <div className="mt-4">
+        <div className="space-y-4">
+          <SingleEmailComposer />
+          <div className="flex justify-end">
             <button
               onClick={() => setIsMassEmailOpen(true)}
-              className="px-4 py-2 rounded-md bg-primary-600 text-white hover:bg-primary-700"
+              className="px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-300 dark:hover:bg-gray-600"
             >
               Open Mass Email Composer
             </button>
