@@ -1,7 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { verifyAuth } from "./verifyAuth.js";
-import { db } from "../firebaseConfig.js";
-import { collection, query, where, getDocs, updateDoc, doc } from "firebase/firestore";
+import { requireCronAuth } from "./_cronAuth.js";
 
 /**
  * Auto-post scheduled posts that are ready to publish
@@ -18,8 +16,11 @@ export default async function handler(
   }
 
   try {
-    // Verify auth (optional for cron jobs, but recommended)
-    const user = await verifyAuth(req).catch(() => null);
+    // This endpoint is triggered by Vercel Cron. Allow manual smoke tests via CRON_SECRET too.
+    if (!requireCronAuth(req)) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
     
     // Get all users (or specific user if auth provided)
     // For now, we'll process all scheduled posts

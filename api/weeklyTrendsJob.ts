@@ -10,30 +10,8 @@
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { searchWeb } from "./_webSearch.js";
-import { initializeApp, getApps, cert } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
-
-// Initialize Firebase Admin if not already initialized
-if (!getApps().length) {
-  try {
-    const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY
-      ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY)
-      : null;
-
-    if (serviceAccount) {
-      initializeApp({
-        credential: cert(serviceAccount),
-      });
-    } else {
-      // Fallback: use default credentials if available
-      initializeApp();
-    }
-  } catch (error) {
-    console.error("Firebase Admin initialization error:", error);
-  }
-}
-
-const db = getFirestore();
+import { getAdminDb } from "./_firebaseAdmin.js";
+import { requireCronAuth } from "./_cronAuth.js";
 
 interface TrendData {
   category: string;
@@ -56,13 +34,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return;
   }
 
-  // Optional: Add authentication for manual triggers
-  if (req.method === "POST") {
-    const authHeader = req.headers.authorization;
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET || "weekly-trends-secret"}`) {
-      res.status(401).json({ error: "Unauthorized" });
-      return;
-    }
+  // Require cron auth (manual smoke test via CRON_SECRET, or Vercel cron markers)
+  if (!requireCronAuth(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
   }
 
   try {
@@ -209,6 +184,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     // Store trends in Firestore
     if (allTrends.length > 0) {
+      const db = getAdminDb();
       const trendsDoc = {
         trends: allTrends,
         fetchedAt: timestamp,

@@ -2,15 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { sendEmail } from "./_mailer.js";
 import { logEmailHistory } from "./_emailHistory.js";
-
-function requireCronAuth(req: VercelRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (secret && secret.trim()) {
-    return req.headers.authorization === `Bearer ${secret}`;
-  }
-  // Fallback for environments without a configured secret.
-  return req.headers["x-vercel-cron"] === "1";
-}
+import { requireCronAuth } from "./_cronAuth.js";
 
 /**
  * Cron worker: sends scheduled emails that are due.

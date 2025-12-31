@@ -2,17 +2,9 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { sendEmail } from "./_mailer.js";
 import { logEmailHistory } from "./_emailHistory.js";
+import { requireCronAuth } from "./_cronAuth.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-function requireCronAuth(req: VercelRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (secret && secret.trim()) {
-    return req.headers.authorization === `Bearer ${secret}`;
-  }
-  // Fallback for environments without a configured secret.
-  return req.headers["x-vercel-cron"] === "1";
-}
 
 function toUtcMidnightMs(d: Date) {
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
