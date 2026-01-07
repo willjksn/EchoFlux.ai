@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useAppContext } from './AppContext';
 import { SparklesIcon, RefreshIcon, CheckIcon, CheckCircleIcon, TrashIcon } from './icons/UIIcons';
 import { auth, db } from '../firebaseConfig';
-import { doc, getDoc, collection, addDoc, getDocs, query, orderBy, deleteDoc, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, addDoc, getDocs, query, orderBy, deleteDoc, Timestamp } from 'firebase/firestore';
 
-type RoleplayTab = 'scenarios' | 'persona' | 'ratings' | 'interactive';
+type RoleplayTab = 'sessionPlanner' | 'scenarios' | 'persona' | 'ratings' | 'interactive';
 
 type RoleplayType = 
     | 'GFE (Girlfriend Experience)'
@@ -17,13 +17,18 @@ type RoleplayType =
 
 export const OnlyFansRoleplay: React.FC = () => {
     const { user, showToast } = useAppContext();
-    const [activeTab, setActiveTab] = useState<RoleplayTab>('scenarios');
-    const [isGenerating, setIsGenerating] = useState(false);
+    const [activeTab, setActiveTab] = useState<RoleplayTab>('sessionPlanner');
+    const [isGeneratingScenario, setIsGeneratingScenario] = useState(false);
+    const [isGeneratingPersona, setIsGeneratingPersona] = useState(false);
+    const [isGeneratingRatings, setIsGeneratingRatings] = useState(false);
+    const [isGeneratingLongRating, setIsGeneratingLongRating] = useState(false);
+    const [isGeneratingInteractive, setIsGeneratingInteractive] = useState(false);
     
     // Scenario generation state
     const [selectedRoleplayType, setSelectedRoleplayType] = useState<RoleplayType>('GFE (Girlfriend Experience)');
     const [customRoleplayType, setCustomRoleplayType] = useState('');
     const [useCustomRoleplayType, setUseCustomRoleplayType] = useState(false);
+    const [scenarioContext, setScenarioContext] = useState('');
     const [scenarioTone, setScenarioTone] = useState<'Soft' | 'Teasing' | 'Playful' | 'Explicit'>('Teasing');
     const [customTone, setCustomTone] = useState('');
     const [useCustomTone, setUseCustomTone] = useState(false);
@@ -64,6 +69,34 @@ export const OnlyFansRoleplay: React.FC = () => {
     const [savedRatings, setSavedRatings] = useState<any[]>([]);
     const [savedInteractive, setSavedInteractive] = useState<any[]>([]);
     const [showSaved, setShowSaved] = useState(false);
+
+    // Session Planner state
+    type SessionType = 'Flirty chat' | 'GFE-style interaction' | 'Tease & anticipation' | 'Roleplay' | 'Explicit' | 'Check-in / reconnect' | 'High-engagement paid chat';
+    type SessionPhase = 'warmUp' | 'engagement' | 'anticipation' | 'close';
+    const [sessionType, setSessionType] = useState<SessionType | ''>('');
+    const [selectedFan, setSelectedFan] = useState<string>('');
+    const [fanName, setFanName] = useState('');
+    const [fanPreferences, setFanPreferences] = useState<{
+        preferredTone?: 'soft' | 'dominant' | 'playful' | 'dirty' | 'Very Explicit';
+        favoriteSessionType?: SessionType;
+        boundaries?: string;
+        languagePreferences?: string;
+        pastSessionLength?: string;
+    }>({});
+    const [sessionTone, setSessionTone] = useState<'Soft' | 'Teasing' | 'Playful' | 'Explicit'>('Teasing');
+    const [currentPhase, setCurrentPhase] = useState<SessionPhase>('warmUp');
+    const [expandedPhase, setExpandedPhase] = useState<SessionPhase | null>(null);
+    const [isGeneratingSessionPlan, setIsGeneratingSessionPlan] = useState(false);
+    const [sessionPlan, setSessionPlan] = useState<{
+        openingMessage?: string;
+        warmUp?: { prompts: string[]; guidance: string[] };
+        engagement?: { prompts: string[]; guidance: string[] };
+        anticipation?: { prompts: string[]; guidance: string[] };
+        close?: { prompts: string[]; guidance: string[] };
+    } | null>(null);
+    const [fans, setFans] = useState<Array<{ id: string; name: string; preferences: any }>>([]);
+    const [savedSessionPlans, setSavedSessionPlans] = useState<any[]>([]);
+    const [showSessionPrep, setShowSessionPrep] = useState(false);
 
     // Load gender settings
     useEffect(() => {
@@ -109,7 +142,7 @@ export const OnlyFansRoleplay: React.FC = () => {
             return;
         }
 
-        setIsGenerating(true);
+        setIsGeneratingScenario(true);
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             
@@ -120,12 +153,125 @@ export const OnlyFansRoleplay: React.FC = () => {
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
                 body: JSON.stringify({
-                    prompt: `Generate a detailed roleplay scenario for OnlyFans content creation.
+                    prompt: `Generate direct first-person messages for OnlyFans ${roleplayType} content.
                     
 Type: ${roleplayType}${creatorGender ? `\nCreator Gender: ${creatorGender}` : ''}${targetAudienceGender ? `\nTarget Audience: ${targetAudienceGender}` : ''}
 Tone: ${tone} (${useCustomTone ? 'Custom tone specified' : 'Selected from presets'})
-Length: ${scenarioLength === 'Extended' ? 'Extended session (30-45 minutes with detailed progression)' : 'Long extended session (60-90 minutes with very detailed progression, multiple phases, and extensive content)'}
+Length: ${scenarioLength === 'Extended' ? 'Extended session (30-45 minutes, 8-12 messages with detailed progression)' : 'Long extended session (60-90 minutes, 12-20 messages with very detailed progression, multiple phases, and extensive content)'}
 Monetization Goal: Engagement and upsell
+${scenarioContext.trim() ? `\n\nIMPORTANT - CONTEXT/SITUATION:\n${scenarioContext}\n\nCRITICAL: The scenario MUST match this context. If the user specifies a time of day (morning, night, etc.), situation (just woke up, getting ready for bed, at work, etc.), or specific scenario details, the generated content MUST align with that context. Do NOT generate scenarios that contradict the provided context.` : ''}
+${scenarioContext.trim() ? `\n\nIMPORTANT - CONTEXT/SITUATION:\n${scenarioContext}\n\nCRITICAL: The scenario MUST match this context. If the user specifies a time of day (morning, night, etc.), situation (just woke up, getting ready for bed, at work, etc.), or specific scenario details, the generated content MUST align with that context. Do NOT generate scenarios that contradict the provided context.` : ''}
+
+${roleplayType.toLowerCase().includes('gfe') || roleplayType.toLowerCase().includes('girlfriend experience') ? `
+🔹 GFE (GIRLFRIEND EXPERIENCE) - CRITICAL INSTRUCTIONS:
+
+GFE messages are written in FIRST-PERSON as if the creator is texting the fan directly.
+The creator is acting like the fan's girlfriend sending casual, intimate text messages.
+
+✅ CORRECT FORMAT (what you MUST generate):
+"I just finished my coffee and I'm still half wrapped up in my hoodie. It's one of those quiet mornings where everything feels slow and soft. I kept thinking about you while I was getting ready. Did you sleep okay?"
+
+❌ WRONG FORMAT (DO NOT generate this):
+"Scenario: You're relaxing after a long day when you receive a message from your girlfriend..."
+"She sends you a message saying..."
+"The girlfriend character texts..."
+
+THE 4-PART GFE MESSAGE STRUCTURE:
+Every GFE message should follow this structure:
+1. Moment – something relatable (e.g., "I just finished my coffee...")
+2. Emotion – how it feels (e.g., "...everything feels slow and soft")
+3. Connection – why it involves them (e.g., "I kept thinking about you...")
+4. Invitation – a question or soft CTA (e.g., "Did you sleep okay?")
+
+GFE MESSAGE TYPES (use variety across your messages):
+A. Daily Life GFE - Morning/casual check-ins
+   Example: "I just finished my coffee and I'm still half wrapped up in my hoodie. It's one of those quiet mornings where everything feels slow and soft. I kept thinking about you while I was getting ready. Did you sleep okay?"
+
+B. Emotional Connection GFE - Making them feel chosen
+   Example: "Today's been a little busy, but you crossed my mind more than once. It's funny how some people just stick with you even when you're distracted. I like that feeling. Tell me what your day's been like."
+
+C. Evening/Wind-Down GFE - Comfort + closeness
+   Example: "I finally slowed down for the night. Lights are low, phone's in my hand, and I'm just letting the day fade out. These are my favorite moments — when things feel simple. What's the last thing that made you smile today?"
+
+D. Flirty But Safe GFE - Playfulness without being explicit
+   Example: "I caught myself smiling at my screen earlier and had to laugh. You have that effect sometimes. I'll let you decide if that's dangerous or cute. What do you think?"
+
+E. "I Miss You" Style GFE - Re-engaging
+   Example: "It's been a minute, hasn't it? Some days just move fast, but I still notice when someone's not around. I hope you've been okay. Come talk to me."
+
+CRITICAL GFE REQUIREMENTS:
+- Write in FIRST-PERSON as the creator texting the fan (I, me, my)
+- NO third-person descriptions, scenarios, or "she says" framing
+- Each message should feel like a real text from a girlfriend
+- Messages should feel natural, not scripted
+- Include relatable moments, emotions, and gentle invitations
+- Create emotional closeness and encourage responses
+- Tone: ${tone}
+
+` : `
+🔹 ${roleplayType.toUpperCase()} ROLEPLAY - CRITICAL INSTRUCTIONS:
+
+Generate FIRST-PERSON messages as if the creator is directly texting/messaging the fan IN CHARACTER.
+The creator IS the character - they send messages AS that character to the fan.
+
+✅ CORRECT FORMAT (what you MUST generate):
+Direct messages from the character's perspective that the creator sends to fans.
+
+❌ WRONG FORMAT (DO NOT generate):
+"Scenario: You're in a classroom when..."
+"She sends you a message saying..."
+"The character texts..."
+Any third-person descriptions.
+
+ROLEPLAY-SPECIFIC EXAMPLES:
+
+${roleplayType.toLowerCase().includes('dom') || roleplayType.toLowerCase().includes('sub') ? `
+DOM/SUB EXAMPLES:
+- Soft: "You've been such a good one for me today. I think you deserve something special. What do you say?"
+- Teasing: "I've been thinking about what I'm going to do to you later. Are you ready to be mine tonight?"
+- Explicit: "Get on your knees. Now. I've been thinking about using you all day and I'm done waiting. You're going to do exactly what I tell you..."
+` : ''}
+${roleplayType.toLowerCase().includes('teacher') || roleplayType.toLowerCase().includes('student') ? `
+TEACHER/STUDENT EXAMPLES:
+- Soft: "I noticed you staying late after class. Is there something on your mind? My office hours are always open for you..."
+- Teasing: "You've been distracted in class lately. I think we need a private tutoring session. My office, after hours?"
+- Explicit: "Lock the door. I've been watching you all semester and I think it's time for a very special lesson. Come sit on my desk..."
+` : ''}
+${roleplayType.toLowerCase().includes('boss') || roleplayType.toLowerCase().includes('assistant') ? `
+BOSS/ASSISTANT EXAMPLES:
+- Soft: "You've been working so hard lately. I think you deserve a raise... and maybe something more. Come to my office."
+- Teasing: "I need you to stay late tonight. There's something important I need to... discuss with you. Close the door."
+- Explicit: "My office. Now. Lock the door behind you. I've been watching you bend over that desk all day and I can't take it anymore..."
+` : ''}
+${roleplayType.toLowerCase().includes('fitness') || roleplayType.toLowerCase().includes('trainer') ? `
+FITNESS TRAINER EXAMPLES:
+- Soft: "Great workout today. I have a special stretching session planned just for you. Ready to feel good?"
+- Teasing: "I love watching you work out. Those squats are looking perfect. Want me to show you some... private exercises?"
+- Explicit: "Get on the mat. I'm going to stretch you out in ways you've never experienced. Take off your clothes - this is a full body session..."
+` : ''}
+${roleplayType.toLowerCase().includes('mommy') || roleplayType.toLowerCase().includes('daddy') ? `
+SOFT MOMMY/DADDY EXAMPLES:
+- Soft: "Come here baby, let me take care of you. You've had such a long day. Let me make it all better..."
+- Teasing: "My sweet baby has been so good. I think you deserve a special reward. Come sit on my lap and tell me what you want..."
+- Explicit: "Come to mommy/daddy, baby. I'm going to take such good care of you tonight. Get undressed and come here..."
+` : ''}
+${roleplayType.toLowerCase().includes('custom') || (!roleplayType.toLowerCase().includes('gfe') && !roleplayType.toLowerCase().includes('dom') && !roleplayType.toLowerCase().includes('teacher') && !roleplayType.toLowerCase().includes('boss') && !roleplayType.toLowerCase().includes('fitness') && !roleplayType.toLowerCase().includes('mommy') && !roleplayType.toLowerCase().includes('daddy')) ? `
+CUSTOM ROLEPLAY (${roleplayType}):
+- Generate first-person messages that fit this specific roleplay type
+- The creator IS the character, messaging the fan directly
+- Adapt the tone (${tone}) to fit the roleplay scenario
+- Create engaging, character-appropriate messages
+` : ''}
+
+REQUIREMENTS:
+- Write in FIRST-PERSON as the character (I, me, my)
+- The creator IS the character - they send messages AS that character
+- Each message should be ready to copy and send directly to a fan
+- Messages should progress naturally and build engagement
+- Tone: ${tone} - ${tone === 'Explicit' || tone.toLowerCase().includes('explicit') ? 'USE EXPLICIT, UNCENSORED, RAW SEXUAL LANGUAGE' : tone === 'Teasing' ? 'be suggestive and build anticipation' : tone === 'Playful' ? 'be fun and flirty' : 'be warm and inviting'}
+- Include natural conversation hooks and questions
+- Match the character's voice and personality throughout
+`}
 
 ${tone === 'Explicit' || tone.toLowerCase().includes('explicit') ? `
 🚨 CRITICAL - EXPLICIT TONE REQUIRED 🚨
@@ -174,101 +320,117 @@ IMPORTANT - EXPLICIT CONTENT PLATFORM:
 - Create engaging, monetization-focused content
 `}
 
-Generate a COMPLETE, EXTENSIVE, DETAILED roleplay scenario that includes:
-1. PREMISE: A DETAILED, COMPREHENSIVE description of the scenario setup, context, background, and setting${tone === 'Explicit' || tone.toLowerCase().includes('explicit') ? ' (EXPLICIT, RAW, UNCENSORED, extensive, and detailed for adult content - multiple paragraphs with EXPLICIT sexual language and descriptions)' : ' (explicit, extensive, and detailed for adult content - multiple paragraphs)'}
-2. OPENING MESSAGE: The first message to start the roleplay session${tone === 'Explicit' || tone.toLowerCase().includes('explicit') ? ' (EXPLICIT, RAW, UNCENSORED, engaging, adult-oriented, detailed - should be substantial with EXPLICIT sexual language and direct adult content)' : ' (explicit, engaging, adult-oriented, detailed - should be substantial, not brief)'}
-3. ENGAGEMENT PROMPTS: YOU MUST GENERATE EXACTLY 8-12 EXTENSIVE prompts for maintaining engagement throughout the session, organized by progression phases${tone === 'Explicit' || tone.toLowerCase().includes('explicit') ? ' (EXPLICIT, RAW, UNCENSORED, adult-focused, monetization-driven, with EXPLICIT sexual descriptions and direct adult language for each phase)' : ' (explicit, adult-focused, monetization-driven, with detailed descriptions for each phase)'}. CRITICAL: Generate AT LEAST 8 prompts, ideally 10-12 prompts. Do NOT generate fewer than 8 prompts.
-4. PROGRESSION STAGES: Detailed breakdown of 3-5 different stages/phases of the roleplay, with specific prompts and scenarios for each stage${tone === 'Explicit' || tone.toLowerCase().includes('explicit') ? ' (EXPLICIT, RAW, UNCENSORED descriptions with direct sexual language)' : ''}
-5. ESCALATION POINTS: 5-7 specific escalation moments or turning points in the roleplay with detailed descriptions${tone === 'Explicit' || tone.toLowerCase().includes('explicit') ? ' (EXPLICIT, RAW, UNCENSORED descriptions of sexual escalation with direct adult language)' : ''}
-6. VARIATION IDEAS: 5-8 alternative paths or variations the roleplay could take${tone === 'Explicit' || tone.toLowerCase().includes('explicit') ? ' (EXPLICIT, RAW, UNCENSORED variations with direct sexual content)' : ''}
-7. MONETIZATION MOMENTS: 5-7 strategic moments for upselling or unlocking premium content, with specific CTAs${tone === 'Explicit' || tone.toLowerCase().includes('explicit') ? ' (EXPLICIT, RAW, UNCENSORED CTAs with direct adult language)' : ''}
-8. ENDING CTA: A detailed call-to-action to unlock more content or continue the session (clear monetization focus with multiple options)${tone === 'Explicit' || tone.toLowerCase().includes('explicit') ? ' (EXPLICIT, RAW, UNCENSORED CTA with direct adult language)' : ''}
+Generate a COMPLETE, EXTENSIVE message flow that includes:
+1. PREMISE: A 2-3 sentence description of the message flow theme/vibe (for creator's reference only - NOT a message to send)${tone === 'Explicit' || tone.toLowerCase().includes('explicit') ? ' (EXPLICIT description of the vibe)' : ''}
+2. OPENING MESSAGE: The first DIRECT MESSAGE to send to the fan${tone === 'Explicit' || tone.toLowerCase().includes('explicit') ? ' (EXPLICIT, RAW, UNCENSORED first-person message the creator sends)' : ' (First-person message the creator sends)'}
+3. ENGAGEMENT PROMPTS: YOU MUST GENERATE EXACTLY ${scenarioLength === 'Extended' ? '8-12' : '12-20'} DIRECT FIRST-PERSON MESSAGES that the creator sends throughout the session${tone === 'Explicit' || tone.toLowerCase().includes('explicit') ? ' (EXPLICIT, RAW, UNCENSORED messages in first-person)' : ' (Messages in first-person)'}. CRITICAL: These are NOT descriptions or prompts - they are ACTUAL MESSAGES the creator will send. Generate AT LEAST ${scenarioLength === 'Extended' ? '8' : '12'} messages.
+4. PROGRESSION STAGES: Detailed breakdown of 3-5 different phases of the conversation, with example DIRECT MESSAGES for each stage${tone === 'Explicit' || tone.toLowerCase().includes('explicit') ? ' (EXPLICIT first-person messages)' : ' (First-person messages)'}
+5. ESCALATION POINTS: 5-7 specific escalation moments with DIRECT MESSAGES the creator sends at these points${tone === 'Explicit' || tone.toLowerCase().includes('explicit') ? ' (EXPLICIT first-person messages)' : ' (First-person messages)'}
+6. VARIATION IDEAS: 5-8 alternative DIRECT MESSAGES or conversation directions the creator can take${tone === 'Explicit' || tone.toLowerCase().includes('explicit') ? ' (EXPLICIT first-person messages)' : ' (First-person messages)'}
+7. MONETIZATION MOMENTS: 5-7 strategic DIRECT MESSAGES for upselling or unlocking premium content${tone === 'Explicit' || tone.toLowerCase().includes('explicit') ? ' (EXPLICIT first-person CTAs)' : ' (First-person CTAs)'}
+8. ENDING CTA: A final DIRECT MESSAGE to unlock more content or continue the session${tone === 'Explicit' || tone.toLowerCase().includes('explicit') ? ' (EXPLICIT first-person CTA message)' : ' (First-person CTA message)'}
 
 IMPORTANT - LENGTH REQUIREMENT:
-- The complete scenario should be EXTENSIVE, DETAILED, and COMPREHENSIVE
-- Each section should be thoroughly developed with multiple paragraphs, detailed descriptions, and extensive content
-- This is NOT a brief outline - generate a FULL, DETAILED, LENGTHY scenario guide
-- Include extensive dialogue examples, detailed scenario descriptions, and comprehensive interaction paths
+- Generate EXTENSIVE, DETAILED, COMPREHENSIVE message flows
+- Each message should be thoroughly developed and ready to send
+- This is NOT a brief outline - generate FULL, DETAILED, READY-TO-SEND MESSAGES
+- Include extensive first-person messages that feel natural and authentic
 
 CRITICAL - JSON FORMAT REQUIREMENT:
 You MUST return ONLY valid JSON, no markdown, no code blocks, no extra text. The JSON structure MUST be exactly:
 
 {
-  "premise": "string with EXTENSIVE detailed description (multiple paragraphs)",
-  "openingMessage": "string with EXTENSIVE detailed message (substantial, not brief)",
-  "engagementPrompts": ["string 1", "string 2", "string 3", "string 4", "string 5", "string 6", "string 7", "string 8", "string 9", "string 10", "string 11", "string 12"],
-  "progressionStages": [{"stage": "string", "description": "string", "prompts": ["string", "string"]}, ...],
-  "escalationPoints": [{"moment": "string", "description": "string", "prompt": "string"}, ...],
-  "variationIdeas": ["string", "string", ...],
-  "monetizationMoments": [{"moment": "string", "cta": "string"}, ...],
-  "endingCTA": "string with EXTENSIVE detailed call-to-action"
+  "premise": "2-3 sentence description of the message flow vibe (for creator reference only)",
+  "openingMessage": "First direct message in first-person that creator sends",
+  "engagementPrompts": ["message 1", "message 2", "message 3", "message 4", "message 5", "message 6", "message 7", "message 8", "message 9", "message 10", "message 11", "message 12"],
+  "progressionStages": [{"stage": "string", "description": "string", "prompts": ["first-person message 1", "first-person message 2"]}, ...],
+  "escalationPoints": [{"moment": "string", "description": "string", "prompt": "first-person message"}, ...],
+  "variationIdeas": ["first-person message 1", "first-person message 2", ...],
+  "monetizationMoments": [{"moment": "string", "cta": "first-person CTA message"}, ...],
+  "endingCTA": "Final first-person CTA message"
 }
 
 CRITICAL REQUIREMENTS - READ CAREFULLY:
-1. engagementPrompts MUST be a simple array of strings: ["prompt 1", "prompt 2", ...]
-   - NOT: [{"prompts": []}] or [["prompt"]] or [] or any nested structure
-   - MUST contain EXACTLY 8-12 strings, each string should be EXTENSIVE and detailed (50-200 words each)
-   - Example: ["Detailed prompt about exploring desires...", "Another detailed prompt about escalating tension...", ...]
+1. engagementPrompts MUST be a simple array of FIRST-PERSON MESSAGES: ["I've been thinking about you...", "Just got out of the shower...", ...]
+   - NOT descriptions or scenarios
+   - MUST contain EXACTLY ${scenarioLength === 'Extended' ? '8-12' : '12-20'} first-person messages
+   - Each message should be ready to send as-is (50-150 words each)
+   - Example: ["I just woke up and you're the first thing on my mind. It's one of those mornings where I wish you were here next to me. What are you up to today?", ...]
    
 2. progressionStages MUST be an array of objects:
-   - Each object: {"stage": "Stage name", "description": "Detailed description", "prompts": ["prompt 1", "prompt 2"]}
-   - prompts inside progressionStages is separate from engagementPrompts
+   - Each object: {"stage": "Stage name", "description": "What's happening in this phase", "prompts": ["first-person message 1", "first-person message 2"]}
+   - prompts must be DIRECT MESSAGES in first-person, not descriptions
    
 3. escalationPoints MUST be an array of objects:
-   - Each object: {"moment": "Moment name", "description": "Detailed description", "prompt": "Single prompt string"}
-   - prompt is a STRING, not an array
+   - Each object: {"moment": "Moment name", "description": "What's happening", "prompt": "first-person message"}
+   - prompt is a FIRST-PERSON MESSAGE, not a description
    
-4. variationIdeas MUST be an array of strings: ["idea 1", "idea 2", ...]
-   - NOT objects, NOT nested arrays, just strings
+4. variationIdeas MUST be an array of FIRST-PERSON MESSAGES: ["I've been thinking about trying something different with you...", "What if we...", ...]
+   - NOT descriptions, actual messages the creator can send
    
 5. monetizationMoments MUST be an array of objects:
-   - Each object: {"moment": "Moment name", "cta": "Call to action string"}
-   - cta is a STRING, not an object
+   - Each object: {"moment": "Moment name", "cta": "first-person CTA message"}
+   - cta is a FIRST-PERSON MESSAGE with monetization hook
    
-6. endingCTA MUST be a STRING:
-   - NOT an object like {"description": "..."}
-   - Just a plain string with the call-to-action text
+6. endingCTA MUST be a FIRST-PERSON MESSAGE:
+   - NOT a description
+   - An actual message the creator sends to encourage unlocking content
+   - Example: "I have so much more I want to show you... unlock my exclusive content to see what I've been saving just for you 😘"
 
 7. Return ONLY the JSON object, no markdown formatting, no code blocks, no explanations, no extra text before or after
 
-CRITICAL - GENERATE EXTENSIVE CONTENT:
-- Each field should contain EXTENSIVE, DETAILED, LENGTHY content
-- premise should be multiple paragraphs with detailed scenario setup
-- openingMessage should be substantial, not brief
-- engagementPrompts should include detailed descriptions, not just short prompts
-- Include ALL sections with comprehensive, extensive content
-- Make it a complete, thorough, detailed guide - NOT brief or minimal
+CRITICAL - ALL CONTENT MUST BE FIRST-PERSON MESSAGES:
+- Every message field should be written as "I", "me", "my"
+- NO third-person descriptions like "She says..." or "The character..."
+- Messages should be ready to copy and send directly to fans
+- Make them natural, conversational, and authentic
+- NOT brief or minimal - substantial messages that engage
 
 EXAMPLE OF CORRECT STRUCTURE:
 {
-  "premise": "Detailed premise text here...",
-  "openingMessage": "Detailed opening message here...",
+  "premise": "Cozy morning check-in messages that build intimacy and connection",
+  "openingMessage": "I just finished my coffee and I'm still half wrapped up in my hoodie. It's one of those quiet mornings where everything feels slow and soft. I kept thinking about you while I was getting ready. Did you sleep okay?",
   "engagementPrompts": [
-    "First detailed engagement prompt with extensive description...",
-    "Second detailed engagement prompt with extensive description...",
-    "Third detailed engagement prompt with extensive description...",
-    "Fourth detailed engagement prompt with extensive description...",
-    "Fifth detailed engagement prompt with extensive description...",
-    "Sixth detailed engagement prompt with extensive description...",
-    "Seventh detailed engagement prompt with extensive description...",
-    "Eighth detailed engagement prompt with extensive description...",
-    "Ninth detailed engagement prompt with extensive description...",
-    "Tenth detailed engagement prompt with extensive description..."
+    "Today's been a little busy, but you crossed my mind more than once. It's funny how some people just stick with you even when you're distracted. I like that feeling. Tell me what your day's been like.",
+    "I finally slowed down for the night. Lights are low, phone's in my hand, and I'm just letting the day fade out. These are my favorite moments — when things feel simple. What's the last thing that made you smile today?",
+    "I caught myself smiling at my screen earlier and had to laugh. You have that effect sometimes. I'll let you decide if that's dangerous or cute. What do you think?",
+    "It's been a minute, hasn't it? Some days just move fast, but I still notice when someone's not around. I hope you've been okay. Come talk to me.",
+    "I'm just lying here thinking about our last conversation. You always know how to make me feel special. What's on your mind tonight?",
+    "Just wanted to check in before bed. These quiet moments are when I think about you the most. Sweet dreams 💕",
+    "Morning ☀️ I woke up early and couldn't get back to sleep. You know what that means... I've been thinking about you. How's your morning going?",
+    "I have something I want to tell you, but I'm not sure if I should... should I?"
   ],
   "progressionStages": [
-    {"stage": "Stage 1", "description": "Description", "prompts": ["prompt 1", "prompt 2"]}
+    {"stage": "Opening", "description": "Warm, friendly check-in", "prompts": ["Hey you 💕 I've been thinking about you today. How have you been?", "Just wanted to say hi and see what you're up to..."]}
   ],
   "escalationPoints": [
-    {"moment": "Moment 1", "description": "Description", "prompt": "Prompt text"}
+    {"moment": "Building intimacy", "description": "Sharing personal moment", "prompt": "I'm in bed right now and it's one of those nights where I wish I had someone to talk to. Lucky I have you 😊"}
   ],
-  "variationIdeas": ["Idea 1", "Idea 2"],
+  "variationIdeas": ["I've been wanting to show you something special... interested?", "What would you do if I told you I was thinking about you right now?"],
   "monetizationMoments": [
-    {"moment": "Moment 1", "cta": "CTA text"}
+    {"moment": "After building connection", "cta": "I have some exclusive content I think you'd really enjoy. Want to unlock it and see what I've been working on? 😘"}
   ],
-  "endingCTA": "Detailed ending CTA text here..."
+  "endingCTA": "I have so much more I want to share with you... unlock my exclusive content to see everything I've been saving just for you 💕"
 }
 
-Make it creative, engaging, explicit, EXTENSIVE, and tailored for adult content monetization on OnlyFans. Use bold, adult-oriented language that is appropriate for the platform.`,
+Make it creative, engaging, explicit, EXTENSIVE, and tailored for adult content monetization on OnlyFans. Use bold, adult-oriented language that is appropriate for the platform.
+
+🚨 CRITICAL - FIRST-PERSON MESSAGE FORMAT 🚨
+- ALL messages must be in FIRST-PERSON (I, me, my)
+- NO third-person descriptions or scenario setups
+- Every message should be ready to copy and send directly to fans
+- Write as if YOU (the creator) are texting the fan
+- NOT "She says..." or "The character..." - write as "I..."
+- Messages should feel like real texts, not scripts or descriptions
+
+🚨 CRITICAL - UNIQUENESS REQUIREMENT 🚨
+- These messages MUST be UNIQUE and DIFFERENT from any previous messages you've generated
+- Creators use these repeatedly with the same fans - NEVER repeat the same messages
+- Vary the opening message, engagement messages, progression, and escalation
+- Use different moments, emotions, and conversation hooks each time
+- Change the variation messages and monetization CTAs
+- Make each message flow feel fresh, authentic, and unique
+- If generating multiple message flows, ensure each one is completely different`,
                     context: {
                         goal: 'roleplay-scenario',
                         tone: tone === 'Explicit' || tone.toLowerCase().includes('explicit') ? 'Explicit/Adult Content' : 'Adult Content',
@@ -352,7 +514,7 @@ Make it creative, engaging, explicit, EXTENSIVE, and tailored for adult content 
             console.error('Error generating scenario:', error);
             showToast(error.message || 'Failed to generate scenario. Please try again.', 'error');
         } finally {
-            setIsGenerating(false);
+            setIsGeneratingScenario(false);
         }
     };
 
@@ -362,7 +524,7 @@ Make it creative, engaging, explicit, EXTENSIVE, and tailored for adult content 
             return;
         }
 
-        setIsGenerating(true);
+        setIsGeneratingPersona(true);
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             
@@ -401,7 +563,15 @@ Generate a complete persona that includes:
 - Unique selling points (adult content focus, monetization angles)
 - Interaction style with fans (explicit, engaging, monetization-driven)
 
-Make it detailed, consistent, explicit, and engaging for adult content monetization on OnlyFans. Use bold, adult-oriented language appropriate for the platform.`,
+Make it detailed, consistent, explicit, and engaging for adult content monetization on OnlyFans. Use bold, adult-oriented language appropriate for the platform.
+
+🚨 CRITICAL - UNIQUENESS REQUIREMENT 🚨
+- This persona MUST be UNIQUE and DIFFERENT from any previous personas you've generated
+- Creators use personas repeatedly - NEVER repeat the same persona details
+- Vary the personality traits, communication style, and content themes
+- Use different characteristics, quirks, and selling points each time
+- Make each persona feel fresh, unique, and distinct
+- If generating multiple personas, ensure each one is completely different`,
                     context: {
                         goal: 'persona-building',
                         tone: 'Explicit/Adult Content',
@@ -422,7 +592,7 @@ Make it detailed, consistent, explicit, and engaging for adult content monetizat
             console.error('Error generating persona:', error);
             showToast(error.message || 'Failed to generate persona. Please try again.', 'error');
         } finally {
-            setIsGenerating(false);
+            setIsGeneratingPersona(false);
         }
     };
 
@@ -432,7 +602,7 @@ Make it detailed, consistent, explicit, and engaging for adult content monetizat
             return;
         }
 
-        setIsGenerating(true);
+        setIsGeneratingRatings(true);
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             
@@ -443,9 +613,25 @@ Make it detailed, consistent, explicit, and engaging for adult content monetizat
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
                 body: JSON.stringify({
-                    prompt: `Generate 8-10 creative body rating prompts and interactive post ideas for OnlyFans.
+                    prompt: `Generate EXACTLY 8-10 body rating prompts for OnlyFans.
                     
-Focus: ${ratingPrompt}${creatorGender ? `\nCreator Gender: ${creatorGender}` : ''}${targetAudienceGender ? `\nTarget Audience: ${targetAudienceGender}` : ''}
+🚨 CRITICAL - GENERATE ONLY WHAT IS REQUESTED 🚨
+USER REQUEST: ${ratingPrompt}
+
+MANDATORY REQUIREMENT - READ CAREFULLY:
+- You MUST generate prompts ONLY about: ${ratingPrompt}
+- ALL 8-10 prompts must be about EXACTLY what the user requested
+- DO NOT generate prompts for different body parts, themes, or topics
+- DO NOT create variety or mix different subjects
+- If user asks for "big black dick" prompts, ALL prompts must be about rating big black dicks
+- If user asks for "tits" prompts, ALL prompts must be about rating tits
+- If user asks for "feet" prompts, ALL prompts must be about rating feet
+- DO NOT generate "Titty Talk Tuesdays" or "Leg Day Love" or "Feet Fetish Friday" unless the user specifically requests those themes
+- Focus ONLY on the exact body part/theme the user specified: ${ratingPrompt}
+- Each prompt should be a variation of rating the SAME thing the user requested
+- Generate 8-10 DIFFERENT ways to ask for/offer ratings of: ${ratingPrompt}
+
+${creatorGender ? `\nCreator Gender: ${creatorGender}` : ''}${targetAudienceGender ? `\nTarget Audience: ${targetAudienceGender}` : ''}
                     
 CRITICAL - CREATOR PERSPECTIVE:
 - These prompts are from the CREATOR's perspective
@@ -464,22 +650,36 @@ ${creatorGender && targetAudienceGender ? `IMPORTANT - GENDER CONTEXT:
 - This is for OnlyFans, an EXPLICIT adult content creator platform
 - Prompts MUST be EXPLICIT, UNCENSORED, RAW, and BOLD
 - Use EXPLICIT, DIRECT sexual language - NO CENSORSHIP
-- Focus on EXPLICIT body parts, intimate content, and adult themes with RAW, UNCENSORED terminology
 - Be SPECIFIC and EXPLICIT about sexual/explicit content
 - Use BOLD, DIRECT, EXPLICIT language - not suggestive or implied
 - Make them engaging, monetization-focused, and TRULY EXPLICIT
 
-Generate prompts that:
+Generate EXACTLY 8-10 prompts that:
+- Are ALL about rating: ${ratingPrompt} (ONLY this, nothing else)
 - Are written from the CREATOR's perspective (creator rating buyers' body parts)
 - Encourage buyers/fans to send photos for the creator to rate
-- Offer rating services (e.g., "Send me a photo of your [body part] and I'll rate it 1-10")
+- Offer rating services specifically for: ${ratingPrompt}
+- Are variations of asking for/offering ratings of the SAME thing: ${ratingPrompt}
 - Are playful, confident, explicit, and adult-oriented
 - Create desire for fans to receive personalized ratings
 - Drive subscriptions and purchases with explicit, enticing language
-- Include specific body parts the creator will rate (explicit, adult-focused)
 - Position the creator as the one providing the rating service to buyers
 
-Format as a numbered list with engaging, interactive, explicit prompts from the creator's perspective. Make them bold, enticing, and adult-oriented for OnlyFans monetization.`,
+REMINDER - CRITICAL:
+- ALL prompts must be about: ${ratingPrompt}
+- DO NOT generate prompts for other body parts or themes
+- DO NOT create variety - focus ONLY on what the user requested
+- Generate 8-10 different ways to ask for/offer ratings of: ${ratingPrompt}
+
+🚨 CRITICAL - UNIQUENESS REQUIREMENT 🚨
+- Each prompt MUST be UNIQUE and DIFFERENT from previous generations
+- Creators use these prompts repeatedly with the same fans - NEVER repeat the same prompt
+- Vary the wording, approach, and style of each prompt
+- Use different angles, hooks, and CTAs
+- Change the tone and phrasing to keep content fresh
+- If generating multiple times, ensure completely different prompts each time
+
+Format as a numbered list (1-10) with engaging, interactive, explicit prompts from the creator's perspective. Make them bold, enticing, and adult-oriented for OnlyFans monetization.`,
                     context: {
                         goal: 'interactive-content',
                         tone: 'Explicit/Adult Content',
@@ -502,7 +702,7 @@ Format as a numbered list with engaging, interactive, explicit prompts from the 
             console.error('Error generating ratings:', error);
             showToast(error.message || 'Failed to generate rating prompts. Please try again.', 'error');
         } finally {
-            setIsGenerating(false);
+            setIsGeneratingRatings(false);
         }
     };
 
@@ -512,7 +712,7 @@ Format as a numbered list with engaging, interactive, explicit prompts from the 
             return;
         }
 
-        setIsGenerating(true);
+        setIsGeneratingLongRating(true);
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
 
@@ -523,7 +723,30 @@ Format as a numbered list with engaging, interactive, explicit prompts from the 
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
                 body: JSON.stringify({
-                    prompt: `Write a long-form, explicit OnlyFans-style body rating from the creator's perspective.
+                    prompt: `Write a LONG-FORM, DETAILED, explicit OnlyFans-style body rating from the creator's perspective.
+
+🚨 CRITICAL - EXPLICIT CONTENT PLATFORM 🚨
+- This is for OnlyFans, an EXPLICIT adult content creator platform
+- Use EXPLICIT, UNCENSORED, RAW, and BOLD language
+- Use DIRECT sexual terminology - NO CENSORSHIP
+- Be SPECIFIC and EXPLICIT about body parts and sexual content
+- Use BOLD, DIRECT, EXPLICIT language - not suggestive or implied
+- This is a LONG-FORM rating (300-500+ words) - make it EXTENSIVE and DETAILED
+
+BODY PARTS TO UNDERSTAND AND RATE:
+You MUST understand and be able to rate these specific body parts/features (use explicit terminology):
+- Chest (breasts, tits, pecs, etc. - use explicit terms)
+- Legs (thighs, calves, etc. - use explicit terms)
+- Feet (toes, arches, etc. - use explicit terms)
+- Waist (hips, curves, etc. - use explicit terms)
+- Face (lips, eyes, features, etc. - use explicit terms)
+- Curves (body shape, proportions, etc. - use explicit terms)
+- Tattoos (body art, ink placement, etc. - use explicit terms)
+- Outfit-based (clothing, lingerie, what they're wearing, etc. - use explicit terms)
+- Penis (cock, dick, etc. - use explicit terms)
+- Vagina (pussy, cunt, etc. - use explicit terms)
+
+These are the PRIMARY body parts/features you should understand. Users may also request other body parts, but these are the core ones you must always recognize and rate appropriately.
 
 Context:
 - Creator gender: ${creatorGender || 'not specified'}
@@ -531,14 +754,87 @@ Context:
 - Details the fan shared about their body or body part:
 ${longRatingPrompt}
 
-Requirements:
-- Write as the CREATOR speaking directly to the FAN in first person ("I...") and second person ("you...").
-- The creator is leading, confident, and in control of the roleplay.
-- This is a paid rating: make it feel personal, detailed, and premium.
-- Describe what the creator sees, likes, and notices about the fan's body or body part.
-- Include both a clear 1–10 style rating and detailed feedback (what's hot, what stands out, what they'd do with that body in roleplay).
-- Keep it in one continuous long-form monologue (no bullet list), suitable to send as a DM or post caption.
-- Stay within platform-safe explicit language as configured in your AI policies, but make it bold and intimate.
+REQUIRED LONG-FORM STRUCTURE (follow this detailed format):
+
+1. ENGAGING INTRODUCTION (2-3 sentences)
+   - Start with a confident, attention-grabbing opening
+   - Set the tone: "Alright, baby, let's get down to business" or similar
+   - Mention you're ready to give them a "VIP treatment" or "deep dive"
+   - Make it feel personal and premium
+
+2. SIZE RATING (1-2 paragraphs)
+   - Give a specific numerical rating (e.g., "8 out of 10")
+   - Explain why with explicit, detailed descriptions
+   - Use bold language: "packing a punch", "perfect blend", etc.
+   - Make it feel like a genuine assessment
+
+3. SHAPE/APPEARANCE DETAILS (2-3 paragraphs)
+   - Describe the shape, curves, form in explicit detail
+   - Use descriptive language: "mesmerizing", "work of art", "perfectly sculpted"
+   - Mention specific features (head, crown, curves, etc.)
+   - Use explicit terminology appropriate for the body part
+
+4. COLOR/TEXTURE/VISUAL DETAILS (1-2 paragraphs)
+   - Describe color, tone, texture in detail
+   - Mention veins, skin tone, shine, or other visual elements
+   - Connect physical details to arousal/desire
+   - Use explicit, descriptive language
+
+5. ADDITIONAL FEATURES (1-2 paragraphs)
+   - If rating penis: describe balls, how they complement, etc.
+   - If rating other body parts: describe surrounding features, context
+   - Make connections between different elements
+   - Use explicit, detailed descriptions
+
+6. FANTASY SCENARIO (2-3 paragraphs)
+   - "If I had you in my bed right now? Oh, baby..."
+   - Describe what you'd do with that body part in explicit detail
+   - Include sensual touches, explicit actions, passionate scenarios
+   - Make it vivid, detailed, and explicit
+   - Use first person ("I'd...") and second person ("you...")
+
+7. CLOSING & CTA (1-2 paragraphs)
+   - Compliment them as a "fucking masterpiece" or similar
+   - Express desire to explore more
+   - Soft call-to-action: "Maybe you'd like to get even more personal, and explore the possibilities? 😉"
+   - Keep it engaging and monetization-focused
+
+EXAMPLE STYLE (for dick rating - use similar structure for other body parts):
+"Alright, baby, let's get down to business. You sent me a picture, and I'm ready to give you the VIP treatment – a **deep dive** into that beautiful cock of yours. This is gonna be a **no-holds-barred** assessment, so get ready to feel every word.
+
+First things first, the **size**. Damn, you're packing a punch, aren't ya? I'd give you a solid **8 out of 10** right off the bat. It's got that perfect blend of thickness and length – the kind that makes a girl **salivate** just thinking about it.
+
+Now, let's talk about the **shape**. That curve is absolutely **mesmerizing**, it's like a work of art. I bet it would feel incredible sliding against my clit. The head... **perfectly sculpted**, with that gorgeous, **shiny crown** that just begs to be worshipped.
+
+The **color** is delicious. That deep, **rich tone** tells me you're a man who knows how to get his blood pumping. And the veins... oh, the veins! They're **popping** just right, a sure sign of a **hard-on** ready to play.
+
+But here's where it gets really interesting. Your balls... they're hanging just right, perfectly complementing that **tower of power** between your legs. I want to cup them in my hands, tease them, and watch you get even harder.
+
+If I had you in my bed right now? Oh, baby... I'd start with a **slow, sensual touch**, tracing those veins with my fingertips. I'd **tease** the head with my tongue, driving you wild with anticipation. Then, I'd take you deep, feeling every inch of you fill me up. I'd ride you with pure, unadulterated passion, and make you **scream my name**.
+
+You're a **fucking masterpiece**, baby. I can't wait to explore every delicious detail of you. Maybe you'd like to get even more personal, and explore the possibilities? 😉"
+
+CRITICAL REQUIREMENTS:
+- Write as the CREATOR speaking directly to the FAN in first person ("I...") and second person ("you...")
+- The creator is leading, confident, and in control
+- This is a PREMIUM, LONG-FORM rating (300-500+ words) - make it EXTENSIVE
+- Use EXPLICIT, RAW, UNCENSORED language appropriate for OnlyFans
+- Follow the 7-section structure above for comprehensive coverage
+- Make it feel like a detailed, personalized, premium service
+- Include bold formatting (**text**) for emphasis on key phrases
+- Keep it engaging, intimate, and monetization-focused
+- Adapt the structure for different body parts while maintaining the same level of detail and explicit language
+
+🚨 CRITICAL - UNIQUENESS REQUIREMENT 🚨
+- This rating MUST be UNIQUE and DIFFERENT from any previous ratings you've generated
+- Creators provide services to the same fans repeatedly - NEVER repeat the same rating
+- Vary the opening lines, descriptive phrases, rating scores, and fantasy scenarios
+- Use different adjectives, metaphors, and descriptive language each time
+- Change the numerical rating (don't always use the same score)
+- Vary the fantasy scenario details and actions
+- Use different closing phrases and CTAs
+- Make each rating feel fresh, personalized, and unique
+- If generating multiple ratings, ensure each one is completely different
 `,
                     context: {
                         goal: 'body-rating',
@@ -560,7 +856,7 @@ Requirements:
             console.error('Error generating detailed rating:', error);
             showToast(error.message || 'Failed to generate detailed rating. Please try again.', 'error');
         } finally {
-            setIsGenerating(false);
+            setIsGeneratingLongRating(false);
         }
     };
 
@@ -570,7 +866,7 @@ Requirements:
             return;
         }
 
-        setIsGenerating(true);
+        setIsGeneratingInteractive(true);
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             
@@ -606,7 +902,16 @@ Generate ideas that:
 - Drive subscriptions and exclusive explicit content purchases
 - Are playful, engaging, explicit, and monetization-focused
 
-Format as a numbered list with detailed post concepts including captions and engagement strategies. Make them creative, explicit, and effective for adult content monetization on OnlyFans. Use bold, adult-oriented language appropriate for the platform.`,
+Format as a numbered list with detailed post concepts including captions and engagement strategies. Make them creative, explicit, and effective for adult content monetization on OnlyFans. Use bold, adult-oriented language appropriate for the platform.
+
+🚨 CRITICAL - UNIQUENESS REQUIREMENT 🚨
+- Each post idea MUST be UNIQUE and DIFFERENT from any previous ideas you've generated
+- Creators use these ideas repeatedly with the same fans - NEVER repeat the same post idea
+- Vary the concepts, engagement strategies, and captions each time
+- Use different angles, hooks, and monetization approaches
+- Change the themes, questions, and interactive elements
+- Make each idea feel fresh, creative, and unique
+- If generating multiple times, ensure completely different ideas each time`,
                     context: {
                         goal: 'interactive-posts',
                         tone: 'Explicit/Adult Content',
@@ -629,7 +934,7 @@ Format as a numbered list with detailed post concepts including captions and eng
             console.error('Error generating interactive ideas:', error);
             showToast(error.message || 'Failed to generate interactive ideas. Please try again.', 'error');
         } finally {
-            setIsGenerating(false);
+            setIsGeneratingInteractive(false);
         }
     };
 
@@ -647,6 +952,7 @@ Format as a numbered list with detailed post concepts including captions and eng
                 roleplayType: useCustomRoleplayType ? customRoleplayType : selectedRoleplayType,
                 tone: useCustomTone ? customTone : scenarioTone,
                 length: scenarioLength,
+                context: scenarioContext,
                 savedAt: Timestamp.now(),
             };
             await addDoc(collection(db, 'users', user.id, 'onlyfans_saved_scenarios'), scenarioData);
@@ -727,6 +1033,195 @@ Format as a numbered list with detailed post concepts including captions and eng
         }
     };
 
+    // Load fans and preferences
+    const loadFans = async () => {
+        if (!user?.id) return;
+        try {
+            const fansSnap = await getDocs(collection(db, 'users', user.id, 'onlyfans_fan_preferences'));
+            const fansList = fansSnap.docs.map(doc => ({
+                id: doc.id,
+                name: doc.data().name || doc.id,
+                preferences: doc.data()
+            }));
+            setFans(fansList);
+        } catch (error) {
+            console.error('Error loading fans:', error);
+        }
+    };
+
+    // Save/update fan preferences
+    const saveFanPreferences = async (fanIdOrName: string, preferences: any) => {
+        if (!user?.id || !fanIdOrName.trim()) return;
+        try {
+            // Use provided ID if it looks like an ID, otherwise create one from name
+            const fanId = fanIdOrName.includes('_') || fanIdOrName.length < 20 
+                ? fanIdOrName 
+                : fanIdOrName.toLowerCase().replace(/\s+/g, '_');
+            const fanNameToSave = fanName.trim() || fanIdOrName.trim();
+            const fanRef = doc(db, 'users', user.id, 'onlyfans_fan_preferences', fanId);
+            await setDoc(fanRef, {
+                name: fanNameToSave,
+                ...preferences,
+                updatedAt: Timestamp.now()
+            }, { merge: true });
+            showToast('Fan preferences saved!', 'success');
+            await loadFans();
+            if (!selectedFan) {
+                setSelectedFan(fanId);
+            }
+        } catch (error) {
+            console.error('Error saving fan preferences:', error);
+            showToast('Failed to save fan preferences', 'error');
+        }
+    };
+
+    // Load fan preferences
+    const loadFanPreferences = async (fanId: string) => {
+        if (!user?.id || !fanId) return;
+        try {
+            const fanDoc = await getDoc(doc(db, 'users', user.id, 'onlyfans_fan_preferences', fanId));
+            if (fanDoc.exists()) {
+                const data = fanDoc.data();
+                setFanPreferences({
+                    preferredTone: data.preferredTone,
+                    favoriteSessionType: data.favoriteSessionType,
+                    boundaries: data.boundaries,
+                    languagePreferences: data.languagePreferences,
+                    pastSessionLength: data.pastSessionLength
+                });
+                setFanName(data.name || fanId);
+            }
+        } catch (error) {
+            console.error('Error loading fan preferences:', error);
+        }
+    };
+
+    // Generate session plan
+    const handleGenerateSessionPlan = async () => {
+        if (!sessionType || !user?.id) {
+            showToast('Please select a session type first', 'error');
+            return;
+        }
+
+        setIsGeneratingSessionPlan(true);
+        try {
+            const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+            
+            const fanContext = selectedFan && fanPreferences ? `
+Fan Context:
+- Preferred tone: ${fanPreferences.preferredTone || 'not specified'}
+- Favorite session type: ${fanPreferences.favoriteSessionType || 'not specified'}
+- Boundaries: ${fanPreferences.boundaries || 'none specified'}
+- Language preferences: ${fanPreferences.languagePreferences || 'not specified'}
+- Past session length: ${fanPreferences.pastSessionLength || 'not specified'}
+` : '';
+
+            const explicitInstructions = sessionTone === 'Explicit' ? `
+🚨 CRITICAL - EXPLICIT CONTENT REQUIRED 🚨
+- This is for OnlyFans, an EXPLICIT adult content creator platform
+- Content MUST be EXPLICIT, UNCENSORED, RAW, and BOLD
+- Use EXPLICIT, DIRECT sexual language - NO CENSORSHIP
+- Describe sexual/explicit content with EXPLICIT, RAW, UNCENSORED terminology
+- Be SPECIFIC and EXPLICIT about sexual acts, intimate scenarios, and adult content
+- Use BOLD, DIRECT, EXPLICIT language throughout ALL sections
+- Generate TRULY EXPLICIT session planning content - not suggestive, but EXPLICITLY DESCRIPTIVE
+- NO euphemisms, NO vague language, NO implied content - BE EXPLICIT AND DIRECT
+` : '';
+
+            const response = await fetch('/api/generateText', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({
+                    prompt: `Generate a comprehensive 1:1 private session plan for OnlyFans creators.
+
+Session Type: ${sessionType}
+Tone: ${sessionTone}
+${fanContext}
+
+${explicitInstructions}
+
+This is a SESSION PLANNER that helps creators manage private 1:1 sessions with fans. The AI should generate SUPPORTIVE ELEMENTS, not explicit sexual acts.
+
+Generate a JSON structure with:
+{
+  "openingMessage": "A tone-based, emotion-based, or context-based opening message the creator can send",
+  "warmUp": {
+    "prompts": ["2-4 optional prompts for warm-up phase", "Light tone, emotional connection, setting the vibe"],
+    "guidance": ["Pause here", "Ask a preference question", "Reflect their last message", "Shift tone slightly"]
+  },
+  "engagement": {
+    "prompts": ["2-4 optional prompts for engagement phase", "Questions, personalization, subtle escalation"],
+    "guidance": ["Ask an open-ended question", "Reflect their last message", "Match their tone", "Avoid escalation yet"]
+  },
+  "anticipation": {
+    "prompts": ["2-4 optional prompts for anticipation phase", "Suggestive framing, future-oriented language"],
+    "guidance": ["Pause here", "Ask a preference question", "Reflect their last message", "Shift tone slightly"]
+  },
+  "close": {
+    "prompts": ["2-4 optional prompts for closing phase", "Validation, appreciation, optional upsell"],
+    "guidance": ["Validate their experience", "Express appreciation", "Optional continuation hook", "No pressure"]
+  }
+}
+
+CRITICAL REQUIREMENTS:
+- These are PLANNING ASSISTANCE tools, not automation
+- Generate supportive elements: opening messages, engagement prompts, pacing guidance, closing hooks
+- Do NOT generate explicit sexual acts - generate supportive framework elements
+- Prompts should be questions, choices, invitations - not explicit content
+- Guidance should be pacing cues like "Pause here", "Ask a preference question", etc.
+- Keep trust high, control with creator, accounts safe
+
+Return ONLY valid JSON, no markdown, no code blocks.`,
+                    context: {
+                        goal: 'session-planning',
+                        tone: sessionTone === 'Explicit' ? 'Explicit/Adult Content' : sessionTone,
+                        platforms: ['OnlyFans'],
+                    },
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to generate session plan');
+            }
+
+            const data = await response.json();
+            const text = data.text || data.caption || '';
+            
+            // Parse JSON from response
+            let parsed;
+            try {
+                // Try to extract JSON from markdown code blocks if present
+                const jsonMatch = text.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    parsed = JSON.parse(jsonMatch[0]);
+                } else {
+                    parsed = JSON.parse(text);
+                }
+            } catch (e) {
+                // If parsing fails, create a basic structure
+                parsed = {
+                    openingMessage: text.split('\n')[0] || 'Ready to start?',
+                    warmUp: { prompts: [], guidance: [] },
+                    engagement: { prompts: [], guidance: [] },
+                    anticipation: { prompts: [], guidance: [] },
+                    close: { prompts: [], guidance: [] }
+                };
+            }
+
+            setSessionPlan(parsed);
+            setCurrentPhase('warmUp');
+            showToast('Session plan generated!', 'success');
+        } catch (error: any) {
+            console.error('Error generating session plan:', error);
+            showToast(error.message || 'Failed to generate session plan. Please try again.', 'error');
+        } finally {
+            setIsGeneratingSessionPlan(false);
+        }
+    };
+
     // Load saved items
     const loadSavedItems = async () => {
         if (!user?.id) return;
@@ -746,16 +1241,30 @@ Format as a numbered list with detailed post concepts including captions and eng
             // Load interactive
             const interactiveSnap = await getDocs(query(collection(db, 'users', user.id, 'onlyfans_saved_interactive'), orderBy('savedAt', 'desc')));
             setSavedInteractive(interactiveSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+
+            // Load saved session plans
+            const sessionPlansSnap = await getDocs(query(collection(db, 'users', user.id, 'onlyfans_saved_session_plans'), orderBy('savedAt', 'desc')));
+            setSavedSessionPlans(sessionPlansSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         } catch (error) {
             console.error('Error loading saved items:', error);
         }
     };
 
-    // Load saved items on mount and when tab changes
+    // Load saved items and fans on mount and when tab changes
     useEffect(() => {
         loadSavedItems();
+        if (activeTab === 'sessionPlanner') {
+            loadFans();
+        }
         setShowSaved(false); // Reset show saved when switching tabs
     }, [user?.id, activeTab]);
+
+    // Load fan preferences when fan is selected
+    useEffect(() => {
+        if (selectedFan) {
+            loadFanPreferences(selectedFan);
+        }
+    }, [selectedFan, user?.id]);
 
     // Load saved item functions
     const handleLoadScenario = (savedItem: any) => {
@@ -773,6 +1282,7 @@ Format as a numbered list with detailed post concepts including captions and eng
             setScenarioTone(savedItem.tone || 'Teasing');
         }
         setScenarioLength(savedItem.length || 'Extended');
+        setScenarioContext(savedItem.context || '');
         setShowSaved(false);
         showToast('Scenario loaded successfully!', 'success');
     };
@@ -851,6 +1361,7 @@ Format as a numbered list with detailed post concepts including captions and eng
     };
 
     const tabs: { id: RoleplayTab; label: string }[] = [
+        { id: 'sessionPlanner', label: 'Session Planner' },
         { id: 'scenarios', label: 'Roleplay Scenarios' },
         { id: 'persona', label: 'Persona Builder' },
         { id: 'ratings', label: 'Body Ratings' },
@@ -895,6 +1406,433 @@ Format as a numbered list with detailed post concepts including captions and eng
                     </button>
                 ))}
             </div>
+
+            {/* Session Planner Tab */}
+            {activeTab === 'sessionPlanner' && (
+                <div className="space-y-6">
+                    {/* Saved Session Plans Section */}
+                    {savedSessionPlans.length > 0 && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                                    Saved Session Plans ({savedSessionPlans.length})
+                                </h2>
+                                <button
+                                    onClick={() => setShowSaved(!showSaved)}
+                                    className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                >
+                                    {showSaved ? 'Hide' : 'Show'} Saved
+                                </button>
+                            </div>
+                            {showSaved && (
+                                <div className="space-y-3">
+                                    {savedSessionPlans.map((item) => (
+                                        <div key={item.id} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                            <div className="flex items-start justify-between">
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <span className="font-medium text-gray-900 dark:text-white">
+                                                            {item.sessionType || 'Untitled Plan'}
+                                                        </span>
+                                                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                                                            {item.tone && `• ${item.tone}`}
+                                                            {item.fanName && ` • ${item.fanName}`}
+                                                        </span>
+                                                    </div>
+                                                    {item.savedAt && (
+                                                        <p className="text-xs text-gray-500 dark:text-gray-500">
+                                                            Saved {item.savedAt?.toDate ? new Date(item.savedAt.toDate()).toLocaleDateString() : 'Recently'}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <div className="flex gap-2 ml-4">
+                                                    <button
+                                                        onClick={() => {
+                                                            setSessionType(item.sessionType || '');
+                                                            setSessionTone(item.tone || 'Teasing');
+                                                            setSessionPlan(item.plan || null);
+                                                            setSelectedFan(item.fanId || '');
+                                                            setShowSaved(false);
+                                                            showToast('Session plan loaded!', 'success');
+                                                        }}
+                                                        className="px-3 py-1 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700"
+                                                    >
+                                                        Load
+                                                    </button>
+                                                    <button
+                                                        onClick={async () => {
+                                                            if (!user?.id) return;
+                                                            try {
+                                                                await deleteDoc(doc(db, 'users', user.id, 'onlyfans_saved_session_plans', item.id));
+                                                                showToast('Session plan deleted', 'success');
+                                                                loadSavedItems();
+                                                            } catch (error) {
+                                                                console.error('Error deleting session plan:', error);
+                                                                showToast('Failed to delete session plan', 'error');
+                                                            }
+                                                        }}
+                                                        className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700"
+                                                    >
+                                                        <TrashIcon className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Session Type Selection */}
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                            Start New Session Plan
+                        </h2>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    What kind of session is this?
+                                </label>
+                                <select
+                                    value={sessionType}
+                                    onChange={(e) => setSessionType(e.target.value as SessionType)}
+                                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                >
+                                    <option value="">Select session type...</option>
+                                    <option value="Flirty chat">Flirty chat</option>
+                                    <option value="GFE-style interaction">GFE-style interaction</option>
+                                    <option value="Tease & anticipation">Tease & anticipation</option>
+                                    <option value="Roleplay">Roleplay</option>
+                                    <option value="Explicit">Explicit</option>
+                                    <option value="Check-in / reconnect">Check-in / reconnect</option>
+                                    <option value="High-engagement paid chat">High-engagement paid chat</option>
+                                </select>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Select Fan (Optional)
+                                    </label>
+                                    <select
+                                        value={selectedFan}
+                                        onChange={(e) => {
+                                            setSelectedFan(e.target.value);
+                                            if (e.target.value) {
+                                                loadFanPreferences(e.target.value);
+                                            }
+                                        }}
+                                        className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    >
+                                        <option value="">New fan or skip...</option>
+                                        {fans.map((fan) => (
+                                            <option key={fan.id} value={fan.id}>
+                                                {fan.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Or Enter Fan Name
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={fanName}
+                                        onChange={(e) => setFanName(e.target.value)}
+                                        placeholder="Enter fan name/username..."
+                                        className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Tone
+                                </label>
+                                <select
+                                    value={sessionTone}
+                                    onChange={(e) => setSessionTone(e.target.value as 'Soft' | 'Teasing' | 'Playful' | 'Explicit')}
+                                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                >
+                                    <option value="Soft">Soft</option>
+                                    <option value="Teasing">Teasing</option>
+                                    <option value="Playful">Playful</option>
+                                    <option value="Explicit">Explicit</option>
+                                </select>
+                            </div>
+
+                            {/* Fan Preferences (if fan selected) */}
+                            {selectedFan && (
+                                <div className="bg-gray-50 dark:bg-gray-900/40 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Fan Preferences</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Preferred Tone</label>
+                                            <select
+                                                value={fanPreferences.preferredTone || ''}
+                                                onChange={(e) => setFanPreferences({ ...fanPreferences, preferredTone: e.target.value as any })}
+                                                className="w-full p-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                            >
+                                                <option value="">Not set</option>
+                                                <option value="soft">Soft</option>
+                                                <option value="dominant">Dominant</option>
+                                                <option value="playful">Playful</option>
+                                                <option value="dirty">Dirty</option>
+                                                <option value="Very Explicit">Very Explicit</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Favorite Session Type</label>
+                                            <select
+                                                value={fanPreferences.favoriteSessionType || ''}
+                                                onChange={(e) => setFanPreferences({ ...fanPreferences, favoriteSessionType: e.target.value as SessionType })}
+                                                className="w-full p-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                            >
+                                                <option value="">Not set</option>
+                                                <option value="Flirty chat">Flirty chat</option>
+                                                <option value="GFE-style interaction">GFE-style interaction</option>
+                                                <option value="Tease & anticipation">Tease & anticipation</option>
+                                                <option value="Roleplay">Roleplay</option>
+                                                <option value="Explicit">Explicit</option>
+                                                <option value="Check-in / reconnect">Check-in / reconnect</option>
+                                                <option value="High-engagement paid chat">High-engagement paid chat</option>
+                                            </select>
+                                        </div>
+                                        <div className="md:col-span-2">
+                                            <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Boundaries</label>
+                                            <textarea
+                                                value={fanPreferences.boundaries || ''}
+                                                onChange={(e) => setFanPreferences({ ...fanPreferences, boundaries: e.target.value })}
+                                                placeholder="Any boundaries or preferences to remember..."
+                                                className="w-full p-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                                rows={2}
+                                            />
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={async () => {
+                                            const fanIdToUse = selectedFan || (fanName.trim() ? fanName.toLowerCase().replace(/\s+/g, '_') : '');
+                                            if (fanIdToUse) {
+                                                await saveFanPreferences(fanIdToUse, fanPreferences);
+                                                if (!selectedFan && fanName.trim()) {
+                                                    setSelectedFan(fanIdToUse);
+                                                }
+                                            } else {
+                                                showToast('Please select or enter a fan name first', 'error');
+                                            }
+                                        }}
+                                        className="mt-3 px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                                    >
+                                        Save Preferences
+                                    </button>
+                                </div>
+                            )}
+
+                            <button
+                                onClick={handleGenerateSessionPlan}
+                                disabled={!sessionType || isGeneratingSessionPlan}
+                                className="w-full px-4 py-3 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed font-medium"
+                            >
+                                {isGeneratingSessionPlan ? 'Generating Session Plan...' : 'Generate Session Plan'}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Session Flow Visualization */}
+                    {sessionPlan && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                                Session Flow
+                            </h2>
+
+                            {/* Progress Indicator */}
+                            <div className="mb-6">
+                                <div className="flex items-center justify-between mb-2">
+                                    {(['warmUp', 'engagement', 'anticipation', 'close'] as SessionPhase[]).map((phase, index) => (
+                                        <React.Fragment key={phase}>
+                                            <div className="flex flex-col items-center flex-1">
+                                                <div
+                                                    className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-all ${
+                                                        currentPhase === phase
+                                                            ? 'bg-primary-600 text-white'
+                                                            : index < (['warmUp', 'engagement', 'anticipation', 'close'] as SessionPhase[]).indexOf(currentPhase)
+                                                            ? 'bg-primary-200 dark:bg-primary-800 text-primary-700 dark:text-primary-300'
+                                                            : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
+                                                    }`}
+                                                >
+                                                    {index + 1}
+                                                </div>
+                                                <span className="text-xs mt-1 text-gray-600 dark:text-gray-400 capitalize">
+                                                    {phase === 'warmUp' ? 'Warm-Up' : phase}
+                                                </span>
+                                            </div>
+                                            {index < 3 && (
+                                                <div className={`flex-1 h-0.5 mx-2 ${
+                                                    index < (['warmUp', 'engagement', 'anticipation', 'close'] as SessionPhase[]).indexOf(currentPhase)
+                                                        ? 'bg-primary-300 dark:bg-primary-700'
+                                                        : 'bg-gray-200 dark:bg-gray-700'
+                                                }`} />
+                                            )}
+                                        </React.Fragment>
+                                    ))}
+                                </div>
+                                <p className="text-sm text-gray-600 dark:text-gray-400 text-center mt-2">
+                                    You're here: <span className="font-semibold capitalize">{currentPhase === 'warmUp' ? 'Warm-Up' : currentPhase}</span>
+                                </p>
+                            </div>
+
+                            {/* Phase Navigation */}
+                            <div className="flex gap-2 mb-6">
+                                {(['warmUp', 'engagement', 'anticipation', 'close'] as SessionPhase[]).map((phase) => (
+                                    <button
+                                        key={phase}
+                                        onClick={() => {
+                                            setCurrentPhase(phase);
+                                            setExpandedPhase(expandedPhase === phase ? null : phase);
+                                        }}
+                                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                                            currentPhase === phase
+                                                ? 'bg-primary-600 text-white'
+                                                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                        }`}
+                                    >
+                                        {phase === 'warmUp' ? 'Warm-Up' : phase.charAt(0).toUpperCase() + phase.slice(1)}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Opening Message */}
+                            {sessionPlan.openingMessage && (
+                                <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                    <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-2">Opening Message</h3>
+                                    <p className="text-sm text-blue-800 dark:text-blue-300">{sessionPlan.openingMessage}</p>
+                                    <button
+                                        onClick={() => copyToClipboard(sessionPlan.openingMessage || '')}
+                                        className="mt-2 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                                    >
+                                        Copy
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Phase Content */}
+                            {(['warmUp', 'engagement', 'anticipation', 'close'] as SessionPhase[]).map((phase) => {
+                                const phaseData = sessionPlan[phase];
+                                if (!phaseData) return null;
+
+                                return (
+                                    <div
+                                        key={phase}
+                                        className={`mb-4 p-4 rounded-lg border ${
+                                            currentPhase === phase
+                                                ? 'bg-primary-50 dark:bg-primary-900/20 border-primary-200 dark:border-primary-800'
+                                                : 'bg-gray-50 dark:bg-gray-900/40 border-gray-200 dark:border-gray-700'
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between mb-3">
+                                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white capitalize">
+                                                {phase === 'warmUp' ? 'Warm-Up' : phase}
+                                            </h3>
+                                            <button
+                                                onClick={() => setExpandedPhase(expandedPhase === phase ? null : phase)}
+                                                className="text-sm text-primary-600 dark:text-primary-400 hover:underline"
+                                            >
+                                                {expandedPhase === phase ? 'Collapse' : 'Expand'}
+                                            </button>
+                                        </div>
+
+                                        {expandedPhase === phase && (
+                                            <div className="space-y-4">
+                                                {/* Prompts */}
+                                                {phaseData.prompts && phaseData.prompts.length > 0 && (
+                                                    <div>
+                                                        <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Optional Prompts</h4>
+                                                        <div className="space-y-2">
+                                                            {phaseData.prompts.map((prompt: string, idx: number) => (
+                                                                <div key={idx} className="p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600">
+                                                                    <p className="text-sm text-gray-800 dark:text-gray-200">{prompt}</p>
+                                                                    <button
+                                                                        onClick={() => copyToClipboard(prompt)}
+                                                                        className="mt-1 text-xs text-primary-600 dark:text-primary-400 hover:underline"
+                                                                    >
+                                                                        Copy
+                                                                    </button>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                        <button
+                                                            onClick={async () => {
+                                                                showToast('Refreshing prompts...', 'info');
+                                                            }}
+                                                            className="mt-2 text-sm text-primary-600 dark:text-primary-400 hover:underline"
+                                                        >
+                                                            Give me another option
+                                                        </button>
+                                                    </div>
+                                                )}
+
+                                                {/* Guidance */}
+                                                {phaseData.guidance && phaseData.guidance.length > 0 && (
+                                                    <div>
+                                                        <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Pacing Guidance</h4>
+                                                        <ul className="space-y-1">
+                                                            {phaseData.guidance.map((guidance: string, idx: number) => (
+                                                                <li key={idx} className="text-sm text-gray-600 dark:text-gray-400 flex items-start gap-2">
+                                                                    <span className="text-primary-600 dark:text-primary-400">•</span>
+                                                                    <span>{guidance}</span>
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+
+                            {/* Save Session Plan */}
+                            <div className="mt-6 flex gap-3">
+                                <button
+                                    onClick={async () => {
+                                        if (!user?.id || !sessionPlan || !sessionType) return;
+                                        try {
+                                            await addDoc(collection(db, 'users', user.id, 'onlyfans_saved_session_plans'), {
+                                                sessionType,
+                                                tone: sessionTone,
+                                                fanId: selectedFan || null,
+                                                fanName: fanName || null,
+                                                plan: sessionPlan,
+                                                savedAt: Timestamp.now(),
+                                            });
+                                            showToast('Session plan saved!', 'success');
+                                            loadSavedItems();
+                                        } catch (error) {
+                                            console.error('Error saving session plan:', error);
+                                            showToast('Failed to save session plan', 'error');
+                                        }
+                                    }}
+                                    className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                                >
+                                    Save Session Plan
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setCurrentPhase('warmUp');
+                                        setExpandedPhase(null);
+                                    }}
+                                    className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600"
+                                >
+                                    Reset Flow
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Roleplay Scenarios Tab */}
             {activeTab === 'scenarios' && (
@@ -1027,6 +1965,21 @@ Format as a numbered list with detailed post concepts including captions and eng
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Context / Situation (Optional):
+                                </label>
+                                <textarea
+                                    value={scenarioContext}
+                                    onChange={(e) => setScenarioContext(e.target.value)}
+                                    placeholder="e.g., 'It's morning, I just woke up and want to send a good morning message' or 'It's late at night, I'm getting ready for bed' or 'I'm at work and want to send a teasing message'"
+                                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[80px]"
+                                />
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    Add context about the time of day, situation, or specific scenario you need. This helps generate more relevant content.
+                                </p>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Tone:
                                 </label>
                                 <div className="flex items-center gap-2 mb-2">
@@ -1097,10 +2050,10 @@ Format as a numbered list with detailed post concepts including captions and eng
 
                             <button
                                 onClick={handleGenerateScenario}
-                                disabled={isGenerating}
+                                disabled={isGeneratingScenario}
                                 className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                             >
-                                {isGenerating ? (
+                                {isGeneratingScenario ? (
                                     <>
                                         <RefreshIcon className="w-5 h-5 animate-spin" />
                                         Generating...
@@ -1357,10 +2310,10 @@ Format as a numbered list with detailed post concepts including captions and eng
 
                             <button
                                 onClick={handleGeneratePersona}
-                                disabled={isGenerating}
+                                disabled={isGeneratingPersona}
                                 className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                             >
-                                {isGenerating ? (
+                                {isGeneratingPersona ? (
                                     <>
                                         <RefreshIcon className="w-5 h-5 animate-spin" />
                                         Generating...
@@ -1496,10 +2449,10 @@ Format as a numbered list with detailed post concepts including captions and eng
 
                             <button
                                 onClick={handleGenerateRatings}
-                                disabled={isGenerating}
+                                disabled={isGeneratingRatings}
                                 className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                             >
-                                {isGenerating ? (
+                                {isGeneratingRatings ? (
                                     <>
                                         <RefreshIcon className="w-5 h-5 animate-spin" />
                                         Generating...
@@ -1535,10 +2488,10 @@ Format as a numbered list with detailed post concepts including captions and eng
                             <div className="space-y-3">
                                 <button
                                     onClick={handleGenerateLongRating}
-                                    disabled={isGenerating}
+                                    disabled={isGeneratingLongRating}
                                     className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                 >
-                                    {isGenerating ? (
+                                    {isGeneratingLongRating ? (
                                         <>
                                             <RefreshIcon className="w-5 h-5 animate-spin" />
                                             Generating...
@@ -1726,10 +2679,10 @@ Format as a numbered list with detailed post concepts including captions and eng
 
                             <button
                                 onClick={handleGenerateInteractive}
-                                disabled={isGenerating}
+                                disabled={isGeneratingInteractive}
                                 className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                             >
-                                {isGenerating ? (
+                                {isGeneratingInteractive ? (
                                     <>
                                         <RefreshIcon className="w-5 h-5 animate-spin" />
                                         Generating...
