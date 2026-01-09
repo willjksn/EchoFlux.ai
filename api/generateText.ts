@@ -4,7 +4,8 @@ import { getModelForTask } from "./_modelRouter.js";
 import { getModel, parseJSON } from "./_geminiShared.js";
 import { getOnlyFansResearchContext } from "./_onlyfansResearch.js";
 import { getOnlyFansWeeklyTrends } from "./_trendsHelper.js";
-import { checkRateLimit, getRateLimitHeaders } from "./_rateLimiter.js";
+import { enforceRateLimit } from "./_rateLimit.js";
+import { getEmojiInstructions, getEmojiExamplesForTone } from "./_emojiHelper.js";
 
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -42,20 +43,17 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   }
 
   // Rate limiting: 10 requests per minute per user
-  const rateLimit = checkRateLimit(user.uid, 10, 60000);
-  if (!rateLimit.allowed) {
-    res.status(429).json({
-      error: "Rate limit exceeded",
-      note: `Too many text generation requests. Please try again after ${new Date(rateLimit.resetTime).toLocaleTimeString()}`,
-      retryAfter: Math.ceil((rateLimit.resetTime - Date.now()) / 1000),
-    });
-    return;
-  }
-  // Add rate limit headers
-  Object.entries(getRateLimitHeaders(rateLimit.remaining, rateLimit.resetTime, 10))
-    .forEach(([key, value]) => res.setHeader(key, value));
+  const ok = await enforceRateLimit({
+    req,
+    res,
+    keyPrefix: "generateText",
+    limit: 10,
+    windowMs: 60_000,
+    identifier: user.uid,
+  });
+  if (!ok) return;
 
-  const { prompt, context } = req.body || {};
+  const { prompt, context, emojiEnabled, emojiIntensity } = req.body || {};
 
   if (!prompt || typeof prompt !== "string") {
     res.status(400).json({ error: "Missing or invalid 'prompt'" });
@@ -169,6 +167,8 @@ Write the content the user requested. Be engaging, authentic, and match the tone
 If the user wants a caption, write a complete caption ready to use.
 If the user wants other text content, write exactly what they asked for.
 ${isExplicitContent || isOnlyFansPlatform ? 'If explicit content is requested, write it with bold, explicit, adult-oriented language focused on sexual experiences, intimate moments, girlfriend experience, lust, and desire. Be descriptive and explicit about intimate/explicit sexual content.' : ''}
+
+${getEmojiInstructions({ enabled: emojiEnabled !== false, intensity: emojiIntensity ?? 5 })}${emojiEnabled !== false ? ` Choose emojis that match the tone (examples: ${getEmojiExamplesForTone(tone)}). Emojis should enhance the content naturally.` : ''}
 
 Return ONLY the generated text content, no explanations or meta-commentary.
 `.trim();

@@ -9,7 +9,8 @@ import {
 import { getGoalFramework, getGoalSpecificCTAs } from "./_goalFrameworks.js";
 import { getLatestTrends, getOnlyFansWeeklyTrends } from "./_trendsHelper.js";
 import { getOnlyFansResearchContext } from "./_onlyfansResearch.js";
-import { checkRateLimit, getRateLimitHeaders } from "./_rateLimiter.js";
+import { enforceRateLimit } from "./_rateLimit.js";
+import { getEmojiInstructions, getEmojiExamplesForTone } from "./_emojiHelper.js";
 
 async function getGeminiShared() {
   try {
@@ -31,28 +32,69 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Retry wrapper for Gemini API
-async function generateWithRetry(model: any, request: any, maxRetries = 3) {
+// Retry wrapper for Gemini API with comprehensive error handling
+async function generateWithRetry(
+  model: any,
+  request: any,
+  maxRetries: number = 3,
+  isVideo: boolean = false
+) {
   let lastError;
-  const baseDelayMs = 2000;
+  const baseDelayMs = isVideo ? 3000 : 2000; // Longer delay for videos
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await model.generateContent(request);
     } catch (err: any) {
+      lastError = err;
       const status = err?.status;
       const msg = err?.message?.toLowerCase() || "";
+      const errorCode = err?.code;
 
+      // Check for retryable errors
       const is429 =
         status === 429 ||
         msg.includes("too many requests") ||
-        msg.includes("429");
+        msg.includes("429") ||
+        errorCode === 429;
 
-      if (!is429 || attempt === maxRetries) {
+      const isTimeout =
+        status === 408 ||
+        msg.includes("timeout") ||
+        msg.includes("timed out") ||
+        msg.includes("deadline exceeded") ||
+        errorCode === 408 ||
+        errorCode === 504;
+
+      const isNetworkError =
+        msg.includes("fetch") ||
+        msg.includes("network") ||
+        msg.includes("connection") ||
+        msg.includes("econnreset") ||
+        msg.includes("enotfound") ||
+        errorCode === "ECONNRESET" ||
+        errorCode === "ENOTFOUND" ||
+        errorCode === "ETIMEDOUT";
+
+      const isServerError =
+        status >= 500 ||
+        status === 503 ||
+        status === 502 ||
+        status === 504 ||
+        errorCode === 503 ||
+        errorCode === 502 ||
+        errorCode === 504;
+
+      // Retry on retryable errors
+      const shouldRetry =
+        (is429 || isTimeout || isNetworkError || isServerError) &&
+        attempt < maxRetries;
+
+      if (!shouldRetry) {
         throw err;
       }
 
-      // Exponential backoff
+      // Calculate delay with exponential backoff
       let delayMs = baseDelayMs * Math.pow(2, attempt);
 
       // Adjust delay if Gemini suggests "retry in Xs"
@@ -61,17 +103,26 @@ async function generateWithRetry(model: any, request: any, maxRetries = 3) {
         delayMs = Number(retryMatch[1]) * 1000;
       }
 
+      // Cap delay at 30 seconds
+      delayMs = Math.min(delayMs, 30000);
+
+      const errorType = is429
+        ? "rate-limited"
+        : isTimeout
+        ? "timeout"
+        : isNetworkError
+        ? "network error"
+        : "server error";
+
       console.warn(
-        `Gemini rate-limited (429). Attempt ${attempt + 1}/${maxRetries + 1}. Retrying in ${
-          delayMs / 1000
-        }s...`
+        `Gemini ${errorType} (${status || errorCode || "unknown"}). Attempt ${attempt + 1}/${maxRetries + 1}. Retrying in ${(delayMs / 1000).toFixed(1)}s...`
       );
 
       await sleep(delayMs);
-      lastError = err;
     }
   }
 
+  // If we get here, all retries failed
   throw lastError;
 }
 
@@ -135,18 +186,15 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   }
 
   // Rate limiting: 10 requests per minute per user
-  const rateLimit = checkRateLimit(authUser.uid, 10, 60000);
-  if (!rateLimit.allowed) {
-    res.status(429).json({
-      error: "Rate limit exceeded",
-      message: `Too many caption generation requests. Please try again after ${new Date(rateLimit.resetTime).toLocaleTimeString()}`,
-      retryAfter: Math.ceil((rateLimit.resetTime - Date.now()) / 1000),
-    });
-    return;
-  }
-  // Add rate limit headers
-  Object.entries(getRateLimitHeaders(rateLimit.remaining, rateLimit.resetTime, 10))
-    .forEach(([key, value]) => res.setHeader(key, value));
+  const ok = await enforceRateLimit({
+    req,
+    res,
+    keyPrefix: "generateCaptions",
+    limit: 10,
+    windowMs: 60_000,
+    identifier: authUser.uid,
+  });
+  if (!ok) return;
 
   // Fetch user's plan and role from Firestore
   let userPlan = 'Free';
@@ -173,6 +221,8 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     tone,
     promptText,
     platforms, // Array of selected platforms for platform-specific hashtags
+    emojiEnabled,
+    emojiIntensity,
   }: {
     mediaUrl?: string;
     mediaUrls?: string[];
@@ -181,6 +231,8 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     tone?: string;
     promptText?: string;
     platforms?: string[]; // Selected platforms for hashtag generation
+    emojiEnabled?: boolean;
+    emojiIntensity?: number;
   } = req.body || {};
   
   // Normalize tone value for consistent detection
@@ -266,9 +318,23 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
 
   // Detect if media is video or image (after finalMedia is determined)
   const isCarousel = finalMediaList.length > 1;
+  
+  // Improved video detection - check mimeType more thoroughly
   const isVideo =
     (finalMedia?.mimeType?.startsWith("video/") || false) ||
-    (finalMediaList.some((m) => m.mimeType?.startsWith("video/")) || false);
+    (finalMediaList.some((m) => m.mimeType?.startsWith("video/")) || false) ||
+    // Also check if mediaUrl contains video file extensions as fallback
+    (mediaUrl && /\.(mp4|mov|avi|wmv|flv|webm|mkv|m4v)$/i.test(mediaUrl)) ||
+    (normalizedMediaUrls.some((u) => /\.(mp4|mov|avi|wmv|flv|webm|mkv|m4v)$/i.test(u)));
+  
+  // Log video detection for debugging
+  if (isVideo) {
+    console.log('[generateCaptions] Video detected:', {
+      mimeType: finalMedia?.mimeType,
+      mediaUrl,
+      isCarousel,
+    });
+  }
 
   // Determine platform for context (if OnlyFans)
   const isOnlyFansPlatform =
@@ -442,9 +508,7 @@ ${platforms.map(platform => {
 CRITICAL: Ensure all captions respect the character limits and hashtag counts specified for the target platform(s). If OnlyFans is selected, hashtags MUST be empty.
 
 EMOJI GUIDELINES (ALL SOCIAL PLATFORMS):
-- Use emojis intentionally to enhance tone/clarity (don’t spam).
-- Prefer 0–4 emojis depending on platform; match emoji to the caption content.
-- Avoid long repeated emoji strings. Vary across captions so each feels unique.
+${getEmojiInstructions({ enabled: emojiEnabled !== false, intensity: emojiIntensity ?? 5 })}${emojiEnabled !== false ? ` Choose emojis that match the tone (examples: ${getEmojiExamplesForTone(tone)}). Emojis should enhance the caption naturally.` : ''}
 ` : ''}
 
 CRITICAL - PERSPECTIVE REQUIREMENT:
@@ -562,6 +626,16 @@ ${isExplicitContent ? `
 ` : ''}
 `}
 Use this visual context to create engaging, relevant captions.
+
+${!Array.isArray(platforms) || platforms.length === 0 ? `
+HASHTAG REQUIREMENTS (when no platform specified):
+- Each caption MUST include 5-10 relevant hashtags
+- Hashtags should be relevant to the content, niche, and tone
+- Use a mix of broad and niche-specific hashtags
+- Vary hashtags across captions - don't use the same ones in every caption
+- Make hashtags specific to what's in the media content
+- Keep hashtags appropriate for general social media platforms
+` : ''}
 ${isExplicitContent ? `
 EXPLICIT CONTENT CAPTION REQUIREMENTS - CAPTION VARIETY:
 
@@ -611,12 +685,18 @@ ${shouldGenerateOnlyFansHashtags ? `CRITICAL - EXPLICIT HASHTAGS REQUIRED:
 - Make hashtags specific to what's in the media`}
 ` : ''}
 
+CRITICAL - HASHTAG REQUIREMENT:
+${isOnlyFansPlatform ? '- OnlyFans does NOT use hashtags. Return empty array: "hashtags": []' : '- Every caption MUST include hashtags in the "hashtags" array (minimum 5 hashtags, unless platform specifies fewer)'}
+- Hashtags must be relevant to the content, niche, and tone
+- Do NOT return empty hashtag arrays unless this is for OnlyFans
+- Hashtags should be formatted as strings in the array (e.g., ["#tag1", "#tag2", "#tag3"])
+
 Return ONLY strict JSON like:
 
 [
   {
     "caption": "text",
-    "hashtags": ["#one", "#two"]
+    "hashtags": ${isOnlyFansPlatform ? '[]' : '["#one", "#two", "#three", "#four", "#five"]'}
   }
 ]
 
@@ -673,10 +753,32 @@ ${shouldGenerateOnlyFansHashtags ? `HASHTAG REQUIREMENTS:
   let rawText: string;
 
   try {
-    const result = await generateWithRetry(model, {
-      contents: [{ role: "user", parts }],
-      generationConfig: { responseMimeType: "application/json" },
+    // Use more retries for videos due to longer processing time
+    // Increase timeout for longer videos
+    const maxRetries = isVideo ? 5 : 3;
+    
+    // Log before generation for debugging
+    console.log('[generateCaptions] Starting generation:', {
+      isVideo,
+      isCarousel,
+      hasMedia: !!finalMedia || finalMediaList.length > 0,
+      maxRetries,
     });
+    
+    const result = await generateWithRetry(
+      model,
+      {
+        contents: [{ role: "user", parts }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          temperature: 0.7,
+          topP: 0.9,
+          topK: 40,
+        },
+      },
+      maxRetries,
+      isVideo
+    );
 
     if (!result?.response || typeof result.response.text !== "function") {
       console.error("Bad Gemini response:", result);
@@ -690,11 +792,59 @@ ${shouldGenerateOnlyFansHashtags ? `HASHTAG REQUIREMENTS:
     }
 
     rawText = result.response.text().trim();
+    
+    // Log successful generation
+    if (rawText) {
+      console.log('[generateCaptions] Successfully generated captions:', {
+        isVideo,
+        textLength: rawText.length,
+      });
+    } else {
+      console.warn('[generateCaptions] Empty response text received');
+    }
   } catch (err: any) {
-    console.error("AI error:", err);
+    console.error("[generateCaptions] AI error:", {
+      error: err,
+      message: err?.message,
+      status: err?.status,
+      code: err?.code,
+      isVideo,
+    });
+    
+    // Provide more specific error messages
+    const errorMessage = err?.message || "";
+    const status = err?.status;
+    const errorCode = err?.code;
+    
+    let userMessage = "AI generation failed. Please try again.";
+    
+    if (status === 429 || errorCode === 429 || errorMessage.includes("429")) {
+      userMessage = "API rate limit reached. Please wait a moment and try again.";
+    } else if (
+      status === 408 ||
+      errorCode === 408 ||
+      errorCode === 504 ||
+      errorMessage.includes("timeout") ||
+      errorMessage.includes("deadline")
+    ) {
+      userMessage = isVideo
+        ? "Video analysis timed out. The video may be too large or processing took too long. Try a smaller video or try again. Longer videos may take more time to process."
+        : "Analysis timed out. Please try again.";
+    } else if (
+      errorMessage.includes("network") ||
+      errorMessage.includes("connection") ||
+      errorMessage.includes("fetch")
+    ) {
+      userMessage = "Network error occurred. Please check your connection and try again.";
+    } else if (status >= 500 || errorCode >= 500) {
+      userMessage = "AI service temporarily unavailable. Please try again in a moment.";
+    } else if (errorMessage.includes("quota") || errorMessage.includes("limit")) {
+      userMessage = "API quota exceeded. Please try again later.";
+    }
+    
     res.status(200).json([
       {
-        caption: err?.message || "AI generation failed.",
+        caption: userMessage,
         hashtags: [],
       },
     ]);
