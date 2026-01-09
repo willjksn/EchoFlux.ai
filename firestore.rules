@@ -23,6 +23,78 @@ service cloud.firestore {
     }
 
     /** -------------------------------------------------------
+     *  Helper: Check if request is for the authed user
+     *  ------------------------------------------------------- */
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    /** -------------------------------------------------------
+     *  Helper: Sensitive fields on user docs
+     *  -------------------------------------------------------
+     *  These must NOT be writable by normal clients, otherwise users
+     *  can self-upgrade plans, reset usage counters, or set role=Admin.
+     *
+     *  Server-side code (Firebase Admin SDK) bypasses rules.
+     */
+    function restrictedUserFields() {
+      return [
+        // Privilege / billing
+        'role',
+        'plan',
+        'stripeCustomerId',
+        'stripeSubscriptionId',
+        'subscriptionStatus',
+        'billingCycle',
+        'cancelAtPeriodEnd',
+        'subscriptionStartDate',
+        'subscriptionEndDate',
+        'lastPaymentDate',
+        'trialUsed',
+        'trialStartedAt',
+
+        // Usage / quota (prevent client resets)
+        'monthlyCaptionGenerationsUsed',
+        'monthlyImageGenerationsUsed',
+        'monthlyVideoGenerationsUsed',
+        'monthlyRepliesUsed',
+        'storageUsed',
+        'storageLimit',
+
+        // Invite-grant markers (server-controlled)
+        'inviteGrantPlan',
+        'inviteGrantExpiresAt',
+        'inviteGrantExpiredAt'
+      ];
+    }
+
+    function isSafeUserCreate() {
+      // New users must start as normal users on Free plan.
+      // Allow optional pending payment markers (used for signup flow),
+      // but do NOT allow any Stripe IDs or elevated role/plan.
+      return request.resource.data.role == 'User'
+        && request.resource.data.plan == 'Free'
+        && !(request.resource.data.keys().hasAny([
+          'stripeCustomerId',
+          'stripeSubscriptionId',
+          'subscriptionStartDate',
+          'subscriptionEndDate',
+          'cancelAtPeriodEnd',
+          'lastPaymentDate',
+          'trialUsed',
+          'trialStartedAt',
+          'inviteGrantPlan',
+          'inviteGrantExpiresAt',
+          'inviteGrantExpiredAt'
+        ]));
+    }
+
+    function isSafeUserUpdate() {
+      // Prevent updating any restricted fields from the client.
+      return !(request.resource.data.diff(resource.data).changedKeys().hasAny(restrictedUserFields()));
+    }
+
+    /** -------------------------------------------------------
      *  USERS COLLECTION
      *  -------------------------------------------------------
      *  - User can read/write ONLY their own top-level user doc
@@ -30,8 +102,14 @@ service cloud.firestore {
      *  ------------------------------------------------------- */
     match /users/{userId} {
 
-      // User can read/write themselves
-      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+      // User can read themselves
+      allow read: if isOwner(userId);
+
+      // User can create their own doc with restricted defaults only
+      allow create: if isOwner(userId) && isSafeUserCreate();
+
+      // User can update their own doc EXCEPT restricted fields
+      allow update: if isOwner(userId) && isSafeUserUpdate();
 
       // Admin override - Admins can read/write any user document
       // This allows Admin users to update plans, roles, and other user fields
