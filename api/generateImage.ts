@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { verifyAuth } from "./verifyAuth.js";
 import { getModelForTask } from "./_modelRouter.js";
-import { checkRateLimit, getRateLimitHeaders } from "./_rateLimiter.js";
+import { enforceRateLimit } from "./_rateLimit.js";
 
 // Import OpenAI with ESM syntax
 import OpenAI from "openai";
@@ -18,17 +18,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Rate limiting: 5 requests per minute per user (image generation is expensive)
-  const rateLimit = checkRateLimit(user.uid, 5, 60000);
-  if (!rateLimit.allowed) {
-    return res.status(429).json({
-      error: "Rate limit exceeded",
-      message: `Too many image generation requests. Please try again after ${new Date(rateLimit.resetTime).toLocaleTimeString()}`,
-      retryAfter: Math.ceil((rateLimit.resetTime - Date.now()) / 1000),
-    });
-  }
-  // Add rate limit headers
-  Object.entries(getRateLimitHeaders(rateLimit.remaining, rateLimit.resetTime, 5))
-    .forEach(([key, value]) => res.setHeader(key, value));
+  const ok = await enforceRateLimit({
+    req,
+    res,
+    keyPrefix: "generateImage",
+    limit: 5,
+    windowMs: 60_000,
+    identifier: user.uid,
+  });
+  if (!ok) return;
 
   const { prompt, baseImage, allowExplicit = false } = (req.body as any) || {};
 

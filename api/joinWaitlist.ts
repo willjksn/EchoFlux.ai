@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
-import { checkRateLimit, getRateLimitHeaders } from "./_rateLimiter.js";
+import { enforceRateLimit } from "./_rateLimit.js";
 import { sendEmail } from "./_mailer.js";
 import { WAITLIST_EMAIL_TEMPLATES } from "./_waitlistEmailTemplates.js";
 import { logEmailHistory } from "./_emailHistory.js";
@@ -18,11 +18,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     "anonymous";
 
   // Rate limit: 5 requests / hour per IP
-  const rl = checkRateLimit(`waitlist:${ip}`, 5, 60 * 60 * 1000);
-  Object.entries(getRateLimitHeaders(rl.remaining, rl.resetTime, 5)).forEach(([k, v]) => res.setHeader(k, v));
-  if (!rl.allowed) {
-    return res.status(429).json({ error: "Rate limit exceeded", retryAfter: Math.ceil((rl.resetTime - Date.now()) / 1000) });
-  }
+  const ok = await enforceRateLimit({
+    req,
+    res,
+    keyPrefix: "waitlist",
+    limit: 5,
+    windowMs: 60 * 60 * 1000,
+    identifier: ip,
+  });
+  if (!ok) return;
 
   const { email, name } = (req.body || {}) as { email?: string; name?: string };
   if (!email || typeof email !== "string") return res.status(400).json({ error: "Email is required" });
