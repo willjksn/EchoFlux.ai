@@ -37,18 +37,35 @@ console.log(`Stripe webhook initialized in ${useTestMode ? 'TEST' : 'LIVE'} mode
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
+async function readRawBody(req: VercelRequest): Promise<Buffer> {
+  // When `config.api.bodyParser = false`, the request is a raw Node stream.
+  // Stripe signature verification requires the exact raw bytes that Stripe sent.
+  const chunks: Buffer[] = [];
+  const stream = req as any;
+  for await (const chunk of stream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const sig = req.headers['stripe-signature'] as string;
+  if (!webhookSecret) {
+    return res.status(500).json({ error: 'Stripe webhook secret is not configured' });
+  }
+
+  const sig = req.headers['stripe-signature'] as string | undefined;
+  if (!sig) {
+    return res.status(400).json({ error: 'Missing Stripe signature header' });
+  }
+
   let event: Stripe.Event;
 
   try {
-    // For Vercel, the body is already parsed, but Stripe needs raw body
-    // We need to get the raw body from the request
-    const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+    const rawBody = await readRawBody(req);
     event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
   } catch (err: any) {
     console.error('Webhook signature verification failed:', err.message);
