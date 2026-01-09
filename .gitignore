@@ -30,6 +30,13 @@ dist-ssr
 engagesuite.zip
 
 # Secrets and credentials
+#
+# IMPORTANT:
+# - Never commit real environment files.
+# - Keep a non-secret template at .env.example.
+.env
+.env.*
+!.env.example
 serviceAccount/
 service-account.jsonl
 *.jsonl
