@@ -1,9 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { LogoIcon, SparklesIcon, AutomationIcon, ChatIcon, AnalyticsIcon, CalendarIcon, RefreshIcon, GlobeIcon, UserIcon, TargetIcon, DashboardIcon, FilmIcon, MicrophoneWaveIcon, RocketIcon, TrendingIcon, ImageIcon, KanbanIcon } from './icons/UIIcons';
 import { InstagramIcon, TikTokIcon, XIcon, FacebookIcon, YouTubeIcon } from './icons/PlatformIcons';
 import { Pricing } from './Pricing';
 import { Page } from '../types';
 import { WaitlistInlineForm } from './WaitlistInlineForm';
+import { About } from './About';
+import { Terms } from './Terms';
+import { Privacy } from './Privacy';
 
 interface LandingPageProps {
   onLoginClick: () => void;
@@ -27,6 +30,18 @@ const Feature: React.FC<{ icon: React.ReactNode; title: string; children: React.
 
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetStartedClick, onNavigateRequest }) => {
+  const [legalModal, setLegalModal] = useState<'about' | 'terms' | 'privacy' | 'contact' | null>(null);
+  const legalTitle =
+    legalModal === 'about'
+      ? 'About EchoFlux.ai'
+      : legalModal === 'terms'
+        ? 'Terms of Service'
+        : legalModal === 'privacy'
+          ? 'Privacy Policy'
+          : legalModal === 'contact'
+            ? 'Contact'
+            : '';
+
   const handleGetStarted = onGetStartedClick || onLoginClick;
   const handleScroll = (id: string) => {
     const element = document.getElementById(id);
@@ -386,10 +401,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         <div className="mt-12 md:mt-0">
                              <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 tracking-wider uppercase">Company</h3>
                             <ul className="mt-4 space-y-4">
-                                <li><button onClick={() => onNavigateRequest('about')} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-left">About Us</button></li>
-                                <li><button onClick={() => onNavigateRequest('contact')} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-left">Contact Us</button></li>
-                                <li><a href="#" onClick={(e) => { e.preventDefault(); onNavigateRequest('terms'); }} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Terms</a></li>
-                                <li><a href="#" onClick={(e) => { e.preventDefault(); onNavigateRequest('privacy'); }} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Privacy</a></li>
+                            <li><button onClick={() => setLegalModal('about')} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-left">About Us</button></li>
+                            <li><button onClick={() => setLegalModal('contact')} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-left">Contact Us</button></li>
+                            <li><a href="#" onClick={(e) => { e.preventDefault(); setLegalModal('terms'); }} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Terms</a></li>
+                            <li><a href="#" onClick={(e) => { e.preventDefault(); setLegalModal('privacy'); }} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Privacy</a></li>
                             </ul>
                         </div>
                     </div>
@@ -398,12 +413,55 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
             <div className="mt-12 border-t border-gray-200 dark:border-gray-700 pt-8 md:flex md:items-center md:justify-between">
                 <p className="text-base text-gray-400 md:order-1">&copy; 2025 EchoFlux.ai. All rights reserved.</p>
                 <div className="mt-8 md:mt-0 md:order-2 flex space-x-6">
-                    <a href="#" onClick={(e) => { e.preventDefault(); onNavigateRequest('terms'); }} className="text-base text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">Terms</a>
-                    <a href="#" onClick={(e) => { e.preventDefault(); onNavigateRequest('privacy'); }} className="text-base text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">Privacy</a>
+                    <a href="#" onClick={(e) => { e.preventDefault(); setLegalModal('terms'); }} className="text-base text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">Terms</a>
+                    <a href="#" onClick={(e) => { e.preventDefault(); setLegalModal('privacy'); }} className="text-base text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">Privacy</a>
                 </div>
             </div>
         </div>
       </footer>
+      {/* Legal modal */}
+      {legalModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-8 backdrop-blur-sm">
+          <div className="relative w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/10 dark:bg-gray-900 dark:ring-white/10">
+            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4 dark:border-gray-800">
+              <div className="text-lg font-semibold text-gray-900 dark:text-white">{legalTitle}</div>
+              <button
+                onClick={() => setLegalModal(null)}
+                className="rounded-md px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="max-h-[75vh] overflow-y-auto px-5 py-6">
+              {legalModal === 'about' && <About />}
+              {legalModal === 'terms' && <Terms />}
+              {legalModal === 'privacy' && <Privacy />}
+              {legalModal === 'contact' && (
+                <div className="max-w-3xl mx-auto space-y-6 text-gray-700 dark:text-gray-300">
+                  <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Support</h3>
+                    <p className="mt-2 text-gray-600 dark:text-gray-400">
+                      Email us anytime and we’ll get back to you as fast as we can.
+                    </p>
+                    <div className="mt-4">
+                      <a
+                        href="mailto:contact@echoflux.ai"
+                        className="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700"
+                      >
+                        contact@echoflux.ai
+                      </a>
+                    </div>
+                    <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+                      Tip: include your account email and a screenshot if you can.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

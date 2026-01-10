@@ -228,8 +228,15 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
                                     </div>
                                 )}
                                 <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-4">{(tier as any).displayName || tier.name}</h3>
-                                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 h-10">{tier.description}</p>
-                                <div className="mt-6">
+                                <div className="mt-2 min-h-[52px] space-y-1">
+                                  <p className="text-sm text-gray-500 dark:text-gray-400">{tier.description}</p>
+                                  {['Pro', 'Elite'].includes(tier.name) && (
+                                    <p className="text-sm font-semibold text-primary-600 dark:text-primary-300">
+                                      Free 7-day Trial
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="mt-4">
                                     <>
                                         <span className="text-4xl font-extrabold text-gray-900 dark:text-white">${price}</span>
                                         <span className="text-base font-medium text-gray-500 dark:text-gray-400">/{billingCycle === 'monthly' ? 'mo' : 'mo'}</span>
