@@ -82,19 +82,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                   <div>
                     <div className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-primary-100 ring-1 ring-inset ring-white/20 backdrop-blur">
                       <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      Live AI operating system for creators
+                      Planning Studio for revenue-focused creators
                     </div>
 
                     <h1 className="mt-6 text-4xl font-extrabold tracking-tight text-white sm:text-5xl lg:text-6xl">
-                      <span className="block">Creator-First AI</span>
+                      <span className="block">The creators who plan consistently</span>
                       <span className="block text-primary-200">
-                        Social Operating System
+                        earn 3x more.
                       </span>
                     </h1>
 
                     <p className="mt-6 max-w-xl text-lg text-primary-100 sm:text-xl">
-                      Replace scattered tools with one creator command center to
-                      strategize, batch-create campaigns, and organize everything on a calendar—then post anywhere you like.
+                      Turn content ideas into recurring revenue. Plan exclusive content, engage subscribers, and maximize your revenue—all in one powerful studio. Scale from content calendar to consistent income (manual posting, account-safe).
                     </p>
 
                     <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -112,6 +111,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                       </button>
                     </div>
 
+                    <div className="mt-4 text-sm text-primary-100/90">
+                      Want the 7-day trial? Choose Pro or Elite below.
+                    </div>
+
+                    <div className="mt-6 text-sm text-primary-100/90">
+                      Invite-only right now. Join the waitlist and we'll email you if you're selected.
+                    </div>
+
                     <WaitlistInlineForm />
 
                     <div className="mt-6 flex flex-col gap-3">
@@ -121,7 +128,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         </div>
                         <div className="flex items-center space-x-3 text-xs text-primary-100/90">
                           <span className="inline-flex items-center rounded-full bg-white/25 backdrop-blur-sm border border-white/30 px-3 py-1.5 whitespace-nowrap font-medium text-white shadow-lg">
-                            No credit card required
+                            Start free (no card)
+                          </span>
+                          <span className="inline-flex items-center rounded-full bg-white/25 backdrop-blur-sm border border-white/30 px-3 py-1.5 whitespace-nowrap font-medium text-white shadow-lg">
+                            7-day trial on Pro/Elite
                           </span>
                           <span className="inline-flex items-center rounded-full bg-white/25 backdrop-blur-sm border border-white/30 px-3 py-1.5 whitespace-nowrap font-medium text-white shadow-lg">
                             Cancel anytime
@@ -129,7 +139,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         </div>
                       </div>
                       <div className="text-sm text-primary-100">
-                        <span>Trusted by creators scaling their social presence</span>
+                        <span>Trusted by creators scaling their revenue and subscriber base</span>
                       </div>
                     </div>
                   </div>
@@ -143,7 +153,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                           <span className="flex h-2 w-2 items-center justify-center">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
                           </span>
-                          Automation · Active
+                          Planning Studio · Active
                         </span>
                         <span>Next 14 days</span>
                       </div>
@@ -180,14 +190,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                           </div>
                           <ul className="mt-2 space-y-1 text-[0.7rem] text-gray-300">
                             <li>• AI-generated content roadmap with image/video ideas</li>
-                            <li>• AI Content Generation created 12 ready-to-use posts</li>
+                            <li>• AI captions and content packs ready to copy</li>
                             <li>• Media Library with reusable assets</li>
                             <li>• Analytics-style insights guiding content decisions</li>
                           </ul>
                         </div>
 
                         <div className="flex items-center justify-between border-t border-white/10 pt-3 text-[0.7rem] text-gray-300">
-                          <span>Plan here · post to your favorite platforms</span>
+                          <span>Plan here · post manually to your favorite platforms</span>
                           <div className="flex items-center space-x-2 text-white/80">
                             <InstagramIcon className="h-4 w-4" />
                             <TikTokIcon className="h-4 w-4" />
@@ -218,25 +228,25 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         </div>
                         <h3 className="text-2xl font-bold text-center text-gray-900 dark:text-white mb-4">For Creators</h3>
                         <p className="text-gray-600 dark:text-gray-300 text-center mb-6">
-                            Build your personal brand, grow your audience, and monetize your passion. Everything you need to go from idea to published content in one powerful platform.
+                            Build your personal brand, grow your subscriber base, and maximize your revenue potential. Everything you need to scale from content idea to consistent income—all in one powerful platform.
                         </p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
                             <div className="space-y-4">
                                 <h4 className="font-semibold text-gray-900 dark:text-white text-lg">Content Creation</h4>
                                 <ul className="space-y-3 text-sm text-gray-500 dark:text-gray-400">
-                                    <li className="flex items-start"><SparklesIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>AI Content Assistant with platform-optimized captions</span></li>
-                                    <li className="flex items-start"><TargetIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Multi-week content roadmaps & campaign planning</span></li>
-                                    <li className="flex items-start"><ImageIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Media Library for organizing all your assets</span></li>
-                                    <li className="flex items-start"><CalendarIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Visual content calendar to plan ahead</span></li>
+                                    <li className="flex items-start"><SparklesIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>AI Content Assistant with conversion-optimized captions</span></li>
+                                    <li className="flex items-start"><TargetIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Multi-week content roadmaps & revenue-driven campaign planning</span></li>
+                                    <li className="flex items-start"><ImageIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Media Library for organizing exclusive content assets</span></li>
+                                    <li className="flex items-start"><CalendarIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Strategic content calendar to maximize subscriber engagement</span></li>
                                 </ul>
                             </div>
                             <div className="space-y-4">
                                 <h4 className="font-semibold text-gray-900 dark:text-white text-lg">Growth & Monetization</h4>
                                 <ul className="space-y-3 text-sm text-gray-500 dark:text-gray-400">
-                                    <li className="flex items-start"><div className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0 flex items-center"><AnalyticsIcon /></div> <span>Growth & Engagement Analytics</span></li>
-                                    <li className="flex items-start"><GlobeIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Smart Link-in-Bio with email capture</span></li>
-                                    <li className="flex items-start"><ChatIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Creator Assistant for brainstorming & ideas</span></li>
-                                    <li className="flex items-start"><SparklesIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Brand Partnership Finder (coming soon)</span></li>
+                                    <li className="flex items-start"><div className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0 flex items-center"><AnalyticsIcon /></div> <span>Revenue & Engagement Analytics</span></li>
+                                    <li className="flex items-start"><GlobeIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Smart Link-in-Bio with subscriber capture</span></li>
+                                    <li className="flex items-start"><ChatIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>AI Chatting Sessions for personalized fan engagement</span></li>
+                                    <li className="flex items-start"><SparklesIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Subscriber conversion optimization tools</span></li>
                                 </ul>
                             </div>
                         </div>
@@ -252,16 +262,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                     <h2 className="text-base text-primary-600 font-semibold tracking-wide uppercase">Features</h2>
                     <p className="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-4xl">Your AI Content Studio</p>
                     <p className="mt-4 max-w-2xl text-xl text-gray-500 dark:text-gray-400 lg:mx-auto">
-                        Turn ideas into full content campaigns, organize them on a calendar, and copy captions/scripts to post anywhere.
+                        Turn ideas into revenue-driving content campaigns, organize them strategically, and scale your subscriber base with AI-powered tools.
                     </p>
                 </div>
                 <div className="mt-12">
                     <dl className="space-y-10 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-x-8 md:gap-y-10">
                         <Feature icon={<TargetIcon />} title="AI Content Strategist">
-                           Generate multi-week content roadmaps tailored to your niche and goals. Push ideas into campaigns and see them as planned content on your calendar.
+                           Generate multi-week content roadmaps tailored to your niche and revenue goals. Push ideas into conversion-focused campaigns and see them as planned content on your calendar.
                         </Feature>
                         <Feature icon={<KanbanIcon />} title="Workflow Board">
-                           Move posts from Draft to Ready-to-Post in a simple kanban view. Review, edit, and copy content packs before you publish on your platforms.
+                           Move posts from Draft to Ready-to-Post in a simple kanban view. Review, edit, and copy revenue-focused content packs before you publish.
                         </Feature>
                         <Feature icon={<CalendarIcon />} title="Visual Content Calendar">
                            See every planned post on a beautiful calendar. Click any slot to open the content, adjust timing, and copy captions/scripts.
@@ -269,14 +279,20 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         <Feature icon={<ImageIcon />} title="Media Library">
                            Upload and organize images and videos in your personal media library. Reuse assets across campaigns and keep everything in one place.
                         </Feature>
-                        <Feature icon={<SparklesIcon />} title="Premium Content Studio (Elite)">
-                           For Elite creators, unlock a dedicated Premium Content Studio with spicy content ideas, roleplay flows, content calendar, and vault-style media tools.
+                        <Feature icon={<SparklesIcon />} title="Premium Content Studio - Content Brain (Elite)">
+                           AI-powered content planning suite for monetized creators. Generate captions, post ideas, weekly plans, and strategic content calendars optimized for revenue goals. Built for OnlyFans, Fansly, Fanvue & more.
+                        </Feature>
+                        <Feature icon={<ChatIcon />} title="Premium Content Studio - Engagement Tools (Elite)">
+                           Roleplay & Chatting Sessions with real-time AI suggestions for subscriber engagement. Fan Management tracks VIPs, preferences, and spending patterns to maximize revenue opportunities.
                         </Feature>
                         <Feature icon={<GlobeIcon />} title="Smart Link-in-Bio">
-                           Build a beautiful, creator-branded bio page with links and optional email capture to grow your owned audience.
+                           Build a beautiful, creator-branded bio page with links and subscriber capture to convert visitors into paying fans.
                         </Feature>
                         <Feature icon={<ChatIcon />} title="Creator Assistant & Ideas">
-                           Ask questions, generate new content angles, and brainstorm campaigns with a creator-focused AI assistant inside the app.
+                           Ask questions, generate new content angles, and brainstorm revenue-driving campaigns with a creator-focused AI assistant inside the app.
+                        </Feature>
+                        <Feature icon={<AnalyticsIcon />} title="Premium Content Studio - Export & Analytics (Elite)">
+                           Export Hub creates ready-to-upload content packages. Funnel Teaser Packs generate cross-platform promo content. Analytics track performance to optimize revenue. Manual posting, account-safe.
                         </Feature>
                     </dl>
                 </div>
@@ -312,7 +328,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
 
                     <div className="relative">
                         <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">3. Generate & Plan Campaigns</h3>
-                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Use Autopilot and Strategy to create full content packs and a visual calendar. Copy captions and scripts to post on any platform you choose.</p>
+                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Use Strategy, the Workflow Board, and the Calendar to build full content packs and a 14-day plan. Copy captions and scripts, then post on any platform you choose.</p>
                     </div>
                 </div>
             </div>
