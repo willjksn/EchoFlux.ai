@@ -69,9 +69,20 @@ export const functions = getFunctions(app, "us-central1");
 // ------------------------------------------------------------
 // Analytics (Browser Only)
 // ------------------------------------------------------------
-isSupported().then((supported) => {
-  if (supported) getAnalytics(app);
-});
+const analyticsMeasurementId = import.meta.env.VITE_FIREBASE_MEASUREMENT_ID;
+const analyticsDisabled = String(import.meta.env.VITE_DISABLE_ANALYTICS || '').toLowerCase() === 'true';
+
+if (analyticsMeasurementId && !analyticsDisabled) {
+  isSupported()
+    .then((supported) => {
+      if (supported) getAnalytics(app);
+    })
+    .catch((err) => {
+      console.warn('Firebase Analytics initialization skipped:', err);
+    });
+} else {
+  console.warn('Firebase Analytics disabled or measurement ID missing; skipping analytics init');
+}
 
 export default app;
 

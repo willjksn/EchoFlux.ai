@@ -18,10 +18,13 @@ export function getAdminApp(): admin.app.App {
     // Continue to initialize new app
   }
 
-  // Load base64 key
-  const base64 = process.env.FIREBASE_SERVICE_ACCOUNT_KEY_BASE64;
+  // Load base64 key (support multiple env names)
+  const base64 =
+    process.env.FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 ||
+    process.env.FIREBASE_ADMIN_KEY || // common fallback name
+    null;
   if (!base64) {
-    throw new Error("Missing FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 env var for Firebase Admin.");
+    throw new Error("Missing FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 (or FIREBASE_ADMIN_KEY) env var for Firebase Admin.");
   }
 
   let serviceAccountJson: string;

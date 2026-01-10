@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "types": ["vite/client", "node"]
+  },
+  "include": [
+    "App.tsx",
+    "components/**/*",
+    "src/**/*",
+    "types.ts",
+    "constants.ts",
+    "firebaseConfig.ts",
+    "vite.config.ts"
+  ],
+  "exclude": [
+    "api/**/*",
+    "node_modules",
+    "dist"
+  ]
+}

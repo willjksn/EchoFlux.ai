@@ -195,7 +195,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const currentInterval = (subscription.items.data[0]?.price as any)?.recurring?.interval || 'month';
     const targetInterval = billingCycle === 'annually' ? 'year' : 'month';
 
-    const upcoming = await stripe.invoices.retrieveUpcoming({
+    const upcoming = await (stripe.invoices as any).retrieveUpcoming({
       customer: subscription.customer as string,
       subscription: subscriptionId,
       subscription_items: [{ id: itemId, price: targetPriceId, quantity: 1 }],

@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "jsx": "preserve",
+    "types": ["@vercel/node", "node"],
+    "moduleResolution": "node",
+    "target": "ES2020",
+    "module": "ESNext",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true
+  },
+  "include": [
+    "api/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "components",
+    "src"
+  ]
+}

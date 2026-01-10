@@ -49,6 +49,8 @@ const OPTIONAL_VARS = [
 export function validateEnvVars(): EnvValidationResult {
   const missing: string[] = [];
   const warnings: string[] = [];
+  // Browser-safe check for process.env
+  const hasProcessEnv = typeof process !== 'undefined' && !!(process as any).env;
 
   // Check Firebase vars
   REQUIRED_VARS.firebase.forEach((key) => {
@@ -59,15 +61,14 @@ export function validateEnvVars(): EnvValidationResult {
 
   // Check backend vars
   REQUIRED_VARS.backend.forEach((key) => {
-    if (!import.meta.env[key] && !process.env[key]) {
-      // Backend vars might be in process.env (server-side)
-      // Only check import.meta.env for client-side vars
-      if (key.startsWith('VITE_')) {
-        if (!import.meta.env[key]) {
-          missing.push(key);
-        }
-      } else {
-        // Server-side only - can't check from client, so just warn
+    if (key.startsWith('VITE_')) {
+      if (!import.meta.env[key]) {
+        missing.push(key);
+      }
+    } else {
+      // Server-side only - can't check from client, so just warn
+      const hasServerVar = hasProcessEnv && (process as any).env?.[key];
+      if (!hasServerVar) {
         warnings.push(`${key} (server-side only - verify in Vercel)`);
       }
     }
@@ -75,8 +76,8 @@ export function validateEnvVars(): EnvValidationResult {
 
   // Check AI keys (at least one should be present)
   const hasGeminiKey = import.meta.env.VITE_GEMINI_API_KEY || 
-                       process.env.GEMINI_API_KEY || 
-                       process.env.GOOGLE_API_KEY;
+                       (hasProcessEnv ? (process as any).env?.GEMINI_API_KEY : undefined) || 
+                       (hasProcessEnv ? (process as any).env?.GOOGLE_API_KEY : undefined);
   if (!hasGeminiKey) {
     warnings.push('GEMINI_API_KEY or GOOGLE_API_KEY (AI features will be disabled)');
   }

@@ -2034,6 +2034,7 @@ export const OnlyFansContentBrain: React.FC = () => {
         setGeneratedCaptions([]);
         setCurrentCaptionForAI('');
         setUsedCaptions(new Set());
+        // Don't clear usedCaptionsHash - it persists across sessions to track globally used captions
         
         setUploadedMediaFile(file);
         const previewUrl = URL.createObjectURL(file);
@@ -2898,13 +2899,9 @@ export const OnlyFansContentBrain: React.FC = () => {
                             </h3>
                             <div className="space-y-3">
                                 {generatedCaptions.map((caption, index) => {
-                                    // Check if used by index or by caption hash (Unicode-safe)
-                                    // Use TextEncoder to handle Unicode characters properly
-                                    const encoder = new TextEncoder();
-                                    const data = encoder.encode(caption);
-                                    const binaryString = Array.from(data, byte => String.fromCharCode(byte)).join('');
-                                    const captionHash = btoa(binaryString).substring(0, 50);
-                                    const isUsed = usedCaptions.has(index) || usedCaptionsHash.has(captionHash);
+                                    // Only check if used by index in current generation session
+                                    // usedCaptionsHash is only checked when marking as used to prevent duplicates
+                                    const isUsed = usedCaptions.has(index);
                                     return (
                                     <div
                                         key={index}
