@@ -9,8 +9,10 @@ type RateLimitResult = {
   resetTimeMs: number;
 };
 
-// Fallback in-memory store (used when Upstash env is not configured).
+// Fallback in-memory store (used when Upstash/KV env is not configured).
 // NOTE: This is NOT distributed and only intended for local/dev.
+// In production with multiple serverless instances, each instance would have its own memory,
+// so limits could be bypassed by hitting different instances.
 const memoryStore: Record<string, { count: number; resetTime: number }> = {};
 
 function getClientIp(req: VercelRequest): string {
@@ -40,31 +42,38 @@ function getUpstashConfig():
   return { url, token };
 }
 
-let cachedRatelimit: Ratelimit | null = null;
-function getRatelimit(limit: number, windowMs: number, prefix: string): Ratelimit | null {
+// Cache per (limit, windowMs) combination so each endpoint gets its own configured limiter.
+// The Ratelimit constructor's `limiter` parameter bakes the limit/window into the config,
+// so we must create separate instances for each unique (limit, window) pair.
+const ratelimitCache = new Map<string, Ratelimit>();
+function getRatelimit(limit: number, windowMs: number): Ratelimit | null {
   const cfg = getUpstashConfig();
   if (!cfg) return null;
 
-  // Cache a single instance; Upstash handles keys; we include per-endpoint prefix in the key.
-  if (cachedRatelimit) return cachedRatelimit;
+  // Cache key combines limit + windowMs so each endpoint config gets its own limiter.
+  // Upstash handles per-key counting; we use per-endpoint keyPrefix in enforceRateLimit for key namespacing.
+  const cacheKey = `${limit}:${windowMs}`;
+  const cached = ratelimitCache.get(cacheKey);
+  if (cached) return cached;
 
   const redis = new Redis({ url: cfg.url, token: cfg.token });
   const windowSeconds = Math.max(1, Math.ceil(windowMs / 1000));
-  cachedRatelimit = new Ratelimit({
+  const ratelimit = new Ratelimit({
     redis,
     limiter: Ratelimit.slidingWindow(limit, `${windowSeconds} s`),
-    prefix,
+    prefix: "engagesuite", // Global prefix for all limiters (Redis keyspace isolation)
   });
-  return cachedRatelimit;
+  
+  ratelimitCache.set(cacheKey, ratelimit);
+  return ratelimit;
 }
 
 async function checkRateLimitDistributed(params: {
   key: string;
   limit: number;
   windowMs: number;
-  prefix: string;
 }): Promise<RateLimitResult | null> {
-  const ratelimit = getRatelimit(params.limit, params.windowMs, params.prefix);
+  const ratelimit = getRatelimit(params.limit, params.windowMs);
   if (!ratelimit) return null;
 
   const r = await ratelimit.limit(params.key);
@@ -135,7 +144,6 @@ export async function enforceRateLimit(params: {
       key,
       limit: params.limit,
       windowMs: params.windowMs,
-      prefix: "engagesuite",
     });
   } catch (e) {
     // If distributed limiter fails, fall back to memory (do not hard-fail the endpoint).
