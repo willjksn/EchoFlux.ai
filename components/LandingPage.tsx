@@ -269,8 +269,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         <Feature icon={<ImageIcon />} title="Media Library">
                            Upload and organize images and videos in your personal media library. Reuse assets across campaigns and keep everything in one place.
                         </Feature>
-                        <Feature icon={<SparklesIcon />} title="OnlyFans Studio (Elite)">
-                           For Elite creators, unlock a dedicated OnlyFans Studio with spicy content ideas, roleplay flows, OF calendar, and vault-style media tools.
+                        <Feature icon={<SparklesIcon />} title="Premium Content Studio (Elite)">
+                           For Elite creators, unlock a dedicated Premium Content Studio with spicy content ideas, roleplay flows, content calendar, and vault-style media tools.
                         </Feature>
                         <Feature icon={<GlobeIcon />} title="Smart Link-in-Bio">
                            Build a beautiful, creator-branded bio page with links and optional email capture to grow your owned audience.
