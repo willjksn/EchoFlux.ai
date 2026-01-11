@@ -628,7 +628,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                 <div
                                     key={dayIdx}
                                     onClick={() => date && handleDateClick(date)}
-                                    className={`min-h-[120px] sm:min-h-24 p-2 border-r border-gray-200 dark:border-gray-700 last:border-r-0 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
+                                    className={`relative min-h-[120px] sm:min-h-24 p-2 border-r border-gray-200 dark:border-gray-700 last:border-r-0 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
                                         !date ? 'bg-gray-50 dark:bg-gray-900/50' : ''
                                     } ${isToday ? 'bg-primary-50 dark:bg-primary-900/20' : ''} ${
                                         isSelected ? 'ring-2 ring-primary-500' : ''
@@ -934,6 +934,19 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                     </div>
                                                 )}
                                             </div>
+
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setSelectedDate(date);
+                                                    setIsCreatingReminder(true);
+                                                }}
+                                                className="absolute bottom-2 right-2 p-2 bg-gradient-to-r from-primary-500 to-primary-600 text-white hover:from-primary-600 hover:to-primary-700 rounded-full transition-all shadow-md opacity-0 hover:opacity-100 focus:opacity-100"
+                                                title="Add Reminder"
+                                                aria-label="Add reminder"
+                                            >
+                                                <PlusIcon className="w-4 h-4" />
+                                            </button>
                                         </>
                                     )}
                                 </div>

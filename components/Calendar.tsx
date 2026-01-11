@@ -984,7 +984,7 @@ export const Calendar: React.FC = () => {
                     )}
                     <button 
                         onClick={(e) => { e.stopPropagation(); setActivePage('compose'); }} 
-                        className="absolute bottom-3 right-3 p-2 bg-gradient-to-r from-primary-500 to-primary-600 text-white hover:from-primary-600 hover:to-primary-700 rounded-full transition-all opacity-0 group-hover:opacity-100 focus:opacity-100 z-10 shadow-lg hover:shadow-xl hover:scale-110"
+                        className="absolute bottom-3 right-3 p-2 bg-gradient-to-r from-primary-500 to-primary-600 text-white hover:from-primary-600 hover:to-primary-700 rounded-full transition-all opacity-0 group-hover:opacity-100 focus:opacity-100 z-10 shadow-lg hover:shadow-xl"
                         title="Add Post to this day"
                         aria-label="Add post"
                     >
