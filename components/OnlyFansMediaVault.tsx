@@ -354,9 +354,7 @@ export const OnlyFansMediaVault: React.FC = () => {
 
     const canModifyFolder = (folder: MediaFolder) => {
         if (!folder) return false;
-        if (folder.id === GENERAL_FOLDER_ID) return false;
-        const isDefault = ONLYFANS_DEFAULT_FOLDERS.includes(folder.name);
-        return !isDefault;
+        return folder.id !== GENERAL_FOLDER_ID;
     };
 
     const handleRenameFolder = async (name: string) => {
@@ -591,43 +589,13 @@ export const OnlyFansMediaVault: React.FC = () => {
                     <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 overflow-hidden space-y-4">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="font-semibold text-gray-900 dark:text-white">Folders</h3>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    onClick={() => { setEditingFolder(null); setShowCreateFolderModal(true); }}
-                                    className="p-1 text-primary-600 dark:text-primary-400 hover:text-primary-700"
-                                    title="Create folder"
-                                >
-                                    <PlusIcon className="w-4 h-4" />
-                                </button>
-                                {selectedFolderId !== GENERAL_FOLDER_ID && (
-                                    <>
-                                        <button
-                                            onClick={() => {
-                                                const folder = folders.find(f => f.id === selectedFolderId);
-                                                if (!folder || !canModifyFolder(folder)) return;
-                                                setEditingFolder(folder);
-                                                setShowCreateFolderModal(true);
-                                            }}
-                                            className="p-1 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white"
-                                            title="Rename folder"
-                                            disabled={!canModifyFolder(folders.find(f => f.id === selectedFolderId) as MediaFolder)}
-                                        >
-                                            Rename
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                const folder = folders.find(f => f.id === selectedFolderId);
-                                                if (folder) handleDeleteFolder(folder);
-                                            }}
-                                            className="p-1 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 disabled:opacity-50"
-                                            title="Delete folder"
-                                            disabled={!canModifyFolder(folders.find(f => f.id === selectedFolderId) as MediaFolder)}
-                                        >
-                                            Delete
-                                        </button>
-                                    </>
-                                )}
-                            </div>
+                            <button
+                                onClick={() => { setEditingFolder(null); setShowCreateFolderModal(true); }}
+                                className="p-1 text-primary-600 dark:text-primary-400 hover:text-primary-700"
+                                title="Create folder"
+                            >
+                                <PlusIcon className="w-4 h-4" />
+                            </button>
                         </div>
                         <div className="space-y-1 max-h-[400px] overflow-y-auto">
                             {folders.map(folder => (
@@ -652,7 +620,30 @@ export const OnlyFansMediaVault: React.FC = () => {
                                 </button>
                             ))}
                         </div>
-                        
+                        <div className="pt-3 border-t border-gray-200 dark:border-gray-700 flex gap-2">
+                            <button
+                                onClick={() => {
+                                    const folder = folders.find(f => f.id === selectedFolderId);
+                                    if (!folder || !canModifyFolder(folder)) return;
+                                    setEditingFolder(folder);
+                                    setShowCreateFolderModal(true);
+                                }}
+                                className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"
+                                disabled={!canModifyFolder(folders.find(f => f.id === selectedFolderId) as MediaFolder)}
+                            >
+                                Rename
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const folder = folders.find(f => f.id === selectedFolderId);
+                                    if (folder) handleDeleteFolder(folder);
+                                }}
+                                className="flex-1 px-3 py-2 text-sm border border-red-200 dark:border-red-700 rounded-md text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-50"
+                                disabled={!canModifyFolder(folders.find(f => f.id === selectedFolderId) as MediaFolder)}
+                            >
+                                Delete
+                            </button>
+                        </div>
                     </div>
                 </div>
 

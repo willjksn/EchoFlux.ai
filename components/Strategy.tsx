@@ -35,7 +35,7 @@ export const Strategy: React.FC = () => {
     });
     const [duration, setDuration] = useState('4 Weeks');
     const [tone, setTone] = useState('Professional');
-    const [platformFocus, setPlatformFocus] = useState('Mixed / All');
+    const [platformFocus, setPlatformFocus] = useState('OnlyFans');
     
     // Auto-set explicit tone when OnlyFans/Fanvue is selected.
     // IMPORTANT: Do not override user-selected tones like "Sexy / Explicit" for normal platforms.
@@ -445,7 +445,25 @@ export const Strategy: React.FC = () => {
                         }
                     } catch (e) {
                         console.error('Failed to autosave strategy via API:', e);
-                        showToast('Strategy generated, but failed to save. Please try again.', 'error');
+                        const fallbackId = `local_${Date.now()}`;
+                        const strategyData = {
+                            id: fallbackId,
+                            name: autoName,
+                            plan: planWithStatus,
+                            goal,
+                            niche,
+                            audience,
+                            tone,
+                            duration,
+                            platformFocus,
+                            status: 'active',
+                            linkedPostIds: [],
+                            createdAt: new Date().toISOString(),
+                            userId: user.id,
+                        };
+                        setSelectedStrategy(strategyData);
+                        localStorage.setItem(`strategy_autosave_${user.id}`, JSON.stringify(strategyData));
+                        showToast('Strategy generated. Auto-save failed; saved locally instead.', 'error');
                     }
                 } else {
                     // Offline fallback: keep in localStorage so navigation doesn't lose it.
@@ -2443,15 +2461,9 @@ export const Strategy: React.FC = () => {
                                     onChange={e => setPlatformFocus(e.target.value)}
                                     className="w-full p-3 border-2 rounded-xl bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
                                 >
-                                    <option>Mixed / All</option>
-                                    <option value="Instagram">Instagram Focus</option>
-                                    <option value="TikTok">TikTok Focus</option>
-                                    <option value="X">X (Twitter) Focus</option>
-                                    <option value="Threads">Threads Focus</option>
-                                    <option value="YouTube">YouTube Focus</option>
-                                    <option value="LinkedIn">LinkedIn Focus</option>
-                                    <option value="Facebook">Facebook Focus</option>
-                                    <option value="Pinterest">Pinterest Focus</option>
+                                    <option value="OnlyFans">OnlyFans</option>
+                                    <option value="Fansly">Fansly</option>
+                                    <option value="Fanvue">Fanvue</option>
                                 </select>
                             </div>
                         </div>
