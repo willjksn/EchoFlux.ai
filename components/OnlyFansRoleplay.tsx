@@ -1412,16 +1412,22 @@ Format as a numbered list with detailed post concepts including captions and eng
                                         className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white mb-3"
                                     />
                                 ) : (
-                                    <select
-                                        value={scenarioTone}
-                                        onChange={(e) => setScenarioTone(e.target.value as 'Soft' | 'Teasing' | 'Playful' | 'Explicit')}
-                                        className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                    >
-                                        <option value="Soft">Soft</option>
-                                        <option value="Teasing">Teasing</option>
-                                        <option value="Playful">Playful</option>
-                                        <option value="Explicit">Explicit</option>
-                                    </select>
+                                    <div className="flex flex-wrap gap-2">
+                                        {(['Soft','Teasing','Playful','Explicit'] as const).map((toneOption) => (
+                                            <button
+                                                key={toneOption}
+                                                type="button"
+                                                onClick={() => setScenarioTone(toneOption)}
+                                                className={`px-3 py-2 text-sm rounded-md border ${
+                                                    scenarioTone === toneOption
+                                                        ? 'border-primary-600 text-primary-700 dark:text-primary-300 bg-primary-50 dark:bg-primary-900/30'
+                                                        : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                                }`}
+                                            >
+                                                {toneOption}
+                                            </button>
+                                        ))}
+                                    </div>
                                 )}
                             </div>
 
@@ -1442,14 +1448,22 @@ Format as a numbered list with detailed post concepts including captions and eng
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Length
                                 </label>
-                                <select
-                                    value={scenarioLength}
-                                    onChange={(e) => setScenarioLength(e.target.value as 'Extended' | 'Long Extended')}
-                                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                >
-                                    <option value="Extended">Extended</option>
-                                    <option value="Long Extended">Long Extended</option>
-                                </select>
+                                <div className="flex gap-2">
+                                    {(['Extended','Long Extended'] as const).map((len) => (
+                                        <button
+                                            key={len}
+                                            type="button"
+                                            onClick={() => setScenarioLength(len)}
+                                            className={`px-3 py-2 text-sm rounded-md border ${
+                                                scenarioLength === len
+                                                    ? 'border-primary-600 text-primary-700 dark:text-primary-300 bg-primary-50 dark:bg-primary-900/30'
+                                                    : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                            }`}
+                                        >
+                                            {len}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
 
                             <button
@@ -1470,7 +1484,7 @@ Format as a numbered list with detailed post concepts including captions and eng
 
                     {/* Generated Scenario Display */}
                     {generatedScenario && (
-                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 space-y-4">
                             <div className="flex items-center justify-between mb-4">
                                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
                                     Generated Scenario
@@ -1488,6 +1502,81 @@ Format as a numbered list with detailed post concepts including captions and eng
                                     >
                                         Clear
                                     </button>
+                                </div>
+                            </div>
+
+                            <div className="space-y-3 text-sm text-gray-900 dark:text-white">
+                                <div>
+                                    <p className="font-semibold text-gray-800 dark:text-gray-100">Premise</p>
+                                    <p className="mt-1 text-gray-700 dark:text-gray-300">{generatedScenario.premise}</p>
+                                </div>
+                                <div>
+                                    <p className="font-semibold text-gray-800 dark:text-gray-100">Opening Message</p>
+                                    <p className="mt-1 text-gray-700 dark:text-gray-300">{generatedScenario.openingMessage}</p>
+                                </div>
+
+                                {generatedScenario.progressionStages && Array.isArray(generatedScenario.progressionStages) && generatedScenario.progressionStages.length > 0 && (
+                                    <div>
+                                        <p className="font-semibold text-gray-800 dark:text-gray-100 mb-2">Progression Stages</p>
+                                        <div className="space-y-2">
+                                            {generatedScenario.progressionStages.map((stage: any, idx: number) => (
+                                                <div key={idx} className="p-3 rounded-md bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
+                                                    <p className="font-medium text-gray-900 dark:text-white">{stage.stage || `Stage ${idx + 1}`}</p>
+                                                    {stage.description && (
+                                                        <p className="text-gray-700 dark:text-gray-300 mt-1">{stage.description}</p>
+                                                    )}
+                                                    {Array.isArray(stage.prompts) && stage.prompts.length > 0 && (
+                                                        <ul className="mt-2 list-disc list-inside text-gray-700 dark:text-gray-300 space-y-1">
+                                                            {stage.prompts.map((p: string, pIdx: number) => (
+                                                                <li key={pIdx}>{p}</li>
+                                                            ))}
+                                                        </ul>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {Array.isArray(generatedScenario.engagementPrompts) && generatedScenario.engagementPrompts.length > 0 && (
+                                    <div>
+                                        <p className="font-semibold text-gray-800 dark:text-gray-100 mb-2">Engagement Prompts</p>
+                                        <ul className="list-disc list-inside space-y-1 text-gray-700 dark:text-gray-300">
+                                            {generatedScenario.engagementPrompts.map((prompt, idx) => (
+                                                <li key={idx}>{prompt}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+
+                                {Array.isArray(generatedScenario.variationIdeas) && generatedScenario.variationIdeas.length > 0 && (
+                                    <div>
+                                        <p className="font-semibold text-gray-800 dark:text-gray-100 mb-2">Variations</p>
+                                        <ul className="list-disc list-inside space-y-1 text-gray-700 dark:text-gray-300">
+                                            {generatedScenario.variationIdeas.map((idea, idx) => (
+                                                <li key={idx}>{idea}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+
+                                {Array.isArray(generatedScenario.monetizationMoments) && generatedScenario.monetizationMoments.length > 0 && (
+                                    <div>
+                                        <p className="font-semibold text-gray-800 dark:text-gray-100 mb-2">Monetization Moments</p>
+                                        <ul className="list-disc list-inside space-y-1 text-gray-700 dark:text-gray-300">
+                                            {generatedScenario.monetizationMoments.map((m: any, idx: number) => (
+                                                <li key={idx}>
+                                                    <span className="font-medium">{m.moment || `Moment ${idx + 1}`}: </span>
+                                                    {m.cta || m.description || ''}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+
+                                <div>
+                                    <p className="font-semibold text-gray-800 dark:text-gray-100">Ending CTA</p>
+                                    <p className="mt-1 text-gray-700 dark:text-gray-300">{generatedScenario.endingCTA}</p>
                                 </div>
                             </div>
                         </div>

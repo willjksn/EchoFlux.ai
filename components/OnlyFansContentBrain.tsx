@@ -591,6 +591,8 @@ export const OnlyFansContentBrain: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<ContentType>('captions' as ContentType);
+    const platformOptions: Array<'OnlyFans' | 'Fansly' | 'Fanvue'> = ['OnlyFans', 'Fansly', 'Fanvue'];
+    const [selectedPlatform, setSelectedPlatform] = useState<'OnlyFans' | 'Fansly' | 'Fanvue'>('OnlyFans');
     const [isGenerating, setIsGenerating] = useState(false);
     
     // Caption generation state
@@ -797,7 +799,7 @@ export const OnlyFansContentBrain: React.FC = () => {
 
     const buildMonetizedContext = () => {
         if (!monetizedModeEnabled) return '';
-        const platforms = Array.isArray(user?.settings?.monetizedPlatforms) ? user?.settings?.monetizedPlatforms.join(', ') : 'OnlyFans, Fansly, Fanvue & more';
+        const platforms = Array.isArray(user?.settings?.monetizedPlatforms) ? user?.settings?.monetizedPlatforms.join(', ') : selectedPlatform;
         const postingFrequency = monetizedOnboarding?.postingFrequency ? String(monetizedOnboarding.postingFrequency) : '';
         const contentHelp = Array.isArray(monetizedOnboarding?.contentHelp) ? monetizedOnboarding.contentHelp.join(', ') : '';
         const biggestChallenge = monetizedOnboarding?.biggestChallenge ? String(monetizedOnboarding.biggestChallenge) : '';
@@ -812,7 +814,7 @@ export const OnlyFansContentBrain: React.FC = () => {
         ].filter(Boolean);
 
         if (lines.length === 0) return '';
-        return `Premium creator personalization (OnlyFans, Fansly, Fanvue & more):\n${lines.map((l) => `- ${l}`).join('\n')}`;
+        return `Premium creator personalization (${selectedPlatform}):\n${lines.map((l) => `- ${l}`).join('\n')}`;
     };
 
     // Prefill defaults once (do not overwrite user edits)
@@ -1092,10 +1094,10 @@ export const OnlyFansContentBrain: React.FC = () => {
                     tone: finalTone === 'Explicit' ? 'Sexy / Explicit' : finalTone,
                     goal: captionGoal,
                     // Target all premium creator platforms we support
-                    platforms: ['OnlyFans', 'Fansly', 'Fanvue'],
+                    platforms: [selectedPlatform],
                     promptText: uploadedMediaUrl 
-                        ? `${captionPrompt || 'Analyze this image/video in detail and describe what you see. Create explicit captions for OnlyFans, Fansly, Fanvue & more based on the actual content shown. Be very descriptive and explicit about what is visually present.'}${fanContext}\n\n[Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`
-                        : `${captionPrompt}${fanContext}\n\n[Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`,
+                        ? `${captionPrompt || `Analyze this image/video in detail and describe what you see. Create explicit captions tailored for ${selectedPlatform}. Mention ${selectedPlatform} naturally when it helps drive subs (e.g., "come see me on ${selectedPlatform}") but only when it fits the line. Be very descriptive and explicit about what is visually present.`}${fanContext}\n\n[Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`
+                        : `${captionPrompt || `Create explicit captions tailored for ${selectedPlatform}. Mention ${selectedPlatform} naturally when it helps drive subs (e.g., "come see me on ${selectedPlatform}") but only when it fits the line.`}${fanContext}\n\n[Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`,
                     emojiEnabled: emojiSettings.enabled,
                     emojiIntensity: emojiSettings.intensity,
                 }),
@@ -1170,13 +1172,14 @@ export const OnlyFansContentBrain: React.FC = () => {
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
                 body: JSON.stringify({
-                    prompt: `Generate 10 creative post ideas for premium creator platforms (OnlyFans, Fansly, Fanvue) based on: ${postIdeaPrompt}. 
+                    prompt: `Generate 10 creative post ideas tailored for ${selectedPlatform} based on: ${postIdeaPrompt}. 
                     Each idea should be specific, engaging, and tailored for adult content creators. 
+                    When natural, include a ${selectedPlatform} mention (e.g., "join me on ${selectedPlatform}") but only if it fits. 
                     Format as a numbered list with brief descriptions.`,
                     context: {
                         goal: 'content-ideas',
                         tone: 'Explicit/Adult Content',
-                        platforms: ['OnlyFans', 'Fansly', 'Fanvue'],
+                        platforms: [selectedPlatform],
                     },
                     analyticsData: buildAnalyticsData(),
                     emojiEnabled: emojiSettings.enabled,
@@ -1230,7 +1233,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
                 body: JSON.stringify({
-                    prompt: `Generate 8 detailed shoot concepts for OnlyFans, Fansly, Fanvue & more based on: ${shootConceptPrompt}.
+                    prompt: `Generate 8 detailed shoot concepts for ${selectedPlatform} based on: ${shootConceptPrompt}.
                     Each concept should include:
                     - Theme/Setting
                     - Outfit suggestions
@@ -1242,7 +1245,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                     context: {
                         goal: 'shoot-planning',
                         tone: 'Explicit/Adult Content',
-                        platforms: ['OnlyFans', 'Fansly', 'Fanvue'],
+                        platforms: [selectedPlatform],
                     },
                     analyticsData: buildAnalyticsData(),
                 }),
@@ -1294,12 +1297,12 @@ export const OnlyFansContentBrain: React.FC = () => {
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
                 body: JSON.stringify({
-                    niche: 'Adult Content Creator (OnlyFans, Fansly, Fanvue & more)',
+                    niche: `Adult Content Creator (${selectedPlatform})`,
                     audience: 'Subscribers and fans',
                     goal: `${weeklyPlanPrompt || 'Sales Conversion'}\n\n${buildMonetizedContext()}`.trim(), // Personalize if available
                     duration: 1, // 1 week
                     tone: 'Explicit/Adult Content',
-                    platformFocus: 'OnlyFans, Fansly, Fanvue & more',
+                    platformFocus: selectedPlatform,
                     analyticsData: buildAnalyticsData(),
                 }),
             });
@@ -1498,12 +1501,22 @@ export const OnlyFansContentBrain: React.FC = () => {
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             const personalization = buildMonetizedContext();
+            const fanContextBlock = selectedFanId && fanPreferences ? `
+Fan Context:
+- Name: ${selectedFanName || 'Fan'}
+- Preferred Tone: ${fanPreferences.preferredTone || 'Not specified'}
+- Favorite Session Type: ${fanPreferences.favoriteSessionType || 'Not specified'}
+- Communication Style: ${fanPreferences.communicationStyle || 'Not specified'}
+- Past Notes: ${fanPreferences.pastNotes || 'None'}
+` : '';
+
             const prompt = `
-Create a subscriber messaging toolkit for an OnlyFans creator.
+Create a subscriber messaging toolkit for a ${selectedPlatform} creator.
 
 Type: ${messageType}
 Tone: ${messageTone}
 Context: ${messageContext || 'None provided'}
+${fanContextBlock ? fanContextBlock : ''}
 
 ${personalization ? personalization : ''}
 
@@ -1533,7 +1546,7 @@ Output format:
                     context: {
                         goal: 'retention',
                         tone: messageTone,
-                        platforms: ['OnlyFans'],
+                        platforms: [selectedPlatform],
                     },
                     emojiEnabled: emojiSettings.enabled,
                     emojiIntensity: emojiSettings.intensity,
@@ -2226,8 +2239,8 @@ Output format:
                     mediaUrl: mediaUrl, // Use Firebase Storage URL instead of base64
                     tone: mediaCaptionTone === 'Explicit' ? 'Sexy / Explicit' : mediaCaptionTone,
                     goal: mediaCaptionGoal,
-                    platforms: ['OnlyFans'],
-                    promptText: `${mediaCaptionPrompt || ''} [Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`.trim(),
+                    platforms: [selectedPlatform],
+                    promptText: `${mediaCaptionPrompt || `Create explicit captions tailored for ${selectedPlatform}. Mention ${selectedPlatform} naturally when it helps drive subs (e.g., "join me on ${selectedPlatform}") but only when it fits the line.`} [Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`.trim(),
                     analyticsData: buildAnalyticsData(),
                     emojiEnabled: emojiSettings.enabled,
                     emojiIntensity: emojiSettings.intensity,
@@ -2395,8 +2408,8 @@ Output format:
                     mediaUrl: uploadedMediaUrl,
                     tone: finalTone === 'Explicit' ? 'Sexy / Explicit' : finalTone,
                     goal: captionGoal,
-                    platforms: ['OnlyFans'],
-                    promptText: `${captionPrompt || 'Analyze this image/video in detail and describe what you see. Create explicit OnlyFans captions based on the actual content shown. Be very descriptive and explicit about what is visually present.'} [Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`.trim(),
+                    platforms: [selectedPlatform],
+                    promptText: `${captionPrompt || `Analyze this image/video in detail and describe what you see. Create explicit ${selectedPlatform} captions based on the actual content shown. Be very descriptive and explicit about what is visually present. Mention ${selectedPlatform} naturally only when it helps drive subs.`} [Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`.trim(),
                     emojiEnabled: emojiSettings.enabled,
                     emojiIntensity: emojiSettings.intensity,
                 }),
@@ -2534,7 +2547,7 @@ Output format:
                 },
                 body: JSON.stringify({
                     originalContent: captionToRepurpose,
-                    originalPlatform: 'OnlyFans',
+                    originalPlatform: selectedPlatform,
                     targetPlatforms: ['Instagram', 'TikTok', 'X', 'LinkedIn', 'Facebook', 'Threads', 'YouTube'],
                     niche: user?.niche || 'Adult Content Creator',
                     tone: captionTone,
@@ -2722,8 +2735,26 @@ Output format:
                     </h1>
                 </div>
                 <p className="text-gray-600 dark:text-gray-400">
-                    Generate AI-powered captions, ideas, shoot concepts, and content plans for OnlyFans.
+                    Generate AI-powered captions, ideas, shoot concepts, and content plans for premium creator platforms.
                 </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                    {platformOptions.map((platform) => (
+                        <button
+                            key={platform}
+                            onClick={() => setSelectedPlatform(platform)}
+                            className={`px-3 py-1 rounded-md text-sm border ${
+                                selectedPlatform === platform
+                                    ? 'border-primary-600 text-primary-700 dark:text-primary-300 bg-primary-50 dark:bg-primary-900/30'
+                                    : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                            }`}
+                        >
+                            {platform}
+                        </button>
+                    ))}
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                        Optimizing for: <span className="font-semibold">{selectedPlatform}</span>
+                    </span>
+                </div>
             </div>
 
             {/* Error banner (non-blocking) */}
@@ -4499,6 +4530,26 @@ Output format:
                                     className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                 />
                             </div>
+                        </div>
+
+                        <div className="mt-4">
+                            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-2">
+                                Select fan (optional) to personalize messages
+                            </label>
+                            <FanSelector
+                                selectedFanId={selectedFanId}
+                                onSelectFan={(fanId, fanName) => {
+                                    setSelectedFanId(fanId);
+                                    setSelectedFanName(fanName);
+                                }}
+                                allowNewFan={true}
+                                compact={true}
+                            />
+                            {selectedFanId && fanPreferences && (
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                                    Using preferences for {selectedFanName || 'selected fan'} (tone: {fanPreferences.preferredTone || 'n/a'}).
+                                </p>
+                            )}
                         </div>
 
                         <div className="mt-4 flex items-center justify-between gap-3">

@@ -465,7 +465,7 @@ Fan Context:
                         </div>
 
                         {/* Message Input */}
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 mt-6 pt-2 border-t border-gray-200 dark:border-gray-700">
                             <input
                                 type="text"
                                 value={messageInput}
@@ -497,6 +497,12 @@ Fan Context:
                                 <RefreshIcon className="w-5 h-5 animate-spin text-primary-600 dark:text-primary-400" />
                             )}
                         </div>
+                        {isGeneratingSuggestions && (
+                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 mb-3">
+                                <div className="h-4 w-4 border-2 border-gray-300 dark:border-gray-600 border-t-primary-600 dark:border-t-primary-400 rounded-full animate-spin"></div>
+                                <span>Generating suggestions...</span>
+                            </div>
+                        )}
                         {aiSuggestions.length === 0 ? (
                             <p className="text-gray-500 dark:text-gray-400 text-center py-8">
                                 {isGeneratingSuggestions ? 'Generating suggestions...' : 'No suggestions yet'}

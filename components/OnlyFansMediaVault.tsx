@@ -6,7 +6,6 @@ import { db, storage } from '../firebaseConfig';
 import { collection, setDoc, doc, getDocs, deleteDoc, query, orderBy, updateDoc, writeBatch, where } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { MoveToFolderModal } from './MoveToFolderModal';
-import { FanSelector } from './FanSelector';
 
 // Video preview removed - using simple video element like MediaLibrary for mobile/tablet compatibility
 
@@ -39,8 +38,6 @@ export const OnlyFansMediaVault: React.FC = () => {
     const [editingFolder, setEditingFolder] = useState<MediaFolder | null>(null);
     const [editingItem, setEditingItem] = useState<OnlyFansMediaItem | null>(null);
     const [isGeneratingTags, setIsGeneratingTags] = useState(false);
-    const [selectedFanId, setSelectedFanId] = useState<string | null>(null);
-    const [selectedFanName, setSelectedFanName] = useState<string | null>(null);
 
     // Initialize default OnlyFans folders
     useEffect(() => {
@@ -234,7 +231,7 @@ export const OnlyFansMediaVault: React.FC = () => {
                     await uploadBytes(storageRef, file, { contentType: file.type });
                     const mediaUrl = await getDownloadURL(storageRef);
 
-                    const mediaItem: OnlyFansMediaItem & { fanId?: string | null; fanName?: string | null } = {
+                    const mediaItem: OnlyFansMediaItem = {
                         id: uniqueId,
                         userId: user.id,
                         url: mediaUrl,
@@ -247,7 +244,6 @@ export const OnlyFansMediaVault: React.FC = () => {
                         tags: [],
                         folderId: selectedFolderId,
                         // aiTags is optional and will be added when AI tagging is generated
-                        ...(selectedFanId ? { fanId: selectedFanId, fanName: selectedFanName } : {}),
                     };
 
                     await setDoc(doc(db, 'users', user.id, 'onlyfans_media_library', mediaItem.id), mediaItem);
@@ -657,23 +653,6 @@ export const OnlyFansMediaVault: React.FC = () => {
                             ))}
                         </div>
                         
-                        {/* Fan Selector for Tagging Uploaded Media */}
-                        <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                            <FanSelector
-                                selectedFanId={selectedFanId}
-                                onSelectFan={(fanId, fanName) => {
-                                    setSelectedFanId(fanId);
-                                    setSelectedFanName(fanName);
-                                }}
-                                allowNewFan={true}
-                                compact={true}
-                            />
-                            {selectedFanId && (
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                                    New uploads will be tagged with this fan
-                                </p>
-                            )}
-                        </div>
                     </div>
                 </div>
 
