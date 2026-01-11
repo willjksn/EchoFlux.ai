@@ -8,27 +8,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const db = getAdminDb();
-    const snap = await db
+    const mapDocs = (docs: any[]) =>
+      docs.map((doc: any) => {
+        const data = doc.data() as any;
+        return {
+          id: doc.id,
+          username: data?.username || "Creator",
+          country: data?.country || null,
+          plan: data?.plan || null,
+          rating: typeof data?.rating === "number" ? data.rating : 5,
+          text: data?.text || "",
+          showAvatar: Boolean(data?.showAvatar),
+          avatarUrl: data?.avatarUrl || null,
+          createdAt: data?.createdAt || data?.updatedAt || null,
+        };
+      });
+
+    // Try to load featured reviews first
+    const featuredSnap = await db
       .collection("reviews")
       .where("isFeatured", "==", true)
       .orderBy("createdAt", "desc")
       .limit(20)
       .get();
 
-    const items = snap.docs.map((doc) => {
-      const data = doc.data() as any;
-      return {
-        id: doc.id,
-        username: data?.username || "Creator",
-        country: data?.country || null,
-        plan: data?.plan || null,
-        rating: typeof data?.rating === "number" ? data.rating : 5,
-        text: data?.text || "",
-        showAvatar: Boolean(data?.showAvatar),
-        avatarUrl: data?.avatarUrl || null,
-        createdAt: data?.createdAt || data?.updatedAt || null,
-      };
-    });
+    let items = mapDocs(featuredSnap.docs);
+
+    // Fallback: if no featured reviews are flagged yet, show the latest reviews
+    if (!items.length) {
+      const recentSnap = await db
+        .collection("reviews")
+        .orderBy("createdAt", "desc")
+        .limit(20)
+        .get();
+      items = mapDocs(recentSnap.docs);
+    }
 
     return res.status(200).json({ success: true, items });
   } catch (error: any) {

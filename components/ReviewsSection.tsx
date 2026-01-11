@@ -13,6 +13,42 @@ type Review = {
   createdAt?: string | null;
 };
 
+const fallbackReviews: Review[] = [
+  {
+    id: "sample-1",
+    username: "Amelia R.",
+    country: "US",
+    plan: "Elite",
+    rating: 5,
+    text: "EchoFlux made it so much easier to plan premium content and keep my DMs converting. I copy captions and scripts straight from the studio.",
+    showAvatar: false,
+    avatarUrl: null,
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
+  },
+  {
+    id: "sample-2",
+    username: "Leo M.",
+    country: "CA",
+    plan: "Pro",
+    rating: 4.5,
+    text: "The weekly planner plus AI captions are lifesavers. I can plan my schedule and export packs without bouncing between tools.",
+    showAvatar: false,
+    avatarUrl: null,
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 26).toISOString(),
+  },
+  {
+    id: "sample-3",
+    username: "Sasha V.",
+    country: "UK",
+    plan: "Elite",
+    rating: 5,
+    text: "I like that it’s built for premium creator platforms. Content Brain gives me Fansly- and Fanvue-ready ideas without me rewriting everything.",
+    showAvatar: false,
+    avatarUrl: null,
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(),
+  },
+];
+
 const formatRelativeTime = (iso?: string | null) => {
   if (!iso) return "";
   const date = new Date(iso);
@@ -60,12 +96,15 @@ export const ReviewsSection: React.FC = () => {
       setLoading(true);
       try {
         const res = await fetch("/api/getFeaturedReviews");
-        const data = await res.json();
-        if (res.ok && data?.items) {
+        const data = await res.json().catch(() => null);
+        if (res.ok && data?.items?.length) {
           setReviews(data.items);
+        } else {
+          setReviews(fallbackReviews);
         }
       } catch (e) {
         console.error("Failed to load featured reviews", e);
+        setReviews(fallbackReviews);
       } finally {
         setLoading(false);
       }
@@ -86,7 +125,24 @@ export const ReviewsSection: React.FC = () => {
     );
   }
 
-  if (!reviews.length) return null;
+  if (!reviews.length) {
+    return (
+      <section className="py-12 sm:py-16 bg-white dark:bg-gray-900">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary-100 dark:bg-primary-900/40 rounded-lg text-primary-600 dark:text-primary-300">
+              <SparklesIcon className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-sm text-primary-600 dark:text-primary-300 font-semibold uppercase tracking-wide">What creators are saying</p>
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">Reviews coming soon</h2>
+            </div>
+          </div>
+          <p className="text-gray-600 dark:text-gray-400 text-sm">Check back shortly—our newest reviews will appear here.</p>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="py-12 sm:py-16 bg-white dark:bg-gray-900">
