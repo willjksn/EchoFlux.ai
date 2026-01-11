@@ -28,7 +28,8 @@ export const ContentIntelligence: React.FC = () => {
     const [isGeneratingMediaCaptions, setIsGeneratingMediaCaptions] = useState(false);
     
     // Detect if we're in OnlyFans Studio context
-    const isOnlyFansStudio = activePage === 'onlyfansStudio' || window.location.pathname.includes('onlyfansStudio');
+    const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
+    const isOnlyFansStudio = activePage === 'onlyfansStudio' || pathname.includes('premiumcontentstudio') || pathname.includes('onlyfansStudio');
     
     // Results state
     const [gapAnalysis, setGapAnalysis] = useState<any>(null);

@@ -273,6 +273,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     path.startsWith('/ads') ||
                     path.startsWith('/mediaLibrary') ||
                     path.startsWith('/autopilot') ||
+                    path.startsWith('/premiumcontentstudio') ||
                     path.startsWith('/onlyfansStudio');
                 if (isAuthenticatedRoute) {
                     window.history.replaceState({}, '', '/');

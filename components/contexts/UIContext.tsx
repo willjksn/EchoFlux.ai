@@ -131,13 +131,15 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         ads: '/ads',
         mediaLibrary: '/mediaLibrary',
         autopilot: '/autopilot',
-        onlyfansStudio: '/onlyfansStudio',
+        onlyfansStudio: '/premiumcontentstudio',
     };
 
     const pathToPage: Record<string, Page> = Object.entries(pageToPath).reduce((acc, [page, path]) => {
         if (path) acc[normalizePath(path)] = page as Page;
         return acc;
     }, {} as Record<string, Page>);
+    // Accept legacy route for backward compatibility
+    pathToPage['/onlyfansstudio'] = 'onlyfansStudio';
 
     const isRoutableAppPath = (path: string) => {
         const p = normalizePath(path);
