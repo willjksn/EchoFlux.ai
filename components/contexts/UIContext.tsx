@@ -138,8 +138,9 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         if (path) acc[normalizePath(path)] = page as Page;
         return acc;
     }, {} as Record<string, Page>);
-    // Accept legacy route for backward compatibility
+    // Accept legacy routes for backward compatibility (case variants)
     pathToPage['/onlyfansstudio'] = 'onlyfansStudio';
+    pathToPage['/onlyfansStudio'] = 'onlyfansStudio';
 
     const isRoutableAppPath = (path: string) => {
         const p = normalizePath(path);
