@@ -52,7 +52,7 @@ export const Sidebar: React.FC = () => {
     { page: 'compose', icon: <ComposeIcon />, label: 'Compose', tourId: 'tour-step-3-compose-nav' },
     { page: 'automation', icon: <AutomationIcon />, label: 'Automation' },
     { page: 'mediaLibrary', icon: <ImageIcon />, label: 'Media Library' },
-    { page: 'approvals', icon: <KanbanIcon />, label: 'Drafts' },
+    { page: 'approvals', icon: <KanbanIcon />, label: 'Approvals' },
     { page: 'calendar', icon: <CalendarIcon />, label: 'Calendar' },
     { page: 'strategy', icon: <TargetIcon />, label: 'Strategy' },
     { page: 'analytics', icon: <AnalyticsIcon />, label: 'Analytics', tourId: 'tour-step-2-analytics-nav' },
