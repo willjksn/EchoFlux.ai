@@ -418,12 +418,20 @@ export const OnlyFansStudio: React.FC = () => {
     if (activeView === 'roleplay') {
         return (
             <div className="max-w-7xl mx-auto">
-                <button
-                    onClick={() => setActiveView('dashboard')}
-                    className="mb-4 text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
-                >
-                    ← Back to Premium Content Studio
-                </button>
+                <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
+                    <button
+                        onClick={() => setActiveView('dashboard')}
+                        className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
+                    >
+                        ← Back to Premium Content Studio
+                    </button>
+                    <button
+                        onClick={() => setActiveView('contentBrain')}
+                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
+                    >
+                        Open Content Brain
+                    </button>
+                </div>
                 <OnlyFansRoleplay />
             </div>
         );
@@ -432,12 +440,20 @@ export const OnlyFansStudio: React.FC = () => {
     if (activeView === 'settings') {
         return (
             <div className="max-w-7xl mx-auto">
-                <button
-                    onClick={() => setActiveView('dashboard')}
-                    className="mb-4 text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
-                >
-                    ← Back to Premium Content Studio
-                </button>
+                <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
+                    <button
+                        onClick={() => setActiveView('dashboard')}
+                        className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
+                    >
+                        ← Back to Premium Content Studio
+                    </button>
+                    <button
+                        onClick={() => setActiveView('contentBrain')}
+                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
+                    >
+                        Open Content Brain
+                    </button>
+                </div>
                 <OnlyFansStudioSettings />
             </div>
         );
@@ -446,12 +462,20 @@ export const OnlyFansStudio: React.FC = () => {
     if (activeView === 'export') {
         return (
             <div className="max-w-7xl mx-auto">
-                <button
-                    onClick={() => setActiveView('dashboard')}
-                    className="mb-4 text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
-                >
-                    ← Back to Premium Content Studio
-                </button>
+                <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
+                    <button
+                        onClick={() => setActiveView('dashboard')}
+                        className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
+                    >
+                        ← Back to Premium Content Studio
+                    </button>
+                    <button
+                        onClick={() => setActiveView('contentBrain')}
+                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
+                    >
+                        Open Content Brain
+                    </button>
+                </div>
                 <OnlyFansExportHub />
             </div>
         );
@@ -460,12 +484,20 @@ export const OnlyFansStudio: React.FC = () => {
     if (activeView === 'calendar') {
         return (
             <div className="max-w-7xl mx-auto">
-                <button
-                    onClick={() => setActiveView('dashboard')}
-                    className="mb-4 text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
-                >
-                    ← Back to Premium Content Studio
-                </button>
+                <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
+                    <button
+                        onClick={() => setActiveView('dashboard')}
+                        className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
+                    >
+                        ← Back to Premium Content Studio
+                    </button>
+                    <button
+                        onClick={() => setActiveView('contentBrain')}
+                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
+                    >
+                        Open Content Brain
+                    </button>
+                </div>
                 <OnlyFansCalendar onNavigateToContentBrain={() => setActiveView('contentBrain')} />
             </div>
         );
@@ -474,12 +506,20 @@ export const OnlyFansStudio: React.FC = () => {
     if (activeView === 'mediaVault') {
         return (
             <div className="max-w-7xl mx-auto">
-                <button
-                    onClick={() => setActiveView('dashboard')}
-                    className="mb-4 text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
-                >
-                    ← Back to Premium Content Studio
-                </button>
+                <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
+                    <button
+                        onClick={() => setActiveView('dashboard')}
+                        className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
+                    >
+                        ← Back to Premium Content Studio
+                    </button>
+                    <button
+                        onClick={() => setActiveView('contentBrain')}
+                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
+                    >
+                        Open Content Brain
+                    </button>
+                </div>
                 <OnlyFansMediaVault />
             </div>
         );
@@ -488,12 +528,20 @@ export const OnlyFansStudio: React.FC = () => {
     if (activeView === 'guides') {
         return (
             <div className="max-w-7xl mx-auto">
-                <button
-                    onClick={() => setActiveView('dashboard')}
-                    className="mb-4 text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
-                >
-                    ← Back to Premium Content Studio
-                </button>
+                <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
+                    <button
+                        onClick={() => setActiveView('dashboard')}
+                        className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
+                    >
+                        ← Back to Premium Content Studio
+                    </button>
+                    <button
+                        onClick={() => setActiveView('contentBrain')}
+                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
+                    >
+                        Open Content Brain
+                    </button>
+                </div>
                 <OnlyFansGuides />
             </div>
         );
@@ -502,12 +550,20 @@ export const OnlyFansStudio: React.FC = () => {
     if (activeView === 'analytics') {
         return (
             <div className="max-w-7xl mx-auto">
-                <button
-                    onClick={() => setActiveView('dashboard')}
-                    className="mb-4 text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
-                >
-                    ← Back to Premium Content Studio
-                </button>
+                <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
+                    <button
+                        onClick={() => setActiveView('dashboard')}
+                        className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
+                    >
+                        ← Back to Premium Content Studio
+                    </button>
+                    <button
+                        onClick={() => setActiveView('contentBrain')}
+                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
+                    >
+                        Open Content Brain
+                    </button>
+                </div>
                 <ErrorBoundary>
                     <OnlyFansAnalytics />
                 </ErrorBoundary>
@@ -518,12 +574,20 @@ export const OnlyFansStudio: React.FC = () => {
     if (activeView === 'fans') {
         return (
             <div className="max-w-7xl mx-auto">
-                <button
-                    onClick={() => setActiveView('dashboard')}
-                    className="mb-4 text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
-                >
-                    ← Back to Premium Content Studio
-                </button>
+                <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
+                    <button
+                        onClick={() => setActiveView('dashboard')}
+                        className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
+                    >
+                        ← Back to Premium Content Studio
+                    </button>
+                    <button
+                        onClick={() => setActiveView('contentBrain')}
+                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
+                    >
+                        Open Content Brain
+                    </button>
+                </div>
                 <ErrorBoundary>
                     <OnlyFansFans />
                 </ErrorBoundary>

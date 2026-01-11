@@ -533,7 +533,7 @@ export const MediaLibrary: React.FC = () => {
                 </div>
                 {currentFolder && currentFolder.id !== GENERAL_FOLDER_ID && (
                   <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-2">
+                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-3">
                       <FolderIcon className="w-4 h-4" />
                       <span className="truncate">{currentFolder.name}</span>
                     </div>
@@ -543,14 +543,13 @@ export const MediaLibrary: React.FC = () => {
                           setEditingFolder({ id: currentFolder.id, name: currentFolder.name });
                           setShowCreateFolderModal(true);
                         }}
-                        className="text-xs text-primary-600 dark:text-primary-400 hover:underline"
+                        className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                       >
                         Rename
                       </button>
-                      <span className="text-gray-400">•</span>
                       <button
                         onClick={() => handleDeleteFolder(currentFolder.id)}
-                        className="text-xs text-red-600 dark:text-red-400 hover:underline"
+                        className="flex-1 px-3 py-2 text-sm border border-red-200 dark:border-red-700 rounded-md text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
                       >
                         Delete
                       </button>

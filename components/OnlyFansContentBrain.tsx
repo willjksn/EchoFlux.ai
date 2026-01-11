@@ -2724,6 +2724,32 @@ Output format:
         );
     }
 
+    const PlatformTargetingCard = () => (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Platform Targeting</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Optimize everything here for OnlyFans, Fansly, or Fanvue.</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    {platformOptions.map((platform) => (
+                        <button
+                            key={platform}
+                            onClick={() => setSelectedPlatform(platform)}
+                            className={`px-4 py-2 min-w-[120px] rounded-md text-sm border ${
+                                selectedPlatform === platform
+                                    ? 'border-primary-600 text-primary-700 dark:text-primary-300 bg-primary-50 dark:bg-primary-900/30'
+                                    : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                            }`}
+                        >
+                            {platform}
+                        </button>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+
     return (
         <div className="max-w-5xl mx-auto">
             {/* Header */}
@@ -2737,29 +2763,6 @@ Output format:
                 <p className="text-gray-600 dark:text-gray-400">
                     Generate AI-powered captions, ideas, shoot concepts, and content plans for premium creator platforms.
                 </p>
-                <div className="mt-4 bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-                    <div className="flex items-center justify-between flex-wrap gap-3">
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Platform Targeting</h3>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">Optimize everything here for OnlyFans, Fansly, or Fanvue.</p>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                            {platformOptions.map((platform) => (
-                                <button
-                                    key={platform}
-                                    onClick={() => setSelectedPlatform(platform)}
-                                    className={`px-4 py-2 min-w-[120px] rounded-md text-sm border ${
-                                        selectedPlatform === platform
-                                            ? 'border-primary-600 text-primary-700 dark:text-primary-300 bg-primary-50 dark:bg-primary-900/30'
-                                            : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                                    }`}
-                                >
-                                    {platform}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </div>
             </div>
 
             {/* Error banner (non-blocking) */}
@@ -2797,6 +2800,8 @@ Output format:
             {/* Captions Tab */}
             {activeTab === 'captions' && (
                 <div className="space-y-6">
+                    <PlatformTargetingCard />
+
                     {/* Predict & Repurpose History Section */}
                     {user?.plan !== 'Free' && (
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
@@ -3698,6 +3703,7 @@ Output format:
             {/* Post Ideas Tab */}
             {activeTab === 'postIdeas' && (
                 <div className="space-y-6">
+                    <PlatformTargetingCard />
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
@@ -3851,6 +3857,7 @@ Output format:
             {/* Shoot Concepts Tab */}
             {activeTab === 'shootConcepts' && (
                 <div className="space-y-6">
+                    <PlatformTargetingCard />
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
@@ -4004,6 +4011,7 @@ Output format:
             {/* Weekly Plan Tab */}
             {activeTab === 'weeklyPlan' && (
                 <div className="space-y-6">
+                    <PlatformTargetingCard />
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
@@ -4159,6 +4167,7 @@ Output format:
             {/* Monetization Planner Tab */}
             {activeTab === 'monetizationPlanner' && (
                 <div className="space-y-6">
+                    <PlatformTargetingCard />
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
@@ -4489,6 +4498,7 @@ Output format:
             {/* Messaging Tab */}
             {activeTab === 'messaging' && (
                 <div className="space-y-6">
+                    <PlatformTargetingCard />
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">

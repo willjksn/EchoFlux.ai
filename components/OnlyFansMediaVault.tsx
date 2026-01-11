@@ -620,30 +620,30 @@ export const OnlyFansMediaVault: React.FC = () => {
                                 </button>
                             ))}
                         </div>
-                        <div className="pt-3 border-t border-gray-200 dark:border-gray-700 flex gap-2">
-                            <button
-                                onClick={() => {
-                                    const folder = folders.find(f => f.id === selectedFolderId);
-                                    if (!folder || !canModifyFolder(folder)) return;
-                                    setEditingFolder(folder);
-                                    setShowCreateFolderModal(true);
-                                }}
-                                className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"
-                                disabled={!canModifyFolder(folders.find(f => f.id === selectedFolderId) as MediaFolder)}
-                            >
-                                Rename
-                            </button>
-                            <button
-                                onClick={() => {
-                                    const folder = folders.find(f => f.id === selectedFolderId);
-                                    if (folder) handleDeleteFolder(folder);
-                                }}
-                                className="flex-1 px-3 py-2 text-sm border border-red-200 dark:border-red-700 rounded-md text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-50"
-                                disabled={!canModifyFolder(folders.find(f => f.id === selectedFolderId) as MediaFolder)}
-                            >
-                                Delete
-                            </button>
-                        </div>
+                        {selectedFolderId && selectedFolderId !== GENERAL_FOLDER_ID && (
+                            <div className="pt-3 border-t border-gray-200 dark:border-gray-700 flex gap-2">
+                                <button
+                                    onClick={() => {
+                                        const folder = folders.find(f => f.id === selectedFolderId);
+                                        if (!folder || !canModifyFolder(folder)) return;
+                                        setEditingFolder(folder);
+                                        setShowCreateFolderModal(true);
+                                    }}
+                                    className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                >
+                                    Rename
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        const folder = folders.find(f => f.id === selectedFolderId);
+                                        if (folder) handleDeleteFolder(folder);
+                                    }}
+                                    className="flex-1 px-3 py-2 text-sm border border-red-200 dark:border-red-700 rounded-md text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
+                                >
+                                    Delete
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
 
