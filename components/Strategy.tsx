@@ -257,14 +257,58 @@ export const Strategy: React.FC = () => {
         }
     };
 
+    const applyLocalAutosave = () => {
+        if (!user?.id) return null;
+        const raw = localStorage.getItem(`strategy_autosave_${user.id}`);
+        if (!raw) return null;
+        try {
+            const parsed = JSON.parse(raw);
+            // Ensure plan has status fields for content items
+            if (parsed?.plan?.weeks) {
+                parsed.plan = {
+                    ...parsed.plan,
+                    weeks: parsed.plan.weeks.map((week: WeekPlan) => ({
+                        ...week,
+                        content: week.content.map((day: DayPlan) => ({
+                            ...day,
+                            status: day.status || 'draft',
+                            imageIdeas: Array.isArray((day as any).imageIdeas) ? (day as any).imageIdeas : [],
+                            videoIdeas: Array.isArray((day as any).videoIdeas) ? (day as any).videoIdeas : [],
+                        })),
+                    })),
+                };
+            }
+            setPlan(parsed.plan || null);
+            setSelectedStrategy(parsed);
+            setNiche(parsed.niche || '');
+            setAudience(parsed.audience || '');
+            setGoal(parsed.goal || 'Increase Followers/Fans');
+            if (parsed.tone) setTone(parsed.tone);
+            if (parsed.duration) setDuration(parsed.duration);
+            if (parsed.platformFocus) setPlatformFocus(parsed.platformFocus);
+            return parsed;
+        } catch (e) {
+            console.warn('Failed to parse local strategy autosave:', e);
+            localStorage.removeItem(`strategy_autosave_${user.id}`);
+            return null;
+        }
+    };
+
     const loadStrategies = async () => {
         try {
             const result = await getStrategies();
             if (result.success && result.strategies) {
-                setSavedStrategies(result.strategies);
+                let merged = result.strategies;
+                const local = applyLocalAutosave();
+                if (local && !merged.find((s: any) => s.id === local.id)) {
+                    merged = [local, ...merged];
+                }
+                setSavedStrategies(merged);
             }
         } catch (error) {
             console.error("Failed to load strategies:", error);
+            // If server load fails, still try to surface local autosave
+            applyLocalAutosave();
         }
     };
 
@@ -310,10 +354,14 @@ export const Strategy: React.FC = () => {
                     if (activeStrategy.tone) setTone(activeStrategy.tone);
                     if (activeStrategy.duration) setDuration(activeStrategy.duration);
                     if (activeStrategy.platformFocus) setPlatformFocus(activeStrategy.platformFocus);
+                    return;
                 }
             }
+            // If no active strategy found on server, fall back to local autosave
+            applyLocalAutosave();
         } catch (error) {
             console.error("Failed to load active roadmap:", error);
+            applyLocalAutosave();
         }
     };
 
@@ -438,6 +486,8 @@ export const Strategy: React.FC = () => {
                                 userId: user.id,
                             };
                             setSelectedStrategy(strategyData);
+                            // Clear any old local fallback once server save succeeds
+                            localStorage.removeItem(`strategy_autosave_${user.id}`);
                             // Refresh history from server so loadActiveRoadmap sees the right one.
                             await loadStrategies();
                         } else {

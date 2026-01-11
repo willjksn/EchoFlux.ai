@@ -5,6 +5,7 @@ import { Client, Notification } from '../types';
 import { useAppContext } from './AppContext';
 import { OFFLINE_MODE } from '../constants';
 import { ReportProblemModal } from './ReportProblemModal';
+import { ShareReviewModal } from './ShareReviewModal';
 
 interface HeaderProps {
   pageTitle: string;
@@ -25,6 +26,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
   const [isClientSwitcherOpen, setIsClientSwitcherOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isReportOpen, setIsReportOpen] = useState(false);
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
 
   const profileRef = useRef<HTMLDivElement>(null);
   const clientSwitcherRef = useRef<HTMLDivElement>(null);
@@ -180,6 +182,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
   return (
     <header className="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
       <ReportProblemModal isOpen={isReportOpen} onClose={() => setIsReportOpen(false)} />
+      <ShareReviewModal isOpen={isReviewOpen} onClose={() => setIsReviewOpen(false)} />
       <div className="flex items-center justify-between p-4 h-20">
         <div className="flex items-center space-x-4">
             <button
@@ -269,6 +272,12 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
                         className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
                     >
                         Report a Problem
+                    </button>
+                    <button
+                        onClick={() => { setIsReviewOpen(true); setIsProfileOpen(false); }}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    >
+                        Share a Review
                     </button>
                     <button 
                         onClick={handleLogout}

@@ -6,6 +6,7 @@ import { ReferralRewardsConfig } from './ReferralRewardsConfig';
 import { GrantReferralRewardModal } from './GrantReferralRewardModal';
 import { AdminAnnouncementsPanel } from './AdminAnnouncementsPanel';
 import { AdminToolsPanel } from './AdminToolsPanel';
+import { AdminReviewsPanel } from './AdminReviewsPanel';
 import { AdminFeedbackPanel } from './AdminFeedbackPanel';
 import { AdminFeedbackFormBuilder } from './AdminFeedbackFormBuilder';
 import { InviteCodeManager } from './InviteCodeManager';
@@ -147,7 +148,7 @@ export const AdminDashboard: React.FC = () => {
     const [isLoadingModelStats, setIsLoadingModelStats] = useState(true);
     const [modelStatsDays, setModelStatsDays] = useState<number>(30);
     const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'tools'>('overview');
-    const [toolsTab, setToolsTab] = useState<'toolsHome' | 'referralRewards' | 'announcements' | 'invites' | 'waitlist' | 'email' | 'feedback' | 'feedbackForms' | 'emailCenter'>('toolsHome');
+    const [toolsTab, setToolsTab] = useState<'toolsHome' | 'referralRewards' | 'announcements' | 'invites' | 'waitlist' | 'email' | 'feedback' | 'feedbackForms' | 'emailCenter' | 'reviews'>('toolsHome');
     const [userStorageMap, setUserStorageMap] = useState<Record<string, number>>({});
     const [currentPage, setCurrentPage] = useState<number>(1);
     const usersPerPage = 20;
@@ -654,6 +655,16 @@ export const AdminDashboard: React.FC = () => {
                         >
                             Email Center
                         </button>
+                        <button
+                            onClick={() => setToolsTab('reviews')}
+                            className={`px-4 py-2 rounded-md transition-colors ${
+                                toolsTab === 'reviews'
+                                    ? 'bg-primary-600 text-white'
+                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                            }`}
+                        >
+                            Reviews
+                        </button>
                     </div>
 
                     {toolsTab === 'toolsHome' && (
@@ -671,6 +682,7 @@ export const AdminDashboard: React.FC = () => {
                     {toolsTab === 'feedback' && <AdminFeedbackPanel />}
                     {toolsTab === 'feedbackForms' && <AdminFeedbackFormBuilder />}
                     {toolsTab === 'emailCenter' && <EmailCenter />}
+                    {toolsTab === 'reviews' && <AdminReviewsPanel />}
                 </div>
             )}
             {activeTab === 'overview' && (

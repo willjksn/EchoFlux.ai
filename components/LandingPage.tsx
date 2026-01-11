@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { LogoIcon, SparklesIcon, AutomationIcon, ChatIcon, AnalyticsIcon, CalendarIcon, RefreshIcon, GlobeIcon, UserIcon, TargetIcon, DashboardIcon, FilmIcon, MicrophoneWaveIcon, RocketIcon, TrendingIcon, ImageIcon, KanbanIcon } from './icons/UIIcons';
 import { InstagramIcon, TikTokIcon, XIcon, FacebookIcon, YouTubeIcon } from './icons/PlatformIcons';
 import { Pricing } from './Pricing';
+import { ReviewsSection } from './ReviewsSection';
 import { Page } from '../types';
 import { WaitlistInlineForm } from './WaitlistInlineForm';
 import { About } from './About';
@@ -228,6 +229,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
             </div>
           </div>
         </div>
+
+        {/* Reviews Section */}
+        <ReviewsSection />
 
         {/* Who We Serve Section */}
         <div className="bg-gray-100 dark:bg-gray-800 py-16">
