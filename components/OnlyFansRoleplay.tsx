@@ -4,6 +4,7 @@ import { SparklesIcon, RefreshIcon, CheckIcon, CheckCircleIcon, TrashIcon, UserI
 import { OnlyFansSextingSession } from './OnlyFansSextingSession';
 import { auth, db } from '../firebaseConfig';
 import { doc, getDoc, setDoc, collection, addDoc, getDocs, query, orderBy, deleteDoc, Timestamp } from 'firebase/firestore';
+import { loadEmojiSettings } from '../src/utils/loadEmojiSettings';
 
 type RoleplayTab = 'scenarios' | 'sexting' | 'persona' | 'ratings' | 'interactive';
 
