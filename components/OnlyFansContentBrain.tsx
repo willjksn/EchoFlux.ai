@@ -1091,7 +1091,8 @@ export const OnlyFansContentBrain: React.FC = () => {
                     mediaUrl: uploadedMediaUrl || undefined, // Include media URL to analyze image/video
                     tone: finalTone === 'Explicit' ? 'Sexy / Explicit' : finalTone,
                     goal: captionGoal,
-                    platforms: ['OnlyFans'],
+                    // Target all premium creator platforms we support
+                    platforms: ['OnlyFans', 'Fansly', 'Fanvue'],
                     promptText: uploadedMediaUrl 
                         ? `${captionPrompt || 'Analyze this image/video in detail and describe what you see. Create explicit OnlyFans captions based on the actual content shown. Be very descriptive and explicit about what is visually present.'}${fanContext}\n\n[Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`
                         : `${captionPrompt}${fanContext}\n\n[Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`,
@@ -1169,13 +1170,13 @@ export const OnlyFansContentBrain: React.FC = () => {
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
                 body: JSON.stringify({
-                    prompt: `Generate 10 creative post ideas for OnlyFans based on: ${postIdeaPrompt}. 
+                    prompt: `Generate 10 creative post ideas for premium creator platforms (OnlyFans, Fansly, Fanvue) based on: ${postIdeaPrompt}. 
                     Each idea should be specific, engaging, and tailored for adult content creators. 
                     Format as a numbered list with brief descriptions.`,
                     context: {
                         goal: 'content-ideas',
                         tone: 'Explicit/Adult Content',
-                        platforms: ['OnlyFans'],
+                        platforms: ['OnlyFans', 'Fansly', 'Fanvue'],
                     },
                     analyticsData: buildAnalyticsData(),
                     emojiEnabled: emojiSettings.enabled,
