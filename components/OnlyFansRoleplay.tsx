@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from './AppContext';
-import { SparklesIcon, RefreshIcon, CheckIcon, CheckCircleIcon, TrashIcon } from './icons/UIIcons';
+import { SparklesIcon, RefreshIcon, CheckIcon, CheckCircleIcon, TrashIcon, UserIcon, StarIcon, SearchIcon, XMarkIcon } from './icons/UIIcons';
+import { OnlyFansSextingSession } from './OnlyFansSextingSession';
 import { auth, db } from '../firebaseConfig';
 import { doc, getDoc, setDoc, collection, addDoc, getDocs, query, orderBy, deleteDoc, Timestamp } from 'firebase/firestore';
 
-type RoleplayTab = 'sessionPlanner' | 'scenarios' | 'persona' | 'ratings' | 'interactive';
+type RoleplayTab = 'scenarios' | 'sexting' | 'persona' | 'ratings' | 'interactive';
 
 type RoleplayType = 
     | 'GFE (Girlfriend Experience)'
@@ -17,7 +18,7 @@ type RoleplayType =
 
 export const OnlyFansRoleplay: React.FC = () => {
     const { user, showToast } = useAppContext();
-    const [activeTab, setActiveTab] = useState<RoleplayTab>('sessionPlanner');
+    const [activeTab, setActiveTab] = useState<RoleplayTab>('scenarios');
     const [isGeneratingScenario, setIsGeneratingScenario] = useState(false);
     const [isGeneratingPersona, setIsGeneratingPersona] = useState(false);
     const [isGeneratingRatings, setIsGeneratingRatings] = useState(false);
@@ -70,33 +71,6 @@ export const OnlyFansRoleplay: React.FC = () => {
     const [savedInteractive, setSavedInteractive] = useState<any[]>([]);
     const [showSaved, setShowSaved] = useState(false);
 
-    // Session Planner state
-    type SessionType = 'Flirty chat' | 'GFE-style interaction' | 'Tease & anticipation' | 'Roleplay' | 'Explicit' | 'Check-in / reconnect' | 'High-engagement paid chat';
-    type SessionPhase = 'warmUp' | 'engagement' | 'anticipation' | 'close';
-    const [sessionType, setSessionType] = useState<SessionType | ''>('');
-    const [selectedFan, setSelectedFan] = useState<string>('');
-    const [fanName, setFanName] = useState('');
-    const [fanPreferences, setFanPreferences] = useState<{
-        preferredTone?: 'soft' | 'dominant' | 'playful' | 'dirty' | 'Very Explicit';
-        favoriteSessionType?: SessionType;
-        boundaries?: string;
-        languagePreferences?: string;
-        pastSessionLength?: string;
-    }>({});
-    const [sessionTone, setSessionTone] = useState<'Soft' | 'Teasing' | 'Playful' | 'Explicit'>('Teasing');
-    const [currentPhase, setCurrentPhase] = useState<SessionPhase>('warmUp');
-    const [expandedPhase, setExpandedPhase] = useState<SessionPhase | null>(null);
-    const [isGeneratingSessionPlan, setIsGeneratingSessionPlan] = useState(false);
-    const [sessionPlan, setSessionPlan] = useState<{
-        openingMessage?: string;
-        warmUp?: { prompts: string[]; guidance: string[] };
-        engagement?: { prompts: string[]; guidance: string[] };
-        anticipation?: { prompts: string[]; guidance: string[] };
-        close?: { prompts: string[]; guidance: string[] };
-    } | null>(null);
-    const [fans, setFans] = useState<Array<{ id: string; name: string; preferences: any }>>([]);
-    const [savedSessionPlans, setSavedSessionPlans] = useState<any[]>([]);
-    const [showSessionPrep, setShowSessionPrep] = useState(false);
 
     // Load gender settings
     useEffect(() => {
@@ -145,6 +119,9 @@ export const OnlyFansRoleplay: React.FC = () => {
         setIsGeneratingScenario(true);
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+            
+            // Load emoji settings
+            const emojiSettings = await loadEmojiSettings(user.id);
             
             const response = await fetch('/api/generateText', {
                 method: 'POST',
@@ -436,6 +413,8 @@ Make it creative, engaging, explicit, EXTENSIVE, and tailored for adult content 
                         tone: tone === 'Explicit' || tone.toLowerCase().includes('explicit') ? 'Explicit/Adult Content' : 'Adult Content',
                         platforms: ['OnlyFans'],
                     },
+                    emojiEnabled: emojiSettings.enabled,
+                    emojiIntensity: emojiSettings.intensity,
                 }),
             });
 
@@ -528,6 +507,9 @@ Make it creative, engaging, explicit, EXTENSIVE, and tailored for adult content 
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             
+            // Load emoji settings
+            const emojiSettings = await loadEmojiSettings(user.id);
+            
             const response = await fetch('/api/generateText', {
                 method: 'POST',
                 headers: {
@@ -577,6 +559,8 @@ Make it detailed, consistent, explicit, and engaging for adult content monetizat
                         tone: 'Explicit/Adult Content',
                         platforms: ['OnlyFans'],
                     },
+                    emojiEnabled: emojiSettings.enabled,
+                    emojiIntensity: emojiSettings.intensity,
                 }),
             });
 
@@ -605,6 +589,9 @@ Make it detailed, consistent, explicit, and engaging for adult content monetizat
         setIsGeneratingRatings(true);
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+            
+            // Load emoji settings
+            const emojiSettings = await loadEmojiSettings(user.id);
             
             const response = await fetch('/api/generateText', {
                 method: 'POST',
@@ -685,6 +672,8 @@ Format as a numbered list (1-10) with engaging, interactive, explicit prompts fr
                         tone: 'Explicit/Adult Content',
                         platforms: ['OnlyFans'],
                     },
+                    emojiEnabled: emojiSettings.enabled,
+                    emojiIntensity: emojiSettings.intensity,
                 }),
             });
 
@@ -715,6 +704,9 @@ Format as a numbered list (1-10) with engaging, interactive, explicit prompts fr
         setIsGeneratingLongRating(true);
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+            
+            // Load emoji settings
+            const emojiSettings = await loadEmojiSettings(user.id);
 
             const response = await fetch('/api/generateText', {
                 method: 'POST',
@@ -841,6 +833,8 @@ CRITICAL REQUIREMENTS:
                         tone: 'Explicit/Adult Content',
                         platforms: ['OnlyFans'],
                     },
+                    emojiEnabled: emojiSettings.enabled,
+                    emojiIntensity: emojiSettings.intensity,
                 }),
             });
 
@@ -917,6 +911,8 @@ Format as a numbered list with detailed post concepts including captions and eng
                         tone: 'Explicit/Adult Content',
                         platforms: ['OnlyFans'],
                     },
+                    emojiEnabled: emojiSettings.enabled,
+                    emojiIntensity: emojiSettings.intensity,
                 }),
             });
 
@@ -1038,189 +1034,30 @@ Format as a numbered list with detailed post concepts including captions and eng
         if (!user?.id) return;
         try {
             const fansSnap = await getDocs(collection(db, 'users', user.id, 'onlyfans_fan_preferences'));
-            const fansList = fansSnap.docs.map(doc => ({
-                id: doc.id,
-                name: doc.data().name || doc.id,
-                preferences: doc.data()
-            }));
+            const fansList = fansSnap.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    name: data.name || doc.id,
+                    preferences: {
+                        ...data,
+                        spendingLevel: data.spendingLevel || (data.totalSpent ? Math.min(5, Math.max(1, Math.ceil(data.totalSpent / 200))) : 0), // Convert old totalSpent to level if exists
+                        totalSessions: data.totalSessions || 0,
+                        isBigSpender: data.isBigSpender || (data.spendingLevel && data.spendingLevel >= 4) || false,
+                        isLoyalFan: data.isLoyalFan || (data.totalSessions && data.totalSessions >= 5) || false,
+                        subscriptionTier: data.subscriptionTier || (data.totalSessions >= 10 ? 'VIP' : data.totalSessions >= 3 ? 'Regular' : 'New'),
+                        engagementHistory: data.engagementHistory || [],
+                        usedPrompts: data.usedPrompts || [],
+                        lastContentThemes: data.lastContentThemes || []
+                    }
+                };
+            });
             setFans(fansList);
         } catch (error) {
             console.error('Error loading fans:', error);
         }
     };
 
-    // Save/update fan preferences
-    const saveFanPreferences = async (fanIdOrName: string, preferences: any) => {
-        if (!user?.id || !fanIdOrName.trim()) return;
-        try {
-            // Use provided ID if it looks like an ID, otherwise create one from name
-            const fanId = fanIdOrName.includes('_') || fanIdOrName.length < 20 
-                ? fanIdOrName 
-                : fanIdOrName.toLowerCase().replace(/\s+/g, '_');
-            const fanNameToSave = fanName.trim() || fanIdOrName.trim();
-            const fanRef = doc(db, 'users', user.id, 'onlyfans_fan_preferences', fanId);
-            await setDoc(fanRef, {
-                name: fanNameToSave,
-                ...preferences,
-                updatedAt: Timestamp.now()
-            }, { merge: true });
-            showToast('Fan preferences saved!', 'success');
-            await loadFans();
-            if (!selectedFan) {
-                setSelectedFan(fanId);
-            }
-        } catch (error) {
-            console.error('Error saving fan preferences:', error);
-            showToast('Failed to save fan preferences', 'error');
-        }
-    };
-
-    // Load fan preferences
-    const loadFanPreferences = async (fanId: string) => {
-        if (!user?.id || !fanId) return;
-        try {
-            const fanDoc = await getDoc(doc(db, 'users', user.id, 'onlyfans_fan_preferences', fanId));
-            if (fanDoc.exists()) {
-                const data = fanDoc.data();
-                setFanPreferences({
-                    preferredTone: data.preferredTone,
-                    favoriteSessionType: data.favoriteSessionType,
-                    boundaries: data.boundaries,
-                    languagePreferences: data.languagePreferences,
-                    pastSessionLength: data.pastSessionLength
-                });
-                setFanName(data.name || fanId);
-            }
-        } catch (error) {
-            console.error('Error loading fan preferences:', error);
-        }
-    };
-
-    // Generate session plan
-    const handleGenerateSessionPlan = async () => {
-        if (!sessionType || !user?.id) {
-            showToast('Please select a session type first', 'error');
-            return;
-        }
-
-        setIsGeneratingSessionPlan(true);
-        try {
-            const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
-            
-            const fanContext = selectedFan && fanPreferences ? `
-Fan Context:
-- Preferred tone: ${fanPreferences.preferredTone || 'not specified'}
-- Favorite session type: ${fanPreferences.favoriteSessionType || 'not specified'}
-- Boundaries: ${fanPreferences.boundaries || 'none specified'}
-- Language preferences: ${fanPreferences.languagePreferences || 'not specified'}
-- Past session length: ${fanPreferences.pastSessionLength || 'not specified'}
-` : '';
-
-            const explicitInstructions = sessionTone === 'Explicit' ? `
-🚨 CRITICAL - EXPLICIT CONTENT REQUIRED 🚨
-- This is for OnlyFans, an EXPLICIT adult content creator platform
-- Content MUST be EXPLICIT, UNCENSORED, RAW, and BOLD
-- Use EXPLICIT, DIRECT sexual language - NO CENSORSHIP
-- Describe sexual/explicit content with EXPLICIT, RAW, UNCENSORED terminology
-- Be SPECIFIC and EXPLICIT about sexual acts, intimate scenarios, and adult content
-- Use BOLD, DIRECT, EXPLICIT language throughout ALL sections
-- Generate TRULY EXPLICIT session planning content - not suggestive, but EXPLICITLY DESCRIPTIVE
-- NO euphemisms, NO vague language, NO implied content - BE EXPLICIT AND DIRECT
-` : '';
-
-            const response = await fetch('/api/generateText', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                },
-                body: JSON.stringify({
-                    prompt: `Generate a comprehensive 1:1 private session plan for OnlyFans creators.
-
-Session Type: ${sessionType}
-Tone: ${sessionTone}
-${fanContext}
-
-${explicitInstructions}
-
-This is a SESSION PLANNER that helps creators manage private 1:1 sessions with fans. The AI should generate SUPPORTIVE ELEMENTS, not explicit sexual acts.
-
-Generate a JSON structure with:
-{
-  "openingMessage": "A tone-based, emotion-based, or context-based opening message the creator can send",
-  "warmUp": {
-    "prompts": ["2-4 optional prompts for warm-up phase", "Light tone, emotional connection, setting the vibe"],
-    "guidance": ["Pause here", "Ask a preference question", "Reflect their last message", "Shift tone slightly"]
-  },
-  "engagement": {
-    "prompts": ["2-4 optional prompts for engagement phase", "Questions, personalization, subtle escalation"],
-    "guidance": ["Ask an open-ended question", "Reflect their last message", "Match their tone", "Avoid escalation yet"]
-  },
-  "anticipation": {
-    "prompts": ["2-4 optional prompts for anticipation phase", "Suggestive framing, future-oriented language"],
-    "guidance": ["Pause here", "Ask a preference question", "Reflect their last message", "Shift tone slightly"]
-  },
-  "close": {
-    "prompts": ["2-4 optional prompts for closing phase", "Validation, appreciation, optional upsell"],
-    "guidance": ["Validate their experience", "Express appreciation", "Optional continuation hook", "No pressure"]
-  }
-}
-
-CRITICAL REQUIREMENTS:
-- These are PLANNING ASSISTANCE tools, not automation
-- Generate supportive elements: opening messages, engagement prompts, pacing guidance, closing hooks
-- Do NOT generate explicit sexual acts - generate supportive framework elements
-- Prompts should be questions, choices, invitations - not explicit content
-- Guidance should be pacing cues like "Pause here", "Ask a preference question", etc.
-- Keep trust high, control with creator, accounts safe
-
-Return ONLY valid JSON, no markdown, no code blocks.`,
-                    context: {
-                        goal: 'session-planning',
-                        tone: sessionTone === 'Explicit' ? 'Explicit/Adult Content' : sessionTone,
-                        platforms: ['OnlyFans'],
-                    },
-                }),
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to generate session plan');
-            }
-
-            const data = await response.json();
-            const text = data.text || data.caption || '';
-            
-            // Parse JSON from response
-            let parsed;
-            try {
-                // Try to extract JSON from markdown code blocks if present
-                const jsonMatch = text.match(/\{[\s\S]*\}/);
-                if (jsonMatch) {
-                    parsed = JSON.parse(jsonMatch[0]);
-                } else {
-                    parsed = JSON.parse(text);
-                }
-            } catch (e) {
-                // If parsing fails, create a basic structure
-                parsed = {
-                    openingMessage: text.split('\n')[0] || 'Ready to start?',
-                    warmUp: { prompts: [], guidance: [] },
-                    engagement: { prompts: [], guidance: [] },
-                    anticipation: { prompts: [], guidance: [] },
-                    close: { prompts: [], guidance: [] }
-                };
-            }
-
-            setSessionPlan(parsed);
-            setCurrentPhase('warmUp');
-            showToast('Session plan generated!', 'success');
-        } catch (error: any) {
-            console.error('Error generating session plan:', error);
-            showToast(error.message || 'Failed to generate session plan. Please try again.', 'error');
-        } finally {
-            setIsGeneratingSessionPlan(false);
-        }
-    };
 
     // Load saved items
     const loadSavedItems = async () => {
@@ -1242,29 +1079,17 @@ Return ONLY valid JSON, no markdown, no code blocks.`,
             const interactiveSnap = await getDocs(query(collection(db, 'users', user.id, 'onlyfans_saved_interactive'), orderBy('savedAt', 'desc')));
             setSavedInteractive(interactiveSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
-            // Load saved session plans
-            const sessionPlansSnap = await getDocs(query(collection(db, 'users', user.id, 'onlyfans_saved_session_plans'), orderBy('savedAt', 'desc')));
-            setSavedSessionPlans(sessionPlansSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         } catch (error) {
             console.error('Error loading saved items:', error);
         }
     };
 
-    // Load saved items and fans on mount and when tab changes
+    // Load saved items on mount and when tab changes
     useEffect(() => {
         loadSavedItems();
-        if (activeTab === 'sessionPlanner') {
-            loadFans();
-        }
         setShowSaved(false); // Reset show saved when switching tabs
     }, [user?.id, activeTab]);
 
-    // Load fan preferences when fan is selected
-    useEffect(() => {
-        if (selectedFan) {
-            loadFanPreferences(selectedFan);
-        }
-    }, [selectedFan, user?.id]);
 
     // Load saved item functions
     const handleLoadScenario = (savedItem: any) => {
@@ -1361,8 +1186,8 @@ Return ONLY valid JSON, no markdown, no code blocks.`,
     };
 
     const tabs: { id: RoleplayTab; label: string }[] = [
-        { id: 'sessionPlanner', label: 'Session Planner' },
         { id: 'scenarios', label: 'Roleplay Scenarios' },
+        { id: 'sexting', label: 'Chat/Sexting Session' },
         { id: 'persona', label: 'Persona Builder' },
         { id: 'ratings', label: 'Body Ratings' },
         { id: 'interactive', label: 'Interactive Posts' },
@@ -1407,430 +1232,10 @@ Return ONLY valid JSON, no markdown, no code blocks.`,
                 ))}
             </div>
 
-            {/* Session Planner Tab */}
-            {activeTab === 'sessionPlanner' && (
+            {/* Sexting Session Tab */}
+            {activeTab === 'sexting' && (
                 <div className="space-y-6">
-                    {/* Saved Session Plans Section */}
-                    {savedSessionPlans.length > 0 && (
-                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                            <div className="flex items-center justify-between mb-4">
-                                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                                    Saved Session Plans ({savedSessionPlans.length})
-                                </h2>
-                                <button
-                                    onClick={() => setShowSaved(!showSaved)}
-                                    className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                >
-                                    {showSaved ? 'Hide' : 'Show'} Saved
-                                </button>
-                            </div>
-                            {showSaved && (
-                                <div className="space-y-3">
-                                    {savedSessionPlans.map((item) => (
-                                        <div key={item.id} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                                            <div className="flex items-start justify-between">
-                                                <div className="flex-1">
-                                                    <div className="flex items-center gap-2 mb-2">
-                                                        <span className="font-medium text-gray-900 dark:text-white">
-                                                            {item.sessionType || 'Untitled Plan'}
-                                                        </span>
-                                                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                                                            {item.tone && `• ${item.tone}`}
-                                                            {item.fanName && ` • ${item.fanName}`}
-                                                        </span>
-                                                    </div>
-                                                    {item.savedAt && (
-                                                        <p className="text-xs text-gray-500 dark:text-gray-500">
-                                                            Saved {item.savedAt?.toDate ? new Date(item.savedAt.toDate()).toLocaleDateString() : 'Recently'}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                                <div className="flex gap-2 ml-4">
-                                                    <button
-                                                        onClick={() => {
-                                                            setSessionType(item.sessionType || '');
-                                                            setSessionTone(item.tone || 'Teasing');
-                                                            setSessionPlan(item.plan || null);
-                                                            setSelectedFan(item.fanId || '');
-                                                            setShowSaved(false);
-                                                            showToast('Session plan loaded!', 'success');
-                                                        }}
-                                                        className="px-3 py-1 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700"
-                                                    >
-                                                        Load
-                                                    </button>
-                                                    <button
-                                                        onClick={async () => {
-                                                            if (!user?.id) return;
-                                                            try {
-                                                                await deleteDoc(doc(db, 'users', user.id, 'onlyfans_saved_session_plans', item.id));
-                                                                showToast('Session plan deleted', 'success');
-                                                                loadSavedItems();
-                                                            } catch (error) {
-                                                                console.error('Error deleting session plan:', error);
-                                                                showToast('Failed to delete session plan', 'error');
-                                                            }
-                                                        }}
-                                                        className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700"
-                                                    >
-                                                        <TrashIcon className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Session Type Selection */}
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                            Start New Session Plan
-                        </h2>
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    What kind of session is this?
-                                </label>
-                                <select
-                                    value={sessionType}
-                                    onChange={(e) => setSessionType(e.target.value as SessionType)}
-                                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                >
-                                    <option value="">Select session type...</option>
-                                    <option value="Flirty chat">Flirty chat</option>
-                                    <option value="GFE-style interaction">GFE-style interaction</option>
-                                    <option value="Tease & anticipation">Tease & anticipation</option>
-                                    <option value="Roleplay">Roleplay</option>
-                                    <option value="Explicit">Explicit</option>
-                                    <option value="Check-in / reconnect">Check-in / reconnect</option>
-                                    <option value="High-engagement paid chat">High-engagement paid chat</option>
-                                </select>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        Select Fan (Optional)
-                                    </label>
-                                    <select
-                                        value={selectedFan}
-                                        onChange={(e) => {
-                                            setSelectedFan(e.target.value);
-                                            if (e.target.value) {
-                                                loadFanPreferences(e.target.value);
-                                            }
-                                        }}
-                                        className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                    >
-                                        <option value="">New fan or skip...</option>
-                                        {fans.map((fan) => (
-                                            <option key={fan.id} value={fan.id}>
-                                                {fan.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        Or Enter Fan Name
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={fanName}
-                                        onChange={(e) => setFanName(e.target.value)}
-                                        placeholder="Enter fan name/username..."
-                                        className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Tone
-                                </label>
-                                <select
-                                    value={sessionTone}
-                                    onChange={(e) => setSessionTone(e.target.value as 'Soft' | 'Teasing' | 'Playful' | 'Explicit')}
-                                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                >
-                                    <option value="Soft">Soft</option>
-                                    <option value="Teasing">Teasing</option>
-                                    <option value="Playful">Playful</option>
-                                    <option value="Explicit">Explicit</option>
-                                </select>
-                            </div>
-
-                            {/* Fan Preferences (if fan selected) */}
-                            {selectedFan && (
-                                <div className="bg-gray-50 dark:bg-gray-900/40 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Fan Preferences</h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        <div>
-                                            <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Preferred Tone</label>
-                                            <select
-                                                value={fanPreferences.preferredTone || ''}
-                                                onChange={(e) => setFanPreferences({ ...fanPreferences, preferredTone: e.target.value as any })}
-                                                className="w-full p-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                            >
-                                                <option value="">Not set</option>
-                                                <option value="soft">Soft</option>
-                                                <option value="dominant">Dominant</option>
-                                                <option value="playful">Playful</option>
-                                                <option value="dirty">Dirty</option>
-                                                <option value="Very Explicit">Very Explicit</option>
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Favorite Session Type</label>
-                                            <select
-                                                value={fanPreferences.favoriteSessionType || ''}
-                                                onChange={(e) => setFanPreferences({ ...fanPreferences, favoriteSessionType: e.target.value as SessionType })}
-                                                className="w-full p-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                            >
-                                                <option value="">Not set</option>
-                                                <option value="Flirty chat">Flirty chat</option>
-                                                <option value="GFE-style interaction">GFE-style interaction</option>
-                                                <option value="Tease & anticipation">Tease & anticipation</option>
-                                                <option value="Roleplay">Roleplay</option>
-                                                <option value="Explicit">Explicit</option>
-                                                <option value="Check-in / reconnect">Check-in / reconnect</option>
-                                                <option value="High-engagement paid chat">High-engagement paid chat</option>
-                                            </select>
-                                        </div>
-                                        <div className="md:col-span-2">
-                                            <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Boundaries</label>
-                                            <textarea
-                                                value={fanPreferences.boundaries || ''}
-                                                onChange={(e) => setFanPreferences({ ...fanPreferences, boundaries: e.target.value })}
-                                                placeholder="Any boundaries or preferences to remember..."
-                                                className="w-full p-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                                rows={2}
-                                            />
-                                        </div>
-                                    </div>
-                                    <button
-                                        onClick={async () => {
-                                            const fanIdToUse = selectedFan || (fanName.trim() ? fanName.toLowerCase().replace(/\s+/g, '_') : '');
-                                            if (fanIdToUse) {
-                                                await saveFanPreferences(fanIdToUse, fanPreferences);
-                                                if (!selectedFan && fanName.trim()) {
-                                                    setSelectedFan(fanIdToUse);
-                                                }
-                                            } else {
-                                                showToast('Please select or enter a fan name first', 'error');
-                                            }
-                                        }}
-                                        className="mt-3 px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
-                                    >
-                                        Save Preferences
-                                    </button>
-                                </div>
-                            )}
-
-                            <button
-                                onClick={handleGenerateSessionPlan}
-                                disabled={!sessionType || isGeneratingSessionPlan}
-                                className="w-full px-4 py-3 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed font-medium"
-                            >
-                                {isGeneratingSessionPlan ? 'Generating Session Plan...' : 'Generate Session Plan'}
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Session Flow Visualization */}
-                    {sessionPlan && (
-                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                                Session Flow
-                            </h2>
-
-                            {/* Progress Indicator */}
-                            <div className="mb-6">
-                                <div className="flex items-center justify-between mb-2">
-                                    {(['warmUp', 'engagement', 'anticipation', 'close'] as SessionPhase[]).map((phase, index) => (
-                                        <React.Fragment key={phase}>
-                                            <div className="flex flex-col items-center flex-1">
-                                                <div
-                                                    className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-all ${
-                                                        currentPhase === phase
-                                                            ? 'bg-primary-600 text-white'
-                                                            : index < (['warmUp', 'engagement', 'anticipation', 'close'] as SessionPhase[]).indexOf(currentPhase)
-                                                            ? 'bg-primary-200 dark:bg-primary-800 text-primary-700 dark:text-primary-300'
-                                                            : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
-                                                    }`}
-                                                >
-                                                    {index + 1}
-                                                </div>
-                                                <span className="text-xs mt-1 text-gray-600 dark:text-gray-400 capitalize">
-                                                    {phase === 'warmUp' ? 'Warm-Up' : phase}
-                                                </span>
-                                            </div>
-                                            {index < 3 && (
-                                                <div className={`flex-1 h-0.5 mx-2 ${
-                                                    index < (['warmUp', 'engagement', 'anticipation', 'close'] as SessionPhase[]).indexOf(currentPhase)
-                                                        ? 'bg-primary-300 dark:bg-primary-700'
-                                                        : 'bg-gray-200 dark:bg-gray-700'
-                                                }`} />
-                                            )}
-                                        </React.Fragment>
-                                    ))}
-                                </div>
-                                <p className="text-sm text-gray-600 dark:text-gray-400 text-center mt-2">
-                                    You're here: <span className="font-semibold capitalize">{currentPhase === 'warmUp' ? 'Warm-Up' : currentPhase}</span>
-                                </p>
-                            </div>
-
-                            {/* Phase Navigation */}
-                            <div className="flex gap-2 mb-6">
-                                {(['warmUp', 'engagement', 'anticipation', 'close'] as SessionPhase[]).map((phase) => (
-                                    <button
-                                        key={phase}
-                                        onClick={() => {
-                                            setCurrentPhase(phase);
-                                            setExpandedPhase(expandedPhase === phase ? null : phase);
-                                        }}
-                                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                                            currentPhase === phase
-                                                ? 'bg-primary-600 text-white'
-                                                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                                        }`}
-                                    >
-                                        {phase === 'warmUp' ? 'Warm-Up' : phase.charAt(0).toUpperCase() + phase.slice(1)}
-                                    </button>
-                                ))}
-                            </div>
-
-                            {/* Opening Message */}
-                            {sessionPlan.openingMessage && (
-                                <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                                    <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-2">Opening Message</h3>
-                                    <p className="text-sm text-blue-800 dark:text-blue-300">{sessionPlan.openingMessage}</p>
-                                    <button
-                                        onClick={() => copyToClipboard(sessionPlan.openingMessage || '')}
-                                        className="mt-2 text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                                    >
-                                        Copy
-                                    </button>
-                                </div>
-                            )}
-
-                            {/* Phase Content */}
-                            {(['warmUp', 'engagement', 'anticipation', 'close'] as SessionPhase[]).map((phase) => {
-                                const phaseData = sessionPlan[phase];
-                                if (!phaseData) return null;
-
-                                return (
-                                    <div
-                                        key={phase}
-                                        className={`mb-4 p-4 rounded-lg border ${
-                                            currentPhase === phase
-                                                ? 'bg-primary-50 dark:bg-primary-900/20 border-primary-200 dark:border-primary-800'
-                                                : 'bg-gray-50 dark:bg-gray-900/40 border-gray-200 dark:border-gray-700'
-                                        }`}
-                                    >
-                                        <div className="flex items-center justify-between mb-3">
-                                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white capitalize">
-                                                {phase === 'warmUp' ? 'Warm-Up' : phase}
-                                            </h3>
-                                            <button
-                                                onClick={() => setExpandedPhase(expandedPhase === phase ? null : phase)}
-                                                className="text-sm text-primary-600 dark:text-primary-400 hover:underline"
-                                            >
-                                                {expandedPhase === phase ? 'Collapse' : 'Expand'}
-                                            </button>
-                                        </div>
-
-                                        {expandedPhase === phase && (
-                                            <div className="space-y-4">
-                                                {/* Prompts */}
-                                                {phaseData.prompts && phaseData.prompts.length > 0 && (
-                                                    <div>
-                                                        <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Optional Prompts</h4>
-                                                        <div className="space-y-2">
-                                                            {phaseData.prompts.map((prompt: string, idx: number) => (
-                                                                <div key={idx} className="p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600">
-                                                                    <p className="text-sm text-gray-800 dark:text-gray-200">{prompt}</p>
-                                                                    <button
-                                                                        onClick={() => copyToClipboard(prompt)}
-                                                                        className="mt-1 text-xs text-primary-600 dark:text-primary-400 hover:underline"
-                                                                    >
-                                                                        Copy
-                                                                    </button>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                        <button
-                                                            onClick={async () => {
-                                                                showToast('Refreshing prompts...', 'info');
-                                                            }}
-                                                            className="mt-2 text-sm text-primary-600 dark:text-primary-400 hover:underline"
-                                                        >
-                                                            Give me another option
-                                                        </button>
-                                                    </div>
-                                                )}
-
-                                                {/* Guidance */}
-                                                {phaseData.guidance && phaseData.guidance.length > 0 && (
-                                                    <div>
-                                                        <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Pacing Guidance</h4>
-                                                        <ul className="space-y-1">
-                                                            {phaseData.guidance.map((guidance: string, idx: number) => (
-                                                                <li key={idx} className="text-sm text-gray-600 dark:text-gray-400 flex items-start gap-2">
-                                                                    <span className="text-primary-600 dark:text-primary-400">•</span>
-                                                                    <span>{guidance}</span>
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
-
-                            {/* Save Session Plan */}
-                            <div className="mt-6 flex gap-3">
-                                <button
-                                    onClick={async () => {
-                                        if (!user?.id || !sessionPlan || !sessionType) return;
-                                        try {
-                                            await addDoc(collection(db, 'users', user.id, 'onlyfans_saved_session_plans'), {
-                                                sessionType,
-                                                tone: sessionTone,
-                                                fanId: selectedFan || null,
-                                                fanName: fanName || null,
-                                                plan: sessionPlan,
-                                                savedAt: Timestamp.now(),
-                                            });
-                                            showToast('Session plan saved!', 'success');
-                                            loadSavedItems();
-                                        } catch (error) {
-                                            console.error('Error saving session plan:', error);
-                                            showToast('Failed to save session plan', 'error');
-                                        }
-                                    }}
-                                    className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
-                                >
-                                    Save Session Plan
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        setCurrentPhase('warmUp');
-                                        setExpandedPhase(null);
-                                    }}
-                                    className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600"
-                                >
-                                    Reset Flow
-                                </button>
-                            </div>
-                        </div>
-                    )}
+                    <OnlyFansSextingSession />
                 </div>
             )}
 
@@ -1883,7 +1288,17 @@ Return ONLY valid JSON, no markdown, no code blocks.`,
                                                         Load
                                                     </button>
                                                     <button
-                                                        onClick={() => handleDeleteScenario(item.id)}
+                                                        onClick={async () => {
+                                                            if (!user?.id) return;
+                                                            try {
+                                                                await deleteDoc(doc(db, 'users', user.id, 'onlyfans_saved_scenarios', item.id));
+                                                                showToast('Scenario deleted', 'success');
+                                                                loadSavedItems();
+                                                            } catch (error) {
+                                                                console.error('Error deleting scenario:', error);
+                                                                showToast('Failed to delete scenario', 'error');
+                                                            }
+                                                        }}
                                                         className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700"
                                                     >
                                                         <TrashIcon className="w-4 h-4" />
@@ -1897,17 +1312,17 @@ Return ONLY valid JSON, no markdown, no code blocks.`,
                         </div>
                     )}
 
+                    {/* Roleplay Type Selection */}
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                             Generate Roleplay Scenario
                         </h2>
-                        
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Roleplay Type:
+                                    Roleplay Type
                                 </label>
-                                <div className="flex items-center gap-2 mb-2">
+                                <div className="flex items-center gap-2 mb-3">
                                     <input
                                         type="checkbox"
                                         id="useCustomRoleplay"
@@ -1946,7 +1361,7 @@ Return ONLY valid JSON, no markdown, no code blocks.`,
                                                             : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                                                     }`}
                                                 >
-                                                    {type.split(' / ')[0]}
+                                                    {type}
                                                 </button>
                                             ))}
                                         </div>
@@ -1955,7 +1370,7 @@ Return ONLY valid JSON, no markdown, no code blocks.`,
                                                 type="text"
                                                 value={customRoleplayType}
                                                 onChange={(e) => setCustomRoleplayType(e.target.value)}
-                                                placeholder="Enter custom roleplay type"
+                                                placeholder="Enter your custom roleplay type"
                                                 className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white mb-3"
                                             />
                                         )}
@@ -1965,24 +1380,9 @@ Return ONLY valid JSON, no markdown, no code blocks.`,
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Context / Situation (Optional):
+                                    Tone
                                 </label>
-                                <textarea
-                                    value={scenarioContext}
-                                    onChange={(e) => setScenarioContext(e.target.value)}
-                                    placeholder="e.g., 'It's morning, I just woke up and want to send a good morning message' or 'It's late at night, I'm getting ready for bed' or 'I'm at work and want to send a teasing message'"
-                                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[80px]"
-                                />
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                    Add context about the time of day, situation, or specific scenario you need. This helps generate more relevant content.
-                                </p>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Tone:
-                                </label>
-                                <div className="flex items-center gap-2 mb-2">
+                                <div className="flex items-center gap-2 mb-3">
                                     <input
                                         type="checkbox"
                                         id="useCustomTone"
@@ -2005,213 +1405,79 @@ Return ONLY valid JSON, no markdown, no code blocks.`,
                                         type="text"
                                         value={customTone}
                                         onChange={(e) => setCustomTone(e.target.value)}
-                                        placeholder="Enter your custom tone (e.g., 'seductive and dominant', 'playful and submissive')"
-                                        className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                        placeholder="Enter your custom tone"
+                                        className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white mb-3"
                                     />
                                 ) : (
-                                    <div className="flex gap-2">
-                                        {(['Soft', 'Teasing', 'Playful', 'Explicit'] as const).map((tone) => (
-                                            <button
-                                                key={tone}
-                                                onClick={() => setScenarioTone(tone)}
-                                                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                                                    scenarioTone === tone
-                                                        ? 'bg-primary-600 text-white'
-                                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                                                }`}
-                                            >
-                                                {tone}
-                                            </button>
-                                        ))}
-                                    </div>
+                                    <select
+                                        value={scenarioTone}
+                                        onChange={(e) => setScenarioTone(e.target.value as 'Soft' | 'Teasing' | 'Playful' | 'Explicit')}
+                                        className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    >
+                                        <option value="Soft">Soft</option>
+                                        <option value="Teasing">Teasing</option>
+                                        <option value="Playful">Playful</option>
+                                        <option value="Explicit">Explicit</option>
+                                    </select>
                                 )}
                             </div>
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Session Length:
+                                    Context (Optional)
                                 </label>
-                                <div className="flex gap-2">
-                                    {(['Extended', 'Long Extended'] as const).map((length) => (
-                                        <button
-                                            key={length}
-                                            onClick={() => setScenarioLength(length)}
-                                            className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                                                scenarioLength === length
-                                                    ? 'bg-primary-600 text-white'
-                                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                                            }`}
-                                        >
-                                            {length}
-                                        </button>
-                                    ))}
-                                </div>
+                                <textarea
+                                    value={scenarioContext}
+                                    onChange={(e) => setScenarioContext(e.target.value)}
+                                    placeholder="Any specific context, themes, or details you want in the scenario..."
+                                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    rows={3}
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Length
+                                </label>
+                                <select
+                                    value={scenarioLength}
+                                    onChange={(e) => setScenarioLength(e.target.value as 'Extended' | 'Long Extended')}
+                                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                >
+                                    <option value="Extended">Extended</option>
+                                    <option value="Long Extended">Long Extended</option>
+                                </select>
                             </div>
 
                             <button
                                 onClick={handleGenerateScenario}
-                                disabled={isGeneratingScenario}
-                                className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                disabled={isGeneratingScenario || (!useCustomRoleplayType && !selectedRoleplayType) || (useCustomRoleplayType && !customRoleplayType.trim())}
+                                className="w-full px-4 py-3 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed font-medium"
                             >
-                                {isGeneratingScenario ? (
-                                    <>
-                                        <RefreshIcon className="w-5 h-5 animate-spin" />
-                                        Generating...
-                                    </>
-                                ) : (
-                                    <>
-                                        <SparklesIcon className="w-5 h-5" />
-                                        Generate Scenario
-                                    </>
-                                )}
+                                {isGeneratingScenario ? 'Generating Scenario...' : 'Generate Roleplay Scenario'}
                             </button>
                         </div>
                     </div>
 
-                    {/* Generated Scenario */}
+                    {/* Generated Scenario Display */}
                     {generatedScenario && (
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
                                     Generated Scenario
-                                </h3>
+                                </h2>
                                 <div className="flex gap-2">
                                     <button
                                         onClick={handleSaveScenario}
-                                        className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-1"
+                                        className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
                                     >
-                                        <CheckCircleIcon className="w-4 h-4" />
-                                        Save
-                                    </button>
-                                    <button
-                                        onClick={() => copyToClipboard(JSON.stringify(generatedScenario, null, 2))}
-                                        className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                    >
-                                        Copy All
+                                        Save Scenario
                                     </button>
                                     <button
                                         onClick={() => setGeneratedScenario(null)}
-                                        className="text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 flex items-center gap-1"
+                                        className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600"
                                     >
-                                        <TrashIcon className="w-4 h-4" />
                                         Clear
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <div className="space-y-4">
-                                <div>
-                                    <h4 className="font-semibold text-gray-900 dark:text-white mb-2">Premise:</h4>
-                                    <p className="text-gray-700 dark:text-gray-300 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                        {generatedScenario.premise}
-                                    </p>
-                                </div>
-                                
-                                <div>
-                                    <h4 className="font-semibold text-gray-900 dark:text-white mb-2">Opening Message:</h4>
-                                    <p className="text-gray-700 dark:text-gray-300 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                        {generatedScenario.openingMessage}
-                                    </p>
-                                    <button
-                                        onClick={() => copyToClipboard(generatedScenario.openingMessage)}
-                                        className="mt-2 text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                    >
-                                        Copy
-                                    </button>
-                                </div>
-                                
-                                <div>
-                                    <h4 className="font-semibold text-gray-900 dark:text-white mb-2">Engagement Prompts:</h4>
-                                    <div className="space-y-2">
-                                        {generatedScenario.engagementPrompts.map((prompt, index) => (
-                                            <div key={index} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                                <p className="text-gray-700 dark:text-gray-300">{prompt}</p>
-                                                <button
-                                                    onClick={() => copyToClipboard(prompt)}
-                                                    className="mt-1 text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                                >
-                                                    Copy
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                                
-                                {generatedScenario.progressionStages && generatedScenario.progressionStages.length > 0 && (
-                                    <div>
-                                        <h4 className="font-semibold text-gray-900 dark:text-white mb-2">Progression Stages:</h4>
-                                        <div className="space-y-3">
-                                            {generatedScenario.progressionStages.map((stage, index) => (
-                                                <div key={index} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                                                    <h5 className="font-medium text-gray-900 dark:text-white mb-1">{stage.stage}</h5>
-                                                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{stage.description}</p>
-                                                    {stage.prompts && stage.prompts.length > 0 && (
-                                                        <div className="space-y-1 mt-2">
-                                                            {stage.prompts.map((prompt, pIndex) => (
-                                                                <p key={pIndex} className="text-sm text-gray-700 dark:text-gray-300 pl-2 border-l-2 border-primary-300 dark:border-primary-600">
-                                                                    {prompt}
-                                                                </p>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {generatedScenario.escalationPoints && generatedScenario.escalationPoints.length > 0 && (
-                                    <div>
-                                        <h4 className="font-semibold text-gray-900 dark:text-white mb-2">Escalation Points:</h4>
-                                        <div className="space-y-2">
-                                            {generatedScenario.escalationPoints.map((point, index) => (
-                                                <div key={index} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                                    <h5 className="font-medium text-gray-900 dark:text-white mb-1">{point.moment}</h5>
-                                                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{point.description}</p>
-                                                    <p className="text-sm text-gray-700 dark:text-gray-300 italic">{point.prompt}</p>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {generatedScenario.variationIdeas && generatedScenario.variationIdeas.length > 0 && (
-                                    <div>
-                                        <h4 className="font-semibold text-gray-900 dark:text-white mb-2">Variation Ideas:</h4>
-                                        <div className="space-y-2">
-                                            {generatedScenario.variationIdeas.map((variation, index) => (
-                                                <div key={index} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                                    <p className="text-gray-700 dark:text-gray-300">{variation}</p>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {generatedScenario.monetizationMoments && generatedScenario.monetizationMoments.length > 0 && (
-                                    <div>
-                                        <h4 className="font-semibold text-gray-900 dark:text-white mb-2">Monetization Moments:</h4>
-                                        <div className="space-y-2">
-                                            {generatedScenario.monetizationMoments.map((moment, index) => (
-                                                <div key={index} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border-l-4 border-primary-500">
-                                                    <h5 className="font-medium text-gray-900 dark:text-white mb-1">{moment.moment}</h5>
-                                                    <p className="text-sm text-gray-700 dark:text-gray-300">{moment.cta}</p>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                <div>
-                                    <h4 className="font-semibold text-gray-900 dark:text-white mb-2">Ending CTA:</h4>
-                                    <p className="text-gray-700 dark:text-gray-300 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                        {generatedScenario.endingCTA}
-                                    </p>
-                                    <button
-                                        onClick={() => copyToClipboard(generatedScenario.endingCTA)}
-                                        className="mt-2 text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                    >
-                                        Copy
                                     </button>
                                 </div>
                             </div>

@@ -61,7 +61,8 @@ export const Sidebar: React.FC = () => {
     { page: 'team', icon: <TeamIcon />, label: 'Team', tourId: 'tour-step-team-nav' },
     { page: 'clients', icon: <BriefcaseIcon />, label: 'Clients', tourId: 'tour-step-clients-nav' },
     { page: 'bio', icon: <GlobeIcon />, label: 'Link in Bio' },
-    { page: 'onlyfansStudio', icon: <SparklesIcon />, label: 'OnlyFans Studio' },
+    { page: 'onlyfansStudio', icon: <SparklesIcon />, label: 'Premium Content Studio' },
+    { page: 'emailCenter', icon: <ComposeIcon />, label: 'Email Center' },
     { page: 'settings', icon: <SettingsIcon />, label: 'Settings' },
     { page: 'admin', icon: <AdminIcon />, label: 'Admin' },
   ];
@@ -115,8 +116,11 @@ export const Sidebar: React.FC = () => {
               // Hide team/clients for now (creator focus); admins handled above
               return false;
           case 'onlyfansStudio':
-              // OnlyFans Studio: OnlyFansStudio, Elite, and Agency plans
-              return ['OnlyFansStudio', 'Elite', 'Agency'].includes(user.plan);
+              // Premium Content Studio: allow OnlyFansStudio/Elite/Agency plans and Admin override
+              return ['OnlyFansStudio', 'Elite', 'Agency'].includes(user.plan) || user.role === 'Admin';
+          case 'emailCenter':
+              // Email Center is exposed for Admin users
+              return user.role === 'Admin';
           case 'admin':
               // Admin page is only visible to Admin users
               return user.role === 'Admin';

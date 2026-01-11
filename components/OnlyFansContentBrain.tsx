@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAppContext } from './AppContext';
 import { SparklesIcon, RefreshIcon, DownloadIcon, UploadIcon, XMarkIcon, CopyIcon, ImageIcon, TrashIcon } from './icons/UIIcons';
 import { auth, storage, db } from '../firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc, Timestamp, query, getDocs, orderBy, getDoc, doc, setDoc, deleteDoc, where } from 'firebase/firestore';
 import { OnlyFansCalendarEvent } from './OnlyFansCalendar';
+import { FanSelector } from './FanSelector';
+import { loadEmojiSettings } from '../src/utils/loadEmojiSettings';
 
-type ContentType = 'captions' | 'mediaCaptions' | 'postIdeas' | 'shootConcepts' | 'weeklyPlan' | 'monetizationPlanner' | 'guides' | 'history';
+type ContentType = 'captions' | 'mediaCaptions' | 'postIdeas' | 'shootConcepts' | 'weeklyPlan' | 'monetizationPlanner' | 'messaging' | 'guides' | 'history';
 
 // Predict Modal Component (similar to Compose)
 const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: string) => void; onSave?: () => void; showToast?: (message: string, type: 'success' | 'error') => void }> = ({ result, onClose, onCopy, onSave, showToast }) => {
@@ -99,19 +101,6 @@ const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: 
                             </div>
                         </div>
                     )}
-                    {result.optimizedVersion && (
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Optimized Version</h3>
-                            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                                <p className="text-gray-900 dark:text-white whitespace-pre-wrap mb-2">{result.optimizedVersion.caption}</p>
-                                {result.optimizedVersion.expectedBoost && (
-                                    <p className="text-xs text-green-700 dark:text-green-300 font-medium">
-                                        Expected Boost: {result.optimizedVersion.expectedBoost}
-                                    </p>
-                                )}
-                            </div>
-                        </div>
-                    )}
                     {result.summary && (
                         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                             <p className="text-blue-900 dark:text-blue-200 text-sm">{result.summary}</p>
@@ -119,15 +108,6 @@ const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: 
                     )}
                 </div>
                 <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
-                    {result.optimizedVersion && (
-                        <button
-                            onClick={() => onCopy(result.optimizedVersion.caption)}
-                            className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
-                        >
-                            <CopyIcon className="w-4 h-4" />
-                            Copy Optimized
-                        </button>
-                    )}
                     {onSave && (
                         <button
                             onClick={async () => {
@@ -640,9 +620,12 @@ export const OnlyFansContentBrain: React.FC = () => {
     const [showMediaVaultModal, setShowMediaVaultModal] = useState(false);
     const [mediaVaultItems, setMediaVaultItems] = useState<any[]>([]);
     const [isAnalyzingGaps, setIsAnalyzingGaps] = useState(false);
+    const [isPredicting, setIsPredicting] = useState(false);
+    const [isRepurposing, setIsRepurposing] = useState(false);
     const [contentGapAnalysis, setContentGapAnalysis] = useState<any>(null);
     const [showGapAnalysisModal, setShowGapAnalysisModal] = useState(false);
     const [currentCaptionForAI, setCurrentCaptionForAI] = useState<string>('');
+    const [editedCaptions, setEditedCaptions] = useState<Map<number, string>>(new Map()); // Track individual caption edits by index
     const [scheduledDate, setScheduledDate] = useState<string>('');
     const [usedCaptions, setUsedCaptions] = useState<Set<number>>(new Set());
     const [usedCaptionsHash, setUsedCaptionsHash] = useState<Set<string>>(new Set()); // Track by caption hash for persistence
@@ -689,6 +672,17 @@ export const OnlyFansContentBrain: React.FC = () => {
     const [balanceRetention, setBalanceRetention] = useState(20);
     const [balanceConversion, setBalanceConversion] = useState(10);
     const [generatedMonetizationPlan, setGeneratedMonetizationPlan] = useState<any>(null);
+
+    // Subscriber messaging toolkit
+    const [messageType, setMessageType] = useState<'Welcome sequence' | 'Renewal reminder' | 'PPV follow-up' | 'Win-back'>(`Welcome sequence`);
+    const [messageContext, setMessageContext] = useState('');
+    const [messageTone, setMessageTone] = useState<'Warm' | 'Flirty' | 'Direct'>(`Warm`);
+    const [generatedMessages, setGeneratedMessages] = useState<string>('');
+    const [selectedFanId, setSelectedFanId] = useState<string | null>(null);
+    const [selectedFanName, setSelectedFanName] = useState<string | null>(null);
+    const [fanPreferences, setFanPreferences] = useState<any>(null);
+    const [isLoadingFanPreferences, setIsLoadingFanPreferences] = useState(false);
+    const [isGeneratingMessages, setIsGeneratingMessages] = useState(false);
     
     // Saved items state for each tab
     const [savedPostIdeas, setSavedPostIdeas] = useState<any[]>([]);
@@ -732,6 +726,49 @@ export const OnlyFansContentBrain: React.FC = () => {
     const [guides, setGuides] = useState<any>(null);
     const [guidesLoading, setGuidesLoading] = useState(false);
 
+    // Load fan preferences when fan is selected
+    useEffect(() => {
+        const loadFanPreferences = async () => {
+            if (!user?.id || !selectedFanId) {
+                setFanPreferences(null);
+                return;
+            }
+            setIsLoadingFanPreferences(true);
+            try {
+                const fanDoc = await getDoc(doc(db, 'users', user.id, 'onlyfans_fan_preferences', selectedFanId));
+                if (fanDoc.exists()) {
+                    const data = fanDoc.data();
+                    setFanPreferences(data);
+                    
+                    // Auto-apply fan preferences to caption tone
+                    // Only auto-apply if tone hasn't been manually changed from default
+                    if (data.preferredTone) {
+                        // Map fan preferred tone to caption tone options
+                        const toneMap: Record<string, string> = {
+                            'soft': 'Intimate',
+                            'dominant': 'Dominant',
+                            'playful': 'Playful',
+                            'dirty': 'Erotic',
+                            'Very Explicit': 'Explicit'
+                        };
+                        const mappedTone = toneMap[data.preferredTone] || data.preferredTone;
+                        if (mappedTone && captionTone === 'Playful') { // Only auto-apply if still on default
+                            setCaptionTone(mappedTone as any);
+                        }
+                    }
+                } else {
+                    setFanPreferences(null);
+                }
+            } catch (error) {
+                console.error('Error loading fan preferences:', error);
+                setFanPreferences(null);
+            } finally {
+                setIsLoadingFanPreferences(false);
+            }
+        };
+        loadFanPreferences();
+    }, [user?.id, selectedFanId]);
+
     // Load user explicitness level
     useEffect(() => {
         const loadExplicitnessLevel = async () => {
@@ -750,6 +787,79 @@ export const OnlyFansContentBrain: React.FC = () => {
         };
         loadExplicitnessLevel();
     }, [user?.id]);
+
+    // ------------------------------------------------------------
+    // Personalization: use Elite OnlyFans onboarding answers
+    // ------------------------------------------------------------
+    const monetizedModeEnabled = Boolean(user?.settings?.monetizedModeEnabled);
+    const monetizedOnboarding = (user?.settings?.monetizedOnboarding || {}) as any;
+    const didInitMonetizedDefaults = useRef(false);
+
+    const buildMonetizedContext = () => {
+        if (!monetizedModeEnabled) return '';
+        const platforms = Array.isArray(user?.settings?.monetizedPlatforms) ? user?.settings?.monetizedPlatforms.join(', ') : 'OnlyFans';
+        const postingFrequency = monetizedOnboarding?.postingFrequency ? String(monetizedOnboarding.postingFrequency) : '';
+        const contentHelp = Array.isArray(monetizedOnboarding?.contentHelp) ? monetizedOnboarding.contentHelp.join(', ') : '';
+        const biggestChallenge = monetizedOnboarding?.biggestChallenge ? String(monetizedOnboarding.biggestChallenge) : '';
+        const monthlyGoal = monetizedOnboarding?.monthlyGoal ? String(monetizedOnboarding.monthlyGoal) : '';
+
+        const lines = [
+            platforms ? `Platforms: ${platforms}` : null,
+            postingFrequency ? `Posting frequency: ${postingFrequency}` : null,
+            contentHelp ? `Help planning: ${contentHelp}` : null,
+            biggestChallenge ? `Biggest challenge: ${biggestChallenge}` : null,
+            monthlyGoal ? `Monthly revenue goal: ${monthlyGoal}` : null,
+        ].filter(Boolean);
+
+        if (lines.length === 0) return '';
+        return `OnlyFans mode personalization:\n${lines.map((l) => `- ${l}`).join('\n')}`;
+    };
+
+    // Prefill defaults once (do not overwrite user edits)
+    useEffect(() => {
+        if (!user?.id) return;
+        if (!monetizedModeEnabled) return;
+        if (didInitMonetizedDefaults.current) return;
+
+        const contentHelpArr: string[] = Array.isArray(monetizedOnboarding?.contentHelp) ? monetizedOnboarding.contentHelp : [];
+        const challenge = monetizedOnboarding?.biggestChallenge ? String(monetizedOnboarding.biggestChallenge) : '';
+        const freq = monetizedOnboarding?.postingFrequency ? String(monetizedOnboarding.postingFrequency) : '';
+        const goal = monetizedOnboarding?.monthlyGoal ? String(monetizedOnboarding.monthlyGoal) : '';
+
+        // Weekly plan prompt: only set if empty
+        if (!weeklyPlanPrompt.trim()) {
+            const starter = [
+                goal ? `Goal: ${goal}` : 'Goal: Sales conversion + consistency',
+                freq ? `Cadence: ${freq}` : null,
+                challenge ? `Challenge: ${challenge}` : null,
+                contentHelpArr.length ? `Focus: ${contentHelpArr.join(', ')}` : null,
+            ].filter(Boolean).join(' · ');
+            setWeeklyPlanPrompt(starter);
+        }
+
+        // Monetization goals: only seed if empty
+        if (monetizationGoals.length === 0) {
+            const seeded: string[] = [];
+            if (contentHelpArr.includes('PPV ideas')) seeded.push('Increase PPV conversions with better hooks + offers');
+            if (contentHelpArr.includes('Engagement / fan messages')) seeded.push('Improve retention with engagement routines + message prompts');
+            if (contentHelpArr.includes('Promo content')) seeded.push('Improve funnel conversion from socials to paid subscribers');
+            if (!seeded.length) seeded.push('Increase subscriber conversion and retention');
+            if (goal && goal !== 'Stay consistent') seeded.push(`Work toward ${goal} months`);
+            setMonetizationGoals(seeded.slice(0, 5));
+        }
+
+        // Monetization preferences: only seed if empty
+        if (!monetizationPreferences.trim()) {
+            const pref = [
+                'Account-safe planning (manual posting).',
+                challenge ? `My biggest challenge: ${challenge}.` : null,
+                'I want a simple weekly plan that balances engagement + upsells without burnout.',
+            ].filter(Boolean).join(' ');
+            setMonetizationPreferences(pref);
+        }
+
+        didInitMonetizedDefaults.current = true;
+    }, [user?.id, monetizedModeEnabled]); // intentionally minimal deps
 
     // Initialize component and restore persisted state
     // Load captions history on mount and when user changes
@@ -919,6 +1029,7 @@ export const OnlyFansContentBrain: React.FC = () => {
         // Clear old captions when regenerating
         setGeneratedCaptions([]);
         setCurrentCaptionForAI('');
+        setEditedCaptions(new Map());
         setUsedCaptions(new Set());
         
         setIsGenerating(true);
@@ -951,6 +1062,24 @@ export const OnlyFansContentBrain: React.FC = () => {
                 finalTone = captionTone === 'Explicit' ? 'Explicit' : captionTone;
             }
 
+            // Build fan context if fan is selected
+            let fanContext = '';
+            if (selectedFanId && fanPreferences) {
+                const contextParts = [];
+                if (fanPreferences.preferredTone) contextParts.push(`Preferred tone: ${fanPreferences.preferredTone}`);
+                if (fanPreferences.communicationStyle) contextParts.push(`Communication style: ${fanPreferences.communicationStyle}`);
+                if (fanPreferences.favoriteSessionType) contextParts.push(`Favorite session type: ${fanPreferences.favoriteSessionType}`);
+                if (fanPreferences.languagePreferences) contextParts.push(`Language preferences: ${fanPreferences.languagePreferences}`);
+                if (fanPreferences.boundaries) contextParts.push(`Boundaries: ${fanPreferences.boundaries}`);
+                if (fanPreferences.suggestedFlow) contextParts.push(`What works best: ${fanPreferences.suggestedFlow}`);
+                if (contextParts.length > 0) {
+                    fanContext = `\n\nFan Context (${selectedFanName || 'Selected Fan'}):\n${contextParts.map(p => `- ${p}`).join('\n')}\n- Generate captions that match this fan's preferences and style.`;
+                }
+            }
+
+            // Load emoji settings
+            const emojiSettings = await loadEmojiSettings(user.id);
+
             const captionsUrl = new URL('/api/generateCaptions', window.location.origin);
             const response = await fetch(captionsUrl.toString(), {
                 method: 'POST',
@@ -964,8 +1093,10 @@ export const OnlyFansContentBrain: React.FC = () => {
                     goal: captionGoal,
                     platforms: ['OnlyFans'],
                     promptText: uploadedMediaUrl 
-                        ? `${captionPrompt || 'Analyze this image/video in detail and describe what you see. Create explicit OnlyFans captions based on the actual content shown. Be very descriptive and explicit about what is visually present.'}\n\n[Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`
-                        : `${captionPrompt}\n\n[Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`,
+                        ? `${captionPrompt || 'Analyze this image/video in detail and describe what you see. Create explicit OnlyFans captions based on the actual content shown. Be very descriptive and explicit about what is visually present.'}${fanContext}\n\n[Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`
+                        : `${captionPrompt}${fanContext}\n\n[Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`,
+                    emojiEnabled: emojiSettings.enabled,
+                    emojiIntensity: emojiSettings.intensity,
                 }),
             });
 
@@ -995,6 +1126,18 @@ export const OnlyFansContentBrain: React.FC = () => {
             }
             setGeneratedCaptions(Array.isArray(captions) ? captions : []);
             showToast?.('Captions generated successfully!', 'success');
+
+            // Lightweight usage tracking (best-effort)
+            try {
+                const { logUsageEvent } = await import('../src/services/usageEvents');
+                await logUsageEvent(user.id, 'of_generate_captions', {
+                    hasMedia: Boolean(uploadedMediaUrl),
+                    tone: finalTone,
+                    goal: captionGoal,
+                });
+            } catch {
+                // ignore
+            }
         } catch (error: any) {
             console.error('Error generating captions:', error);
             const errorMsg = error.message || 'Failed to generate captions. Please try again.';
@@ -1016,6 +1159,9 @@ export const OnlyFansContentBrain: React.FC = () => {
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             
+            // Load emoji settings
+            const emojiSettings = await loadEmojiSettings(user.id);
+            
             const response = await fetch('/api/generateText', {
                 method: 'POST',
                 headers: {
@@ -1032,6 +1178,8 @@ export const OnlyFansContentBrain: React.FC = () => {
                         platforms: ['OnlyFans'],
                     },
                     analyticsData: buildAnalyticsData(),
+                    emojiEnabled: emojiSettings.enabled,
+                    emojiIntensity: emojiSettings.intensity,
                 }),
             });
 
@@ -1147,7 +1295,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                 body: JSON.stringify({
                     niche: 'Adult Content Creator (OnlyFans)',
                     audience: 'Subscribers and fans',
-                    goal: weeklyPlanPrompt || 'Sales Conversion', // Use goal (singular) - default to Sales Conversion for OnlyFans
+                    goal: `${weeklyPlanPrompt || 'Sales Conversion'}\n\n${buildMonetizedContext()}`.trim(), // Personalize if available
                     duration: 1, // 1 week
                     tone: 'Explicit/Adult Content',
                     platformFocus: 'OnlyFans',
@@ -1170,6 +1318,14 @@ export const OnlyFansContentBrain: React.FC = () => {
                 prompt: weeklyPlanPrompt,
             });
             showToast?.('Weekly plan generated successfully!', 'success');
+
+            // Lightweight usage tracking (best-effort)
+            try {
+                const { logUsageEvent } = await import('../src/services/usageEvents');
+                await logUsageEvent(user.id, 'of_generate_weekly_plan', { prompt: weeklyPlanPrompt });
+            } catch {
+                // ignore
+            }
         } catch (error: any) {
             console.error('Error generating weekly plan:', error);
             const errorMsg = error.message || 'Failed to generate weekly plan. Please try again.';
@@ -1269,6 +1425,9 @@ export const OnlyFansContentBrain: React.FC = () => {
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             
+            // Load emoji settings
+            const emojiSettings = await loadEmojiSettings(user.id);
+            
             const response = await fetch('/api/generateMonetizationPlan', {
                 method: 'POST',
                 headers: {
@@ -1277,7 +1436,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                 },
                 body: JSON.stringify({
                     goals: monetizationGoals,
-                    contentPreferences: monetizationPreferences,
+                    contentPreferences: `${monetizationPreferences}\n\n${buildMonetizedContext()}`.trim(),
                     subscriberCount: subscriberCount || undefined,
                     balance: {
                         engagement: balanceEngagement,
@@ -1302,6 +1461,22 @@ export const OnlyFansContentBrain: React.FC = () => {
                     ...data.plan,
                 });
                 showToast?.('Monetization plan generated successfully!', 'success');
+
+                // Lightweight usage tracking (best-effort)
+                try {
+                    const { logUsageEvent } = await import('../src/services/usageEvents');
+                    await logUsageEvent(user.id, 'of_generate_monetization_plan', {
+                        goals: monetizationGoals,
+                        balance: {
+                            engagement: balanceEngagement,
+                            upsell: balanceUpsell,
+                            retention: balanceRetention,
+                            conversion: balanceConversion,
+                        },
+                    });
+                } catch {
+                    // ignore
+                }
             } else {
                 throw new Error(data.error || 'Failed to generate monetization plan');
             }
@@ -1312,6 +1487,80 @@ export const OnlyFansContentBrain: React.FC = () => {
             setError(errorMsg);
         } finally {
             setIsGenerating(false);
+        }
+    };
+
+    const handleGenerateSubscriberMessages = async () => {
+        if (!user?.id) return;
+        setIsGeneratingMessages(true);
+        setError(null);
+        try {
+            const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+            const personalization = buildMonetizedContext();
+            const prompt = `
+Create a subscriber messaging toolkit for an OnlyFans creator.
+
+Type: ${messageType}
+Tone: ${messageTone}
+Context: ${messageContext || 'None provided'}
+
+${personalization ? personalization : ''}
+
+Rules:
+- Manual posting only. Do not claim integrations or auto sending.
+- Keep messages short and conversion-focused.
+- Output should be ready to copy/paste.
+
+Output format:
+- If Welcome sequence: 3 messages (Day 0, Day 1, Day 3)
+- If Renewal reminder: 3 messages (soft → direct)
+- If PPV follow-up: 3 messages (soft nudge → last call)
+- If Win-back: 3 messages (friendly → offer → last check-in)
+`.trim();
+
+            // Load emoji settings
+            const emojiSettings = await loadEmojiSettings(user.id);
+            
+            const resp = await fetch('/api/generateText', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({
+                    prompt,
+                    context: {
+                        goal: 'retention',
+                        tone: messageTone,
+                        platforms: ['OnlyFans'],
+                    },
+                    emojiEnabled: emojiSettings.enabled,
+                    emojiIntensity: emojiSettings.intensity,
+                }),
+            });
+
+            const data = await resp.json().catch(() => ({}));
+            const text = data?.text || data?.caption || '';
+            if (!text || typeof text !== 'string') {
+                throw new Error(data?.error || 'Failed to generate messages');
+            }
+
+            setGeneratedMessages(text);
+            showToast?.('Messages generated!', 'success');
+
+            // Usage tracking (best-effort)
+            try {
+                const { logUsageEvent } = await import('../src/services/usageEvents');
+                await logUsageEvent(user.id, 'of_generate_subscriber_messages', { messageType, tone: messageTone });
+            } catch {
+                // ignore
+            }
+        } catch (e: any) {
+            console.error('Subscriber messages generation failed:', e);
+            showToast?.(e?.message || 'Failed to generate messages', 'error');
+            setError(e?.message || 'Failed to generate messages');
+        } finally {
+            setIsGeneratingMessages(false);
         }
     };
 
@@ -1671,7 +1920,7 @@ export const OnlyFansContentBrain: React.FC = () => {
         }
     };
 
-    const saveToHistory = async (type: 'optimize' | 'predict' | 'repurpose' | 'monetization_plan' | 'post_ideas' | 'shoot_concepts' | 'weekly_plan' | 'gap_analysis', title: string, data: any) => {
+    const saveToHistory = async (type: 'optimize' | 'predict' | 'repurpose' | 'monetization_plan' | 'post_ideas' | 'shoot_concepts' | 'weekly_plan' | 'gap_analysis' | 'subscriber_messages', title: string, data: any) => {
         if (!user?.id) return;
         try {
             // Don't save predict and repurpose to content brain history - they have their own history
@@ -1962,6 +2211,9 @@ export const OnlyFansContentBrain: React.FC = () => {
                 throw new Error(`Failed to upload media: ${uploadError.message || 'Please try again'}`);
             }
             
+            // Load emoji settings
+            const emojiSettings = await loadEmojiSettings(user.id);
+            
             const captionsUrl = new URL('/api/generateCaptions', window.location.origin);
             const response = await fetch(captionsUrl.toString(), {
                 method: 'POST',
@@ -1976,6 +2228,8 @@ export const OnlyFansContentBrain: React.FC = () => {
                     platforms: ['OnlyFans'],
                     promptText: `${mediaCaptionPrompt || ''} [Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`.trim(),
                     analyticsData: buildAnalyticsData(),
+                    emojiEnabled: emojiSettings.enabled,
+                    emojiIntensity: emojiSettings.intensity,
                 }),
             });
 
@@ -2033,8 +2287,8 @@ export const OnlyFansContentBrain: React.FC = () => {
         // Clear old captions when uploading new media
         setGeneratedCaptions([]);
         setCurrentCaptionForAI('');
+        setEditedCaptions(new Map());
         setUsedCaptions(new Set());
-        // Don't clear usedCaptionsHash - it persists across sessions to track globally used captions
         
         setUploadedMediaFile(file);
         const previewUrl = URL.createObjectURL(file);
@@ -2079,6 +2333,7 @@ export const OnlyFansContentBrain: React.FC = () => {
         // Clear old captions when selecting new media
         setGeneratedCaptions([]);
         setCurrentCaptionForAI('');
+        setEditedCaptions(new Map());
         setUsedCaptions(new Set());
         
         setUploadedMediaUrl(item.url);
@@ -2125,6 +2380,9 @@ export const OnlyFansContentBrain: React.FC = () => {
                 finalTone = captionTone === 'Explicit' ? 'Explicit' : captionTone;
             }
             
+            // Load emoji settings
+            const emojiSettings = await loadEmojiSettings(user.id);
+            
             const captionsUrl = new URL('/api/generateCaptions', window.location.origin);
             const response = await fetch(captionsUrl.toString(), {
                 method: 'POST',
@@ -2138,6 +2396,8 @@ export const OnlyFansContentBrain: React.FC = () => {
                     goal: captionGoal,
                     platforms: ['OnlyFans'],
                     promptText: `${captionPrompt || 'Analyze this image/video in detail and describe what you see. Create explicit OnlyFans captions based on the actual content shown. Be very descriptive and explicit about what is visually present.'} [Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`.trim(),
+                    emojiEnabled: emojiSettings.enabled,
+                    emojiIntensity: emojiSettings.intensity,
                 }),
             });
 
@@ -2189,7 +2449,7 @@ export const OnlyFansContentBrain: React.FC = () => {
         const currentMediaUrl = uploadedMediaUrl;
         const currentMediaType = uploadedMediaType || 'image';
 
-        setIsGenerating(true);
+        setIsPredicting(true);
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             const response = await fetch('/api/predictContentPerformance', {
@@ -2241,7 +2501,7 @@ export const OnlyFansContentBrain: React.FC = () => {
         } catch (error: any) {
             showToast?.(error.message || 'Failed to predict performance', 'error');
         } finally {
-            setIsGenerating(false);
+            setIsPredicting(false);
         }
     };
 
@@ -2262,7 +2522,7 @@ export const OnlyFansContentBrain: React.FC = () => {
         const currentMediaUrl = uploadedMediaUrl;
         const currentMediaType = uploadedMediaType || 'image';
 
-        setIsGenerating(true);
+        setIsRepurposing(true);
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             const response = await fetch('/api/repurposeContent', {
@@ -2315,7 +2575,7 @@ export const OnlyFansContentBrain: React.FC = () => {
         } catch (error: any) {
             showToast?.(error.message || 'Failed to repurpose content', 'error');
         } finally {
-            setIsGenerating(false);
+            setIsRepurposing(false);
         }
     };
 
@@ -2408,6 +2668,7 @@ export const OnlyFansContentBrain: React.FC = () => {
         { id: 'shootConcepts', label: 'Shoot Concepts' },
         { id: 'weeklyPlan', label: 'Weekly Plan' },
         { id: 'monetizationPlanner', label: 'Monetization Planner' },
+        { id: 'messaging', label: 'Messaging' },
         { id: 'guides', label: 'Guides & Tips' },
     ];
     // Filter out mediaCaptions and guides tabs (history is now in captions tab)
@@ -2769,6 +3030,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                                                 // Clear captions when removing media
                                                 setGeneratedCaptions([]);
                                                 setCurrentCaptionForAI('');
+                                                setEditedCaptions(new Map());
                                                 setUsedCaptions(new Set());
                                                 setUploadedMediaFile(null);
                                                 setUploadedMediaPreview(null);
@@ -2802,6 +3064,72 @@ export const OnlyFansContentBrain: React.FC = () => {
                                     </p>
                                 )}
                             </div>
+
+                            {/* Fan Selector */}
+                            <FanSelector
+                                selectedFanId={selectedFanId}
+                                onSelectFan={(fanId, fanName) => {
+                                    setSelectedFanId(fanId);
+                                    setSelectedFanName(fanName);
+                                    // Preferences will load automatically via useEffect
+                                }}
+                                allowNewFan={true}
+                            />
+
+                            {/* Fan Context Card - Show when fan is selected */}
+                            {selectedFanId && fanPreferences && (
+                                <div className="p-4 bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h3 className="text-sm font-semibold text-purple-900 dark:text-purple-200">
+                                            📋 Fan Context: {selectedFanName || 'Selected Fan'}
+                                        </h3>
+                                        <button
+                                            onClick={() => {
+                                                setSelectedFanId(null);
+                                                setSelectedFanName(null);
+                                                setFanPreferences(null);
+                                            }}
+                                            className="text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 text-xs"
+                                        >
+                                            Clear
+                                        </button>
+                                    </div>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                                        {fanPreferences.preferredTone && (
+                                            <div>
+                                                <span className="text-purple-700 dark:text-purple-300 font-medium">Tone:</span>
+                                                <span className="ml-1 text-purple-900 dark:text-purple-100">{fanPreferences.preferredTone}</span>
+                                            </div>
+                                        )}
+                                        {fanPreferences.communicationStyle && (
+                                            <div>
+                                                <span className="text-purple-700 dark:text-purple-300 font-medium">Style:</span>
+                                                <span className="ml-1 text-purple-900 dark:text-purple-100">{fanPreferences.communicationStyle}</span>
+                                            </div>
+                                        )}
+                                        {fanPreferences.favoriteSessionType && (
+                                            <div>
+                                                <span className="text-purple-700 dark:text-purple-300 font-medium">Fav Type:</span>
+                                                <span className="ml-1 text-purple-900 dark:text-purple-100 truncate">{fanPreferences.favoriteSessionType.split(' ')[0]}</span>
+                                            </div>
+                                        )}
+                                        {fanPreferences.spendingLevel > 0 && (
+                                            <div>
+                                                <span className="text-purple-700 dark:text-purple-300 font-medium">Spending:</span>
+                                                <span className="ml-1 text-purple-900 dark:text-purple-100">{fanPreferences.spendingLevel}/5</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    {fanPreferences.suggestedFlow && (
+                                        <div className="mt-2 text-xs text-purple-800 dark:text-purple-200">
+                                            <span className="font-medium">💡 Tip: </span>{fanPreferences.suggestedFlow}
+                                        </div>
+                                    )}
+                                    <p className="mt-2 text-xs text-purple-700 dark:text-purple-300 italic">
+                                        Captions will be personalized for this fan's preferences
+                                    </p>
+                                </div>
+                            )}
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
@@ -2899,9 +3227,13 @@ export const OnlyFansContentBrain: React.FC = () => {
                             </h3>
                             <div className="space-y-3">
                                 {generatedCaptions.map((caption, index) => {
-                                    // Only check if used by index in current generation session
-                                    // usedCaptionsHash is only checked when marking as used to prevent duplicates
-                                    const isUsed = usedCaptions.has(index);
+                                    // Check if used by index or by caption hash (Unicode-safe)
+                                    // Use TextEncoder to handle Unicode characters properly
+                                    const encoder = new TextEncoder();
+                                    const data = encoder.encode(caption);
+                                    const binaryString = Array.from(data, byte => String.fromCharCode(byte)).join('');
+                                    const captionHash = btoa(binaryString).substring(0, 50);
+                                    const isUsed = usedCaptions.has(index) || usedCaptionsHash.has(captionHash);
                                     return (
                                     <div
                                         key={index}
@@ -2917,9 +3249,13 @@ export const OnlyFansContentBrain: React.FC = () => {
                                             </div>
                                         )}
                                         <textarea
-                                            value={currentCaptionForAI || caption}
-                                            onChange={(e) => setCurrentCaptionForAI(e.target.value)}
-                                            onFocus={() => setCurrentCaptionForAI(caption)}
+                                            value={editedCaptions.get(index) ?? caption}
+                                            onChange={(e) => {
+                                                const newEditedCaptions = new Map(editedCaptions);
+                                                newEditedCaptions.set(index, e.target.value);
+                                                setEditedCaptions(newEditedCaptions);
+                                                setCurrentCaptionForAI(e.target.value);
+                                            }}
                                             disabled={isUsed}
                                             className={`w-full p-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[80px] mb-2 ${
                                                 isUsed ? 'opacity-50 cursor-not-allowed' : ''
@@ -2930,7 +3266,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                                             <>
                                                 <div className="mb-2">
                                                     <button
-                                                        onClick={() => copyToClipboard(currentCaptionForAI || caption)}
+                                                        onClick={() => copyToClipboard(editedCaptions.get(index) ?? caption)}
                                                         className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
                                                     >
                                                         <CopyIcon className="w-4 h-4" />
@@ -2943,9 +3279,10 @@ export const OnlyFansContentBrain: React.FC = () => {
                                                             <button
                                                                 onClick={async () => {
                                                                     // Save as Draft to OnlyFans calendar
-                                                                    await handleSaveCaptionToOnlyFansCalendar(caption, [], 'Draft');
+                                                                    const captionToSave = editedCaptions.get(index) ?? caption;
+                                                                    await handleSaveCaptionToOnlyFansCalendar(captionToSave, [], 'Draft');
                                                                     // Mark as used (persist to Firestore)
-                                                                    await markCaptionAsUsed(caption, index);
+                                                                    await markCaptionAsUsed(captionToSave, index);
                                                                 }}
                                                                 className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
                                                             >
@@ -2963,7 +3300,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                                                                             return;
                                                                         }
                                                                         const postId = Date.now().toString();
-                                                                        const fullCaption = currentCaptionForAI || caption;
+                                                                        const fullCaption = editedCaptions.get(index) ?? caption;
                                                                         const scheduledDateISO = new Date(scheduledDate).toISOString();
                                                                         // Only save as a post - do NOT create a reminder event
                                                                         const postData = {
@@ -3006,7 +3343,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                                     {/* Analyze Content Gaps */}
                                     <button
                                         onClick={handleAnalyzeContentGaps}
-                                        disabled={isAnalyzingGaps || isGenerating}
+                                        disabled={isAnalyzingGaps || isPredicting || isRepurposing}
                                         className="px-4 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium transition-all shadow-md hover:shadow-lg"
                                     >
                                         {isAnalyzingGaps ? (
@@ -3025,29 +3362,47 @@ export const OnlyFansContentBrain: React.FC = () => {
                                     {/* Predict Performance */}
                                     <button
                                         onClick={handlePredictPerformance}
-                                        disabled={isGenerating || user?.plan === 'Free' || generatedCaptions.length === 0}
+                                        disabled={isPredicting || isRepurposing || isAnalyzingGaps || user?.plan === 'Free' || generatedCaptions.length === 0}
                                         className={`px-4 py-3 rounded-lg font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 ${
                                             user?.plan === 'Free' || generatedCaptions.length === 0
                                                 ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
                                                 : 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:from-blue-700 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed'
                                         }`}
                                     >
-                                        <SparklesIcon className="w-5 h-5" />
-                                        Predict Performance
+                                        {isPredicting ? (
+                                            <>
+                                                <RefreshIcon className="w-5 h-5 animate-spin" />
+                                                Predicting...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <SparklesIcon className="w-5 h-5" />
+                                                Predict Performance
+                                            </>
+                                        )}
                                     </button>
 
                                     {/* Repurpose Content */}
                                     <button
                                         onClick={handleRepurposeContent}
-                                        disabled={isGenerating || user?.plan === 'Free' || generatedCaptions.length === 0}
+                                        disabled={isRepurposing || isPredicting || isAnalyzingGaps || user?.plan === 'Free' || generatedCaptions.length === 0}
                                         className={`px-4 py-3 rounded-lg font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 ${
                                             user?.plan === 'Free' || generatedCaptions.length === 0
                                                 ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
                                                 : 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed'
                                         }`}
                                     >
-                                        <SparklesIcon className="w-5 h-5" />
-                                        Repurpose Content
+                                        {isRepurposing ? (
+                                            <>
+                                                <RefreshIcon className="w-5 h-5 animate-spin" />
+                                                Repurposing...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <SparklesIcon className="w-5 h-5" />
+                                                Repurpose Content
+                                            </>
+                                        )}
                                     </button>
                                 </div>
                             </div>
@@ -3061,7 +3416,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                                 {/* Analyze Content Gaps */}
                                 <button
                                     onClick={handleAnalyzeContentGaps}
-                                    disabled={isAnalyzingGaps || isGenerating}
+                                    disabled={isAnalyzingGaps || isPredicting || isRepurposing}
                                     className="px-4 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium transition-all shadow-md hover:shadow-lg"
                                 >
                                     {isAnalyzingGaps ? (
@@ -3080,29 +3435,47 @@ export const OnlyFansContentBrain: React.FC = () => {
                                 {/* Predict Performance */}
                                 <button
                                     onClick={handlePredictPerformance}
-                                    disabled={isGenerating || user?.plan === 'Free' || generatedCaptions.length === 0}
+                                    disabled={isPredicting || isRepurposing || isAnalyzingGaps || user?.plan === 'Free' || generatedCaptions.length === 0}
                                     className={`px-4 py-3 rounded-lg font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 ${
                                         user?.plan === 'Free' || generatedCaptions.length === 0
                                             ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
                                             : 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:from-blue-700 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed'
                                     }`}
                                 >
-                                    <SparklesIcon className="w-5 h-5" />
-                                    Predict Performance
+                                    {isPredicting ? (
+                                        <>
+                                            <RefreshIcon className="w-5 h-5 animate-spin" />
+                                            Predicting...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <SparklesIcon className="w-5 h-5" />
+                                            Predict Performance
+                                        </>
+                                    )}
                                 </button>
 
                                 {/* Repurpose Content */}
                                 <button
                                     onClick={handleRepurposeContent}
-                                    disabled={isGenerating || user?.plan === 'Free' || generatedCaptions.length === 0}
+                                    disabled={isRepurposing || isPredicting || isAnalyzingGaps || user?.plan === 'Free' || generatedCaptions.length === 0}
                                     className={`px-4 py-3 rounded-lg font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 ${
                                         user?.plan === 'Free' || generatedCaptions.length === 0
                                             ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
                                             : 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed'
                                     }`}
                                 >
-                                    <SparklesIcon className="w-5 h-5" />
-                                    Repurpose Content
+                                    {isRepurposing ? (
+                                        <>
+                                            <RefreshIcon className="w-5 h-5 animate-spin" />
+                                            Repurposing...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <SparklesIcon className="w-5 h-5" />
+                                            Repurpose Content
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </div>
@@ -4073,6 +4446,101 @@ export const OnlyFansContentBrain: React.FC = () => {
                     {generatedMonetizationPlan && (
                         <MonetizationPlanFormatter plan={generatedMonetizationPlan} />
                     )}
+                </div>
+            )}
+
+            {/* Messaging Tab */}
+            {activeTab === 'messaging' && (
+                <div className="space-y-6">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                                Subscriber Messaging Toolkit
+                            </h2>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">copy/paste templates</span>
+                        </div>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                            Generate short message sequences that improve retention and PPV conversions (manual sending).
+                        </p>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Message type</label>
+                                <select
+                                    value={messageType}
+                                    onChange={(e) => setMessageType(e.target.value as any)}
+                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                >
+                                    <option value="Welcome sequence">Welcome sequence</option>
+                                    <option value="Renewal reminder">Renewal reminder</option>
+                                    <option value="PPV follow-up">PPV follow-up</option>
+                                    <option value="Win-back">Win-back</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Tone</label>
+                                <select
+                                    value={messageTone}
+                                    onChange={(e) => setMessageTone(e.target.value as any)}
+                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                >
+                                    <option value="Warm">Warm</option>
+                                    <option value="Flirty">Flirty</option>
+                                    <option value="Direct">Direct</option>
+                                </select>
+                            </div>
+                            <div className="md:col-span-1">
+                                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Context (optional)</label>
+                                <input
+                                    value={messageContext}
+                                    onChange={(e) => setMessageContext(e.target.value)}
+                                    placeholder="e.g., promo ends tonight, new PPV drop, discount, theme"
+                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="mt-4 flex items-center justify-between gap-3">
+                            <button
+                                onClick={handleGenerateSubscriberMessages}
+                                disabled={isGeneratingMessages}
+                                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-60"
+                            >
+                                {isGeneratingMessages ? 'Generating…' : 'Generate messages'}
+                            </button>
+
+                            {generatedMessages?.trim() && (
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => copyToClipboard(generatedMessages)}
+                                        className="px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center gap-2"
+                                    >
+                                        <CopyIcon className="w-4 h-4" />
+                                        Copy
+                                    </button>
+                                    <button
+                                        onClick={() => saveToHistory('subscriber_messages', `Subscriber Messages - ${new Date().toLocaleDateString()}`, {
+                                            messageType,
+                                            tone: messageTone,
+                                            context: messageContext,
+                                            text: generatedMessages,
+                                        })}
+                                        className="px-3 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                                    >
+                                        Save
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {generatedMessages?.trim() && (
+                            <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                <pre className="whitespace-pre-wrap text-sm text-gray-900 dark:text-white font-sans">
+                                    {generatedMessages}
+                                </pre>
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
 

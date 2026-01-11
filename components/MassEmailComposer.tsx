@@ -27,6 +27,12 @@ export const MassEmailComposer: React.FC<MassEmailComposerProps> = ({ isOpen, on
     sent: number;
     failed: number;
   } | null>(null);
+  
+  // AI Email Generation
+  const [aiInstructions, setAiInstructions] = useState('');
+  const [isGeneratingEmail, setIsGeneratingEmail] = useState(false);
+  const [showAiGenerator, setShowAiGenerator] = useState(false);
+  const [emailTone, setEmailTone] = useState<'professional' | 'friendly' | 'casual' | 'formal' | 'enthusiastic'>('professional');
 
   useEffect(() => {
     if (!isOpen) return;
@@ -97,6 +103,45 @@ export const MassEmailComposer: React.FC<MassEmailComposerProps> = ({ isOpen, on
       showToast(e?.message || 'Failed to send mass email', 'error');
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const generateEmailWithAI = async () => {
+    if (!aiInstructions.trim()) {
+      showToast('Please describe what you want in the email', 'error');
+      return;
+    }
+
+    setIsGeneratingEmail(true);
+    try {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+      if (!token) throw new Error('Not authenticated');
+
+      const resp = await fetch('/api/generateEmailContent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          instructions: aiInstructions.trim(),
+          emailType: 'mass',
+          tone: emailTone,
+          includePlaceholders: true,
+        }),
+      });
+
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || !data.success) {
+        throw new Error(data.error || data.note || 'Failed to generate email');
+      }
+
+      setSubject(data.subject || '');
+      setText(data.body || '');
+      setShowAiGenerator(false);
+      setAiInstructions('');
+      showToast('Email generated successfully! Review and edit as needed.', 'success');
+    } catch (e: any) {
+      showToast(e?.message || 'Failed to generate email', 'error');
+    } finally {
+      setIsGeneratingEmail(false);
     }
   };
 
@@ -207,6 +252,71 @@ export const MassEmailComposer: React.FC<MassEmailComposerProps> = ({ isOpen, on
                 </select>
               </div>
             </div>
+          </div>
+
+          {/* AI Email Generator */}
+          <div className="border border-primary-200 dark:border-primary-800 rounded-lg p-4 bg-primary-50 dark:bg-primary-900/20">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">✨ AI Email Generator</h3>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                  Describe what you want to say, and AI will write the email for you
+                </p>
+              </div>
+              <button
+                onClick={() => setShowAiGenerator(!showAiGenerator)}
+                className="px-3 py-1 text-xs rounded-md bg-primary-600 text-white hover:bg-primary-700"
+              >
+                {showAiGenerator ? 'Hide' : 'Generate with AI'}
+              </button>
+            </div>
+
+            {showAiGenerator && (
+              <div className="space-y-3 mt-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    What should this email say?
+                  </label>
+                  <textarea
+                    value={aiInstructions}
+                    onChange={(e) => setAiInstructions(e.target.value)}
+                    placeholder="e.g., 'Announce a new feature launch to all Pro users' or 'Send a welcome email to new signups'"
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Tone
+                  </label>
+                  <select
+                    value={emailTone}
+                    onChange={(e) => setEmailTone(e.target.value as any)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
+                  >
+                    <option value="professional">Professional</option>
+                    <option value="friendly">Friendly</option>
+                    <option value="casual">Casual</option>
+                    <option value="formal">Formal</option>
+                    <option value="enthusiastic">Enthusiastic</option>
+                  </select>
+                </div>
+                <button
+                  onClick={generateEmailWithAI}
+                  disabled={isGeneratingEmail || !aiInstructions.trim()}
+                  className="w-full px-4 py-2 rounded-md bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                >
+                  {isGeneratingEmail ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                      Generating...
+                    </span>
+                  ) : (
+                    '✨ Generate Email'
+                  )}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Subject */}

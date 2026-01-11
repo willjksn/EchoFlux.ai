@@ -23,6 +23,8 @@ export const EmailHistory: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<'all' | 'waitlist' | 'mass' | 'scheduled' | 'template' | 'other'>('all');
   const [selectedEmail, setSelectedEmail] = useState<EmailHistoryEntry | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     const loadHistory = async () => {
@@ -56,6 +58,66 @@ export const EmailHistory: React.FC = () => {
     scheduled: history.filter((h) => h.category === 'scheduled').length,
   };
 
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === history.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(history.map(h => h.id)));
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedIds.size === 0) {
+      showToast('Please select at least one email to delete', 'error');
+      return;
+    }
+
+    if (!window.confirm(`Are you sure you want to delete ${selectedIds.size} email(s)? This action cannot be undone.`)) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+      if (!token) throw new Error('Not authenticated');
+
+      const response = await fetch('/api/deleteEmailHistory', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ ids: Array.from(selectedIds) }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || 'Failed to delete emails');
+
+      // Remove deleted emails from local state
+      const deletedCount = selectedIds.size;
+      setHistory(prev => prev.filter(h => !selectedIds.has(h.id)));
+      setSelectedIds(new Set());
+      showToast(`Successfully deleted ${deletedCount} email(s)`, 'success');
+    } catch (e: any) {
+      console.error('Failed to delete emails:', e);
+      showToast(e?.message || 'Failed to delete emails', 'error');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -85,21 +147,32 @@ export const EmailHistory: React.FC = () => {
         </div>
       </div>
 
-      {/* Category Tabs */}
-      <div className="flex flex-wrap gap-2 border-b border-gray-200 dark:border-gray-700 pb-2">
-        {(['all', 'waitlist', 'mass', 'scheduled', 'template', 'other'] as const).map((cat) => (
+      {/* Category Tabs and Delete Button */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 dark:border-gray-700 pb-2">
+        <div className="flex flex-wrap gap-2">
+          {(['all', 'waitlist', 'mass', 'scheduled', 'template', 'other'] as const).map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={`px-4 py-2 rounded-md transition-colors capitalize ${
+                activeCategory === cat
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+        {selectedIds.size > 0 && (
           <button
-            key={cat}
-            onClick={() => setActiveCategory(cat)}
-            className={`px-4 py-2 rounded-md transition-colors capitalize ${
-              activeCategory === cat
-                ? 'bg-primary-600 text-white'
-                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-            }`}
+            onClick={handleDeleteSelected}
+            disabled={isDeleting}
+            className="px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
           >
-            {cat}
+            {isDeleting ? 'Deleting...' : `Delete ${selectedIds.size} Selected`}
           </button>
-        ))}
+        )}
       </div>
 
       {/* History Table */}
@@ -111,6 +184,14 @@ export const EmailHistory: React.FC = () => {
             <table className="w-full">
               <thead className="bg-gray-50 dark:bg-gray-900">
                 <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    <input
+                      type="checkbox"
+                      checked={history.length > 0 && selectedIds.size === history.length}
+                      onChange={handleSelectAll}
+                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    />
+                  </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Sent At</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">To</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Subject</th>
@@ -123,13 +204,21 @@ export const EmailHistory: React.FC = () => {
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                 {history.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
+                    <td colSpan={8} className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
                       No email history found.
                     </td>
                   </tr>
                 ) : (
                   history.map((entry) => (
                     <tr key={entry.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                      <td className="px-6 py-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(entry.id)}
+                          onChange={() => handleToggleSelect(entry.id)}
+                          className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                        />
+                      </td>
                       <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
                         {new Date(entry.sentAt).toLocaleString()}
                       </td>

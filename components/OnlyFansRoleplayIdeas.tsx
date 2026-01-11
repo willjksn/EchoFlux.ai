@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from './AppContext';
 import { SparklesIcon, RefreshIcon } from './icons/UIIcons';
+import { OnlyFansSextingSession } from './OnlyFansSextingSession';
 import { auth } from '../firebaseConfig';
 
 type RoleplayType = 'GFE' | 'Dom/Sub' | 'Teacher/Student' | 'Boss/Assistant' | 'Fitness Trainer' | 'Soft Mommy/Daddy' | 'Custom';
@@ -16,12 +17,13 @@ interface RoleplayScenario {
 
 export const OnlyFansRoleplayIdeas: React.FC = () => {
     const { showToast } = useAppContext();
-    const [activeTab, setActiveTab] = useState<'roleplay' | 'persona' | 'interactive' | 'ratings'>('roleplay');
+    const [activeTab, setActiveTab] = useState<'roleplay' | 'persona' | 'interactive' | 'ratings' | 'sexting'>('roleplay');
     const [isGenerating, setIsGenerating] = useState(false);
 
     // Roleplay Scenario state
     const [roleplayType, setRoleplayType] = useState<RoleplayType>('GFE');
     const [customRoleplay, setCustomRoleplay] = useState('');
+    const [roleplayContext, setRoleplayContext] = useState('');
     const [roleplayTone, setRoleplayTone] = useState<Tone>('teasing');
     const [sessionLength, setSessionLength] = useState<SessionLength>('short');
     const [generatedRoleplay, setGeneratedRoleplay] = useState<RoleplayScenario | null>(null);
@@ -56,19 +58,128 @@ export const OnlyFansRoleplayIdeas: React.FC = () => {
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
                 body: JSON.stringify({
-                    prompt: `Generate a complete roleplay scenario for OnlyFans content creation. 
+                    prompt: `Generate ${sessionLength === 'short' ? '5-7' : '8-12'} direct first-person messages for OnlyFans ${selectedType} content.
 
 Roleplay Type: ${selectedType}
 Tone: ${roleplayTone}
-Session Length: ${sessionLength === 'short' ? 'Short session (15-30 minutes)' : 'Extended session (1-2 hours)'}
+Session Length: ${sessionLength === 'short' ? 'Short session (15-30 minutes, 5-7 messages)' : 'Extended session (1-2 hours, 8-12 messages)'}
+${roleplayContext.trim() ? `\n\nIMPORTANT - CONTEXT/SITUATION:\n${roleplayContext}\n\nCRITICAL: The scenario MUST match this context. If the user specifies a time of day (morning, night, etc.), situation (just woke up, getting ready for bed, at work, etc.), or specific scenario details, the generated content MUST align with that context. Do NOT generate scenarios that contradict the provided context.` : ''}
 
-Generate a detailed roleplay scenario that includes:
-1. SCENARIO PREMISE: A brief description of the roleplay setting and characters (2-3 sentences)
-2. OPENING MESSAGE: The first message that starts the roleplay session (engaging and sets the scene)
-3. ESCALATION PROMPTS: 5-7 prompts that help escalate the roleplay naturally (each should be a natural progression)
-4. ENDING CTA: A soft call-to-action that encourages unlocking exclusive content or continuing the session
+${selectedType.toLowerCase().includes('gfe') || selectedType.toLowerCase().includes('girlfriend experience') ? `
+🔹 GFE (GIRLFRIEND EXPERIENCE) - CRITICAL INSTRUCTIONS:
 
-Make it creative, engaging, and tailored for adult content platforms. The tone should be ${roleplayTone}. Format as JSON with keys: premise, openingMessage, escalationPrompts (array), endingCTA.`,
+GFE messages are written in FIRST-PERSON as if the creator is texting the fan directly.
+The creator is acting like the fan's girlfriend sending casual, intimate text messages.
+
+✅ CORRECT FORMAT (what you MUST generate):
+"I just finished my coffee and I'm still half wrapped up in my hoodie. It's one of those quiet mornings where everything feels slow and soft. I kept thinking about you while I was getting ready. Did you sleep okay?"
+
+❌ WRONG FORMAT (DO NOT generate this):
+"Scenario: You're relaxing after a long day when you receive a message from your girlfriend..."
+
+THE 4-PART GFE MESSAGE STRUCTURE:
+Every GFE message should follow this structure:
+1. Moment – something relatable (e.g., "I just finished my coffee...")
+2. Emotion – how it feels (e.g., "...everything feels slow and soft")
+3. Connection – why it involves them (e.g., "I kept thinking about you...")
+4. Invitation – a question or soft CTA (e.g., "Did you sleep okay?")
+
+GFE MESSAGE TYPES (use variety):
+A. Daily Life GFE - Morning/casual check-ins
+   Example: "I just finished my coffee and I'm still half wrapped up in my hoodie. It's one of those quiet mornings where everything feels slow and soft. I kept thinking about you while I was getting ready. Did you sleep okay?"
+
+B. Emotional Connection GFE - Making them feel chosen
+   Example: "Today's been a little busy, but you crossed my mind more than once. It's funny how some people just stick with you even when you're distracted. I like that feeling. Tell me what your day's been like."
+
+C. Evening/Wind-Down GFE - Comfort + closeness
+   Example: "I finally slowed down for the night. Lights are low, phone's in my hand, and I'm just letting the day fade out. These are my favorite moments — when things feel simple. What's the last thing that made you smile today?"
+
+D. Flirty But Safe GFE - Playfulness without being explicit
+   Example: "I caught myself smiling at my screen earlier and had to laugh. You have that effect sometimes. I'll let you decide if that's dangerous or cute. What do you think?"
+
+E. "I Miss You" Style GFE - Re-engaging
+   Example: "It's been a minute, hasn't it? Some days just move fast, but I still notice when someone's not around. I hope you've been okay. Come talk to me."
+
+CRITICAL REQUIREMENTS:
+- Write in FIRST-PERSON as the creator texting the fan
+- NO third-person descriptions or scenario setups
+- Each message should feel like a real text from a girlfriend
+- Messages should feel natural, not scripted
+- Include relatable moments, emotions, and gentle invitations
+- Tone: ${roleplayTone}
+- Create emotional closeness and encourage responses
+
+` : `
+🔹 ${selectedType.toUpperCase()} ROLEPLAY - CRITICAL INSTRUCTIONS:
+
+Generate FIRST-PERSON messages as if the creator is directly texting/messaging the fan IN CHARACTER.
+The creator IS the character - they send messages AS that character to the fan.
+
+✅ CORRECT FORMAT (what you MUST generate):
+Direct messages from the character's perspective that the creator sends to fans.
+
+❌ WRONG FORMAT (DO NOT generate):
+"Scenario: You're in a classroom when..."
+"She sends you a message saying..."
+Any third-person descriptions.
+
+ROLEPLAY-SPECIFIC EXAMPLES:
+
+${selectedType.toLowerCase().includes('dom') || selectedType.toLowerCase().includes('sub') ? `
+DOM/SUB:
+- Soft: "You've been such a good one for me today. I think you deserve something special..."
+- Explicit: "Get on your knees. Now. I've been thinking about using you all day..."
+` : ''}
+${selectedType.toLowerCase().includes('teacher') || selectedType.toLowerCase().includes('student') ? `
+TEACHER/STUDENT:
+- Soft: "I noticed you staying late. My office hours are always open for you..."
+- Explicit: "Lock the door. I think it's time for a very private lesson..."
+` : ''}
+${selectedType.toLowerCase().includes('boss') || selectedType.toLowerCase().includes('assistant') ? `
+BOSS/ASSISTANT:
+- Soft: "You've been working so hard. Come to my office, I have something for you..."
+- Explicit: "My office. Now. Lock the door. I've been watching you all day..."
+` : ''}
+${selectedType.toLowerCase().includes('fitness') || selectedType.toLowerCase().includes('trainer') ? `
+FITNESS TRAINER:
+- Soft: "Great workout today. Ready for a special stretching session?"
+- Explicit: "Get on the mat. I'm going to stretch you out like never before..."
+` : ''}
+${selectedType.toLowerCase().includes('mommy') || selectedType.toLowerCase().includes('daddy') ? `
+SOFT MOMMY/DADDY:
+- Soft: "Come here baby, let me take care of you..."
+- Explicit: "Come to mommy/daddy. I'm going to take such good care of you tonight..."
+` : ''}
+
+REQUIREMENTS:
+- Write in FIRST-PERSON as the character (I, me, my)
+- The creator IS the character - messaging the fan directly
+- Each message should be ready to copy and send to a fan
+- Tone: ${roleplayTone} - ${roleplayTone === 'explicit' ? 'USE EXPLICIT, UNCENSORED, RAW SEXUAL LANGUAGE' : roleplayTone === 'teasing' ? 'be suggestive and build anticipation' : roleplayTone === 'playful' ? 'be fun and flirty' : 'be warm and inviting'}
+- Include natural conversation hooks
+`}
+
+Generate a JSON object with these fields:
+1. "premise": A 1-sentence description of the message flow theme/vibe (for creator's reference only)
+2. "openingMessage": The first message to send
+3. "escalationPrompts": Array of ${sessionLength === 'short' ? '5-7' : '8-12'} follow-up messages that progress the conversation naturally
+4. "endingCTA": Final message with a soft call-to-action for unlocking content or continuing
+
+CRITICAL - ALL MESSAGES MUST BE:
+- Written in FIRST-PERSON (I, me, my)
+- Direct messages the creator can copy and send
+- Natural, conversational, and authentic
+- NOT descriptions or scenarios
+- Ready to send as-is to fans
+
+Format as JSON: {"premise": "...", "openingMessage": "...", "escalationPrompts": ["message 1", "message 2", ...], "endingCTA": "..."}
+
+🚨 CRITICAL - UNIQUENESS REQUIREMENT 🚨
+- Each message MUST be UNIQUE and DIFFERENT from any previous messages you've generated
+- Creators use these repeatedly - NEVER repeat the same messages
+- Vary the moments, emotions, and conversation hooks
+- Use different themes and vibes each time
+- Make each set feel fresh and authentic`,
                     context: {
                         goal: 'roleplay-content',
                         tone: 'Explicit/Adult Content',
@@ -137,7 +248,14 @@ The persona should include:
 - Fan interaction approach
 - Content style preferences
 
-Make it detailed, creative, and tailored for adult content platforms. Format as a well-structured persona profile.`,
+Make it detailed, creative, and tailored for adult content platforms. Format as a well-structured persona profile.
+
+🚨 CRITICAL - UNIQUENESS REQUIREMENT 🚨
+- This persona MUST be UNIQUE and DIFFERENT from any previous personas you've generated
+- Creators use personas repeatedly - NEVER repeat the same persona details
+- Vary the personality traits, communication style, and content themes
+- Use different characteristics, quirks, and selling points each time
+- Make each persona feel fresh, unique, and distinct`,
                     context: {
                         goal: 'persona-creation',
                         tone: 'Explicit/Adult Content',
@@ -189,7 +307,14 @@ Each idea should encourage audience participation, engagement, and interaction. 
 - Q&A sessions
 - Fan request themes
 
-Format as a numbered list with brief descriptions. Make them engaging and monetization-friendly.`,
+Format as a numbered list with brief descriptions. Make them engaging and monetization-friendly.
+
+🚨 CRITICAL - UNIQUENESS REQUIREMENT 🚨
+- Each post idea MUST be UNIQUE and DIFFERENT from any previous ideas you've generated
+- Creators use these ideas repeatedly with the same fans - NEVER repeat the same post idea
+- Vary the concepts, engagement strategies, and captions each time
+- Use different angles, hooks, and monetization approaches
+- Make each idea feel fresh, creative, and unique`,
                     context: {
                         goal: 'interactive-content',
                         tone: 'Explicit/Adult Content',
@@ -232,20 +357,54 @@ Format as a numbered list with brief descriptions. Make them engaging and moneti
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
                 body: JSON.stringify({
-                    prompt: `Generate 12 creative body rating prompt ideas for OnlyFans based on: ${ratingPrompt}
+                    prompt: `Generate EXACTLY 12 body rating prompt ideas for OnlyFans.
+
+🚨 CRITICAL - GENERATE ONLY WHAT IS REQUESTED 🚨
+USER REQUEST: ${ratingPrompt}
+
+MANDATORY REQUIREMENT - READ CAREFULLY:
+- You MUST generate prompts ONLY about: ${ratingPrompt}
+- ALL 12 prompts must be about EXACTLY what the user requested
+- DO NOT generate prompts for different body parts, themes, or topics
+- DO NOT create variety or mix different subjects
+- If user asks for "big black dick" prompts, ALL prompts must be about rating big black dicks
+- If user asks for "tits" prompts, ALL prompts must be about rating tits
+- If user asks for "feet" prompts, ALL prompts must be about rating feet
+- DO NOT generate "Titty Talk Tuesdays" or "Leg Day Love" or "Feet Fetish Friday" unless the user specifically requests those themes
+- Focus ONLY on the exact body part/theme the user specified: ${ratingPrompt}
+- Each prompt should be a variation of rating the SAME thing the user requested
+- Generate 12 DIFFERENT ways to ask for/offer ratings of: ${ratingPrompt}
+
+🚨 CRITICAL - EXPLICIT CONTENT PLATFORM 🚨
+- This is for OnlyFans, an EXPLICIT adult content creator platform
+- Prompts MUST be EXPLICIT, UNCENSORED, RAW, and BOLD
+- Use EXPLICIT, DIRECT sexual language - NO CENSORSHIP
+- Use BOLD, DIRECT, EXPLICIT language - not suggestive or implied
 
 Each prompt should be:
-- Engaging and playful
+- About rating: ${ratingPrompt} (ONLY this, nothing else)
+- Engaging, playful, and EXPLICIT
 - Encourage audience interaction
-- Suitable for adult content platforms
+- Suitable for EXPLICIT adult content platforms
 - Include clear instructions for rating
+- Reference the specific body part/theme using explicit terminology: ${ratingPrompt}
+- Use BOLD, DIRECT, EXPLICIT language
+- Variations of asking for/offering ratings of: ${ratingPrompt}
 
-Examples:
-- "Rate my legs from 1-10... winner gets a surprise tonight 😈"
-- "Which do you want more tonight: thighs or back?"
-- "Pick what I post next 👀"
+REMINDER - CRITICAL:
+- ALL prompts must be about: ${ratingPrompt}
+- DO NOT generate prompts for other body parts or themes
+- DO NOT create variety - focus ONLY on what the user requested
+- Generate 12 different ways to ask for/offer ratings of: ${ratingPrompt}
 
-Format as a numbered list with complete prompt text. Make them creative and varied.`,
+Format as a numbered list (1-12) with complete prompt text. Make them creative, varied in approach, but ALL about: ${ratingPrompt}.
+
+🚨 CRITICAL - UNIQUENESS REQUIREMENT 🚨
+- Each prompt MUST be UNIQUE and DIFFERENT from any previous prompts you've generated
+- Creators use these prompts repeatedly with the same fans - NEVER repeat the same prompt
+- Vary the wording, approach, and style of each prompt
+- Use different angles, hooks, and CTAs
+- Make each prompt feel fresh, creative, and unique`,
                     context: {
                         goal: 'rating-content',
                         tone: 'Explicit/Adult Content',
@@ -278,6 +437,7 @@ Format as a numbered list with complete prompt text. Make them creative and vari
 
     const tabs: { id: typeof activeTab; label: string }[] = [
         { id: 'roleplay', label: 'Roleplay Scenarios' },
+        { id: 'sexting', label: 'Chat/Sexting Session' },
         { id: 'persona', label: 'Persona Builder' },
         { id: 'interactive', label: 'Interactive Posts' },
         { id: 'ratings', label: 'Body Ratings' },
@@ -374,6 +534,21 @@ Format as a numbered list with complete prompt text. Make them creative and vari
                                     />
                                 </div>
                             )}
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Context / Situation (Optional):
+                                </label>
+                                <textarea
+                                    value={roleplayContext}
+                                    onChange={(e) => setRoleplayContext(e.target.value)}
+                                    placeholder="e.g., 'It's morning, I just woke up and want to send a good morning message' or 'It's late at night, I'm getting ready for bed' or 'I'm at work and want to send a teasing message'"
+                                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[80px]"
+                                />
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    Add context about the time of day, situation, or specific scenario you need. This helps generate more relevant content.
+                                </p>
+                            </div>
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -635,6 +810,13 @@ Format as a numbered list with complete prompt text. Make them creative and vari
                             </div>
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* Sexting Session Tab */}
+            {activeTab === 'sexting' && (
+                <div className="space-y-6">
+                    <OnlyFansSextingSession />
                 </div>
             )}
 

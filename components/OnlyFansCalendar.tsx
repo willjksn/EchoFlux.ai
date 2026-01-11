@@ -5,6 +5,7 @@ import { db } from '../firebaseConfig';
 import { collection, query, orderBy, onSnapshot, doc, setDoc, deleteDoc, getDocs } from 'firebase/firestore';
 import { PlusIcon, TrashIcon, XMarkIcon, CheckCircleIcon, DownloadIcon, SparklesIcon, CopyIcon } from './icons/UIIcons';
 import { generateCaptions } from '../src/services/geminiService';
+import { FanSelector } from './FanSelector';
 
 export interface OnlyFansCalendarEvent {
     id: string;
@@ -69,6 +70,8 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
     const [eventContentType, setEventContentType] = useState<'free' | 'paid'>('free');
     const [eventDate, setEventDate] = useState('');
     const [eventTime, setEventTime] = useState('');
+    const [selectedFanId, setSelectedFanId] = useState<string | null>(null);
+    const [selectedFanName, setSelectedFanName] = useState<string | null>(null);
 
     // Load reminders from Firestore
     useEffect(() => {
@@ -278,7 +281,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
             const reminderId = selectedEvent?.reminder?.id || `evt-${Date.now()}`;
             const dateTime = new Date(`${eventDate}T${eventTime || '12:00'}`);
             
-            const eventData: Omit<OnlyFansCalendarEvent, 'id'> = {
+            const eventData: Omit<OnlyFansCalendarEvent, 'id'> & { fanId?: string | null; fanName?: string | null } = {
                 title: eventTitle.trim(),
                 description: eventDescription.trim() || undefined,
                 date: dateTime.toISOString(),
@@ -287,6 +290,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                 reminderTime: eventTime || undefined,
                 createdAt: selectedEvent?.reminder?.createdAt || new Date().toISOString(),
                 userId: user.id,
+                ...(selectedFanId ? { fanId: selectedFanId, fanName: selectedFanName } : {}),
             };
 
             await setDoc(doc(db, 'users', user.id, 'onlyfans_calendar_events', reminderId), eventData);
@@ -323,6 +327,8 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
         setIsCreatingReminder(false);
         setSelectedEvent(null);
         setSelectedDate(null);
+        setSelectedFanId(null);
+        setSelectedFanName(null);
         setEventTitle('');
         setEventDescription('');
         setEventReminderType('post');
@@ -1354,6 +1360,16 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                     When you want to be reminded (e.g., 8:00 PM)
                                 </p>
                             </div>
+
+                            {/* Fan Selector */}
+                            <FanSelector
+                                selectedFanId={selectedFanId}
+                                onSelectFan={(fanId, fanName) => {
+                                    setSelectedFanId(fanId);
+                                    setSelectedFanName(fanName);
+                                }}
+                                allowNewFan={true}
+                            />
 
                             {/* Actions */}
                             <div className="flex gap-3 pt-4">

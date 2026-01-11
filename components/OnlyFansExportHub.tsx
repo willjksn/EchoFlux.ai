@@ -4,6 +4,7 @@ import { DownloadIcon, XMarkIcon, PlusIcon, ClockIcon, FileIcon, ImageIcon, Vide
 import { auth, db } from '../firebaseConfig';
 import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, Timestamp, setDoc } from 'firebase/firestore';
 import { OnlyFansCalendarEvent } from './OnlyFansCalendar';
+import { FanSelector } from './FanSelector';
 
 interface ExportPackage {
     id?: string;
@@ -39,6 +40,8 @@ export const OnlyFansExportHub: React.FC = () => {
     const [mediaVaultItems, setMediaVaultItems] = useState<MediaItem[]>([]);
     const [selectedMediaIds, setSelectedMediaIds] = useState<Set<string>>(new Set());
     const [copiedItem, setCopiedItem] = useState<string | null>(null); // Track what was copied
+    const [selectedFanId, setSelectedFanId] = useState<string | null>(null);
+    const [selectedFanName, setSelectedFanName] = useState<string | null>(null);
 
     // Load media from Media Vault
     useEffect(() => {
@@ -236,6 +239,7 @@ export const OnlyFansExportHub: React.FC = () => {
                 suggestedTime: suggestedTime || (finalScheduledDate ? new Date(finalScheduledDate).toLocaleString() : new Date().toLocaleString()),
                 scheduledDate: finalScheduledDate,
                 teaserCaptions,
+                ...(selectedFanId ? { fanId: selectedFanId, fanName: selectedFanName } : {}),
                 createdAt: Timestamp.now(),
             };
 
@@ -247,7 +251,7 @@ export const OnlyFansExportHub: React.FC = () => {
                 try {
                     // Create OnlyFans calendar event (saves to onlyfans_calendar_events collection)
                     const onlyFansEventId = `export-${packageId}`;
-                    const onlyFansEvent: Omit<OnlyFansCalendarEvent, 'id'> = {
+                    const onlyFansEvent: Omit<OnlyFansCalendarEvent, 'id'> & { fanId?: string | null; fanName?: string | null } = {
                         title: caption.substring(0, 50) + (caption.length > 50 ? '...' : ''),
                         date: finalScheduledDate,
                         reminderType: 'post', // Export packages are post reminders
@@ -256,6 +260,7 @@ export const OnlyFansExportHub: React.FC = () => {
                         reminderTime: scheduledTime || undefined,
                         createdAt: new Date().toISOString(),
                         userId: user.id,
+                        ...(selectedFanId ? { fanId: selectedFanId, fanName: selectedFanName } : {}),
                     };
                     await setDoc(doc(db, 'users', user.id, 'onlyfans_calendar_events', onlyFansEventId), onlyFansEvent);
                 } catch (calendarError) {
@@ -273,6 +278,8 @@ export const OnlyFansExportHub: React.FC = () => {
             setScheduledDate('');
             setScheduledTime('');
             setTeaserCaptions([]);
+            setSelectedFanId(null);
+            setSelectedFanName(null);
             
             // Reload packages
             const packagesSnap = await getDocs(query(collection(db, 'users', user.id, 'onlyfans_export_packages'), orderBy('createdAt', 'desc')));
@@ -626,6 +633,17 @@ export const OnlyFansExportHub: React.FC = () => {
                                 className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                             />
                         </div>
+
+                        {/* Fan Selector */}
+                        <FanSelector
+                            selectedFanId={selectedFanId}
+                            onSelectFan={(fanId, fanName) => {
+                                setSelectedFanId(fanId);
+                                setSelectedFanName(fanName);
+                            }}
+                            allowNewFan={true}
+                            compact={true}
+                        />
                     </div>
 
                     {/* Teaser Captions */}

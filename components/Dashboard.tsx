@@ -5,9 +5,12 @@ import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIco
 import { DashboardIcon, FlagIcon, SearchIcon, StarIcon, CalendarIcon, SparklesIcon, TrendingIcon, CheckCircleIcon, UserIcon, ArrowUpCircleIcon, KanbanIcon, BriefcaseIcon, LinkIcon, RocketIcon, ArrowUpIcon, ChatIcon, DollarSignIcon, HeartIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 import { updateUserSocialStats } from '../src/services/socialStatsService';
-import { auth } from '../firebaseConfig';
+import { auth, db } from '../firebaseConfig';
 import { ContentGapAnalysis } from './ContentGapAnalysis';
 import { FeedbackSurveyModal, type FeedbackMilestone } from './FeedbackSurveyModal';
+import { CustomFeedbackFormModal } from './CustomFeedbackFormModal';
+import { isInviteOnlyMode } from '../src/utils/inviteOnly';
+import { OFFLINE_MODE } from '../constants';
 
 const platformFilterIcons: { [key in Platform]: React.ReactNode } = {
   Instagram: <InstagramIcon />,
@@ -112,10 +115,19 @@ export const Dashboard: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<'trending' | 'engagement' | 'niche' | null>(null);
   const [showIdeasModal, setShowIdeasModal] = useState(false);
 
-  // First-login Early Testing onboarding (in-app)
+  // Admin-only daily dashboard flag & lightweight metrics
+  const isAdmin = user?.role === 'Admin';
+  const enableAdminDashboardV2 = isAdmin && (settings?.enableAdminDashboardV2 ?? true);
+  const [adminSignupCounts, setAdminSignupCounts] = useState<{ last24h: number; last7d: number }>({ last24h: 0, last7d: 0 });
+  const [isLoadingAdminSignupCounts, setIsLoadingAdminSignupCounts] = useState(false);
+  const [adminSignupError, setAdminSignupError] = useState<string | null>(null);
+
+  // First-login Early Testing onboarding (in-app) - only show in invite-only mode
   const [showEarlyTestingOnboarding, setShowEarlyTestingOnboarding] = useState(false);
   useEffect(() => {
     if (!user?.id) return;
+    // Only show early testing onboarding when invite-only mode is enabled
+    if (!isInviteOnlyMode()) return;
     const key = `earlyTestingOnboardingSeen_${user.id}`;
     if (localStorage.getItem(key) === 'true') return;
     localStorage.setItem(key, 'true');
@@ -125,6 +137,125 @@ export const Dashboard: React.FC = () => {
   // In-app feedback survey (Day 7 / Day 14) with 24h snooze
   const [showFeedbackSurvey, setShowFeedbackSurvey] = useState(false);
   const [feedbackMilestone, setFeedbackMilestone] = useState<FeedbackMilestone>('day7');
+  
+  // Custom feedback forms
+  const [pendingFeedbackForms, setPendingFeedbackForms] = useState<any[]>([]);
+  const [showCustomFeedbackForm, setShowCustomFeedbackForm] = useState(false);
+  const [selectedCustomForm, setSelectedCustomForm] = useState<any>(null);
+
+  // Fetch pending custom feedback forms
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const fetchPendingForms = async () => {
+      try {
+        const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+        const res = await fetch('/api/getPendingFeedbackForms', {
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.forms) {
+            setPendingFeedbackForms(data.forms || []);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to fetch pending feedback forms:', e);
+      }
+    };
+
+    fetchPendingForms();
+  }, [user?.id]);
+
+  // Admin-only: lightweight signup counts for the daily dashboard
+  useEffect(() => {
+    if (!enableAdminDashboardV2) return;
+    let isMounted = true;
+
+    const loadSignupCounts = async () => {
+      setIsLoadingAdminSignupCounts(true);
+      setAdminSignupError(null);
+      try {
+        const now = new Date();
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+        // Dynamic import to avoid module initialization/circular import edge-cases in production bundles
+        const { collection, query, where, getDocs } = await import('firebase/firestore');
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('signupDate', '>=', sevenDaysAgo.toISOString()));
+        const snapshot = await getDocs(q);
+
+        let last24h = 0;
+        let last7d = 0;
+
+        snapshot.forEach(docSnap => {
+          const data: any = docSnap.data();
+          const rawDate = data?.signupDate;
+          if (!rawDate) return;
+          const d = new Date(rawDate);
+          if (Number.isNaN(d.getTime())) return;
+          if (d.getTime() >= sevenDaysAgo.getTime()) last7d++;
+          if (d.getTime() >= twentyFourHoursAgo.getTime()) last24h++;
+        });
+
+        if (isMounted) {
+          setAdminSignupCounts({ last24h, last7d });
+        }
+      } catch (err) {
+        console.error('Failed to load signup counts for admin dashboard:', err);
+        if (isMounted) {
+          setAdminSignupError('Signup counts unavailable');
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingAdminSignupCounts(false);
+        }
+      }
+    };
+
+    loadSignupCounts();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [enableAdminDashboardV2]);
+
+  // Check URL for custom feedback form parameter
+  useEffect(() => {
+    if (!user?.id) return;
+    if (typeof window === 'undefined') return;
+
+    const params = new URLSearchParams(window.location.search);
+    const formId = params.get('feedbackForm');
+    if (!formId) return;
+
+    // Find the form in pending forms
+    const form = pendingFeedbackForms.find(f => f.id === formId);
+    if (form) {
+      setSelectedCustomForm(form);
+      setShowCustomFeedbackForm(true);
+      
+      // Remove query param
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('feedbackForm');
+        window.history.replaceState({}, '', url.toString());
+      } catch {}
+    }
+  }, [user?.id, pendingFeedbackForms]);
+
+  const handleCustomFeedbackSubmit = () => {
+    // Remove submitted form from pending list
+    if (selectedCustomForm) {
+      setPendingFeedbackForms(prev => prev.filter(f => f.id !== selectedCustomForm.id));
+    }
+    setSelectedCustomForm(null);
+    showToast?.('Thanks — feedback submitted!', 'success');
+  };
 
   // Open feedback modal when arriving from an email link: ?feedback=day7|day14
   useEffect(() => {
@@ -274,15 +405,14 @@ export const Dashboard: React.FC = () => {
     return user?.userType === 'Business';
   }, [selectedClient, user?.role, user?.userType]);
   
-  // Derive calendar events from posts - excludes OnlyFans posts (they only show in OnlyFans Studio calendar)
+  // Derive calendar events from posts - excludes premium content posts (they only show in Premium Content Studio calendar)
   // When posts are deleted, events automatically disappear from both Calendar and Dashboard
   const filteredCalendarEvents = useMemo(() => {
     // Get all posts that have scheduledDate - include Scheduled, Published, and Draft posts (for consistency with Calendar)
-    // Exclude OnlyFans posts - they should only appear in OnlyFans Studio calendar
+    // Exclude premium content posts - they should only appear in Premium Content Studio calendar
     const scheduledPosts = posts.filter(p => 
       p.scheduledDate && 
       (p.status === 'Scheduled' || p.status === 'Published' || p.status === 'Draft') && // Include Scheduled, Published, and Draft posts
-      (p.mediaUrl || p.mediaUrls) && // Must have media (either single or multiple)
       !(p.platforms && (p.platforms as any[]).includes('OnlyFans')) // Exclude OnlyFans posts
     );
     
@@ -292,11 +422,18 @@ export const Dashboard: React.FC = () => {
       const platforms = post.platforms || [];
       return platforms.map((platform, idx) => {
         const eventDate = post.scheduledDate || new Date().toISOString();
+        // Determine type: 'Post' | 'Story' | 'Reel' (match Calendar)
+        let eventType: 'Post' | 'Story' | 'Reel' = 'Post';
+        if ((post as any).instagramPostType === 'Story') {
+          eventType = 'Story';
+        } else if ((post as any).instagramPostType === 'Reel' || post.mediaType === 'video') {
+          eventType = 'Reel';
+        }
         return {
           id: `post-${post.id}-${platform}-${idx}`,
           title: post.content?.substring(0, 30) + '...' || 'Post',
           date: eventDate,
-          type: post.mediaType === 'video' ? 'Reel' : 'Post',
+          type: eventType,
           platform: platform as Platform, // Cast to Platform (OnlyFans will need special handling)
           status: post.status as 'Scheduled' | 'Published' | 'Draft',
           thumbnail: post.mediaUrl || undefined,
@@ -308,15 +445,11 @@ export const Dashboard: React.FC = () => {
     const eventsFromContext: CalendarEvent[] = (calendarEvents || []).filter(e => {
       // Exclude OnlyFans platform events
       if (e.platform === 'OnlyFans' || (e.platform as any) === 'OnlyFans') return false;
-      // Include scheduled, published, and draft events with future dates
-      if (e.status !== 'Scheduled' && e.status !== 'Published' && e.status !== 'Draft') return false;
-      if (!e.date) return false;
-      try {
-        const eventDate = new Date(e.date);
-        return eventDate.getTime() > new Date().getTime();
-      } catch {
-        return false;
-      }
+      // Always include reminders from the calendar_events collection (no platform/status)
+      if ((e as any).reminderType && !(e as any).platform) return true;
+      // Include scheduled, published, and draft events (do not future-filter here; consumers can decide)
+      if (e.status === 'Scheduled' || e.status === 'Published' || e.status === 'Draft') return true;
+      return false;
     });
     
     // Combine and deduplicate by ID
@@ -327,38 +460,342 @@ export const Dashboard: React.FC = () => {
     
     return uniqueEvents;
   }, [posts, calendarEvents]);
+
+  // Admin-only: scheduled emails fetched from /api/listScheduledEmails (used to augment calendar)
+  const [adminScheduledEmails, setAdminScheduledEmails] = useState<Array<{ id: string; sendAt: string; subject: string; status: string }>>([]);
+
+  // Admin-only: augment calendar events with scheduled emails (no DB writes, dashboard-only)
+  const adminEmailEvents = useMemo<CalendarEvent[]>(() => {
+    if (!enableAdminDashboardV2) return [];
+    return adminScheduledEmails
+      .filter(e => e.sendAt)
+      .map((e, idx) => ({
+        id: `scheduled-email-${e.id}-${idx}`,
+        title: e.subject || 'Scheduled email',
+        date: e.sendAt,
+        type: 'Email',
+        platform: 'Email' as any,
+        status: (e.status as any) || 'Scheduled',
+      }));
+  }, [adminScheduledEmails, enableAdminDashboardV2]);
+
+  const effectiveCalendarEvents = useMemo(() => {
+    if (enableAdminDashboardV2) {
+      return [...filteredCalendarEvents, ...adminEmailEvents];
+    }
+    return filteredCalendarEvents;
+  }, [enableAdminDashboardV2, filteredCalendarEvents, adminEmailEvents]);
   
   // Calculate today's highlights
   const todaysHighlights = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
-    const todaysPosts = posts.filter(p => {
+    const todaysPostsCreated = posts.filter(p => {
       const postDate = new Date(p.createdAt || 0);
+      if (isNaN(postDate.getTime())) return false;
       postDate.setHours(0, 0, 0, 0);
       return postDate.getTime() === today.getTime();
-    });
-    
-    const unreadMessages = messages.filter(m => !m.isArchived).length;
-    // Use filtered calendar events (only Scheduled with media)
-    const todaysEvents = filteredCalendarEvents.filter(e => {
-      const eventDate = new Date(e.date);
-      eventDate.setHours(0, 0, 0, 0);
-      return eventDate.getTime() === today.getTime();
+    }).length;
+
+    const draftsToReview = posts.filter(p => p.status === 'Draft').length;
+
+    // Planned slots today (exclude reminders; include scheduled/published/draft items)
+    const plannedToday = effectiveCalendarEvents.filter(e => {
+      if (!e?.date) return false;
+      if ((e as any).type === 'Reminder' || (e as any).reminderType) return false;
+      if (e.status === 'Draft' || e.status === 'Scheduled' || e.status === 'Published') {
+        const eventDate = new Date(e.date);
+        if (isNaN(eventDate.getTime())) return false;
+        eventDate.setHours(0, 0, 0, 0);
+        return eventDate.getTime() === today.getTime();
+      }
+      return false;
+    }).length;
+
+    const now = new Date();
+    const weekEnd = new Date();
+    weekEnd.setDate(weekEnd.getDate() + 7);
+    const plannedNext7Days = effectiveCalendarEvents.filter(e => {
+      if (!e?.date) return false;
+      if ((e as any).type === 'Reminder' || (e as any).reminderType) return false;
+      if (e.status !== 'Draft' && e.status !== 'Scheduled' && e.status !== 'Published') return false;
+      const d = new Date(e.date);
+      if (isNaN(d.getTime())) return false;
+      return d.getTime() > now.getTime() && d.getTime() <= weekEnd.getTime();
     }).length;
     
-    // Calculate response rate (mock - in real app, calculate from message timestamps)
-    const respondedMessages = messages.filter(m => m.isArchived).length;
-    const totalMessages = messages.length;
-    const responseRate = totalMessages > 0 ? Math.round((respondedMessages / totalMessages) * 100) : 0;
-    
     return {
-      postsPublished: todaysPosts.length,
-      unreadMessages,
-      scheduledPosts: todaysEvents,
-      responseRate
+      postsCreated: todaysPostsCreated,
+      draftsToReview,
+      plannedToday,
+      plannedNext7Days
     };
-  }, [posts, messages, filteredCalendarEvents]);
+  }, [posts, effectiveCalendarEvents]);
+  
+  // Admin-only growth suggestions (Gemini + Tavily prompts) - DEPRECATED, replaced by User Engagement widget
+  const [adminGrowthIdeas, setAdminGrowthIdeas] = useState<{ queries: string[]; ideas: string[]; experiments: string[] }>({ queries: [], ideas: [], experiments: [] });
+  const [isLoadingAdminGrowthIdeas, setIsLoadingAdminGrowthIdeas] = useState(false);
+  const [adminGrowthError, setAdminGrowthError] = useState<string | null>(null);
+  
+  // Admin-only: User engagement & health metrics
+  const [userEngagementData, setUserEngagementData] = useState<{
+    conversionFunnel: { free: number; pro: number; elite: number; total: number };
+    churnRisk: number; // Users who signed up >30 days ago but have low/no activity
+    featureAdoption: { captions: number; images: number; videos: number; anyFeature: number };
+    mostActiveUsers: Array<{ id: string; name: string; email: string; totalUsage: number; plan: string }>;
+    totalUsers: number;
+  } | null>(null);
+  const [isLoadingUserEngagement, setIsLoadingUserEngagement] = useState(false);
+  const [adminInviteStats, setAdminInviteStats] = useState<{ total?: number; used?: number; available?: number; expired?: number } | null>(null);
+  const [adminFeedbackStats, setAdminFeedbackStats] = useState<{ total?: number; day7?: number; day14?: number } | null>(null);
+  const [adminBilling, setAdminBilling] = useState<{ failed: any[]; renewals: any[] }>({ failed: [], renewals: [] });
+  const [adminBillingError, setAdminBillingError] = useState<string | null>(null);
+  const [isLoadingAdminBilling, setIsLoadingAdminBilling] = useState(false);
+  const [adminOnlyFansUsage, setAdminOnlyFansUsage] = useState<any | null>(null);
+  const [adminOnlyFansUsageError, setAdminOnlyFansUsageError] = useState<string | null>(null);
+  const [isLoadingAdminOnlyFansUsage, setIsLoadingAdminOnlyFansUsage] = useState(false);
+  const [showStrategyModal, setShowStrategyModal] = useState(false);
+  const [strategyModalTitle, setStrategyModalTitle] = useState('');
+  const [strategyModalContent, setStrategyModalContent] = useState<any | null>(null);
+  const [isLoadingStrategyDetail, setIsLoadingStrategyDetail] = useState(false);
+  const [showGrowthDetails, setShowGrowthDetails] = useState(true);
+  const [billingModal, setBillingModal] = useState<{ type: 'failed' | 'renewals' | null; items: any[] }>({ type: null, items: [] });
+
+  // DEPRECATED: Weekly growth searches - replaced by User Engagement widget
+  // Keeping this useEffect commented out but not removing to avoid breaking changes
+  // useEffect(() => {
+  //   if (!enableAdminDashboardV2) return;
+  //   let isMounted = true;
+  //   const run = async () => {
+  //     setIsLoadingAdminGrowthIdeas(true);
+  //     setAdminGrowthError(null);
+  //     try {
+  //       const { generateGrowthIdeas } = await import("../src/services/geminiService");
+  //       const res = await generateGrowthIdeas({
+  //         niche: "SaaS growth for a social scheduling app",
+  //         growthGoal: "activation, WAU/MAU, invites, retention"
+  //       });
+  //       // ... rest of code
+  //     } catch (err: any) {
+  //       // ... error handling
+  //     } finally {
+  //       if (isMounted) setIsLoadingAdminGrowthIdeas(false);
+  //     }
+  //   };
+  //   run();
+  //   return () => {
+  //     isMounted = false;
+  //   };
+  // }, [enableAdminDashboardV2]);
+
+  // Admin-only: Load user engagement & health metrics
+  useEffect(() => {
+    if (!enableAdminDashboardV2 || user?.role !== 'Admin') return;
+    let isMounted = true;
+
+    const loadUserEngagement = async () => {
+      setIsLoadingUserEngagement(true);
+      try {
+        const { collection, query, getDocs, where } = await import('firebase/firestore');
+        const usersRef = collection(db, 'users');
+        
+        // Get all users (excluding admins for metrics)
+        const usersQuery = query(usersRef);
+        const snapshot = await getDocs(usersQuery);
+        
+        const now = new Date();
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        
+        let freeCount = 0;
+        let proCount = 0;
+        let eliteCount = 0;
+        let churnRiskCount = 0;
+        let captionsUsers = 0;
+        let imagesUsers = 0;
+        let videosUsers = 0;
+        let anyFeatureUsers = 0;
+        const userActivity: Array<{ id: string; name: string; email: string; totalUsage: number; plan: string }> = [];
+        
+        snapshot.forEach((docSnap) => {
+          const userData = docSnap.data();
+          const userId = docSnap.id;
+          
+          // Skip admins
+          if (userData.role === 'Admin') return;
+          
+          // Count plans (only Free, Pro, Elite for funnel)
+          const plan = userData.plan || 'Free';
+          if (plan === 'Free') freeCount++;
+          else if (plan === 'Pro') proCount++;
+          else if (plan === 'Elite') eliteCount++;
+          
+          // Calculate usage
+          const captions = Number(userData.monthlyCaptionGenerationsUsed || 0);
+          const images = Number(userData.monthlyImageGenerationsUsed || 0);
+          const videos = Number(userData.monthlyVideoGenerationsUsed || 0);
+          const totalUsage = captions + images + videos;
+          
+          // Feature adoption
+          if (captions > 0) captionsUsers++;
+          if (images > 0) imagesUsers++;
+          if (videos > 0) videosUsers++;
+          if (captions > 0 || images > 0 || videos > 0) anyFeatureUsers++;
+          
+          // Churn risk: signed up >30 days ago but low/no activity
+          const signupDate = userData.signupDate ? new Date(userData.signupDate) : null;
+          if (signupDate && signupDate.getTime() < thirtyDaysAgo.getTime() && totalUsage < 5) {
+            churnRiskCount++;
+          }
+          
+          // Track for most active users
+          if (totalUsage > 0) {
+            userActivity.push({
+              id: userId,
+              name: userData.name || 'Unknown',
+              email: userData.email || 'No email',
+              totalUsage,
+              plan
+            });
+          }
+        });
+        
+        // Sort by usage and take top 5
+        userActivity.sort((a, b) => b.totalUsage - a.totalUsage);
+        const mostActive = userActivity.slice(0, 5);
+        
+        const totalUsers = freeCount + proCount + eliteCount;
+        
+        if (isMounted) {
+          setUserEngagementData({
+            conversionFunnel: {
+              free: freeCount,
+              pro: proCount,
+              elite: eliteCount,
+              total: totalUsers
+            },
+            churnRisk: churnRiskCount,
+            featureAdoption: {
+              captions: captionsUsers,
+              images: imagesUsers,
+              videos: videosUsers,
+              anyFeature: anyFeatureUsers
+            },
+            mostActiveUsers: mostActive,
+            totalUsers
+          });
+        }
+      } catch (err) {
+        console.error('Failed to load user engagement data:', err);
+      } finally {
+        if (isMounted) {
+          setIsLoadingUserEngagement(false);
+        }
+      }
+    };
+
+    loadUserEngagement();
+    return () => {
+      isMounted = false;
+    };
+  }, [enableAdminDashboardV2, user?.role]);
+
+  // Admin-only: load invites stats and feedback stats
+  useEffect(() => {
+    if (!enableAdminDashboardV2) return;
+    let isMounted = true;
+    const loadAux = async () => {
+      try {
+        const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+        // Invites
+        try {
+          const resp = await fetch('/api/listInviteCodes', {
+            headers: {
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            if (isMounted) setAdminInviteStats(data.stats || null);
+          }
+        } catch (e) {
+          console.warn('Admin dashboard: failed to load invite stats', e);
+        }
+        // Feedback
+        try {
+          const resp = await fetch('/api/adminGetFeedback', {
+            headers: {
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            if (isMounted) setAdminFeedbackStats(data.stats || null);
+          }
+        } catch (e) {
+          console.warn('Admin dashboard: failed to load feedback stats', e);
+        }
+        // Billing events (failed + renewals)
+        try {
+          setIsLoadingAdminBilling(true);
+          const resp = await fetch('/api/adminGetBillingEvents', {
+            headers: {
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data.success && isMounted) {
+              setAdminBilling({ failed: data.failed || [], renewals: data.renewals || [] });
+            } else if (isMounted) {
+              setAdminBillingError(data.error || 'Billing data unavailable');
+            }
+          } else if (isMounted) {
+            setAdminBillingError('Billing data unavailable');
+          }
+        } catch (e) {
+          console.warn('Admin dashboard: failed to load billing events', e);
+          if (isMounted) setAdminBillingError('Billing data unavailable');
+        } finally {
+          if (isMounted) setIsLoadingAdminBilling(false);
+        }
+
+        // OnlyFans usage metrics intentionally hidden from the admin daily dashboard (UI-only change).
+        // Leave the underlying OnlyFans features untouched to minimize risk.
+
+        // Scheduled emails (for admin calendar augmentation)
+        try {
+          const resp = await fetch('/api/listScheduledEmails', {
+            headers: {
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            if (isMounted) {
+              const items = Array.isArray(data.items) ? data.items : [];
+              setAdminScheduledEmails(
+                items.map((i: any) => ({
+                  id: i.id || `scheduled-email-${Math.random()}`,
+                  sendAt: i.sendAt,
+                  subject: i.subject || i.name || 'Scheduled email',
+                  status: i.status || 'scheduled',
+                }))
+              );
+            }
+          }
+        } catch (e) {
+          console.warn('Admin dashboard: failed to load scheduled emails', e);
+        }
+      } catch (err) {
+        console.warn('Admin dashboard: aux stats load error', err);
+      }
+    };
+    loadAux();
+    return () => {
+      isMounted = false;
+    };
+  }, [enableAdminDashboardV2]);
   
   // Content Ideas handler
   const handleGenerateIdeas = async (category: 'trending' | 'engagement' | 'niche') => {
@@ -561,8 +998,9 @@ export const Dashboard: React.FC = () => {
    useEffect(() => {
     if (dashboardNavState) {
         if (dashboardNavState.highlightId) {
-            // Navigate to inbox page with highlighted message
-            setActivePage('inbox');
+            // Inbox flow is not part of the current AI Content Studio workflow.
+            // Keep the user on dashboard and clear the nav state instead.
+            setActivePage('dashboard');
         }
         clearDashboardNavState();
     }
@@ -592,7 +1030,7 @@ export const Dashboard: React.FC = () => {
       // Include reminders from main calendar
       // Filter events that are scheduled for future dates/times (exclude past events)
       // Show the next 3 events regardless of how far out they are
-      const futureEvents = filteredCalendarEvents
+      const futureEvents = effectiveCalendarEvents
         .filter(e => {
           // Include reminders (they don't have status)
           if ((e as any).type === 'Reminder' || (e as any).reminderType) {
@@ -613,19 +1051,8 @@ export const Dashboard: React.FC = () => {
             const eventDate = new Date(e.date);
             // Only show events that are scheduled for the future (not past)
             // Use > (not >=) to exclude events that have already passed
-            const isFuture = eventDate.getTime() > now.getTime();
-            if (!isFuture) {
-              console.log('Dashboard: Filtered out past event:', {
-                id: e.id,
-                date: e.date,
-                eventDate: eventDate.toISOString(),
-                now: now.toISOString(),
-                diff: eventDate.getTime() - now.getTime()
-              });
-            }
-            return isFuture;
+            return eventDate.getTime() > now.getTime();
           } catch (error) {
-            console.error('Error parsing event date:', e.date, error);
             return false;
           }
         })
@@ -639,23 +1066,9 @@ export const Dashboard: React.FC = () => {
           }
         });
       
-      // Debug logging
-      console.log('Dashboard: Upcoming events calculation:', {
-        totalFilteredEvents: filteredCalendarEvents.length,
-        futureEventsCount: futureEvents.length,
-        next3Events: futureEvents.slice(0, 3).map(e => ({
-          id: e.id,
-          title: e.title,
-          date: e.date,
-          status: e.status,
-          type: (e as any).type,
-          dateFormatted: new Date(e.date).toLocaleString()
-        }))
-      });
-      
       // Return the next 3 events (regardless of how far out)
       return futureEvents.slice(0, 3);
-  }, [filteredCalendarEvents]);
+  }, [effectiveCalendarEvents]);
 
   const accountName = selectedClient ? selectedClient.name : 'Main Account';
   const currentStats = selectedClient ? selectedClient.socialStats : user?.socialStats;
@@ -678,12 +1091,56 @@ export const Dashboard: React.FC = () => {
 
   const renderCommandCenter = () => (
       <div className="space-y-6 animate-fade-in">
+          {/* Pending Feedback Forms Alert */}
+          {pendingFeedbackForms.length > 0 && !showCustomFeedbackForm && (
+            <div className="bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-blue-600 dark:to-indigo-700 p-4 rounded-xl shadow-lg text-white">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold mb-1">
+                    📋 You have {pendingFeedbackForms.length} feedback {pendingFeedbackForms.length === 1 ? 'form' : 'forms'} waiting
+                  </h3>
+                  <p className="text-sm text-blue-100/90 mb-3">
+                    We'd love to hear your thoughts! Your feedback helps us improve EchoFlux.
+                  </p>
+                  <div className="space-y-2">
+                    {pendingFeedbackForms.map((form) => (
+                      <button
+                        key={form.id}
+                        onClick={() => {
+                          setSelectedCustomForm(form);
+                          setShowCustomFeedbackForm(true);
+                        }}
+                        className="block w-full text-left p-3 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+                      >
+                        <div className="font-semibold">{form.title}</div>
+                        {form.description && (
+                          <div className="text-xs text-blue-100/80 mt-1">{form.description}</div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    if (pendingFeedbackForms.length > 0) {
+                      setSelectedCustomForm(pendingFeedbackForms[0]);
+                      setShowCustomFeedbackForm(true);
+                    }
+                  }}
+                  className="px-4 py-2 bg-white text-blue-600 rounded-lg hover:bg-blue-50 font-semibold text-sm whitespace-nowrap"
+                >
+                  Take Survey
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Studio Mode Banner */}
           <div className="bg-gradient-to-r from-primary-600 to-purple-600 dark:from-primary-600 dark:to-purple-700 p-4 rounded-xl shadow-lg text-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <h2 className="text-lg font-bold">AI Content Studio mode</h2>
               <p className="text-sm text-primary-100/90">
-                Plan campaigns, generate content packs, and organize everything on your calendar. Post to social manually—one‑click posting will come in a future version.
+                Plan campaigns, generate content packs, and organize everything on your calendar. Post to social sites manually (account‑safe).
               </p>
             </div>
             <div className="flex items-center gap-2 text-xs text-primary-100/80">
@@ -700,23 +1157,21 @@ export const Dashboard: React.FC = () => {
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
-                <p className="text-sm opacity-90 mb-1">New posts created</p>
-                <p className="text-3xl font-bold">{todaysHighlights.postsPublished}</p>
+                <p className="text-sm opacity-90 mb-1">Posts created today</p>
+                <p className="text-3xl font-bold">{todaysHighlights.postsCreated}</p>
               </div>
               <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
-                <p className="text-sm opacity-90 mb-1">Messages to review</p>
-                <p className="text-3xl font-bold">{todaysHighlights.unreadMessages}</p>
+                <p className="text-sm opacity-90 mb-1">Drafts to review</p>
+                <p className="text-3xl font-bold">{todaysHighlights.draftsToReview}</p>
               </div>
               <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
                 <p className="text-sm opacity-90 mb-1">Planned slots today</p>
-                <p className="text-3xl font-bold">{todaysHighlights.scheduledPosts}</p>
+                <p className="text-3xl font-bold">{todaysHighlights.plannedToday}</p>
               </div>
-              {user.plan !== 'Free' && (
-                <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
-                  <p className="text-sm opacity-90 mb-1">Inbox handled</p>
-                  <p className="text-3xl font-bold">{todaysHighlights.responseRate}%</p>
-                </div>
-              )}
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                <p className="text-sm opacity-90 mb-1">Next 7 days planned</p>
+                <p className="text-3xl font-bold">{todaysHighlights.plannedNext7Days}</p>
+              </div>
             </div>
           </div>
 
@@ -1449,19 +1904,20 @@ export const Dashboard: React.FC = () => {
               {/* Best Posting Times - Dynamic Based on User Data */}
               {(() => {
             // Analyze user's actual posting patterns and engagement
-            const publishedPosts = posts?.filter(p => p.status === 'Published' && (p.scheduledDate || p.createdAt)) || [];
-            const scheduledPosts = posts?.filter(p => p.status === 'Scheduled' && p.scheduledDate) || [];
-            const allPostsWithDates = [...publishedPosts, ...scheduledPosts];
+            // Prefer calendar-derived events so the widget matches what users see on the Calendar.
+            const allCalendarItems = (effectiveCalendarEvents || []).filter(e => {
+              if (!e?.date) return false;
+              if ((e as any).type === 'Reminder' || (e as any).reminderType) return false;
+              return e.status === 'Published' || e.status === 'Scheduled';
+            });
             
             // Group posts by day of week and time
-            const dayTimeMap: Record<string, { count: number; engagement: number }> = {};
+            const dayTimeMap: Record<string, { count: number }> = {};
             const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
             
-            allPostsWithDates.forEach(post => {
-              const postDate = post.scheduledDate || post.createdAt;
-              if (!postDate) return;
-              
-              const date = new Date(postDate);
+            allCalendarItems.forEach(item => {
+              const date = new Date(item.date);
+              if (isNaN(date.getTime())) return;
               const dayName = daysOfWeek[date.getDay()];
               const hour = date.getHours();
               
@@ -1473,12 +1929,10 @@ export const Dashboard: React.FC = () => {
               
               const timeKey = `${dayName}-${nearestSlot}`;
               if (!dayTimeMap[timeKey]) {
-                dayTimeMap[timeKey] = { count: 0, engagement: 0 };
+                dayTimeMap[timeKey] = { count: 0 };
               }
               
               dayTimeMap[timeKey].count++;
-              // Use comments as engagement proxy
-              dayTimeMap[timeKey].engagement += post.comments?.length || 0;
             });
             
             // Calculate best times per day
@@ -1488,13 +1942,8 @@ export const Dashboard: React.FC = () => {
                 .map(key => ({
                   time: parseInt(key.split('-')[1]),
                   ...dayTimeMap[key],
-                  avgEngagement: dayTimeMap[key].engagement / dayTimeMap[key].count
                 }))
                 .sort((a, b) => {
-                  // Sort by average engagement first, then by count
-                  if (Math.abs(a.avgEngagement - b.avgEngagement) > 0.5) {
-                    return b.avgEngagement - a.avgEngagement;
-                  }
                   return b.count - a.count;
                 })
                 .slice(0, 3); // Top 3 times per day
@@ -1509,14 +1958,11 @@ export const Dashboard: React.FC = () => {
               
               // Determine engagement level
               const totalPosts = daySlots.reduce((sum, slot) => sum + slot.count, 0);
-              const avgEngagement = daySlots.length > 0 
-                ? daySlots.reduce((sum, slot) => sum + slot.avgEngagement, 0) / daySlots.length 
-                : 0;
               
               let engagement: 'High' | 'Medium' | 'Low' = 'Low';
-              if (totalPosts >= 5 && avgEngagement >= 2) {
+              if (totalPosts >= 5) {
                 engagement = 'High';
-              } else if (totalPosts >= 2 || avgEngagement >= 1) {
+              } else if (totalPosts >= 2) {
                 engagement = 'Medium';
               }
               
@@ -1577,13 +2023,13 @@ export const Dashboard: React.FC = () => {
                   <div className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
                     <TrendingIcon className="w-3 h-3 text-primary-600 dark:text-primary-400" />
                     <span className="font-medium">
-                      {allPostsWithDates.length > 0 
-                        ? 'Based on your posting history' 
+                      {allCalendarItems.length > 0 
+                        ? 'Based on your calendar plan' 
                         : 'Tip:'}
                     </span>
                     <span className="text-[10px]">
-                      {allPostsWithDates.length > 0
-                        ? 'Calculated from your posts'
+                      {allCalendarItems.length > 0
+                        ? 'Calculated from scheduled & published items'
                         : 'Weekdays 9 AM - 6 PM'}
                     </span>
                   </div>
@@ -1632,9 +2078,12 @@ export const Dashboard: React.FC = () => {
               }
               
               // Check upcoming schedule
-              const upcomingCount = calendarEvents.filter(e => {
+              const upcomingCount = effectiveCalendarEvents.filter(e => {
+                if (!e?.date) return false;
+                if ((e as any).type === 'Reminder' || (e as any).reminderType) return false;
+                if (e.status !== 'Scheduled' && e.status !== 'Published' && e.status !== 'Draft') return false;
                 const eventDate = new Date(e.date);
-                return eventDate > new Date();
+                return !isNaN(eventDate.getTime()) && eventDate > new Date();
               }).length;
               
               if (upcomingCount === 0) {
@@ -1646,16 +2095,16 @@ export const Dashboard: React.FC = () => {
                   actionLabel: 'Schedule Post'
                 });
               }
-              
-              // Check unread messages
-              const unreadCount = messages.filter(m => !m.isArchived).length;
-              if (unreadCount > 5) {
+
+              // In offline/studio mode we don't have an Inbox. Replace message nudges with draft/workflow nudges.
+              const draftsCount = posts.filter(p => p.status === 'Draft').length;
+              if (draftsCount > 0) {
                 recommendations.push({
                   type: 'info',
-                  title: 'Messages Need Attention',
-                  description: `You have ${unreadCount} unread messages. Quick responses improve engagement.`,
-                  action: () => setActivePage('inbox'),
-                  actionLabel: 'View Inbox'
+                  title: 'Drafts Ready to Polish',
+                  description: `You have ${draftsCount} draft${draftsCount === 1 ? '' : 's'} to review before scheduling.`,
+                  action: () => setActivePage('approvals'),
+                  actionLabel: 'Review drafts'
                 });
               }
               
@@ -1938,6 +2387,7 @@ export const Dashboard: React.FC = () => {
           {(() => {
             // Show for Creators OR Business Agency (since Agency manages creators)
             const shouldShowFanHub = !isBusiness || user?.plan === 'Agency';
+            if (OFFLINE_MODE) return null;
             if (!shouldShowFanHub) return null;
             
             const fanMessages = messages.filter(m => !m.isArchived && (m.category === 'Fan Message' || !m.category));
@@ -1949,7 +2399,9 @@ export const Dashboard: React.FC = () => {
               <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white">Fan Engagement Hub</h3>
-                  <button onClick={() => setActivePage('inbox')} className="text-sm text-primary-600 hover:underline">View Inbox</button>
+                  {!OFFLINE_MODE && (
+                    <button onClick={() => setActivePage('inbox')} className="text-sm text-primary-600 hover:underline">View Inbox</button>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   <div className="p-4 bg-gradient-to-br from-pink-50 to-rose-50 dark:from-pink-900/20 dark:to-rose-900/20 rounded-lg border border-pink-200 dark:border-pink-700 text-center">
@@ -1975,6 +2427,7 @@ export const Dashboard: React.FC = () => {
           
           {/* Customer Engagement Hub - Business Starter/Growth Only */}
           {isBusiness && user?.plan !== 'Agency' && (() => {
+            if (OFFLINE_MODE) return null;
             const leadMessages = messages.filter(m => !m.isArchived && m.category === 'Lead');
             const supportMessages = messages.filter(m => !m.isArchived && m.category === 'Support');
             const opportunityMessages = messages.filter(m => !m.isArchived && m.category === 'Opportunity');
@@ -1984,7 +2437,9 @@ export const Dashboard: React.FC = () => {
               <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white">Customer Engagement Hub</h3>
-                  <button onClick={() => setActivePage('inbox')} className="text-sm text-primary-600 hover:underline">View Inbox</button>
+                  {!OFFLINE_MODE && (
+                    <button onClick={() => setActivePage('inbox')} className="text-sm text-primary-600 hover:underline">View Inbox</button>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   <div className="p-4 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 rounded-lg border border-emerald-200 dark:border-emerald-700 text-center">
@@ -2311,11 +2766,12 @@ export const Dashboard: React.FC = () => {
                   <button
                     onClick={() => {
                       setFilters(prev => ({ ...prev, category: 'Lead' }));
-                      setActivePage('inbox');
+                      if (!OFFLINE_MODE) setActivePage('inbox');
                     }}
-                    className="text-sm text-primary-600 dark:text-primary-400 hover:underline font-medium"
+                    className={`text-sm font-medium ${OFFLINE_MODE ? 'text-gray-400 dark:text-gray-500 cursor-not-allowed' : 'text-primary-600 dark:text-primary-400 hover:underline'}`}
+                    disabled={OFFLINE_MODE}
                   >
-                    View All Leads →
+                    {OFFLINE_MODE ? 'Leads inbox (coming soon)' : 'View All Leads →'}
                   </button>
                 </div>
                 
@@ -2765,6 +3221,17 @@ export const Dashboard: React.FC = () => {
             onSubmit={submitInAppFeedback}
           />
 
+          {/* Custom feedback forms */}
+          <CustomFeedbackFormModal
+            isOpen={showCustomFeedbackForm}
+            form={selectedCustomForm}
+            onClose={() => {
+              setShowCustomFeedbackForm(false);
+              setSelectedCustomForm(null);
+            }}
+            onSubmit={handleCustomFeedbackSubmit}
+          />
+
           {/* First-login Early Testing onboarding */}
           {showEarlyTestingOnboarding && (
             <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" aria-modal="true">
@@ -2920,6 +3387,473 @@ export const Dashboard: React.FC = () => {
       </div>
   );
 
+  const renderAdminDashboardView = () => (
+    <div className="space-y-6 max-w-7xl mx-auto w-full">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Admin Daily Dashboard</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Growth-focused view without user posts or scheduled content.</p>
+        </div>
+        <span className="text-xs px-3 py-1 rounded-full bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-200">
+          Admin view
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+          <span className="text-xs text-gray-600 dark:text-gray-400">Signups (24h)</span>
+          <span className="text-sm font-semibold text-gray-900 dark:text-white">
+            {isLoadingAdminSignupCounts ? '—' : adminSignupCounts.last24h.toLocaleString()}
+          </span>
+        </div>
+        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+          <span className="text-xs text-gray-600 dark:text-gray-400">Signups (7d)</span>
+          <span className="text-sm font-semibold text-gray-900 dark:text-white">
+            {isLoadingAdminSignupCounts ? '—' : adminSignupCounts.last7d.toLocaleString()}
+          </span>
+        </div>
+        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+          <span className="text-xs text-gray-600 dark:text-gray-400">Failed payments (24h)</span>
+          <button
+            onClick={() => setBillingModal({ type: 'failed', items: adminBilling.failed })}
+            className="text-sm font-semibold text-primary-600 dark:text-primary-300 hover:underline"
+          >
+            {isLoadingAdminBilling ? '…' : adminBilling.failed.length}
+          </button>
+        </div>
+      </div>
+
+      {/* OnlyFans admin metrics intentionally hidden to keep the admin daily dashboard focused. */}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Signups (24h)</p>
+            <UserIcon className="w-5 h-5 text-primary-500" />
+          </div>
+          <p className="text-2xl font-bold text-gray-900 dark:text-white">
+            {isLoadingAdminSignupCounts ? '—' : adminSignupCounts.last24h.toLocaleString()}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {adminSignupError ? adminSignupError : `Last 7d: ${adminSignupCounts.last7d.toLocaleString()}`}
+          </p>
+        </div>
+
+        <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Feature Adoption</p>
+            <TrendingIcon className="w-5 h-5 text-primary-500" />
+          </div>
+          <p className="text-2xl font-bold text-gray-900 dark:text-white">
+            {isLoadingUserEngagement ? '—' : userEngagementData ? `${userEngagementData.featureAdoption.anyFeature}` : '—'}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {isLoadingUserEngagement ? 'Loading...' : userEngagementData 
+              ? `${userEngagementData.conversionFunnel.total > 0 ? (userEngagementData.featureAdoption.anyFeature / userEngagementData.conversionFunnel.total * 100).toFixed(1) : 0}% of users activated`
+              : 'No data'}
+          </p>
+        </div>
+
+        <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Feedback & inbox</p>
+            <ChatIcon className="w-5 h-5 text-primary-500" />
+          </div>
+          <p className="text-2xl font-bold text-gray-900 dark:text-white">{pendingFeedbackForms.length}</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            Open messages: {messages.filter(m => !m.isArchived).length}
+          </p>
+        </div>
+
+        <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-200">System signals</p>
+            <DashboardIcon className="w-5 h-5 text-primary-500" />
+          </div>
+          <p className="text-2xl font-bold text-gray-900 dark:text-white">
+            {messages.filter(m => m.isFlagged && !m.isArchived).length}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Flagged/priority messages</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 p-5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">User Engagement & Health</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Track user behavior, conversion, and feature adoption.</p>
+            </div>
+            <button
+              onClick={() => setActivePage('admin')}
+              className="text-sm text-primary-600 dark:text-primary-300 font-semibold hover:underline"
+            >
+              View Details →
+            </button>
+          </div>
+          <div className="space-y-4">
+            {isLoadingUserEngagement ? (
+              <div className="text-center py-8">
+                <svg className="animate-spin h-6 w-6 text-primary-600 mx-auto mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Loading engagement metrics…</p>
+              </div>
+            ) : userEngagementData ? (
+              <>
+                {/* Conversion Funnel */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Conversion Funnel</h4>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">Free</span>
+                      <div className="flex items-center gap-3">
+                        <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                          <div 
+                            className="bg-gray-400 dark:bg-gray-600 h-2 rounded-full" 
+                            style={{ width: `${userEngagementData.conversionFunnel.total > 0 ? (userEngagementData.conversionFunnel.free / userEngagementData.conversionFunnel.total * 100) : 0}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-sm font-semibold text-gray-900 dark:text-white w-12 text-right">
+                          {userEngagementData.conversionFunnel.free}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">Pro</span>
+                      <div className="flex items-center gap-3">
+                        <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                          <div 
+                            className="bg-primary-500 h-2 rounded-full" 
+                            style={{ width: `${userEngagementData.conversionFunnel.total > 0 ? (userEngagementData.conversionFunnel.pro / userEngagementData.conversionFunnel.total * 100) : 0}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-sm font-semibold text-gray-900 dark:text-white w-12 text-right">
+                          {userEngagementData.conversionFunnel.pro}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">Elite</span>
+                      <div className="flex items-center gap-3">
+                        <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                          <div 
+                            className="bg-purple-500 h-2 rounded-full" 
+                            style={{ width: `${userEngagementData.conversionFunnel.total > 0 ? (userEngagementData.conversionFunnel.elite / userEngagementData.conversionFunnel.total * 100) : 0}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-sm font-semibold text-gray-900 dark:text-white w-12 text-right">
+                          {userEngagementData.conversionFunnel.elite}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Total Users</span>
+                        <span className="text-sm font-bold text-gray-900 dark:text-white">
+                          {userEngagementData.conversionFunnel.total}
+                        </span>
+                      </div>
+                      {userEngagementData.conversionFunnel.total > 0 && (
+                        <div className="flex items-center justify-between mt-1">
+                          <span className="text-xs text-gray-500 dark:text-gray-400">Conversion Rate</span>
+                          <span className="text-xs font-semibold text-primary-600 dark:text-primary-400">
+                            {((userEngagementData.conversionFunnel.pro + userEngagementData.conversionFunnel.elite) / userEngagementData.conversionFunnel.total * 100).toFixed(1)}%
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Feature Adoption */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Feature Adoption</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">AI Captions</p>
+                      <p className="text-lg font-bold text-gray-900 dark:text-white">
+                        {userEngagementData.featureAdoption.captions}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {userEngagementData.conversionFunnel.total > 0 
+                          ? `${(userEngagementData.featureAdoption.captions / userEngagementData.conversionFunnel.total * 100).toFixed(1)}% of users`
+                          : '—'}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Image Gen</p>
+                      <p className="text-lg font-bold text-gray-900 dark:text-white">
+                        {userEngagementData.featureAdoption.images}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {userEngagementData.conversionFunnel.total > 0 
+                          ? `${(userEngagementData.featureAdoption.images / userEngagementData.conversionFunnel.total * 100).toFixed(1)}% of users`
+                          : '—'}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Video Gen</p>
+                      <p className="text-lg font-bold text-gray-900 dark:text-white">
+                        {userEngagementData.featureAdoption.videos}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {userEngagementData.conversionFunnel.total > 0 
+                          ? `${(userEngagementData.featureAdoption.videos / userEngagementData.conversionFunnel.total * 100).toFixed(1)}% of users`
+                          : '—'}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-primary-50 dark:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-700">
+                      <p className="text-xs text-primary-700 dark:text-primary-300 mb-1">Any Feature</p>
+                      <p className="text-lg font-bold text-primary-900 dark:text-primary-100">
+                        {userEngagementData.featureAdoption.anyFeature}
+                      </p>
+                      <p className="text-xs text-primary-600 dark:text-primary-400 mt-1">
+                        {userEngagementData.conversionFunnel.total > 0 
+                          ? `${(userEngagementData.featureAdoption.anyFeature / userEngagementData.conversionFunnel.total * 100).toFixed(1)}% activated`
+                          : '—'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Churn Risk & Most Active */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-700">
+                    <p className="text-xs text-red-700 dark:text-red-300 mb-1">Churn Risk</p>
+                    <p className="text-2xl font-bold text-red-900 dark:text-red-100">
+                      {userEngagementData.churnRisk}
+                    </p>
+                    <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                      Inactive users (30d+)
+                    </p>
+                  </div>
+                  <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-700">
+                    <p className="text-xs text-green-700 dark:text-green-300 mb-1">Most Active</p>
+                    <p className="text-2xl font-bold text-green-900 dark:text-green-100">
+                      {userEngagementData.mostActiveUsers.length}
+                    </p>
+                    <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                      Top users by usage
+                    </p>
+                  </div>
+                </div>
+
+                {/* Most Active Users List */}
+                {userEngagementData.mostActiveUsers.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Top Active Users</h4>
+                    <div className="space-y-2">
+                      {userEngagementData.mostActiveUsers.map((activeUser, idx) => (
+                        <div key={activeUser.id} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-gray-400 dark:text-gray-500 w-4">#{idx + 1}</span>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900 dark:text-white">{activeUser.name}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">{activeUser.plan} Plan</p>
+                            </div>
+                          </div>
+                          <span className="text-sm font-semibold text-primary-600 dark:text-primary-400">
+                            {activeUser.totalUsage.toLocaleString()} uses
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                <p className="text-sm">No engagement data available</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="p-5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-5">
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Ops signals (today)</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Daily snapshot</p>
+              </div>
+              <CheckCircleIcon className="w-5 h-5 text-primary-500" />
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm text-gray-800 dark:text-gray-200">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600 dark:text-gray-400">New signups</span>
+                <span className="font-semibold">{isLoadingAdminSignupCounts ? '—' : adminSignupCounts.last24h}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600 dark:text-gray-400">Open messages</span>
+                <span className="font-semibold">{messages.filter(m => !m.isArchived).length}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600 dark:text-gray-400">Pending feedback</span>
+                <span className="font-semibold">{pendingFeedbackForms.length}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600 dark:text-gray-400">Flagged messages</span>
+                <span className="font-semibold">{messages.filter(m => m.isFlagged && !m.isArchived).length}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600 dark:text-gray-400">Invites (available)</span>
+                <span className="font-semibold">
+                  {adminInviteStats?.available ?? (adminInviteStats ? 0 : '—')}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600 dark:text-gray-400">Feedback total</span>
+                <span className="font-semibold">
+                  {adminFeedbackStats?.total ?? (adminFeedbackStats ? 0 : '—')}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Billing guardrails</h3>
+              {adminBillingError && <span className="text-xs text-red-500 dark:text-red-400">{adminBillingError}</span>}
+            </div>
+            <div className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600 dark:text-gray-400">Failed payments (24h)</span>
+                <button
+                  onClick={() => setBillingModal({ type: 'failed', items: adminBilling.failed })}
+                  className="font-semibold text-primary-600 dark:text-primary-300 hover:underline"
+                >
+                  {isLoadingAdminBilling ? '…' : adminBilling.failed.length}
+                </button>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600 dark:text-gray-400">Renewals (next 7d)</span>
+                <button
+                  onClick={() => setBillingModal({ type: 'renewals', items: adminBilling.renewals })}
+                  className="font-semibold text-primary-600 dark:text-primary-300 hover:underline"
+                >
+                  {isLoadingAdminBilling ? '…' : adminBilling.renewals.length}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {showStrategyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowStrategyModal(false)} />
+          <div className="relative bg-white dark:bg-gray-900 rounded-xl shadow-2xl max-w-2xl w-full p-6 border border-gray-200 dark:border-gray-700">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Strategy</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">{strategyModalTitle}</p>
+              </div>
+              <button
+                onClick={() => setShowStrategyModal(false)}
+                className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-white"
+              >
+                Close
+              </button>
+            </div>
+            {isLoadingStrategyDetail ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">Loading strategy…</p>
+            ) : strategyModalContent ? (
+              <div className="space-y-3 text-sm text-gray-800 dark:text-gray-200">
+                {strategyModalContent.title && (
+                  <p className="font-semibold text-gray-900 dark:text-white">{strategyModalContent.title}</p>
+                )}
+                {strategyModalContent.objective && (
+                  <p className="text-gray-700 dark:text-gray-300">Objective: {strategyModalContent.objective}</p>
+                )}
+                {Array.isArray(strategyModalContent.steps) && strategyModalContent.steps.length > 0 && (
+                  <div>
+                    <p className="text-xs uppercase text-gray-500 dark:text-gray-400 mb-1">Steps</p>
+                    <ul className="list-disc pl-5 space-y-1">
+                      {strategyModalContent.steps.map((s: string, idx: number) => (
+                        <li key={idx}>{s}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {Array.isArray(strategyModalContent.metrics) && strategyModalContent.metrics.length > 0 && (
+                  <div>
+                    <p className="text-xs uppercase text-gray-500 dark:text-gray-400 mb-1">Metrics</p>
+                    <ul className="list-disc pl-5 space-y-1">
+                      {strategyModalContent.metrics.map((m: string, idx: number) => (
+                        <li key={`m-${idx}`}>{m}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-gray-400">No strategy available.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {billingModal.type && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setBillingModal({ type: null, items: [] })} />
+          <div className="relative bg-white dark:bg-gray-900 rounded-xl shadow-2xl max-w-3xl w-full p-6 border border-gray-200 dark:border-gray-700 max-h-[80vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                  {billingModal.type === 'failed' ? 'Failed payments (24h)' : 'Renewals (next 7d)'}
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">{billingModal.items.length} items</p>
+              </div>
+              <button
+                onClick={() => setBillingModal({ type: null, items: [] })}
+                className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-white"
+              >
+                Close
+              </button>
+            </div>
+            {billingModal.items.length === 0 ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">No entries.</p>
+            ) : (
+              <div className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
+                {billingModal.items.map((item: any, idx: number) => (
+                  <div
+                    key={item.id || idx}
+                    className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-semibold text-gray-900 dark:text-white">
+                        {item.type || billingModal.type}
+                      </span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {item.createdAt || item.dueAt || ''}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 mt-2 text-xs text-gray-700 dark:text-gray-300">
+                      <span>User: {item.userId || '—'}</span>
+                      <span>Customer: {item.customerId || '—'}</span>
+                      <span>Subscription: {item.subscriptionId || '—'}</span>
+                      <span>Status: {item.status || '—'}</span>
+                      <span>Amount: {item.amount ? `$${(item.amount / 100).toFixed(2)}` : '—'}</span>
+                      <span>Currency: {(item.currency || '').toUpperCase() || '—'}</span>
+                      {item.dueAt && <span>Due: {item.dueAt}</span>}
+                      {item.note && <span className="col-span-2 text-gray-600 dark:text-gray-400">Note: {item.note}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+
+  if (enableAdminDashboardV2) {
+    return renderAdminDashboardView();
+  }
 
   return (
     <div id="tour-step-1-dashboard" className="space-y-6 max-w-7xl mx-auto w-full">

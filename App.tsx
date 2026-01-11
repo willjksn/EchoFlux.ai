@@ -28,6 +28,7 @@ import Automation from './components/Automation';
 import { Calendar } from './components/Calendar';
 import MediaLibrary from './components/MediaLibrary';
 import { Approvals } from './components/Approvals';
+import { EmailCenterPage } from './components/EmailCenterPage';
 import { Inbox } from './components/Inbox';
 import { CreatorOnboardingModal } from './components/CreatorOnboardingModal';
 import { PlanSelectorModal } from './components/PlanSelectorModal';
@@ -83,7 +84,8 @@ const pageTitles: Record<Page, string> = {
     ads: 'AI Ad Generator',
     mediaLibrary: 'Media Library',
     autopilot: 'AI Autopilot',
-    onlyfansStudio: 'OnlyFans Studio',
+    onlyfansStudio: 'Premium Content Studio',
+    emailCenter: 'Email Center',
 };
 
 const MainContent: React.FC = () => {
@@ -154,6 +156,7 @@ const MainContent: React.FC = () => {
                     <OnlyFansStudio />
                 </Suspense>
             );
+            case 'emailCenter': return <EmailCenterPage />;
             default: return <Dashboard />;
         }
     } catch (error: any) {

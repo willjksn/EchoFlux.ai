@@ -1,11 +1,14 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { MediaLibraryItem, MediaFolder } from '../types';
 import { useAppContext } from './AppContext';
-import { UploadIcon, TrashIcon, ImageIcon, VideoIcon, CheckCircleIcon, PlusIcon, XMarkIcon, FolderIcon, EditIcon, SparklesIcon } from './icons/UIIcons';
+import { UploadIcon, TrashIcon, ImageIcon, VideoIcon, CheckCircleIcon, PlusIcon, XMarkIcon, FolderIcon, SparklesIcon } from './icons/UIIcons';
 import { db, storage } from '../firebaseConfig';
 import { collection, setDoc, doc, getDocs, deleteDoc, query, orderBy, updateDoc, writeBatch, where } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { MoveToFolderModal } from './MoveToFolderModal';
+import { FanSelector } from './FanSelector';
+
+// Video preview removed - using simple video element like MediaLibrary for mobile/tablet compatibility
 
 const GENERAL_FOLDER_ID = 'general';
 const ONLYFANS_DEFAULT_FOLDERS = ['Photosets', 'Videos', 'Teasers', 'Roleplay Content'];
@@ -35,8 +38,8 @@ export const OnlyFansMediaVault: React.FC = () => {
     const [showMoveModal, setShowMoveModal] = useState(false);
     const [editingItem, setEditingItem] = useState<OnlyFansMediaItem | null>(null);
     const [isGeneratingTags, setIsGeneratingTags] = useState(false);
-    const [showEditor, setShowEditor] = useState(false);
-    const [editorItem, setEditorItem] = useState<OnlyFansMediaItem | null>(null);
+    const [selectedFanId, setSelectedFanId] = useState<string | null>(null);
+    const [selectedFanName, setSelectedFanName] = useState<string | null>(null);
 
     // Initialize default OnlyFans folders
     useEffect(() => {
@@ -167,26 +170,71 @@ export const OnlyFansMediaVault: React.FC = () => {
         }
     }, [mediaItems, folders.length]);
 
+    const getVideoDurationSeconds = (file: File): Promise<number | null> => {
+        return new Promise((resolve) => {
+            try {
+                const url = URL.createObjectURL(file);
+                const video = document.createElement('video');
+                video.preload = 'metadata';
+                video.onloadedmetadata = () => {
+                    const d = Number.isFinite(video.duration) ? video.duration : NaN;
+                    URL.revokeObjectURL(url);
+                    resolve(Number.isFinite(d) ? d : null);
+                };
+                video.onerror = () => {
+                    try { URL.revokeObjectURL(url); } catch {}
+                    resolve(null);
+                };
+                video.src = url;
+            } catch {
+                resolve(null);
+            }
+        });
+    };
+
     const handleFileSelect = useCallback(async (files: FileList | null) => {
         if (!files || files.length === 0 || !user) return;
+        
+        // Prevent multiple simultaneous uploads
+        if (isUploading) {
+            showToast('Upload already in progress. Please wait...', 'info');
+            return;
+        }
 
         setIsUploading(true);
+        
         const uploadPromises: Promise<void>[] = [];
+        const fileArray = Array.from(files);
+        let successCount = 0;
+        let failCount = 0;
 
-        Array.from(files).forEach((file) => {
+        fileArray.forEach((file, index) => {
             const uploadPromise = (async () => {
                 try {
                     const fileType = file.type.startsWith('image') ? 'image' : 'video';
+
+                    if (fileType === 'video') {
+                        const duration = await getVideoDurationSeconds(file);
+                        // Only validate that duration can be read, but allow any length
+                        if (duration === null) {
+                            failCount++;
+                            showToast(`Could not read duration for "${file.name}". Please try a different video file.`, 'error');
+                            return;
+                        }
+                    }
+
+                    // Use timestamp + index + random to ensure unique IDs
                     const timestamp = Date.now();
-                    const ext = file.type.split('/')[1] || (fileType === 'image' ? 'jpg' : 'mp4');
-                    const storagePath = `users/${user.id}/media_library/${timestamp}_${file.name}`;
+                    const uniqueId = `${timestamp}_${index}_${Math.random().toString(36).substring(2, 9)}`;
+                    // Use onlyfans_media_library path to match the collection name
+                    const storagePath = `users/${user.id}/onlyfans_media_library/${uniqueId}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
                     const storageRef = ref(storage, storagePath);
 
                     await uploadBytes(storageRef, file, { contentType: file.type });
                     const mediaUrl = await getDownloadURL(storageRef);
 
-                    const mediaItem: OnlyFansMediaItem = {
-                        id: timestamp.toString(),
+                    const mediaItem: OnlyFansMediaItem & { fanId?: string | null; fanName?: string | null } = {
+                        id: uniqueId,
                         userId: user.id,
                         url: mediaUrl,
                         name: file.name,
@@ -198,13 +246,22 @@ export const OnlyFansMediaVault: React.FC = () => {
                         tags: [],
                         folderId: selectedFolderId,
                         // aiTags is optional and will be added when AI tagging is generated
+                        ...(selectedFanId ? { fanId: selectedFanId, fanName: selectedFanName } : {}),
                     };
 
                     await setDoc(doc(db, 'users', user.id, 'onlyfans_media_library', mediaItem.id), mediaItem);
                     
-                    setMediaItems(prev => [mediaItem, ...prev]);
-                    showToast(`Uploaded ${file.name}`, 'success');
+                    // Use functional update to prevent race conditions
+                    setMediaItems(prev => {
+                        // Check if item already exists to prevent duplicates
+                        if (prev.some(item => item.id === mediaItem.id)) {
+                            return prev;
+                        }
+                        return [mediaItem, ...prev];
+                    });
+                    successCount++;
                 } catch (error) {
+                    failCount++;
                     console.error(`Failed to upload ${file.name}:`, error);
                     showToast(`Failed to upload ${file.name}`, 'error');
                 }
@@ -213,9 +270,24 @@ export const OnlyFansMediaVault: React.FC = () => {
             uploadPromises.push(uploadPromise);
         });
 
-        await Promise.all(uploadPromises);
+        await Promise.allSettled(uploadPromises);
+        
+        // Clear file input AFTER processing to prevent duplicate triggers
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+        
+        // Show summary
+        if (successCount > 0 && failCount === 0) {
+            showToast(`Successfully uploaded ${successCount} file(s)`, 'success');
+        } else if (successCount > 0 && failCount > 0) {
+            showToast(`Uploaded ${successCount} file(s), ${failCount} failed`, 'warning');
+        } else if (failCount > 0) {
+            showToast(`Failed to upload ${failCount} file(s)`, 'error');
+        }
+        
         setIsUploading(false);
-    }, [user, selectedFolderId, showToast]);
+    }, [user, selectedFolderId, showToast, isUploading]);
 
     const handleDragOver = useCallback((e: React.DragEvent) => {
         e.preventDefault();
@@ -404,7 +476,11 @@ export const OnlyFansMediaVault: React.FC = () => {
                 <div>
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Media Vault</h2>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                        Organize and manage your OnlyFans content with AI tagging and editing tools.
+                        Organize and manage your OnlyFans content with AI-powered tagging and organization tools.
+                    </p>
+                    <p className="text-xs text-primary-600 dark:text-primary-400 mt-1 flex items-center gap-1">
+                        <SparklesIcon className="w-3 h-3" />
+                        <span>AI Tagging available - Generate smart tags for outfits, poses, and vibes</span>
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -421,16 +497,31 @@ export const OnlyFansMediaVault: React.FC = () => {
                         type="file"
                         multiple
                         accept="image/*,video/*"
-                        onChange={(e) => handleFileSelect(e.target.files)}
+                        onChange={(e) => {
+                            const files = e.target.files;
+                            if (files) {
+                                handleFileSelect(files);
+                            }
+                        }}
                         className="hidden"
                     />
                 </div>
             </div>
 
+            {isUploading && (
+                <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
+                    <div className="flex flex-col items-center gap-3">
+                        <div className="animate-spin h-8 w-8 border-4 border-white border-t-transparent rounded-full"></div>
+                        <div className="text-sm font-semibold text-white">Uploading…</div>
+                        <div className="text-xs text-white/80">Please keep this tab open</div>
+                    </div>
+                </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
                 {/* Folder Sidebar */}
                 <div className="md:col-span-3">
-                    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 overflow-hidden">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 overflow-hidden space-y-4">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="font-semibold text-gray-900 dark:text-white">Folders</h3>
                             <button
@@ -464,6 +555,24 @@ export const OnlyFansMediaVault: React.FC = () => {
                                 </button>
                             ))}
                         </div>
+                        
+                        {/* Fan Selector for Tagging Uploaded Media */}
+                        <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                            <FanSelector
+                                selectedFanId={selectedFanId}
+                                onSelectFan={(fanId, fanName) => {
+                                    setSelectedFanId(fanId);
+                                    setSelectedFanName(fanName);
+                                }}
+                                allowNewFan={true}
+                                compact={true}
+                            />
+                            {selectedFanId && (
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                                    New uploads will be tagged with this fan
+                                </p>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -471,67 +580,77 @@ export const OnlyFansMediaVault: React.FC = () => {
                 <div className="md:col-span-9">
                     {/* Filters and View Toggle */}
                     <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                                <div className="flex items-center gap-2">
+                        <div className="overflow-x-auto -mx-4 px-4">
+                            <div className="flex items-center justify-between gap-4 min-w-max">
+                                <div className="flex items-center gap-4 flex-shrink-0">
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => setFilterType('all')}
+                                            className={`px-3 py-1 rounded-md text-sm whitespace-nowrap ${
+                                                filterType === 'all'
+                                                    ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                                                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                            }`}
+                                        >
+                                            All
+                                        </button>
+                                        <button
+                                            onClick={() => setFilterType('image')}
+                                            className={`px-3 py-1 rounded-md text-sm whitespace-nowrap ${
+                                                filterType === 'image'
+                                                    ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                                                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                            }`}
+                                        >
+                                            Images
+                                        </button>
+                                        <button
+                                            onClick={() => setFilterType('video')}
+                                            className={`px-3 py-1 rounded-md text-sm whitespace-nowrap ${
+                                                filterType === 'video'
+                                                    ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                                                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                            }`}
+                                        >
+                                            Videos
+                                        </button>
+                                    </div>
+                                    {selectedItems.size > 0 && (
+                                        <>
+                                            <button
+                                                onClick={() => setShowMoveModal(true)}
+                                                className="px-3 py-1 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-md whitespace-nowrap flex-shrink-0"
+                                            >
+                                                Move {selectedItems.size} selected
+                                            </button>
+                                            <button
+                                                onClick={handleBulkDelete}
+                                                className="px-3 py-1 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md whitespace-nowrap flex-shrink-0"
+                                            >
+                                                Delete {selectedItems.size} selected
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                    {filteredItems.length > 0 && (
+                                        <button
+                                            onClick={handleSelectAll}
+                                            className="px-3 py-1 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-md whitespace-nowrap"
+                                        >
+                                            {selectedItems.size === filteredItems.length ? 'Deselect All' : 'Select All'}
+                                        </button>
+                                    )}
+                                    <span className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                                        {filteredItems.length} items
+                                    </span>
                                     <button
-                                        onClick={() => setFilterType('all')}
-                                        className={`px-3 py-1 rounded-md text-sm ${
-                                            filterType === 'all'
-                                                ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
-                                                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                                        }`}
+                                        onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+                                        className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 whitespace-nowrap"
                                     >
-                                        All
-                                    </button>
-                                    <button
-                                        onClick={() => setFilterType('image')}
-                                        className={`px-3 py-1 rounded-md text-sm ${
-                                            filterType === 'image'
-                                                ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
-                                                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                                        }`}
-                                    >
-                                        Images
-                                    </button>
-                                    <button
-                                        onClick={() => setFilterType('video')}
-                                        className={`px-3 py-1 rounded-md text-sm ${
-                                            filterType === 'video'
-                                                ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
-                                                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                                        }`}
-                                    >
-                                        Videos
+                                        {viewMode === 'grid' ? 'List' : 'Grid'}
                                     </button>
                                 </div>
-                                {selectedItems.size > 0 && (
-                                    <>
-                                        <button
-                                            onClick={() => setShowMoveModal(true)}
-                                            className="px-3 py-1 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-md"
-                                        >
-                                            Move {selectedItems.size} selected
-                                        </button>
-                                        <button
-                                            onClick={handleBulkDelete}
-                                            className="px-3 py-1 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md"
-                                        >
-                                            Delete {selectedItems.size} selected
-                                        </button>
-                                    </>
-                                )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <span className="text-sm text-gray-600 dark:text-gray-400">
-                                    {filteredItems.length} items
-                                </span>
-                                <button
-                                    onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-                                    className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
-                                >
-                                    {viewMode === 'grid' ? 'List' : 'Grid'}
-                                </button>
                             </div>
                         </div>
                     </div>
@@ -564,11 +683,7 @@ export const OnlyFansMediaVault: React.FC = () => {
                                     onSelect={() => handleSelectItem(item.id)}
                                     onDelete={() => handleDelete(item.id)}
                                     onView={() => setViewingItem(item)}
-                                    onEdit={() => {
-                                        setEditorItem(item);
-                                        setShowEditor(true);
-                                        setViewingItem(null);
-                                    }}
+                                    onEdit={() => {}} // Edit feature removed
                                     onGenerateTags={() => handleGenerateAITags(item)}
                                     onMoveToFolder={(folderId) => handleMoveToFolder(item.id, folderId)}
                                     folders={folders}
@@ -581,8 +696,8 @@ export const OnlyFansMediaVault: React.FC = () => {
                 </div>
             </div>
 
-            {/* View/Edit Modal */}
-            {viewingItem && !showEditor && (
+            {/* View Modal */}
+            {viewingItem && (
                 <MediaViewModal
                     item={viewingItem}
                     onClose={() => setViewingItem(null)}
@@ -595,54 +710,9 @@ export const OnlyFansMediaVault: React.FC = () => {
                         handleMoveToFolder(viewingItem.id, folderId);
                         setViewingItem(null);
                     }}
-                    onEdit={() => {
-                        setEditorItem(viewingItem);
-                        setShowEditor(true);
-                    }}
+                    onEdit={() => {}} // Edit feature removed
                     folders={folders}
                     isGeneratingTags={isGeneratingTags}
-                />
-            )}
-
-            {/* Media Editor Modal */}
-            {showEditor && editorItem && editorItem.type === 'image' && (
-                <MediaEditor
-                    item={editorItem}
-                    onClose={() => {
-                        setShowEditor(false);
-                        setEditorItem(null);
-                    }}
-                    onSave={async (editedImageUrl: string) => {
-                        if (!user) return;
-                        try {
-                            // Upload edited image to Firebase Storage
-                            const response = await fetch(editedImageUrl);
-                            const blob = await response.blob();
-                            const timestamp = Date.now();
-                            const storagePath = `users/${user.id}/onlyfans_media_library/${timestamp}_edited_${editorItem.name}`;
-                            const storageRef = ref(storage, storagePath);
-                            await uploadBytes(storageRef, blob);
-                            const newUrl = await getDownloadURL(storageRef);
-                            
-                            // Update Firestore with new URL
-                            await updateDoc(doc(db, 'users', user.id, 'onlyfans_media_library', editorItem.id), {
-                                url: newUrl,
-                                editedAt: new Date().toISOString(),
-                            });
-                            
-                            // Update local state
-                            setMediaItems(prev => prev.map(m => 
-                                m.id === editorItem.id ? { ...m, url: newUrl } : m
-                            ));
-                            
-                            setShowEditor(false);
-                            setEditorItem(null);
-                            showToast('Image edited and saved successfully!', 'success');
-                        } catch (error) {
-                            console.error('Error saving edited image:', error);
-                            showToast('Failed to save edited image', 'error');
-                        }
-                    }}
                 />
             )}
 
@@ -694,7 +764,7 @@ const MediaItemCard: React.FC<{
     folders: MediaFolder[];
     isGeneratingTags: boolean;
     viewMode: 'grid' | 'list';
-}> = ({ item, isSelected, onSelect, onView, onEdit, onGenerateTags, isGeneratingTags, viewMode }) => {
+}> = ({ item, isSelected, onSelect, onDelete, onView, onGenerateTags, isGeneratingTags, viewMode }) => {
     return (
         <div
             className={`relative group cursor-pointer rounded-lg overflow-hidden border-2 transition-all ${
@@ -711,6 +781,15 @@ const MediaItemCard: React.FC<{
                     controls={false}
                     preload="metadata"
                     playsInline
+                    muted
+                    onLoadedMetadata={(e) => {
+                        // Set currentTime to show a preview frame (1 second or 10% of duration, whichever is smaller)
+                        const video = e.currentTarget;
+                        if (video.duration && video.duration > 0) {
+                            const previewTime = Math.min(1, video.duration * 0.1);
+                            video.currentTime = previewTime;
+                        }
+                    }}
                 />
             ) : (
                 <img
@@ -742,12 +821,22 @@ const MediaItemCard: React.FC<{
                 <button
                     onClick={(e) => {
                         e.stopPropagation();
-                        onEdit();
+                        onView();
                     }}
                     className="p-2 bg-white dark:bg-gray-800 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 shadow-md"
-                    title="Edit"
+                    title="View"
                 >
-                    <EditIcon className="w-4 h-4 text-gray-900 dark:text-gray-100" />
+                    <ImageIcon className="w-4 h-4 text-gray-900 dark:text-gray-100" />
+                </button>
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete();
+                    }}
+                    className="p-2 bg-white dark:bg-gray-800 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 shadow-md"
+                    title="Delete"
+                >
+                    <TrashIcon className="w-4 h-4 text-red-600 dark:text-red-400" />
                 </button>
             </div>
 
@@ -792,7 +881,8 @@ const MediaViewModal: React.FC<{
     onEdit: () => void;
     folders: MediaFolder[];
     isGeneratingTags: boolean;
-}> = ({ item, onClose, onDelete, onGenerateTags, onMoveToFolder, onEdit, folders, isGeneratingTags }) => {
+}> = ({ item, onClose, onDelete, onGenerateTags, onMoveToFolder, folders, isGeneratingTags }) => {
+    const { showToast } = useAppContext();
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
@@ -805,7 +895,17 @@ const MediaViewModal: React.FC<{
                 <div className="p-6">
                     <div className="mb-4">
                         {item.type === 'video' ? (
-                            <video src={item.url} controls className="w-full max-h-96 rounded-lg" preload="metadata" playsInline />
+                            <video 
+                                src={item.url} 
+                                controls 
+                                className="w-full max-h-96 rounded-lg" 
+                                preload="auto"
+                                playsInline
+                                onError={(e) => {
+                                    console.error('Failed to load video:', item.url);
+                                    showToast('Failed to load video. Please try again.', 'error');
+                                }}
+                            />
                         ) : (
                             <img 
                                 src={item.url} 
@@ -880,20 +980,6 @@ const MediaViewModal: React.FC<{
 
                     {/* Actions */}
                     <div className="flex gap-2">
-                        {item.type === 'image' && (
-                            <button
-                                onClick={() => {
-                                    onEdit();
-                                    onClose();
-                                }}
-                                className="px-4 py-2 text-sm border border-primary-300 dark:border-primary-700 text-primary-700 dark:text-primary-400 rounded-md hover:bg-primary-50 dark:hover:bg-primary-900/30 flex items-center gap-2"
-                            >
-                                <span className="text-gray-900 dark:text-gray-100">
-                                    <EditIcon />
-                                </span>
-                                Edit Image
-                            </button>
-                        )}
                         <button
                             onClick={onDelete}
                             className="px-4 py-2 text-sm border border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-900/30"
@@ -907,491 +993,6 @@ const MediaViewModal: React.FC<{
     );
 };
 
-// Media Editor Component
-const MediaEditor: React.FC<{
-    item: OnlyFansMediaItem;
-    onClose: () => void;
-    onSave: (editedImageUrl: string) => Promise<void>;
-}> = ({ item, onClose, onSave }) => {
-    const { showToast } = useAppContext();
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const imageRef = useRef<HTMLImageElement>(null);
-    const baseCanvasRef = useRef<HTMLCanvasElement | null>(null);
-    const [watermarkText, setWatermarkText] = useState('');
-    const [watermarkPosition, setWatermarkPosition] = useState<'bottom-right' | 'bottom-left' | 'top-right' | 'top-left'>('bottom-right');
-    const [watermarkOpacity, setWatermarkOpacity] = useState(0.7);
-    const [watermarkSize, setWatermarkSize] = useState(100);
-    const [watermarkTextColor, setWatermarkTextColor] = useState('#ffffff');
-    const [watermarkImage, setWatermarkImage] = useState<string | null>(null);
-    const watermarkImageInputRef = useRef<HTMLInputElement>(null);
-    const watermarkImageRef = useRef<HTMLImageElement | null>(null);
-    const [isProcessing, setIsProcessing] = useState(false);
-    const containerRef = useRef<HTMLDivElement>(null);
-    const originalImageRef = useRef<HTMLImageElement | null>(null);
-    const renderTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const isLoadingImageRef = useRef<boolean>(false);
-
-
-    const applyFilters = useCallback(() => {
-        if (!canvasRef.current) return;
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        if (!ctx) return;
-        
-        // Use originalImageRef if available, otherwise use imageRef
-        const img = originalImageRef.current || imageRef.current;
-        if (!img || !img.complete) return;
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        // Draw base image (no filters - removed lighting/contrast/etc)
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        
-        // Apply watermark (text or image)
-        if (watermarkText || watermarkImage) {
-            ctx.save();
-            ctx.globalAlpha = watermarkOpacity;
-            
-            if (watermarkImage && watermarkImageRef.current && watermarkImageRef.current.complete) {
-                // Draw image watermark (only if already loaded)
-                const img = watermarkImageRef.current;
-                const imgSize = watermarkSize; // Use size slider for image scale
-                const aspectRatio = img.width / img.height;
-                const displayWidth = imgSize;
-                const displayHeight = imgSize / aspectRatio;
-                
-                let x = 0;
-                let y = 0;
-                
-                switch (watermarkPosition) {
-                    case 'bottom-right':
-                        x = canvas.width - displayWidth - 20;
-                        y = canvas.height - displayHeight - 20;
-                        break;
-                    case 'bottom-left':
-                        x = 20;
-                        y = canvas.height - displayHeight - 20;
-                        break;
-                    case 'top-right':
-                        x = canvas.width - displayWidth - 20;
-                        y = 20;
-                        break;
-                    case 'top-left':
-                        x = 20;
-                        y = 20;
-                        break;
-                }
-                
-                ctx.drawImage(img, x, y, displayWidth, displayHeight);
-            } else if (watermarkText) {
-                // Draw text watermark
-                ctx.font = `bold ${watermarkSize}px Arial`;
-                ctx.fillStyle = watermarkTextColor;
-                ctx.strokeStyle = 'black';
-                ctx.lineWidth = 2;
-                const metrics = ctx.measureText(watermarkText);
-                const textWidth = metrics.width;
-                const textHeight = watermarkSize + 6;
-                
-                let x = 0;
-                let y = 0;
-                
-                switch (watermarkPosition) {
-                    case 'bottom-right':
-                        x = canvas.width - textWidth - 20;
-                        y = canvas.height - 20;
-                        break;
-                    case 'bottom-left':
-                        x = 20;
-                        y = canvas.height - 20;
-                        break;
-                    case 'top-right':
-                        x = canvas.width - textWidth - 20;
-                        y = textHeight;
-                        break;
-                    case 'top-left':
-                        x = 20;
-                        y = textHeight;
-                        break;
-                }
-                
-                ctx.strokeText(watermarkText, x, y);
-                ctx.fillText(watermarkText, x, y);
-            }
-            
-            ctx.restore();
-        }
-    }, [watermarkText, watermarkPosition, watermarkOpacity, watermarkSize, watermarkTextColor, watermarkImage]);
-
-
-    useEffect(() => {
-        // Prevent multiple simultaneous image loads
-        if (isLoadingImageRef.current) return;
-        
-        // Load image with CORS handling - use proxy for Firebase Storage images
-        const loadImage = async () => {
-            isLoadingImageRef.current = true;
-            
-            // Use proxy API for Firebase Storage images to bypass CORS
-            const isFirebaseStorage = item.url.includes('firebasestorage.googleapis.com');
-            
-            // For Firebase Storage, use proxy; otherwise use direct URL
-            let imageUrl = item.url;
-            let needsAuth = false;
-            
-            if (isFirebaseStorage) {
-                // Get auth token for proxy request
-                try {
-                    const { auth } = await import('../firebaseConfig');
-                    const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
-                    if (token) {
-                        // Firebase Storage URLs may already be encoded, so we need to decode first
-                        // then encode properly for the query parameter to avoid double encoding
-                        let urlToEncode = item.url;
-                        try {
-                            // Try to decode multiple times if it's already encoded (contains %)
-                            // This handles cases where the URL is already encoded
-                            let previousUrl = urlToEncode;
-                            for (let i = 0; i < 3; i++) {
-                                if (urlToEncode.includes('%')) {
-                                    const decoded = decodeURIComponent(urlToEncode);
-                                    if (decoded === previousUrl) break; // No more decoding possible
-                                    urlToEncode = decoded;
-                                    previousUrl = decoded;
-                                } else {
-                                    break; // Not encoded, no need to decode
-                                }
-                            }
-                        } catch (e) {
-                            // If decode fails, use original URL
-                            console.warn('Could not decode URL, using as-is:', item.url);
-                            urlToEncode = item.url;
-                        }
-                        // Now encode it properly for the query parameter
-                        imageUrl = `/api/proxyImage?url=${encodeURIComponent(urlToEncode)}`;
-                        needsAuth = true;
-                    }
-                } catch (err) {
-                    // If we can't get token, fall back to direct URL (may have CORS issues)
-                    console.warn('Could not get auth token for image proxy, using direct URL');
-                }
-            }
-            
-            // Try fetching as blob first (best for canvas operations)
-            try {
-                const headers: HeadersInit = {};
-                if (needsAuth) {
-                    const { auth } = await import('../firebaseConfig');
-                    const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
-                    if (token) {
-                        headers['Authorization'] = `Bearer ${token}`;
-                    }
-                }
-                
-                console.log('Fetching image from proxy:', imageUrl.substring(0, 200));
-                const response = await fetch(imageUrl, { 
-                    credentials: 'include',
-                    headers
-                });
-                
-                if (!response.ok) {
-                    const errorText = await response.text().catch(() => 'Unknown error');
-                    console.error('Proxy returned error:', response.status, errorText);
-                    throw new Error(`Proxy failed: ${response.status} - ${errorText.substring(0, 100)}`);
-                }
-                
-                // Check if response is actually an image
-                const contentType = response.headers.get('content-type');
-                if (!contentType || !contentType.startsWith('image/')) {
-                    console.error('Proxy returned non-image content:', contentType);
-                    throw new Error('Proxy returned non-image content');
-                }
-                
-                const blob = await response.blob();
-                const objectUrl = URL.createObjectURL(blob);
-                
-                const img = new Image();
-                img.crossOrigin = 'anonymous'; // Helps with canvas operations
-                img.onload = () => {
-                    if (canvasRef.current && imageRef.current) {
-                        const canvas = canvasRef.current;
-                        const ctx = canvas.getContext('2d');
-                        if (!ctx) {
-                            isLoadingImageRef.current = false;
-                            URL.revokeObjectURL(objectUrl);
-                            showToast('Failed to initialize canvas', 'error');
-                            return;
-                        }
-                        
-                        canvas.width = img.width;
-                        canvas.height = img.height;
-                        originalImageRef.current = img;
-                        imageRef.current.src = objectUrl;
-                        imageRef.current.crossOrigin = 'anonymous';
-                        imageRef.current.onload = () => {
-                            // Initialize base canvas
-                            if (!baseCanvasRef.current) {
-                                baseCanvasRef.current = document.createElement('canvas');
-                            }
-                            baseCanvasRef.current.width = img.width;
-                            baseCanvasRef.current.height = img.height;
-                            isLoadingImageRef.current = false;
-                            applyFilters();
-                        };
-                        imageRef.current.onerror = () => {
-                            URL.revokeObjectURL(objectUrl);
-                            isLoadingImageRef.current = false;
-                            showToast('Failed to load image for editing', 'error');
-                        };
-                    } else {
-                        isLoadingImageRef.current = false;
-                        URL.revokeObjectURL(objectUrl);
-                    }
-                };
-                img.onerror = () => {
-                    URL.revokeObjectURL(objectUrl);
-                    console.error('Image load error after blob fetch');
-                    isLoadingImageRef.current = false;
-                    showToast('Failed to load image. Please try again.', 'error');
-                };
-                img.src = objectUrl;
-            } catch (error: any) {
-                console.error('Error fetching image from proxy:', error);
-                isLoadingImageRef.current = false;
-                // Show error to user instead of silently failing
-                showToast(`Failed to load image: ${error?.message || 'Unknown error'}. Please try again.`, 'error');
-            }
-        };
-
-        // Note: Removed loadDirect fallback since it won't work with CORS
-        // If proxy fails, we show an error message instead
-        
-        loadImage();
-        
-        // Cleanup function
-        return () => {
-            isLoadingImageRef.current = false;
-        };
-    }, [item.url, applyFilters]);
-
-    useEffect(() => {
-        // Debounce filter application to prevent excessive redraws
-        if (imageRef.current?.complete && canvasRef.current) {
-            if (renderTimeoutRef.current) {
-                clearTimeout(renderTimeoutRef.current);
-            }
-            renderTimeoutRef.current = setTimeout(() => {
-                requestAnimationFrame(() => {
-                    applyFilters();
-                });
-            }, 50);
-            return () => {
-                if (renderTimeoutRef.current) {
-                    clearTimeout(renderTimeoutRef.current);
-                }
-            };
-        }
-    }, [watermarkText, watermarkPosition, watermarkOpacity, watermarkSize, watermarkTextColor, watermarkImage, applyFilters]);
-
-    // Preload watermark image when it changes
-    useEffect(() => {
-        if (watermarkImage) {
-            const img = new Image();
-            img.onload = () => {
-                watermarkImageRef.current = img;
-                applyFilters();
-            };
-            img.onerror = () => {
-                console.error('Failed to load watermark image');
-                watermarkImageRef.current = null;
-            };
-            img.src = watermarkImage;
-        } else {
-            watermarkImageRef.current = null;
-        }
-    }, [watermarkImage, applyFilters]);
-
-
-
-
-    const handleSave = async () => {
-        if (!canvasRef.current) return;
-        setIsProcessing(true);
-        try {
-            const dataUrl = canvasRef.current.toDataURL('image/jpeg', 0.9);
-            await onSave(dataUrl);
-        } catch (error) {
-            console.error('Error saving:', error);
-        } finally {
-            setIsProcessing(false);
-        }
-    };
-
-
-
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
-                <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Edit Image: {item.name}</h3>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-                        <XMarkIcon className="w-6 h-6" />
-                    </button>
-                </div>
-                
-                <div className="p-6">
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* Canvas Preview */}
-                        <div className="lg:col-span-2">
-                            <div className="bg-gray-100 dark:bg-gray-900 rounded-lg p-4 flex items-center justify-center" ref={containerRef}>
-                                <canvas
-                                    ref={canvasRef}
-                                    className="max-w-full max-h-[600px]"
-                                    style={{ touchAction: 'none', userSelect: 'none' }}
-                                />
-                                <img ref={imageRef} className="hidden" alt="Source" />
-                            </div>
-                        </div>
-
-                        {/* Editing Controls */}
-                        <div className="space-y-6">
-
-                            {/* Watermark */}
-                            <div>
-                                <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Watermark</h4>
-                                <div className="space-y-3">
-                                    <input
-                                        type="text"
-                                        value={watermarkText}
-                                        onChange={(e) => setWatermarkText(e.target.value)}
-                                        placeholder="Watermark text"
-                                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                                    />
-                                    <select
-                                        value={watermarkPosition}
-                                        onChange={(e) => setWatermarkPosition(e.target.value as any)}
-                                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                                    >
-                                        <option value="bottom-right">Bottom Right</option>
-                                        <option value="bottom-left">Bottom Left</option>
-                                        <option value="top-right">Top Right</option>
-                                        <option value="top-left">Top Left</option>
-                                    </select>
-                                    <div>
-                                        <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">
-                                            Opacity: {Math.round(watermarkOpacity * 100)}%
-                                        </label>
-                                        <input
-                                            type="range"
-                                            min="0"
-                                            max="1"
-                                            step="0.1"
-                                            value={watermarkOpacity}
-                                            onChange={(e) => setWatermarkOpacity(Number(e.target.value))}
-                                            className="w-full"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">
-                                            Size: {watermarkSize}px
-                                        </label>
-                                        <input
-                                            type="range"
-                                            min="50"
-                                            max="300"
-                                            step="5"
-                                            value={watermarkSize}
-                                            onChange={(e) => setWatermarkSize(Number(e.target.value))}
-                                            className="w-full"
-                                        />
-                                    </div>
-                                    {watermarkText && (
-                                        <div>
-                                            <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">
-                                                Text Color
-                                            </label>
-                                            <input
-                                                type="color"
-                                                value={watermarkTextColor}
-                                                onChange={(e) => setWatermarkTextColor(e.target.value)}
-                                                className="w-full h-10 rounded cursor-pointer"
-                                            />
-                                        </div>
-                                    )}
-                                    <div>
-                                        <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">
-                                            Or Upload Image/Logo
-                                        </label>
-                                        <input
-                                            ref={watermarkImageInputRef}
-                                            type="file"
-                                            accept="image/*"
-                                            onChange={(e) => {
-                                                const file = e.target.files?.[0];
-                                                if (file) {
-                                                    const reader = new FileReader();
-                                                    reader.onload = (event) => {
-                                                        const result = event.target?.result;
-                                                        if (typeof result === 'string') {
-                                                            setWatermarkImage(result);
-                                                            setWatermarkText(''); // Clear text if image is set
-                                                            // Preload the image
-                                                            const img = new Image();
-                                                            img.onload = () => {
-                                                                watermarkImageRef.current = img;
-                                                                applyFilters();
-                                                            };
-                                                            img.src = result;
-                                                        }
-                                                    };
-                                                    reader.readAsDataURL(file);
-                                                }
-                                                e.target.value = '';
-                                            }}
-                                            className="hidden"
-                                        />
-                                        <button
-                                            onClick={() => watermarkImageInputRef.current?.click()}
-                                            className="w-full px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 text-sm font-medium"
-                                        >
-                                            {watermarkImage ? 'Change Image' : 'Upload Image'}
-                                        </button>
-                                        {watermarkImage && (
-                                            <div className="mt-2 relative">
-                                                <img src={watermarkImage} alt="Watermark" className="w-full h-20 object-contain bg-gray-100 dark:bg-gray-800 rounded" />
-                                                <button
-                                                    onClick={() => {
-                                                        setWatermarkImage(null);
-                                                        watermarkImageRef.current = null;
-                                                        watermarkImageInputRef.current && (watermarkImageInputRef.current.value = '');
-                                                        applyFilters();
-                                                    }}
-                                                    className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded text-xs hover:bg-red-600"
-                                                >
-                                                    Remove
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-
-                            {/* Save Button */}
-                            <button
-                                onClick={handleSave}
-                                disabled={isProcessing}
-                                className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 font-medium"
-                            >
-                                {isProcessing ? 'Saving...' : 'Save Edited Image'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
 
 // Create Folder Modal Component
 const CreateFolderModal: React.FC<{

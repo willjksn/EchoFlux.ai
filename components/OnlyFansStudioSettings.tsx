@@ -25,6 +25,8 @@ export const OnlyFansStudioSettings: React.FC = () => {
     
     // General settings
     const [notifications, setNotifications] = useState(true);
+    const [emojiEnabled, setEmojiEnabled] = useState(true);
+    const [emojiIntensity, setEmojiIntensity] = useState(5); // 0-10 scale, 5 = moderate
     
     // Load user settings
     useEffect(() => {
@@ -42,6 +44,8 @@ export const OnlyFansStudioSettings: React.FC = () => {
                     setCreatorGender(data.creatorGender || '');
                     setTargetAudienceGender(data.targetAudienceGender || '');
                     setNotifications(data.notificationsEnabled !== false);
+                    setEmojiEnabled(data.emojiEnabled !== false); // Default to true
+                    setEmojiIntensity(data.emojiIntensity ?? 5); // Default to 5 (moderate)
                 }
             } catch (error) {
                 console.error('Error loading settings:', error);
@@ -125,6 +129,8 @@ export const OnlyFansStudioSettings: React.FC = () => {
             // Use setDoc with merge: true to handle cases where document might not exist
             await setDoc(doc(db, 'users', user.id), {
                 notificationsEnabled: notifications,
+                emojiEnabled: emojiEnabled,
+                emojiIntensity: emojiIntensity,
                 updatedAt: new Date().toISOString(),
             }, { merge: true });
             
@@ -208,6 +214,60 @@ export const OnlyFansStudioSettings: React.FC = () => {
                                 />
                                 <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary-600"></div>
                             </label>
+                        </div>
+
+                        <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <div>
+                                    <h3 className="text-sm font-medium text-gray-900 dark:text-white">
+                                        Emoji in AI Content
+                                    </h3>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                                        Enable emojis in AI-generated content (captions, suggestions, etc.)
+                                    </p>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={emojiEnabled}
+                                        onChange={(e) => setEmojiEnabled(e.target.checked)}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary-600"></div>
+                                </label>
+                            </div>
+
+                            {emojiEnabled && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                                        Emoji Intensity: <span className="text-primary-600 dark:text-primary-400">
+                                            {emojiIntensity === 0 ? 'None' : emojiIntensity <= 3 ? 'Light' : emojiIntensity <= 7 ? 'Moderate' : 'Heavy'}
+                                        </span>
+                                    </label>
+                                    <div className="relative">
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="10"
+                                            value={emojiIntensity}
+                                            onChange={(e) => setEmojiIntensity(Number(e.target.value))}
+                                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                                            style={{
+                                                background: `linear-gradient(to right, #2563eb 0%, #2563eb ${(emojiIntensity / 10) * 100}%, #e5e7eb ${(emojiIntensity / 10) * 100}%, #e5e7eb 100%)`
+                                            }}
+                                        />
+                                        <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                            <span>None</span>
+                                            <span>Light</span>
+                                            <span>Moderate</span>
+                                            <span>Heavy</span>
+                                        </div>
+                                    </div>
+                                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                                        Control how many emojis appear in AI-generated content. Higher values add more emojis for playful, engaging content.
+                                    </p>
+                                </div>
+                            )}
                         </div>
 
                         <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
