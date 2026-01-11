@@ -138,7 +138,6 @@ Tone: ${tone} (${useCustomTone ? 'Custom tone specified' : 'Selected from preset
 Length: ${scenarioLength === 'Extended' ? 'Extended session (30-45 minutes, 8-12 messages with detailed progression)' : 'Long extended session (60-90 minutes, 12-20 messages with very detailed progression, multiple phases, and extensive content)'}
 Monetization Goal: Engagement and upsell
 ${scenarioContext.trim() ? `\n\nIMPORTANT - CONTEXT/SITUATION:\n${scenarioContext}\n\nCRITICAL: The scenario MUST match this context. If the user specifies a time of day (morning, night, etc.), situation (just woke up, getting ready for bed, at work, etc.), or specific scenario details, the generated content MUST align with that context. Do NOT generate scenarios that contradict the provided context.` : ''}
-${scenarioContext.trim() ? `\n\nIMPORTANT - CONTEXT/SITUATION:\n${scenarioContext}\n\nCRITICAL: The scenario MUST match this context. If the user specifies a time of day (morning, night, etc.), situation (just woke up, getting ready for bed, at work, etc.), or specific scenario details, the generated content MUST align with that context. Do NOT generate scenarios that contradict the provided context.` : ''}
 
 ${roleplayType.toLowerCase().includes('gfe') || roleplayType.toLowerCase().includes('girlfriend experience') ? `
 🔹 GFE (GIRLFRIEND EXPERIENCE) - CRITICAL INSTRUCTIONS:
@@ -1460,6 +1459,12 @@ Format as a numbered list with detailed post concepts including captions and eng
                             >
                                 {isGeneratingScenario ? 'Generating Scenario...' : 'Generate Roleplay Scenario'}
                             </button>
+                            {isGeneratingScenario && (
+                                <div className="mt-3 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                                    <div className="h-4 w-4 border-2 border-gray-300 dark:border-gray-600 border-t-primary-600 dark:border-t-primary-400 rounded-full animate-spin"></div>
+                                    <span>Thinking...</span>
+                                </div>
+                            )}
                         </div>
                     </div>
 
