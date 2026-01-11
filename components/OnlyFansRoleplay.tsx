@@ -719,7 +719,7 @@ Format as a numbered list (1-10) with engaging, interactive, explicit prompts fr
                     prompt: `Write a LONG-FORM, DETAILED, explicit OnlyFans-style body rating from the creator's perspective.
 
 🚨 CRITICAL - EXPLICIT CONTENT PLATFORM 🚨
-- This is for OnlyFans, an EXPLICIT adult content creator platform
+- This is for premium creator platforms (OnlyFans, Fansly, Fanvue & more) that support EXPLICIT adult content
 - Use EXPLICIT, UNCENSORED, RAW, and BOLD language
 - Use DIRECT sexual terminology - NO CENSORSHIP
 - Be SPECIFIC and EXPLICIT about body parts and sexual content
@@ -875,7 +875,7 @@ CRITICAL REQUIREMENTS:
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
                 body: JSON.stringify({
-                    prompt: `Generate 10 creative interactive post ideas for OnlyFans that encourage audience participation.
+                    prompt: `Generate 10 creative interactive post ideas for OnlyFans, Fansly, Fanvue & more that encourage audience participation.
 
 Focus: ${interactivePrompt}${creatorGender ? `\nCreator Gender: ${creatorGender}` : ''}${targetAudienceGender ? `\nTarget Audience: ${targetAudienceGender}` : ''}
 
@@ -900,7 +900,7 @@ Generate ideas that:
 - Drive subscriptions and exclusive explicit content purchases
 - Are playful, engaging, explicit, and monetization-focused
 
-Format as a numbered list with detailed post concepts including captions and engagement strategies. Make them creative, explicit, and effective for adult content monetization on OnlyFans. Use bold, adult-oriented language appropriate for the platform.
+Format as a numbered list with detailed post concepts including captions and engagement strategies. Make them creative, explicit, and effective for adult content monetization on OnlyFans, Fansly, Fanvue & more. Use bold, adult-oriented language appropriate for the platform.
 
 🚨 CRITICAL - UNIQUENESS REQUIREMENT 🚨
 - Each post idea MUST be UNIQUE and DIFFERENT from any previous ideas you've generated
@@ -913,7 +913,7 @@ Format as a numbered list with detailed post concepts including captions and eng
                     context: {
                         goal: 'interactive-posts',
                         tone: 'Explicit/Adult Content',
-                        platforms: ['OnlyFans'],
+                        platforms: ['OnlyFans', 'Fansly', 'Fanvue'],
                     },
                     emojiEnabled: emojiSettings.enabled,
                     emojiIntensity: emojiSettings.intensity,

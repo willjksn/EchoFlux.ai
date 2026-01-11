@@ -797,7 +797,7 @@ export const OnlyFansContentBrain: React.FC = () => {
 
     const buildMonetizedContext = () => {
         if (!monetizedModeEnabled) return '';
-        const platforms = Array.isArray(user?.settings?.monetizedPlatforms) ? user?.settings?.monetizedPlatforms.join(', ') : 'OnlyFans';
+        const platforms = Array.isArray(user?.settings?.monetizedPlatforms) ? user?.settings?.monetizedPlatforms.join(', ') : 'OnlyFans, Fansly, Fanvue & more';
         const postingFrequency = monetizedOnboarding?.postingFrequency ? String(monetizedOnboarding.postingFrequency) : '';
         const contentHelp = Array.isArray(monetizedOnboarding?.contentHelp) ? monetizedOnboarding.contentHelp.join(', ') : '';
         const biggestChallenge = monetizedOnboarding?.biggestChallenge ? String(monetizedOnboarding.biggestChallenge) : '';
@@ -812,7 +812,7 @@ export const OnlyFansContentBrain: React.FC = () => {
         ].filter(Boolean);
 
         if (lines.length === 0) return '';
-        return `OnlyFans mode personalization:\n${lines.map((l) => `- ${l}`).join('\n')}`;
+        return `Premium creator personalization (OnlyFans, Fansly, Fanvue & more):\n${lines.map((l) => `- ${l}`).join('\n')}`;
     };
 
     // Prefill defaults once (do not overwrite user edits)
@@ -1094,7 +1094,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                     // Target all premium creator platforms we support
                     platforms: ['OnlyFans', 'Fansly', 'Fanvue'],
                     promptText: uploadedMediaUrl 
-                        ? `${captionPrompt || 'Analyze this image/video in detail and describe what you see. Create explicit OnlyFans captions based on the actual content shown. Be very descriptive and explicit about what is visually present.'}${fanContext}\n\n[Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`
+                        ? `${captionPrompt || 'Analyze this image/video in detail and describe what you see. Create explicit captions for OnlyFans, Fansly, Fanvue & more based on the actual content shown. Be very descriptive and explicit about what is visually present.'}${fanContext}\n\n[Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`
                         : `${captionPrompt}${fanContext}\n\n[Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`,
                     emojiEnabled: emojiSettings.enabled,
                     emojiIntensity: emojiSettings.intensity,
@@ -1230,7 +1230,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
                 body: JSON.stringify({
-                    prompt: `Generate 8 detailed shoot concepts for OnlyFans based on: ${shootConceptPrompt}.
+                    prompt: `Generate 8 detailed shoot concepts for OnlyFans, Fansly, Fanvue & more based on: ${shootConceptPrompt}.
                     Each concept should include:
                     - Theme/Setting
                     - Outfit suggestions
@@ -1242,7 +1242,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                     context: {
                         goal: 'shoot-planning',
                         tone: 'Explicit/Adult Content',
-                        platforms: ['OnlyFans'],
+                        platforms: ['OnlyFans', 'Fansly', 'Fanvue'],
                     },
                     analyticsData: buildAnalyticsData(),
                 }),
@@ -1294,12 +1294,12 @@ export const OnlyFansContentBrain: React.FC = () => {
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
                 body: JSON.stringify({
-                    niche: 'Adult Content Creator (OnlyFans)',
+                    niche: 'Adult Content Creator (OnlyFans, Fansly, Fanvue & more)',
                     audience: 'Subscribers and fans',
                     goal: `${weeklyPlanPrompt || 'Sales Conversion'}\n\n${buildMonetizedContext()}`.trim(), // Personalize if available
                     duration: 1, // 1 week
                     tone: 'Explicit/Adult Content',
-                    platformFocus: 'OnlyFans',
+                    platformFocus: 'OnlyFans, Fansly, Fanvue & more',
                     analyticsData: buildAnalyticsData(),
                 }),
             });
