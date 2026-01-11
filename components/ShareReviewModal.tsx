@@ -38,7 +38,8 @@ export const ShareReviewModal: React.FC<ShareReviewModalProps> = ({ isOpen, onCl
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
       });
-      const data = await res.json();
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : null;
       if (res.ok && data?.review) {
         const r: ReviewResponse = data.review;
         setRating(r.rating || 5);
@@ -87,7 +88,8 @@ export const ShareReviewModal: React.FC<ShareReviewModalProps> = ({ isOpen, onCl
           avatarUrl: showAvatar ? user?.avatar || user?.photoURL || null : null,
         }),
       });
-      const data = await res.json();
+      const textBody = await res.text();
+      const data = textBody ? JSON.parse(textBody) : null;
       if (!res.ok || !data?.success) throw new Error(data?.error || "Failed to save review");
       showToast("Review saved", "success");
       onClose();

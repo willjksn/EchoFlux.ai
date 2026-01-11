@@ -5,10 +5,10 @@ import { getAdminDb } from "./_firebaseAdmin.js";
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const user = await verifyAuth(req);
-  if (!user) return res.status(401).json({ error: "Unauthorized" });
-
   try {
+    const user = await verifyAuth(req);
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
+
     const { text, rating, showAvatar, country, plan, username, avatarUrl } = req.body || {};
     if (!text || typeof text !== "string" || !text.trim()) {
       return res.status(400).json({ error: "Review text is required" });
