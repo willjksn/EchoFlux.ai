@@ -262,6 +262,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     path.startsWith('/settings') ||
                     path.startsWith('/compose') ||
                     path.startsWith('/calendar') ||
+                    path.startsWith('/drafts') ||
                     path.startsWith('/approvals') ||
                     path.startsWith('/team') ||
                     path.startsWith('/opportunities') ||

@@ -112,7 +112,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         settings: '/settings',
         compose: '/compose',
         calendar: '/calendar',
-        approvals: '/approvals',
+        approvals: '/drafts',
         team: '/team',
         opportunities: '/opportunities',
         profile: '/profile',
@@ -141,6 +141,8 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     // Accept legacy routes for backward compatibility (case variants)
     pathToPage['/onlyfansstudio'] = 'onlyfansStudio';
     pathToPage['/onlyfansStudio'] = 'onlyfansStudio';
+    // Legacy approvals route
+    pathToPage['/approvals'] = 'approvals';
 
     const isRoutableAppPath = (path: string) => {
         const p = normalizePath(path);

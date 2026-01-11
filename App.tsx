@@ -184,7 +184,7 @@ const AppContent: React.FC = () => {
     const pathname = window.location.pathname;
     
     // Exclude known app routes and API routes to avoid conflicts
-    const knownRoutes = ['/', '/dashboard', '/inbox', '/analytics', '/settings', '/compose', '/calendar', '/approvals', '/team', '/opportunities', '/profile', '/about', '/contact', '/pricing', '/clients', '/faq', '/terms', '/privacy', '/dataDeletion', '/admin', '/automation', '/bio', '/strategy', '/ads', '/mediaLibrary', '/autopilot', '/premiumcontentstudio', '/onlyfansStudio', '/reset-password'];
+    const knownRoutes = ['/', '/dashboard', '/inbox', '/analytics', '/settings', '/compose', '/calendar', '/drafts', '/approvals', '/team', '/opportunities', '/profile', '/about', '/contact', '/pricing', '/clients', '/faq', '/terms', '/privacy', '/dataDeletion', '/admin', '/automation', '/bio', '/strategy', '/ads', '/mediaLibrary', '/autopilot', '/premiumcontentstudio', '/onlyfansStudio', '/reset-password'];
     
     // Check if it's a direct username path (not a known route) or legacy /u/ or /link/ path
     // Also exclude paths that start with /api or contain dots (likely static files)
@@ -235,6 +235,7 @@ const AppContent: React.FC = () => {
             path === '/settings' ||
             path === '/compose' ||
             path === '/calendar' ||
+            path === '/drafts' ||
             path === '/approvals' ||
             path === '/team' ||
             path === '/opportunities' ||
