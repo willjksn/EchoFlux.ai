@@ -865,6 +865,9 @@ CRITICAL REQUIREMENTS:
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             
+            // Load emoji settings for interactive ideas
+            const emojiSettings = await loadEmojiSettings(user.id);
+            
             const response = await fetch('/api/generateText', {
                 method: 'POST',
                 headers: {
