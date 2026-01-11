@@ -59,10 +59,10 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
         if (typeof window !== 'undefined') {
             const savedTheme = localStorage.getItem('theme');
-            // Default to dark mode if no preference is saved, or if saved preference is 'dark'
-            return savedTheme ? savedTheme === 'dark' : true;
+            // Default to light mode if no preference is saved
+            return savedTheme ? savedTheme === 'dark' : false;
         }
-        return true;
+        return false;
     });
     
     const [activePageState, setActivePageState] = useState<Page>('dashboard');

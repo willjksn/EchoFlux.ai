@@ -42,7 +42,7 @@ const fallbackReviews: Review[] = [
     country: "UK",
     plan: "Elite",
     rating: 5,
-    text: "I like that it’s built for premium creator platforms. Content Brain gives me Fansly- and Fanvue-ready ideas without me rewriting everything.",
+    text: "I like that it’s built for 🌶️ platforms—Content Brain gives me Fansly- and Fanvue-ready ideas without me rewriting everything.",
     showAvatar: false,
     avatarUrl: null,
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(),
@@ -169,7 +169,7 @@ export const ReviewsSection: React.FC = () => {
               return (
                 <div
                   key={review.id}
-                  className="min-w-[280px] max-w-sm flex-1 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 shadow-sm"
+                  className="min-w-[280px] max-w-sm flex-1 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 shadow-sm flex flex-col justify-between h-full"
                 >
                   <div className="flex items-center gap-3 mb-3">
                     <div className="h-10 w-10 rounded-full bg-primary-100 dark:bg-primary-900/50 text-primary-700 dark:text-primary-300 flex items-center justify-center overflow-hidden">

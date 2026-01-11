@@ -16,8 +16,8 @@ const allCreatorTiers = [
         priceAnnually: 0,
         description: 'For individuals testing the studio.',
         features: [
-            '1 AI strategy generation / month (basic)',
-            '10 AI captions / month',
+            '1 AI strategy generation (basic)',
+            '10 AI captions',
             'Basic Link-in-Bio (1 link)',
             'Media Library',
             '100 MB Storage'
@@ -31,9 +31,9 @@ const allCreatorTiers = [
         description: 'For creators scaling their brand.',
         features: [
             'AI Content Strategist',
-            '2 AI strategy generations / month',
-            'Live trend research included (16 searches/month)',
-            '500 AI captions / month',
+            '2 AI strategy generations',
+            'Live trend research',
+            '500 AI captions',
             'Link-in-Bio Builder (5 links)',
             'Media Library',
             'Visual Content Calendar',
@@ -46,18 +46,18 @@ const allCreatorTiers = [
         name: 'Elite',
         priceMonthly: 79,
         priceAnnually: 63,
-        description: 'For professional & OF creators.',
+        description: 'For professional & monetized creators.',
         features: [
+            'Premium Content Studio (included)',
             'Advanced Strategy options',
-            '5 AI strategy generations / month',
-            'Enhanced live trend research (40 searches/month)',
-            '1,500 AI captions / month',
+            '5 AI strategy generations',
+            'Enhanced live trend research',
+            '1,500 AI captions',
             'Link-in-Bio Builder (unlimited links)',
             'Media Library',
             'Visual Content Calendar',
             'AI Voice Assistant',
             '10 GB Storage',
-            'OnlyFans Studio (included)'
         ],
         isRecommended: false
     },
