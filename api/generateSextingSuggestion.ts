@@ -1,0 +1,140 @@
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { checkApiKeys, getVerifyAuth, withErrorHandling } from "./_errorHandler.js";
+import { getModelForTask } from "./_modelRouter.js";
+import { enforceRateLimit } from "./_rateLimit.js";
+import { getEmojiInstructions, getEmojiExamplesForTone } from "./_emojiHelper.js";
+import { parseJSON } from "./_geminiShared.js";
+
+async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
+  if (req.method !== "POST") {
+    res.status(405).json({ error: "Method not allowed" });
+    return;
+  }
+
+  const apiKeyCheck = checkApiKeys();
+  if (!apiKeyCheck.hasKey) {
+    res.status(200).json({
+      success: false,
+      error: "AI not configured",
+      note: apiKeyCheck.error,
+    });
+    return;
+  }
+
+  // Auth
+  let user;
+  try {
+    const verifyAuth = await getVerifyAuth();
+    user = await verifyAuth(req);
+  } catch (authError: any) {
+    console.error("[generateSextingSuggestion] auth error:", authError);
+    res.status(200).json({
+      success: false,
+      error: "Authentication error",
+      note: authError?.message || "Failed to verify authentication.",
+    });
+    return;
+  }
+
+  if (!user) {
+    res.status(401).json({ success: false, error: "Unauthorized" });
+    return;
+  }
+
+  // Rate limit per user
+  const ok = await enforceRateLimit({
+    req,
+    res,
+    keyPrefix: "generateSextingSuggestion",
+    limit: 8,
+    windowMs: 60_000,
+    identifier: user.uid,
+  });
+  if (!ok) return;
+
+  const {
+    sessionContext,
+    fanContext,
+    conversationHistory,
+    lastFanMessage,
+    emojiEnabled,
+    emojiIntensity,
+  } = req.body || {};
+
+  try {
+    const model = await getModelForTask("sexting_session", user.uid);
+
+    const roleplayType = sessionContext?.roleplayType || "Girlfriend Experience";
+    const tone = sessionContext?.tone || "Flirty";
+    const fanName = sessionContext?.fanName || "Fan";
+
+    const emojiGuidance = getEmojiInstructions({
+      enabled: emojiEnabled !== false,
+      intensity: emojiIntensity ?? 5,
+    });
+    const emojiExamples =
+      emojiEnabled === false ? "" : ` Emoji examples: ${getEmojiExamplesForTone(tone)}.`;
+
+    const prompt = `
+You are an explicit sexting co-pilot for premium creator platforms (OnlyFans / Fansly / Fanvue).
+Generate 4-6 short, message-ready suggestions the creator can send immediately.
+
+Session context:
+- Roleplay type: ${roleplayType}
+- Tone: ${tone}
+- Fan name: ${fanName}
+${fanContext ? `- Fan context: ${fanContext}` : ""}
+${lastFanMessage ? `- Last fan message: "${lastFanMessage}"` : ""}
+
+Recent conversation (most recent last):
+${conversationHistory || "No prior messages provided."}
+
+Guidelines:
+- Be bold, playful, and explicitly adult (sexting) while respecting the chosen tone.
+- Keep replies concise (1-3 sentences each).
+- Vary style across suggestions (teasing, direct, playful).
+- Personalize with the fan's name when natural.
+- ${emojiGuidance}${emojiExamples}
+- Return ONLY strict JSON array of strings, no prose, like:
+["Hey love, ...", "How about ..."]
+`.trim();
+
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+    });
+
+    const raw = result.response.text().trim();
+
+    let suggestions: string[] = [];
+    try {
+      const parsed = parseJSON(raw);
+      if (Array.isArray(parsed)) {
+        suggestions = parsed.filter((s) => typeof s === "string");
+      }
+    } catch {
+      // Fallback: split lines
+      suggestions = raw
+        .split("\n")
+        .map((s) => s.replace(/^[-*]\s*/, "").trim())
+        .filter(Boolean);
+    }
+
+    if (!Array.isArray(suggestions) || suggestions.length === 0) {
+      throw new Error("Model returned no suggestions");
+    }
+
+    res.status(200).json({
+      success: true,
+      suggestions,
+    });
+  } catch (error: any) {
+    console.error("[generateSextingSuggestion] error:", error);
+    res.status(200).json({
+      success: false,
+      error: "Failed to generate suggestions",
+      note: error?.message || "An unexpected error occurred. Please try again.",
+    });
+  }
+}
+
+export default withErrorHandling(handler);
