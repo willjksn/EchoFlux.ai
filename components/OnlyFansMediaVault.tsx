@@ -36,6 +36,7 @@ export const OnlyFansMediaVault: React.FC = () => {
     const [viewingItem, setViewingItem] = useState<OnlyFansMediaItem | null>(null);
     const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
     const [showMoveModal, setShowMoveModal] = useState(false);
+    const [editingFolder, setEditingFolder] = useState<MediaFolder | null>(null);
     const [editingItem, setEditingItem] = useState<OnlyFansMediaItem | null>(null);
     const [isGeneratingTags, setIsGeneratingTags] = useState(false);
     const [selectedFanId, setSelectedFanId] = useState<string | null>(null);
@@ -355,6 +356,76 @@ export const OnlyFansMediaVault: React.FC = () => {
         }
     };
 
+    const canModifyFolder = (folder: MediaFolder) => {
+        if (!folder) return false;
+        if (folder.id === GENERAL_FOLDER_ID) return false;
+        const isDefault = ONLYFANS_DEFAULT_FOLDERS.includes(folder.name);
+        return !isDefault;
+    };
+
+    const handleRenameFolder = async (name: string) => {
+        if (!editingFolder || !user) return;
+        const folderId = editingFolder.id;
+        if (!name.trim()) return;
+
+        try {
+            const folderPath =
+                folderId === GENERAL_FOLDER_ID
+                    ? doc(db, 'users', user.id, 'media_folders', folderId)
+                    : doc(db, 'users', user.id, 'onlyfans_media_folders', folderId);
+            await updateDoc(folderPath, { name: name.trim() });
+            setFolders(prev =>
+                prev.map(f => (f.id === folderId ? { ...f, name: name.trim() } : f))
+            );
+            showToast('Folder renamed', 'success');
+        } catch (error) {
+            console.error('Failed to rename folder:', error);
+            showToast('Failed to rename folder', 'error');
+        } finally {
+            setEditingFolder(null);
+            setShowCreateFolderModal(false);
+        }
+    };
+
+    const handleDeleteFolder = async (folder: MediaFolder) => {
+        if (!user || !canModifyFolder(folder)) return;
+
+        if (!window.confirm(`Delete folder "${folder.name}" and move its items to General?`)) {
+            return;
+        }
+
+        try {
+            const batch = writeBatch(db);
+            mediaItems
+                .filter(item => (item.folderId || GENERAL_FOLDER_ID) === folder.id)
+                .forEach(item => {
+                    const itemRef = doc(db, 'users', user.id, 'onlyfans_media_library', item.id);
+                    batch.update(itemRef, { folderId: GENERAL_FOLDER_ID });
+                });
+
+            const folderRef = doc(db, 'users', user.id, 'onlyfans_media_folders', folder.id);
+            batch.delete(folderRef);
+
+            await batch.commit();
+
+            setMediaItems(prev =>
+                prev.map(item =>
+                    (item.folderId || GENERAL_FOLDER_ID) === folder.id
+                        ? { ...item, folderId: GENERAL_FOLDER_ID }
+                        : item
+                )
+            );
+            setFolders(prev => prev.filter(f => f.id !== folder.id));
+            if (selectedFolderId === folder.id) {
+                setSelectedFolderId(GENERAL_FOLDER_ID);
+            }
+            showToast('Folder deleted and items moved to General', 'success');
+        } catch (error) {
+            console.error('Failed to delete folder:', error);
+            showToast('Failed to delete folder', 'error');
+        }
+    };
+
     // Generate AI tags
     const handleGenerateAITags = async (item: OnlyFansMediaItem) => {
         if (!user) return;
@@ -524,13 +595,43 @@ export const OnlyFansMediaVault: React.FC = () => {
                     <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 overflow-hidden space-y-4">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="font-semibold text-gray-900 dark:text-white">Folders</h3>
-                            <button
-                                onClick={() => setShowCreateFolderModal(true)}
-                                className="p-1 text-primary-600 dark:text-primary-400 hover:text-primary-700"
-                                title="Create folder"
-                            >
-                                <PlusIcon className="w-4 h-4" />
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => { setEditingFolder(null); setShowCreateFolderModal(true); }}
+                                    className="p-1 text-primary-600 dark:text-primary-400 hover:text-primary-700"
+                                    title="Create folder"
+                                >
+                                    <PlusIcon className="w-4 h-4" />
+                                </button>
+                                {selectedFolderId !== GENERAL_FOLDER_ID && (
+                                    <>
+                                        <button
+                                            onClick={() => {
+                                                const folder = folders.find(f => f.id === selectedFolderId);
+                                                if (!folder || !canModifyFolder(folder)) return;
+                                                setEditingFolder(folder);
+                                                setShowCreateFolderModal(true);
+                                            }}
+                                            className="p-1 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white"
+                                            title="Rename folder"
+                                            disabled={!canModifyFolder(folders.find(f => f.id === selectedFolderId) as MediaFolder)}
+                                        >
+                                            Rename
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                const folder = folders.find(f => f.id === selectedFolderId);
+                                                if (folder) handleDeleteFolder(folder);
+                                            }}
+                                            className="p-1 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 disabled:opacity-50"
+                                            title="Delete folder"
+                                            disabled={!canModifyFolder(folders.find(f => f.id === selectedFolderId) as MediaFolder)}
+                                        >
+                                            Delete
+                                        </button>
+                                    </>
+                                )}
+                            </div>
                         </div>
                         <div className="space-y-1 max-h-[400px] overflow-y-auto">
                             {folders.map(folder => (
@@ -719,9 +820,18 @@ export const OnlyFansMediaVault: React.FC = () => {
             {/* Create Folder Modal */}
             {showCreateFolderModal && (
                 <CreateFolderModal
-                    onClose={() => setShowCreateFolderModal(false)}
+                    onClose={() => {
+                        setShowCreateFolderModal(false);
+                        setEditingFolder(null);
+                    }}
+                    initialName={editingFolder?.name}
+                    title={editingFolder ? 'Rename Folder' : 'Create Folder'}
                     onCreate={async (name: string) => {
                         if (!user) return;
+                        if (editingFolder) {
+                            await handleRenameFolder(name);
+                            return;
+                        }
                         const folderId = `folder_${Date.now()}`;
                         const newFolder: MediaFolder = {
                             id: folderId,
@@ -998,8 +1108,14 @@ const MediaViewModal: React.FC<{
 const CreateFolderModal: React.FC<{
     onClose: () => void;
     onCreate: (name: string) => Promise<void>;
-}> = ({ onClose, onCreate }) => {
-    const [folderName, setFolderName] = useState('');
+    initialName?: string;
+    title?: string;
+}> = ({ onClose, onCreate, initialName = '', title = 'Create Folder' }) => {
+    const [folderName, setFolderName] = useState(initialName);
+
+    useEffect(() => {
+        setFolderName(initialName);
+    }, [initialName]);
 
     const handleCreate = async () => {
         if (!folderName.trim()) return;
@@ -1010,7 +1126,7 @@ const CreateFolderModal: React.FC<{
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Create Folder</h3>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">{title}</h3>
                 <input
                     type="text"
                     value={folderName}
