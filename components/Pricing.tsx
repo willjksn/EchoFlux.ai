@@ -44,8 +44,8 @@ const allCreatorTiers = [
     },
     {
         name: 'Elite',
-        priceMonthly: 59,
-        priceAnnually: 47,
+        priceMonthly: 79,
+        priceAnnually: 63,
         description: 'For professional & OF creators.',
         features: [
             'Advanced Strategy options',
