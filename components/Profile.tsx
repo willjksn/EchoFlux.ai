@@ -422,8 +422,12 @@ export const Profile: React.FC = () => {
 
             <SettingsSection title="Profile Information">
                 <div className="flex items-center space-x-6">
-                    <div className="relative">
-                        <img src={canEdit && isEditing && editableUser ? editableUser.avatar : currentData.avatar} alt="Profile" className="w-28 h-28 rounded-full object-cover border-4 border-white dark:border-gray-800 shadow-lg ring-2 ring-gray-200 dark:ring-gray-700" />
+                    <div className="relative flex-shrink-0">
+                        <img 
+                            src={canEdit && isEditing && editableUser ? editableUser.avatar : currentData.avatar} 
+                            alt="Profile" 
+                            className="w-28 h-28 aspect-square rounded-full object-cover border-4 border-white dark:border-gray-800 shadow-lg ring-2 ring-gray-200 dark:ring-gray-700" 
+                        />
                         {isEditing && (
                             <>
                                 <input type="file" ref={fileInputRef} onChange={handleAvatarChange} className="hidden" accept="image/*" />
