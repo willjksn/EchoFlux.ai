@@ -77,13 +77,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
       </header>
       
       {/* Hero Section */}
-      <main>
+      <main className="overflow-x-hidden">
         <div className="relative overflow-hidden">
           <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gray-100 dark:bg-gray-800" />
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="relative overflow-hidden rounded-2xl bg-white dark:bg-gray-900 shadow-2xl border border-gray-200 dark:border-white/10 mb-12 sm:mb-14 lg:mb-16">
               {/* Background image + gradient overlay */}
-              <div className="absolute inset-0">
+              <div className="absolute inset-0 overflow-hidden">
                 <img
                   className="h-full w-full object-cover opacity-15 dark:opacity-55 transition-opacity"
                   src="https://images.unsplash.com/photo-1531297484001-80022131f5a1?q=80&w=2920&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
@@ -92,7 +92,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                 <div className="absolute inset-0 bg-white/96 dark:bg-gradient-to-br dark:from-primary-600/80 dark:via-gray-900/90 dark:to-gray-900" />
               </div>
 
-              <div className="relative px-6 py-12 sm:px-10 sm:py-16 lg:px-16 lg:py-18">
+              <div className="relative px-6 py-12 sm:px-10 sm:py-16 lg:px-16 lg:py-18 overflow-hidden">
                 <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
                   {/* Left: Copy + CTAs */}
                   <div>
@@ -170,7 +170,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
 
                   {/* Right: Product preview card */}
                   <div className="relative overflow-hidden">
-                    <div className="pointer-events-none absolute -inset-8 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-primary-500/10 to-transparent blur-3xl" />
+                    <div className="pointer-events-none absolute inset-0 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-primary-500/10 to-transparent blur-3xl" />
                     <div className="relative rounded-2xl bg-white/90 dark:bg-gray-900/70 p-4 shadow-xl ring-1 ring-gray-200 dark:ring-white/15 backdrop-blur">
                       <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 px-3 py-2 text-xs text-gray-700 dark:text-gray-300">
                         <span className="inline-flex items-center gap-2">
