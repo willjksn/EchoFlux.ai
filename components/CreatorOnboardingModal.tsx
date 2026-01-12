@@ -76,7 +76,7 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                     {isElitePlan && (
                         <div className="mt-6 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
                             <p className="text-sm text-purple-800 dark:text-purple-200">
-                                <strong>Elite Plan Includes:</strong> Advanced Strategy options, 5 strategies/month, Enhanced trend research (40 searches/month), 1,500 captions/month, Unlimited links, Visual Content Calendar, 10GB storage, OnlyFans Studio
+                                <strong>Elite Plan Includes:</strong> Advanced Strategy options, 5 strategies/month, Enhanced trend research (40 searches/month), 1,500 captions/month, Unlimited links, Visual Content Calendar, 10GB storage, Premium Content Studio
                             </p>
                         </div>
                     )}
@@ -328,13 +328,13 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
             );
         }
 
-        // Step 7: Elite OnlyFans Studio (Elite only)
+        // Step 7: Elite Premium Content Studio (Elite only)
         if (step === 7 && isElitePlan) {
             return (
                 <div className="animate-fade-in">
-                    <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-white">OnlyFans Studio (Elite)</h2>
+                    <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-white">Premium Content Studio (Elite)</h2>
                     <p className="mt-2 text-center text-gray-500 dark:text-gray-400">
-                        Your Elite plan unlocks OnlyFans-specific tools designed to help you plan, organize, and scale faster.
+                        Your Elite plan unlocks OnlyFans, Fansly, and Fanvue-specific tools to help you plan, organize, and scale faster.
                     </p>
                     <div className="mt-6 space-y-4">
                         <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
@@ -357,7 +357,7 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                         </div>
                         <div className="p-4 border border-purple-200 dark:border-purple-800 rounded-lg bg-white/60 dark:bg-gray-800/40">
                             <p className="text-sm text-gray-700 dark:text-gray-300">
-                                <strong>Where to find it:</strong> open the sidebar and click <strong>OnlyFans Studio</strong>.
+                                <strong>Where to find it:</strong> open the sidebar and click <strong>Premium Content Studio</strong>.
                             </p>
                         </div>
                     </div>
@@ -382,6 +382,11 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                             <li>• Remembers your preference across sessions</li>
                         </ul>
                     </div>
+                    <div className="mt-4 p-4 border border-gray-200 dark:border-gray-700 rounded-lg text-left">
+                        <p className="text-sm text-gray-700 dark:text-gray-300">
+                            <strong>Where:</strong> Header top-right sun/moon icon. Tap to toggle themes.
+                        </p>
+                    </div>
                 </div>
             );
         }
@@ -404,7 +409,7 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                             <li>• Set up your Link-in-Bio page</li>
                             <li>• Upload media to your library</li>
                             {isProPlan && <li>• Explore your Visual Content Calendar</li>}
-                            {isElitePlan && <li>• Explore OnlyFans Studio (Content Brain, Studio Calendar, Media Vault)</li>}
+                            {isElitePlan && <li>• Explore Premium Content Studio (Content Brain, Studio Calendar, Media Vault)</li>}
                         </ul>
                     </div>
                 </div>
@@ -425,7 +430,7 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm" aria-modal="true">
             <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-lg w-full m-4 p-8 flex flex-col min-h-[400px] max-h-[90vh] overflow-hidden">
                 {/* Content area can overflow on smaller screens — make it scrollable */}
-                <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+                <div className="flex-1 min-h-0 overflow-y-auto pr-1" aria-live="polite">
                     {renderStepContent()}
                 </div>
                 <div className="mt-8 flex justify-between items-center">
