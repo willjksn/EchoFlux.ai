@@ -15,6 +15,8 @@ type RoleplayType =
     | 'Boss / Assistant'
     | 'Fitness Trainer'
     | 'Soft Mommy / Daddy'
+    | 'Nurse / Patient'
+    | 'Celebrity / Fan'
     | 'Custom';
 
 export const OnlyFansRoleplay: React.FC = () => {
@@ -29,11 +31,9 @@ export const OnlyFansRoleplay: React.FC = () => {
     // Scenario generation state
     const [selectedRoleplayType, setSelectedRoleplayType] = useState<RoleplayType>('GFE (Girlfriend Experience)');
     const [customRoleplayType, setCustomRoleplayType] = useState('');
-    const [useCustomRoleplayType, setUseCustomRoleplayType] = useState(false);
     const [scenarioContext, setScenarioContext] = useState('');
-    const [scenarioTone, setScenarioTone] = useState<'Soft' | 'Teasing' | 'Playful' | 'Explicit'>('Teasing');
+    const [scenarioTone, setScenarioTone] = useState<'Soft' | 'Teasing' | 'Playful' | 'Explicit' | 'Custom'>('Teasing');
     const [customTone, setCustomTone] = useState('');
-    const [useCustomTone, setUseCustomTone] = useState(false);
     const [scenarioLength, setScenarioLength] = useState<'Extended' | 'Long Extended'>('Extended');
     const [generatedScenario, setGeneratedScenario] = useState<{
         premise: string;
@@ -100,12 +100,14 @@ export const OnlyFansRoleplay: React.FC = () => {
         'Boss / Assistant',
         'Fitness Trainer',
         'Soft Mommy / Daddy',
+        'Nurse / Patient',
+        'Celebrity / Fan',
         'Custom'
     ];
 
     const handleGenerateScenario = async () => {
-        const roleplayType = useCustomRoleplayType ? customRoleplayType : (selectedRoleplayType === 'Custom' ? customRoleplayType : selectedRoleplayType);
-        const tone = useCustomTone ? customTone : scenarioTone;
+        const roleplayType = selectedRoleplayType === 'Custom' ? customRoleplayType : selectedRoleplayType;
+        const tone = scenarioTone === 'Custom' ? customTone : scenarioTone;
         
         if (!roleplayType.trim()) {
             showToast('Please select or enter a roleplay type', 'error');
@@ -134,7 +136,7 @@ export const OnlyFansRoleplay: React.FC = () => {
                     prompt: `Generate direct first-person messages for OnlyFans ${roleplayType} content.
                     
 Type: ${roleplayType}${creatorGender ? `\nCreator Gender: ${creatorGender}` : ''}${targetAudienceGender ? `\nTarget Audience: ${targetAudienceGender}` : ''}
-Tone: ${tone} (${useCustomTone ? 'Custom tone specified' : 'Selected from presets'})
+Tone: ${tone} (${scenarioTone === 'Custom' ? 'Custom tone specified' : 'Selected from presets'})
 Length: ${scenarioLength === 'Extended' ? 'Extended session (30-45 minutes, 8-12 messages with detailed progression)' : 'Long extended session (60-90 minutes, 12-20 messages with very detailed progression, multiple phases, and extensive content)'}
 Monetization Goal: Engagement and upsell
 ${scenarioContext.trim() ? `\n\nIMPORTANT - CONTEXT/SITUATION:\n${scenarioContext}\n\nCRITICAL: The scenario MUST match this context. If the user specifies a time of day (morning, night, etc.), situation (just woke up, getting ready for bed, at work, etc.), or specific scenario details, the generated content MUST align with that context. Do NOT generate scenarios that contradict the provided context.` : ''}
@@ -948,8 +950,8 @@ Format as a numbered list with detailed post concepts including captions and eng
         try {
             const scenarioData = {
                 ...generatedScenario,
-                roleplayType: useCustomRoleplayType ? customRoleplayType : selectedRoleplayType,
-                tone: useCustomTone ? customTone : scenarioTone,
+                roleplayType: selectedRoleplayType === 'Custom' ? customRoleplayType : selectedRoleplayType,
+                tone: scenarioTone === 'Custom' ? customTone : scenarioTone,
                 length: scenarioLength,
                 context: scenarioContext,
                 savedAt: Timestamp.now(),
@@ -1207,14 +1209,14 @@ Format as a numbered list with detailed post concepts including captions and eng
                     </h1>
                 </div>
                 <p className="text-gray-600 dark:text-gray-400">
-                    Generate roleplay scenarios, build personas, create rating prompts, and design interactive posts for OnlyFans.
+                    Generate roleplay scenarios, build personas, create rating prompts, and design interactive posts for OnlyFans, Fansly, and Fanvue.
                 </p>
             </div>
 
             {/* Important Notice */}
             <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4 mb-6">
                 <p className="text-sm text-purple-800 dark:text-purple-200">
-                    <strong>Note:</strong> These tools generate scripts, prompts, and ideas for content creation. Messages and interactions must be sent manually through your OnlyFans account.
+                    <strong>Note:</strong> These tools generate scripts, prompts, and ideas for content creation. Messages and interactions must be sent manually through your OnlyFans, Fansly, or Fanvue accounts.
                 </p>
             </div>
 
@@ -1325,59 +1327,39 @@ Format as a numbered list with detailed post concepts including captions and eng
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Roleplay Type
                                 </label>
-                                <div className="flex items-center gap-2 mb-3">
-                                    <input
-                                        type="checkbox"
-                                        id="useCustomRoleplay"
-                                        checked={useCustomRoleplayType}
-                                        onChange={(e) => {
-                                            setUseCustomRoleplayType(e.target.checked);
-                                            if (!e.target.checked) {
-                                                setCustomRoleplayType('');
-                                            }
-                                        }}
-                                        className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
-                                    />
-                                    <label htmlFor="useCustomRoleplay" className="text-sm text-gray-700 dark:text-gray-300">
-                                        Use custom roleplay type
-                                    </label>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
+                                    {roleplayTypes.filter((type) => type !== 'Custom').map((type) => (
+                                        <button
+                                            key={type}
+                                            onClick={() => setSelectedRoleplayType(type)}
+                                            className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                                                selectedRoleplayType === type
+                                                    ? 'bg-primary-600 text-white'
+                                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                            }`}
+                                        >
+                                            {type}
+                                        </button>
+                                    ))}
                                 </div>
-                                
-                                {useCustomRoleplayType ? (
+                                <button
+                                    onClick={() => setSelectedRoleplayType('Custom')}
+                                    className={`w-full px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                                        selectedRoleplayType === 'Custom'
+                                            ? 'bg-primary-600 text-white'
+                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                    }`}
+                                >
+                                    Custom
+                                </button>
+                                {selectedRoleplayType === 'Custom' && (
                                     <input
                                         type="text"
                                         value={customRoleplayType}
                                         onChange={(e) => setCustomRoleplayType(e.target.value)}
                                         placeholder="Enter your custom roleplay type"
-                                        className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white mb-3"
+                                        className="w-full mt-2 p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     />
-                                ) : (
-                                    <>
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
-                                            {roleplayTypes.slice(0, -1).map((type) => (
-                                                <button
-                                                    key={type}
-                                                    onClick={() => setSelectedRoleplayType(type)}
-                                                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                                                        selectedRoleplayType === type
-                                                            ? 'bg-primary-600 text-white'
-                                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                                                    }`}
-                                                >
-                                                    {type}
-                                                </button>
-                                            ))}
-                                        </div>
-                                        {selectedRoleplayType === 'Custom' && (
-                                            <input
-                                                type="text"
-                                                value={customRoleplayType}
-                                                onChange={(e) => setCustomRoleplayType(e.target.value)}
-                                                placeholder="Enter your custom roleplay type"
-                                                className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white mb-3"
-                                            />
-                                        )}
-                                    </>
                                 )}
                             </div>
 
@@ -1385,49 +1367,41 @@ Format as a numbered list with detailed post concepts including captions and eng
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Tone
                                 </label>
-                                <div className="flex items-center gap-2 mb-3">
-                                    <input
-                                        type="checkbox"
-                                        id="useCustomTone"
-                                        checked={useCustomTone}
-                                        onChange={(e) => {
-                                            setUseCustomTone(e.target.checked);
-                                            if (!e.target.checked) {
-                                                setCustomTone('');
-                                            }
-                                        }}
-                                        className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
-                                    />
-                                    <label htmlFor="useCustomTone" className="text-sm text-gray-700 dark:text-gray-300">
-                                        Use custom tone
-                                    </label>
+                                <div className="flex flex-wrap gap-2 mb-2">
+                                    {(['Soft','Teasing','Playful','Explicit'] as const).map((toneOption) => (
+                                        <button
+                                            key={toneOption}
+                                            type="button"
+                                            onClick={() => setScenarioTone(toneOption)}
+                                            className={`px-3 py-2 text-sm rounded-md border ${
+                                                scenarioTone === toneOption
+                                                    ? 'border-primary-600 text-primary-700 dark:text-primary-300 bg-primary-50 dark:bg-primary-900/30'
+                                                    : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                            }`}
+                                        >
+                                            {toneOption}
+                                        </button>
+                                    ))}
                                 </div>
-                                
-                                {useCustomTone ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setScenarioTone('Custom')}
+                                    className={`w-full px-3 py-2 text-sm rounded-md border ${
+                                        scenarioTone === 'Custom'
+                                            ? 'bg-primary-600 text-white border-primary-700 hover:bg-primary-700'
+                                            : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                    }`}
+                                >
+                                    Custom Tone
+                                </button>
+                                {scenarioTone === 'Custom' && (
                                     <input
                                         type="text"
                                         value={customTone}
                                         onChange={(e) => setCustomTone(e.target.value)}
                                         placeholder="Enter your custom tone"
-                                        className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white mb-3"
+                                        className="w-full mt-2 p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     />
-                                ) : (
-                                    <div className="flex flex-wrap gap-2">
-                                        {(['Soft','Teasing','Playful','Explicit'] as const).map((toneOption) => (
-                                            <button
-                                                key={toneOption}
-                                                type="button"
-                                                onClick={() => setScenarioTone(toneOption)}
-                                                className={`px-3 py-2 text-sm rounded-md border ${
-                                                    scenarioTone === toneOption
-                                                        ? 'border-primary-600 text-primary-700 dark:text-primary-300 bg-primary-50 dark:bg-primary-900/30'
-                                                        : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                                                }`}
-                                            >
-                                                {toneOption}
-                                            </button>
-                                        ))}
-                                    </div>
                                 )}
                             </div>
 
@@ -1468,7 +1442,12 @@ Format as a numbered list with detailed post concepts including captions and eng
 
                             <button
                                 onClick={handleGenerateScenario}
-                                disabled={isGeneratingScenario || (!useCustomRoleplayType && !selectedRoleplayType) || (useCustomRoleplayType && !customRoleplayType.trim())}
+                                disabled={
+                                    isGeneratingScenario ||
+                                    !selectedRoleplayType ||
+                                    (selectedRoleplayType === 'Custom' && !customRoleplayType.trim()) ||
+                                    (scenarioTone === 'Custom' && !customTone.trim())
+                                }
                                 className="w-full px-4 py-3 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed font-medium"
                             >
                                 {isGeneratingScenario ? 'Generating Scenario...' : 'Generate Roleplay Scenario'}

@@ -5,7 +5,7 @@ import { auth, db } from '../firebaseConfig';
 import { doc, getDoc, collection, addDoc, query, orderBy, limit, getDocs, Timestamp, updateDoc, setDoc } from 'firebase/firestore';
 
 type SessionStatus = 'draft' | 'active' | 'paused' | 'ended';
-type RoleplayType = 'GFE (Girlfriend Experience)' | 'Dominant / Submissive' | 'Teacher / Student' | 'Boss / Assistant' | 'Fitness Trainer' | 'Soft Mommy / Daddy' | 'Custom';
+type RoleplayType = 'GFE (Girlfriend Experience)' | 'Dominant / Submissive' | 'Teacher / Student' | 'Boss / Assistant' | 'Fitness Trainer' | 'Soft Mommy / Daddy' | 'Nurse / Patient' | 'Celebrity / Fan' | 'Custom';
 type Tone = 'Soft' | 'Teasing' | 'Playful' | 'Explicit';
 
 interface Message {
@@ -551,10 +551,10 @@ Fan Context:
             <div className="mb-6">
                 <div className="flex items-center gap-3 mb-2">
                     <SparklesIcon className="w-8 h-8 text-primary-600 dark:text-primary-400" />
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Sexting Session Assistant</h1>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Chat/Sexting Session Assistant</h1>
                 </div>
                 <p className="text-gray-600 dark:text-gray-400">
-                    Start an AI-powered sexting session with real-time suggestions to reduce stress and improve engagement.
+                    Start an AI-powered chatting/sexting session with real-time suggestions to reduce stress and improve engagement.
                 </p>
             </div>
 
@@ -594,7 +594,7 @@ Fan Context:
                         Roleplay Type:
                     </label>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
-                        {(['GFE (Girlfriend Experience)', 'Dominant / Submissive', 'Teacher / Student', 'Boss / Assistant', 'Fitness Trainer', 'Soft Mommy / Daddy'] as RoleplayType[]).map((type) => (
+                        {(['GFE (Girlfriend Experience)', 'Dominant / Submissive', 'Teacher / Student', 'Boss / Assistant', 'Fitness Trainer', 'Soft Mommy / Daddy', 'Nurse / Patient', 'Celebrity / Fan'] as RoleplayType[]).map((type) => (
                             <button
                                 key={type}
                                 onClick={() => setRoleplayType(type)}

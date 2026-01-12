@@ -541,7 +541,7 @@ export const OnlyFansMediaVault: React.FC = () => {
                 <div>
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Media Vault</h2>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                        Organize and manage your OnlyFans content with AI-powered tagging and organization tools.
+                        Organize and manage your premium content for OnlyFans, Fansly, and Fanvue with AI-powered tagging and organization tools.
                     </p>
                     <p className="text-xs text-primary-600 dark:text-primary-400 mt-1 flex items-center gap-1">
                         <SparklesIcon className="w-3 h-3" />

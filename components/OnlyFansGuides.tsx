@@ -304,7 +304,7 @@ export const OnlyFansGuides: React.FC = () => {
                                 Manual Upload Guide
                             </h2>
                             <p className="text-gray-600 dark:text-gray-400 mb-6">
-                                Follow these steps to manually upload content to your OnlyFans account using content prepared in OnlyFans Studio.
+                                Follow these steps to manually upload content to your OnlyFans, Fansly, or Fanvue account using content prepared in Premium Content Studio.
                             </p>
                         </div>
                         {uploadSteps.map((step, index) => (
@@ -551,7 +551,7 @@ export const OnlyFansGuides: React.FC = () => {
                     </h1>
                 </div>
                 <p className="text-gray-600 dark:text-gray-400">
-                    Learn best practices, strategies, and step-by-step guides for successful OnlyFans content creation.
+                    Learn best practices, strategies, and step-by-step guides for successful premium content creation across OnlyFans, Fansly, and Fanvue.
                 </p>
             </div>
 

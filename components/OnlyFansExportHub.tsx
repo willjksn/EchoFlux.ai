@@ -431,7 +431,7 @@ export const OnlyFansExportHub: React.FC = () => {
                     </h1>
                 </div>
                 <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
-                    Create ready-to-upload content packages with captions, media, and checklists for manual upload to OnlyFans.
+                    Create ready-to-upload content packages with captions, media, and checklists for manual upload to OnlyFans, Fansly, or Fanvue.
                 </p>
             </div>
 
@@ -450,7 +450,7 @@ export const OnlyFansExportHub: React.FC = () => {
                         <textarea
                             value={caption}
                             onChange={(e) => setCaption(e.target.value)}
-                            placeholder="Enter your OnlyFans caption here..."
+                            placeholder="Enter your premium platform caption here (OnlyFans, Fansly, Fanvue)..."
                             className="w-full p-3 sm:p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[120px] text-base sm:text-sm"
                         />
                     </div>

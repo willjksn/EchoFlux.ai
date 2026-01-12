@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from './AppContext';
 import { UserIcon, SearchIcon, XMarkIcon } from './icons/UIIcons';
 import { db } from '../firebaseConfig';
@@ -36,6 +36,7 @@ export const FanSelector: React.FC<FanSelectorProps> = ({
     const [showFanGrid, setShowFanGrid] = useState(false);
     const [fanSearchQuery, setFanSearchQuery] = useState('');
     const [newFanName, setNewFanName] = useState('');
+    const containerRef = useRef<HTMLDivElement | null>(null);
 
     const loadFans = async () => {
         if (!user?.id) return;
@@ -71,6 +72,22 @@ export const FanSelector: React.FC<FanSelectorProps> = ({
         }
     }, [showFanGrid, user?.id]);
 
+    useEffect(() => {
+        if (!showFanGrid) return;
+
+        const handleClickOutside = (event: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+                setShowFanGrid(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [showFanGrid]);
+
     const filteredFans = fans.filter(fan =>
         fan.name.toLowerCase().includes(fanSearchQuery.toLowerCase()) ||
         fan.id.toLowerCase().includes(fanSearchQuery.toLowerCase())
@@ -103,7 +120,7 @@ export const FanSelector: React.FC<FanSelectorProps> = ({
 
     if (compact) {
         return (
-            <div className="relative">
+            <div className="relative" ref={containerRef}>
                 <button
                     type="button"
                     onClick={() => setShowFanGrid(!showFanGrid)}
@@ -209,21 +226,13 @@ export const FanSelector: React.FC<FanSelectorProps> = ({
                         )}
                     </div>
                 )}
-
-                {/* Click outside to close */}
-                {showFanGrid && (
-                    <div
-                        className="fixed inset-0 z-40"
-                        onClick={() => setShowFanGrid(false)}
-                    />
-                )}
             </div>
         );
     }
 
     // Full version
     return (
-        <div className="space-y-2">
+        <div className="space-y-2" ref={containerRef}>
             <div className="flex items-center justify-between">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Fan (Optional)
