@@ -117,14 +117,14 @@ const BioPreview: React.FC<{ config: any }> = ({ config }) => {
         buttonStyle: config?.theme?.buttonStyle || 'rounded',
     };
     const pageTextColor = theme.pageTextColor || (theme.textColor === '#ffffff' ? '#2563eb' : theme.textColor) || '#2563eb';
-    const buttonTextColor = theme.buttonTextColor || theme.textColor || '#ffffff';
+    const buttonTextColor = theme.buttonTextColor || theme.textColor || '#111827';
     const emailTheme = {
         formBackgroundColor: config?.emailCapture?.formBackgroundColor || '#ffffff',
         titleColor: config?.emailCapture?.titleColor || pageTextColor,
         inputBackgroundColor: config?.emailCapture?.inputBackgroundColor || '#f9fafb',
         inputTextColor: config?.emailCapture?.inputTextColor || '#111827',
         buttonBackgroundColor: config?.emailCapture?.buttonBackgroundColor || theme.buttonColor,
-        buttonTextColor: config?.emailCapture?.buttonTextColor || buttonTextColor,
+        buttonTextColor: config?.emailCapture?.buttonTextColor || '#111827',
     };
     
     return (
