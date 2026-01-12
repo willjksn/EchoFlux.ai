@@ -146,6 +146,8 @@ export const Dashboard: React.FC = () => {
   // Fetch pending custom feedback forms
   useEffect(() => {
     if (!user?.id) return;
+    const feedbackFormsEnabled = false; // disable when endpoint not available
+    if (!feedbackFormsEnabled) return;
 
     const fetchPendingForms = async () => {
       try {
