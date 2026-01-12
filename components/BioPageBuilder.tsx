@@ -1124,12 +1124,12 @@ export const BioPageBuilder: React.FC = () => {
                                 ) : (
                                     <div key={link.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700">
                                         <div className="cursor-move text-gray-400">⋮⋮</div>
-                                        <div className="flex-1">
+                                        <div className="flex-1 min-w-0">
                                             <p className="font-semibold text-gray-900 dark:text-white">{link.title}</p>
                                             <p className="text-xs text-gray-500 dark:text-gray-400">{link.url}</p>
                                         </div>
                                         <div className="text-xs font-bold text-gray-500 dark:text-gray-400">{link.clicks} clicks</div>
-                                        <div className="flex items-center gap-2 ml-2">
+                                        <div className="flex items-center gap-2 ml-2 shrink-0">
                                             <button onClick={() => handleEditLink(link)} className="text-gray-400 hover:text-primary-500">
                                                 <EditIcon className="w-4 h-4" />
                                             </button>

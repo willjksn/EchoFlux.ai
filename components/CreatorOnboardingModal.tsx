@@ -20,7 +20,7 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
     const isElitePlan = userPlan === 'Elite';
     
     // Plan-specific step counts
-    const totalSteps = isFreePlan ? 5 : isProPlan ? 6 : 8; // Free: 5, Pro: 6, Elite: 8 (adds OnlyFans Studio + Completion)
+    const totalSteps = isFreePlan ? 6 : isProPlan ? 7 : 9; // Free: 6, Pro: 7, Elite: 9 (adds theme toggle + completion)
 
     const handleSaveAndComplete = async () => {
         if (user) {
@@ -365,12 +365,34 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
             );
         }
 
-        // Final step: Completion (Pro and Elite)
-        if ((step === 6 && isProPlan) || (step === 8 && isElitePlan)) {
+        // Theme toggle mention (all plans, plan-specific step)
+        const themeStep = isFreePlan ? 6 : isProPlan ? 6 : 8;
+        if (step === themeStep) {
+            return (
+                <div className="text-center animate-fade-in">
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Switch Light / Dark Mode</h2>
+                    <p className="mt-2 text-gray-500 dark:text-gray-400">
+                        Toggle themes anytime from the header — tap the sun/moon button in the top right.
+                    </p>
+                    <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg text-left">
+                        <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Why use it?</h3>
+                        <ul className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
+                            <li>• Dark mode for late-night work</li>
+                            <li>• Light mode for daylight readability</li>
+                            <li>• Remembers your preference across sessions</li>
+                        </ul>
+                    </div>
+                </div>
+            );
+        }
+
+        // Final step: Completion
+        if (step === totalSteps) {
             return (
                 <div className="text-center animate-fade-in">
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white">You're All Set!</h2>
                     <p className="mt-2 text-gray-500 dark:text-gray-400">
+                        {isFreePlan && "Start creating with your Free plan. Upgrade anytime to unlock more."}
                         {isProPlan && "Start creating with your Pro plan. You're ready to scale!"}
                         {isElitePlan && "Welcome to Elite! You have access to everything."}
                     </p>

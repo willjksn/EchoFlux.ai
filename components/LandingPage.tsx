@@ -95,7 +95,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
               <div className="relative px-6 py-12 sm:px-10 sm:py-16 lg:px-16 lg:py-18 overflow-hidden">
                 <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
                   {/* Left: Copy + CTAs */}
-                  <div>
+                  <div className="min-w-0">
                     <div className="inline-flex items-center rounded-full bg-primary-50 px-3 py-1 text-xs font-medium text-primary-700 ring-1 ring-inset ring-primary-200 backdrop-blur dark:bg-white/10 dark:text-primary-100 dark:ring-white/20">
                       <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
                       Planning Studio for revenue-focused creators
@@ -169,7 +169,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                   </div>
 
                   {/* Right: Product preview card */}
-                  <div className="relative overflow-hidden">
+                  <div className="relative overflow-hidden min-w-0">
                     <div className="pointer-events-none absolute inset-0 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-primary-500/10 to-transparent blur-3xl" />
                     <div className="relative rounded-2xl bg-white/90 dark:bg-gray-900/70 p-4 shadow-xl ring-1 ring-gray-200 dark:ring-white/15 backdrop-blur">
                       <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 px-3 py-2 text-xs text-gray-700 dark:text-gray-300">

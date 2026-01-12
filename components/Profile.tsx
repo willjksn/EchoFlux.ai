@@ -661,6 +661,20 @@ export const Profile: React.FC = () => {
                                 </p>
                                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">This month</p>
                             </div>
+                            <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Posts Scheduled</p>
+                                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                                    {user.monthlyPostsScheduled || 0}
+                                </p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">This month</p>
+                            </div>
+                            <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Avg Captions / Week</p>
+                                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                                    {user.avgCaptionsPerWeek ?? Math.round((user.monthlyCaptionGenerationsUsed || 0) / 4)}
+                                </p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Rolling average</p>
+                            </div>
                             {(user.monthlyAdGenerationsUsed || user.monthlyVideoAdGenerationsUsed) && (
                                 <>
                                     <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
