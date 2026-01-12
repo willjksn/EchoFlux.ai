@@ -1,5 +1,5 @@
 import React, { useState, useRef, ChangeEvent, useEffect, useMemo, useLayoutEffect } from 'react';
-import { CameraIcon, TrashIcon, CheckCircleIcon, CalendarIcon, CreditCardIcon, LockIcon, DownloadIcon, SparklesIcon, EmojiIcon, FaceSmileIcon, CatIcon, PizzaIcon, SoccerBallIcon, CarIcon, LightbulbIcon, HeartIcon } from './icons/UIIcons';
+import { CameraIcon, TrashIcon, CheckCircleIcon, CalendarIcon, CreditCardIcon, LockIcon, EmojiIcon, FaceSmileIcon, CatIcon, PizzaIcon, SoccerBallIcon, CarIcon, LightbulbIcon, HeartIcon } from './icons/UIIcons';
 import { EMOJIS, EMOJI_CATEGORIES, Emoji } from './emojiData';
 import { useAppContext } from './AppContext';
 import { User, MediaItem, Client, Plan } from '../types';
@@ -18,7 +18,6 @@ import { auth, storage } from '../firebaseConfig';
 // @ts-ignore
 import * as storageFunctions from 'firebase/storage';
 import { sendPasswordResetEmail } from 'firebase/auth';
-import { getGeneratedContent } from '../src/services/geminiService';
 import { listAll, getMetadata, ref } from 'firebase/storage';
 
 const SettingsSection: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
@@ -33,9 +32,7 @@ export const Profile: React.FC = () => {
     const [isEditing, setIsEditing] = useState(false);
     const [editableUser, setEditableUser] = useState<User | null>(user);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const [usageTab, setUsageTab] = useState<'stats' | 'ads'>('stats');
-    const [storedAds, setStoredAds] = useState<any[]>([]);
-    const [isLoadingAds, setIsLoadingAds] = useState(false);
+   
     
     // Emoji picker state for name field
     const [isNameEmojiPickerOpen, setIsNameEmojiPickerOpen] = useState(false);
@@ -303,26 +300,9 @@ export const Profile: React.FC = () => {
         ? (storageUsage.used / storageUsage.total) * 100 
         : 0;
 
-    useEffect(() => {
-        if (usageTab === 'ads' && canEdit) {
-            loadStoredAds();
-        }
-    }, [usageTab, canEdit]);
+    // Ads usage disabled
 
-    const loadStoredAds = async () => {
-        setIsLoadingAds(true);
-        try {
-            const result = await getGeneratedContent('ad');
-            if (result.success) {
-                setStoredAds(result.content || []);
-            }
-        } catch (err) {
-            console.error('Failed to load ads:', err);
-            showToast('Failed to load saved ads', 'error');
-        } finally {
-            setIsLoadingAds(false);
-        }
-    };
+    // Ads loading disabled
 
     const handleDownloadAd = (ad: any) => {
         const content = [
@@ -673,145 +653,33 @@ export const Profile: React.FC = () => {
                 {/* Usage Statistics */}
                 {canEdit && (
                     <SettingsSection title="Usage Statistics">
-                        {/* Tabs */}
-                        <div className="flex gap-2 mb-4 border-b border-gray-200 dark:border-gray-700">
-                            <button
-                                onClick={() => setUsageTab('stats')}
-                                className={`px-4 py-2 font-medium text-sm transition-colors ${
-                                    usageTab === 'stats'
-                                        ? 'text-primary-600 dark:text-primary-400 border-b-2 border-primary-600 dark:border-primary-400'
-                                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                                }`}
-                            >
-                                Statistics
-                            </button>
-                            <button
-                                onClick={() => setUsageTab('ads')}
-                                className={`px-4 py-2 font-medium text-sm transition-colors flex items-center gap-2 ${
-                                    usageTab === 'ads'
-                                        ? 'text-primary-600 dark:text-primary-400 border-b-2 border-primary-600 dark:border-primary-400'
-                                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                                }`}
-                            >
-                                <SparklesIcon className="w-4 h-4" />
-                                Ad Generator
-                            </button>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Caption Generations</p>
+                                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                                    {user.monthlyCaptionGenerationsUsed || 0}
+                                </p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">This month</p>
+                            </div>
+                            {(user.monthlyAdGenerationsUsed || user.monthlyVideoAdGenerationsUsed) && (
+                                <>
+                                    <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Text Ads Generated</p>
+                                        <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                                            {user.monthlyAdGenerationsUsed || 0}
+                                        </p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">This month</p>
+                                    </div>
+                                    <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Video Ads Generated</p>
+                                        <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                                            {user.monthlyVideoAdGenerationsUsed || 0}
+                                        </p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">This month</p>
+                                    </div>
+                                </>
+                            )}
                         </div>
-
-                        {/* Stats Tab */}
-                        {usageTab === 'stats' && (
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Image Generations <span className="text-xs">(Coming Soon)</span></p>
-                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                                        {user.monthlyImageGenerationsUsed || 0}
-                                    </p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">This month</p>
-                                </div>
-                                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Video Generations <span className="text-xs">(Coming Soon)</span></p>
-                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                                        {user.monthlyVideoGenerationsUsed || 0}
-                                    </p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">This month</p>
-                                </div>
-                                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Caption Generations</p>
-                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                                        {user.monthlyCaptionGenerationsUsed || 0}
-                                    </p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">This month</p>
-                                </div>
-                                {(user.monthlyAdGenerationsUsed || user.monthlyVideoAdGenerationsUsed) && (
-                                    <>
-                                        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Text Ads Generated</p>
-                                            <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                                                {user.monthlyAdGenerationsUsed || 0}
-                                            </p>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">This month</p>
-                                        </div>
-                                        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Video Ads Generated</p>
-                                            <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                                                {user.monthlyVideoAdGenerationsUsed || 0}
-                                            </p>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">This month</p>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Ads Tab */}
-                        {usageTab === 'ads' && (
-                            <div>
-                                {isLoadingAds ? (
-                                    <div className="text-center py-8">
-                                        <p className="text-gray-500 dark:text-gray-400">Loading saved ads...</p>
-                                    </div>
-                                ) : storedAds.length === 0 ? (
-                                    <div className="text-center py-12">
-                                        <SparklesIcon className="w-12 h-12 mx-auto mb-4 text-gray-400 dark:text-gray-500" />
-                                        <p className="text-gray-500 dark:text-gray-400">No saved ads yet</p>
-                                        <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">Generate and save ads from the Ad Generator</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-4">
-                                        {storedAds.map((ad) => (
-                                            <div
-                                                key={ad.id}
-                                                className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
-                                            >
-                                                <div className="flex items-start justify-between mb-2">
-                                                    <div className="flex-1">
-                                                        <div className="flex items-center gap-2 mb-1">
-                                                            <span className={`px-2 py-1 text-xs font-semibold rounded ${
-                                                                ad.adType === 'text' 
-                                                                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
-                                                                    : 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
-                                                            }`}>
-                                                                {ad.adType === 'text' ? 'Text Ad' : 'Video Ad'}
-                                                            </span>
-                                                            {ad.platform && (
-                                                                <span className="text-xs text-gray-500 dark:text-gray-400">
-                                                                    {ad.platform}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        {ad.headline && (
-                                                            <h4 className="font-semibold text-gray-900 dark:text-white mb-1">
-                                                                {ad.headline}
-                                                            </h4>
-                                                        )}
-                                                        {ad.adCopy && (
-                                                            <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-2 mb-2">
-                                                                {ad.adCopy}
-                                                            </p>
-                                                        )}
-                                                        {ad.videoPrompt && (
-                                                            <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-2 mb-2">
-                                                                {ad.videoPrompt}
-                                                            </p>
-                                                        )}
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                            {new Date(ad.createdAt).toLocaleDateString()}
-                                                        </p>
-                                                    </div>
-                                                    <button
-                                                        onClick={() => handleDownloadAd(ad)}
-                                                        className="ml-4 p-2 text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
-                                                        title="Download ad"
-                                                    >
-                                                        <DownloadIcon className="w-5 h-5" />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        )}
                     </SettingsSection>
                 )}
 

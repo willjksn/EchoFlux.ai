@@ -231,14 +231,15 @@ const BioPreview: React.FC<{ config: any }> = ({ config }) => {
                                     style={{
                                         backgroundColor: emailTheme.inputBackgroundColor,
                                         color: emailTheme.inputTextColor,
-                                        borderColor: 'rgba(0,0,0,0.08)',
+                                        borderColor: '#d1d5db',
                                     }}
                                 />
                                 <button 
-                                    className="w-full py-2 text-xs font-bold rounded-md"
+                                    className="w-full py-2 text-xs font-bold rounded-md border"
                                     style={{
                                         backgroundColor: emailTheme.buttonBackgroundColor,
                                         color: emailTheme.buttonTextColor,
+                                        borderColor: 'rgba(17,24,39,0.15)',
                                     }}
                                 >
                                     {config.emailCapture.buttonText}
@@ -1128,12 +1129,14 @@ export const BioPageBuilder: React.FC = () => {
                                             <p className="text-xs text-gray-500 dark:text-gray-400">{link.url}</p>
                                         </div>
                                         <div className="text-xs font-bold text-gray-500 dark:text-gray-400">{link.clicks} clicks</div>
-                                        <button onClick={() => handleEditLink(link)} className="text-gray-400 hover:text-primary-500">
-                                            <EditIcon className="w-4 h-4" />
-                                        </button>
-                                        <button onClick={() => handleRemoveLink(link.id)} className="text-gray-400 hover:text-red-500">
-                                            <TrashIcon />
-                                        </button>
+                                        <div className="flex items-center gap-2 ml-2">
+                                            <button onClick={() => handleEditLink(link)} className="text-gray-400 hover:text-primary-500">
+                                                <EditIcon className="w-4 h-4" />
+                                            </button>
+                                            <button onClick={() => handleRemoveLink(link.id)} className="text-gray-400 hover:text-red-500">
+                                                <TrashIcon className="w-4 h-4" />
+                                            </button>
+                                        </div>
                                     </div>
                                 )
                             ))}
@@ -1219,7 +1222,7 @@ export const BioPageBuilder: React.FC = () => {
                                 <button 
                                     key={style}
                                     onClick={() => updateTheme('buttonStyle', style)}
-                                    className={`flex-1 py-2 border-2 text-sm font-medium ${
+                                    className={`flex-1 py-2 border-2 text-sm font-medium shadow-sm ${
                                         bioPage.theme.buttonStyle === style
                                             ? 'border-primary-500 bg-primary-50 text-primary-700 dark:text-primary-300 dark:bg-primary-900/20'
                                             : 'border-gray-300 dark:border-gray-600 bg-gray-100 text-gray-800 dark:text-gray-200 dark:bg-gray-700'

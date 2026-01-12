@@ -5,8 +5,6 @@ import { OFFLINE_MODE } from '../constants';
 import {
   SparklesIcon,
   UploadIcon,
-  VideoIcon,
-  ImageIcon,
   ComposeIcon as CaptionIcon,
   SendIcon,
   CheckCircleIcon,
@@ -4279,12 +4277,10 @@ const CaptionGenerator: React.FC = () => {
   );
 };
 
-type ComposeTab = 'captions' | 'image' | 'video';
+type ComposeTab = 'captions';
 
 const tabs: { id: ComposeTab; label: string; icon: React.ReactNode }[] = [
   { id: 'captions', label: 'Captions', icon: <CaptionIcon /> },
-  { id: 'image', label: 'Image', icon: <ImageIcon /> },
-  { id: 'video', label: 'Video', icon: <VideoIcon /> }
 ];
 
 export const Compose: React.FC = () => {
@@ -4309,14 +4305,8 @@ export const Compose: React.FC = () => {
 
   useEffect(() => {
     if (composeContext) {
-      if (composeContext.type === 'Reel' || composeContext.type === 'video') {
-        setActiveTab('video');
-      } else if (composeContext.type === 'Story' || composeContext.type === 'image') {
-        setActiveTab('image');
-      } else {
-        setActiveTab('captions');
-        setComposeState(prev => ({ ...prev, captionText: composeContext.topic }));
-      }
+      setActiveTab('captions');
+      setComposeState(prev => ({ ...prev, captionText: composeContext.topic }));
       setInitialPrompt(composeContext.topic);
       clearComposeContext();
     }
