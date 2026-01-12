@@ -1219,7 +1219,11 @@ export const BioPageBuilder: React.FC = () => {
                                 <button 
                                     key={style}
                                     onClick={() => updateTheme('buttonStyle', style)}
-                                    className={`flex-1 py-2 border-2 text-white dark:text-white ${bioPage.theme.buttonStyle === style ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300' : 'border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700'} ${style === 'rounded' ? 'rounded-lg' : style === 'pill' ? 'rounded-full' : 'rounded-none'}`}
+                                    className={`flex-1 py-2 border-2 text-sm font-medium ${
+                                        bioPage.theme.buttonStyle === style
+                                            ? 'border-primary-500 bg-primary-50 text-primary-700 dark:text-primary-300 dark:bg-primary-900/20'
+                                            : 'border-gray-300 dark:border-gray-600 bg-gray-100 text-gray-800 dark:text-gray-200 dark:bg-gray-700'
+                                    } ${style === 'rounded' ? 'rounded-lg' : style === 'pill' ? 'rounded-full' : 'rounded-none'}`}
                                 >
                                     {style.charAt(0).toUpperCase() + style.slice(1)}
                                 </button>

@@ -52,7 +52,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
   };
 
   return (
-    <div className="bg-white dark:bg-gray-900">
+    <div className="bg-white dark:bg-gray-900 overflow-x-hidden">
       {/* Header */}
       <header className="relative bg-white dark:bg-gray-900 shadow-sm">
         <nav className="container mx-auto px-4 sm:px-6 lg:px-8">
@@ -78,7 +78,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
       
       {/* Hero Section */}
       <main>
-        <div className="relative">
+        <div className="relative overflow-hidden">
           <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gray-100 dark:bg-gray-800" />
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="relative overflow-hidden rounded-2xl bg-white dark:bg-gray-900 shadow-2xl border border-gray-200 dark:border-white/10 mb-12 sm:mb-14 lg:mb-16">
@@ -169,7 +169,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                   </div>
 
                   {/* Right: Product preview card */}
-                  <div className="relative">
+                  <div className="relative overflow-hidden">
                     <div className="pointer-events-none absolute -inset-8 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-primary-500/10 to-transparent blur-3xl" />
                     <div className="relative rounded-2xl bg-white/90 dark:bg-gray-900/70 p-4 shadow-xl ring-1 ring-gray-200 dark:ring-white/15 backdrop-blur">
                       <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 px-3 py-2 text-xs text-gray-700 dark:text-gray-300">
