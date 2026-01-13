@@ -124,7 +124,10 @@ const BioPreview: React.FC<{ config: any }> = ({ config }) => {
         inputBackgroundColor: config?.emailCapture?.inputBackgroundColor || '#f9fafb',
         inputTextColor: config?.emailCapture?.inputTextColor || '#d1dbf0',
         buttonBackgroundColor: config?.emailCapture?.buttonBackgroundColor || theme.buttonColor,
-        buttonTextColor: config?.emailCapture?.buttonTextColor || '#111827',
+        // Ensure button text is always dark for visibility on white buttons
+        buttonTextColor: (config?.emailCapture?.buttonTextColor && config.emailCapture.buttonTextColor !== '#ffffff' && config.emailCapture.buttonTextColor !== '#fff') 
+            ? config.emailCapture.buttonTextColor 
+            : '#111827',
     };
     
     return (
