@@ -134,11 +134,12 @@ export const AdminReviewsPanel: React.FC = () => {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ id, isFeatured: !current }),
+        body: JSON.stringify({ id, action: "upsert", isFeatured: !current }),
       });
       const data = await res.json();
       if (!res.ok || !data?.success) throw new Error(data?.error || "Failed to update");
       setReviews((prev) => prev.map((r) => (r.id === id ? { ...r, isFeatured: !current } : r)));
+      showToast(`Review ${!current ? "featured" : "unfeatured"}`, "success");
     } catch (e: any) {
       console.error("toggleFeatured error:", e);
       showToast(e?.message || "Failed to update review", "error");

@@ -25,14 +25,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
 
     // Try to load featured reviews first
-    const featuredSnap = await db
-      .collection("reviews")
-      .where("isFeatured", "==", true)
-      .orderBy("createdAt", "desc")
-      .limit(20)
-      .get();
-
-    let items = mapDocs(featuredSnap.docs);
+    let items: any[] = [];
+    try {
+      const featuredSnap = await db
+        .collection("reviews")
+        .where("isFeatured", "==", true)
+        .orderBy("createdAt", "desc")
+        .limit(20)
+        .get();
+      items = mapDocs(featuredSnap.docs);
+    } catch (indexError: any) {
+      // If index doesn't exist, try without orderBy
+      console.warn("Featured reviews query with orderBy failed, trying without orderBy:", indexError?.message);
+      try {
+        const featuredSnap = await db
+          .collection("reviews")
+          .where("isFeatured", "==", true)
+          .limit(20)
+          .get();
+        items = mapDocs(featuredSnap.docs);
+        // Sort manually by createdAt
+        items.sort((a, b) => {
+          const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return bTime - aTime;
+        });
+      } catch (fallbackError: any) {
+        console.error("Featured reviews query failed:", fallbackError?.message);
+      }
+    }
 
     // Fallback: if no featured reviews are flagged yet, show the latest reviews
     if (!items.length) {
