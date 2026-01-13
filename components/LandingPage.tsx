@@ -177,9 +177,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                           <span className="flex h-2 w-2 items-center justify-center">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400" />
                           </span>
-                          Planning Studio · Active
+                          Planning Studio
                         </span>
-                        <span>Next 14 days</span>
+                        <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400" />
+                          Active · next 14 days
+                        </span>
                       </div>
 
                       <div className="space-y-4 p-4">
