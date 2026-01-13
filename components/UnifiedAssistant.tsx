@@ -205,10 +205,26 @@ export const UnifiedAssistant: React.FC = () => {
 
     const ai = new GoogleGenAI({ apiKey });
     const liveModel =
-      (settings as any)?.voiceModel ||
-      "gemini-2.5-flash-native-audio-preview-09-2025";
+      (typeof (settings as any)?.voiceModel === "string" && (settings as any).voiceModel?.trim()) ||
+      "models/gemini-2.5-flash-native-audio-preview-09-2025";
+
+    if (!liveModel) {
+      const msg = "Voice model not configured. Please set a model and retry.";
+      setConnectionError(msg);
+      showToast(msg, "error");
+      setIsConnecting(false);
+      return;
+    }
 
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) {
+      const msg = "AudioContext not supported in this browser.";
+      setConnectionError(msg);
+      showToast(msg, "error");
+      setIsConnecting(false);
+      return;
+    }
+
     if (!inputAudioContext.current) inputAudioContext.current = new AudioContextClass({ sampleRate: 16000 });
     if (!outputAudioContext.current) outputAudioContext.current = new AudioContextClass({ sampleRate: 24000 });
 
@@ -318,6 +334,10 @@ export const UnifiedAssistant: React.FC = () => {
             if (!outputAudioContext.current) {
               outputAudioContext.current = new AudioContextClass({ sampleRate: 24000 });
             }
+
+            if (!inputAudioContext.current) throw new Error("Input audio context unavailable");
+            if (!outputAudioContext.current) throw new Error("Output audio context unavailable");
+
             mediaStream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
 
             const source = inputAudioContext.current.createMediaStreamSource(mediaStream.current);
