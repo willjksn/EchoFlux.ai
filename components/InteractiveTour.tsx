@@ -56,17 +56,12 @@ export const InteractiveTour: React.FC = () => {
             } else {
                 attempts++;
                 if (attempts > maxAttempts) {
-                    // If the step is page-specific, keep polling instead of skipping to avoid missing the first step
-                    if (step.page) {
-                        attempts = 0;
-                        findElementPoller = requestAnimationFrame(findAndPositionElement);
-                        return;
-                    }
-                    console.warn(`Tour element with id "${step.elementId}" not found. Ending tour.`);
-                    endTour();
-                } else {
-                    findElementPoller = requestAnimationFrame(findAndPositionElement);
+                    console.warn(`Tour element with id "${step.elementId}" not found after ${maxAttempts} attempts. Skipping step.`);
+                    // Skip to next step instead of ending tour
+                    nextTourStep();
+                    return;
                 }
+                findElementPoller = requestAnimationFrame(findAndPositionElement);
             }
         };
 

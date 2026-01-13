@@ -3390,7 +3390,7 @@ export const Dashboard: React.FC = () => {
   );
 
   const renderAdminDashboardView = () => (
-    <div className="space-y-6 max-w-7xl mx-auto w-full">
+    <div id="tour-step-1-dashboard" className="space-y-6 max-w-7xl mx-auto w-full">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Admin Daily Dashboard</h2>
