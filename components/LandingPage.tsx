@@ -150,14 +150,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         <div className="flex items-center">
                           <span className="mr-2 text-lg whitespace-nowrap text-gray-800 dark:text-white">★ ★ ★ ★ ★</span>
                         </div>
-                        <div className="flex items-center space-x-3 text-xs text-gray-700 dark:text-primary-100/90">
-                          <span className="inline-flex items-center rounded-full bg-primary-50 border border-primary-200 px-3 py-1.5 whitespace-nowrap font-medium text-primary-700 shadow-sm dark:bg-white/20 dark:border-white/30 dark:text-white dark:shadow-lg">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-gray-700 dark:text-primary-100/90 min-w-0">
+                          <span className="inline-flex items-center rounded-full bg-primary-50 border border-primary-200 px-3 py-1.5 whitespace-nowrap font-medium text-primary-700 shadow-sm dark:bg-white/20 dark:border-white/30 dark:text-white dark:shadow-lg flex-shrink-0">
                             Start free (no card)
                           </span>
-                          <span className="inline-flex items-center rounded-full bg-primary-50 border border-primary-200 px-3 py-1.5 whitespace-nowrap font-medium text-primary-700 shadow-sm dark:bg-white/20 dark:border-white/30 dark:text-white dark:shadow-lg">
+                          <span className="inline-flex items-center rounded-full bg-primary-50 border border-primary-200 px-3 py-1.5 whitespace-nowrap font-medium text-primary-700 shadow-sm dark:bg-white/20 dark:border-white/30 dark:text-white dark:shadow-lg flex-shrink-0">
                             7-day trial on Pro/Elite
                           </span>
-                          <span className="inline-flex items-center rounded-full bg-primary-50 border border-primary-200 px-3 py-1.5 whitespace-nowrap font-medium text-primary-700 shadow-sm dark:bg-white/20 dark:border-white/30 dark:text-white dark:shadow-lg">
+                          <span className="inline-flex items-center rounded-full bg-primary-50 border border-primary-200 px-3 py-1.5 whitespace-nowrap font-medium text-primary-700 shadow-sm dark:bg-white/20 dark:border-white/30 dark:text-white dark:shadow-lg flex-shrink-0">
                             Cancel anytime
                           </span>
                         </div>
