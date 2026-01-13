@@ -18,7 +18,7 @@ export const InteractiveTour: React.FC = () => {
         let findElementPoller: number;
         let positionPoller: number;
         let attempts = 0;
-        const maxAttempts = 300; // ~5 seconds to allow page render
+        const maxAttempts = 600; // ~10 seconds to allow page render
 
         const findAndPositionElement = () => {
             const targetElement = document.getElementById(step.elementId);
