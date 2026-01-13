@@ -169,7 +169,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                   </div>
 
                   {/* Right: Product preview card */}
-                  <div className="relative overflow-hidden min-w-0 max-w-full">
+                  <div className="relative min-w-0 max-w-full overflow-hidden">
                     <div className="pointer-events-none absolute inset-0 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-primary-500/10 to-transparent blur-3xl" />
                     <div className="relative rounded-2xl overflow-hidden bg-white dark:bg-gray-900 p-4 shadow-xl ring-1 ring-gray-200 dark:ring-white/15">
                       <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 px-3 py-2 text-xs text-gray-700 dark:text-gray-300">
