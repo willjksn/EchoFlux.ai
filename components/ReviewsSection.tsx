@@ -47,6 +47,28 @@ const fallbackReviews: Review[] = [
     avatarUrl: null,
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(),
   },
+  {
+    id: "sample-4",
+    username: "Maya T.",
+    country: "US",
+    plan: "Elite",
+    rating: 5,
+    text: "Premium Content Studio is a game-changer for managing my OnlyFans and Fansly content. The roleplay scenarios and messaging tools help me engage subscribers better.",
+    showAvatar: false,
+    avatarUrl: null,
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString(),
+  },
+  {
+    id: "sample-5",
+    username: "Jordan K.",
+    country: "AU",
+    plan: "Elite",
+    rating: 5,
+    text: "The Premium Content Studio features are incredible. I use it for both OnlyFans and Fansly—the content calendar and fan management tools save me hours every week.",
+    showAvatar: false,
+    avatarUrl: null,
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 14).toISOString(),
+  },
 ];
 
 const formatRelativeTime = (iso?: string | null) => {
