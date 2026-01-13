@@ -27,6 +27,7 @@ export const MediaLibrary: React.FC = () => {
   const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [editingFolder, setEditingFolder] = useState<{ id: string; name: string } | null>(null);
+  const [videoThumbnails, setVideoThumbnails] = useState<Map<string, string>>(new Map());
 
   // Load folders
   useEffect(() => {
@@ -440,6 +441,43 @@ export const MediaLibrary: React.FC = () => {
   const filteredItems = getFilteredItems();
   const currentFolder = folders.find(f => f.id === selectedFolderId);
 
+  // Generate video thumbnail
+  const generateVideoThumbnail = useCallback((videoUrl: string, videoId: string) => {
+    if (videoThumbnails.has(videoId)) return;
+
+    const video = document.createElement('video');
+    video.crossOrigin = 'anonymous';
+    video.src = videoUrl;
+    video.currentTime = 0.1; // Seek to first frame
+    
+    video.addEventListener('loadeddata', () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 400;
+      canvas.height = video.videoHeight || 400;
+      const ctx = canvas.getContext('2d');
+      
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const thumbnailUrl = canvas.toDataURL('image/jpeg', 0.8);
+        setVideoThumbnails(prev => new Map(prev).set(videoId, thumbnailUrl));
+      }
+    });
+
+    video.addEventListener('error', () => {
+      // Fallback: use a placeholder
+      setVideoThumbnails(prev => new Map(prev).set(videoId, 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="400"%3E%3Crect fill="%23ddd" width="400" height="400"/%3E%3Ctext x="200" y="200" text-anchor="middle" fill="%23999" font-size="16"%3EVideo%3C/text%3E%3C/svg%3E'));
+    });
+  }, [videoThumbnails]);
+
+  // Generate thumbnails for videos when they're loaded
+  useEffect(() => {
+    filteredItems.forEach(item => {
+      if (item.type === 'video' && !videoThumbnails.has(item.id)) {
+        generateVideoThumbnail(item.url, item.id);
+      }
+    });
+  }, [filteredItems, videoThumbnails, generateVideoThumbnail]);
+
   if (!user) {
     return (
       <div className="p-6 text-center">
@@ -491,10 +529,10 @@ export const MediaLibrary: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6 overflow-x-hidden">
             {/* Folder Sidebar */}
             <div className="md:col-span-3">
-              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 overflow-hidden">
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 overflow-hidden max-w-full">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-semibold text-gray-900 dark:text-white">Folders</h3>
                   <button
@@ -560,8 +598,8 @@ export const MediaLibrary: React.FC = () => {
             </div>
 
             {/* Main Content Area */}
-            <div className="md:col-span-9">
-                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4">
+            <div className="md:col-span-9 min-w-0 overflow-hidden">
+                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4 overflow-x-auto">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
@@ -645,8 +683,8 @@ export const MediaLibrary: React.FC = () => {
                     fileInputRef.current?.click();
                   }
                 }}
-                className={`bg-white dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 p-6 min-h-64 ${
-                  viewMode === 'grid' ? 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4' : 'space-y-2'
+                className={`bg-white dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 p-4 sm:p-6 min-h-64 overflow-hidden ${
+                  viewMode === 'grid' ? 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4' : 'flex flex-col space-y-2'
                 } ${filteredItems.length === 0 ? 'cursor-pointer' : ''}`}
               >
               <input
@@ -684,13 +722,33 @@ export const MediaLibrary: React.FC = () => {
                     onClick={() => setViewingItem(item)}
                   >
                     {item.type === 'video' ? (
-                      <video
-                        src={item.url}
-                        className={`${viewMode === 'grid' ? 'w-full h-full' : 'w-24 h-24'} object-contain bg-gray-100 dark:bg-gray-700`}
-                        controls={false}
-                        preload="metadata"
-                        playsInline
-                      />
+                      <div className={`${viewMode === 'grid' ? 'w-full h-full' : 'w-24 h-24 flex-shrink-0'} relative bg-gray-100 dark:bg-gray-700`}>
+                        {videoThumbnails.has(item.id) ? (
+                          <img
+                            src={videoThumbnails.get(item.id)}
+                            alt={item.name}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <video
+                            src={item.url}
+                            className="w-full h-full object-cover"
+                            preload="metadata"
+                            playsInline
+                            muted
+                            onLoadedData={(e) => {
+                              const video = e.currentTarget;
+                              if (video.videoWidth > 0 && !videoThumbnails.has(item.id)) {
+                                generateVideoThumbnail(item.url, item.id);
+                              }
+                            }}
+                          />
+                        )}
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                          <VideoIcon className="w-6 h-6 sm:w-8 sm:h-8 text-white drop-shadow-lg" />
+                        </div>
+                      </div>
                     ) : (
                       <img
                         src={item.url}
@@ -772,7 +830,7 @@ export const MediaLibrary: React.FC = () => {
 
                     {/* Item info (for list view) */}
                     {viewMode === 'list' && (
-                      <div className="flex-1 p-3">
+                      <div className="flex-1 p-3 min-w-0">
                         <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
                           {item.name}
                         </p>

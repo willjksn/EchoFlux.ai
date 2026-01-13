@@ -70,9 +70,11 @@ export const UnifiedAssistant: React.FC = () => {
   // Voice mode state
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [conversationHistory, setConversationHistory] = useState<ConversationMessage[]>([]);
   const [showTranscript, setShowTranscript] = useState(false);
+  const [hasGreeted, setHasGreeted] = useState(false);
 
   const nextStartTime = useRef(0);
   const inputAudioContext = useRef<AudioContext | null>(null);
@@ -144,6 +146,8 @@ export const UnifiedAssistant: React.FC = () => {
     sources.current.clear();
     setIsSpeaking(false);
     setIsConnecting(false);
+    setIsListening(false);
+    setHasGreeted(false);
   };
 
   useEffect(() => {
@@ -206,8 +210,22 @@ export const UnifiedAssistant: React.FC = () => {
     const ai = new GoogleGenAI({ apiKey });
 
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (!inputAudioContext.current) inputAudioContext.current = new AudioContextClass({ sampleRate: 16000 });
-    if (!outputAudioContext.current) outputAudioContext.current = new AudioContextClass({ sampleRate: 24000 });
+    
+    // For mobile: ensure audio contexts are created/resumed with user interaction
+    if (!inputAudioContext.current) {
+      inputAudioContext.current = new AudioContextClass({ sampleRate: 16000 });
+    }
+    if (!outputAudioContext.current) {
+      outputAudioContext.current = new AudioContextClass({ sampleRate: 24000 });
+    }
+    
+    // Resume audio contexts if suspended (required for mobile)
+    if (inputAudioContext.current.state === 'suspended') {
+      await inputAudioContext.current.resume();
+    }
+    if (outputAudioContext.current.state === 'suspended') {
+      await outputAudioContext.current.resume();
+    }
 
     const outputNode = outputAudioContext.current.createGain();
     outputNode.connect(outputAudioContext.current.destination);
@@ -268,10 +286,19 @@ export const UnifiedAssistant: React.FC = () => {
       - Redirect non-admin users asking about admin features to contact support.
     ` : "";
 
+    // Get personalized name for admin users
+    let userName = user?.name || 'the creator';
+    if (isAdmin && user?.email) {
+      const email = user.email.toLowerCase();
+      if (email === 'will_jackson@icloud.com') {
+        userName = 'Will';
+      } else if (email === 'kristinac_jackson@icloud.com') {
+        userName = 'Kristina';
+      }
+    }
+
     const systemInstruction = `
-      You are the built-in **EchoFlux.ai Voice Assistant**, helping ${
-        user?.name || 'the creator'
-      } use the app and create better content.
+      You are the built-in **EchoFlux.ai Voice Assistant**, helping ${userName} use the app and create better content.
 
       CRITICAL PRODUCT LIMITS (DO NOT MISREPRESENT):
       - EchoFlux.ai is currently a creator-focused AI Content Studio & Campaign Planner (offline/planning-first).
@@ -294,9 +321,10 @@ export const UnifiedAssistant: React.FC = () => {
 
       User is Admin: ${isAdmin}
 
-      FIRST GREETING:
-      - When you first connect, greet them as the EchoFlux.ai voice assistant and offer help like:
-        - "Hi! I'm your EchoFlux.ai voice assistant. I can explain how to use any feature in the app, help you create content, answer questions about social media strategy, and more. What would you like to learn about or work on today?"
+      FIRST GREETING (CRITICAL - ALWAYS GREET ON CONNECTION):
+      - When you first connect, you MUST immediately greet ${userName} by name.
+      - Use a friendly, warm greeting like: "Hi ${userName}! I'm your EchoFlux.ai voice assistant. I'm here and ready to help. What would you like to work on today?"
+      - Always greet immediately upon connection - do not wait for the user to speak first.
     `;
 
     sessionPromise.current = ai.live.connect({
@@ -306,10 +334,27 @@ export const UnifiedAssistant: React.FC = () => {
           setIsConnecting(false);
           setConnectionError(null);
           setConversationHistory([]);
+          setIsListening(true);
+          setHasGreeted(false);
           showToast("Voice Assistant Connected. You can start speaking!", "success");
 
           try {
-            mediaStream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+            // Resume audio contexts again in case they got suspended (mobile)
+            if (inputAudioContext.current && inputAudioContext.current.state === 'suspended') {
+              await inputAudioContext.current.resume();
+            }
+            if (outputAudioContext.current && outputAudioContext.current.state === 'suspended') {
+              await outputAudioContext.current.resume();
+            }
+
+            mediaStream.current = await navigator.mediaDevices.getUserMedia({ 
+              audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+                sampleRate: 16000
+              } 
+            });
 
             const source = inputAudioContext.current!.createMediaStreamSource(mediaStream.current);
             scriptProcessor.current = inputAudioContext.current!.createScriptProcessor(4096, 1, 1);
@@ -321,6 +366,9 @@ export const UnifiedAssistant: React.FC = () => {
 
             source.connect(scriptProcessor.current);
             scriptProcessor.current.connect(inputAudioContext.current!.destination);
+            
+            // The system instruction will trigger the AI to greet automatically
+            // The greeting will come through the onmessage callback when the AI responds
           } catch (e: any) {
             console.error("Mic Error:", e);
             const errorMessage = e?.message || e?.name || "Unknown error";
@@ -410,6 +458,10 @@ Just ask me how to do something or what you'd like to learn about!`;
                 text: assistantText,
                 timestamp: new Date()
               }]);
+              // Mark as greeted if we receive any text response
+              if (!hasGreeted) {
+                setHasGreeted(true);
+              }
             }
             
             // Process audio
@@ -480,14 +532,25 @@ Just ask me how to do something or what you'd like to learn about!`;
   };
 
   const toggleVoiceSession = async () => {
-    if (isSpeaking || isConnecting) {
+    if (isSpeaking || isConnecting || isListening) {
       disconnect();
       return;
     }
 
+    // For mobile: ensure audio contexts are created/resumed with user interaction
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (!outputAudioContext.current) outputAudioContext.current = new AudioContextClass({ sampleRate: 24000 });
-    if (outputAudioContext.current.state === "suspended") await outputAudioContext.current.resume();
+    if (!outputAudioContext.current) {
+      outputAudioContext.current = new AudioContextClass({ sampleRate: 24000 });
+    }
+    if (outputAudioContext.current.state === "suspended") {
+      await outputAudioContext.current.resume();
+    }
+    if (!inputAudioContext.current) {
+      inputAudioContext.current = new AudioContextClass({ sampleRate: 16000 });
+    }
+    if (inputAudioContext.current.state === "suspended") {
+      await inputAudioContext.current.resume();
+    }
 
     await connect();
   };
@@ -637,24 +700,31 @@ Just ask me how to do something or what you'd like to learn about!`;
                 </div>
               )}
 
-              {(isConnecting || isSpeaking) && (
+              {(isConnecting || isSpeaking || isListening) && (
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   {isConnecting && (
                     <p className="text-gray-600 dark:text-gray-400 mb-4">Connecting...</p>
                   )}
-                  {isSpeaking && (
-                    <p className="text-gray-600 dark:text-gray-400 mb-4">Listening...</p>
+                  {(isListening || isSpeaking) && (
+                    <p className="text-gray-600 dark:text-gray-400 mb-4">
+                      {isSpeaking ? "Speaking..." : "Listening..."}
+                    </p>
                   )}
                   <button
                     onClick={toggleVoiceSession}
                     className={`p-6 rounded-full transition-colors shadow-lg text-white ${
+                      isListening && !isSpeaking ? "bg-green-600 hover:bg-green-700 animate-pulse" :
                       isSpeaking ? "bg-red-600 hover:bg-red-700 animate-pulse" :
                       isConnecting ? "bg-yellow-500 hover:bg-yellow-600 animate-pulse" :
                       "bg-red-600 hover:bg-red-700"
                     }`}
                     aria-label="Stop voice assistant"
                   >
-                    <StopCircleIcon className="w-8 h-8" />
+                    {isListening && !isSpeaking ? (
+                      <MicrophoneWaveIcon className="w-8 h-8" />
+                    ) : (
+                      <StopCircleIcon className="w-8 h-8" />
+                    )}
                   </button>
                 </div>
               )}
