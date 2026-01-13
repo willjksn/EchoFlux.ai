@@ -78,8 +78,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
       
       {/* Hero Section */}
       <main className="overflow-x-hidden">
-        <div className="relative overflow-hidden">
-          <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gray-100 dark:bg-gray-800" />
+        <div className="relative overflow-hidden rounded-3xl">
+          <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gray-100 dark:bg-gray-800 rounded-b-3xl" />
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="relative overflow-hidden rounded-2xl bg-white dark:bg-gray-900 shadow-2xl border border-gray-200 dark:border-white/10 mb-12 sm:mb-14 lg:mb-16">
               {/* Background image + gradient overlay */}
