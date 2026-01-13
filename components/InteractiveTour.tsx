@@ -18,7 +18,7 @@ export const InteractiveTour: React.FC = () => {
         let findElementPoller: number;
         let positionPoller: number;
         let attempts = 0;
-        const maxAttempts = 600; // ~10 seconds to allow page render
+        const maxAttempts = 1200; // allow more time for first step to render
 
         const findAndPositionElement = () => {
             const targetElement = document.getElementById(step.elementId);
@@ -56,10 +56,10 @@ export const InteractiveTour: React.FC = () => {
             } else {
                 attempts++;
                 if (attempts > maxAttempts) {
-                    // If element not found, advance so the tour doesn't block the UI
+                    // If the step is page-specific, keep polling instead of skipping to avoid missing the first step
                     if (step.page) {
-                        console.warn(`Tour element with id "${step.elementId}" not found on current page. Skipping to next step.`);
-                        nextTourStep();
+                        attempts = 0;
+                        findElementPoller = requestAnimationFrame(findAndPositionElement);
                         return;
                     }
                     console.warn(`Tour element with id "${step.elementId}" not found. Ending tour.`);
