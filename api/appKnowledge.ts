@@ -1,8 +1,6 @@
 // Re-export from shared constants location for backward compatibility
 export { APP_KNOWLEDGE } from '../constants/appKnowledge.js';
 
-## Key Surfaces & Workflows
-
 ### 1. Strategy (AI Content Strategist) - Detailed Guide
 
 **What it is:**
