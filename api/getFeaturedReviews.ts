@@ -34,6 +34,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .limit(20)
         .get();
       items = mapDocs(featuredSnap.docs);
+      console.log(`Found ${items.length} featured reviews with orderBy`);
     } catch (indexError: any) {
       // If index doesn't exist, try without orderBy
       console.warn("Featured reviews query with orderBy failed, trying without orderBy:", indexError?.message);
@@ -50,19 +51,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
           return bTime - aTime;
         });
+        console.log(`Found ${items.length} featured reviews without orderBy`);
       } catch (fallbackError: any) {
         console.error("Featured reviews query failed:", fallbackError?.message);
+        // Try to get all reviews and filter client-side as last resort
+        try {
+          const allSnap = await db.collection("reviews").limit(100).get();
+          const allItems = mapDocs(allSnap.docs);
+          items = allItems.filter((item: any) => item.isFeatured === true || item.isFeatured === "true");
+          items.sort((a: any, b: any) => {
+            const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return bTime - aTime;
+          });
+          console.log(`Found ${items.length} featured reviews via client-side filter`);
+        } catch (finalError: any) {
+          console.error("Final fallback query failed:", finalError?.message);
+        }
       }
     }
 
     // Fallback: if no featured reviews are flagged yet, show the latest reviews
     if (!items.length) {
-      const recentSnap = await db
-        .collection("reviews")
-        .orderBy("createdAt", "desc")
-        .limit(20)
-        .get();
-      items = mapDocs(recentSnap.docs);
+      console.log("No featured reviews found, falling back to latest reviews");
+      try {
+        const recentSnap = await db
+          .collection("reviews")
+          .orderBy("createdAt", "desc")
+          .limit(20)
+          .get();
+        items = mapDocs(recentSnap.docs);
+      } catch (recentError: any) {
+        console.error("Failed to load recent reviews:", recentError?.message);
+        // Try without orderBy
+        try {
+          const recentSnap = await db.collection("reviews").limit(20).get();
+          items = mapDocs(recentSnap.docs);
+          items.sort((a, b) => {
+            const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return bTime - aTime;
+          });
+        } catch (finalRecentError: any) {
+          console.error("Failed to load any reviews:", finalRecentError?.message);
+        }
+      }
     }
 
     return res.status(200).json({ success: true, items });

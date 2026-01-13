@@ -37,7 +37,7 @@ import { isMaintenanceMode, getAllowedEmail, canBypassMaintenance } from './src/
 import { InteractiveTour } from './components/InteractiveTour';
 import { PaymentModal } from './components/PaymentModal';
 import { Toast } from './components/Toast';
-import { Chatbot } from './components/Chatbot';
+import { UnifiedAssistant } from './components/UnifiedAssistant';
 import { AnnouncementBanner } from './components/AnnouncementBanner';
 import { PublicAnnouncementBanner } from './components/PublicAnnouncementBanner';
 import { Page, UserType, Plan } from './types';
@@ -45,7 +45,6 @@ import { Pricing } from './components/Pricing';
 import { CRMSidebar } from './components/CRMSidebar';
 import { BioPageBuilder } from './components/BioPageBuilder';
 import { AdGenerator } from './components/AdGenerator';
-import { VoiceAssistant } from './components/VoiceAssistant';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { BioPageView } from './components/BioPageView';
 import { ResetPassword } from './components/ResetPassword';
@@ -853,8 +852,7 @@ const AppContent: React.FC = () => {
             </div>
             <PaymentModal />
             {toast && <Toast message={toast.message} type={toast.type} />}
-            {user?.plan !== 'Free' && <VoiceAssistant />}
-            <Chatbot />
+            <UnifiedAssistant />
         </div>
     );
 }

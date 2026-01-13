@@ -13,7 +13,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const adminDoc = await db.collection("users").doc(admin.uid).get();
     if ((adminDoc.data() as any)?.role !== "Admin") return res.status(403).json({ error: "Admin access required" });
 
-    const snap = await db.collection("reviews").orderBy("createdAt", "desc").limit(200).get();
+    // Try to get reviews with orderBy, fallback without if index doesn't exist
+    let snap;
+    try {
+      snap = await db.collection("reviews").orderBy("createdAt", "desc").limit(200).get();
+    } catch (indexError: any) {
+      console.warn("Reviews query with orderBy failed, trying without orderBy:", indexError?.message);
+      snap = await db.collection("reviews").limit(200).get();
+      // Sort manually
+      const docs = snap.docs.sort((a, b) => {
+        const aTime = a.data()?.createdAt ? new Date(a.data().createdAt).getTime() : 0;
+        const bTime = b.data()?.createdAt ? new Date(b.data().createdAt).getTime() : 0;
+        return bTime - aTime;
+      });
+      snap = { docs } as any;
+    }
     const items = snap.docs.map((doc) => {
       const data = doc.data() as any;
       return {

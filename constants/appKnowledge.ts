@@ -1,5 +1,6 @@
-// Re-export from shared constants location for backward compatibility
-export { APP_KNOWLEDGE } from '../constants/appKnowledge.js';
+// Shared knowledge base accessible to both client and server components
+export const APP_KNOWLEDGE = `
+# EchoFlux.ai Knowledge Base
 
 ## Age Requirements and Eligibility
 **IMPORTANT:** EchoFlux.ai has strict age requirements that must be enforced:
@@ -336,7 +337,9 @@ Generates roleplay scenarios, builds fan personas, creates rating prompts, and d
 
 1. **Generate Roleplay Scenarios:**
    - Select roleplay type: Teacher/Student, Boss/Employee, Doctor/Patient, Stranger/Stranger, Dom/Sub, Nurse/Patient, Celebrity/Fan, or Custom
+   - If Custom, click "Custom" button and enter your custom roleplay type in the text field
    - Choose scenario tone: Teasing, Flirty, Explicit, Romantic, or Custom
+   - If Custom tone, click "Custom" button and enter your custom tone description
    - Enter any specific details or preferences
    - Click "Generate Roleplay Scenario"
    - Get a complete scenario script with dialogue and actions
@@ -378,11 +381,11 @@ Helps you create engaging chatting and sexting sessions with fans. Generates con
 
 1. **Start a Session:**
    - Click "Start New Session"
-   - Select a fan (or create a new fan profile)
-   - Choose session type: Casual Chat, Sexting, Roleplay, Custom
+   - Select a fan from your fan list (or create new fan profile)
+   - Choose session type: Casual Chat, Sexting, Roleplay, or Custom
 
 2. **Set Session Parameters:**
-   - Select roleplay type (if applicable): Teacher/Student, Boss/Employee, Doctor/Patient, Stranger/Stranger, Dom/Sub, Nurse/Patient, Celebrity/Fan, or Custom
+   - If Roleplay, select roleplay type: Teacher/Student, Boss/Employee, Doctor/Patient, Stranger/Stranger, Dom/Sub, Nurse/Patient, Celebrity/Fan, or Custom
    - Choose tone: Teasing, Flirty, Explicit, Romantic, or Custom
    - Enter any specific context or goals
 
@@ -414,26 +417,12 @@ Helps you create engaging chatting and sexting sessions with fans. Generates con
 Visual calendar for planning and scheduling premium content. Shows all scheduled posts, sessions, and content releases.
 
 **How to use it:**
-
-1. **View Calendar:**
-   - See monthly/weekly view of scheduled content
-   - Color-coded by content type
-   - Click any date to see scheduled items
-
-2. **Schedule Content:**
-   - Drag and drop content to specific dates
-   - Set times for optimal engagement
-   - Plan content themes by week
-
-3. **Manage Events:**
-   - Add custom events (PPV releases, special promotions, etc.)
-   - Link content to specific fans or campaigns
-   - Set reminders for important dates
-
-4. **Export Schedule:**
-   - Export your calendar as a reference document
-   - Share with team members if applicable
-   - Use for content planning outside the app
+- View monthly/weekly view of scheduled content
+- Color-coded by content type
+- Click any date to see scheduled items
+- Drag and drop to reschedule
+- Add custom events (PPV releases, special promotions, etc.)
+- Export schedule as reference document
 
 **Best practices:**
 - Plan 2-4 weeks in advance
@@ -453,26 +442,13 @@ Visual calendar for planning and scheduling premium content. Shows all scheduled
 Organizes and manages all your premium content assets. Tag, categorize, and quickly find media for content creation.
 
 **How to use it:**
-
-1. **Upload Media:**
-   - Upload images, videos, and other assets
-   - Organize into folders or categories
-   - Tag with keywords for easy searching
-
-2. **Organize Content:**
-   - Create collections (e.g., "Lingerie Sets", "Workout Videos", "Behind the Scenes")
-   - Tag content with themes, dates, or campaigns
-   - Use AI-powered tagging for automatic organization
-
-3. **Search and Filter:**
-   - Search by tags, dates, or keywords
-   - Filter by content type or collection
-   - Quickly find assets for new content
-
-4. **Reuse Assets:**
-   - Select media from vault when creating new content
-   - Repurpose top-performing assets
-   - Build content packs from vault items
+- Upload images, videos, and other assets
+- Organize into folders or categories
+- Tag with keywords for easy searching
+- Create collections (e.g., "Lingerie Sets", "Workout Videos", "Behind the Scenes")
+- Search by tags, dates, or keywords
+- Filter by content type or collection
+- Select media from vault when creating new content
 
 **Best practices:**
 - Tag everything when uploading
@@ -492,25 +468,12 @@ Organizes and manages all your premium content assets. Tag, categorize, and quic
 Creates ready-to-upload content packages with captions, media checklists, and platform-specific formatting.
 
 **How to use it:**
-
-1. **Select Content:**
-   - Choose content items to include in export package
-   - Can include multiple posts, captions, and media
-
-2. **Format for Platform:**
-   - Select target platform (OnlyFans, Fansly, Fanvue)
-   - Content formats automatically for that platform's requirements
-   - Captions adjust to platform character limits and style
-
-3. **Create Export Package:**
-   - Generate downloadable package
-   - Includes: formatted captions, media checklist, posting instructions
-   - Ready to copy/paste when uploading manually
-
-4. **Download and Use:**
-   - Download the export package
-   - Follow the checklist when uploading
-   - Copy captions directly to your platform
+- Select content items to include in export package
+- Choose target platform (OnlyFans, Fansly, Fanvue)
+- Content formats automatically for that platform's requirements
+- Generate downloadable package
+- Includes: formatted captions, media checklist, posting instructions
+- Download and follow checklist when uploading manually
 
 **Best practices:**
 - Create export packages weekly for batch uploading
@@ -530,26 +493,13 @@ Creates ready-to-upload content packages with captions, media checklists, and pl
 Central hub for managing fan relationships, tracking engagement, preferences, and session history across all Premium Content Studio features.
 
 **How to use it:**
-
-1. **View Fan List:**
-   - See all your fans in one place
-   - Filter by: All, Active, VIP, Big Spenders, Loyal Fans
-   - Sort by engagement, spending, or recency
-
-2. **Fan Profiles:**
-   - Click on any fan to see their full profile
-   - View: preferences, spending history, session history, notes
-   - Track engagement patterns and favorite content types
-
-3. **Manage Fan Data:**
-   - Add notes about fan preferences
-   - Tag fans (VIP, Big Spender, Loyal, etc.)
-   - Update fan information as you learn more
-
-4. **Fan Insights:**
-   - See which fans need attention (inactive VIPs, etc.)
-   - Track upcoming scheduled sessions
-   - Identify your most valuable fans
+- View all fans, filter by type (VIP, Active, Big Spenders, etc.)
+- Click on any fan to see their full profile (preferences, spending history, session history, notes)
+- Add notes about fan preferences
+- Tag fans (VIP, Big Spender, Loyal, etc.)
+- See which fans need attention (inactive VIPs, etc.)
+- Track upcoming scheduled sessions
+- Identify your most valuable fans
 
 **Best practices:**
 - Regularly update fan profiles with new information
@@ -573,12 +523,6 @@ Educational resources with best practices, strategies, and step-by-step guides f
 - Learn platform-specific best practices
 - Get tips for increasing engagement and revenue
 - Follow step-by-step tutorials
-
-**Best practices:**
-- Read guides when starting out
-- Reference guides when trying new content types
-- Follow platform-specific guidelines
-- Implement tips gradually to see what works
 
 ---
 
@@ -867,9 +811,9 @@ Your home base showing overview of activity, upcoming content, and quick actions
 ### "How do I create roleplay scenarios?"
 1. Go to **Roleplay & Interactive Ideas** in Premium Content Studio
 2. Select roleplay type (Teacher/Student, Boss/Employee, etc.) or choose "Custom"
-3. If Custom, enter your custom roleplay type in the text field
+3. If Custom, click "Custom" button and enter your custom roleplay type in the text field
 4. Select tone (Teasing, Flirty, Explicit, etc.) or choose "Custom"
-5. If Custom tone, enter your custom tone description
+5. If Custom tone, click "Custom" button and enter your custom tone description
 6. Add any specific details or preferences
 7. Click "Generate Roleplay Scenario"
 8. Review the complete scenario with dialogue and actions
@@ -971,6 +915,485 @@ A: Yes! Premium Content Studio works for OnlyFans, Fansly, Fanvue, and other pre
 **Quick actions:**
 - Dashboard has quick action buttons to jump to Strategy, Compose, or Calendar
 - Use these for faster navigation to common tasks
+
+---
+
+## Admin Dashboard & Features - Complete Guide
+
+**What it is:**
+The Admin Dashboard is a comprehensive management interface for administrators to manage users, monitor system usage, configure settings, and manage content.
+
+**Access Requirements:**
+- Only users with `role: "Admin"` in their user document can access
+- Navigate to Admin Dashboard from sidebar (only visible to admins)
+
+**Main Tabs:**
+
+### 1. Overview Tab
+
+**What it shows:**
+- **Key Statistics Cards:**
+  - Total Users
+  - Simulated MRR (Monthly Recurring Revenue)
+  - New Users (last 30 days)
+  - Image Generations (total)
+  - Video Generations (total)
+
+- **Plan Distribution:**
+  - Visual breakdown of users by plan (Free, Pro, Elite)
+  - Percentage and count for each plan
+  - Color-coded progress bars
+
+- **Top Users by AI Generations:**
+  - List of users with most image/video generations
+  - Shows avatar, name, email, and generation count
+
+- **Recent Activity Feed:**
+  - Real-time activity log of user actions
+  - Shows user name, action details, and timestamp
+
+- **AI Model Usage Analytics:**
+  - **Key Metrics:**
+    - Total Requests
+    - Total Cost
+    - Average Cost per Request
+    - Error Rate
+  - **Requests by Model:**
+    - Breakdown by AI model (gemini-2.0-flash, gemini-2.0-flash-lite, tavily-web-search)
+    - Percentage and count for each model
+  - **Requests by Task Type:**
+    - Breakdown by task (caption, analytics, sexting_session, strategy, etc.)
+    - Shows which features are used most
+  - **Requests by Cost Tier:**
+    - Low, Medium, High cost breakdown
+  - **Top Users by Requests:**
+    - Users with most AI requests
+    - Shows request count and cost per user
+  - **Time Range Selector:**
+    - Filter by: Last 7 days, Last 30 days, Last 90 days
+
+**How to use:**
+- Monitor overall system health and usage
+- Track user growth and plan distribution
+- Identify power users and usage patterns
+- Monitor AI costs and optimize model usage
+- Review recent activity for troubleshooting
+
+---
+
+### 2. Users Tab
+
+**What it does:**
+Manage all users in the system - view, edit, delete, and modify user accounts.
+
+**Features:**
+
+1. **User List:**
+   - View all users in a paginated table
+   - Search by name, email, or user ID
+   - Filter by plan, user type, or status
+   - Sort by signup date, plan, or activity
+
+2. **User Details:**
+   - Click "Edit" on any user to see full details:
+     - Profile information (name, email, avatar)
+     - Plan and subscription status
+     - Usage statistics (captions, strategies, storage)
+     - Account settings and preferences
+     - Activity history
+
+3. **Edit User:**
+   - **Change Plan:**
+     - Select new plan (Free, Pro, Elite, Agency, etc.)
+     - Update subscription status
+   - **Modify User Data:**
+     - Update name, email, avatar
+     - Change user type (Creator, Business)
+     - Adjust usage limits
+     - Set custom storage limits
+   - **Account Actions:**
+     - Suspend/activate accounts
+     - Reset passwords
+     - Delete accounts (with confirmation)
+
+4. **User Storage:**
+   - View storage usage per user
+   - See storage limits by plan
+   - Monitor storage trends
+
+**How to use:**
+- **Search for a user:**
+  1. Go to Admin Dashboard → Users tab
+  2. Type name/email in search box
+  3. Click on user to view details
+
+- **Change a user's plan:**
+  1. Find user in Users tab
+  2. Click "Edit" button
+  3. Select new plan from dropdown
+  4. Click "Save Changes"
+  5. User's features update immediately
+
+- **View user usage:**
+  1. Click "Edit" on any user
+  2. View usage statistics section
+  3. See captions used, strategies generated, storage used
+
+**Best practices:**
+- Use search to quickly find users
+- Review usage before changing plans
+- Check activity history when troubleshooting
+- Be careful when deleting accounts (irreversible)
+
+---
+
+### 3. Tools Tab
+
+**What it does:**
+Collection of admin tools for managing system settings, content, and configurations.
+
+**Sub-tabs:**
+
+#### A. Admin Tools (Tools Home)
+
+**What it does:**
+Run live Tavily web searches, manage trend presets, and monitor API usage.
+
+**Features:**
+
+1. **Run Weekly Trends Now:**
+   - Button: "Run Weekly Trends Now"
+   - Manually triggers the weekly trends refresh job
+   - Updates trend data immediately (normally runs on schedule)
+   - Use when you need fresh trends before the scheduled run
+
+2. **Tavily Usage Statistics:**
+   - **Overall Total Calls:**
+    - Total API calls made (excludes cache hits)
+    - Breakdown: Admin calls, User calls, Weekly/System calls
+   - **This Month:**
+    - Monthly usage totals
+    - Same breakdown as overall
+   - **Top Users This Month:**
+    - Top 10 users by Tavily API usage
+    - Shows user ID, role, plan, and call count
+   - **Refresh Button:**
+    - Click "Refresh Totals" to update statistics
+
+3. **"What's Viral This Week" Presets:**
+   - **Preset Categories:**
+    - **Instagram:** Reels trends, algorithm updates, hook formulas, caption patterns
+    - **TikTok:** Trend signals, caption structure, retention hooks, policy changes
+    - **X (Twitter):** Post formats, thread templates, engagement patterns, policy changes
+    - **OnlyFans:** Monetization best practices, PPV promo copy, retention messaging, policy updates
+   - **How to use:**
+    1. Select a preset category from dropdown
+    2. Set max results (1-10)
+    3. Choose search depth (Basic or Advanced)
+    4. Optionally check "Bypass cache" for fresh results
+    5. Click "Run Preset (Save)"
+    6. Results are saved to Firestore for Gemini to use immediately
+
+4. **Custom Tavily Search:**
+   - **Query Field:**
+    - Enter any search query (e.g., "OnlyFans policy updates 2025")
+   - **Settings:**
+    - Max results: 1-10
+    - Search depth: Basic or Advanced
+    - Bypass cache: Check to force fresh results
+   - **Actions:**
+    - Click "Run Tavily Search" to execute
+    - Click "Clear" to reset results
+   - **Results:**
+    - Shows title, snippet, and link for each result
+    - Click links to open in new tab
+    - Results are NOT automatically saved (use presets to save)
+
+**Best practices:**
+- Use presets for common trend categories
+- Run weekly trends manually if needed before scheduled time
+- Monitor Tavily usage to track API costs
+- Use "Bypass cache" sparingly (increases API calls)
+- Save important searches as presets for reuse
+
+**Example workflow:**
+"I need to update Instagram trends immediately. I'll go to Admin Tools, select 'Instagram Reels trends this week' preset, set max results to 5, choose Advanced depth, then click 'Run Preset (Save)'. The results will be saved and available to Gemini immediately."
+
+---
+
+#### B. Referral Rewards
+
+**What it does:**
+Configure and manage the referral rewards system.
+
+**Features:**
+- Set reward amounts for referrals
+- Configure reward conditions
+- View referral statistics
+- Grant rewards manually to users
+
+**How to use:**
+- Configure reward settings
+- Monitor referral activity
+- Manually grant rewards when needed
+
+---
+
+#### C. Announcements
+
+**What it does:**
+Create and manage system-wide announcements shown to users.
+
+**Features:**
+- Create new announcements
+- Edit existing announcements
+- Set announcement visibility (all users, specific plans, etc.)
+- Schedule announcements
+- Delete announcements
+
+**How to use:**
+1. Go to Admin Dashboard → Tools tab → Announcements
+2. Click "Create Announcement"
+3. Enter title, message, and settings
+4. Set visibility and schedule
+5. Save announcement
+6. Users see it in their dashboard
+
+---
+
+#### D. Invite Codes
+
+**What it does:**
+Manage invite codes for controlled user signups.
+
+**Features:**
+- **Create Invite Codes:**
+  - Generate new invite codes
+  - Set code expiration dates
+  - Assign codes to specific plans
+  - Set usage limits (how many times code can be used)
+- **View Invite Codes:**
+  - See all active and expired codes
+  - View usage statistics per code
+  - See which users signed up with each code
+- **Manage Codes:**
+  - Activate/deactivate codes
+  - Delete unused codes
+  - Edit code settings
+
+**How to use:**
+- **Create an invite code:**
+  1. Go to Admin Dashboard → Tools tab → Invite Codes
+  2. Click "Create New Code"
+  3. Enter code name/identifier
+  4. Set plan assignment (optional)
+  5. Set expiration date (optional)
+  6. Set usage limit (optional)
+  7. Click "Generate Code"
+  8. Copy code to share with users
+
+- **View code usage:**
+  1. Go to Invite Codes tab
+  2. Find code in list
+  3. Click to see usage details
+  4. View users who signed up with that code
+
+**Best practices:**
+- Use descriptive code names
+- Set expiration dates for time-limited promotions
+- Monitor code usage to track signup sources
+- Deactivate codes when no longer needed
+
+---
+
+#### E. Waitlist
+
+**What it does:**
+Manage user waitlist for features or access.
+
+**Features:**
+- View waitlist entries
+- Approve/deny waitlist requests
+- Export waitlist data
+- Send notifications to waitlisted users
+
+**How to use:**
+1. Go to Admin Dashboard → Tools tab → Waitlist
+2. View all waitlist entries
+3. Click "Approve" to grant access
+4. Click "Deny" to remove from waitlist
+5. Export data if needed
+
+---
+
+#### F. Feedback
+
+**What it does:**
+View and manage user feedback submissions.
+
+**Features:**
+- View all feedback submissions
+- Filter by status, date, or user
+- Respond to feedback
+- Mark feedback as resolved
+- Export feedback data
+
+**How to use:**
+1. Go to Admin Dashboard → Tools tab → Feedback
+2. View feedback list
+3. Click on any feedback to see details
+4. Respond or mark as resolved
+5. Filter by status to find pending items
+
+---
+
+#### G. Feedback Forms
+
+**What it does:**
+Create and manage custom feedback forms for users.
+
+**Features:**
+- **Create Forms:**
+  - Design custom feedback forms
+  - Add custom fields (text, rating, dropdown, etc.)
+  - Set form visibility and targeting
+- **Manage Forms:**
+  - Edit existing forms
+  - Activate/deactivate forms
+  - View form submissions
+  - Delete forms
+
+**How to use:**
+- **Create a feedback form:**
+  1. Go to Admin Dashboard → Tools tab → Feedback Forms
+  2. Click "Create New Form"
+  3. Enter form name and description
+  4. Add custom fields as needed
+  5. Set visibility settings
+  6. Save form
+  7. Users see form in their dashboard
+
+- **View form submissions:**
+  1. Go to Feedback Forms tab
+  2. Click on a form
+  3. View all submissions
+  4. Export data if needed
+
+---
+
+#### H. Email Center
+
+**What it does:**
+Manage email campaigns and scheduled emails.
+
+**Features:**
+- View scheduled emails
+- Create email campaigns
+- Manage email templates
+- View email statistics
+- Send test emails
+
+**How to use:**
+1. Go to Admin Dashboard → Tools tab → Email Center
+2. View scheduled emails list
+3. Create new campaigns or templates
+4. Monitor email delivery and statistics
+
+---
+
+#### I. Reviews
+
+**What it does:**
+Manage user reviews for the landing page.
+
+**Features:**
+
+1. **View All Reviews:**
+   - See all user-submitted reviews
+   - Filter by featured status
+   - Sort by date, rating, or featured status
+
+2. **Create/Edit Reviews:**
+   - **Create New Review:**
+    - Click "Add Review" button
+    - Enter username, rating, text
+    - Set country, plan (optional)
+    - Choose to show avatar or use initials
+    - Upload avatar URL (optional)
+    - Click "Save Review"
+   - **Edit Existing Review:**
+    - Click "Edit" button on any review
+    - Modify any fields
+    - Click "Save Changes"
+
+3. **Feature Reviews:**
+   - **How to feature a review:**
+    1. Go to Admin Dashboard → Tools tab → Reviews
+    2. Find the review you want to feature
+    3. Check the "Featured" checkbox
+    4. Review is immediately featured
+    5. Featured reviews appear on the landing page for all visitors
+   - **Unfeature a review:**
+    - Uncheck the "Featured" checkbox
+    - Review is removed from landing page
+
+4. **Delete Reviews:**
+   - Click "Delete" button on any review
+   - Confirm deletion
+   - Review is permanently removed
+
+5. **Review Statistics:**
+   - See count of featured reviews
+   - View total reviews count
+   - Refresh button to reload reviews
+
+**Best practices:**
+- Feature 3-5 high-quality reviews
+- Regularly review and update featured reviews
+- Respond to user feedback in reviews
+- Keep featured reviews diverse (different plans, countries)
+
+**Example workflow:**
+"A user submitted a great review. I'll go to Admin Dashboard → Tools → Reviews, find their review, check the 'Featured' checkbox, and it will immediately appear on the landing page for all visitors (logged in or not)."
+
+---
+
+## Admin Feature Summary
+
+**Overview Tab:**
+- Monitor system health and usage
+- Track user growth and plan distribution
+- View AI model usage and costs
+- Review recent activity
+
+**Users Tab:**
+- Search and manage all users
+- Edit user plans and settings
+- View user usage statistics
+- Suspend/delete accounts
+
+**Tools Tab:**
+- **Admin Tools:** Run Tavily searches, manage trends, monitor API usage
+- **Referral Rewards:** Configure referral system
+- **Announcements:** Create system-wide announcements
+- **Invite Codes:** Generate and manage invite codes
+- **Waitlist:** Manage feature waitlist
+- **Feedback:** View and respond to user feedback
+- **Feedback Forms:** Create custom feedback forms
+- **Email Center:** Manage email campaigns
+- **Reviews:** Feature/unfeature reviews for landing page
+
+**Navigation:**
+- Click "Admin Dashboard" in sidebar (only visible to admins)
+- Use tabs at top: Overview, Users, Tools
+- Within Tools tab, use sub-tabs for specific tools
+
+**Important Notes:**
+- All admin features require Admin role
+- Changes take effect immediately
+- Some actions (like deleting users) are irreversible
+- Monitor API usage to control costs
+- Featured reviews appear on public landing page
 
 ---
 

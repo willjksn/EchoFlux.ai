@@ -47,12 +47,56 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     return;
   }
 
+  // Check if user is admin
+  let isAdmin = false;
+  try {
+    const { getAdminDb } = await import("./_firebaseAdmin.js");
+    const db = getAdminDb();
+    const userDoc = await db.collection("users").doc(user.uid).get();
+    const userData = userDoc.exists ? (userDoc.data() as any) : null;
+    isAdmin = userData?.role === "Admin";
+  } catch (error) {
+    console.error("Failed to check admin status:", error);
+    // Continue with non-admin access if check fails
+  }
+
+  // Filter knowledge base based on admin status
+  let knowledgeBase = APP_KNOWLEDGE;
+  if (!isAdmin) {
+    // Remove admin section from knowledge base for non-admins
+    const adminSectionStart = knowledgeBase.indexOf("## Admin Dashboard & Features");
+    if (adminSectionStart !== -1) {
+      // Find the end of admin section (look for next major section or end)
+      const nextSection = knowledgeBase.indexOf("\n---\n## ", adminSectionStart);
+      if (nextSection !== -1) {
+        knowledgeBase = knowledgeBase.substring(0, adminSectionStart) + knowledgeBase.substring(nextSection + 5);
+      } else {
+        // If no next section, remove from admin section to end
+        knowledgeBase = knowledgeBase.substring(0, adminSectionStart);
+      }
+    }
+  }
+
   try {
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
     const genAI = new GoogleGenerativeAI(apiKey!);
     const model = genAI.getGenerativeModel({
       model: "gemini-2.0-flash",
     });
+
+    const adminRestriction = !isAdmin ? `
+CRITICAL ADMIN RESTRICTION:
+- You MUST NOT answer any questions about admin features, admin dashboard, admin tools, or admin functionality.
+- If the user asks about admin features, politely decline and say: "I can only answer questions about admin features if you have admin access. Please contact support if you need admin assistance."
+- Do NOT provide any information about:
+  - Admin Dashboard
+  - User management
+  - Admin tools (Tavily searches, invite codes, announcements, etc.)
+  - Review management
+  - Model usage analytics
+  - Any admin-only features
+- Redirect non-admin users asking about admin features to contact support.
+` : "";
 
     const prompt = `
 You are EchoFlux.ai's built-in assistant.
@@ -63,10 +107,13 @@ CRITICAL PRODUCT LIMITS (DO NOT MISREPRESENT):
 - Do NOT claim the app provides automated DM/comment reply automation or automatic posting.
 - You do NOT have live web access. Be honest about uncertainty for time-sensitive questions.
 
+${adminRestriction}
+
 App System Knowledge:
-${APP_KNOWLEDGE}
+${knowledgeBase}
 
 User UID: ${user.uid}
+User is Admin: ${isAdmin}
 
 User question:
 ${question}
