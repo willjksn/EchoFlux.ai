@@ -335,44 +335,109 @@ export const UnifiedAssistant: React.FC = () => {
           }
         },
         onmessage: async (msg: LiveServerMessage) => {
+          // Handle function calls FIRST - before processing audio
+          const functionCall = msg.serverContent?.modelTurn?.parts?.find(p => p.functionCall);
+          if (functionCall?.functionCall) {
+            const { name, args } = functionCall.functionCall;
+            let result = '';
+            
+            console.log('[UnifiedAssistant] Function call received:', { name, args });
+            
+            try {
+              switch (name) {
+                case 'show_help':
+                  result = `I'm your EchoFlux.ai Voice Assistant! I can help you with:
+- Explaining how to use any feature in the app with detailed step-by-step instructions
+- Providing comprehensive guides on creating content, generating strategies, using the calendar, and more
+- Answering questions about social media strategy, content creation, marketing, and best practices
+- Sharing what tends to work (best practices) and how to use the in-app trends/opportunities tools
+- Giving detailed feedback on your content ideas and strategies
+- Explaining workflows and helping you understand the full functionality of each feature
+
+Just ask me how to do something or what you'd like to learn about!`;
+                  break;
+                  
+                default:
+                  result = `Unknown function: ${name}`;
+              }
+              
+              // Send function response back to the AI IMMEDIATELY
+              const session = await sessionPromise.current;
+              if (session) {
+                try {
+                  await session.sendRealtimeInput({
+                    functionResponse: {
+                      name,
+                      response: { result }
+                    }
+                  });
+                  console.log('[UnifiedAssistant] Function response sent:', { name, resultLength: result.length });
+                } catch (responseError: any) {
+                  console.error('[UnifiedAssistant] Failed to send function response:', responseError);
+                }
+              } else {
+                console.error('[UnifiedAssistant] No active session to send function response');
+              }
+            } catch (err: any) {
+              console.error('[UnifiedAssistant] Function call error:', err);
+              const session = await sessionPromise.current;
+              if (session) {
+                try {
+                  await session.sendRealtimeInput({
+                    functionResponse: {
+                      name,
+                      response: { error: err?.message || 'Failed to execute function' }
+                    }
+                  });
+                } catch (responseError: any) {
+                  console.error('[UnifiedAssistant] Failed to send error response:', responseError);
+                }
+              }
+            }
+            
+            return; // Don't process audio for function calls
+          }
+
           if (msg.serverContent?.modelTurn) {
             const parts = msg.serverContent.modelTurn.parts || [];
             
-            for (const part of parts) {
-              if (part.text) {
-                const text = part.text;
-                setConversationHistory(prev => [...prev, {
-                  type: 'assistant',
-                  text,
-                  timestamp: new Date()
-                }]);
-              }
-              
-              if (part.inlineData?.mimeType?.startsWith('audio/')) {
-                const b64 = part.inlineData.data;
-                if (!b64) continue;
+            // Extract text if available (for transcript)
+            const textPart = parts.find(p => p.text);
+            const assistantText = typeof textPart?.text === 'string' ? textPart.text : null;
+            if (assistantText && assistantText.trim()) {
+              setConversationHistory(prev => [...prev, {
+                type: 'assistant',
+                text: assistantText,
+                timestamp: new Date()
+              }]);
+            }
+            
+            // Process audio
+            const audioPart = parts.find(p => p.inlineData?.mimeType?.startsWith('audio/'));
+            if (audioPart?.inlineData?.data) {
+              const b64 = audioPart.inlineData.data;
+              if (!b64) return;
 
-                setIsSpeaking(true);
-                const ctx = outputAudioContext.current!;
-                nextStartTime.current = Math.max(nextStartTime.current, ctx.currentTime);
+              setIsSpeaking(true);
+              const ctx = outputAudioContext.current!;
+              nextStartTime.current = Math.max(nextStartTime.current, ctx.currentTime);
 
-                try {
-                  const audioBuffer = await decodeAudioData(decode(b64), ctx, 24000, 1);
-                  const src = ctx.createBufferSource();
-                  src.buffer = audioBuffer;
-                  src.connect(outputNode);
+              try {
+                const audioBuffer = await decodeAudioData(decode(b64), ctx, 24000, 1);
+                const src = ctx.createBufferSource();
+                src.buffer = audioBuffer;
+                src.connect(outputNode);
 
-                  src.onended = () => {
-                    sources.current.delete(src);
-                    if (sources.current.size === 0) setIsSpeaking(false);
-                  };
+                src.onended = () => {
+                  sources.current.delete(src);
+                  if (sources.current.size === 0) setIsSpeaking(false);
+                };
 
-                  src.start(nextStartTime.current);
-                  nextStartTime.current += audioBuffer.duration;
-                  sources.current.add(src);
-                } catch (err: any) {
-                  console.error("Decode fail:", err);
-                }
+                src.start(nextStartTime.current);
+                nextStartTime.current += audioBuffer.duration;
+                sources.current.add(src);
+              } catch (err: any) {
+                console.error("Decode fail:", err);
               }
             }
           }

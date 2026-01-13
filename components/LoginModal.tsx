@@ -396,33 +396,47 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
         if (hasInviteCode) {
           // INVITE FLOW (Pro/Elite): redeem invite and skip Stripe payment, but still requires signup + onboarding.
-          // Re-validate invite code on submit and fetch grant metadata (plan + expiry)
+          // Only re-validate if not already validated, or if validation state is unclear
           let grantPlan: 'Pro' | 'Elite' | null = inviteGrantPlan;
           let expiresAt: string | null = inviteExpiresAt;
-          try {
-            const resp = await fetch('/api/validateInviteCode', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ inviteCode: inviteCode.trim() }),
-            });
-            const data = await resp.json().catch(() => ({}));
-            if (!data?.valid || (data?.grantPlan !== 'Pro' && data?.grantPlan !== 'Elite')) {
-              setInviteCodeValid(false);
-              setInviteGrantPlan(null);
-              setInviteExpiresAt(null);
-              setValidationErrors(prev => ({ ...prev, inviteCode: data?.error || 'Invalid invite code' }));
-              setIsLoading(false);
-              return;
+          
+          // Skip re-validation if already validated successfully
+          if (inviteCodeValid !== true || !grantPlan) {
+            try {
+              const resp = await fetch('/api/validateInviteCode', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ inviteCode: inviteCode.trim() }),
+              });
+              const data = await resp.json().catch(() => ({}));
+              if (!data?.valid || (data?.grantPlan !== 'Pro' && data?.grantPlan !== 'Elite')) {
+                setInviteCodeValid(false);
+                setInviteGrantPlan(null);
+                setInviteExpiresAt(null);
+                setValidationErrors(prev => ({ ...prev, inviteCode: data?.error || 'Invalid invite code' }));
+                setIsLoading(false);
+                return;
+              }
+              grantPlan = data.grantPlan;
+              expiresAt = data.expiresAt || null;
+              setInviteCodeValid(true);
+              setInviteGrantPlan(grantPlan);
+              setInviteExpiresAt(expiresAt);
+              // Clear any previous validation errors
+              setValidationErrors(prev => {
+                const next = { ...prev };
+                delete next.inviteCode;
+                return next;
+              });
+            } catch {
+              // Only show error if not already validated
+              if (inviteCodeValid !== true) {
+                setValidationErrors(prev => ({ ...prev, inviteCode: 'Failed to validate invite code' }));
+                setIsLoading(false);
+                return;
+              }
+              // If already validated, use cached values and continue
             }
-            grantPlan = data.grantPlan;
-            expiresAt = data.expiresAt || null;
-            setInviteCodeValid(true);
-            setInviteGrantPlan(grantPlan);
-            setInviteExpiresAt(expiresAt);
-          } catch {
-            setValidationErrors(prev => ({ ...prev, inviteCode: 'Failed to validate invite code' }));
-            setIsLoading(false);
-            return;
           }
 
           // Create Firebase Auth account immediately and redeem invite (no Stripe).
