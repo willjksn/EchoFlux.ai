@@ -204,6 +204,9 @@ export const UnifiedAssistant: React.FC = () => {
     }
 
     const ai = new GoogleGenAI({ apiKey });
+    const liveModel =
+      (settings as any)?.voiceModel ||
+      "gemini-2.5-flash-native-audio-preview-09-2025";
 
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
     if (!inputAudioContext.current) inputAudioContext.current = new AudioContextClass({ sampleRate: 16000 });
@@ -300,6 +303,7 @@ export const UnifiedAssistant: React.FC = () => {
     `;
 
     sessionPromise.current = ai.live.connect({
+      model: liveModel,
       callbacks: {
         onopen: async () => {
           setIsConnecting(false);
@@ -308,18 +312,24 @@ export const UnifiedAssistant: React.FC = () => {
           showToast("Voice Assistant Connected. You can start speaking!", "success");
 
           try {
+            if (!inputAudioContext.current) {
+              inputAudioContext.current = new AudioContextClass({ sampleRate: 16000 });
+            }
+            if (!outputAudioContext.current) {
+              outputAudioContext.current = new AudioContextClass({ sampleRate: 24000 });
+            }
             mediaStream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-            const source = inputAudioContext.current!.createMediaStreamSource(mediaStream.current);
-            scriptProcessor.current = inputAudioContext.current!.createScriptProcessor(4096, 1, 1);
+            const source = inputAudioContext.current.createMediaStreamSource(mediaStream.current);
+            scriptProcessor.current = inputAudioContext.current.createScriptProcessor(4096, 1, 1);
 
             scriptProcessor.current.onaudioprocess = (e) => {
               const pcm = createBlob(e.inputBuffer.getChannelData(0));
               sessionPromise.current?.then(s => s.sendRealtimeInput({ media: pcm })).catch(() => {});
             };
 
-            scriptProcessor.current.connect(inputAudioContext.current!.destination);
             source.connect(scriptProcessor.current);
+            scriptProcessor.current.connect(inputAudioContext.current.destination);
           } catch (err: any) {
             console.error("Failed to get microphone access:", err);
             showToast("Microphone access denied. Please enable microphone permissions.", "error");
