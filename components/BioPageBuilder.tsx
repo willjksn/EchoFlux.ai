@@ -215,7 +215,8 @@ const BioPreview: React.FC<{ config: any }> = ({ config }) => {
                             className="w-full mt-8 p-4 rounded-xl shadow-lg border"
                             style={{
                                 backgroundColor: emailTheme.formBackgroundColor,
-                                borderColor: 'rgba(0,0,0,0.06)',
+                                borderColor: '#d1d5db',
+                                borderWidth: '1px',
                             }}
                         >
                             <div className="flex items-center justify-center w-8 h-8 rounded-full mx-auto mb-2" style={{ backgroundColor: emailTheme.buttonBackgroundColor + '22', color: emailTheme.buttonBackgroundColor }}>
@@ -231,7 +232,8 @@ const BioPreview: React.FC<{ config: any }> = ({ config }) => {
                                     style={{
                                         backgroundColor: emailTheme.inputBackgroundColor,
                                         color: emailTheme.inputTextColor,
-                                        borderColor: '#d1d5db',
+                                        borderColor: '#9ca3af',
+                                        borderWidth: '1px',
                                     }}
                                 />
                                 <button 
@@ -239,7 +241,8 @@ const BioPreview: React.FC<{ config: any }> = ({ config }) => {
                                     style={{
                                         backgroundColor: emailTheme.buttonBackgroundColor,
                                         color: emailTheme.buttonTextColor,
-                                        borderColor: 'rgba(17,24,39,0.15)',
+                                        borderColor: '#9ca3af',
+                                        borderWidth: '1px',
                                     }}
                                 >
                                     {config.emailCapture.buttonText}

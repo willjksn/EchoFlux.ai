@@ -93,22 +93,22 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
               </div>
 
               <div className="relative px-6 py-12 sm:px-10 sm:py-16 lg:px-16 lg:py-18 overflow-hidden">
-                <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
+                <div className="grid gap-12 lg:grid-cols-2 lg:items-center max-w-full">
                   {/* Left: Copy + CTAs */}
-                  <div className="min-w-0">
+                  <div className="min-w-0 max-w-full overflow-hidden">
                     <div className="inline-flex items-center rounded-full bg-primary-50 px-3 py-1 text-xs font-medium text-primary-700 ring-1 ring-inset ring-primary-200 backdrop-blur dark:bg-white/10 dark:text-primary-100 dark:ring-white/20">
                       <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
                       Planning Studio for revenue-focused creators
                     </div>
 
-                    <h1 className="mt-6 text-4xl font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-5xl lg:text-6xl">
+                    <h1 className="mt-6 text-4xl font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-5xl lg:text-6xl max-w-full break-words">
                       <span className="block">The creators who plan consistently</span>
                       <span className="block text-primary-700 dark:text-primary-200">
                         earn 3x more.
                       </span>
                     </h1>
 
-                    <p className="mt-6 max-w-xl text-lg text-gray-700 dark:text-primary-100 sm:text-xl">
+                    <p className="mt-6 max-w-xl text-lg text-gray-700 dark:text-primary-100 sm:text-xl max-w-full break-words">
                       Turn content ideas into recurring revenue. Plan exclusive content, engage subscribers, and maximize your revenue—all in one powerful studio. Scale from content calendar to consistent income (manual posting, account-safe).
                     </p>
 
@@ -169,7 +169,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                   </div>
 
                   {/* Right: Product preview card */}
-                  <div className="relative overflow-hidden min-w-0">
+                  <div className="relative overflow-hidden min-w-0 max-w-full">
                     <div className="pointer-events-none absolute inset-0 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-primary-500/10 to-transparent blur-3xl" />
                     <div className="relative rounded-2xl bg-white/90 dark:bg-gray-900/70 p-4 shadow-xl ring-1 ring-gray-200 dark:ring-white/15 backdrop-blur">
                       <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 px-3 py-2 text-xs text-gray-700 dark:text-gray-300">
