@@ -299,9 +299,6 @@ export const UnifiedAssistant: React.FC = () => {
         - "Hi! I'm your EchoFlux.ai voice assistant. I can explain how to use any feature in the app, help you create content, answer questions about social media strategy, and more. What would you like to learn about or work on today?"
     `;
 
-    const outputNode = outputAudioContext.current.createGain();
-    outputNode.connect(outputAudioContext.current.destination);
-
     sessionPromise.current = ai.live.connect({
       callbacks: {
         onopen: async () => {
