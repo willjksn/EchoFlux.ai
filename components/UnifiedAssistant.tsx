@@ -204,31 +204,8 @@ export const UnifiedAssistant: React.FC = () => {
     }
 
     const ai = new GoogleGenAI({ apiKey });
-    
-    // Get model from settings or use default (matching VoiceAssistant format)
-    const voiceModelFromSettings = (settings as any)?.voiceModel;
-    const liveModel = (typeof voiceModelFromSettings === "string" && voiceModelFromSettings.trim()) 
-      ? voiceModelFromSettings.trim()
-      : "gemini-2.5-flash-native-audio-preview-09-2025";
-
-    // Ensure model is a non-empty string
-    if (!liveModel || typeof liveModel !== "string" || !liveModel.trim()) {
-      const msg = "Voice model not configured. Please set a model and retry.";
-      setConnectionError(msg);
-      showToast(msg, "error");
-      setIsConnecting(false);
-      return;
-    }
 
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioContextClass) {
-      const msg = "AudioContext not supported in this browser.";
-      setConnectionError(msg);
-      showToast(msg, "error");
-      setIsConnecting(false);
-      return;
-    }
-
     if (!inputAudioContext.current) inputAudioContext.current = new AudioContextClass({ sampleRate: 16000 });
     if (!outputAudioContext.current) outputAudioContext.current = new AudioContextClass({ sampleRate: 24000 });
 
@@ -322,22 +299,8 @@ export const UnifiedAssistant: React.FC = () => {
         - "Hi! I'm your EchoFlux.ai voice assistant. I can explain how to use any feature in the app, help you create content, answer questions about social media strategy, and more. What would you like to learn about or work on today?"
     `;
 
-    // Final validation - ensure model is a valid string
-    const finalModel = String(liveModel).trim();
-    if (!finalModel) {
-      const msg = "Voice model is invalid. Please check configuration.";
-      console.error("[UnifiedAssistant] Invalid model:", liveModel);
-      setConnectionError(msg);
-      showToast(msg, "error");
-      setIsConnecting(false);
-      return;
-    }
-    
-    // Debug: log model being used
-    console.log("[UnifiedAssistant] Connecting with model:", finalModel);
-    
     sessionPromise.current = ai.live.connect({
-      model: finalModel,
+      model: "gemini-2.5-flash-native-audio-preview-09-2025",
       callbacks: {
         onopen: async () => {
           setIsConnecting(false);
@@ -346,38 +309,10 @@ export const UnifiedAssistant: React.FC = () => {
           showToast("Voice Assistant Connected. You can start speaking!", "success");
 
           try {
-            // Ensure audio contexts exist and are not closed
-            if (!inputAudioContext.current || inputAudioContext.current.state === "closed") {
-              inputAudioContext.current = new AudioContextClass({ sampleRate: 16000 });
-            }
-            if (!outputAudioContext.current || outputAudioContext.current.state === "closed") {
-              outputAudioContext.current = new AudioContextClass({ sampleRate: 24000 });
-            }
-
-            // Resume contexts if suspended
-            if (inputAudioContext.current.state === "suspended") {
-              await inputAudioContext.current.resume();
-            }
-            if (outputAudioContext.current.state === "suspended") {
-              await outputAudioContext.current.resume();
-            }
-
-            // Final validation
-            if (!inputAudioContext.current || inputAudioContext.current.state === "closed") {
-              throw new Error("Input audio context unavailable or closed");
-            }
-            if (!outputAudioContext.current || outputAudioContext.current.state === "closed") {
-              throw new Error("Output audio context unavailable or closed");
-            }
-
             mediaStream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-            if (!mediaStream.current) {
-              throw new Error("Failed to get media stream");
-            }
-
-            const source = inputAudioContext.current.createMediaStreamSource(mediaStream.current);
-            scriptProcessor.current = inputAudioContext.current.createScriptProcessor(4096, 1, 1);
+            const source = inputAudioContext.current!.createMediaStreamSource(mediaStream.current);
+            scriptProcessor.current = inputAudioContext.current!.createScriptProcessor(4096, 1, 1);
 
             scriptProcessor.current.onaudioprocess = (e) => {
               const pcm = createBlob(e.inputBuffer.getChannelData(0));
@@ -385,10 +320,17 @@ export const UnifiedAssistant: React.FC = () => {
             };
 
             source.connect(scriptProcessor.current);
-            scriptProcessor.current.connect(inputAudioContext.current.destination);
-          } catch (err: any) {
-            console.error("Failed to get microphone access:", err);
-            showToast("Microphone access denied. Please enable microphone permissions.", "error");
+            scriptProcessor.current.connect(inputAudioContext.current!.destination);
+          } catch (e: any) {
+            console.error("Mic Error:", e);
+            const errorMessage = e?.message || e?.name || "Unknown error";
+            if (errorMessage.includes("Permission") || errorMessage.includes("NotAllowedError")) {
+              showToast("Microphone access denied. Please enable microphone permissions in your browser settings.", "error");
+            } else if (errorMessage.includes("NotFoundError") || errorMessage.includes("DevicesNotFoundError")) {
+              showToast("No microphone found. Please connect a microphone and try again.", "error");
+            } else {
+              showToast(`Microphone error: ${errorMessage}`, "error");
+            }
             disconnect();
           }
         },
