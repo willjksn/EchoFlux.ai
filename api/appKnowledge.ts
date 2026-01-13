@@ -1,25 +1,6 @@
 // Re-export from shared constants location for backward compatibility
 export { APP_KNOWLEDGE } from '../constants/appKnowledge.js';
 
-## Age Requirements and Eligibility
-**IMPORTANT:** EchoFlux.ai has strict age requirements that must be enforced:
-- **Minimum Age:** Users must be at least **13 years old** to use EchoFlux.ai
-- **Users Under 18:** If under 18 (or age of majority in their jurisdiction), users must have parent/guardian consent. Parents/guardians are responsible for their child's activities.
-- **Adult Content Features (18+):** Certain features including Premium Content Studio and explicit content generation tools are restricted to users who are **18 years of age or older**. Users must verify they are 18+ and legally permitted to access adult content in their jurisdiction.
-- **Age Verification:** EchoFlux.ai reserves the right to verify age at any time. False age information may result in immediate account suspension or termination.
-- **Compliance:** EchoFlux.ai complies with COPPA (Children's Online Privacy Protection Act) and other age-related regulations.
-
-If users ask about age requirements, clearly explain these policies and direct them to the Terms of Service for complete details. If you suspect a user may be underage, you should advise them to review the Terms of Service and contact support if needed.
-
-## Core Concept
-EchoFlux.ai is an **AI Content Studio & Campaign Planner for creators**.
-
-- Current live mode is **offline / planning-first**:
-  - Users **do not need to connect social accounts**.
-  - The app focuses on **strategy, campaign planning, content packs, and calendars**.
-  - Creators **copy content out** to post manually wherever they like.
-- "Business"/"Agency" modes, **social listening**, **competitor tracking**, and deep analytics are **paused/hidden for now** (not available in the current version) but may return later.
-
 ## Key Surfaces & Workflows
 
 ### 1. Strategy (AI Content Strategist) - Detailed Guide
