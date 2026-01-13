@@ -122,10 +122,19 @@ const BioPreview: React.FC<{ config: any }> = ({ config }) => {
         formBackgroundColor: config?.emailCapture?.formBackgroundColor || '#d1dbf0',
         titleColor: config?.emailCapture?.titleColor || pageTextColor,
         inputBackgroundColor: config?.emailCapture?.inputBackgroundColor || '#f9fafb',
-        inputTextColor: config?.emailCapture?.inputTextColor || '#d1dbf0',
+        // Force dark text for input - ensure visibility on light backgrounds
+        inputTextColor: (config?.emailCapture?.inputTextColor && 
+            config.emailCapture.inputTextColor !== '#ffffff' && 
+            config.emailCapture.inputTextColor !== '#fff' &&
+            config.emailCapture.inputTextColor !== '#d1dbf0') 
+            ? config.emailCapture.inputTextColor 
+            : '#111827',
         buttonBackgroundColor: config?.emailCapture?.buttonBackgroundColor || theme.buttonColor,
-        // Ensure button text is always dark for visibility on white buttons
-        buttonTextColor: (config?.emailCapture?.buttonTextColor && config.emailCapture.buttonTextColor !== '#ffffff' && config.emailCapture.buttonTextColor !== '#fff') 
+        // Force dark text for button - ensure visibility on white buttons
+        buttonTextColor: (config?.emailCapture?.buttonTextColor && 
+            config.emailCapture.buttonTextColor !== '#ffffff' && 
+            config.emailCapture.buttonTextColor !== '#fff' &&
+            config.emailCapture.buttonTextColor !== '#d1dbf0') 
             ? config.emailCapture.buttonTextColor 
             : '#111827',
     };
@@ -1305,7 +1314,7 @@ export const BioPageBuilder: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Input Text</label>
-                                    <input type="color" value={bioPage.emailCapture.inputTextColor || '#d1dbf0'} onChange={e => updateEmailCapture('inputTextColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent" />
+                                    <input type="color" value={bioPage.emailCapture.inputTextColor || '#111827'} onChange={e => updateEmailCapture('inputTextColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent" />
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Button Background</label>
