@@ -2,7 +2,7 @@ import React, { useEffect, useState, useLayoutEffect } from 'react';
 import { useAppContext } from './AppContext';
 
 export const InteractiveTour: React.FC = () => {
-    const { tourStep, tourSteps, nextTourStep, endTour } = useAppContext();
+    const { tourStep, tourSteps, nextTourStep, endTour, activePage } = useAppContext();
     const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
     const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>({});
     
@@ -11,6 +11,12 @@ export const InteractiveTour: React.FC = () => {
     }
     
     const step = tourSteps[tourStep];
+    
+    // Hide overlay if step requires a different page than current active page
+    // This prevents flash when transitioning between pages
+    if (step.page && step.page !== activePage) {
+        return null;
+    }
 
     useLayoutEffect(() => {
         setTargetRect(null); // Reset on step change to show loading state

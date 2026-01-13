@@ -265,11 +265,14 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
             const next = tourSteps[tourStep + 1];
             // Navigate to the page for the next step if needed
             if (next.page && activePageState !== next.page) {
+                // Hide overlay immediately by resetting targetRect
+                // Navigate to new page
                 setActivePage(next.page);
-                // Wait a bit for the page to render before moving to next step
+                // Wait a bit longer for the page to render before moving to next step
+                // This gives the page time to mount and the element to be available
                 setTimeout(() => {
                     setTourStep(prev => prev + 1);
-                }, 300);
+                }, 500);
             } else {
                 setTourStep(prev => prev + 1);
             }
