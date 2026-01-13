@@ -124,7 +124,7 @@ const BioPreview: React.FC<{ config: any }> = ({ config }) => {
         inputBackgroundColor: config?.emailCapture?.inputBackgroundColor || '#f9fafb',
         inputTextColor: config?.emailCapture?.inputTextColor || '#d1dbf0',
         buttonBackgroundColor: config?.emailCapture?.buttonBackgroundColor || theme.buttonColor,
-        buttonTextColor: config?.emailCapture?.buttonTextColor || '#d1dbf0',
+        buttonTextColor: config?.emailCapture?.buttonTextColor || '#111827',
     };
     
     return (
@@ -1310,7 +1310,7 @@ export const BioPageBuilder: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Button Text</label>
-                                    <input type="color" value={bioPage.emailCapture.buttonTextColor || '#d1dbf0'} onChange={e => updateEmailCapture('buttonTextColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent" />
+                                    <input type="color" value={bioPage.emailCapture.buttonTextColor || '#111827'} onChange={e => updateEmailCapture('buttonTextColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent" />
                                 </div>
                             </div>
                         </div>
