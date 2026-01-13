@@ -924,7 +924,7 @@ A: Yes! Premium Content Studio works for OnlyFans, Fansly, Fanvue, and other pre
 The Admin Dashboard is a comprehensive management interface for administrators to manage users, monitor system usage, configure settings, and manage content.
 
 **Access Requirements:**
-- Only users with `role: "Admin"` in their user document can access
+- Only users with role: "Admin" in their user document can access
 - Navigate to Admin Dashboard from sidebar (only visible to admins)
 
 **Main Tabs:**
