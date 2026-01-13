@@ -119,12 +119,12 @@ const BioPreview: React.FC<{ config: any }> = ({ config }) => {
     const pageTextColor = theme.pageTextColor || (theme.textColor === '#ffffff' ? '#2563eb' : theme.textColor) || '#2563eb';
     const buttonTextColor = theme.buttonTextColor || theme.textColor || '#111827';
     const emailTheme = {
-        formBackgroundColor: config?.emailCapture?.formBackgroundColor || '#d1dbe0',
+        formBackgroundColor: config?.emailCapture?.formBackgroundColor || '#d1dbf0',
         titleColor: config?.emailCapture?.titleColor || pageTextColor,
         inputBackgroundColor: config?.emailCapture?.inputBackgroundColor || '#f9fafb',
-        inputTextColor: config?.emailCapture?.inputTextColor || '#d1dbe0',
+        inputTextColor: config?.emailCapture?.inputTextColor || '#d1dbf0',
         buttonBackgroundColor: config?.emailCapture?.buttonBackgroundColor || theme.buttonColor,
-        buttonTextColor: config?.emailCapture?.buttonTextColor || '#d1dbe0',
+        buttonTextColor: config?.emailCapture?.buttonTextColor || '#d1dbf0',
     };
     
     return (
@@ -1290,7 +1290,7 @@ export const BioPageBuilder: React.FC = () => {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Form Background</label>
-                                    <input type="color" value={bioPage.emailCapture.formBackgroundColor || '#d1dbe0'} onChange={e => updateEmailCapture('formBackgroundColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent" />
+                                    <input type="color" value={bioPage.emailCapture.formBackgroundColor || '#d1dbf0'} onChange={e => updateEmailCapture('formBackgroundColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent" />
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Title Color</label>
@@ -1302,7 +1302,7 @@ export const BioPageBuilder: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Input Text</label>
-                                    <input type="color" value={bioPage.emailCapture.inputTextColor || '#d1dbe0'} onChange={e => updateEmailCapture('inputTextColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent" />
+                                    <input type="color" value={bioPage.emailCapture.inputTextColor || '#d1dbf0'} onChange={e => updateEmailCapture('inputTextColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent" />
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Button Background</label>
@@ -1310,7 +1310,7 @@ export const BioPageBuilder: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Button Text</label>
-                                    <input type="color" value={bioPage.emailCapture.buttonTextColor || '#d1dbe0'} onChange={e => updateEmailCapture('buttonTextColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent" />
+                                    <input type="color" value={bioPage.emailCapture.buttonTextColor || '#d1dbf0'} onChange={e => updateEmailCapture('buttonTextColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent" />
                                 </div>
                             </div>
                         </div>
