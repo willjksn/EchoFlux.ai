@@ -27,7 +27,6 @@ export const MediaLibrary: React.FC = () => {
   const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [editingFolder, setEditingFolder] = useState<{ id: string; name: string } | null>(null);
-  const [videoThumbnails, setVideoThumbnails] = useState<Map<string, string>>(new Map());
 
   // Load folders
   useEffect(() => {
@@ -441,43 +440,6 @@ export const MediaLibrary: React.FC = () => {
   const filteredItems = getFilteredItems();
   const currentFolder = folders.find(f => f.id === selectedFolderId);
 
-  // Generate video thumbnail
-  const generateVideoThumbnail = useCallback((videoUrl: string, videoId: string) => {
-    if (videoThumbnails.has(videoId)) return;
-
-    const video = document.createElement('video');
-    video.crossOrigin = 'anonymous';
-    video.src = videoUrl;
-    video.currentTime = 0.1; // Seek to first frame
-    
-    video.addEventListener('loadeddata', () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth || 400;
-      canvas.height = video.videoHeight || 400;
-      const ctx = canvas.getContext('2d');
-      
-      if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const thumbnailUrl = canvas.toDataURL('image/jpeg', 0.8);
-        setVideoThumbnails(prev => new Map(prev).set(videoId, thumbnailUrl));
-      }
-    });
-
-    video.addEventListener('error', () => {
-      // Fallback: use a placeholder
-      setVideoThumbnails(prev => new Map(prev).set(videoId, 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="400"%3E%3Crect fill="%23ddd" width="400" height="400"/%3E%3Ctext x="200" y="200" text-anchor="middle" fill="%23999" font-size="16"%3EVideo%3C/text%3E%3C/svg%3E'));
-    });
-  }, [videoThumbnails]);
-
-  // Generate thumbnails for videos when they're loaded
-  useEffect(() => {
-    filteredItems.forEach(item => {
-      if (item.type === 'video' && !videoThumbnails.has(item.id)) {
-        generateVideoThumbnail(item.url, item.id);
-      }
-    });
-  }, [filteredItems, videoThumbnails, generateVideoThumbnail]);
-
   if (!user) {
     return (
       <div className="p-6 text-center">
@@ -722,33 +684,22 @@ export const MediaLibrary: React.FC = () => {
                     onClick={() => setViewingItem(item)}
                   >
                     {item.type === 'video' ? (
-                      <div className={`${viewMode === 'grid' ? 'w-full h-full' : 'w-24 h-24 flex-shrink-0'} relative bg-gray-100 dark:bg-gray-700`}>
-                        {videoThumbnails.has(item.id) ? (
-                          <img
-                            src={videoThumbnails.get(item.id)}
-                            alt={item.name}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <video
-                            src={item.url}
-                            className="w-full h-full object-cover"
-                            preload="metadata"
-                            playsInline
-                            muted
-                            onLoadedData={(e) => {
-                              const video = e.currentTarget;
-                              if (video.videoWidth > 0 && !videoThumbnails.has(item.id)) {
-                                generateVideoThumbnail(item.url, item.id);
-                              }
-                            }}
-                          />
-                        )}
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                          <VideoIcon className="w-6 h-6 sm:w-8 sm:h-8 text-white drop-shadow-lg" />
-                        </div>
-                      </div>
+                      <video
+                        src={item.url}
+                        className={`${viewMode === 'grid' ? 'w-full h-full' : 'w-24 h-24'} object-contain bg-gray-100 dark:bg-gray-700`}
+                        controls={false}
+                        preload="metadata"
+                        playsInline
+                        muted
+                        onLoadedMetadata={(e) => {
+                          // Set currentTime to show a preview frame (1 second or 10% of duration, whichever is smaller)
+                          const video = e.currentTarget;
+                          if (video.duration && video.duration > 0) {
+                            const previewTime = Math.min(1, video.duration * 0.1);
+                            video.currentTime = previewTime;
+                          }
+                        }}
+                      />
                     ) : (
                       <img
                         src={item.url}

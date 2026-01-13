@@ -609,8 +609,18 @@ Just ask me how to do something or what you'd like to learn about!`;
                 Voice
               </button>
             </div>
-            <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-              <XMarkIcon className="h-6 w-6" />
+            <button 
+              onClick={() => {
+                if (mode === 'voice' && (isSpeaking || isConnecting || isListening)) {
+                  disconnect();
+                }
+                setIsOpen(false);
+              }} 
+              className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors flex items-center gap-2"
+              title="Close assistant"
+            >
+              <span>Close</span>
+              <XMarkIcon className="h-4 w-4" />
             </button>
           </div>
         </div>
