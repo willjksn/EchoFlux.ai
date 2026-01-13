@@ -215,7 +215,8 @@ const BioPreview: React.FC<{ config: any }> = ({ config }) => {
                             className="w-full mt-8 p-4 rounded-xl shadow-lg border"
                             style={{
                                 backgroundColor: emailTheme.formBackgroundColor,
-                                borderColor: 'rgba(0,0,0,0.06)',
+                                borderColor: '#d1d5db',
+                                borderWidth: '1px',
                             }}
                         >
                             <div className="flex items-center justify-center w-8 h-8 rounded-full mx-auto mb-2" style={{ backgroundColor: emailTheme.buttonBackgroundColor + '22', color: emailTheme.buttonBackgroundColor }}>
@@ -231,7 +232,8 @@ const BioPreview: React.FC<{ config: any }> = ({ config }) => {
                                     style={{
                                         backgroundColor: emailTheme.inputBackgroundColor,
                                         color: emailTheme.inputTextColor,
-                                        borderColor: '#d1d5db',
+                                        borderColor: '#9ca3af',
+                                        borderWidth: '1px',
                                     }}
                                 />
                                 <button 
@@ -239,7 +241,8 @@ const BioPreview: React.FC<{ config: any }> = ({ config }) => {
                                     style={{
                                         backgroundColor: emailTheme.buttonBackgroundColor,
                                         color: emailTheme.buttonTextColor,
-                                        borderColor: 'rgba(17,24,39,0.15)',
+                                        borderColor: '#9ca3af',
+                                        borderWidth: '1px',
                                     }}
                                 >
                                     {config.emailCapture.buttonText}
@@ -1124,12 +1127,12 @@ export const BioPageBuilder: React.FC = () => {
                                 ) : (
                                     <div key={link.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700">
                                         <div className="cursor-move text-gray-400">⋮⋮</div>
-                                        <div className="flex-1">
+                                        <div className="flex-1 min-w-0">
                                             <p className="font-semibold text-gray-900 dark:text-white">{link.title}</p>
                                             <p className="text-xs text-gray-500 dark:text-gray-400">{link.url}</p>
                                         </div>
                                         <div className="text-xs font-bold text-gray-500 dark:text-gray-400">{link.clicks} clicks</div>
-                                        <div className="flex items-center gap-2 ml-2">
+                                        <div className="flex items-center gap-2 ml-2 shrink-0">
                                             <button onClick={() => handleEditLink(link)} className="text-gray-400 hover:text-primary-500">
                                                 <EditIcon className="w-4 h-4" />
                                             </button>

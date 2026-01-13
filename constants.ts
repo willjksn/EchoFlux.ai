@@ -77,8 +77,9 @@ export const MOCK_POSTS: Post[] = [
 
 export const getTourStepsForPlan = (user: User): TourStep[] => {
     let steps: TourStep[] = [
-      { elementId: 'tour-step-1-dashboard', page: 'dashboard', title: 'Your Command Center', content: 'This is your new home base. Check stats, see upcoming posts, and handle urgent messages.', position: 'bottom' },
-      { elementId: 'tour-step-3-compose-nav', page: 'compose', title: 'AI Content Suite', content: 'Generate captions, images, and short videos.', position: 'right' },
+      { elementId: 'tour-step-1-dashboard', page: 'dashboard', title: 'Your Command Center', content: 'This is your home base. Check stats, upcoming posts, and urgent items.', position: 'top' },
+      { elementId: 'tour-step-theme-toggle', page: 'dashboard', title: 'Light / Dark Mode', content: 'Use the sun/moon button (top right) to toggle themes anytime.', position: 'left' },
+      { elementId: 'tour-step-3-compose-nav', page: 'compose', title: 'AI Content Suite', content: 'Generate captions quickly. Image/video generation is disabled in this build.', position: 'right' },
     ];
     
     if (user.hasAutopilot) {

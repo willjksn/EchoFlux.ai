@@ -18,7 +18,7 @@ export const InteractiveTour: React.FC = () => {
         let findElementPoller: number;
         let positionPoller: number;
         let attempts = 0;
-        const maxAttempts = 100; // ~1.6 seconds
+        const maxAttempts = 1200; // allow more time for first step to render
 
         const findAndPositionElement = () => {
             const targetElement = document.getElementById(step.elementId);
@@ -56,17 +56,12 @@ export const InteractiveTour: React.FC = () => {
             } else {
                 attempts++;
                 if (attempts > maxAttempts) {
-                    // If element not found and we have a page to navigate to, try navigating first
-                    if (step.page) {
-                        console.warn(`Tour element with id "${step.elementId}" not found on current page. The tour will continue when you navigate to the correct page.`);
-                        // Don't end tour, just skip this step - the next step might work
-                        return;
-                    }
-                    console.warn(`Tour element with id "${step.elementId}" not found. Ending tour.`);
-                    endTour();
-                } else {
-                    findElementPoller = requestAnimationFrame(findAndPositionElement);
+                    console.warn(`Tour element with id "${step.elementId}" not found after ${maxAttempts} attempts. Skipping step.`);
+                    // Skip to next step instead of ending tour
+                    nextTourStep();
+                    return;
                 }
+                findElementPoller = requestAnimationFrame(findAndPositionElement);
             }
         };
 
@@ -76,7 +71,7 @@ export const InteractiveTour: React.FC = () => {
             cancelAnimationFrame(findElementPoller);
             cancelAnimationFrame(positionPoller);
         };
-    }, [step.elementId, endTour]);
+    }, [step.elementId, step.page, endTour, nextTourStep]);
 
     useEffect(() => {
         if (!targetRect) return;

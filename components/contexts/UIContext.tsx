@@ -240,12 +240,12 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         // If first step requires a specific page, navigate there first
         if (firstStepPage && activePageState !== firstStepPage) {
             setActivePage(firstStepPage);
-            // Wait for page to render before starting tour
+            // Wait briefly for the page to render before starting tour
             setTimeout(() => {
                 setTourSteps(steps);
                 setTourStep(0);
                 setIsTourActive(true);
-            }, 500);
+            }, 400);
         } else {
             // Start tour immediately if already on correct page
             setTourSteps(steps);

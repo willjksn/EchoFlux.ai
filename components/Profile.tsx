@@ -661,6 +661,22 @@ export const Profile: React.FC = () => {
                                 </p>
                                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">This month</p>
                             </div>
+                            <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Strategies Used</p>
+                                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                                    {(user as any).monthlyStrategyGenerationsUsed || 0} / {user.plan === 'Elite' ? 5 : user.plan === 'Pro' ? 2 : 1}
+                                </p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Resets monthly</p>
+                            </div>
+                            <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Link-in-Bio Clicks</p>
+                                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                                    {(user as any).linkInBioClicksMonth ?? 0}
+                                </p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    CTR: {((user as any).linkInBioCtrMonth ?? null) != null ? `${Math.round(((user as any).linkInBioCtrMonth || 0) * 100)}%` : '—'} · Resets monthly
+                                </p>
+                            </div>
                             {(user.monthlyAdGenerationsUsed || user.monthlyVideoAdGenerationsUsed) && (
                                 <>
                                     <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
