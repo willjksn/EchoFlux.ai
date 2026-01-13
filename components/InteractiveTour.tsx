@@ -12,13 +12,16 @@ export const InteractiveTour: React.FC = () => {
     
     const step = tourSteps[tourStep];
     
-    // Hide overlay if step requires a different page than current active page
-    // This prevents flash when transitioning between pages
-    if (step.page && step.page !== activePage) {
-        return null;
-    }
+    // Check if step requires a different page - if so, don't search for element
+    const isPageMismatch = step.page && step.page !== activePage;
 
     useLayoutEffect(() => {
+        // If page doesn't match, don't search for element
+        if (isPageMismatch) {
+            setTargetRect(null);
+            return;
+        }
+        
         setTargetRect(null); // Reset on step change to show loading state
         
         let findElementPoller: number;
@@ -77,7 +80,7 @@ export const InteractiveTour: React.FC = () => {
             cancelAnimationFrame(findElementPoller);
             cancelAnimationFrame(positionPoller);
         };
-    }, [step.elementId, step.page, endTour, nextTourStep]);
+    }, [step.elementId, step.page, endTour, nextTourStep, isPageMismatch]);
 
     useEffect(() => {
         if (!targetRect) return;
@@ -121,10 +124,10 @@ export const InteractiveTour: React.FC = () => {
         setPopoverStyle(style);
     }, [targetRect, step.position]);
 
-    if (!targetRect) {
-        return (
-            <div className="fixed inset-0 z-[1000] bg-black bg-opacity-60 transition-opacity duration-300" />
-        );
+    // Hide overlay if step requires a different page than current active page
+    // This prevents flash when transitioning between pages
+    if (isPageMismatch || !targetRect) {
+        return null;
     }
 
     const highlighterPadding = 4;
