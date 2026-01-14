@@ -3188,16 +3188,22 @@ Output format:
                                 )}
                             </div>
 
-                            {/* Fan Selector */}
-                            <FanSelector
-                                selectedFanId={selectedFanId}
-                                onSelectFan={(fanId, fanName) => {
-                                    setSelectedFanId(fanId);
-                                    setSelectedFanName(fanName);
-                                    // Preferences will load automatically via useEffect
-                                }}
-                                allowNewFan={true}
-                            />
+                            {/* Fan Selector - Dropdown */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Personalize for Fan (Optional):
+                                </label>
+                                <FanSelector
+                                    selectedFanId={selectedFanId}
+                                    onSelectFan={(fanId, fanName) => {
+                                        setSelectedFanId(fanId);
+                                        setSelectedFanName(fanName);
+                                        // Preferences will load automatically via useEffect
+                                    }}
+                                    allowNewFan={true}
+                                    compact={true}
+                                />
+                            </div>
 
                             {/* Fan Context Card - Show when fan is selected */}
                             {selectedFanId && fanPreferences && (

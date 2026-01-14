@@ -119,52 +119,90 @@ export const FanSelector: React.FC<FanSelectorProps> = ({
     };
 
     if (compact) {
+        // Load fans on mount for dropdown
+        useEffect(() => {
+            if (user?.id) {
+                loadFans();
+            }
+        }, [user?.id]);
+
         return (
             <div className="relative" ref={containerRef}>
                 <button
                     type="button"
-                    onClick={() => setShowFanGrid(!showFanGrid)}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white flex items-center justify-between"
+                    onClick={() => {
+                        setShowFanGrid(!showFanGrid);
+                        if (!showFanGrid && fans.length === 0) {
+                            loadFans();
+                        }
+                    }}
+                    className="w-full px-4 py-3 text-sm border-2 border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white flex items-center justify-between hover:border-primary-500 dark:hover:border-primary-500 transition-colors"
                 >
                     <span className="flex items-center gap-2">
-                        <UserIcon className="w-4 h-4" />
-                        {selectedFan ? selectedFan.name : 'Select Fan (Optional)'}
+                        <UserIcon className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                        <span className="font-medium">
+                            {selectedFan ? selectedFan.name : 'Select Fan to Personalize Captions (Optional)'}
+                        </span>
                     </span>
-                    {selectedFanId && (
-                        <button
-                            type="button"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onSelectFan(null, null);
-                            }}
-                            className="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    <div className="flex items-center gap-2">
+                        {selectedFanId && (
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onSelectFan(null, null);
+                                }}
+                                className="text-gray-400 hover:text-red-600 dark:hover:text-red-400 p-1 rounded"
+                                title="Clear selection"
+                            >
+                                <XMarkIcon className="w-4 h-4" />
+                            </button>
+                        )}
+                        <svg 
+                            className={`w-4 h-4 text-gray-400 transition-transform ${showFanGrid ? 'rotate-180' : ''}`}
+                            fill="none" 
+                            stroke="currentColor" 
+                            viewBox="0 0 24 24"
                         >
-                            <XMarkIcon className="w-4 h-4" />
-                        </button>
-                    )}
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </div>
                 </button>
 
                 {showFanGrid && (
-                    <div className="absolute z-50 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-96 overflow-y-auto">
-                        <div className="p-3 border-b border-gray-200 dark:border-gray-700">
+                    <div className="absolute z-50 mt-2 w-full bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-lg shadow-xl max-h-96 overflow-hidden">
+                        <div className="p-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
                             <div className="relative">
-                                <SearchIcon className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                                 <input
                                     type="text"
                                     value={fanSearchQuery}
                                     onChange={(e) => setFanSearchQuery(e.target.value)}
-                                    placeholder="Search fans..."
-                                    className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    placeholder="Search fans by name..."
+                                    className="w-full pl-10 pr-3 py-2.5 text-sm border-2 border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:border-primary-500 dark:focus:border-primary-500 focus:outline-none"
                                     onClick={(e) => e.stopPropagation()}
+                                    autoFocus
                                 />
                             </div>
                         </div>
                         <div className="p-2 space-y-1 max-h-64 overflow-y-auto">
                             {isLoading ? (
-                                <div className="text-center py-4 text-sm text-gray-500 dark:text-gray-400">Loading...</div>
+                                <div className="text-center py-6 text-sm text-gray-500 dark:text-gray-400">
+                                    <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600"></div>
+                                    <p className="mt-2">Loading fans...</p>
+                                </div>
                             ) : filteredFans.length === 0 ? (
-                                <div className="text-center py-4 text-sm text-gray-500 dark:text-gray-400">
-                                    {fanSearchQuery ? 'No fans found' : 'No fans yet'}
+                                <div className="text-center py-6 text-sm text-gray-500 dark:text-gray-400">
+                                    {fanSearchQuery ? (
+                                        <>
+                                            <p>No fans found matching "{fanSearchQuery}"</p>
+                                            {allowNewFan && (
+                                                <p className="text-xs mt-1">You can add a new fan below</p>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <p>No fans yet. Add one below to get started!</p>
+                                    )}
                                 </div>
                             ) : (
                                 filteredFans.map((fan) => (
@@ -174,31 +212,50 @@ export const FanSelector: React.FC<FanSelectorProps> = ({
                                             onSelectFan(fan.id, fan.name);
                                             setShowFanGrid(false);
                                         }}
-                                        className={`p-2 rounded-md cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 ${
-                                            selectedFanId === fan.id ? 'bg-primary-50 dark:bg-primary-900/20' : ''
+                                        className={`p-3 rounded-lg cursor-pointer transition-all ${
+                                            selectedFanId === fan.id 
+                                                ? 'bg-primary-100 dark:bg-primary-900/30 border-2 border-primary-500 dark:border-primary-500' 
+                                                : 'hover:bg-gray-100 dark:hover:bg-gray-700 border-2 border-transparent hover:border-gray-300 dark:hover:border-gray-600'
                                         }`}
                                     >
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-700 dark:text-primary-300 text-xs font-semibold">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${
+                                                fan.preferences?.subscriptionTier === 'VIP' 
+                                                    ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
+                                                    : fan.preferences?.subscriptionTier === 'Regular'
+                                                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                                                    : 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                                            }`}>
                                                 {getInitials(fan.name)}
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                                <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
                                                     {fan.name}
                                                 </div>
                                                 {fan.preferences?.subscriptionTier && (
-                                                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                                                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                                                         {fan.preferences.subscriptionTier}
+                                                        {fan.preferences.spendingLevel > 0 && ` • Level ${fan.preferences.spendingLevel}`}
                                                     </div>
                                                 )}
                                             </div>
+                                            {selectedFanId === fan.id && (
+                                                <div className="text-primary-600 dark:text-primary-400">
+                                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                    </svg>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 ))
                             )}
                         </div>
                         {allowNewFan && (
-                            <div className="p-3 border-t border-gray-200 dark:border-gray-700">
+                            <div className="p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+                                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                    Add New Fan:
+                                </label>
                                 <div className="flex gap-2">
                                     <input
                                         type="text"
@@ -210,14 +267,14 @@ export const FanSelector: React.FC<FanSelectorProps> = ({
                                                 handleNewFan();
                                             }
                                         }}
-                                        placeholder="Enter new fan name..."
-                                        className="flex-1 px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                        placeholder="Enter fan name..."
+                                        className="flex-1 px-3 py-2 text-sm border-2 border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:border-primary-500 dark:focus:border-primary-500 focus:outline-none"
                                         onClick={(e) => e.stopPropagation()}
                                     />
                                     <button
                                         type="button"
                                         onClick={handleNewFan}
-                                        className="px-3 py-1.5 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700"
+                                        className="px-4 py-2 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 font-medium transition-colors"
                                     >
                                         Add
                                     </button>
