@@ -183,7 +183,7 @@ export const VoiceAssistant: React.FC = () => {
       - EchoFlux.ai is currently a creator-focused AI Content Studio & Campaign Planner (offline/planning-first).
       - Do NOT claim the app provides social listening or competitor tracking in the current version.
       - Do NOT claim the app provides automated DM/comment reply automation or automatic posting.
-      - You do NOT have live web access. Be honest about uncertainty for time-sensitive questions.
+      - You HAVE live web search access via Tavily for real-time information. Use the web_search function whenever you need current information, trends, or any web-based research.
 
       COMPREHENSIVE APP KNOWLEDGE BASE:
       ${APP_KNOWLEDGE}
@@ -195,6 +195,7 @@ export const VoiceAssistant: React.FC = () => {
       - When describing navigation, tell users HOW to navigate (e.g., "Click on the Strategy option in the sidebar" or "Go to the Compose page by clicking Compose in the navigation menu").
       - DO NOT attempt to navigate for the user - only provide clear instructions on how they can navigate themselves.
       - You CAN navigate to pages programmatically when the user explicitly asks (e.g., "go to compose" or "open strategy").
+      - You have access to web_search function via Tavily for real-time information. Use it whenever you need current data, trends, news, or any web research. Always use web_search when the user asks about current events, recent trends, or anything that requires up-to-date information.
 
       FIRST GREETING:
       - When you first connect, greet them as the EchoFlux.ai voice assistant and offer help like:
@@ -256,8 +257,52 @@ export const VoiceAssistant: React.FC = () => {
 - Sharing what tends to work (best practices) and how to use the in-app trends/opportunities tools
 - Giving detailed feedback on your content ideas and strategies
 - Explaining workflows and helping you understand the full functionality of each feature
+- Performing web searches for real-time information using Tavily
 
 Just ask me how to do something or what you'd like to learn about!`;
+                  break;
+                  
+                case 'web_search':
+                  // Tavily web search for admin users
+                  const searchQuery = args?.query || args?.search || '';
+                  if (!searchQuery || typeof searchQuery !== 'string') {
+                    result = 'Error: Please provide a search query.';
+                    break;
+                  }
+                  
+                  try {
+                    const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+                    const searchRes = await fetch('/api/webSearch', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                      },
+                      body: JSON.stringify({
+                        query: searchQuery,
+                        maxResults: args?.maxResults || 5,
+                        searchDepth: args?.searchDepth || 'basic',
+                      }),
+                    });
+                    
+                    if (searchRes.ok) {
+                      const searchData = await searchRes.json();
+                      if (searchData.success && searchData.results && searchData.results.length > 0) {
+                        const resultsText = searchData.results
+                          .slice(0, 5)
+                          .map((r: any, i: number) => `${i + 1}. ${r.title}: ${r.snippet}`)
+                          .join('\n\n');
+                        result = `Web search results for "${searchQuery}":\n\n${resultsText}`;
+                      } else {
+                        result = `No results found for "${searchQuery}". ${searchData.note || ''}`;
+                      }
+                    } else {
+                      result = `Search failed: ${searchRes.status} ${searchRes.statusText}`;
+                    }
+                  } catch (searchErr: any) {
+                    console.error('[VoiceAssistant] Web search error:', searchErr);
+                    result = `Search error: ${searchErr?.message || 'Failed to perform web search'}`;
+                  }
                   break;
                   
                 default:
@@ -375,6 +420,41 @@ Just ask me how to do something or what you'd like to learn about!`;
       config: {
         responseModalities: [Modality.AUDIO],
         systemInstruction,
+        tools: [{
+          functionDeclarations: [
+            {
+              name: 'web_search',
+              description: 'Search the web for real-time information using Tavily. Use this whenever you need current information, trends, news, or any web-based research. Admin users have unlimited access to web search.',
+              parameters: {
+                type: 'object',
+                properties: {
+                  query: {
+                    type: 'string',
+                    description: 'The search query to look up on the web'
+                  },
+                  maxResults: {
+                    type: 'number',
+                    description: 'Maximum number of results to return (1-10, default: 5)'
+                  },
+                  searchDepth: {
+                    type: 'string',
+                    enum: ['basic', 'advanced'],
+                    description: 'Search depth - basic for quick results, advanced for deeper research (default: basic)'
+                  }
+                },
+                required: ['query']
+              }
+            },
+            {
+              name: 'show_help',
+              description: 'Show help information about what the voice assistant can do',
+              parameters: {
+                type: 'object',
+                properties: {}
+              }
+            }
+          ]
+        }]
       }
     });
   };

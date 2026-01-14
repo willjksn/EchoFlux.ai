@@ -38,6 +38,7 @@ import { InteractiveTour } from './components/InteractiveTour';
 import { PaymentModal } from './components/PaymentModal';
 import { Toast } from './components/Toast';
 import { UnifiedAssistant } from './components/UnifiedAssistant';
+import { VoiceAssistant } from './components/VoiceAssistant';
 import { AnnouncementBanner } from './components/AnnouncementBanner';
 import { PublicAnnouncementBanner } from './components/PublicAnnouncementBanner';
 import { Page, UserType, Plan } from './types';
@@ -853,6 +854,7 @@ const AppContent: React.FC = () => {
             <PaymentModal />
             {toast && <Toast message={toast.message} type={toast.type} />}
             <UnifiedAssistant />
+            <VoiceAssistant />
         </div>
     );
 }
