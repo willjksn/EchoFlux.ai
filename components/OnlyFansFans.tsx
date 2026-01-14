@@ -64,6 +64,18 @@ export const OnlyFansFans: React.FC = () => {
     const [expandedSessionFanId, setExpandedSessionFanId] = useState<string | null>(null);
     const [sessionHistory, setSessionHistory] = useState<Record<string, any[]>>({});
     const [isLoadingSessionHistory, setIsLoadingSessionHistory] = useState<Record<string, boolean>>({});
+    const [customContent, setCustomContent] = useState<Array<{
+        id: string;
+        title: string;
+        description?: string;
+        date: string;
+        status: 'ordered' | 'in-progress' | 'delivered' | 'cancelled';
+    }>>([]);
+    const [isLoadingCustomContent, setIsLoadingCustomContent] = useState(false);
+    const [editingCustomContentId, setEditingCustomContentId] = useState<string | null>(null);
+    const [editCustomTitle, setEditCustomTitle] = useState('');
+    const [editCustomDescription, setEditCustomDescription] = useState('');
+    const [editCustomStatus, setEditCustomStatus] = useState<'ordered' | 'in-progress' | 'delivered' | 'cancelled'>('ordered');
     const [newFanName, setNewFanName] = useState('');
     const [newFanSpendingLevel, setNewFanSpendingLevel] = useState<number>(0);
     const [newFanTier, setNewFanTier] = useState<'Free' | 'Paid'>('Free');
@@ -85,6 +97,42 @@ export const OnlyFansFans: React.FC = () => {
         timeBoundaryOnly: false,
     });
     const [isSavingFan, setIsSavingFan] = useState(false);
+
+    // Load custom content for a specific fan
+    const loadCustomContent = async (fanId: string) => {
+        if (!user?.id) return;
+        setIsLoadingCustomContent(true);
+        try {
+            const eventsSnap = await getDocs(collection(db, 'users', user.id, 'onlyfans_calendar_events'));
+            const customItems = eventsSnap.docs
+                .map(doc => {
+                    const data = doc.data();
+                    return {
+                        id: doc.id,
+                        ...data
+                    };
+                })
+                .filter((event: any) => 
+                    event.contentType === 'custom' && 
+                    event.fanId === fanId
+                )
+                .map((event: any) => ({
+                    id: event.id,
+                    title: event.title || '',
+                    description: event.description || '',
+                    date: event.date || '',
+                    status: event.customStatus || 'ordered' as 'ordered' | 'in-progress' | 'delivered' | 'cancelled'
+                }))
+                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            
+            setCustomContent(customItems);
+        } catch (error) {
+            console.error('Error loading custom content:', error);
+            showToast?.('Failed to load custom content', 'error');
+        } finally {
+            setIsLoadingCustomContent(false);
+        }
+    };
 
     // Load fans
     const loadFans = async () => {
@@ -266,6 +314,9 @@ export const OnlyFansFans: React.FC = () => {
     useEffect(() => {
         if (selectedFan) {
             loadFanActivity(selectedFan.id);
+            loadCustomContent(selectedFan.id);
+        } else {
+            setCustomContent([]);
         }
     }, [selectedFan, fans]);
 
@@ -953,6 +1004,147 @@ export const OnlyFansFans: React.FC = () => {
                             </div>
                         </div>
                     )}
+
+                    {/* Custom Content Section */}
+                    <div className="mb-4 border-t border-gray-200 dark:border-gray-700 pt-4">
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Custom Content</h3>
+                        </div>
+                        {isLoadingCustomContent ? (
+                            <div className="text-center py-4 text-gray-500 dark:text-gray-400">Loading...</div>
+                        ) : customContent.length === 0 ? (
+                            <div className="text-center py-4 text-gray-500 dark:text-gray-400 text-sm">
+                                No custom content orders yet.
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {customContent.map((item) => (
+                                    <div key={item.id} className="p-3 bg-gray-50 dark:bg-gray-900/40 rounded-lg border border-gray-200 dark:border-gray-700">
+                                        {editingCustomContentId === item.id ? (
+                                            <div className="space-y-2">
+                                                <input
+                                                    type="text"
+                                                    value={editCustomTitle}
+                                                    onChange={(e) => setEditCustomTitle(e.target.value)}
+                                                    placeholder="Title"
+                                                    className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                                                />
+                                                <textarea
+                                                    value={editCustomDescription}
+                                                    onChange={(e) => setEditCustomDescription(e.target.value)}
+                                                    placeholder="Description"
+                                                    rows={2}
+                                                    className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                                                />
+                                                <select
+                                                    value={editCustomStatus}
+                                                    onChange={(e) => setEditCustomStatus(e.target.value as 'ordered' | 'in-progress' | 'delivered' | 'cancelled')}
+                                                    className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                                                >
+                                                    <option value="ordered">Ordered</option>
+                                                    <option value="in-progress">In Progress</option>
+                                                    <option value="delivered">Delivered</option>
+                                                    <option value="cancelled">Cancelled</option>
+                                                </select>
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={async () => {
+                                                            if (!user?.id) return;
+                                                            try {
+                                                                const eventRef = doc(db, 'users', user.id, 'onlyfans_calendar_events', item.id);
+                                                                await updateDoc(eventRef, {
+                                                                    title: editCustomTitle,
+                                                                    description: editCustomDescription,
+                                                                    customStatus: editCustomStatus,
+                                                                });
+                                                                await loadCustomContent(selectedFan.id);
+                                                                setEditingCustomContentId(null);
+                                                                showToast?.('Custom content updated!', 'success');
+                                                            } catch (error) {
+                                                                console.error('Error updating custom content:', error);
+                                                                showToast?.('Failed to update custom content', 'error');
+                                                            }
+                                                        }}
+                                                        className="flex-1 px-3 py-1 bg-primary-600 text-white rounded text-sm hover:bg-primary-700"
+                                                    >
+                                                        Save
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            setEditingCustomContentId(null);
+                                                            setEditCustomTitle('');
+                                                            setEditCustomDescription('');
+                                                            setEditCustomStatus('ordered');
+                                                        }}
+                                                        className="flex-1 px-3 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div>
+                                                <div className="flex items-start justify-between">
+                                                    <div className="flex-1">
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white">{item.title}</h4>
+                                                            <span className={`text-xs px-2 py-0.5 rounded ${
+                                                                item.status === 'ordered' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' :
+                                                                item.status === 'in-progress' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' :
+                                                                item.status === 'delivered' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' :
+                                                                'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                                                            }`}>
+                                                                {item.status === 'ordered' ? 'Ordered' :
+                                                                 item.status === 'in-progress' ? 'In Progress' :
+                                                                 item.status === 'delivered' ? 'Delivered' : 'Cancelled'}
+                                                            </span>
+                                                        </div>
+                                                        {item.description && (
+                                                            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{item.description}</p>
+                                                        )}
+                                                        <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                                            {new Date(item.date).toLocaleDateString()}
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex gap-1 ml-2">
+                                                        <button
+                                                            onClick={() => {
+                                                                setEditingCustomContentId(item.id);
+                                                                setEditCustomTitle(item.title);
+                                                                setEditCustomDescription(item.description || '');
+                                                                setEditCustomStatus(item.status);
+                                                            }}
+                                                            className="p-1 text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
+                                                            title="Edit"
+                                                        >
+                                                            <EditIcon className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={async () => {
+                                                                if (!user?.id || !confirm('Are you sure you want to delete this custom content?')) return;
+                                                                try {
+                                                                    await deleteDoc(doc(db, 'users', user.id, 'onlyfans_calendar_events', item.id));
+                                                                    await loadCustomContent(selectedFan.id);
+                                                                    showToast?.('Custom content deleted', 'success');
+                                                                } catch (error) {
+                                                                    console.error('Error deleting custom content:', error);
+                                                                    showToast?.('Failed to delete custom content', 'error');
+                                                                }
+                                                            }}
+                                                            className="p-1 text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+                                                            title="Delete"
+                                                        >
+                                                            <TrashIcon className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
 
                     {/* Preferences Summary */}
                     <div className="grid grid-cols-2 gap-4 text-sm">

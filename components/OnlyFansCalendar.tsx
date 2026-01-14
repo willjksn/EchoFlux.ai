@@ -12,11 +12,14 @@ export interface OnlyFansCalendarEvent {
     title: string;
     date: string; // ISO string
     reminderType: 'post' | 'shoot'; // post = upload reminder, shoot = filming reminder
-    contentType: 'free' | 'paid'; // free or paid content
+    contentType: 'free' | 'paid' | 'custom'; // free, paid, or custom content
     description?: string;
     reminderTime?: string; // Time for the reminder (e.g., "8:00 PM")
     createdAt: string;
     userId: string;
+    customStatus?: 'ordered' | 'in-progress' | 'delivered' | 'cancelled'; // Status for custom content
+    fanId?: string; // ID of the fan this custom is for
+    fanName?: string; // Name of the fan this custom is for
 }
 
 // Combined event type for display (posts or reminders)
@@ -27,10 +30,11 @@ interface CombinedEvent {
     type: 'post' | 'reminder';
     status?: 'Draft' | 'Scheduled' | 'Published';
     reminderType?: 'post' | 'shoot';
-    contentType?: 'free' | 'paid';
+    contentType?: 'free' | 'paid' | 'custom';
     post?: Post | null;
     reminder?: OnlyFansCalendarEvent | null;
     thumbnail?: string;
+    customStatus?: 'ordered' | 'in-progress' | 'delivered' | 'cancelled';
 }
 
 const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -67,7 +71,8 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
     const [eventTitle, setEventTitle] = useState('');
     const [eventDescription, setEventDescription] = useState('');
     const [eventReminderType, setEventReminderType] = useState<'post' | 'shoot'>('post');
-    const [eventContentType, setEventContentType] = useState<'free' | 'paid'>('free');
+    const [eventContentType, setEventContentType] = useState<'free' | 'paid' | 'custom'>('free');
+    const [eventCustomStatus, setEventCustomStatus] = useState<'ordered' | 'in-progress' | 'delivered' | 'cancelled'>('ordered');
     const [eventDate, setEventDate] = useState('');
     const [eventTime, setEventTime] = useState('');
     const [selectedFanId, setSelectedFanId] = useState<string | null>(null);
@@ -134,6 +139,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                 type: 'reminder',
                 reminderType: reminder.reminderType,
                 contentType: reminder.contentType,
+                customStatus: reminder.customStatus,
                 reminder: reminder,
             });
         });
@@ -239,8 +245,11 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
             setEventDescription(reminder.description || '');
             setEventReminderType(reminder.reminderType);
             setEventContentType(reminder.contentType);
+            setEventCustomStatus(reminder.customStatus || 'ordered');
             setEventDate(new Date(reminder.date).toISOString().split('T')[0]);
             setEventTime(reminder.reminderTime || '20:00');
+            setSelectedFanId(reminder.fanId || null);
+            setSelectedFanName(reminder.fanName || null);
             setIsCreatingReminder(true);
         } else {
             // Open post modal
@@ -281,7 +290,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
             const reminderId = selectedEvent?.reminder?.id || `evt-${Date.now()}`;
             const dateTime = new Date(`${eventDate}T${eventTime || '12:00'}`);
             
-            const eventData: Omit<OnlyFansCalendarEvent, 'id'> & { fanId?: string | null; fanName?: string | null } = {
+            const eventData: Omit<OnlyFansCalendarEvent, 'id'> = {
                 title: eventTitle.trim(),
                 description: eventDescription.trim() || undefined,
                 date: dateTime.toISOString(),
@@ -290,6 +299,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                 reminderTime: eventTime || undefined,
                 createdAt: selectedEvent?.reminder?.createdAt || new Date().toISOString(),
                 userId: user.id,
+                ...(eventContentType === 'custom' ? { customStatus: eventCustomStatus } : {}),
                 ...(selectedFanId ? { fanId: selectedFanId, fanName: selectedFanName } : {}),
             };
 
@@ -333,6 +343,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
         setEventDescription('');
         setEventReminderType('post');
         setEventContentType('free');
+        setEventCustomStatus('ordered');
         setEventDate('');
         setEventTime('');
     };
@@ -670,13 +681,44 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                     if (event.type === 'post' && event.status) {
                                                         colors = statusColors[event.status] || statusColors.Draft;
                                                     } else if (event.type === 'reminder') {
-                                                        // Reminders use orange/amber color to match main calendar
-                                                        colors = {
-                                                            bg: 'bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-900/30 dark:to-amber-900/30',
-                                                            border: 'border-l-4 border-orange-500 dark:border-orange-400',
-                                                            dot: 'bg-orange-500 dark:bg-orange-400',
-                                                            text: 'text-orange-700 dark:text-orange-300'
-                                                        };
+                                                        // Custom content reminders use status-based colors
+                                                        if (event.contentType === 'custom' && event.customStatus) {
+                                                            const customStatusColors = {
+                                                                'ordered': {
+                                                                    bg: 'bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/30 dark:to-amber-900/30',
+                                                                    border: 'border-l-4 border-yellow-500 dark:border-yellow-400',
+                                                                    dot: 'bg-yellow-500 dark:bg-yellow-400',
+                                                                    text: 'text-yellow-700 dark:text-yellow-300'
+                                                                },
+                                                                'in-progress': {
+                                                                    bg: 'bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/30',
+                                                                    border: 'border-l-4 border-blue-500 dark:border-blue-400',
+                                                                    dot: 'bg-blue-500 dark:bg-blue-400',
+                                                                    text: 'text-blue-700 dark:text-blue-300'
+                                                                },
+                                                                'delivered': {
+                                                                    bg: 'bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30',
+                                                                    border: 'border-l-4 border-green-500 dark:border-green-400',
+                                                                    dot: 'bg-green-500 dark:bg-green-400',
+                                                                    text: 'text-green-700 dark:text-green-300'
+                                                                },
+                                                                'cancelled': {
+                                                                    bg: 'bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-900/30 dark:to-rose-900/30',
+                                                                    border: 'border-l-4 border-red-500 dark:border-red-400',
+                                                                    dot: 'bg-red-500 dark:bg-red-400',
+                                                                    text: 'text-red-700 dark:text-red-300'
+                                                                }
+                                                            };
+                                                            colors = customStatusColors[event.customStatus] || customStatusColors['ordered'];
+                                                        } else {
+                                                            // Regular reminders use orange/amber color
+                                                            colors = {
+                                                                bg: 'bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-900/30 dark:to-amber-900/30',
+                                                                border: 'border-l-4 border-orange-500 dark:border-orange-400',
+                                                                dot: 'bg-orange-500 dark:bg-orange-400',
+                                                                text: 'text-orange-700 dark:text-orange-300'
+                                                            };
+                                                        }
                                                     } else {
                                                         colors = statusColors.Draft;
                                                     }
@@ -1314,8 +1356,38 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                     >
                                         Paid
                                     </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setEventContentType('custom')}
+                                        className={`flex-1 px-4 py-2 rounded-md border-2 transition-colors ${
+                                            eventContentType === 'custom'
+                                                ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
+                                                : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300'
+                                        }`}
+                                    >
+                                        Custom
+                                    </button>
                                 </div>
                             </div>
+
+                            {/* Custom Status (only show when Custom is selected) */}
+                            {eventContentType === 'custom' && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Status *
+                                    </label>
+                                    <select
+                                        value={eventCustomStatus}
+                                        onChange={(e) => setEventCustomStatus(e.target.value as 'ordered' | 'in-progress' | 'delivered' | 'cancelled')}
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    >
+                                        <option value="ordered">Ordered</option>
+                                        <option value="in-progress">In Progress</option>
+                                        <option value="delivered">Delivered</option>
+                                        <option value="cancelled">Cancelled</option>
+                                    </select>
+                                </div>
+                            )}
 
                             {/* Title */}
                             <div>
