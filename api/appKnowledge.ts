@@ -660,18 +660,16 @@ Your home base showing overview of activity, upcoming content, and quick actions
 **What it includes:**
 - Profile and brand voice configuration
 - AI behavior controls (tone, explicitness)
-- Voice mode toggle
-- Voice cloning tools (for video voice-overs)
+- Customize content generation settings
 
 **How to use:**
 - Set your brand voice and tone preferences
 - Configure AI to match your style
-- Enable/disable voice assistant
 - Customize content generation settings
 
 ---
 
-### 11. Chatbot & Voice Assistant
+### 11. Chatbot
 
 **Chatbot:**
 - Text-based assistant accessible to all users
@@ -679,14 +677,7 @@ Your home base showing overview of activity, upcoming content, and quick actions
 - Ask questions about features, workflows, or get help
 - Uses this knowledge base for accurate answers
 
-**Voice Assistant:**
-- Real-time audio assistant (Pro/Elite plans)
-- Enable in Settings → Voice Mode
-- Speak questions and get voice responses
-- Can navigate to pages and help with content creation
-- Uses same knowledge base as Chatbot
-
-**Both assistants can:**
+**The chatbot can:**
 - Explain any feature in detail
 - Provide step-by-step instructions
 - Help brainstorm content ideas

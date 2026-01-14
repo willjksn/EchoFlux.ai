@@ -37,7 +37,6 @@ const allCreatorTiers = [
             'Link-in-Bio Builder (5 links)',
             'Media Library',
             'Visual Content Calendar',
-            'AI Voice Assistant',
             '5 GB Storage'
         ],
         isRecommended: true
@@ -56,7 +55,6 @@ const allCreatorTiers = [
             'Link-in-Bio Builder (unlimited links)',
             'Media Library',
             'Visual Content Calendar',
-            'AI Voice Assistant',
             '10 GB Storage',
         ],
         isRecommended: false

@@ -29,8 +29,15 @@ preferences?: {
 ```
 
 **Solution**: `subscriptionTier` indicates subscription status:
-- **Free** = Free plan (not subscribed)
-- **Paid** = Subscribed (paid subscriber)
+- **Free** = Subscribed to free plan only (free plan shows limited content, may have PPVs to unlock)
+- **Paid** = Subscribed to paid plan (may also be subscribed to free plan - most fans subscribe to both)
+
+**Important Context**: 
+- Most creators have both a free plan and a paid plan
+- Most fans subscribe to both plans
+- Free plans show limited content and may have PPVs to unlock
+- Creators always try to convert free plan subscribers to paid plan for exclusive content
+- Fans can be on both free and paid plans simultaneously
 
 **VIP Flag**: Separate `isVIP` boolean indicates fans who get special treatment:
 - Big spenders (spendingLevel >= 4)
@@ -105,10 +112,12 @@ preferences?: {
 ```
 
 **Subscription Status Inference**:
-- **Free** tier → "Free Plan" (not subscribed)
-- **Paid** tier → "Subscribed" (paid subscriber)
+- **Free** tier → "Free Plan" (subscribed to free plan only - limited content, may have PPVs)
+- **Paid** tier → "Paid Plan" (subscribed to paid plan - may also be on free plan)
 - **isVIP** flag → Indicates special treatment (big spenders, loyal fans, manually marked)
 - No activity in 30+ days → "Inactive" (regardless of tier)
+
+**Note**: Most fans subscribe to both free and paid plans. The tier indicates their primary/current subscription level.
 
 ### 2. Add "Free to Paid Plan" Goal Option
 
