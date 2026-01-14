@@ -652,9 +652,6 @@ Just ask me how to do something or what you'd like to learn about!`;
     setMode(newMode);
   };
 
-  // Check if user is admin
-  const isAdmin = (user as any)?.role === 'Admin';
-  
   // Hide voice mode for non-admin users
   if (mode === 'voice' && !isAdmin) {
     return null;
