@@ -854,7 +854,8 @@ const AppContent: React.FC = () => {
             <PaymentModal />
             {toast && <Toast message={toast.message} type={toast.type} />}
             <UnifiedAssistant />
-            <VoiceAssistant />
+            {/* VoiceAssistant is now integrated into UnifiedAssistant for admins - only show separate button if needed for non-admins */}
+            {user && (user as any)?.role !== 'Admin' && <VoiceAssistant />}
         </div>
     );
 }

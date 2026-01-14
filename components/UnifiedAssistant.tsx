@@ -56,6 +56,10 @@ type AssistantMode = 'text' | 'voice';
 
 export const UnifiedAssistant: React.FC = () => {
   const { user, showToast, settings, setActivePage } = useAppContext();
+  
+  // Check if user is admin
+  const isAdmin = (user as any)?.role === 'Admin';
+  
   const [mode, setMode] = useState<AssistantMode>('text');
   const [isOpen, setIsOpen] = useState(false);
   
@@ -304,7 +308,7 @@ export const UnifiedAssistant: React.FC = () => {
       - EchoFlux.ai is currently a creator-focused AI Content Studio & Campaign Planner (offline/planning-first).
       - Do NOT claim the app provides social listening or competitor tracking in the current version.
       - Do NOT claim the app provides automated DM/comment reply automation or automatic posting.
-      - You do NOT have live web access. Be honest about uncertainty for time-sensitive questions.
+      ${isAdmin ? '- You HAVE live web search access via Tavily for real-time information. Use the web_search function whenever you need current information, trends, or any web-based research.' : '- You do NOT have live web access. Be honest about uncertainty for time-sensitive questions.'}
 
       ${adminRestriction}
 
@@ -318,6 +322,7 @@ export const UnifiedAssistant: React.FC = () => {
       - When describing navigation, tell users HOW to navigate (e.g., "Click on the Strategy option in the sidebar" or "Go to the Compose page by clicking Compose in the navigation menu").
       - DO NOT attempt to navigate for the user - only provide clear instructions on how they can navigate themselves.
       - You CAN navigate to pages programmatically when the user explicitly asks (e.g., "go to compose" or "open strategy").
+      ${isAdmin ? '- You have access to web_search function via Tavily for real-time information. Use it whenever you need current data, trends, news, or any web research. Always use web_search when the user asks about current events, recent trends, or anything that requires up-to-date information.' : ''}
 
       User is Admin: ${isAdmin}
 
@@ -400,9 +405,57 @@ export const UnifiedAssistant: React.FC = () => {
 - Answering questions about social media strategy, content creation, marketing, and best practices
 - Sharing what tends to work (best practices) and how to use the in-app trends/opportunities tools
 - Giving detailed feedback on your content ideas and strategies
-- Explaining workflows and helping you understand the full functionality of each feature
+- Explaining workflows and helping you understand the full functionality of each feature${isAdmin ? '\n- Performing web searches for real-time information using Tavily' : ''}
 
 Just ask me how to do something or what you'd like to learn about!`;
+                  break;
+                  
+                case 'web_search':
+                  // Tavily web search for admin users only
+                  if (!isAdmin) {
+                    result = 'Error: Web search is only available for Admin users.';
+                    break;
+                  }
+                  
+                  const searchQuery = args?.query || args?.search || '';
+                  if (!searchQuery || typeof searchQuery !== 'string') {
+                    result = 'Error: Please provide a search query.';
+                    break;
+                  }
+                  
+                  try {
+                    const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+                    const searchRes = await fetch('/api/webSearch', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                      },
+                      body: JSON.stringify({
+                        query: searchQuery,
+                        maxResults: args?.maxResults || 5,
+                        searchDepth: args?.searchDepth || 'basic',
+                      }),
+                    });
+                    
+                    if (searchRes.ok) {
+                      const searchData = await searchRes.json();
+                      if (searchData.success && searchData.results && searchData.results.length > 0) {
+                        const resultsText = searchData.results
+                          .slice(0, 5)
+                          .map((r: any, i: number) => `${i + 1}. ${r.title}: ${r.snippet}`)
+                          .join('\n\n');
+                        result = `Web search results for "${searchQuery}":\n\n${resultsText}`;
+                      } else {
+                        result = `No results found for "${searchQuery}". ${searchData.note || ''}`;
+                      }
+                    } else {
+                      result = `Search failed: ${searchRes.status} ${searchRes.statusText}`;
+                    }
+                  } catch (searchErr: any) {
+                    console.error('[UnifiedAssistant] Web search error:', searchErr);
+                    result = `Search error: ${searchErr?.message || 'Failed to perform web search'}`;
+                  }
                   break;
                   
                 default:
@@ -519,6 +572,43 @@ Just ask me how to do something or what you'd like to learn about!`;
       config: {
         responseModalities: [Modality.AUDIO],
         systemInstruction,
+        ...(isAdmin ? {
+          tools: [{
+            functionDeclarations: [
+              {
+                name: 'web_search',
+                description: 'Search the web for real-time information using Tavily. Use this whenever you need current information, trends, news, or any web-based research. Admin users have unlimited access to web search.',
+                parameters: {
+                  type: 'object',
+                  properties: {
+                    query: {
+                      type: 'string',
+                      description: 'The search query to look up on the web'
+                    },
+                    maxResults: {
+                      type: 'number',
+                      description: 'Maximum number of results to return (1-10, default: 5)'
+                    },
+                    searchDepth: {
+                      type: 'string',
+                      enum: ['basic', 'advanced'],
+                      description: 'Search depth - basic for quick results, advanced for deeper research (default: basic)'
+                    }
+                  },
+                  required: ['query']
+                }
+              },
+              {
+                name: 'show_help',
+                description: 'Show help information about what the voice assistant can do',
+                parameters: {
+                  type: 'object',
+                  properties: {}
+                }
+              }
+            ]
+          }]
+        } : {})
       }
     });
 
@@ -562,8 +652,11 @@ Just ask me how to do something or what you'd like to learn about!`;
     setMode(newMode);
   };
 
-  // Hide for Free plan users (voice mode only)
-  if (mode === 'voice' && user?.plan === 'Free') {
+  // Check if user is admin
+  const isAdmin = (user as any)?.role === 'Admin';
+  
+  // Hide voice mode for non-admin users
+  if (mode === 'voice' && !isAdmin) {
     return null;
   }
 
@@ -584,31 +677,32 @@ Just ask me how to do something or what you'd like to learn about!`;
         <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-bold text-gray-900 dark:text-white">EchoFlux.ai Assistant</h3>
           <div className="flex items-center gap-2">
-            {/* Mode Toggle */}
-            <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-              <button
-                onClick={() => handleModeSwitch('text')}
-                className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
-                  mode === 'text'
-                    ? 'bg-primary-600 text-white'
-                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
-                }`}
-              >
-                Text
-              </button>
-              <button
-                onClick={() => handleModeSwitch('voice')}
-                disabled={user?.plan === 'Free'}
-                className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
-                  mode === 'voice'
-                    ? 'bg-primary-600 text-white'
-                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
-                } ${user?.plan === 'Free' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                title={user?.plan === 'Free' ? 'Voice mode requires Pro or Elite plan' : 'Switch to voice mode'}
-              >
-                Voice
-              </button>
-            </div>
+            {/* Mode Toggle - Only show for admins */}
+            {isAdmin && (
+              <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                <button
+                  onClick={() => handleModeSwitch('text')}
+                  className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
+                    mode === 'text'
+                      ? 'bg-primary-600 text-white'
+                      : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+                  }`}
+                >
+                  Text
+                </button>
+                <button
+                  onClick={() => handleModeSwitch('voice')}
+                  className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
+                    mode === 'voice'
+                      ? 'bg-primary-600 text-white'
+                      : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+                  }`}
+                  title="Switch to voice mode"
+                >
+                  Voice
+                </button>
+              </div>
+            )}
             <button 
               onClick={() => {
                 if (mode === 'voice' && (isSpeaking || isConnecting || isListening)) {
@@ -748,11 +842,6 @@ Just ask me how to do something or what you'd like to learn about!`;
               >
                 {showTranscript ? 'Hide' : 'Show'} Transcript
               </button>
-              {user?.plan === 'Free' && (
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Voice mode requires Pro or Elite plan
-                </p>
-              )}
             </div>
           </>
         )}
