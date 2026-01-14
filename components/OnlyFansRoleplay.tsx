@@ -1006,6 +1006,18 @@ NATURAL PERSONALIZATION GUIDELINES:
                     prompt: `Write a LONG-FORM, DETAILED, explicit OnlyFans-style body rating from the creator's perspective.
 ${fanContext}
 
+🎯 NATURAL CREATOR LANGUAGE & SLANG:
+- Use abbreviations and slang that creators ACTUALLY use on OnlyFans/Fansly/Fanvue naturally
+- Common abbreviations: PPV, DM/DMs, sub/subs, custom/customs, unlock/unlocks, tip/tips, OF (OnlyFans)
+- Use casual terms naturally: "babe", "love", "hun", "baby" when appropriate - but don't overuse
+- Write like a REAL CREATOR would text/message - casual, authentic, human, NOT formal or corporate
+- Mix full words and abbreviations naturally - don't force abbreviations, use them when they feel right
+- Example natural: "Hey babe! Send me a pic in my DMs and I'll rate it 💕" (sounds human)
+- Example forced: "Hello subscriber. Please send me a photograph in your Direct Messages for a rating" (sounds AI)
+- Vary your language - sometimes use "sub", sometimes "subscriber", sometimes "fan" - natural variation
+- Sound like you're texting a friend, not writing a business email
+- Use platform slang organically - it should feel natural, not like you're checking off a list
+
 🚨 CRITICAL - EXPLICIT CONTENT PLATFORM 🚨
 - This is for premium creator platforms (OnlyFans, Fansly, Fanvue & more) that support EXPLICIT adult content
 - Use EXPLICIT, UNCENSORED, RAW, and BOLD language
