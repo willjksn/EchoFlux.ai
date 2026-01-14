@@ -178,11 +178,11 @@ export const OnlyFansFans: React.FC = () => {
     };
 
     // Load session history from database
-    const loadSessionHistory = async (fanId: string) => {
+    const loadSessionHistory = async (fanId: string, forceExpand: boolean = false) => {
         if (!user?.id) return;
         
-        // If already loaded, just toggle
-        if (sessionHistory[fanId]) {
+        // If already loaded, just toggle (unless forceExpand is true)
+        if (sessionHistory[fanId] && !forceExpand) {
             setExpandedSessionFanId(expandedSessionFanId === fanId ? null : fanId);
             return;
         }
@@ -212,6 +212,7 @@ export const OnlyFansFans: React.FC = () => {
             });
             
             setSessionHistory({ ...sessionHistory, [fanId]: sessions });
+            // Always expand when loading (or force expanding)
             setExpandedSessionFanId(fanId);
         } catch (error) {
             console.error('Error loading session history:', error);
@@ -784,11 +785,21 @@ export const OnlyFansFans: React.FC = () => {
                                             <div className="mt-2 space-y-1">
                                                 {prefs.totalSessions !== undefined && prefs.totalSessions > 0 && (
                                                     <button
-                                                        onClick={(e) => {
+                                                        onClick={async (e) => {
                                                             e.stopPropagation();
-                                                            loadSessionHistory(fan.id);
+                                                            // Select the fan first if not already selected
+                                                            if (!isSelected) {
+                                                                setSelectedFan(fan);
+                                                                // Wait a moment for the selection to take effect, then load sessions
+                                                                setTimeout(() => {
+                                                                    loadSessionHistory(fan.id, true);
+                                                                }, 100);
+                                                            } else {
+                                                                // Fan already selected, just load/expand sessions
+                                                                loadSessionHistory(fan.id, true);
+                                                            }
                                                         }}
-                                                        className="flex items-center gap-2 text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 cursor-pointer"
+                                                        className="flex items-center gap-2 text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 cursor-pointer underline"
                                                     >
                                                         <span className="font-medium">{prefs.totalSessions}</span>
                                                         <span>sessions</span>
