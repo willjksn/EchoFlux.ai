@@ -412,7 +412,7 @@ ${subscriptionStatus === 'Subscribed'
 2. **Roleplay Scenarios**:
    - Monetization moments match fan status
    - Subscribed fans get PPV/custom CTAs
-   - Free plan fans get upgrade CTAs
+   - Free plan fans can get upgrade CTAs or PPV CTAs (many creators have free pages with PPV unlocks)
    - Ending CTAs are appropriate
 
 3. **Chat/Sexting Session**:
