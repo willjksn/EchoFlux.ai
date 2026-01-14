@@ -683,30 +683,31 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                     } else if (event.type === 'reminder') {
                                                         // Custom content reminders use status-based colors
                                                         if (event.contentType === 'custom' && event.customStatus) {
+                                                            // Use distinct colors for custom reminders (avoid post colors)
                                                             const customStatusColors = {
                                                                 'ordered': {
-                                                                    bg: 'bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/30 dark:to-amber-900/30',
-                                                                    border: 'border-l-4 border-yellow-500 dark:border-yellow-400',
-                                                                    dot: 'bg-yellow-500 dark:bg-yellow-400',
-                                                                    text: 'text-yellow-700 dark:text-yellow-300'
+                                                                    bg: 'bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-900/25 dark:to-purple-900/25',
+                                                                    border: 'border-l-4 border-violet-500 dark:border-violet-400',
+                                                                    dot: 'bg-violet-500 dark:bg-violet-400',
+                                                                    text: 'text-violet-700 dark:text-violet-300'
                                                                 },
                                                                 'in-progress': {
-                                                                    bg: 'bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/30',
-                                                                    border: 'border-l-4 border-blue-500 dark:border-blue-400',
-                                                                    dot: 'bg-blue-500 dark:bg-blue-400',
-                                                                    text: 'text-blue-700 dark:text-blue-300'
+                                                                    bg: 'bg-gradient-to-r from-cyan-50 to-teal-50 dark:from-cyan-900/25 dark:to-teal-900/25',
+                                                                    border: 'border-l-4 border-teal-500 dark:border-teal-400',
+                                                                    dot: 'bg-teal-500 dark:bg-teal-400',
+                                                                    text: 'text-teal-700 dark:text-teal-300'
                                                                 },
                                                                 'delivered': {
-                                                                    bg: 'bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30',
-                                                                    border: 'border-l-4 border-green-500 dark:border-green-400',
-                                                                    dot: 'bg-green-500 dark:bg-green-400',
-                                                                    text: 'text-green-700 dark:text-green-300'
+                                                                    bg: 'bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/25 dark:to-orange-900/25',
+                                                                    border: 'border-l-4 border-amber-500 dark:border-amber-400',
+                                                                    dot: 'bg-amber-500 dark:bg-amber-400',
+                                                                    text: 'text-amber-700 dark:text-amber-300'
                                                                 },
                                                                 'cancelled': {
-                                                                    bg: 'bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-900/30 dark:to-rose-900/30',
-                                                                    border: 'border-l-4 border-red-500 dark:border-red-400',
-                                                                    dot: 'bg-red-500 dark:bg-red-400',
-                                                                    text: 'text-red-700 dark:text-red-300'
+                                                                    bg: 'bg-gradient-to-r from-rose-50 to-pink-50 dark:from-rose-900/25 dark:to-pink-900/25',
+                                                                    border: 'border-l-4 border-rose-500 dark:border-rose-400',
+                                                                    dot: 'bg-rose-500 dark:bg-rose-400',
+                                                                    text: 'text-rose-700 dark:text-rose-300'
                                                                 }
                                                             };
                                                             colors = customStatusColors[event.customStatus] || customStatusColors['ordered'];
