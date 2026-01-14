@@ -85,10 +85,10 @@
 // In handleGenerateSubscriberMessages
 let subscriptionContext = '';
 if (selectedFanId && fanPreferences) {
-    // Infer subscription status from tier: Free = Free Plan, Regular/VIP = Subscribed
+    // Infer subscription status from tier: Free = Free Plan, Paid = Subscribed
     const subscriptionStatus = fanPreferences.subscriptionTier === 'Free' 
         ? 'Free Plan' 
-        : (fanPreferences.subscriptionTier === 'Regular' || fanPreferences.subscriptionTier === 'VIP')
+        : fanPreferences.subscriptionTier === 'Paid'
         ? 'Subscribed'
         : 'Unknown';
     
@@ -191,10 +191,10 @@ FAN STATUS UNKNOWN - GENERIC WIN-BACK:
 // In handleGenerateScenario
 let monetizationContext = '';
 if (selectedFanId && fanPreferences) {
-    // Infer subscription status from tier: Free = Free Plan, Regular/VIP = Subscribed
+    // Infer subscription status from tier: Free = Free Plan, Paid = Subscribed
     const subscriptionStatus = fanPreferences.subscriptionTier === 'Free' 
         ? 'Free Plan' 
-        : (fanPreferences.subscriptionTier === 'Regular' || fanPreferences.subscriptionTier === 'VIP')
+        : fanPreferences.subscriptionTier === 'Paid'
         ? 'Subscribed'
         : 'Unknown';
     
