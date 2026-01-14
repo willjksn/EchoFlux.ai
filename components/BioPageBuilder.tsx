@@ -237,21 +237,21 @@ const BioPreview: React.FC<{ config: any }> = ({ config }) => {
                                     type="email" 
                                     placeholder={config.emailCapture.placeholder} 
                                     disabled
-                                    className="w-full p-2 text-xs border rounded-md mb-2"
+                                    className="w-full p-2 text-xs border-2 rounded-md mb-2"
                                     style={{
                                         backgroundColor: emailTheme.inputBackgroundColor,
                                         color: emailTheme.inputTextColor,
-                                        borderColor: '#9ca3af',
-                                        borderWidth: '1px',
+                                        borderColor: '#6b7280',
+                                        borderWidth: '2px',
                                     }}
                                 />
                                 <button 
-                                    className="w-full py-2 text-xs font-bold rounded-md border"
+                                    className="w-full py-2 text-xs font-bold rounded-md border-2"
                                     style={{
                                         backgroundColor: emailTheme.buttonBackgroundColor,
                                         color: emailTheme.buttonTextColor,
-                                        borderColor: '#9ca3af',
-                                        borderWidth: '1px',
+                                        borderColor: '#6b7280',
+                                        borderWidth: '2px',
                                     }}
                                 >
                                     {config.emailCapture.buttonText}
@@ -1250,7 +1250,7 @@ export const BioPageBuilder: React.FC = () => {
                                     className={`flex-1 py-2 border-2 text-sm font-medium shadow-sm ${
                                         bioPage.theme.buttonStyle === style
                                             ? 'border-primary-500 bg-primary-50 text-primary-700 dark:text-primary-300 dark:bg-primary-900/20'
-                                            : 'border-gray-300 dark:border-gray-600 bg-gray-100 text-gray-800 dark:text-gray-200 dark:bg-gray-700'
+                                            : 'border-gray-400 dark:border-gray-500 bg-gray-100 text-gray-800 dark:text-gray-200 dark:bg-gray-700'
                                     } ${style === 'rounded' ? 'rounded-lg' : style === 'pill' ? 'rounded-full' : 'rounded-none'}`}
                                 >
                                     {style.charAt(0).toUpperCase() + style.slice(1)}
