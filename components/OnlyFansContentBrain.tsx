@@ -1158,6 +1158,19 @@ export const OnlyFansContentBrain: React.FC = () => {
             if (selectedFanId && fanPreferences) {
                 const contextParts = [];
                 const fanName = selectedFanName || 'this fan';
+                const subscriptionTier = fanPreferences.subscriptionTier;
+                const isVip = fanPreferences.isVIP === true;
+                if (subscriptionTier) {
+                    contextParts.push(`Subscription tier: ${subscriptionTier}`);
+                    if (subscriptionTier === 'Paid') {
+                        contextParts.push('CTA rule: Already a paid subscriber - DO NOT ask them to subscribe or upgrade. Focus on appreciation, retention, PPV unlocks, tips, customs, and VIP treatment if applicable.');
+                    } else {
+                        contextParts.push('CTA rule: Free plan - encourage them to upgrade to paid for full access. PPV unlocks are allowed for free fans.');
+                    }
+                }
+                if (isVip) {
+                    contextParts.push('VIP: Provide special treatment and priority responses.');
+                }
                 if (fanPreferences.preferredTone) contextParts.push(`Preferred tone: ${fanPreferences.preferredTone}`);
                 if (fanPreferences.communicationStyle) contextParts.push(`Communication style: ${fanPreferences.communicationStyle}`);
                 if (fanPreferences.favoriteSessionType) contextParts.push(`Favorite session type: ${fanPreferences.favoriteSessionType}`);
@@ -1608,6 +1621,19 @@ export const OnlyFansContentBrain: React.FC = () => {
             if (selectedFanId && fanPreferences) {
                 const fanName = selectedFanName || 'this fan';
                 const contextParts = [];
+                const subscriptionTier = fanPreferences.subscriptionTier;
+                const isVip = fanPreferences.isVIP === true;
+                if (subscriptionTier) {
+                    contextParts.push(`Subscription tier: ${subscriptionTier}`);
+                    if (subscriptionTier === 'Paid') {
+                        contextParts.push('CTA rule: Already a paid subscriber - DO NOT ask them to subscribe or upgrade. Focus on appreciation, retention, PPV unlocks, tips, customs, and VIP treatment if applicable.');
+                    } else {
+                        contextParts.push('CTA rule: Free plan - encourage them to upgrade to paid for full access. PPV unlocks are allowed for free fans.');
+                    }
+                }
+                if (isVip) {
+                    contextParts.push('VIP: Provide special treatment and priority responses.');
+                }
                 if (fanPreferences.preferredTone) contextParts.push(`Preferred tone: ${fanPreferences.preferredTone}`);
                 if (fanPreferences.communicationStyle) contextParts.push(`Communication style: ${fanPreferences.communicationStyle}`);
                 if (fanPreferences.favoriteSessionType) contextParts.push(`Favorite session type: ${fanPreferences.favoriteSessionType}`);
