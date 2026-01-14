@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAppContext } from './AppContext';
 import { SparklesIcon, RefreshIcon, CheckIcon, CheckCircleIcon, TrashIcon, UserIcon, StarIcon, SearchIcon, XMarkIcon } from './icons/UIIcons';
 import { OnlyFansSextingSession } from './OnlyFansSextingSession';
+import { FanSelector } from './FanSelector';
 import { auth, db } from '../firebaseConfig';
 import { doc, getDoc, setDoc, collection, addDoc, getDocs, query, orderBy, deleteDoc, Timestamp } from 'firebase/firestore';
 import { loadEmojiSettings } from '../src/utils/loadEmojiSettings';
@@ -64,6 +65,11 @@ export const OnlyFansRoleplay: React.FC = () => {
     // Gender settings (loaded from user settings)
     const [creatorGender, setCreatorGender] = useState('');
     const [targetAudienceGender, setTargetAudienceGender] = useState('');
+    
+    // Fan selection state (shared across all tabs)
+    const [selectedFanId, setSelectedFanId] = useState<string | null>(null);
+    const [selectedFanName, setSelectedFanName] = useState<string | null>(null);
+    const [fanPreferences, setFanPreferences] = useState<any>(null);
 
     // Saved items state
     const [savedScenarios, setSavedScenarios] = useState<any[]>([]);
@@ -92,6 +98,29 @@ export const OnlyFansRoleplay: React.FC = () => {
         
         loadGenderSettings();
     }, [user?.id]);
+
+    // Load fan preferences when fan is selected
+    useEffect(() => {
+        const loadFanPreferences = async () => {
+            if (!user?.id || !selectedFanId) {
+                setFanPreferences(null);
+                return;
+            }
+            try {
+                const fanDoc = await getDoc(doc(db, 'users', user.id, 'onlyfans_fan_preferences', selectedFanId));
+                if (fanDoc.exists()) {
+                    const data = fanDoc.data();
+                    setFanPreferences(data);
+                } else {
+                    setFanPreferences(null);
+                }
+            } catch (error) {
+                console.error('Error loading fan preferences:', error);
+                setFanPreferences(null);
+            }
+        };
+        loadFanPreferences();
+    }, [user?.id, selectedFanId]);
 
     const roleplayTypes: RoleplayType[] = [
         'GFE (Girlfriend Experience)',
@@ -123,6 +152,43 @@ export const OnlyFansRoleplay: React.FC = () => {
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             
+            // Build fan context
+            let fanContext = '';
+            if (selectedFanId && fanPreferences) {
+                const fanName = selectedFanName || fanPreferences.name || 'this fan';
+                const contextParts = [];
+                if (fanPreferences.preferredTone) contextParts.push(`Preferred tone: ${fanPreferences.preferredTone}`);
+                if (fanPreferences.communicationStyle) contextParts.push(`Communication style: ${fanPreferences.communicationStyle}`);
+                if (fanPreferences.favoriteSessionType) contextParts.push(`Favorite session type: ${fanPreferences.favoriteSessionType}`);
+                if (fanPreferences.languagePreferences) contextParts.push(`Language preferences: ${fanPreferences.languagePreferences}`);
+                if (fanPreferences.boundaries) contextParts.push(`Boundaries: ${fanPreferences.boundaries}`);
+                if (fanPreferences.suggestedFlow) contextParts.push(`What works best: ${fanPreferences.suggestedFlow}`);
+                if (fanPreferences.pastNotes) contextParts.push(`Past notes: ${fanPreferences.pastNotes}`);
+                
+                if (contextParts.length > 0) {
+                    fanContext = `
+CRITICAL - PERSONALIZE FOR FAN: ${fanName}
+Fan Preferences:
+${contextParts.map(p => `- ${p}`).join('\n')}
+
+REQUIREMENTS:
+- Use ${fanName}'s name naturally in messages (e.g., "Hey ${fanName}...", "${fanName}, I wanted to...", etc.)
+- Match ${fanName}'s preferred tone: ${fanPreferences.preferredTone || 'their style'}
+- Use ${fanName}'s communication style: ${fanPreferences.communicationStyle || 'their preferred style'}
+- Reference ${fanName}'s favorite session type when relevant: ${fanPreferences.favoriteSessionType || 'their preferences'}
+- Make roleplay feel personal and tailored specifically for ${fanName}
+- Generate content that ${fanName} would respond to based on their preferences
+- Consider ${fanName}'s boundaries and what works best for them
+`;
+                }
+            } else if (selectedFanId && selectedFanName) {
+                fanContext = `
+CRITICAL - PERSONALIZE FOR FAN: ${selectedFanName}
+- Use ${selectedFanName}'s name naturally in messages (e.g., "Hey ${selectedFanName}...", "${selectedFanName}, I wanted to...", etc.)
+- Make roleplay feel personal and tailored specifically for ${selectedFanName}
+`;
+            }
+            
             // Load emoji settings
             const emojiSettings = await loadEmojiSettings(user.id);
             
@@ -136,6 +202,7 @@ export const OnlyFansRoleplay: React.FC = () => {
                     prompt: `Generate direct first-person messages for OnlyFans ${roleplayType} content.
                     
 Type: ${roleplayType}${creatorGender ? `\nCreator Gender: ${creatorGender}` : ''}${targetAudienceGender ? `\nTarget Audience: ${targetAudienceGender}` : ''}
+${fanContext}
 Tone: ${tone} (${scenarioTone === 'Custom' ? 'Custom tone specified' : 'Selected from presets'})
 Length: ${scenarioLength === 'Extended' ? 'Extended session (30-45 minutes, 8-12 messages with detailed progression)' : 'Long extended session (60-90 minutes, 12-20 messages with very detailed progression, multiple phases, and extensive content)'}
 Monetization Goal: Engagement and upsell
@@ -592,6 +659,42 @@ Make it detailed, consistent, explicit, and engaging for adult content monetizat
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             
+            // Build fan context
+            let fanContext = '';
+            if (selectedFanId && fanPreferences) {
+                const fanName = selectedFanName || fanPreferences.name || 'this fan';
+                const contextParts = [];
+                if (fanPreferences.preferredTone) contextParts.push(`Preferred tone: ${fanPreferences.preferredTone}`);
+                if (fanPreferences.communicationStyle) contextParts.push(`Communication style: ${fanPreferences.communicationStyle}`);
+                if (fanPreferences.favoriteSessionType) contextParts.push(`Favorite session type: ${fanPreferences.favoriteSessionType}`);
+                if (fanPreferences.languagePreferences) contextParts.push(`Language preferences: ${fanPreferences.languagePreferences}`);
+                if (fanPreferences.boundaries) contextParts.push(`Boundaries: ${fanPreferences.boundaries}`);
+                if (fanPreferences.suggestedFlow) contextParts.push(`What works best: ${fanPreferences.suggestedFlow}`);
+                if (fanPreferences.pastNotes) contextParts.push(`Past notes: ${fanPreferences.pastNotes}`);
+                
+                if (contextParts.length > 0) {
+                    fanContext = `
+CRITICAL - PERSONALIZE FOR FAN: ${fanName}
+Fan Preferences:
+${contextParts.map(p => `- ${p}`).join('\n')}
+
+REQUIREMENTS:
+- Use ${fanName}'s name naturally in prompts (e.g., "Hey ${fanName}...", "${fanName}, send me...", etc.)
+- Match ${fanName}'s preferred tone: ${fanPreferences.preferredTone || 'their style'}
+- Use ${fanName}'s communication style: ${fanPreferences.communicationStyle || 'their preferred style'}
+- Make prompts feel personal and tailored specifically for ${fanName}
+- Generate prompts that ${fanName} would respond to based on their preferences
+- Consider ${fanName}'s boundaries and what works best for them
+`;
+                }
+            } else if (selectedFanId && selectedFanName) {
+                fanContext = `
+CRITICAL - PERSONALIZE FOR FAN: ${selectedFanName}
+- Use ${selectedFanName}'s name naturally in prompts (e.g., "Hey ${selectedFanName}...", "${selectedFanName}, send me...", etc.)
+- Make prompts feel personal and tailored specifically for ${selectedFanName}
+`;
+            }
+            
             // Load emoji settings
             const emojiSettings = await loadEmojiSettings(user.id);
             
@@ -606,6 +709,7 @@ Make it detailed, consistent, explicit, and engaging for adult content monetizat
                     
 🚨 CRITICAL - GENERATE ONLY WHAT IS REQUESTED 🚨
 USER REQUEST: ${ratingPrompt}
+${fanContext}
 
 MANDATORY REQUIREMENT - READ CAREFULLY:
 - You MUST generate prompts ONLY about: ${ratingPrompt}
@@ -707,6 +811,42 @@ Format as a numbered list (1-10) with engaging, interactive, explicit prompts fr
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             
+            // Build fan context
+            let fanContext = '';
+            if (selectedFanId && fanPreferences) {
+                const fanName = selectedFanName || fanPreferences.name || 'this fan';
+                const contextParts = [];
+                if (fanPreferences.preferredTone) contextParts.push(`Preferred tone: ${fanPreferences.preferredTone}`);
+                if (fanPreferences.communicationStyle) contextParts.push(`Communication style: ${fanPreferences.communicationStyle}`);
+                if (fanPreferences.favoriteSessionType) contextParts.push(`Favorite session type: ${fanPreferences.favoriteSessionType}`);
+                if (fanPreferences.languagePreferences) contextParts.push(`Language preferences: ${fanPreferences.languagePreferences}`);
+                if (fanPreferences.boundaries) contextParts.push(`Boundaries: ${fanPreferences.boundaries}`);
+                if (fanPreferences.suggestedFlow) contextParts.push(`What works best: ${fanPreferences.suggestedFlow}`);
+                if (fanPreferences.pastNotes) contextParts.push(`Past notes: ${fanPreferences.pastNotes}`);
+                
+                if (contextParts.length > 0) {
+                    fanContext = `
+CRITICAL - PERSONALIZE FOR FAN: ${fanName}
+Fan Preferences:
+${contextParts.map(p => `- ${p}`).join('\n')}
+
+REQUIREMENTS:
+- Use ${fanName}'s name naturally in the rating (e.g., "Hey ${fanName}...", "${fanName}, let me tell you...", etc.)
+- Match ${fanName}'s preferred tone: ${fanPreferences.preferredTone || 'their style'}
+- Use ${fanName}'s communication style: ${fanPreferences.communicationStyle || 'their preferred style'}
+- Make the rating feel personal and tailored specifically for ${fanName}
+- Generate a rating that ${fanName} would respond to based on their preferences
+- Consider ${fanName}'s boundaries and what works best for them
+`;
+                }
+            } else if (selectedFanId && selectedFanName) {
+                fanContext = `
+CRITICAL - PERSONALIZE FOR FAN: ${selectedFanName}
+- Use ${selectedFanName}'s name naturally in the rating (e.g., "Hey ${selectedFanName}...", "${selectedFanName}, let me tell you...", etc.)
+- Make the rating feel personal and tailored specifically for ${selectedFanName}
+`;
+            }
+            
             // Load emoji settings
             const emojiSettings = await loadEmojiSettings(user.id);
 
@@ -718,6 +858,7 @@ Format as a numbered list (1-10) with engaging, interactive, explicit prompts fr
                 },
                 body: JSON.stringify({
                     prompt: `Write a LONG-FORM, DETAILED, explicit OnlyFans-style body rating from the creator's perspective.
+${fanContext}
 
 🚨 CRITICAL - EXPLICIT CONTENT PLATFORM 🚨
 - This is for premium creator platforms (OnlyFans, Fansly, Fanvue & more) that support EXPLICIT adult content
@@ -866,6 +1007,43 @@ CRITICAL REQUIREMENTS:
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             
+            // Build fan context
+            let fanContext = '';
+            if (selectedFanId && fanPreferences) {
+                const fanName = selectedFanName || fanPreferences.name || 'this fan';
+                const contextParts = [];
+                if (fanPreferences.preferredTone) contextParts.push(`Preferred tone: ${fanPreferences.preferredTone}`);
+                if (fanPreferences.communicationStyle) contextParts.push(`Communication style: ${fanPreferences.communicationStyle}`);
+                if (fanPreferences.favoriteSessionType) contextParts.push(`Favorite session type: ${fanPreferences.favoriteSessionType}`);
+                if (fanPreferences.languagePreferences) contextParts.push(`Language preferences: ${fanPreferences.languagePreferences}`);
+                if (fanPreferences.boundaries) contextParts.push(`Boundaries: ${fanPreferences.boundaries}`);
+                if (fanPreferences.suggestedFlow) contextParts.push(`What works best: ${fanPreferences.suggestedFlow}`);
+                if (fanPreferences.pastNotes) contextParts.push(`Past notes: ${fanPreferences.pastNotes}`);
+                
+                if (contextParts.length > 0) {
+                    fanContext = `
+CRITICAL - PERSONALIZE FOR FAN: ${fanName}
+Fan Preferences:
+${contextParts.map(p => `- ${p}`).join('\n')}
+
+REQUIREMENTS:
+- Use ${fanName}'s name naturally in post ideas when relevant (e.g., "Hey ${fanName}...", "${fanName}, what do you think...", etc.)
+- Match ${fanName}'s preferred tone: ${fanPreferences.preferredTone || 'their style'}
+- Use ${fanName}'s communication style: ${fanPreferences.communicationStyle || 'their preferred style'}
+- Reference ${fanName}'s favorite session type when relevant: ${fanPreferences.favoriteSessionType || 'their preferences'}
+- Make post ideas feel personal and tailored specifically for ${fanName}
+- Generate ideas that ${fanName} would respond to based on their preferences
+- Consider ${fanName}'s boundaries and what works best for them
+`;
+                }
+            } else if (selectedFanId && selectedFanName) {
+                fanContext = `
+CRITICAL - PERSONALIZE FOR FAN: ${selectedFanName}
+- Use ${selectedFanName}'s name naturally in post ideas when relevant (e.g., "Hey ${selectedFanName}...", "${selectedFanName}, what do you think...", etc.)
+- Make post ideas feel personal and tailored specifically for ${selectedFanName}
+`;
+            }
+            
             // Load emoji settings for interactive ideas
             const emojiSettings = await loadEmojiSettings(user.id);
             
@@ -879,6 +1057,7 @@ CRITICAL REQUIREMENTS:
                     prompt: `Generate 10 creative interactive post ideas for OnlyFans, Fansly, Fanvue & more that encourage audience participation.
 
 Focus: ${interactivePrompt}${creatorGender ? `\nCreator Gender: ${creatorGender}` : ''}${targetAudienceGender ? `\nTarget Audience: ${targetAudienceGender}` : ''}
+${fanContext}
 
 ${creatorGender && targetAudienceGender ? `IMPORTANT - GENDER CONTEXT:
 - Creator is ${creatorGender} creating content for ${targetAudienceGender === 'Both' ? 'both male and female' : targetAudienceGender === 'All' ? 'all audiences' : targetAudienceGender.toLowerCase()} audiences
@@ -1323,6 +1502,32 @@ Format as a numbered list with detailed post concepts including captions and eng
                             Generate Roleplay Scenario
                         </h2>
                         <div className="space-y-4">
+                            {/* Fan Selector */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Personalize for Fan (Optional):
+                                </label>
+                                <FanSelector
+                                    selectedFanId={selectedFanId}
+                                    onSelectFan={(fanId, fanName) => {
+                                        setSelectedFanId(fanId);
+                                        setSelectedFanName(fanName);
+                                    }}
+                                    allowNewFan={true}
+                                    compact={true}
+                                />
+                                {selectedFanId && fanPreferences && (
+                                    <div className="mt-3 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                                        <div className="text-xs text-purple-700 dark:text-purple-300">
+                                            <p className="font-semibold mb-1">Fan Preferences Loaded:</p>
+                                            {fanPreferences.preferredTone && <p>• Tone: {fanPreferences.preferredTone}</p>}
+                                            {fanPreferences.communicationStyle && <p>• Style: {fanPreferences.communicationStyle}</p>}
+                                            {fanPreferences.favoriteSessionType && <p>• Favorite: {fanPreferences.favoriteSessionType}</p>}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                            
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Roleplay Type
@@ -1778,6 +1983,32 @@ Format as a numbered list with detailed post concepts including captions and eng
                         </h2>
                         
                         <div className="space-y-4">
+                            {/* Fan Selector */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Personalize for Fan (Optional):
+                                </label>
+                                <FanSelector
+                                    selectedFanId={selectedFanId}
+                                    onSelectFan={(fanId, fanName) => {
+                                        setSelectedFanId(fanId);
+                                        setSelectedFanName(fanName);
+                                    }}
+                                    allowNewFan={true}
+                                    compact={true}
+                                />
+                                {selectedFanId && fanPreferences && (
+                                    <div className="mt-3 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                                        <div className="text-xs text-purple-700 dark:text-purple-300">
+                                            <p className="font-semibold mb-1">Fan Preferences Loaded:</p>
+                                            {fanPreferences.preferredTone && <p>• Tone: {fanPreferences.preferredTone}</p>}
+                                            {fanPreferences.communicationStyle && <p>• Style: {fanPreferences.communicationStyle}</p>}
+                                            {fanPreferences.favoriteSessionType && <p>• Favorite: {fanPreferences.favoriteSessionType}</p>}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                            
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     What kind of rating prompts do you want?
@@ -1816,6 +2047,32 @@ Format as a numbered list with detailed post concepts including captions and eng
                         </h2>
                         
                         <div className="space-y-4">
+                            {/* Fan Selector */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Personalize for Fan (Optional):
+                                </label>
+                                <FanSelector
+                                    selectedFanId={selectedFanId}
+                                    onSelectFan={(fanId, fanName) => {
+                                        setSelectedFanId(fanId);
+                                        setSelectedFanName(fanName);
+                                    }}
+                                    allowNewFan={true}
+                                    compact={true}
+                                />
+                                {selectedFanId && fanPreferences && (
+                                    <div className="mt-3 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                                        <div className="text-xs text-purple-700 dark:text-purple-300">
+                                            <p className="font-semibold mb-1">Fan Preferences Loaded:</p>
+                                            {fanPreferences.preferredTone && <p>• Tone: {fanPreferences.preferredTone}</p>}
+                                            {fanPreferences.communicationStyle && <p>• Style: {fanPreferences.communicationStyle}</p>}
+                                            {fanPreferences.favoriteSessionType && <p>• Favorite: {fanPreferences.favoriteSessionType}</p>}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                            
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Describe the body or body part you want to rate in detail
@@ -2008,6 +2265,32 @@ Format as a numbered list with detailed post concepts including captions and eng
                         </h2>
                         
                         <div className="space-y-4">
+                            {/* Fan Selector */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Personalize for Fan (Optional):
+                                </label>
+                                <FanSelector
+                                    selectedFanId={selectedFanId}
+                                    onSelectFan={(fanId, fanName) => {
+                                        setSelectedFanId(fanId);
+                                        setSelectedFanName(fanName);
+                                    }}
+                                    allowNewFan={true}
+                                    compact={true}
+                                />
+                                {selectedFanId && fanPreferences && (
+                                    <div className="mt-3 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                                        <div className="text-xs text-purple-700 dark:text-purple-300">
+                                            <p className="font-semibold mb-1">Fan Preferences Loaded:</p>
+                                            {fanPreferences.preferredTone && <p>• Tone: {fanPreferences.preferredTone}</p>}
+                                            {fanPreferences.communicationStyle && <p>• Style: {fanPreferences.communicationStyle}</p>}
+                                            {fanPreferences.favoriteSessionType && <p>• Favorite: {fanPreferences.favoriteSessionType}</p>}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                            
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     What kind of interactive posts are you looking for?

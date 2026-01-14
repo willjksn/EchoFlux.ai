@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from './AppContext';
 import { SparklesIcon, RefreshIcon, CopyIcon, CheckIcon, XMarkIcon, UserIcon, ClockIcon, PlayIcon, PauseIcon, StopIcon, TrashIcon } from './icons/UIIcons';
+import { FanSelector } from './FanSelector';
 import { auth, db } from '../firebaseConfig';
 import { doc, getDoc, collection, addDoc, query, orderBy, limit, getDocs, Timestamp, updateDoc, setDoc } from 'firebase/firestore';
 
@@ -55,6 +56,9 @@ export const OnlyFansSextingSession: React.FC = () => {
     const [sessions, setSessions] = useState<Session[]>([]);
     const [fans, setFans] = useState<Fan[]>([]);
     const [selectedFan, setSelectedFan] = useState<Fan | null>(null);
+    const [selectedFanId, setSelectedFanId] = useState<string | null>(null);
+    const [selectedFanName, setSelectedFanName] = useState<string | null>(null);
+    const [fanPreferences, setFanPreferences] = useState<any>(null);
     const [roleplayType, setRoleplayType] = useState<RoleplayType>('GFE (Girlfriend Experience)');
     const [customRoleplay, setCustomRoleplay] = useState('');
     const [tone, setTone] = useState<Tone>('Teasing');
@@ -69,6 +73,36 @@ export const OnlyFansSextingSession: React.FC = () => {
     useEffect(() => {
         loadFans();
     }, [user?.id]);
+
+    // Load fan preferences when fan is selected
+    useEffect(() => {
+        const loadFanPreferences = async () => {
+            if (!user?.id || !selectedFanId) {
+                setFanPreferences(null);
+                return;
+            }
+            try {
+                const fanDoc = await getDoc(doc(db, 'users', user.id, 'onlyfans_fan_preferences', selectedFanId));
+                if (fanDoc.exists()) {
+                    const data = fanDoc.data();
+                    setFanPreferences(data);
+                    // Auto-apply fan preferences
+                    if (data.favoriteSessionType && !selectedFan) {
+                        setRoleplayType(data.favoriteSessionType as RoleplayType || 'GFE (Girlfriend Experience)');
+                    }
+                    if (data.preferredTone) {
+                        setTone(data.preferredTone as Tone || 'Teasing');
+                    }
+                } else {
+                    setFanPreferences(null);
+                }
+            } catch (error) {
+                console.error('Error loading fan preferences:', error);
+                setFanPreferences(null);
+            }
+        };
+        loadFanPreferences();
+    }, [user?.id, selectedFanId]);
 
     // Auto-scroll to bottom when messages change
     useEffect(() => {
@@ -110,8 +144,8 @@ export const OnlyFansSextingSession: React.FC = () => {
 
         const newSession: Session = {
             id: `session-${Date.now()}`,
-            fanId: selectedFan?.id,
-            fanName: selectedFan?.name,
+            fanId: selectedFanId || selectedFan?.id,
+            fanName: selectedFanName || selectedFan?.name,
             roleplayType: selectedRoleplay as RoleplayType,
             tone,
             status: 'active',
@@ -135,26 +169,54 @@ export const OnlyFansSextingSession: React.FC = () => {
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
 
-            // Load fan context if available
+            // Build comprehensive fan context if available
             let fanContext = '';
-            if (session.fanId) {
+            const currentFanId = session.fanId;
+            const currentFanName = session.fanName;
+            const currentFanPrefs = fanPreferences || (currentFanId ? await (async () => {
                 try {
-                    const fanDoc = await getDoc(doc(db, 'users', user.id, 'onlyfans_fan_preferences', session.fanId));
-                    if (fanDoc.exists()) {
-                        const fanData = fanDoc.data();
-                        fanContext = `
-Fan Context:
-- Name: ${fanData.name || 'Unknown'}
-- Favorite Session Type: ${fanData.favoriteSessionType || 'Not specified'}
-- Preferred Tone: ${fanData.preferredTone || 'Not specified'}
-- Communication Style: ${fanData.communicationStyle || 'Not specified'}
-- Past Notes: ${fanData.pastNotes || 'None'}
-- Total Sessions: ${fanData.totalSessions || 0}
-`;
-                    }
+                    const fanDoc = await getDoc(doc(db, 'users', user.id, 'onlyfans_fan_preferences', currentFanId));
+                    return fanDoc.exists() ? fanDoc.data() : null;
                 } catch (e) {
-                    console.warn('Failed to load fan context:', e);
+                    return null;
                 }
+            })() : null);
+
+            if (currentFanId && currentFanPrefs) {
+                const fanName = currentFanName || currentFanPrefs.name || 'this fan';
+                const contextParts = [];
+                if (currentFanPrefs.preferredTone) contextParts.push(`Preferred tone: ${currentFanPrefs.preferredTone}`);
+                if (currentFanPrefs.communicationStyle) contextParts.push(`Communication style: ${currentFanPrefs.communicationStyle}`);
+                if (currentFanPrefs.favoriteSessionType) contextParts.push(`Favorite session type: ${currentFanPrefs.favoriteSessionType}`);
+                if (currentFanPrefs.languagePreferences) contextParts.push(`Language preferences: ${currentFanPrefs.languagePreferences}`);
+                if (currentFanPrefs.boundaries) contextParts.push(`Boundaries: ${currentFanPrefs.boundaries}`);
+                if (currentFanPrefs.suggestedFlow) contextParts.push(`What works best: ${currentFanPrefs.suggestedFlow}`);
+                if (currentFanPrefs.pastNotes) contextParts.push(`Past notes: ${currentFanPrefs.pastNotes}`);
+                if (currentFanPrefs.totalSessions) contextParts.push(`Total sessions: ${currentFanPrefs.totalSessions}`);
+                
+                if (contextParts.length > 0) {
+                    fanContext = `
+CRITICAL - PERSONALIZE FOR FAN: ${fanName}
+Fan Preferences:
+${contextParts.map(p => `- ${p}`).join('\n')}
+
+REQUIREMENTS:
+- Use ${fanName}'s name naturally in suggestions (e.g., "Hey ${fanName}...", "${fanName}, I wanted to...", etc.)
+- Match ${fanName}'s preferred tone: ${currentFanPrefs.preferredTone || 'their style'}
+- Use ${fanName}'s communication style: ${currentFanPrefs.communicationStyle || 'their preferred style'}
+- Reference ${fanName}'s favorite session type when relevant: ${currentFanPrefs.favoriteSessionType || 'their preferences'}
+- Make suggestions feel personal and tailored specifically for ${fanName}
+- Generate suggestions that ${fanName} would respond to based on their preferences
+- Consider ${fanName}'s boundaries and what works best for them
+`;
+                }
+            } else if (currentFanId && currentFanName) {
+                // Fan selected but preferences not loaded yet - still use their name
+                fanContext = `
+CRITICAL - PERSONALIZE FOR FAN: ${currentFanName}
+- Use ${currentFanName}'s name naturally in suggestions (e.g., "Hey ${currentFanName}...", "${currentFanName}, I wanted to...", etc.)
+- Make suggestions feel personal and tailored specifically for ${currentFanName}
+`;
             }
 
             // Load emoji settings from user data
@@ -562,30 +624,30 @@ Fan Context:
                 {/* Fan Selection */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Select Fan (Optional):
+                        Personalize for Fan (Optional):
                     </label>
-                    <select
-                        value={selectedFan?.id || ''}
-                        onChange={(e) => {
-                            const fan = fans.find(f => f.id === e.target.value);
+                    <FanSelector
+                        selectedFanId={selectedFanId}
+                        onSelectFan={(fanId, fanName) => {
+                            setSelectedFanId(fanId);
+                            setSelectedFanName(fanName);
+                            const fan = fans.find(f => f.id === fanId);
                             setSelectedFan(fan || null);
-                            if (fan?.preferences?.favoriteSessionType) {
-                                setRoleplayType(fan.preferences.favoriteSessionType as RoleplayType || 'GFE (Girlfriend Experience)');
-                            }
-                            if (fan?.preferences?.preferredTone) {
-                                setTone(fan.preferences.preferredTone as Tone || 'Teasing');
-                            }
+                            // Preferences will load automatically via useEffect
                         }}
-                        className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    >
-                        <option value="">No fan selected (generic session)</option>
-                        {fans.map((fan) => (
-                            <option key={fan.id} value={fan.id}>
-                                {fan.name} {fan.preferences?.favoriteSessionType ? `(${fan.preferences.favoriteSessionType})` : ''}
-                            </option>
-                        ))}
-                    </select>
-                    {isLoadingFans && <p className="text-xs text-gray-500 mt-1">Loading fans...</p>}
+                        allowNewFan={true}
+                        compact={true}
+                    />
+                    {selectedFanId && fanPreferences && (
+                        <div className="mt-3 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                            <div className="text-xs text-purple-700 dark:text-purple-300">
+                                <p className="font-semibold mb-1">Fan Preferences Loaded:</p>
+                                {fanPreferences.preferredTone && <p>• Tone: {fanPreferences.preferredTone}</p>}
+                                {fanPreferences.communicationStyle && <p>• Style: {fanPreferences.communicationStyle}</p>}
+                                {fanPreferences.favoriteSessionType && <p>• Favorite: {fanPreferences.favoriteSessionType}</p>}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Roleplay Type */}

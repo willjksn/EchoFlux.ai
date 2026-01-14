@@ -75,6 +75,25 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     const emojiExamples =
       emojiEnabled === false ? "" : ` Emoji examples: ${getEmojiExamplesForTone(tone)}.`;
 
+    // Parse fan context if it's the enhanced format
+    let enhancedFanContext = '';
+    if (fanContext) {
+        if (fanContext.includes('CRITICAL - PERSONALIZE FOR FAN:')) {
+            // Enhanced format - use as-is
+            enhancedFanContext = fanContext;
+        } else {
+            // Legacy format - convert to enhanced
+            enhancedFanContext = `
+CRITICAL - PERSONALIZE FOR FAN: ${fanName}
+${fanContext}
+
+REQUIREMENTS:
+- Use ${fanName}'s name naturally in suggestions (e.g., "Hey ${fanName}...", "${fanName}, I wanted to...", etc.)
+- Make suggestions feel personal and tailored specifically for ${fanName}
+`;
+        }
+    }
+
     const prompt = `
 You are an explicit sexting co-pilot for premium creator platforms (OnlyFans / Fansly / Fanvue).
 Generate 4-6 short, message-ready suggestions the creator can send immediately.
@@ -83,7 +102,7 @@ Session context:
 - Roleplay type: ${roleplayType}
 - Tone: ${tone}
 - Fan name: ${fanName}
-${fanContext ? `- Fan context: ${fanContext}` : ""}
+${enhancedFanContext || (fanContext ? `- Fan context: ${fanContext}` : "")}
 ${lastFanMessage ? `- Last fan message: "${lastFanMessage}"` : ""}
 
 Recent conversation (most recent last):
