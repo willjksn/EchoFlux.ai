@@ -2474,6 +2474,29 @@ Output format:
                 });
 
                 mediaUrl = await getDownloadURL(storageRef);
+
+                // Auto-save uploaded media to Media Vault (Premium Content Studio)
+                try {
+                    const fileType = mediaFile.type.startsWith('video/') ? 'video' : 'image';
+                    const uniqueId = `${timestamp}_${Math.random().toString(36).substring(2, 9)}`;
+                    const mediaItem = {
+                        id: uniqueId,
+                        userId: user.id,
+                        url: mediaUrl,
+                        name: mediaFile.name,
+                        type: fileType,
+                        mimeType: mediaFile.type,
+                        size: mediaFile.size,
+                        uploadedAt: new Date().toISOString(),
+                        usedInPosts: [],
+                        tags: [],
+                        folderId: 'general', // Default folder
+                    };
+                    await setDoc(doc(db, 'users', user.id, 'onlyfans_media_library', mediaItem.id), mediaItem);
+                } catch (vaultError) {
+                    console.error('Error auto-saving to Media Vault:', vaultError);
+                    // Don't block caption generation if vault save fails
+                }
             } catch (uploadError: any) {
                 console.error('Upload error:', uploadError);
                 throw new Error(`Failed to upload media: ${uploadError.message || 'Please try again'}`);
