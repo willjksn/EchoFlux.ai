@@ -342,11 +342,19 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     });
   }
 
-  // Determine platform for context (if OnlyFans)
+  // Determine platform for context (if OnlyFans, Fansly, or Fanvue)
   const isOnlyFansPlatform =
     Array.isArray(platforms) &&
-    platforms.some((p) => String(p).toLowerCase().trim() === "onlyfans");
-  const targetPlatform = isOnlyFansPlatform ? "OnlyFans" : null;
+    platforms.some((p) => {
+      const platformLower = String(p).toLowerCase().trim();
+      return platformLower === "onlyfans" || platformLower === "fansly" || platformLower === "fanvue";
+    });
+  const targetPlatform = isOnlyFansPlatform 
+    ? (Array.isArray(platforms) && platforms.find((p) => {
+        const platformLower = String(p).toLowerCase().trim();
+        return platformLower === "onlyfans" || platformLower === "fansly" || platformLower === "fanvue";
+      }) || "OnlyFans")
+    : null;
 
   // Build explicit content context - only for truly explicit content
   const explicitContext = isExplicitContent ? `
@@ -482,13 +490,27 @@ ${onlyfansResearch ? `ONLYFANS-SPECIFIC RESEARCH & BEST PRACTICES:\n${onlyfansRe
 
 ${onlyFansPlatformContext}
 ${onlyFansExplicitBoost}
+${isOnlyFansPlatform ? `
+🎯 NATURAL CREATOR LANGUAGE & SLANG (CRITICAL FOR AUTHENTICITY):
+- Use abbreviations and slang that creators ACTUALLY use on OnlyFans/Fansly/Fanvue naturally
+- Common abbreviations: PPV (Pay-Per-View), DM/DMs (Direct Message/Messages), sub/subs (subscriber/subscribers), custom/customs, unlock/unlocks, tip/tips, OF (OnlyFans)
+- Use casual terms naturally: "babe", "love", "hun", "baby" when appropriate - but don't overuse
+- Write like a REAL CREATOR would text/message - casual, authentic, human, NOT formal or corporate
+- Mix full words and abbreviations naturally - don't force abbreviations, use them when they feel right
+- Example natural: "Hey babe! New PPV in your DMs 💕 Unlock it to see the full set" (sounds human)
+- Example forced: "Hello subscriber. Please unlock the Pay-Per-View content in your Direct Messages" (sounds AI)
+- Vary your language - sometimes use "sub", sometimes "subscriber", sometimes "fan" - natural variation
+- Sound like you're texting a friend, not writing a business email
+- Use platform slang organically - it should feel natural, not like you're checking off a list
+` : ''}
 
 ${Array.isArray(platforms) && platforms.length > 0 ? `
 PLATFORM-SPECIFIC OPTIMIZATION REQUIREMENTS:
 ${platforms.map(platform => {
   const platformName = platform.toLowerCase();
   if (platformName === 'onlyfans') {
-    return `- OnlyFans: Do NOT generate hashtags. Optimize for 150–500 characters (soft max ~2000). Add subscriber-focused monetization CTAs (subscribe, tip, PPV unlock, customs) when appropriate.`;
+    return `- OnlyFans: Do NOT generate hashtags. Optimize for 150–500 characters (soft max ~2000). Add subscriber-focused monetization CTAs (subscribe, tip, PPV unlock, customs) when appropriate.
+- Use natural OnlyFans slang and abbreviations that creators actually use: PPV, DM/DMs, sub/subs, custom/customs, unlock/unlocks, tip/tips, OF (for OnlyFans). Use these naturally, not forced. Write like a real creator would - casual, authentic, human.`;
   }
   if (platformName.includes('instagram')) {
     return `- Instagram: Maximum 2,200 characters for captions. Optimal length: 125-150 characters for engagement. Include 10-30 relevant hashtags for maximum reach. Hashtags should be relevant to content, niche, and trending topics. Use 1–4 creative, relevant emojis (don’t spam) to enhance tone.`;
@@ -526,6 +548,20 @@ CRITICAL - PERSPECTIVE REQUIREMENT (MUST FOLLOW):
 - Write captions that the CONTENT CREATOR would post about their own content
 - Use first-person language from the creator's point of view (e.g., "I'm feeling...", "Check out my...", "I wanted to share...")
 - The caption should be what the CREATOR is saying about their own post, not what viewers are thinking
+${isOnlyFansPlatform ? `
+🎯 NATURAL CREATOR LANGUAGE & SLANG (CRITICAL FOR AUTHENTICITY):
+- Use abbreviations and slang that creators ACTUALLY use on OnlyFans/Fansly/Fanvue naturally
+- Common abbreviations: PPV (Pay-Per-View), DM/DMs (Direct Message/Messages), sub/subs (subscriber/subscribers), custom/customs, unlock/unlocks, tip/tips, OF (OnlyFans)
+- Use casual terms naturally: "babe", "love", "hun", "baby" when appropriate - but don't overuse
+- Write like a REAL CREATOR would text/message - casual, authentic, human, NOT formal or corporate
+- Mix full words and abbreviations naturally - don't force abbreviations, use them when they feel right
+- Example natural: "Hey babe! New PPV in your DMs 💕 Unlock it to see the full set" (sounds human)
+- Example forced: "Hello subscriber. Please unlock the Pay-Per-View content in your Direct Messages" (sounds AI)
+- Vary your language - sometimes use "sub", sometimes "subscriber", sometimes "fan" - natural variation
+- Sound like you're texting a friend, not writing a business email
+- Use platform slang organically - it should feel natural, not like you're checking off a list
+- Gemini has knowledge of OnlyFans/Fansly/Fanvue creator culture - use that knowledge to write authentically
+` : ''}
 
 ${promptText && (promptText.includes('PERSONALIZE FOR FAN') || promptText.includes('fan')) ? `
 🚨 CRITICAL - FAN PERSONALIZATION PERSPECTIVE (READ CAREFULLY) 🚨

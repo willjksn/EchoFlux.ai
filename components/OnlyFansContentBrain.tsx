@@ -1762,6 +1762,18 @@ ${personalization ? personalization : ''}
 - Use first-person language from the creator's point of view
 - The messages should be what the CREATOR is saying to fans, not what fans are saying to the creator
 
+🎯 NATURAL CREATOR LANGUAGE & SLANG:
+- Use abbreviations and slang that creators ACTUALLY use on ${selectedPlatform} naturally
+- Common abbreviations: PPV, DM/DMs, sub/subs, custom/customs, unlock/unlocks, tip/tips, OF (OnlyFans)
+- Use casual terms naturally: "babe", "love", "hun", "baby" when appropriate - but don't overuse
+- Write like a REAL CREATOR would text/message - casual, authentic, human, NOT formal or corporate
+- Mix full words and abbreviations naturally - don't force abbreviations, use them when they feel right
+- Example natural: "Hey babe! New PPV in your DMs 💕 Unlock it to see the full set" (sounds human)
+- Example forced: "Hello subscriber. Please unlock the Pay-Per-View content in your Direct Messages" (sounds AI)
+- Vary your language - sometimes use "sub", sometimes "subscriber", sometimes "fan" - natural variation
+- Sound like you're texting a friend, not writing a business email
+- Use platform slang organically - it should feel natural, not like you're checking off a list
+
 Rules:
 - Manual posting only. Do not claim integrations or auto sending.
 - Keep messages short and conversion-focused.
