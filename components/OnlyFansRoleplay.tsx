@@ -1213,34 +1213,7 @@ Format as a numbered list with detailed post concepts including captions and eng
         }
     };
 
-    // Load fans and preferences
-    const loadFans = async () => {
-        if (!user?.id) return;
-        try {
-            const fansSnap = await getDocs(collection(db, 'users', user.id, 'onlyfans_fan_preferences'));
-            const fansList = fansSnap.docs.map(doc => {
-                const data = doc.data();
-                return {
-                    id: doc.id,
-                    name: data.name || doc.id,
-                    preferences: {
-                        ...data,
-                        spendingLevel: data.spendingLevel || (data.totalSpent ? Math.min(5, Math.max(1, Math.ceil(data.totalSpent / 200))) : 0), // Convert old totalSpent to level if exists
-                        totalSessions: data.totalSessions || 0,
-                        isBigSpender: data.isBigSpender || (data.spendingLevel && data.spendingLevel >= 4) || false,
-                        isLoyalFan: data.isLoyalFan || (data.totalSessions && data.totalSessions >= 5) || false,
-                        subscriptionTier: data.subscriptionTier || (data.totalSessions >= 10 ? 'VIP' : data.totalSessions >= 3 ? 'Regular' : 'New'),
-                        engagementHistory: data.engagementHistory || [],
-                        usedPrompts: data.usedPrompts || [],
-                        lastContentThemes: data.lastContentThemes || []
-                    }
-                };
-            });
-            setFans(fansList);
-        } catch (error) {
-            console.error('Error loading fans:', error);
-        }
-    };
+    // Note: Fans are loaded via FanSelector component, no need for separate loadFans function
 
 
     // Load saved items
@@ -1279,13 +1252,13 @@ Format as a numbered list with detailed post concepts including captions and eng
     const handleLoadScenario = (savedItem: any) => {
         setGeneratedScenario(savedItem);
         if (savedItem.roleplayType && !roleplayTypes.includes(savedItem.roleplayType)) {
-            setUseCustomRoleplayType(true);
+            setSelectedRoleplayType('Custom');
             setCustomRoleplayType(savedItem.roleplayType);
         } else {
             setSelectedRoleplayType(savedItem.roleplayType || 'GFE (Girlfriend Experience)');
         }
-        if (savedItem.tone && !['Soft', 'Teasing', 'Playful', 'Explicit'].includes(savedItem.tone)) {
-            setUseCustomTone(true);
+        if (savedItem.tone && !['Soft', 'Teasing', 'Playful', 'Explicit', 'Custom'].includes(savedItem.tone)) {
+            setScenarioTone('Custom');
             setCustomTone(savedItem.tone);
         } else {
             setScenarioTone(savedItem.tone || 'Teasing');
