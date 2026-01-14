@@ -50,7 +50,14 @@ export const FanSelector: React.FC<FanSelectorProps> = ({
                     id: doc.id,
                     name: data.name || doc.id,
                     preferences: {
-                        subscriptionTier: data.subscriptionTier || (data.totalSessions >= 3 ? 'Paid' : 'Free'),
+                        subscriptionTier: (() => {
+                            // Migrate old 'VIP' or 'Regular' tiers to 'Paid' or 'Free'
+                            const tier = data.subscriptionTier;
+                            if (tier === 'VIP' || tier === 'Regular') {
+                                return 'Paid';
+                            }
+                            return tier || (data.totalSessions >= 3 ? 'Paid' : 'Free');
+                        })(),
                         isVIP: data.isVIP || false,  // Only use checkbox value, not auto-set from spending
                         spendingLevel: data.spendingLevel || 0,
                         totalSessions: data.totalSessions || 0,
@@ -101,8 +108,8 @@ export const FanSelector: React.FC<FanSelectorProps> = ({
 
     const getTierColor = (tier?: string) => {
         switch (tier) {
-            case 'VIP': return 'bg-yellow-500 dark:bg-yellow-600';
-            case 'Regular': return 'bg-blue-500 dark:bg-blue-600';
+            case 'Paid': return 'bg-blue-500 dark:bg-blue-600';
+            case 'Free': return 'bg-gray-500 dark:bg-gray-600';
             default: return 'bg-gray-400 dark:bg-gray-600';
         }
     };

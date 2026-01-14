@@ -110,7 +110,14 @@ export const OnlyFansStudio: React.FC = () => {
                         totalSessions: data.totalSessions || 0,
                         isBigSpender: data.isBigSpender || false,
                         isLoyalFan: data.isLoyalFan || false,
-                        subscriptionTier: data.subscriptionTier || 'Free',
+                        subscriptionTier: (() => {
+                            // Migrate old 'VIP' or 'Regular' tiers to 'Paid' or 'Free'
+                            const tier = data.subscriptionTier;
+                            if (tier === 'VIP' || tier === 'Regular') {
+                                return 'Paid';
+                            }
+                            return tier || 'Free';
+                        })(),
                         isVIP: data.isVIP || false,  // Only use checkbox value, not auto-set from spending
                         lastSessionDate: data.lastSessionDate,
                         engagementHistory: data.engagementHistory || []

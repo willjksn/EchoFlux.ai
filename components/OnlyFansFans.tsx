@@ -103,7 +103,14 @@ export const OnlyFansFans: React.FC = () => {
                         totalSessions: data.totalSessions || 0,
                         isBigSpender: data.isBigSpender || (data.spendingLevel && data.spendingLevel >= 4) || false,
                         isLoyalFan: data.isLoyalFan || (data.totalSessions && data.totalSessions >= 5) || false,
-                        subscriptionTier: data.subscriptionTier || (data.totalSessions >= 3 ? 'Paid' : 'Free'),
+                        subscriptionTier: (() => {
+                            // Migrate old 'VIP' or 'Regular' tiers to 'Paid' or 'Free'
+                            const tier = data.subscriptionTier;
+                            if (tier === 'VIP' || tier === 'Regular') {
+                                return 'Paid';
+                            }
+                            return tier || (data.totalSessions >= 3 ? 'Paid' : 'Free');
+                        })(),
                         isVIP: data.isVIP || false,  // Only use checkbox value, not auto-set from spending
                         lastSessionDate: data.lastSessionDate?.toDate ? data.lastSessionDate.toDate().toISOString() : (data.lastSessionDate || undefined),
                         engagementHistory: data.engagementHistory || [],
@@ -362,8 +369,8 @@ export const OnlyFansFans: React.FC = () => {
 
     const getTierColor = (tier?: string) => {
         switch (tier) {
-            case 'VIP': return 'bg-yellow-500 dark:bg-yellow-600';
-            case 'Regular': return 'bg-blue-500 dark:bg-blue-600';
+            case 'Paid': return 'bg-blue-500 dark:bg-blue-600';
+            case 'Free': return 'bg-gray-500 dark:bg-gray-600';
             default: return 'bg-gray-400 dark:bg-gray-600';
         }
     };
