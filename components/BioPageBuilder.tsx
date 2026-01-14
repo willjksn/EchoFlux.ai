@@ -2,7 +2,7 @@
 import React, { useState, useRef, useMemo, useEffect, useLayoutEffect } from 'react';
 import { useAppContext } from './AppContext';
 import { BioLink, SocialBioLink, Platform } from '../types';
-import { TrashIcon, PlusIcon, UploadIcon, LinkIcon, CheckCircleIcon, MailIcon, CameraIcon, UserIcon, EmojiIcon, FaceSmileIcon, CatIcon, PizzaIcon, SoccerBallIcon, CarIcon, LightbulbIcon, HeartIcon, EditIcon } from './icons/UIIcons';
+import { TrashIcon, PlusIcon, UploadIcon, LinkIcon, CheckCircleIcon, MailIcon, CameraIcon, UserIcon, EmojiIcon, FaceSmileIcon, CatIcon, PizzaIcon, SoccerBallIcon, CarIcon, LightbulbIcon, HeartIcon, EditIcon, MobileIcon } from './icons/UIIcons';
 import { EMOJIS, EMOJI_CATEGORIES, Emoji } from './emojiData';
 import { BioPageSubscribersPanel } from './BioPageSubscribersPanel';
 import { storage } from '../firebaseConfig';
@@ -857,9 +857,22 @@ export const BioPageBuilder: React.FC = () => {
                             </p>
                         )}
                     </div>
-                    <button onClick={handlePublish} disabled={isSaving} className="px-6 py-2 bg-primary-600 text-white font-bold rounded-md hover:bg-primary-700 flex items-center gap-2 disabled:opacity-50">
-                        <CheckCircleIcon className="w-5 h-5"/> {isSaving ? 'Saving...' : 'Publish'}
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {bioPage.username && (
+                            <a
+                                href={`${window.location.origin}/${bioPage.username.replace('@', '')}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="lg:hidden px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-medium rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
+                            >
+                                <MobileIcon className="w-5 h-5" />
+                                <span>View Preview</span>
+                            </a>
+                        )}
+                        <button onClick={handlePublish} disabled={isSaving} className="px-6 py-2 bg-primary-600 text-white font-bold rounded-md hover:bg-primary-700 flex items-center gap-2 disabled:opacity-50">
+                            <CheckCircleIcon className="w-5 h-5"/> {isSaving ? 'Saving...' : 'Publish'}
+                        </button>
+                    </div>
                 </div>
 
                 {/* Profile Section */}
@@ -1299,7 +1312,7 @@ export const BioPageBuilder: React.FC = () => {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Form Background</label>
-                                    <input type="color" value={bioPage.emailCapture.formBackgroundColor || '#d1dbf0'} onChange={e => updateEmailCapture('formBackgroundColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent" />
+                                    <input type="color" value={bioPage.emailCapture.formBackgroundColor || '#d1dbf0'} onChange={e => updateEmailCapture('formBackgroundColor', e.target.value)} className="h-10 w-full rounded cursor-pointer border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700" />
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Title Color</label>
@@ -1307,7 +1320,7 @@ export const BioPageBuilder: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Input Background</label>
-                                    <input type="color" value={bioPage.emailCapture.inputBackgroundColor || '#f9fafb'} onChange={e => updateEmailCapture('inputBackgroundColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent" />
+                                    <input type="color" value={bioPage.emailCapture.inputBackgroundColor || '#f9fafb'} onChange={e => updateEmailCapture('inputBackgroundColor', e.target.value)} className="h-10 w-full rounded cursor-pointer border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700" />
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Input Text</label>
@@ -1319,7 +1332,7 @@ export const BioPageBuilder: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Button Text</label>
-                                    <input type="color" value={bioPage.emailCapture.buttonTextColor || '#111827'} onChange={e => updateEmailCapture('buttonTextColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent" />
+                                    <input type="color" value={bioPage.emailCapture.buttonTextColor || '#111827'} onChange={e => updateEmailCapture('buttonTextColor', e.target.value)} className="h-10 w-full rounded cursor-pointer border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700" />
                                 </div>
                             </div>
                         </div>
