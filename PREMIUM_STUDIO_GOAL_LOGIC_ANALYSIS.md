@@ -204,11 +204,11 @@ FAN IS SUBSCRIBED - PPV PROMOTION:
 - DO NOT ask to subscribe`;
         } else {
             fanSubscriptionContext = `
-FAN IS ON FREE PLAN - PPV REQUIRES SUBSCRIPTION:
+FAN IS ON FREE PLAN - PPV WORKS FOR FREE PLAN TOO:
 - ${selectedFanName} is on free plan
-- PPV requires paid subscription
-- Strategy: First encourage upgrade, then offer PPV
-- Include upgrade CTA before PPV offer`;
+- PPV can be offered to free plan fans (many creators have free pages with PPV unlocks)
+- Focus on: direct PPV unlock CTAs, tease content, create urgency
+- Can optionally include upgrade CTAs if creator wants to convert them to paid`;
         }
     }
 }

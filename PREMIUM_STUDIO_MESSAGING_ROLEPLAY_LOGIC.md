@@ -34,7 +34,7 @@
 
 **Issues**:
 1. **Monetization moments** don't consider if fan is subscribed or free plan
-2. If fan is on free plan, should focus on upgrade CTAs, not PPV
+2. If fan is on free plan, should focus on upgrade CTAs (though PPV can also work - many creators have free pages with PPV unlocks)
 3. If fan is subscribed, should focus on PPV/customs, not upgrade
 4. Generic "upsell" doesn't specify what to upsell
 
@@ -74,9 +74,9 @@
 | **Renewal reminder** | Subscribed | ✅ Soft → direct renewal reminders, show value, offer incentives<br>❌ Don't ask to subscribe |
 | **Renewal reminder** | Free Plan | ⚠️ **MISMATCH** - Can't renew if not subscribed<br>✅ Should use "Free to Paid Plan" messaging instead |
 | **PPV follow-up** | Subscribed | ✅ Soft nudge → last call for PPV unlock<br>❌ Don't ask to subscribe |
-| **PPV follow-up** | Free Plan | ⚠️ **WARNING** - PPV requires subscription<br>✅ Strategy: First encourage upgrade, then offer PPV |
-| **Win-back** | Subscribed (Inactive) | ✅ Re-engagement for lapsed subscriber, special offer, "missed you"<br>✅ Can include renewal incentives |
-| **Win-back** | Free Plan (Inactive) | ✅ Re-engagement for free plan fan, upgrade offer, FOMO<br>✅ Focus on converting to paid |
+| **PPV follow-up** | Free Plan | ✅ **PPV works for free plan fans too** - Many creators have free pages with PPV unlocks<br>✅ Soft nudge → last call for PPV unlock<br>✅ Can optionally include upgrade CTAs if creator wants to convert them |
+| **Win-back** | Subscribed (Inactive/Lapsed) | ✅ **Lost subscriber scenario** - Was on paid plan, now inactive<br>✅ Re-engagement: "missed you", special offer, renewal incentives<br>✅ Focus on getting them back to paid subscription<br>✅ Can include "come back" CTAs with special pricing |
+| **Win-back** | Free Plan (Inactive) | ✅ **Free plan fan scenario** - Never subscribed, now inactive<br>✅ Re-engagement: "missed you", upgrade offer, FOMO<br>✅ Focus on converting to paid subscription<br>✅ Show what they're missing on free plan |
 | **Win-back** | Unknown | ✅ Generic re-engagement, can include both upgrade and renewal options |
 
 #### B. Enhanced Prompt Logic
@@ -134,29 +134,30 @@ CRITICAL - FAN IS SUBSCRIBED:
 - Remind them of the PPV value and create FOMO`;
         } else {
             subscriptionContext = `
-WARNING - PPV REQUIRES SUBSCRIPTION:
+FAN IS ON FREE PLAN - PPV WORKS FOR FREE PLAN TOO:
 - ${selectedFanName} is on free plan
-- PPV requires paid subscription
-- Strategy: First encourage upgrade, then offer PPV
-- Message 1: Upgrade offer with value proposition
-- Message 2: Remind about upgrade + mention PPV as subscriber benefit
-- Message 3: Final upgrade call + PPV preview`;
+- PPV can be offered to free plan fans (many creators have free pages with PPV unlocks)
+- Focus on: following up on PPV offer, creating urgency, soft nudge → last call
+- Remind them of the PPV value and create FOMO
+- Can optionally include upgrade CTAs if creator wants to convert them to paid`;
         }
     } else if (messageType === 'Win-back') {
         if (subscriptionStatus === 'Subscribed') {
             subscriptionContext = `
-FAN IS SUBSCRIBED BUT INACTIVE:
-- ${selectedFanName} is subscribed but hasn't been active
+LOST SUBSCRIBER SCENARIO - WAS ON PAID PLAN, NOW INACTIVE:
+- ${selectedFanName} was on paid plan but is now inactive/lapsed
 - Focus on: re-engagement, "missed you", special offers, renewal incentives
-- Can include renewal reminders if approaching renewal
-- Make them feel valued and want to re-engage`;
+- Strategy: Get them back to paid subscription
+- Can include "come back" CTAs with special pricing or renewal incentives
+- Make them feel valued and want to re-engage with paid content`;
         } else if (subscriptionStatus === 'Free Plan') {
             subscriptionContext = `
-FAN IS ON FREE PLAN AND INACTIVE:
+FREE PLAN FAN SCENARIO - NEVER SUBSCRIBED, NOW INACTIVE:
 - ${selectedFanName} is on free plan and hasn't been active
 - Focus on: re-engagement, upgrade offer, FOMO, what they're missing
 - Strategy: Friendly re-engagement → upgrade value → final upgrade call
-- Show them what paid subscribers get`;
+- Show them what paid subscribers get
+- Goal: Convert them to paid subscription`;
         } else {
             subscriptionContext = `
 FAN STATUS UNKNOWN - GENERIC WIN-BACK:
@@ -325,7 +326,7 @@ Fan subscription status: ${subscriptionStatus}
 ${subscriptionStatus === 'Subscribed' 
     ? '- Fan is subscribed - can suggest PPV, customs, tips. DO NOT suggest upgrade.'
     : subscriptionStatus === 'Free Plan'
-    ? '- Fan is on free plan - can suggest upgrade. DO NOT suggest PPV (requires subscription).'
+    ? '- Fan is on free plan - can suggest upgrade. PPV can also be suggested (many creators have free pages with PPV unlocks).'
     : '- Subscription status unknown - use generic monetization options.'}
 ` : ''}
 ```
