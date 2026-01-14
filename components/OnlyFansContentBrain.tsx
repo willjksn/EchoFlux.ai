@@ -4863,9 +4863,10 @@ Output format:
                                     <button
                                         onClick={() => copyToClipboard(generatedMessages)}
                                         className="px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center gap-2"
+                                        title="Copy all messages"
                                     >
                                         <CopyIcon className="w-4 h-4" />
-                                        Copy
+                                        Copy All
                                     </button>
                                     <button
                                         onClick={() => saveToHistory('subscriber_messages', `Subscriber Messages - ${new Date().toLocaleDateString()}`, {
@@ -4882,13 +4883,52 @@ Output format:
                             )}
                         </div>
 
-                        {generatedMessages?.trim() && (
-                            <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                                <pre className="whitespace-pre-wrap text-sm text-gray-900 dark:text-white font-sans">
-                                    {generatedMessages}
-                                </pre>
-                            </div>
-                        )}
+                        {generatedMessages?.trim() && (() => {
+                            // Parse messages - split by numbered items (1., 2., 3., etc.) or double newlines
+                            const parseMessages = (text: string): string[] => {
+                                // Try splitting by numbered patterns (1., 2., Day 0, Day 1, etc.)
+                                const numberedSplit = text.split(/(?=^\d+\.|^Day \d+|^Message \d+)/m);
+                                if (numberedSplit.length > 1 && numberedSplit[0].trim() === '') {
+                                    return numberedSplit.slice(1).map(m => m.trim()).filter(m => m.length > 0);
+                                }
+                                
+                                // Try splitting by double newlines
+                                const doubleNewlineSplit = text.split(/\n\n+/);
+                                if (doubleNewlineSplit.length > 1) {
+                                    return doubleNewlineSplit.map(m => m.trim()).filter(m => m.length > 0);
+                                }
+                                
+                                // Fallback: return as single message
+                                return [text.trim()];
+                            };
+                            
+                            const messages = parseMessages(generatedMessages);
+                            
+                            return (
+                                <div className="mt-4 space-y-3">
+                                    {messages.map((message, index) => (
+                                        <div key={index} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                            <div className="flex items-start justify-between gap-3 mb-2">
+                                                <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                                                    Message {index + 1}
+                                                </span>
+                                                <button
+                                                    onClick={() => copyToClipboard(message)}
+                                                    className="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center gap-2 text-sm"
+                                                    title="Copy this message"
+                                                >
+                                                    <CopyIcon className="w-4 h-4" />
+                                                    Copy
+                                                </button>
+                                            </div>
+                                            <pre className="whitespace-pre-wrap text-sm text-gray-900 dark:text-white font-sans">
+                                                {message}
+                                            </pre>
+                                        </div>
+                                    ))}
+                                </div>
+                            );
+                        })()}
                     </div>
                 </div>
             )}
