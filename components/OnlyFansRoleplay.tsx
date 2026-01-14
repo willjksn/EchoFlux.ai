@@ -152,6 +152,24 @@ export const OnlyFansRoleplay: React.FC = () => {
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             
+            // Load AI personality/training settings
+            let aiPersonality = '';
+            let aiTone = '';
+            let creatorGender = '';
+            let targetAudienceGender = '';
+            try {
+                const userDoc = await getDoc(doc(db, 'users', user.id));
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    aiPersonality = userData?.aiPersonality || '';
+                    aiTone = userData?.aiTone || '';
+                    creatorGender = userData?.creatorGender || '';
+                    targetAudienceGender = userData?.targetAudienceGender || '';
+                }
+            } catch (e) {
+                console.error('Error loading AI personality settings:', e);
+            }
+            
             // Build fan context
             let fanContext = '';
             if (selectedFanId && fanPreferences) {
@@ -184,12 +202,15 @@ CRITICAL - PERSONALIZE FOR FAN: ${fanName}
 Fan Preferences:
 ${contextParts.map(p => `- ${p}`).join('\n')}
 
-REQUIREMENTS:
-- Use ${fanName}'s name naturally in messages (e.g., "Hey ${fanName}...", "${fanName}, I wanted to...", etc.)
+REQUIREMENTS - PERSPECTIVE IS CRITICAL:
+- YOU (the content creator) are writing roleplay messages FROM YOUR PERSPECTIVE (first person: "I", "my", "me")
+- YOU are addressing ${fanName} directly - the messages are YOU talking TO ${fanName}, NOT ${fanName} talking to you
+- Use ${fanName}'s name naturally as YOU address them (e.g., "Hey ${fanName}...", "${fanName}, I wanted to...", etc.)
+- DO NOT write as if ${fanName} is speaking to you - YOU are the one sending these messages
 - Match ${fanName}'s preferred tone: ${fanPreferences.preferredTone || 'their style'}
 - Use ${fanName}'s communication style: ${fanPreferences.communicationStyle || 'their preferred style'}
 - Reference ${fanName}'s favorite session type when relevant: ${fanPreferences.favoriteSessionType || 'their preferences'}
-- Make roleplay feel personal and tailored specifically for ${fanName}
+- Make roleplay feel personal and tailored specifically for ${fanName} - but always from YOUR perspective as the creator
 - Generate content that ${fanName} would respond to based on their preferences
 - Consider ${fanName}'s boundaries and what works best for them
 `;
@@ -197,9 +218,28 @@ REQUIREMENTS:
             } else if (selectedFanId && selectedFanName) {
                 fanContext = `
 CRITICAL - PERSONALIZE FOR FAN: ${selectedFanName}
-- Use ${selectedFanName}'s name naturally in messages (e.g., "Hey ${selectedFanName}...", "${selectedFanName}, I wanted to...", etc.)
-- Make roleplay feel personal and tailored specifically for ${selectedFanName}
+PERSPECTIVE REQUIREMENT:
+- YOU (the content creator) are writing roleplay messages FROM YOUR PERSPECTIVE (first person: "I", "my", "me")
+- YOU are addressing ${selectedFanName} directly - the messages are YOU talking TO ${selectedFanName}, NOT ${selectedFanName} talking to you
+- Use ${selectedFanName}'s name naturally as YOU address them (e.g., "Hey ${selectedFanName}...", "${selectedFanName}, I wanted to...", etc.)
+- DO NOT write as if ${selectedFanName} is speaking to you - YOU are the one sending these messages
+- Make roleplay feel personal and tailored specifically for ${selectedFanName} - but always from YOUR perspective as the creator
 `;
+            }
+            
+            // Build AI personality context
+            let personalityContext = '';
+            if (aiPersonality) {
+                personalityContext = `\n\nAI PERSONALITY & TRAINING:\n${aiPersonality}`;
+            }
+            if (aiTone && aiTone !== tone) {
+                personalityContext += `\nDefault AI Tone: ${aiTone}`;
+            }
+            if (creatorGender) {
+                personalityContext += `\nCreator Gender: ${creatorGender}`;
+            }
+            if (targetAudienceGender) {
+                personalityContext += `\nTarget Audience: ${targetAudienceGender}`;
             }
             
             // Load emoji settings
@@ -214,8 +254,17 @@ CRITICAL - PERSONALIZE FOR FAN: ${selectedFanName}
                 body: JSON.stringify({
                     prompt: `Generate direct first-person messages for OnlyFans ${roleplayType} content.
                     
-Type: ${roleplayType}${creatorGender ? `\nCreator Gender: ${creatorGender}` : ''}${targetAudienceGender ? `\nTarget Audience: ${targetAudienceGender}` : ''}
+Type: ${roleplayType}${personalityContext ? personalityContext : ''}${creatorGender ? `\nCreator Gender: ${creatorGender}` : ''}${targetAudienceGender ? `\nTarget Audience: ${targetAudienceGender}` : ''}
 ${fanContext}
+
+🚨 CRITICAL - PERSPECTIVE REQUIREMENT 🚨
+- Write messages FROM THE CONTENT CREATOR'S PERSPECTIVE (first person: "I", "my", "me")
+- The messages are what the CONTENT CREATOR is sending, NOT what fans/followers are saying
+- Write as if YOU (the content creator) are sending these messages yourself
+- DO NOT write from the audience's perspective
+- DO NOT write as if fans are speaking to you
+- Use first-person language from the creator's point of view
+- The messages should be what the CREATOR is saying to fans, not what fans are saying to the creator
 Tone: ${tone} (${scenarioTone === 'Custom' ? 'Custom tone specified' : 'Selected from presets'})
 Length: ${scenarioLength === 'Extended' ? 'Extended session (30-45 minutes, 8-12 messages with detailed progression)' : 'Long extended session (60-90 minutes, 12-20 messages with very detailed progression, multiple phases, and extensive content)'}
 Monetization Goal: Engagement and upsell
@@ -672,6 +721,24 @@ Make it detailed, consistent, explicit, and engaging for adult content monetizat
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             
+            // Load AI personality/training settings
+            let aiPersonality = '';
+            let aiTone = '';
+            let creatorGender = '';
+            let targetAudienceGender = '';
+            try {
+                const userDoc = await getDoc(doc(db, 'users', user.id));
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    aiPersonality = userData?.aiPersonality || '';
+                    aiTone = userData?.aiTone || '';
+                    creatorGender = userData?.creatorGender || '';
+                    targetAudienceGender = userData?.targetAudienceGender || '';
+                }
+            } catch (e) {
+                console.error('Error loading AI personality settings:', e);
+            }
+            
             // Build fan context
             let fanContext = '';
             if (selectedFanId && fanPreferences) {
@@ -691,11 +758,14 @@ CRITICAL - PERSONALIZE FOR FAN: ${fanName}
 Fan Preferences:
 ${contextParts.map(p => `- ${p}`).join('\n')}
 
-REQUIREMENTS:
-- Use ${fanName}'s name naturally in prompts (e.g., "Hey ${fanName}...", "${fanName}, send me...", etc.)
+REQUIREMENTS - PERSPECTIVE IS CRITICAL:
+- YOU (the content creator) are writing rating prompts FROM YOUR PERSPECTIVE (first person: "I", "my", "me")
+- YOU are addressing ${fanName} directly - the prompts are YOU talking TO ${fanName}, NOT ${fanName} talking to you
+- Use ${fanName}'s name naturally as YOU address them (e.g., "Hey ${fanName}...", "${fanName}, send me...", etc.)
+- DO NOT write as if ${fanName} is speaking to you - YOU are the one posting these prompts
 - Match ${fanName}'s preferred tone: ${fanPreferences.preferredTone || 'their style'}
 - Use ${fanName}'s communication style: ${fanPreferences.communicationStyle || 'their preferred style'}
-- Make prompts feel personal and tailored specifically for ${fanName}
+- Make prompts feel personal and tailored specifically for ${fanName} - but always from YOUR perspective as the creator
 - Generate prompts that ${fanName} would respond to based on their preferences
 - Consider ${fanName}'s boundaries and what works best for them
 `;
@@ -703,9 +773,28 @@ REQUIREMENTS:
             } else if (selectedFanId && selectedFanName) {
                 fanContext = `
 CRITICAL - PERSONALIZE FOR FAN: ${selectedFanName}
-- Use ${selectedFanName}'s name naturally in prompts (e.g., "Hey ${selectedFanName}...", "${selectedFanName}, send me...", etc.)
-- Make prompts feel personal and tailored specifically for ${selectedFanName}
+PERSPECTIVE REQUIREMENT:
+- YOU (the content creator) are writing rating prompts FROM YOUR PERSPECTIVE (first person: "I", "my", "me")
+- YOU are addressing ${selectedFanName} directly - the prompts are YOU talking TO ${selectedFanName}, NOT ${selectedFanName} talking to you
+- Use ${selectedFanName}'s name naturally as YOU address them (e.g., "Hey ${selectedFanName}...", "${selectedFanName}, send me...", etc.)
+- DO NOT write as if ${selectedFanName} is speaking to you - YOU are the one posting these prompts
+- Make prompts feel personal and tailored specifically for ${selectedFanName} - but always from YOUR perspective as the creator
 `;
+            }
+            
+            // Build AI personality context
+            let personalityContext = '';
+            if (aiPersonality) {
+                personalityContext = `\n\nAI PERSONALITY & TRAINING:\n${aiPersonality}`;
+            }
+            if (aiTone) {
+                personalityContext += `\nDefault AI Tone: ${aiTone}`;
+            }
+            if (creatorGender) {
+                personalityContext += `\nCreator Gender: ${creatorGender}`;
+            }
+            if (targetAudienceGender) {
+                personalityContext += `\nTarget Audience: ${targetAudienceGender}`;
             }
             
             // Load emoji settings
@@ -722,7 +811,17 @@ CRITICAL - PERSONALIZE FOR FAN: ${selectedFanName}
                     
 🚨 CRITICAL - GENERATE ONLY WHAT IS REQUESTED 🚨
 USER REQUEST: ${ratingPrompt}
+${personalityContext ? personalityContext : ''}
 ${fanContext}
+
+🚨 CRITICAL - PERSPECTIVE REQUIREMENT 🚨
+- Write prompts FROM THE CONTENT CREATOR'S PERSPECTIVE (first person: "I", "my", "me")
+- The prompts are what the CONTENT CREATOR is posting, NOT what fans/followers are saying
+- Write as if YOU (the content creator) are posting these prompts yourself
+- DO NOT write from the audience's perspective
+- DO NOT write as if fans are speaking to you
+- Use first-person language from the creator's point of view
+- The prompts should be what the CREATOR is saying to fans, not what fans are saying to the creator
 
 MANDATORY REQUIREMENT - READ CAREFULLY:
 - You MUST generate prompts ONLY about: ${ratingPrompt}

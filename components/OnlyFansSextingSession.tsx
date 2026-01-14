@@ -182,9 +182,40 @@ export const OnlyFansSextingSession: React.FC = () => {
                 }
             })() : null);
 
+            // Load AI personality/training settings
+            let aiPersonality = '';
+            let aiTone = '';
+            let creatorGender = '';
+            let targetAudienceGender = '';
+            try {
+                const userDoc = await getDoc(doc(db, 'users', user.id));
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    aiPersonality = userData?.aiPersonality || '';
+                    aiTone = userData?.aiTone || '';
+                    creatorGender = userData?.creatorGender || '';
+                    targetAudienceGender = userData?.targetAudienceGender || '';
+                }
+            } catch (e) {
+                console.error('Error loading AI personality settings:', e);
+            }
+            
             if (currentFanId && currentFanPrefs) {
                 const fanName = currentFanName || currentFanPrefs.name || 'this fan';
                 const contextParts = [];
+                const subscriptionTier = currentFanPrefs.subscriptionTier;
+                const isVip = currentFanPrefs.isVIP === true;
+                if (subscriptionTier) {
+                    contextParts.push(`Subscription tier: ${subscriptionTier}`);
+                    if (subscriptionTier === 'Paid') {
+                        contextParts.push('CTA rule: Already a paid subscriber - DO NOT ask them to subscribe or upgrade. Focus on appreciation, retention, PPV unlocks, tips, customs, and VIP treatment if applicable.');
+                    } else {
+                        contextParts.push('CTA rule: Free plan - encourage them to upgrade to paid for full access. PPV unlocks are allowed for free fans.');
+                    }
+                }
+                if (isVip) {
+                    contextParts.push('VIP: Provide special treatment and priority responses.');
+                }
                 if (currentFanPrefs.preferredTone) contextParts.push(`Preferred tone: ${currentFanPrefs.preferredTone}`);
                 if (currentFanPrefs.communicationStyle) contextParts.push(`Communication style: ${currentFanPrefs.communicationStyle}`);
                 if (currentFanPrefs.favoriteSessionType) contextParts.push(`Favorite session type: ${currentFanPrefs.favoriteSessionType}`);
@@ -200,12 +231,15 @@ CRITICAL - PERSONALIZE FOR FAN: ${fanName}
 Fan Preferences:
 ${contextParts.map(p => `- ${p}`).join('\n')}
 
-REQUIREMENTS:
-- Use ${fanName}'s name naturally in suggestions (e.g., "Hey ${fanName}...", "${fanName}, I wanted to...", etc.)
+REQUIREMENTS - PERSPECTIVE IS CRITICAL:
+- YOU (the content creator) are writing messages FROM YOUR PERSPECTIVE (first person: "I", "my", "me")
+- YOU are addressing ${fanName} directly - the messages are YOU talking TO ${fanName}, NOT ${fanName} talking to you
+- Use ${fanName}'s name naturally as YOU address them (e.g., "Hey ${fanName}...", "${fanName}, I wanted to...", etc.)
+- DO NOT write as if ${fanName} is speaking to you - YOU are the one sending these messages
 - Match ${fanName}'s preferred tone: ${currentFanPrefs.preferredTone || 'their style'}
 - Use ${fanName}'s communication style: ${currentFanPrefs.communicationStyle || 'their preferred style'}
 - Reference ${fanName}'s favorite session type when relevant: ${currentFanPrefs.favoriteSessionType || 'their preferences'}
-- Make suggestions feel personal and tailored specifically for ${fanName}
+- Make suggestions feel personal and tailored specifically for ${fanName} - but always from YOUR perspective as the creator
 - Generate suggestions that ${fanName} would respond to based on their preferences
 - Consider ${fanName}'s boundaries and what works best for them
 `;
@@ -214,9 +248,28 @@ REQUIREMENTS:
                 // Fan selected but preferences not loaded yet - still use their name
                 fanContext = `
 CRITICAL - PERSONALIZE FOR FAN: ${currentFanName}
-- Use ${currentFanName}'s name naturally in suggestions (e.g., "Hey ${currentFanName}...", "${currentFanName}, I wanted to...", etc.)
-- Make suggestions feel personal and tailored specifically for ${currentFanName}
+PERSPECTIVE REQUIREMENT:
+- YOU (the content creator) are writing messages FROM YOUR PERSPECTIVE (first person: "I", "my", "me")
+- YOU are addressing ${currentFanName} directly - the messages are YOU talking TO ${currentFanName}, NOT ${currentFanName} talking to you
+- Use ${currentFanName}'s name naturally as YOU address them (e.g., "Hey ${currentFanName}...", "${currentFanName}, I wanted to...", etc.)
+- DO NOT write as if ${currentFanName} is speaking to you - YOU are the one sending these messages
+- Make suggestions feel personal and tailored specifically for ${currentFanName} - but always from YOUR perspective as the creator
 `;
+            }
+            
+            // Build AI personality context
+            let personalityContext = '';
+            if (aiPersonality) {
+                personalityContext = `\n\nAI PERSONALITY & TRAINING:\n${aiPersonality}`;
+            }
+            if (aiTone && aiTone !== session.tone) {
+                personalityContext += `\nDefault AI Tone: ${aiTone}`;
+            }
+            if (creatorGender) {
+                personalityContext += `\nCreator Gender: ${creatorGender}`;
+            }
+            if (targetAudienceGender) {
+                personalityContext += `\nTarget Audience: ${targetAudienceGender}`;
             }
 
             // Load emoji settings from user data
@@ -252,6 +305,7 @@ CRITICAL - PERSONALIZE FOR FAN: ${currentFanName}
                         fanName: session.fanName,
                     },
                     fanContext: fanContext || undefined,
+                    personalityContext: personalityContext || undefined,
                     conversationHistory: conversationContext || undefined,
                     lastFanMessage: conversationHistory.filter(m => m.role === 'fan').slice(-1)[0]?.content || undefined,
                     emojiEnabled: emojiEnabled,

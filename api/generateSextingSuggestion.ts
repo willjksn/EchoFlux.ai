@@ -52,9 +52,10 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   });
   if (!ok) return;
 
-  const {
+    const {
     sessionContext,
     fanContext,
+    personalityContext,
     conversationHistory,
     lastFanMessage,
     emojiEnabled,
@@ -102,11 +103,22 @@ Session context:
 - Roleplay type: ${roleplayType}
 - Tone: ${tone}
 - Fan name: ${fanName}
+${personalityContext ? personalityContext : ''}
 ${enhancedFanContext || (fanContext ? `- Fan context: ${fanContext}` : "")}
 ${lastFanMessage ? `- Last fan message: "${lastFanMessage}"` : ""}
 
 Recent conversation (most recent last):
 ${conversationHistory || "No prior messages provided."}
+
+🚨 CRITICAL - PERSPECTIVE REQUIREMENT 🚨
+- Write suggestions FROM THE CONTENT CREATOR'S PERSPECTIVE (first person: "I", "my", "me")
+- The suggestions are what the CONTENT CREATOR is sending, NOT what fans/followers are saying
+- Write as if YOU (the content creator) are sending these messages yourself
+- DO NOT write from the audience's perspective
+- DO NOT write as if fans are speaking to you
+- Use first-person language from the creator's point of view
+- The suggestions should be what the CREATOR is saying to fans, not what fans are saying to the creator
+${fanName && fanName !== 'Fan' ? `- When mentioning ${fanName}, YOU are addressing them directly - YOU are talking TO ${fanName}, NOT ${fanName} talking to you` : ''}
 
 Guidelines:
 - Be bold, playful, and explicitly adult (sexting) while respecting the chosen tone.
