@@ -27,7 +27,14 @@ const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: 
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
                 <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Performance Prediction</h2>
+                    <div>
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Performance Prediction</h2>
+                        {result.platform && (
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                Based on {result.platform} platform analysis
+                            </p>
+                        )}
+                    </div>
                     <button
                         onClick={onClose}
                         className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
@@ -104,6 +111,70 @@ const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: 
                     {result.summary && (
                         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                             <p className="text-blue-900 dark:text-blue-200 text-sm">{result.summary}</p>
+                        </div>
+                    )}
+                    {result.optimizedCaptions && result.optimizedCaptions.length > 0 && (
+                        <div>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Optimized Captions</h3>
+                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                                These captions are optimized based on the prediction analysis and should perform better:
+                            </p>
+                            <div className="space-y-3">
+                                {result.optimizedCaptions.map((optCaption: any, idx: number) => (
+                                    <div key={idx} className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                                        <div className="flex items-start justify-between mb-2">
+                                            <p className="text-sm font-medium text-gray-900 dark:text-white">Caption {idx + 1}</p>
+                                            <button
+                                                onClick={() => {
+                                                    onCopy(optCaption.caption || optCaption);
+                                                    showToast?.('Caption copied to clipboard!', 'success');
+                                                }}
+                                                className="text-xs text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300"
+                                            >
+                                                Copy
+                                            </button>
+                                        </div>
+                                        <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                                            {optCaption.caption || optCaption}
+                                        </p>
+                                        {optCaption.expectedBoost && (
+                                            <p className="text-xs text-green-600 dark:text-green-400 mt-2">
+                                                Expected boost: {optCaption.expectedBoost}
+                                            </p>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {result.optimizedVersion && result.optimizedVersion.caption && !result.optimizedCaptions && (
+                        <div>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Optimized Caption</h3>
+                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                                This caption is optimized based on the prediction analysis and should perform better:
+                            </p>
+                            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                                <div className="flex items-start justify-between mb-2">
+                                    <p className="text-sm font-medium text-gray-900 dark:text-white">Optimized Version</p>
+                                    <button
+                                        onClick={() => {
+                                            onCopy(result.optimizedVersion.caption);
+                                            showToast?.('Caption copied to clipboard!', 'success');
+                                        }}
+                                        className="text-xs text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300"
+                                    >
+                                        Copy
+                                    </button>
+                                </div>
+                                <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                                    {result.optimizedVersion.caption}
+                                </p>
+                                {result.optimizedVersion.expectedBoost && (
+                                    <p className="text-xs text-green-600 dark:text-green-400 mt-2">
+                                        Expected boost: {result.optimizedVersion.expectedBoost}
+                                    </p>
+                                )}
+                            </div>
                         </div>
                     )}
                 </div>
@@ -2477,11 +2548,17 @@ Output format:
                 },
                 body: JSON.stringify({
                     caption: captionToPredict,
-                    platform: 'OnlyFans',
+                    platform: selectedPlatform,
                     mediaType: currentMediaType,
                     niche: user?.niche || 'Adult Content Creator',
                     tone: captionTone,
                     goal: captionGoal,
+                    fanPreferences: selectedFanId && fanPreferences ? {
+                        preferredTone: fanPreferences.preferredTone,
+                        communicationStyle: fanPreferences.communicationStyle,
+                        favoriteSessionType: fanPreferences.favoriteSessionType,
+                        languagePreferences: fanPreferences.languagePreferences,
+                    } : undefined,
                 }),
             });
 
@@ -3382,6 +3459,33 @@ Output format:
 
                             {/* Action Buttons - Always Visible */}
                             <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700 space-y-3">
+                                {/* Fan Selector for Predict */}
+                                <div className="mb-3">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Select fan for personalized predictions (optional):
+                                    </label>
+                                    <FanSelector
+                                        selectedFanId={selectedFanId}
+                                        onSelectFan={(fanId, fanName) => {
+                                            setSelectedFanId(fanId);
+                                            setSelectedFanName(fanName);
+                                        }}
+                                        allowNewFan={false}
+                                        compact={true}
+                                    />
+                                    {selectedFanId && (
+                                        <button
+                                            onClick={() => {
+                                                setSelectedFanId(null);
+                                                setSelectedFanName(null);
+                                            }}
+                                            className="mt-2 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                                        >
+                                            Clear selection
+                                        </button>
+                                    )}
+                                </div>
+                                
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                     {/* Analyze Content Gaps */}
                                     <button

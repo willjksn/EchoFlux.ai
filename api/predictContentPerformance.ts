@@ -44,7 +44,8 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     tone,
     goal,
     scheduledDate,
-    hashtags
+    hashtags,
+    fanPreferences
   } = (req.body as any) || {};
 
   if (!caption || !platform) {
@@ -107,10 +108,23 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
 
     const model = await getModelForTask("strategy", user.uid);
 
-    const prompt = `
-You are a content performance prediction specialist for social media creators.
+    // Build fan context if fan preferences provided
+    let fanContext = '';
+    if (fanPreferences) {
+      const contextParts = [];
+      if (fanPreferences.preferredTone) contextParts.push(`Preferred tone: ${fanPreferences.preferredTone}`);
+      if (fanPreferences.communicationStyle) contextParts.push(`Communication style: ${fanPreferences.communicationStyle}`);
+      if (fanPreferences.favoriteSessionType) contextParts.push(`Favorite session type: ${fanPreferences.favoriteSessionType}`);
+      if (fanPreferences.languagePreferences) contextParts.push(`Language preferences: ${fanPreferences.languagePreferences}`);
+      if (contextParts.length > 0) {
+        fanContext = `\nFAN PERSONALIZATION CONTEXT:\n${contextParts.map(p => `- ${p}`).join('\n')}\n\nWhen generating optimized captions, personalize them to match this fan's preferences and style.`;
+      }
+    }
 
-TASK: Analyze the provided content and predict its performance (High/Medium/Low) based on multiple factors, then suggest improvements to boost the prediction.
+    const prompt = `
+You are a content performance prediction specialist for ${platform} creators.
+
+TASK: Analyze the provided content and predict its performance (High/Medium/Low) based on multiple factors, then generate 3-5 optimized captions that should perform well.
 
 ${trendContext ? `CURRENT TRENDS & BEST PRACTICES:\n${trendContext}\n` : ''}
 
@@ -124,6 +138,7 @@ ${tone ? `Tone: ${tone}` : ''}
 ${goal ? `Goal: ${goal}` : ''}
 ${scheduledDate ? `Scheduled Date: ${new Date(scheduledDate).toLocaleString()}` : ''}
 ${hashtags && hashtags.length > 0 ? `Hashtags: ${hashtags.join(', ')}` : ''}
+${fanContext}
 
 HISTORICAL CONTEXT (User's Recent Content):
 ${historicalData.length > 0 
@@ -201,17 +216,34 @@ OUTPUT FORMAT (JSON only):
     "suggestedTime": "Best time to post",
     "expectedBoost": "How much this would improve prediction"
   },
-  "summary": "Overall assessment and key recommendations"
+  "optimizedCaptions": [
+    {
+      "caption": "First optimized caption that should perform well",
+      "expectedBoost": "Expected performance improvement"
+    },
+    {
+      "caption": "Second optimized caption with different approach",
+      "expectedBoost": "Expected performance improvement"
+    },
+    {
+      "caption": "Third optimized caption personalized for better engagement",
+      "expectedBoost": "Expected performance improvement"
+    }
+  ],
+  "summary": "Overall assessment and key recommendations. IMPORTANT: All analysis and reasoning should reference ${platform} specifically, not generic platforms."
 }
 
 GUIDELINES:
 - Be honest and realistic in predictions
 - Provide specific, actionable improvements
 - Consider all factors holistically
-- Explain reasoning clearly
+- Explain reasoning clearly - ALWAYS mention ${platform} specifically in your reasoning (e.g., "Based on ${platform} platform analysis...", "For ${platform} creators...", "On ${platform}...")
 - Prioritize high-impact improvements
 - Use current trends when relevant
-${tone ? `- Maintain ${tone} tone in suggestions` : ''}
+- Generate 3-5 diverse optimized captions that should perform well on ${platform}
+${tone ? `- Maintain ${tone} tone in suggestions and optimized captions` : ''}
+${fanContext ? `- Personalize optimized captions to match the fan's preferences and communication style` : ''}
+- Optimized captions should be ready to use and tailored for ${platform} specifically
 `;
 
     const result = await model.generateContent({
@@ -254,7 +286,12 @@ ${tone ? `- Maintain ${tone} tone in suggestions` : ''}
       factors: data.factors || {},
       improvements: data.improvements || [],
       optimizedVersion: data.optimizedVersion || {},
+      optimizedCaptions: data.optimizedCaptions || (data.optimizedVersion?.caption ? [{
+        caption: data.optimizedVersion.caption,
+        expectedBoost: data.optimizedVersion.expectedBoost || 'Improved performance expected'
+      }] : []),
       summary: data.summary || '',
+      platform: platform, // Include platform in response
     });
   } catch (error: any) {
     console.error("Error predicting performance:", error);
