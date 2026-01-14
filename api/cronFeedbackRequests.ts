@@ -81,7 +81,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const name = typeof u?.name === "string" ? u.name : null;
 
-      const sends: Array<{ key: "day7" | "day14"; subject: string; body: string }> = [];
+      const sends: Array<{ key: "day7" | "day14"; subject: string; body: string; htmlBody?: string }> = [];
       if (shouldSendDay7) {
         const link = buildFeedbackLink("day7");
         sends.push({
@@ -120,7 +120,7 @@ If you’re not logged in, log in first and it will pop up automatically.
       // If already at day 14 and day 7 never sent, we can send both (day 7 first).
       for (const s of sends) {
         try {
-          const mail = await sendEmail({ to: email, subject: s.subject, text: s.body });
+          const mail = await sendEmail({ to: email, subject: s.subject, text: s.body, html: s.htmlBody });
 
           await db
             .collection("users")
