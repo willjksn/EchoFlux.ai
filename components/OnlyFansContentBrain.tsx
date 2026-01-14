@@ -1104,7 +1104,24 @@ export const OnlyFansContentBrain: React.FC = () => {
         setCurrentCaptionForAI('');
         setEditedCaptions(new Map());
         setUsedCaptions(new Set());
-        setUsedCaptionsHash(new Set()); // Clear used captions hash for new generation
+        // Don't clear usedCaptionsHash - we need to filter out used captions from new generation
+        // Reload used captions to ensure we have the latest
+        if (user?.id) {
+            try {
+                const usedCaptionsRef = collection(db, 'users', user.id, 'onlyfans_used_captions');
+                const snapshot = await getDocs(usedCaptionsRef);
+                const usedHashes = new Set<string>();
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    if (data.captionHash) {
+                        usedHashes.add(data.captionHash);
+                    }
+                });
+                setUsedCaptionsHash(usedHashes);
+            } catch (error) {
+                console.error('Error reloading used captions:', error);
+            }
+        }
         
         setIsGenerating(true);
         setError(null);
@@ -1140,6 +1157,7 @@ export const OnlyFansContentBrain: React.FC = () => {
             let fanContext = '';
             if (selectedFanId && fanPreferences) {
                 const contextParts = [];
+                const fanName = selectedFanName || 'this fan';
                 if (fanPreferences.preferredTone) contextParts.push(`Preferred tone: ${fanPreferences.preferredTone}`);
                 if (fanPreferences.communicationStyle) contextParts.push(`Communication style: ${fanPreferences.communicationStyle}`);
                 if (fanPreferences.favoriteSessionType) contextParts.push(`Favorite session type: ${fanPreferences.favoriteSessionType}`);
@@ -1147,8 +1165,11 @@ export const OnlyFansContentBrain: React.FC = () => {
                 if (fanPreferences.boundaries) contextParts.push(`Boundaries: ${fanPreferences.boundaries}`);
                 if (fanPreferences.suggestedFlow) contextParts.push(`What works best: ${fanPreferences.suggestedFlow}`);
                 if (contextParts.length > 0) {
-                    fanContext = `\n\nFan Context (${selectedFanName || 'Selected Fan'}):\n${contextParts.map(p => `- ${p}`).join('\n')}\n- Generate captions that match this fan's preferences and style.`;
+                    fanContext = `\n\nCRITICAL - PERSONALIZE FOR FAN: ${fanName}\nFan Preferences:\n${contextParts.map(p => `- ${p}`).join('\n')}\n\nREQUIREMENTS:\n- Use ${fanName}'s name naturally in at least one caption (e.g., "Hey ${fanName}...", "For ${fanName}...", "${fanName}, this one's for you...", etc.)\n- Match ${fanName}'s preferred tone: ${fanPreferences.preferredTone || 'their style'}\n- Use ${fanName}'s communication style: ${fanPreferences.communicationStyle || 'their preferred style'}\n- Reference ${fanName}'s favorite session type when relevant: ${fanPreferences.favoriteSessionType || 'their preferences'}\n- Make captions feel personal and tailored specifically for ${fanName}\n- Generate captions that ${fanName} would respond to based on their preferences`;
                 }
+            } else if (selectedFanId && selectedFanName) {
+                // Fan selected but preferences not loaded yet - still use their name
+                fanContext = `\n\nCRITICAL - PERSONALIZE FOR FAN: ${selectedFanName}\n- Use ${selectedFanName}'s name naturally in at least one caption (e.g., "Hey ${selectedFanName}...", "For ${selectedFanName}...", "${selectedFanName}, this one's for you...", etc.)\n- Make captions feel personal and tailored specifically for ${selectedFanName}`;
             }
 
             // Load emoji settings
@@ -1168,8 +1189,8 @@ export const OnlyFansContentBrain: React.FC = () => {
                     // Target all premium creator platforms we support
                     platforms: [selectedPlatform],
                     promptText: uploadedMediaUrl 
-                        ? `${captionPrompt || `Analyze this image/video in detail and describe what you see. Create explicit captions tailored for ${selectedPlatform}. Mention ${selectedPlatform} naturally when it helps drive subs (e.g., "come see me on ${selectedPlatform}") but only when it fits the line. Be very descriptive and explicit about what is visually present.`}${fanContext}\n\n[Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`
-                        : `${captionPrompt || `Create explicit captions tailored for ${selectedPlatform}. Mention ${selectedPlatform} naturally when it helps drive subs (e.g., "come see me on ${selectedPlatform}") but only when it fits the line.`}${fanContext}\n\n[Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`,
+                        ? `${captionPrompt || `Analyze this image/video in detail and describe what you see. Create explicit captions tailored for ${selectedPlatform}. Mention ${selectedPlatform} naturally when it helps drive subs (e.g., "come see me on ${selectedPlatform}") but only when it fits the line. Be very descriptive and explicit about what is visually present.`}${fanContext}\n\n[CRITICAL - GENERATE FRESH CAPTIONS: Variety seed ${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${Math.random().toString(36).substr(2, 9)}] - You MUST generate completely NEW, UNIQUE captions that are DIFFERENT from any previous generation. Do NOT reuse, repeat, or modify previous captions. Create entirely fresh content with different wording, structure, and angles each time.`
+                        : `${captionPrompt || `Create explicit captions tailored for ${selectedPlatform}. Mention ${selectedPlatform} naturally when it helps drive subs (e.g., "come see me on ${selectedPlatform}") but only when it fits the line.`}${fanContext}\n\n[CRITICAL - GENERATE FRESH CAPTIONS: Variety seed ${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${Math.random().toString(36).substr(2, 9)}] - You MUST generate completely NEW, UNIQUE captions that are DIFFERENT from any previous generation. Do NOT reuse, repeat, or modify previous captions. Create entirely fresh content with different wording, structure, and angles each time.`,
                     emojiEnabled: emojiSettings.enabled,
                     emojiIntensity: emojiSettings.intensity,
                 }),
@@ -3356,27 +3377,24 @@ Output format:
                             </h3>
                             <div className="space-y-3">
                                 {generatedCaptions.map((caption, index) => {
-                                    // Check if used by index or by caption hash (Unicode-safe)
-                                    // Use TextEncoder to handle Unicode characters properly
+                                    // Captions are already filtered out if used, so we don't need to check here
+                                    // But we'll keep the check for safety in case a caption becomes used after generation
                                     const encoder = new TextEncoder();
                                     const data = encoder.encode(caption);
                                     const binaryString = Array.from(data, byte => String.fromCharCode(byte)).join('');
                                     const captionHash = btoa(binaryString).substring(0, 50);
                                     const isUsed = usedCaptions.has(index) || usedCaptionsHash.has(captionHash);
+                                    
+                                    // Don't render used captions at all
+                                    if (isUsed) {
+                                        return null;
+                                    }
+                                    
                                     return (
                                     <div
                                         key={index}
-                                        className={`p-4 rounded-lg border ${
-                                            isUsed 
-                                                ? 'bg-gray-100 dark:bg-gray-800/50 border-gray-300 dark:border-gray-600 opacity-50' 
-                                                : 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600'
-                                        }`}
+                                        className="p-4 rounded-lg border bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600"
                                     >
-                                        {isUsed && (
-                                            <div className="mb-2 text-xs text-gray-500 dark:text-gray-400 italic">
-                                                ✓ Used
-                                            </div>
-                                        )}
                                         <textarea
                                             value={editedCaptions.get(index) ?? caption}
                                             onChange={(e) => {

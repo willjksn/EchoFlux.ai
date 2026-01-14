@@ -107,12 +107,25 @@ export const FanSelector: React.FC<FanSelectorProps> = ({
 
     const selectedFan = fans.find(f => f.id === selectedFanId);
 
-    const handleNewFan = () => {
+    const handleNewFan = async () => {
         if (!newFanName.trim()) {
             showToast?.('Please enter a fan name', 'error');
             return;
         }
         const fanId = newFanName.toLowerCase().replace(/\s+/g, '_');
+        // Create a new fan document in Firestore
+        if (user?.id) {
+            try {
+                const { doc, setDoc } = await import('firebase/firestore');
+                const { db } = await import('../firebaseConfig');
+                await setDoc(doc(db, 'users', user.id, 'onlyfans_fan_preferences', fanId), {
+                    name: newFanName.trim(),
+                    createdAt: new Date().toISOString(),
+                });
+            } catch (error) {
+                console.error('Error creating new fan:', error);
+            }
+        }
         onSelectFan(fanId, newFanName.trim());
         setNewFanName('');
         setShowFanGrid(false);
