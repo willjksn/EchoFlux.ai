@@ -104,7 +104,7 @@ export const OnlyFansFans: React.FC = () => {
                         isBigSpender: data.isBigSpender || (data.spendingLevel && data.spendingLevel >= 4) || false,
                         isLoyalFan: data.isLoyalFan || (data.totalSessions && data.totalSessions >= 5) || false,
                         subscriptionTier: data.subscriptionTier || (data.totalSessions >= 3 ? 'Paid' : 'Free'),
-                        isVIP: data.isVIP || data.isBigSpender || (data.spendingLevel && data.spendingLevel >= 4) || false,
+                        isVIP: data.isVIP || false,  // Only use checkbox value, not auto-set from spending
                         lastSessionDate: data.lastSessionDate?.toDate ? data.lastSessionDate.toDate().toISOString() : (data.lastSessionDate || undefined),
                         engagementHistory: data.engagementHistory || [],
                         notes: data.notes || '',
@@ -787,6 +787,11 @@ export const OnlyFansFans: React.FC = () => {
 
                                     {/* Badges */}
                                     <div className="mt-2 flex gap-1">
+                                        {prefs.isVIP && (
+                                            <span className="text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 px-2 py-0.5 rounded font-semibold">
+                                                VIP
+                                            </span>
+                                        )}
                                         {prefs.isBigSpender && (
                                             <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 px-2 py-0.5 rounded">
                                                 💰 Big Spender

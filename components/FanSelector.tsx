@@ -51,7 +51,7 @@ export const FanSelector: React.FC<FanSelectorProps> = ({
                     name: data.name || doc.id,
                     preferences: {
                         subscriptionTier: data.subscriptionTier || (data.totalSessions >= 3 ? 'Paid' : 'Free'),
-                        isVIP: data.isVIP || data.isBigSpender || (data.spendingLevel && data.spendingLevel >= 4) || false,
+                        isVIP: data.isVIP || false,  // Only use checkbox value, not auto-set from spending
                         spendingLevel: data.spendingLevel || 0,
                         totalSessions: data.totalSessions || 0,
                         isBigSpender: data.isBigSpender || false,

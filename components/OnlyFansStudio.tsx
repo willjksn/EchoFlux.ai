@@ -111,7 +111,7 @@ export const OnlyFansStudio: React.FC = () => {
                         isBigSpender: data.isBigSpender || false,
                         isLoyalFan: data.isLoyalFan || false,
                         subscriptionTier: data.subscriptionTier || 'Free',
-                        isVIP: data.isVIP || data.isBigSpender || (data.spendingLevel && data.spendingLevel >= 4) || false,
+                        isVIP: data.isVIP || false,  // Only use checkbox value, not auto-set from spending
                         lastSessionDate: data.lastSessionDate,
                         engagementHistory: data.engagementHistory || []
                     }
