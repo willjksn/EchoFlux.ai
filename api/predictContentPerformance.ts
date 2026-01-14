@@ -191,7 +191,7 @@ OUTPUT FORMAT (JSON only):
     "level": "High" | "Medium" | "Low",
     "confidence": 0-100,
     "score": 0-100,
-    "reasoning": "Why this prediction was made"
+    "reasoning": "Why this prediction was made. IMPORTANT: Always mention ${platform} specifically in the reasoning (e.g., 'Based on ${platform} platform analysis...', 'For ${platform} creators...', 'On ${platform}...')"
   },
   "factors": {
     "captionQuality": { "score": 0-100, "analysis": "..." },
