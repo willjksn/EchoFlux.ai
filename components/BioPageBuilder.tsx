@@ -876,7 +876,7 @@ export const BioPageBuilder: React.FC = () => {
                 </div>
 
                 {/* Profile Section */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 md:border-0 lg:border-0">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Profile</h3>
                     <div className="flex items-center gap-6">
                         <div className="relative group">
@@ -1039,7 +1039,7 @@ export const BioPageBuilder: React.FC = () => {
                 </div>
 
                 {/* Teaser Images Section */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 md:border-0 lg:border-0">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Teaser Images</h3>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Upload multiple images to showcase your content</p>
                     
@@ -1193,7 +1193,7 @@ export const BioPageBuilder: React.FC = () => {
                 </div>
 
                 {/* Appearance Section */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 md:border-0 lg:border-0">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Appearance</h3>
                     <div className="grid grid-cols-2 gap-4 mb-4">
                         <div>
@@ -1261,7 +1261,7 @@ export const BioPageBuilder: React.FC = () => {
                 </div>
                 
                 {/* Email Capture Section */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 md:border-0 lg:border-0">
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">
                             <MailIcon className="text-primary-600 dark:text-primary-400" />
