@@ -61,6 +61,7 @@ export const VoiceAssistant: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isWaitingForGreeting, setIsWaitingForGreeting] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [conversationHistory, setConversationHistory] = useState<ConversationMessage[]>([]);
   const [showTranscript, setShowTranscript] = useState(false);
@@ -204,9 +205,9 @@ export const VoiceAssistant: React.FC = () => {
       callbacks: {
         onopen: async () => {
           setIsConnecting(false);
+          setIsWaitingForGreeting(true); // Show thinking indicator while waiting for greeting
           setConnectionError(null);
           setConversationHistory([]); // Clear history on new connection
-          showToast("Voice Assistant Connected. You can start speaking!", "success");
 
           try {
             mediaStream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -303,6 +304,11 @@ Just ask me how to do something or what you'd like to learn about!`;
           const textPart = msg.serverContent?.modelTurn?.parts?.find(p => p.text);
           const assistantText = typeof textPart?.text === 'string' ? textPart.text : null;
           if (assistantText && assistantText.trim()) {
+            // If this is the first message (greeting), hide the waiting indicator
+            if (isWaitingForGreeting) {
+              setIsWaitingForGreeting(false);
+              showToast("Voice Assistant Connected. You can start speaking!", "success");
+            }
             setConversationHistory(prev => [...prev, {
               type: 'assistant',
               text: assistantText,
@@ -376,11 +382,13 @@ Just ask me how to do something or what you'd like to learn about!`;
     if (isOpen) {
       setIsOpen(false);
       disconnect();
+      setIsWaitingForGreeting(false);
       return;
     }
 
     setIsOpen(true);
     setIsConnecting(true);
+    setIsWaitingForGreeting(false);
 
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
     if (!outputAudioContext.current) outputAudioContext.current = new AudioContextClass({ sampleRate: 24000 });
@@ -445,27 +453,34 @@ Just ask me how to do something or what you'd like to learn about!`;
           onClick={toggleSession}
           className={`p-4 rounded-full shadow-lg transition-all transform hover:scale-110 text-white ${
             isSpeaking ? "bg-red-500 animate-pulse" :
-            isConnecting ? "bg-yellow-500 animate-pulse" :
+            isConnecting || isWaitingForGreeting ? "bg-yellow-500 animate-pulse" :
             isOpen ? "bg-red-500 hover:bg-red-600" :
             "bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
           }`}
           title={
             isSpeaking ? "AI is speaking - Click to stop" :
             isConnecting ? "Connecting..." :
+            isWaitingForGreeting ? "Voice Assistant is thinking..." :
             isOpen ? "Voice Assistant Active - Click to disconnect" :
             "Start Voice Assistant"
           }
-          disabled={isConnecting}
+          disabled={isConnecting || isWaitingForGreeting}
         >
-          {isOpen || isConnecting ? (
+          {isOpen || isConnecting || isWaitingForGreeting ? (
             <StopCircleIcon className="w-6 h-6" />
           ) : (
             <MicrophoneWaveIcon className="w-6 h-6" />
           )}
         </button>
         {/* Status indicator */}
-        {isOpen && !isConnecting && (
+        {isOpen && !isConnecting && !isWaitingForGreeting && (
           <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse"></div>
+        )}
+        {/* Thinking indicator when waiting for greeting */}
+        {isWaitingForGreeting && (
+          <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 rounded-full border-2 border-white dark:border-gray-800 animate-spin">
+            <div className="w-full h-full rounded-full border-2 border-transparent border-t-white"></div>
+          </div>
         )}
       </div>
       {/* Connection status tooltip */}
@@ -474,12 +489,21 @@ Just ask me how to do something or what you'd like to learn about!`;
           Connecting to voice assistant...
         </div>
       )}
+      {isWaitingForGreeting && (
+        <div className="absolute bottom-full right-0 mb-2 px-3 py-2 bg-yellow-600 dark:bg-yellow-700 text-white text-sm rounded-lg shadow-lg whitespace-nowrap animate-pulse flex items-center gap-2">
+          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          Voice Assistant is thinking...
+        </div>
+      )}
       {connectionError && (
         <div className="absolute bottom-full right-0 mb-2 px-3 py-2 bg-red-600 dark:bg-red-700 text-white text-sm rounded-lg shadow-lg max-w-xs">
           {connectionError}
         </div>
       )}
-      {isOpen && !isConnecting && !isSpeaking && (
+      {isOpen && !isConnecting && !isWaitingForGreeting && !isSpeaking && (
         <div className="absolute bottom-full right-0 mb-2 px-3 py-2 bg-green-600 dark:bg-green-700 text-white text-sm rounded-lg shadow-lg whitespace-nowrap">
           Listening... Speak now
         </div>

@@ -2492,22 +2492,7 @@ Output format:
                     mediaType: currentMediaType,
                 };
                 
-                // Save to history automatically - ensure media is included
-                try {
-                    await savePredictToHistory({
-                        ...resultData,
-                        mediaUrl: currentMediaUrl || null,
-                        mediaType: currentMediaType,
-                    });
-                    // Reload captions history
-                    await loadCaptionsHistory();
-                    showToast?.('Prediction saved to history!', 'success');
-                } catch (saveError: any) {
-                    // Log error but don't block showing the result
-                    console.error('Failed to save prediction to history:', saveError);
-                    showToast?.('Prediction generated but failed to save to history. Please try saving manually.', 'error');
-                }
-                
+                // Don't save automatically - let user choose to save via modal
                 setPredictResult(resultData);
                 setShowPredictModal(true);
                 showToast?.('Performance predicted!', 'success');
