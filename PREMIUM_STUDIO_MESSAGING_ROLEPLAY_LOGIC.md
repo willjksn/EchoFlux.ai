@@ -271,7 +271,7 @@ if (currentFanId && currentFanPrefs) {
     // Infer subscription status from tier: Free = Free Plan, Regular/VIP = Subscribed
     const subscriptionStatus = currentFanPrefs.subscriptionTier === 'Free' 
         ? 'Free Plan' 
-        : (currentFanPrefs.subscriptionTier === 'Regular' || currentFanPrefs.subscriptionTier === 'VIP')
+        : currentFanPrefs.subscriptionTier === 'Paid'
         ? 'Subscribed'
         : 'Unknown';
     
