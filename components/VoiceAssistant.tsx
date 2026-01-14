@@ -101,6 +101,7 @@ export const VoiceAssistant: React.FC = () => {
 
     setIsSpeaking(false);
     setIsConnecting(false);
+    setIsWaitingForGreeting(false);
     setConnectionError(null);
   };
 
