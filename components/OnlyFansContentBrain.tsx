@@ -2477,6 +2477,34 @@ Output format:
             await uploadBytes(storageRef, file, { contentType: file.type });
             const mediaUrl = await getDownloadURL(storageRef);
             setUploadedMediaUrl(mediaUrl);
+            
+            // Auto-save to Media Vault
+            try {
+                const fileType = file.type.startsWith('video/') ? 'video' : 'image';
+                const uniqueId = `${timestamp}_${Math.random().toString(36).substring(2, 9)}`;
+                const mediaItem = {
+                    id: uniqueId,
+                    userId: user.id,
+                    url: mediaUrl,
+                    name: file.name,
+                    type: fileType,
+                    mimeType: file.type,
+                    size: file.size,
+                    uploadedAt: new Date().toISOString(),
+                    usedInPosts: [],
+                    tags: [],
+                    folderId: 'general', // Default to general folder
+                };
+                
+                await setDoc(doc(db, 'users', user.id, 'onlyfans_media_library', mediaItem.id), mediaItem);
+                // Refresh media vault items if modal is open
+                if (showMediaVaultModal) {
+                    loadMediaVault();
+                }
+            } catch (vaultError: any) {
+                // Don't fail the upload if vault save fails, just log it
+                console.error('Failed to save to media vault:', vaultError);
+            }
         } catch (error: any) {
             console.error('Upload error:', error);
             showToast?.('Failed to upload media', 'error');
