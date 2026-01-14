@@ -1196,11 +1196,11 @@ export const OnlyFansContentBrain: React.FC = () => {
                 if (fanPreferences.boundaries) contextParts.push(`Boundaries: ${fanPreferences.boundaries}`);
                 if (fanPreferences.suggestedFlow) contextParts.push(`What works best: ${fanPreferences.suggestedFlow}`);
                 if (contextParts.length > 0) {
-                    fanContext = `\n\nCRITICAL - PERSONALIZE FOR FAN: ${fanName}\nFan Preferences:\n${contextParts.map(p => `- ${p}`).join('\n')}\n\nREQUIREMENTS - PERSPECTIVE IS CRITICAL:\n- YOU (the content creator) are writing captions FROM YOUR PERSPECTIVE (first person: "I", "my", "me")\n- YOU are addressing ${fanName} directly - the caption is YOU talking TO ${fanName}, NOT ${fanName} talking to you\n- Use ${fanName}'s name naturally as YOU address them (e.g., "Hey ${fanName}...", "For ${fanName}...", "${fanName}, this one's for you...", etc.)\n- DO NOT write as if ${fanName} is speaking to you - YOU are the one posting this caption\n- Match ${fanName}'s preferred tone: ${fanPreferences.preferredTone || 'their style'}\n- Use ${fanName}'s communication style: ${fanPreferences.communicationStyle || 'their preferred style'}\n- Reference ${fanName}'s favorite session type when relevant: ${fanPreferences.favoriteSessionType || 'their preferences'}\n- Make captions feel personal and tailored specifically for ${fanName} - but always from YOUR perspective as the creator`;
+                    fanContext = `\n\nPERSONALIZE FOR FAN: ${fanName}\nFan Preferences:\n${contextParts.map(p => `- ${p}`).join('\n')}\n\nNATURAL PERSONALIZATION GUIDELINES:\n- Write FROM YOUR PERSPECTIVE (first person: "I", "my", "me") - YOU are the creator posting this\n- Write as if YOU are addressing ${fanName}, but make it sound NATURAL and CONVERSATIONAL\n- Use ${fanName}'s name OCCASIONALLY and NATURALLY - not in every sentence, just when it feels right (like a real person would)\n- Match ${fanPreferences.preferredTone || 'their preferred'} tone naturally - don't force it\n- Use ${fanPreferences.communicationStyle || 'their preferred'} communication style organically\n- Reference their preferences subtly - don't make it obvious you're following a checklist\n- Write like a REAL PERSON, not AI - natural flow, varied sentence structure, authentic voice\n- DO NOT overuse their name - use it sparingly, like you would in real conversation\n- Make it feel personal but NOT robotic or formulaic`;
                 }
             } else if (selectedFanId && selectedFanName) {
                 // Fan selected but preferences not loaded yet - still use their name
-                fanContext = `\n\nCRITICAL - PERSONALIZE FOR FAN: ${selectedFanName}\nPERSPECTIVE REQUIREMENT:\n- YOU (the content creator) are writing captions FROM YOUR PERSPECTIVE (first person: "I", "my", "me")\n- YOU are addressing ${selectedFanName} directly - the caption is YOU talking TO ${selectedFanName}, NOT ${selectedFanName} talking to you\n- Use ${selectedFanName}'s name naturally as YOU address them (e.g., "Hey ${selectedFanName}...", "For ${selectedFanName}...", "${selectedFanName}, this one's for you...", etc.)\n- DO NOT write as if ${selectedFanName} is speaking to you - YOU are the one posting this caption\n- Make captions feel personal and tailored specifically for ${selectedFanName} - but always from YOUR perspective as the creator`;
+                fanContext = `\n\nPERSONALIZE FOR FAN: ${selectedFanName}\nNATURAL PERSONALIZATION GUIDELINES:\n- Write FROM YOUR PERSPECTIVE (first person: "I", "my", "me") - YOU are the creator posting this\n- Write as if YOU are addressing ${selectedFanName}, but make it sound NATURAL and CONVERSATIONAL\n- Use ${selectedFanName}'s name OCCASIONALLY and NATURALLY - not in every sentence, just when it feels right\n- Write like a REAL PERSON, not AI - natural flow, varied sentence structure, authentic voice\n- DO NOT overuse their name - use it sparingly, like you would in real conversation\n- Make it feel personal but NOT robotic or formulaic`;
             }
 
             // Build AI personality context
@@ -1696,33 +1696,34 @@ export const OnlyFansContentBrain: React.FC = () => {
                 
                 if (contextParts.length > 0) {
                     fanContextBlock = `
-CRITICAL - PERSONALIZE FOR FAN: ${fanName}
+PERSONALIZE FOR FAN: ${fanName}
 Fan Preferences:
 ${contextParts.map(p => `- ${p}`).join('\n')}
 
-REQUIREMENTS - PERSPECTIVE IS CRITICAL:
-- YOU (the content creator) are writing messages FROM YOUR PERSPECTIVE (first person: "I", "my", "me")
-- YOU are addressing ${fanName} directly - the messages are YOU talking TO ${fanName}, NOT ${fanName} talking to you
-- Use ${fanName}'s name naturally as YOU address them (e.g., "Hey ${fanName}...", "${fanName}, I wanted to...", etc.)
-- DO NOT write as if ${fanName} is speaking to you - YOU are the one sending these messages
-- Match ${fanName}'s preferred tone: ${fanPreferences.preferredTone || 'their style'}
-- Use ${fanName}'s communication style: ${fanPreferences.communicationStyle || 'their preferred style'}
-- Reference ${fanName}'s favorite session type when relevant: ${fanPreferences.favoriteSessionType || 'their preferences'}
-- Make messages feel personal and tailored specifically for ${fanName} - but always from YOUR perspective as the creator
-- Generate messages that ${fanName} would respond to based on their preferences
-- Consider ${fanName}'s boundaries and what works best for them
+NATURAL PERSONALIZATION GUIDELINES:
+- Write FROM YOUR PERSPECTIVE (first person: "I", "my", "me") - YOU are the creator sending these messages
+- Write as if YOU are addressing ${fanName}, but make it sound NATURAL and CONVERSATIONAL
+- Use ${fanName}'s name OCCASIONALLY and NATURALLY - not in every message, just when it feels right (like a real person would)
+- Match ${fanPreferences.preferredTone || 'their preferred'} tone naturally - don't force it
+- Use ${fanPreferences.communicationStyle || 'their preferred'} communication style organically
+- Reference their preferences subtly - don't make it obvious you're following a checklist
+- Write like a REAL PERSON, not AI - natural flow, varied sentence structure, authentic voice
+- DO NOT overuse their name - use it sparingly, like you would in real conversation
+- Make messages feel personal but NOT robotic or formulaic
+- Consider their boundaries and what works best for them naturally
 `;
                 }
             } else if (selectedFanId && selectedFanName) {
                 // Fan selected but preferences not loaded yet - still use their name
                 fanContextBlock = `
-CRITICAL - PERSONALIZE FOR FAN: ${selectedFanName}
-PERSPECTIVE REQUIREMENT:
-- YOU (the content creator) are writing messages FROM YOUR PERSPECTIVE (first person: "I", "my", "me")
-- YOU are addressing ${selectedFanName} directly - the messages are YOU talking TO ${selectedFanName}, NOT ${selectedFanName} talking to you
-- Use ${selectedFanName}'s name naturally as YOU address them (e.g., "Hey ${selectedFanName}...", "${selectedFanName}, I wanted to...", etc.)
-- DO NOT write as if ${selectedFanName} is speaking to you - YOU are the one sending these messages
-- Make messages feel personal and tailored specifically for ${selectedFanName} - but always from YOUR perspective as the creator
+PERSONALIZE FOR FAN: ${selectedFanName}
+NATURAL PERSONALIZATION GUIDELINES:
+- Write FROM YOUR PERSPECTIVE (first person: "I", "my", "me") - YOU are the creator sending these messages
+- Write as if YOU are addressing ${selectedFanName}, but make it sound NATURAL and CONVERSATIONAL
+- Use ${selectedFanName}'s name OCCASIONALLY and NATURALLY - not in every message, just when it feels right
+- Write like a REAL PERSON, not AI - natural flow, varied sentence structure, authentic voice
+- DO NOT overuse their name - use it sparingly, like you would in real conversation
+- Make messages feel personal but NOT robotic or formulaic
 `;
             }
             

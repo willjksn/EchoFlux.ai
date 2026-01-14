@@ -110,7 +110,7 @@ ${lastFanMessage ? `- Last fan message: "${lastFanMessage}"` : ""}
 Recent conversation (most recent last):
 ${conversationHistory || "No prior messages provided."}
 
-🚨 CRITICAL - PERSPECTIVE REQUIREMENT 🚨
+🚨 CRITICAL - PERSPECTIVE & NATURAL WRITING 🚨
 - Write suggestions FROM THE CONTENT CREATOR'S PERSPECTIVE (first person: "I", "my", "me")
 - The suggestions are what the CONTENT CREATOR is sending, NOT what fans/followers are saying
 - Write as if YOU (the content creator) are sending these messages yourself
@@ -118,7 +118,10 @@ ${conversationHistory || "No prior messages provided."}
 - DO NOT write as if fans are speaking to you
 - Use first-person language from the creator's point of view
 - The suggestions should be what the CREATOR is saying to fans, not what fans are saying to the creator
-${fanName && fanName !== 'Fan' ? `- When mentioning ${fanName}, YOU are addressing them directly - YOU are talking TO ${fanName}, NOT ${fanName} talking to you` : ''}
+${fanName && fanName !== 'Fan' ? `- When mentioning ${fanName}, YOU are addressing them directly - but make it NATURAL
+- Use ${fanName}'s name OCCASIONALLY and NATURALLY - not in every message, just when it feels right (like a real person would)
+- Write like a REAL PERSON, not AI - natural flow, varied sentence structure, authentic voice
+- DO NOT overuse their name - use it sparingly, like you would in real conversation` : ''}
 
 Guidelines:
 - Be bold, playful, and explicitly adult (sexting) while respecting the chosen tone.
