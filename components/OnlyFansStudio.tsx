@@ -111,6 +111,7 @@ export const OnlyFansStudio: React.FC = () => {
                         isBigSpender: data.isBigSpender || false,
                         isLoyalFan: data.isLoyalFan || false,
                         subscriptionTier: data.subscriptionTier || 'Free',
+                        isVIP: data.isVIP || data.isBigSpender || (data.spendingLevel && data.spendingLevel >= 4) || false,
                         lastSessionDate: data.lastSessionDate,
                         engagementHistory: data.engagementHistory || []
                     }
@@ -127,7 +128,7 @@ export const OnlyFansStudio: React.FC = () => {
                 return daysSince <= 30;
             });
 
-            const vipFans = fansList.filter(f => f.preferences.subscriptionTier === 'VIP');
+            const vipFans = fansList.filter(f => f.preferences.isVIP === true);
             const bigSpenders = fansList.filter(f => f.preferences.isBigSpender || (f.preferences.spendingLevel || 0) >= 4);
 
             // Load upcoming sessions from calendar (both OnlyFans calendar and regular calendar)

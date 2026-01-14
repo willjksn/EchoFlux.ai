@@ -8,7 +8,8 @@ interface Fan {
     id: string;
     name: string;
     preferences?: {
-        subscriptionTier?: 'VIP' | 'Regular' | 'Free';
+        subscriptionTier?: 'Free' | 'Paid';
+        isVIP?: boolean;
         spendingLevel?: number;
         totalSessions?: number;
         isBigSpender?: boolean;
@@ -49,7 +50,8 @@ export const FanSelector: React.FC<FanSelectorProps> = ({
                     id: doc.id,
                     name: data.name || doc.id,
                     preferences: {
-                        subscriptionTier: data.subscriptionTier || (data.totalSessions >= 10 ? 'VIP' : data.totalSessions >= 3 ? 'Regular' : 'Free'),
+                        subscriptionTier: data.subscriptionTier || (data.totalSessions >= 3 ? 'Paid' : 'Free'),
+                        isVIP: data.isVIP || data.isBigSpender || (data.spendingLevel && data.spendingLevel >= 4) || false,
                         spendingLevel: data.spendingLevel || 0,
                         totalSessions: data.totalSessions || 0,
                         isBigSpender: data.isBigSpender || false,
@@ -233,17 +235,22 @@ export const FanSelector: React.FC<FanSelectorProps> = ({
                                     >
                                         <div className="flex items-center gap-3">
                                             <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${
-                                                fan.preferences?.subscriptionTier === 'VIP' 
-                                                    ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
-                                                    : fan.preferences?.subscriptionTier === 'Regular'
+                                                fan.preferences?.subscriptionTier === 'Paid'
                                                     ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                                                     : 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
                                             }`}>
                                                 {getInitials(fan.name)}
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                                                    {fan.name}
+                                                <div className="flex items-center gap-2">
+                                                    <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                                                        {fan.name}
+                                                    </div>
+                                                    {fan.preferences?.isVIP && (
+                                                        <span className="px-1.5 py-0.5 text-xs font-semibold rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300">
+                                                            VIP
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 {fan.preferences?.subscriptionTier && (
                                                     <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
@@ -323,7 +330,14 @@ export const FanSelector: React.FC<FanSelectorProps> = ({
                         {getInitials(selectedFan.name)}
                     </div>
                     <div className="flex-1">
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">{selectedFan.name}</div>
+                        <div className="flex items-center gap-2">
+                            <div className="text-sm font-medium text-gray-900 dark:text-white">{selectedFan.name}</div>
+                            {selectedFan.preferences?.isVIP && (
+                                <span className="px-1.5 py-0.5 text-xs font-semibold rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300">
+                                    VIP
+                                </span>
+                            )}
+                        </div>
                         {selectedFan.preferences?.subscriptionTier && (
                             <div className="text-xs text-gray-500 dark:text-gray-400">{selectedFan.preferences.subscriptionTier}</div>
                         )}
@@ -377,8 +391,15 @@ export const FanSelector: React.FC<FanSelectorProps> = ({
                                             {getInitials(fan.name)}
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                                                {fan.name}
+                                            <div className="flex items-center gap-2">
+                                                <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                                                    {fan.name}
+                                                </div>
+                                                {fan.preferences?.isVIP && (
+                                                    <span className="px-1.5 py-0.5 text-xs font-semibold rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300">
+                                                        VIP
+                                                    </span>
+                                                )}
                                             </div>
                                             {fan.preferences?.subscriptionTier && (
                                                 <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
