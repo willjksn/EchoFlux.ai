@@ -40,6 +40,10 @@
     {
       "path": "/api/cronFeedbackRequests",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cleanupExpiredApprovedWaitlist",
+      "schedule": "0 2 * * *"
     }
   ]
 }
