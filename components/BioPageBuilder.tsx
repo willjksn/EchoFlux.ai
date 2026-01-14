@@ -876,7 +876,7 @@ export const BioPageBuilder: React.FC = () => {
                 </div>
 
                 {/* Profile Section */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 md:border-0 lg:border-0">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 md:border-0 md:shadow-none lg:border-0 lg:shadow-none">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Profile</h3>
                     <div className="flex items-center gap-6">
                         <div className="relative group">
@@ -1039,7 +1039,7 @@ export const BioPageBuilder: React.FC = () => {
                 </div>
 
                 {/* Teaser Images Section */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 md:border-0 lg:border-0">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 md:border-0 md:shadow-none lg:border-0 lg:shadow-none">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Teaser Images</h3>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Upload multiple images to showcase your content</p>
                     
@@ -1193,7 +1193,7 @@ export const BioPageBuilder: React.FC = () => {
                 </div>
 
                 {/* Appearance Section */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 md:border-0 lg:border-0">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 md:border-0 md:shadow-none lg:border-0 lg:shadow-none">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Appearance</h3>
                     <div className="grid grid-cols-2 gap-4 mb-4">
                         <div>
@@ -1205,7 +1205,7 @@ export const BioPageBuilder: React.FC = () => {
                                     updateTheme('pageBackgroundColor', e.target.value);
                                     if (!bioPage.theme.backgroundColor) updateTheme('backgroundColor', e.target.value);
                                 }} 
-                                className="h-10 w-full rounded cursor-pointer bg-transparent" 
+                                className="h-10 w-full rounded cursor-pointer bg-transparent border-2 border-gray-500 dark:border-gray-400 md:border-0 lg:border-0" 
                             />
                         </div>
                         <div>
@@ -1214,12 +1214,12 @@ export const BioPageBuilder: React.FC = () => {
                                 type="color" 
                                 value={bioPage.theme.cardBackgroundColor || '#ffffff'} 
                                 onChange={e => updateTheme('cardBackgroundColor', e.target.value)} 
-                                className="h-10 w-full rounded cursor-pointer bg-transparent" 
+                                className="h-10 w-full rounded cursor-pointer bg-transparent border-2 border-gray-500 dark:border-gray-400 md:border-0 lg:border-0" 
                             />
                         </div>
                         <div>
                             <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Buttons</label>
-                            <input type="color" value={bioPage.theme.buttonColor || '#000000'} onChange={e => updateTheme('buttonColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent" />
+                            <input type="color" value={bioPage.theme.buttonColor || '#000000'} onChange={e => updateTheme('buttonColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent border-2 border-gray-500 dark:border-gray-400 md:border-0 lg:border-0" />
                         </div>
                         <div>
                             <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Page Text</label>
@@ -1227,7 +1227,7 @@ export const BioPageBuilder: React.FC = () => {
                                 type="color"
                                 value={bioPage.theme.pageTextColor || (bioPage.theme.textColor === '#ffffff' ? '#2563eb' : bioPage.theme.textColor) || '#2563eb'}
                                 onChange={e => updateTheme('pageTextColor', e.target.value)}
-                                className="h-10 w-full rounded cursor-pointer bg-transparent"
+                                className="h-10 w-full rounded cursor-pointer bg-transparent border-2 border-gray-500 dark:border-gray-400 md:border-0 lg:border-0"
                             />
                         </div>
                         <div>
@@ -1236,7 +1236,7 @@ export const BioPageBuilder: React.FC = () => {
                                 type="color"
                                 value={bioPage.theme.buttonTextColor || bioPage.theme.textColor || '#ffffff'}
                                 onChange={e => updateTheme('buttonTextColor', e.target.value)}
-                                className="h-10 w-full rounded cursor-pointer bg-transparent"
+                                className="h-10 w-full rounded cursor-pointer bg-transparent border-2 border-gray-500 dark:border-gray-400 md:border-0 lg:border-0"
                             />
                         </div>
                     </div>
@@ -1261,7 +1261,7 @@ export const BioPageBuilder: React.FC = () => {
                 </div>
                 
                 {/* Email Capture Section */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 md:border-0 lg:border-0">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 md:border-0 md:shadow-none lg:border-0 lg:shadow-none">
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">
                             <MailIcon className="text-primary-600 dark:text-primary-400" />
@@ -1312,19 +1312,19 @@ export const BioPageBuilder: React.FC = () => {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Form Background</label>
-                                    <input type="color" value={bioPage.emailCapture.formBackgroundColor || '#d1dbf0'} onChange={e => updateEmailCapture('formBackgroundColor', e.target.value)} className="h-10 w-full rounded cursor-pointer border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700" />
+                                    <input type="color" value={bioPage.emailCapture.formBackgroundColor || '#d1dbf0'} onChange={e => updateEmailCapture('formBackgroundColor', e.target.value)} className="h-10 w-full rounded cursor-pointer border-2 border-gray-500 dark:border-gray-400 md:border md:border-gray-300 md:dark:border-gray-600 lg:border lg:border-gray-300 lg:dark:border-gray-600 bg-white dark:bg-gray-700" />
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Title Color</label>
-                                    <input type="color" value={bioPage.emailCapture.titleColor || '#111827'} onChange={e => updateEmailCapture('titleColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent" />
+                                    <input type="color" value={bioPage.emailCapture.titleColor || '#111827'} onChange={e => updateEmailCapture('titleColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent border-2 border-gray-500 dark:border-gray-400 md:border-0 lg:border-0" />
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Input Background</label>
-                                    <input type="color" value={bioPage.emailCapture.inputBackgroundColor || '#f9fafb'} onChange={e => updateEmailCapture('inputBackgroundColor', e.target.value)} className="h-10 w-full rounded cursor-pointer border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700" />
+                                    <input type="color" value={bioPage.emailCapture.inputBackgroundColor || '#f9fafb'} onChange={e => updateEmailCapture('inputBackgroundColor', e.target.value)} className="h-10 w-full rounded cursor-pointer border-2 border-gray-500 dark:border-gray-400 md:border md:border-gray-300 md:dark:border-gray-600 lg:border lg:border-gray-300 lg:dark:border-gray-600 bg-white dark:bg-gray-700" />
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Input Text</label>
-                                    <input type="color" value={bioPage.emailCapture.inputTextColor || '#111827'} onChange={e => updateEmailCapture('inputTextColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent" />
+                                    <input type="color" value={bioPage.emailCapture.inputTextColor || '#111827'} onChange={e => updateEmailCapture('inputTextColor', e.target.value)} className="h-10 w-full rounded cursor-pointer bg-transparent border-2 border-gray-500 dark:border-gray-400 md:border-0 lg:border-0" />
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Button Background</label>
@@ -1332,7 +1332,7 @@ export const BioPageBuilder: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Button Text</label>
-                                    <input type="color" value={bioPage.emailCapture.buttonTextColor || '#111827'} onChange={e => updateEmailCapture('buttonTextColor', e.target.value)} className="h-10 w-full rounded cursor-pointer border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700" />
+                                    <input type="color" value={bioPage.emailCapture.buttonTextColor || '#111827'} onChange={e => updateEmailCapture('buttonTextColor', e.target.value)} className="h-10 w-full rounded cursor-pointer border-2 border-gray-500 dark:border-gray-400 md:border md:border-gray-300 md:dark:border-gray-600 lg:border lg:border-gray-300 lg:dark:border-gray-600 bg-white dark:bg-gray-700" />
                                 </div>
                             </div>
                         </div>
