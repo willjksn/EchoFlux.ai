@@ -54,8 +54,8 @@ interface ConversationMessage {
 export const VoiceAssistant: React.FC = () => {
   const { user, showToast, settings } = useAppContext();
   
-  // Hide Voice Assistant for Free plan users
-  if (user?.plan === 'Free') {
+  // Only show Voice Assistant for Admin users
+  if (user?.role !== 'Admin') {
     return null;
   }
   const [isOpen, setIsOpen] = useState(false);
