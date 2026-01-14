@@ -225,10 +225,21 @@ ${isAdmin ? 'If the user asks about current events, trends, or time-sensitive in
                     },
                     {
                       role: "model",
-                      parts: [{ functionResponse: {
-                        name: 'web_search',
-                        response: { results: searchResult.results }
-                      }}],
+                      parts: [{ 
+                        functionCall: {
+                          name: 'web_search',
+                          args: args
+                        }
+                      }],
+                    },
+                    {
+                      role: "function",
+                      parts: [{ 
+                        functionResponse: {
+                          name: 'web_search',
+                          response: { results: searchResult.results }
+                        }
+                      }],
                     },
                     {
                       role: "user",
