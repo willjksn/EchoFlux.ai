@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "engines": {
-    "node": "20.x"
+    "node": "22.x"
   },
   "scripts": {
     "dev": "vite",
@@ -39,7 +39,7 @@
     "vercel": "^48.11.0"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
+    "@types/node": "^22.0.0",
     "@types/nodemailer": "^6.4.17",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.0",
