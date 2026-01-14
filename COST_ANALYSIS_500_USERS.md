@@ -4,7 +4,7 @@
 - **User Distribution**: Equal distribution across plans (167 Free, 167 Pro, 166 Elite)
 - **Usage**: All users use 100% of their monthly limits
 - **Chatbot**: Average 50 queries per user per month (no hard limit)
-- **Voice Assistant**: **ADMIN ONLY** - Average 50 sessions per admin per month, 5 minutes per session (assumes 3 admin users)
+- **Voice Assistant**: **ADMIN ONLY** - 10 sessions total per month, 3 minutes per session (assumes 3 admin users, minimal usage)
 - **Token Estimates**: Based on typical prompt/response sizes
 
 ---
@@ -33,7 +33,7 @@
 - Voice Assistant: Not available (Admin only)
 
 ### Admin Users (3 users - assumed)
-- Voice Assistant: 50 sessions × 5 min = **150 sessions total**
+- Voice Assistant: **10 sessions total**, 3 minutes per session
 
 ---
 
@@ -45,7 +45,7 @@
 | Captions | 334,170 |
 | Replies | 174,600 |
 | Chatbot Queries | 25,000 |
-| Voice Assistant Sessions (Admin Only) | 150 |
+| Voice Assistant Sessions (Admin Only) | 10 |
 
 ---
 
@@ -93,10 +93,10 @@
 
 ### Voice Assistant Sessions (Native Audio)
 - **Text Input**: ~5,000 tokens (system instruction + knowledge base)
-- **Audio Input**: ~50,000 tokens per 5-minute session (estimated)
+- **Audio Input**: ~30,000 tokens per 3-minute session (estimated)
 - **Text Output**: ~500 tokens (occasional text responses)
-- **Audio Output**: ~100,000 tokens per 5-minute session (estimated)
-- **Total per session**: ~156,000 tokens
+- **Audio Output**: ~60,000 tokens per 3-minute session (estimated)
+- **Total per session**: ~95,500 tokens
 
 ---
 
@@ -122,17 +122,17 @@
 - Output: 25,000 × 1,000 = 25,000,000 tokens = 25M tokens
 - **Cost**: (125 × $0.15) + (25 × $0.60) = $18.75 + $15.00 = **$33.75**
 
-### 5. Voice Assistant Sessions (Admin Only - 150 sessions)
-- Text Input: 150 × 5,000 = 750,000 tokens = 0.75M tokens
-- Audio Input: 150 × 50,000 = 7,500,000 tokens = 7.5M tokens
-- Text Output: 150 × 500 = 75,000 tokens = 0.075M tokens
-- Audio Output: 150 × 100,000 = 15,000,000 tokens = 15M tokens
+### 5. Voice Assistant Sessions (Admin Only - 10 sessions, 3 min each)
+- Text Input: 10 × 5,000 = 50,000 tokens = 0.05M tokens
+- Audio Input: 10 × 30,000 = 300,000 tokens = 0.3M tokens
+- Text Output: 10 × 500 = 5,000 tokens = 0.005M tokens
+- Audio Output: 10 × 60,000 = 600,000 tokens = 0.6M tokens
 - **Cost**: 
-  - Text Input: 0.75 × $0.50 = $0.38
-  - Audio Input: 7.5 × $3.00 = $22.50
-  - Text Output: 0.075 × $2.00 = $0.15
-  - Audio Output: 15 × $12.00 = $180.00
-  - **Total Voice (Admin Only)**: **$203.03**
+  - Text Input: 0.05 × $0.50 = $0.03
+  - Audio Input: 0.3 × $3.00 = $0.90
+  - Text Output: 0.005 × $2.00 = $0.01
+  - Audio Output: 0.6 × $12.00 = $7.20
+  - **Total Voice (Admin Only)**: **$8.14**
 
 ### 6. Premium Content Studio Features (Elite users only - 166 users)
 Assuming Elite users use Premium Content Studio features:
@@ -188,19 +188,19 @@ Assuming Elite users use Premium Content Studio features:
 | Strategies | $6.99 |
 | Replies | $23.58 |
 | Chatbot Queries | $33.75 |
-| Voice Assistant (Admin Only) | **$203.03** |
+| Voice Assistant (Admin Only) | **$8.14** |
 | Premium Content Studio | $77.94 |
-| **TOTAL** | **$445.55** |
+| **TOTAL** | **$250.66** |
 
 ---
 
 ## Key Findings
 
-1. **Voice Assistant (Admin Only) is now a minimal cost** at ~45.5% of total costs ($203.03)
+1. **Voice Assistant (Admin Only) is now a minimal cost** at ~3.2% of total costs ($8.14)
    - Audio input/output is expensive ($3/$12 per million tokens)
-   - 5-minute sessions generate ~156,000 tokens each
-   - 150 admin sessions = 23.4 million tokens
-   - **Restricting to admin only reduced voice costs by 99.7%** (from $67,607.34 to $203.03)
+   - 3-minute sessions generate ~95,500 tokens each
+   - 10 admin sessions = 955,000 tokens (0.955M tokens)
+   - **Restricting to admin only with minimal usage reduced voice costs by 99.99%** (from $67,607.34 to $8.14)
 
 2. **Text-based features are very affordable**:
    - Captions: $100.26 (334K requests)
@@ -210,9 +210,9 @@ Assuming Elite users use Premium Content Studio features:
    - Premium Content Studio: $77.94
 
 3. **Cost per user per month**:
-   - **Total**: **$0.89/user/month** (down from $135.70/user/month)
+   - **Total**: **$0.50/user/month** (down from $135.70/user/month)
    - Text features only: **$0.48/user/month**
-   - Voice (admin only): **$0.41/user/month** (amortized across all users)
+   - Voice (admin only): **$0.02/user/month** (amortized across all users)
 
 ---
 
@@ -220,8 +220,8 @@ Assuming Elite users use Premium Content Studio features:
 
 1. **Voice Assistant (Admin Only) - IMPLEMENTED**:
    - ✅ Voice assistant restricted to Admin users only
-   - ✅ Cost reduced from $67,607.34/month to $203.03/month (99.7% reduction)
-   - Admin users can still use voice assistant for support and testing
+   - ✅ Cost reduced from $67,607.34/month to $8.14/month (99.99% reduction)
+   - Admin users can still use voice assistant for support and testing (10 sessions/month, 3 min each)
    - Regular users no longer have access to voice assistant
 
 2. **Text Features Are Efficient**:
@@ -230,24 +230,25 @@ Assuming Elite users use Premium Content Studio features:
    - Premium Content Studio adds only $77.94/month for Elite users
 
 3. **Scaling Considerations**:
-   - At $0.89/user/month, the platform is highly cost-effective
-   - Can support 1,000 users for ~$1,780/month
-   - Can support 5,000 users for ~$8,900/month
-   - Voice assistant costs scale linearly with admin usage (minimal impact)
+   - At $0.50/user/month, the platform is highly cost-effective
+   - Can support 1,000 users for ~$1,000/month
+   - Can support 5,000 users for ~$5,000/month
+   - Can support 10,000 users for ~$10,000/month
+   - Voice assistant costs are negligible ($8.14/month for 10 sessions)
 
 ---
 
 ## Scenario Variations
 
-### Scenario A: Current Implementation (Admin Only - 3 admins, 50 sessions each)
-- Voice Sessions: 150 (Admin only)
-- Voice Cost: **$203.03**
-- **Total Monthly Cost**: **$445.55** ($0.89/user/month)
+### Scenario A: Current Implementation (Admin Only - 10 sessions, 3 min each)
+- Voice Sessions: 10 (Admin only)
+- Voice Cost: **$8.14**
+- **Total Monthly Cost**: **$250.66** ($0.50/user/month)
 
-### Scenario B: More Admin Usage (5 admins, 100 sessions each)
-- Voice Sessions: 500 (Admin only)
-- Voice Cost: **$676.75**
-- **Total Monthly Cost**: **$919.27** ($1.84/user/month)
+### Scenario B: Moderate Admin Usage (20 sessions, 3 min each)
+- Voice Sessions: 20 (Admin only)
+- Voice Cost: **$16.28**
+- **Total Monthly Cost**: **$258.80** ($0.52/user/month)
 
 ### Scenario C: No Voice Assistant (Complete Removal)
 - **Total Monthly Cost**: **$242.52** ($0.49/user/month)
