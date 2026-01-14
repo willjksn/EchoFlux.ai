@@ -214,38 +214,39 @@ ${isAdmin ? 'If the user asks about current events, trends, or time-sensitive in
                   .map((r: any, i: number) => `${i + 1}. ${r.title}: ${r.snippet}`)
                   .join('\n\n');
                 
-                // Generate final response with search results
-                const followUpPrompt = `Based on these web search results for "${searchQuery}":\n\n${resultsText}\n\nPlease provide a comprehensive answer to the user's question using this information.`;
+                // Build conversation history with function call and response
+                const conversationHistory: any[] = [
+                  {
+                    role: "user",
+                    parts: [{ text: prompt }],
+                  },
+                ];
                 
+                // Add model's function call response if available
+                const modelContent = result.response.candidates?.[0]?.content;
+                if (modelContent) {
+                  conversationHistory.push(modelContent);
+                }
+                
+                // Add function response
+                conversationHistory.push({
+                  role: "tool",
+                  parts: [{ 
+                    functionResponse: {
+                      name: 'web_search',
+                      response: { results: searchResult.results }
+                    }
+                  }],
+                });
+                
+                // Add follow-up prompt
+                conversationHistory.push({
+                  role: "user",
+                  parts: [{ text: `Based on these web search results for "${searchQuery}":\n\n${resultsText}\n\nPlease provide a comprehensive answer to the user's question using this information.` }],
+                });
+
                 const finalResult = await model.generateContent({
-                  contents: [
-                    {
-                      role: "user",
-                      parts: [{ text: prompt }],
-                    },
-                    {
-                      role: "model",
-                      parts: [{ 
-                        functionCall: {
-                          name: 'web_search',
-                          args: args
-                        }
-                      }],
-                    },
-                    {
-                      role: "function",
-                      parts: [{ 
-                        functionResponse: {
-                          name: 'web_search',
-                          response: { results: searchResult.results }
-                        }
-                      }],
-                    },
-                    {
-                      role: "user",
-                      parts: [{ text: followUpPrompt }],
-                    },
-                  ],
+                  contents: conversationHistory,
                 });
                 
                 const finalText = finalResult.response.text().trim();
