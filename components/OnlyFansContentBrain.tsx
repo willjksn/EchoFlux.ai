@@ -2351,6 +2351,7 @@ Output format:
         setCurrentCaptionForAI('');
         setEditedCaptions(new Map());
         setUsedCaptions(new Set());
+        setUsedCaptionsHash(new Set()); // Clear used captions hash for new media
         
         setUploadedMediaUrl(item.url);
         setUploadedMediaPreview(item.url);
