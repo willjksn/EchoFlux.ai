@@ -29,7 +29,8 @@ export type TaskType =
   | 'content_gap_analysis'      // Content gap analysis - use balanced model
   | 'caption_optimization'      // Caption optimization - use balanced model
   | 'performance_prediction'   // Performance prediction - use balanced model
-  | 'content_repurposing';      // Content repurposing - use balanced model
+  | 'content_repurposing'      // Content repurposing - use balanced model
+  | 'sexting_session';  // Premium Content Studio: Sexting session assistant - use balanced model
 
 /**
  * Model configuration for each task type
@@ -115,6 +116,11 @@ const MODEL_CONFIG: Record<TaskType, {
   'content_repurposing': {
     model: 'gemini-2.0-flash',
     description: 'Balanced model for content repurposing',
+    costTier: 'medium',
+  },
+  'sexting_session': {
+    model: 'gemini-2.0-flash',
+    description: 'Balanced model for Premium Content Studio sexting session assistant',
     costTier: 'medium',
   },
   
