@@ -2892,9 +2892,12 @@ Output format:
                                             loadCaptionsHistory();
                                         }
                                     }}
-                                    className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                    className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
                                 >
                                     {showCaptionsHistory ? 'Hide' : 'Show'} History
+                                    {(captionsPredictHistory.length > 0 || captionsRepurposeHistory.length > 0 || captionsGapAnalysisHistory.length > 0) && (
+                                        <span className="w-2 h-2 bg-red-500 rounded-full" title="History available"></span>
+                                    )}
                                 </button>
                             </div>
                             {showCaptionsHistory && (
@@ -3459,33 +3462,6 @@ Output format:
 
                             {/* Action Buttons - Always Visible */}
                             <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700 space-y-3">
-                                {/* Fan Selector for Predict */}
-                                <div className="mb-3">
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        Select fan for personalized predictions (optional):
-                                    </label>
-                                    <FanSelector
-                                        selectedFanId={selectedFanId}
-                                        onSelectFan={(fanId, fanName) => {
-                                            setSelectedFanId(fanId);
-                                            setSelectedFanName(fanName);
-                                        }}
-                                        allowNewFan={false}
-                                        compact={true}
-                                    />
-                                    {selectedFanId && (
-                                        <button
-                                            onClick={() => {
-                                                setSelectedFanId(null);
-                                                setSelectedFanName(null);
-                                            }}
-                                            className="mt-2 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-                                        >
-                                            Clear selection
-                                        </button>
-                                    )}
-                                </div>
-                                
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                     {/* Analyze Content Gaps */}
                                     <button
