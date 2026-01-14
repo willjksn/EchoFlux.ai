@@ -1153,6 +1153,24 @@ export const OnlyFansContentBrain: React.FC = () => {
                 finalTone = captionTone === 'Explicit' ? 'Explicit' : captionTone;
             }
 
+            // Load AI personality/training settings
+            let aiPersonality = '';
+            let aiTone = '';
+            let creatorGender = '';
+            let targetAudienceGender = '';
+            try {
+                const userDoc = await getDoc(doc(db, 'users', user.id));
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    aiPersonality = userData?.aiPersonality || '';
+                    aiTone = userData?.aiTone || '';
+                    creatorGender = userData?.creatorGender || '';
+                    targetAudienceGender = userData?.targetAudienceGender || '';
+                }
+            } catch (e) {
+                console.error('Error loading AI personality settings:', e);
+            }
+
             // Build fan context if fan is selected
             let fanContext = '';
             if (selectedFanId && fanPreferences) {
@@ -1178,11 +1196,26 @@ export const OnlyFansContentBrain: React.FC = () => {
                 if (fanPreferences.boundaries) contextParts.push(`Boundaries: ${fanPreferences.boundaries}`);
                 if (fanPreferences.suggestedFlow) contextParts.push(`What works best: ${fanPreferences.suggestedFlow}`);
                 if (contextParts.length > 0) {
-                    fanContext = `\n\nCRITICAL - PERSONALIZE FOR FAN: ${fanName}\nFan Preferences:\n${contextParts.map(p => `- ${p}`).join('\n')}\n\nREQUIREMENTS:\n- Use ${fanName}'s name naturally in at least one caption (e.g., "Hey ${fanName}...", "For ${fanName}...", "${fanName}, this one's for you...", etc.)\n- Match ${fanName}'s preferred tone: ${fanPreferences.preferredTone || 'their style'}\n- Use ${fanName}'s communication style: ${fanPreferences.communicationStyle || 'their preferred style'}\n- Reference ${fanName}'s favorite session type when relevant: ${fanPreferences.favoriteSessionType || 'their preferences'}\n- Make captions feel personal and tailored specifically for ${fanName}\n- Generate captions that ${fanName} would respond to based on their preferences`;
+                    fanContext = `\n\nCRITICAL - PERSONALIZE FOR FAN: ${fanName}\nFan Preferences:\n${contextParts.map(p => `- ${p}`).join('\n')}\n\nREQUIREMENTS - PERSPECTIVE IS CRITICAL:\n- YOU (the content creator) are writing captions FROM YOUR PERSPECTIVE (first person: "I", "my", "me")\n- YOU are addressing ${fanName} directly - the caption is YOU talking TO ${fanName}, NOT ${fanName} talking to you\n- Use ${fanName}'s name naturally as YOU address them (e.g., "Hey ${fanName}...", "For ${fanName}...", "${fanName}, this one's for you...", etc.)\n- DO NOT write as if ${fanName} is speaking to you - YOU are the one posting this caption\n- Match ${fanName}'s preferred tone: ${fanPreferences.preferredTone || 'their style'}\n- Use ${fanName}'s communication style: ${fanPreferences.communicationStyle || 'their preferred style'}\n- Reference ${fanName}'s favorite session type when relevant: ${fanPreferences.favoriteSessionType || 'their preferences'}\n- Make captions feel personal and tailored specifically for ${fanName} - but always from YOUR perspective as the creator`;
                 }
             } else if (selectedFanId && selectedFanName) {
                 // Fan selected but preferences not loaded yet - still use their name
-                fanContext = `\n\nCRITICAL - PERSONALIZE FOR FAN: ${selectedFanName}\n- Use ${selectedFanName}'s name naturally in at least one caption (e.g., "Hey ${selectedFanName}...", "For ${selectedFanName}...", "${selectedFanName}, this one's for you...", etc.)\n- Make captions feel personal and tailored specifically for ${selectedFanName}`;
+                fanContext = `\n\nCRITICAL - PERSONALIZE FOR FAN: ${selectedFanName}\nPERSPECTIVE REQUIREMENT:\n- YOU (the content creator) are writing captions FROM YOUR PERSPECTIVE (first person: "I", "my", "me")\n- YOU are addressing ${selectedFanName} directly - the caption is YOU talking TO ${selectedFanName}, NOT ${selectedFanName} talking to you\n- Use ${selectedFanName}'s name naturally as YOU address them (e.g., "Hey ${selectedFanName}...", "For ${selectedFanName}...", "${selectedFanName}, this one's for you...", etc.)\n- DO NOT write as if ${selectedFanName} is speaking to you - YOU are the one posting this caption\n- Make captions feel personal and tailored specifically for ${selectedFanName} - but always from YOUR perspective as the creator`;
+            }
+
+            // Build AI personality context
+            let personalityContext = '';
+            if (aiPersonality) {
+                personalityContext = `\n\nAI PERSONALITY & TRAINING:\n${aiPersonality}`;
+            }
+            if (aiTone && aiTone !== captionTone) {
+                personalityContext += `\nDefault AI Tone: ${aiTone}`;
+            }
+            if (creatorGender) {
+                personalityContext += `\nCreator Gender: ${creatorGender}`;
+            }
+            if (targetAudienceGender) {
+                personalityContext += `\nTarget Audience: ${targetAudienceGender}`;
             }
 
             // Load emoji settings
@@ -1202,8 +1235,8 @@ export const OnlyFansContentBrain: React.FC = () => {
                     // Target all premium creator platforms we support
                     platforms: [selectedPlatform],
                     promptText: uploadedMediaUrl 
-                        ? `${captionPrompt || `Analyze this image/video in detail and describe what you see. Create explicit captions tailored for ${selectedPlatform}. Mention ${selectedPlatform} naturally when it helps drive subs (e.g., "come see me on ${selectedPlatform}") but only when it fits the line. Be very descriptive and explicit about what is visually present.`}${fanContext}\n\n[CRITICAL - GENERATE FRESH CAPTIONS: Variety seed ${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${Math.random().toString(36).substr(2, 9)}] - You MUST generate completely NEW, UNIQUE captions that are DIFFERENT from any previous generation. Do NOT reuse, repeat, or modify previous captions. Create entirely fresh content with different wording, structure, and angles each time.`
-                        : `${captionPrompt || `Create explicit captions tailored for ${selectedPlatform}. Mention ${selectedPlatform} naturally when it helps drive subs (e.g., "come see me on ${selectedPlatform}") but only when it fits the line.`}${fanContext}\n\n[CRITICAL - GENERATE FRESH CAPTIONS: Variety seed ${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${Math.random().toString(36).substr(2, 9)}] - You MUST generate completely NEW, UNIQUE captions that are DIFFERENT from any previous generation. Do NOT reuse, repeat, or modify previous captions. Create entirely fresh content with different wording, structure, and angles each time.`,
+                        ? `${captionPrompt || `Analyze this image/video in detail and describe what you see. Create explicit captions tailored for ${selectedPlatform}. Mention ${selectedPlatform} naturally when it helps drive subs (e.g., "come see me on ${selectedPlatform}") but only when it fits the line. Be very descriptive and explicit about what is visually present.`}${personalityContext}${fanContext}\n\n[CRITICAL - GENERATE FRESH CAPTIONS: Variety seed ${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${Math.random().toString(36).substr(2, 9)}] - You MUST generate completely NEW, UNIQUE captions that are DIFFERENT from any previous generation. Do NOT reuse, repeat, or modify previous captions. Create entirely fresh content with different wording, structure, and angles each time.`
+                        : `${captionPrompt || `Create explicit captions tailored for ${selectedPlatform}. Mention ${selectedPlatform} naturally when it helps drive subs (e.g., "come see me on ${selectedPlatform}") but only when it fits the line.`}${personalityContext}${fanContext}\n\n[CRITICAL - GENERATE FRESH CAPTIONS: Variety seed ${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${Math.random().toString(36).substr(2, 9)}] - You MUST generate completely NEW, UNIQUE captions that are DIFFERENT from any previous generation. Do NOT reuse, repeat, or modify previous captions. Create entirely fresh content with different wording, structure, and angles each time.`,
                     emojiEnabled: emojiSettings.enabled,
                     emojiIntensity: emojiSettings.intensity,
                 }),

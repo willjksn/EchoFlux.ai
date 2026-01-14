@@ -517,7 +517,7 @@ EMOJI GUIDELINES (ALL SOCIAL PLATFORMS):
 ${getEmojiInstructions({ enabled: emojiEnabled !== false, intensity: emojiIntensity ?? 5 })}${emojiEnabled !== false ? ` Choose emojis that match the tone (examples: ${getEmojiExamplesForTone(tone)}). Emojis should enhance the caption naturally.` : ''}
 ` : ''}
 
-CRITICAL - PERSPECTIVE REQUIREMENT:
+CRITICAL - PERSPECTIVE REQUIREMENT (MUST FOLLOW):
 - Write captions FROM THE CONTENT CREATOR'S PERSPECTIVE (first person: "I", "my", "me")
 - The captions are what the CONTENT CREATOR is posting, NOT what fans/followers are saying or wanting
 - Write as if YOU (the content creator) are posting this content yourself
@@ -526,6 +526,18 @@ CRITICAL - PERSPECTIVE REQUIREMENT:
 - Write captions that the CONTENT CREATOR would post about their own content
 - Use first-person language from the creator's point of view (e.g., "I'm feeling...", "Check out my...", "I wanted to share...")
 - The caption should be what the CREATOR is saying about their own post, not what viewers are thinking
+
+${promptText && (promptText.includes('PERSONALIZE FOR FAN') || promptText.includes('fan')) ? `
+🚨 CRITICAL - FAN PERSONALIZATION PERSPECTIVE (READ CAREFULLY) 🚨
+- If a fan's name is mentioned in the context, YOU (the creator) are addressing that fan directly
+- The caption is YOU talking TO the fan, NOT the fan talking to you
+- Example CORRECT: "Hey [fan name], I wanted to share this with you..." (creator speaking to fan)
+- Example WRONG: "[creator name], I love when you..." (fan speaking to creator - THIS IS INCORRECT)
+- When personalizing for a fan, write as if YOU are posting a caption and addressing that fan by name
+- DO NOT reverse the perspective - the fan is NOT writing the caption, YOU are
+- The fan's name should appear as someone YOU are addressing, not as someone addressing you
+- Always maintain first-person creator perspective: "I", "my", "me" referring to YOU the creator
+` : ''}
 
 ${explicitContext}
 
