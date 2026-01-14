@@ -258,6 +258,8 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         setIsTourActive(false);
         setTourStep(0);
         setTourSteps([]);
+        // Navigate back to dashboard when tour ends
+        setActivePage('dashboard');
     };
 
     const nextTourStep = () => {

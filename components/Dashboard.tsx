@@ -1867,9 +1867,6 @@ export const Dashboard: React.FC = () => {
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white">Quick Stats</h3>
-                    <button onClick={() => setActivePage('analytics')} className="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 font-medium">
-                      View Details
-                    </button>
                   </div>
                   <div className="space-y-4">
                     {/* Post Status Breakdown */}

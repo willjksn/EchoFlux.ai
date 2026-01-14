@@ -118,10 +118,12 @@ const BioPreview: React.FC<{ config: any }> = ({ config }) => {
     };
     const pageTextColor = theme.pageTextColor || (theme.textColor === '#ffffff' ? '#2563eb' : theme.textColor) || '#2563eb';
     const buttonTextColor = theme.buttonTextColor || theme.textColor || '#111827';
+    // For light mode, ensure colors are darker for visibility
+    const isLightMode = !document.documentElement.classList.contains('dark');
     const emailTheme = {
-        formBackgroundColor: config?.emailCapture?.formBackgroundColor || '#d1dbf0',
+        formBackgroundColor: config?.emailCapture?.formBackgroundColor || (isLightMode ? '#f3f4f6' : '#d1dbf0'),
         titleColor: config?.emailCapture?.titleColor || pageTextColor,
-        inputBackgroundColor: config?.emailCapture?.inputBackgroundColor || '#f9fafb',
+        inputBackgroundColor: config?.emailCapture?.inputBackgroundColor || (isLightMode ? '#e5e7eb' : '#f9fafb'),
         // Force dark text for input - ensure visibility on light backgrounds
         inputTextColor: (config?.emailCapture?.inputTextColor && 
             config.emailCapture.inputTextColor !== '#ffffff' && 
@@ -131,7 +133,7 @@ const BioPreview: React.FC<{ config: any }> = ({ config }) => {
             : '#111827',
         buttonBackgroundColor: config?.emailCapture?.buttonBackgroundColor || theme.buttonColor,
         // Default to grey text for button - ensure visibility on white/light backgrounds
-        buttonTextColor: config?.emailCapture?.buttonTextColor || '#4b5563',
+        buttonTextColor: config?.emailCapture?.buttonTextColor || (isLightMode ? '#374151' : '#4b5563'),
     };
     
     return (

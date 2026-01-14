@@ -260,7 +260,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
           <div id="tour-step-5-profile-avatar" className="relative" ref={profileRef}>
             <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="flex-shrink-0">
               <img
-                className="h-10 w-10 rounded-full ring-2 ring-offset-2 ring-offset-gray-100 dark:ring-offset-gray-800 ring-primary-500"
+                className="h-10 w-10 rounded-full object-cover ring-2 ring-offset-2 ring-offset-gray-100 dark:ring-offset-gray-800 ring-primary-500"
                 src={user.avatar}
                 alt="User"
               />

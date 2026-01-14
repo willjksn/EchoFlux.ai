@@ -167,13 +167,18 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   // Check password requirements in real-time
   useEffect(() => {
     if (!isLogin && password) {
-      setPasswordRequirements({
+      const reqs = {
         hasUppercase: /[A-Z]/.test(password),
         hasLowercase: /[a-z]/.test(password),
         hasSpecialChar: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password),
         hasNumeric: /[0-9]/.test(password),
         hasMinLength: password.length >= 8,
-      });
+      };
+      setPasswordRequirements(reqs);
+      // Auto-close requirements box when all requirements are met
+      if (reqs.hasUppercase && reqs.hasLowercase && reqs.hasSpecialChar && reqs.hasNumeric && reqs.hasMinLength) {
+        setShowPasswordRequirements(false);
+      }
     } else if (!isLogin && !password) {
       setPasswordRequirements({
         hasUppercase: false,
