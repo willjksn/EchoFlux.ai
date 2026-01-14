@@ -77,27 +77,71 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       // Grant access on user doc
-      tx.set(
-        userRef,
-        {
-          // Keep core fields stable; merge into existing doc if present
-          id: user.uid,
-          email: user.email || "",
-          name: typeof fullName === "string" && fullName.trim() ? fullName.trim() : undefined,
-          userType: "Creator",
-          plan: grantPlan,
-          hasCompletedOnboarding: false,
-          // Invite grant metadata
-          invitedWithCode: normalizedCode,
-          invitedAt: nowIso,
-          inviteGrantPlan: grantPlan,
-          inviteGrantExpiresAt: expiresAtIso,
-          inviteGrantRedeemedAt: nowIso,
-          // Marker so UI can treat as grant (not Stripe subscription)
-          subscriptionStatus: "invite_grant",
-        },
-        { merge: true }
-      );
+      // If user doesn't exist, create with all required fields
+      // If user exists, merge invite grant fields
+      const isNewUser = !userSnap.exists;
+      const userData: any = {
+        id: user.uid,
+        email: user.email || "",
+        name: typeof fullName === "string" && fullName.trim() ? fullName.trim() : (existingUserData?.name || "New User"),
+        userType: "Creator",
+        plan: grantPlan,
+        role: existingUserData?.role || "User",
+        hasCompletedOnboarding: existingUserData?.hasCompletedOnboarding || false,
+        // Invite grant metadata
+        invitedWithCode: normalizedCode,
+        invitedAt: nowIso,
+        inviteGrantPlan: grantPlan,
+        inviteGrantExpiresAt: expiresAtIso,
+        inviteGrantRedeemedAt: nowIso,
+        // Marker so UI can treat as grant (not Stripe subscription)
+        subscriptionStatus: "invite_grant",
+      };
+
+      // For new users, include all required fields
+      if (isNewUser) {
+        userData.signupDate = nowIso;
+        userData.avatar = `https://picsum.photos/seed/${user.uid}/100/100`;
+        userData.bio = "Welcome to EchoFlux.ai!";
+        userData.notifications = {
+          newMessages: true,
+          weeklySummary: false,
+          trendAlerts: false,
+        };
+        userData.monthlyCaptionGenerationsUsed = 0;
+        userData.monthlyImageGenerationsUsed = 0;
+        userData.monthlyVideoGenerationsUsed = 0;
+        userData.monthlyRepliesUsed = 0;
+        userData.storageUsed = 0;
+        userData.storageLimit = 100;
+        userData.mediaLibrary = [];
+        userData.settings = {
+          autoReply: true,
+          autoRespond: false,
+          safeMode: true,
+          highQuality: false,
+          tone: {
+            formality: 50,
+            humor: 30,
+            empathy: 70,
+            spiciness: 0,
+          },
+          voiceMode: true,
+          prioritizedKeywords: 'collaboration, pricing, question',
+          ignoredKeywords: 'spam, giveaway, follow back',
+          connectedAccounts: {
+            Instagram: true,
+            TikTok: true,
+            X: true,
+            Threads: true,
+            YouTube: false,
+            LinkedIn: true,
+            Facebook: true,
+          },
+        };
+      }
+
+      tx.set(userRef, userData, { merge: true });
 
       return {
         ok: true as const,
