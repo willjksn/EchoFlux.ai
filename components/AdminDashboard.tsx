@@ -11,7 +11,6 @@ import { AdminFeedbackPanel } from './AdminFeedbackPanel';
 import { AdminFeedbackFormBuilder } from './AdminFeedbackFormBuilder';
 import { InviteCodeManager } from './InviteCodeManager';
 import { WaitlistManager } from './WaitlistManager';
-import { EmailCenter } from './EmailCenter';
 import { TeamIcon, DollarSignIcon, UserPlusIcon, ArrowUpCircleIcon, ImageIcon, VideoIcon, LockIcon, TrendingIcon, TrashIcon } from './icons/UIIcons';
 import { db, auth } from '../firebaseConfig';
 import { collection, query, orderBy, onSnapshot, setDoc, doc, getDoc, deleteField, getDocs } from 'firebase/firestore';
@@ -148,7 +147,7 @@ export const AdminDashboard: React.FC = () => {
     const [isLoadingModelStats, setIsLoadingModelStats] = useState(true);
     const [modelStatsDays, setModelStatsDays] = useState<number>(30);
     const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'tools'>('overview');
-    const [toolsTab, setToolsTab] = useState<'toolsHome' | 'referralRewards' | 'announcements' | 'invites' | 'waitlist' | 'email' | 'feedback' | 'feedbackForms' | 'emailCenter' | 'reviews'>('toolsHome');
+    const [toolsTab, setToolsTab] = useState<'toolsHome' | 'referralRewards' | 'announcements' | 'invites' | 'waitlist' | 'email' | 'feedback' | 'feedbackForms' | 'reviews'>('toolsHome');
     const [userStorageMap, setUserStorageMap] = useState<Record<string, number>>({});
     const [currentPage, setCurrentPage] = useState<number>(1);
     const usersPerPage = 20;
@@ -646,16 +645,6 @@ export const AdminDashboard: React.FC = () => {
                             Feedback Forms
                         </button>
                         <button
-                            onClick={() => setToolsTab('emailCenter')}
-                            className={`px-4 py-2 rounded-md transition-colors ${
-                                toolsTab === 'emailCenter'
-                                    ? 'bg-primary-600 text-white'
-                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                            }`}
-                        >
-                            Email Center
-                        </button>
-                        <button
                             onClick={() => setToolsTab('reviews')}
                             className={`px-4 py-2 rounded-md transition-colors ${
                                 toolsTab === 'reviews'
@@ -681,7 +670,6 @@ export const AdminDashboard: React.FC = () => {
                     {toolsTab === 'waitlist' && <WaitlistManager />}
                     {toolsTab === 'feedback' && <AdminFeedbackPanel />}
                     {toolsTab === 'feedbackForms' && <AdminFeedbackFormBuilder />}
-                    {toolsTab === 'emailCenter' && <EmailCenter />}
                     {toolsTab === 'reviews' && <AdminReviewsPanel />}
                 </div>
             )}
