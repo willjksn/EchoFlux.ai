@@ -11,7 +11,6 @@ import { AdminFeedbackPanel } from './AdminFeedbackPanel';
 import { AdminFeedbackFormBuilder } from './AdminFeedbackFormBuilder';
 import { InviteCodeManager } from './InviteCodeManager';
 import { WaitlistManager } from './WaitlistManager';
-import { EmailCenter } from './EmailCenter';
 import { TeamIcon, DollarSignIcon, UserPlusIcon, ArrowUpCircleIcon, ImageIcon, VideoIcon, LockIcon, TrendingIcon, TrashIcon } from './icons/UIIcons';
 import { db, auth } from '../firebaseConfig';
 import { collection, query, orderBy, onSnapshot, setDoc, doc, getDoc, deleteField, getDocs } from 'firebase/firestore';
@@ -123,6 +122,7 @@ const planColorMap: Record<User['plan'], string> = {
     Agency: 'bg-primary-100 text-primary-800 dark:bg-primary-900/50 dark:text-primary-200',
     Growth: 'bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200',
     Starter: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-200',
+    OnlyFansStudio: 'bg-pink-100 text-pink-800 dark:bg-pink-900/50 dark:text-pink-200',
 };
 
 const planPrices: Record<User['plan'], number> = { 
@@ -132,7 +132,8 @@ const planPrices: Record<User['plan'], number> = {
     'Elite': 79, 
     'Agency': 599, 
     'Growth': 249, 
-    'Starter': 99 
+    'Starter': 99,
+    'OnlyFansStudio': 79,
 };
 
 export const AdminDashboard: React.FC = () => {
@@ -148,7 +149,7 @@ export const AdminDashboard: React.FC = () => {
     const [isLoadingModelStats, setIsLoadingModelStats] = useState(true);
     const [modelStatsDays, setModelStatsDays] = useState<number>(30);
     const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'tools'>('overview');
-    const [toolsTab, setToolsTab] = useState<'toolsHome' | 'referralRewards' | 'announcements' | 'invites' | 'waitlist' | 'email' | 'feedback' | 'feedbackForms' | 'emailCenter' | 'reviews'>('toolsHome');
+    const [toolsTab, setToolsTab] = useState<'toolsHome' | 'referralRewards' | 'announcements' | 'invites' | 'waitlist' | 'email' | 'feedback' | 'feedbackForms' | 'reviews'>('toolsHome');
     const [userStorageMap, setUserStorageMap] = useState<Record<string, number>>({});
     const [currentPage, setCurrentPage] = useState<number>(1);
     const usersPerPage = 20;
@@ -476,7 +477,7 @@ export const AdminDashboard: React.FC = () => {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-        const distribution: Record<User['plan'], number> = { Free: 0, Caption: 0, Pro: 0, Elite: 0, Agency: 0, Growth: 0, Starter: 0 };
+        const distribution: Record<User['plan'], number> = { Free: 0, Caption: 0, Pro: 0, Elite: 0, Agency: 0, Growth: 0, Starter: 0, OnlyFansStudio: 0 };
         
         users.forEach(user => {
             // Hide Agency, Starter, Growth, and Caption plans from display
@@ -646,16 +647,6 @@ export const AdminDashboard: React.FC = () => {
                             Feedback Forms
                         </button>
                         <button
-                            onClick={() => setToolsTab('emailCenter')}
-                            className={`px-4 py-2 rounded-md transition-colors ${
-                                toolsTab === 'emailCenter'
-                                    ? 'bg-primary-600 text-white'
-                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                            }`}
-                        >
-                            Email Center
-                        </button>
-                        <button
                             onClick={() => setToolsTab('reviews')}
                             className={`px-4 py-2 rounded-md transition-colors ${
                                 toolsTab === 'reviews'
@@ -681,7 +672,6 @@ export const AdminDashboard: React.FC = () => {
                     {toolsTab === 'waitlist' && <WaitlistManager />}
                     {toolsTab === 'feedback' && <AdminFeedbackPanel />}
                     {toolsTab === 'feedbackForms' && <AdminFeedbackFormBuilder />}
-                    {toolsTab === 'emailCenter' && <EmailCenter />}
                     {toolsTab === 'reviews' && <AdminReviewsPanel />}
                 </div>
             )}
@@ -964,44 +954,47 @@ export const AdminDashboard: React.FC = () => {
                 )}
             </div>
 
-            {/* OnlyFans AI Model Usage */}
+            {/* Premium Content Studio AI Model Usage */}
             {modelUsageStats && (
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md mt-6">
                     <div className="flex items-center justify-between mb-6">
                         <div>
-                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">OnlyFans AI Model Usage</h3>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Track AI usage specifically for OnlyFans features</p>
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Premium Content Studio AI Model Usage</h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Track AI usage specifically for Premium Content Studio features</p>
                         </div>
                     </div>
 
                     {(() => {
-                        // Filter OnlyFans-related tasks
-                        const onlyfansTasks = ['sexting_session'];
-                        const onlyfansStats = {
+                        // Filter Premium Content Studio-related tasks
+                        // Note: Some features (Content Brain, Roleplay) may use shared task types (caption, strategy, etc.)
+                        // that are also used by the main app, so they appear in the general analytics
+                        const premiumContentStudioTasks = ['sexting_session'];
+                        const premiumContentStudioStats = {
                             totalRequests: 0,
                             totalCost: 0,
                             requestsByTask: {} as Record<string, number>,
                             requestsByDay: [] as Array<{ date: string; count: number; cost: number }>,
                         };
 
-                        // Calculate OnlyFans stats from modelUsageStats
-                        onlyfansTasks.forEach(task => {
+                        // Calculate Premium Content Studio stats from modelUsageStats
+                        premiumContentStudioTasks.forEach(task => {
                             const count = modelUsageStats.requestsByTask[task as keyof typeof modelUsageStats.requestsByTask] as number || 0;
                             if (count > 0) {
-                                onlyfansStats.totalRequests += count;
-                                onlyfansStats.requestsByTask[task] = count;
+                                premiumContentStudioStats.totalRequests += count;
+                                premiumContentStudioStats.requestsByTask[task] = count;
                             }
                         });
 
                         // Calculate cost using average cost per request (more accurate than fixed estimate)
-                        // OnlyFans tasks use medium tier, so we use the overall average cost per request
-                        onlyfansStats.totalCost = onlyfansStats.totalRequests * modelUsageStats.averageCostPerRequest;
+                        // Premium Content Studio tasks use medium tier, so we use the overall average cost per request
+                        premiumContentStudioStats.totalCost = premiumContentStudioStats.totalRequests * modelUsageStats.averageCostPerRequest;
 
-                        if (onlyfansStats.totalRequests === 0) {
+                        if (premiumContentStudioStats.totalRequests === 0) {
                             return (
                                 <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                                    <p className="text-sm">No OnlyFans AI usage data yet</p>
-                                    <p className="text-xs mt-1">Usage will appear here when creators use OnlyFans AI features</p>
+                                    <p className="text-sm">No Premium Content Studio AI usage data yet</p>
+                                    <p className="text-xs mt-1">Usage will appear here when creators use Premium Content Studio AI features</p>
+                                    <p className="text-xs mt-2 text-gray-400 dark:text-gray-500">Note: Some features (Content Brain, Roleplay) may use shared task types that appear in general analytics</p>
                                 </div>
                             );
                         }
@@ -1011,29 +1004,29 @@ export const AdminDashboard: React.FC = () => {
                                 {/* Key Metrics */}
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <div className="p-4 bg-gradient-to-br from-pink-50 to-pink-100 dark:from-pink-900/20 dark:to-pink-800/20 rounded-lg border border-pink-200 dark:border-pink-700">
-                                        <p className="text-xs font-medium text-pink-700 dark:text-pink-300 mb-1">Total OnlyFans Requests</p>
-                                        <p className="text-2xl font-bold text-pink-900 dark:text-pink-100">{onlyfansStats.totalRequests.toLocaleString()}</p>
+                                        <p className="text-xs font-medium text-pink-700 dark:text-pink-300 mb-1">Total Premium Content Studio Requests</p>
+                                        <p className="text-2xl font-bold text-pink-900 dark:text-pink-100">{premiumContentStudioStats.totalRequests.toLocaleString()}</p>
                                     </div>
                                     <div className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-lg border border-purple-200 dark:border-purple-700">
-                                        <p className="text-xs font-medium text-purple-700 dark:text-purple-300 mb-1">Total OnlyFans Cost</p>
-                                        <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">${onlyfansStats.totalCost.toFixed(2)}</p>
+                                        <p className="text-xs font-medium text-purple-700 dark:text-purple-300 mb-1">Total Premium Content Studio Cost</p>
+                                        <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">${premiumContentStudioStats.totalCost.toFixed(2)}</p>
                                     </div>
                                     <div className="p-4 bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/20 dark:to-indigo-800/20 rounded-lg border border-indigo-200 dark:border-indigo-700">
                                         <p className="text-xs font-medium text-indigo-700 dark:text-indigo-300 mb-1">Avg Cost/Request</p>
-                                        <p className="text-2xl font-bold text-indigo-900 dark:text-indigo-100">${(onlyfansStats.totalCost / onlyfansStats.totalRequests).toFixed(4)}</p>
+                                        <p className="text-2xl font-bold text-indigo-900 dark:text-indigo-100">${(premiumContentStudioStats.totalCost / premiumContentStudioStats.totalRequests).toFixed(4)}</p>
                                     </div>
                                 </div>
 
-                                {/* OnlyFans Tasks Breakdown */}
+                                {/* Premium Content Studio Tasks Breakdown */}
                                 <div>
-                                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">OnlyFans Features Usage</h4>
+                                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Premium Content Studio Features Usage</h4>
                                     <div className="space-y-2">
-                                        {Object.entries(onlyfansStats.requestsByTask)
+                                        {Object.entries(premiumContentStudioStats.requestsByTask)
                                             .sort(([, a], [, b]) => (b as number) - (a as number))
                                             .map(([task, count]) => {
                                                 const countNum = count as number;
-                                                const percentage = onlyfansStats.totalRequests > 0 
-                                                    ? (countNum / onlyfansStats.totalRequests * 100).toFixed(1) 
+                                                const percentage = premiumContentStudioStats.totalRequests > 0 
+                                                    ? (countNum / premiumContentStudioStats.totalRequests * 100).toFixed(1) 
                                                     : '0';
                                                 const taskLabel = task === 'sexting_session' ? 'Sexting Session Assistant' : task;
                                                 return (
