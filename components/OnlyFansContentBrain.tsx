@@ -1604,14 +1604,42 @@ export const OnlyFansContentBrain: React.FC = () => {
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             const personalization = buildMonetizedContext();
-            const fanContextBlock = selectedFanId && fanPreferences ? `
-Fan Context:
-- Name: ${selectedFanName || 'Fan'}
-- Preferred Tone: ${fanPreferences.preferredTone || 'Not specified'}
-- Favorite Session Type: ${fanPreferences.favoriteSessionType || 'Not specified'}
-- Communication Style: ${fanPreferences.communicationStyle || 'Not specified'}
-- Past Notes: ${fanPreferences.pastNotes || 'None'}
-` : '';
+            let fanContextBlock = '';
+            if (selectedFanId && fanPreferences) {
+                const fanName = selectedFanName || 'this fan';
+                const contextParts = [];
+                if (fanPreferences.preferredTone) contextParts.push(`Preferred tone: ${fanPreferences.preferredTone}`);
+                if (fanPreferences.communicationStyle) contextParts.push(`Communication style: ${fanPreferences.communicationStyle}`);
+                if (fanPreferences.favoriteSessionType) contextParts.push(`Favorite session type: ${fanPreferences.favoriteSessionType}`);
+                if (fanPreferences.languagePreferences) contextParts.push(`Language preferences: ${fanPreferences.languagePreferences}`);
+                if (fanPreferences.boundaries) contextParts.push(`Boundaries: ${fanPreferences.boundaries}`);
+                if (fanPreferences.suggestedFlow) contextParts.push(`What works best: ${fanPreferences.suggestedFlow}`);
+                if (fanPreferences.pastNotes) contextParts.push(`Past notes: ${fanPreferences.pastNotes}`);
+                
+                if (contextParts.length > 0) {
+                    fanContextBlock = `
+CRITICAL - PERSONALIZE FOR FAN: ${fanName}
+Fan Preferences:
+${contextParts.map(p => `- ${p}`).join('\n')}
+
+REQUIREMENTS:
+- Use ${fanName}'s name naturally in the messages (e.g., "Hey ${fanName}...", "${fanName}, I wanted to...", etc.)
+- Match ${fanName}'s preferred tone: ${fanPreferences.preferredTone || 'their style'}
+- Use ${fanName}'s communication style: ${fanPreferences.communicationStyle || 'their preferred style'}
+- Reference ${fanName}'s favorite session type when relevant: ${fanPreferences.favoriteSessionType || 'their preferences'}
+- Make messages feel personal and tailored specifically for ${fanName}
+- Generate messages that ${fanName} would respond to based on their preferences
+- Consider ${fanName}'s boundaries and what works best for them
+`;
+                }
+            } else if (selectedFanId && selectedFanName) {
+                // Fan selected but preferences not loaded yet - still use their name
+                fanContextBlock = `
+CRITICAL - PERSONALIZE FOR FAN: ${selectedFanName}
+- Use ${selectedFanName}'s name naturally in the messages (e.g., "Hey ${selectedFanName}...", "${selectedFanName}, I wanted to...", etc.)
+- Make messages feel personal and tailored specifically for ${selectedFanName}
+`;
+            }
 
             const prompt = `
 Create a subscriber messaging toolkit for a ${selectedPlatform} creator.
