@@ -1,5 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { checkApiKeys, getVerifyAuth, getModelRouter, withErrorHandling } from "./_errorHandler.js";
+import { enforceRateLimit } from "./_rateLimit.js";
+import { sanitizeForAI } from "./_inputSanitizer.js";
 
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -38,6 +40,17 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     return;
   }
 
+  // Rate limiting: 20 requests per minute per user
+  const ok = await enforceRateLimit({
+    req,
+    res,
+    keyPrefix: "generateReply",
+    limit: 20,
+    windowMs: 60_000,
+    identifier: user.uid,
+  });
+  if (!ok) return;
+
   // Check monthly reply limit based on plan
   const monthlyRepliesUsed = user.monthlyRepliesUsed || 0;
   const replyLimits: Record<string, number> = {
@@ -67,12 +80,19 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     res.status(400).json({ error: "Missing 'incomingMessage' or 'messageContent' in body" });
     return;
   }
+
+  // Sanitize input
+  const sanitizedMessage = sanitizeForAI(message, 5000);
+  if (!sanitizedMessage) {
+    res.status(400).json({ error: "Message cannot be empty" });
+    return;
+  }
   
   // Extract tone and context from settings if provided
   const finalTone = tone || settings?.tone?.formality !== undefined 
     ? `${settings.tone.formality > 0.5 ? 'formal' : 'casual'}, ${settings.tone.humor > 0.5 ? 'humorous' : 'professional'}`
     : "friendly, on-brand";
-  const finalContext = context || settings?.prioritizedKeywords || "none";
+  const finalContext = sanitizeForAI(context || settings?.prioritizedKeywords || "none", 1000);
 
   try {
     // Use model router - replies use cheapest model for cost optimization
@@ -83,7 +103,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
 You write replies to DMs/comments.
 
 Incoming message:
-${message}
+${sanitizedMessage}
 
 Tone: ${finalTone}
 Context: ${finalContext}

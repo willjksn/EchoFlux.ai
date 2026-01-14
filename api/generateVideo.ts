@@ -2,6 +2,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { verifyAuth } from "./verifyAuth.js";
 import { enforceRateLimit } from "./_rateLimit.js";
+import { sanitizeForAI } from "./_inputSanitizer.js";
 import Replicate from "replicate";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -29,6 +30,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!prompt || typeof prompt !== "string") {
     return res.status(400).json({ error: "Missing or invalid 'prompt'" });
+  }
+
+  // Sanitize prompt input
+  const sanitizedPrompt = sanitizeForAI(prompt, 2000);
+  if (!sanitizedPrompt) {
+    return res.status(400).json({ error: "Prompt cannot be empty" });
   }
 
   try {

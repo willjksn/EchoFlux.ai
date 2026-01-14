@@ -11,6 +11,7 @@ import { getLatestTrends, getOnlyFansWeeklyTrends } from "./_trendsHelper.js";
 import { getOnlyFansResearchContext } from "./_onlyfansResearch.js";
 import { enforceRateLimit } from "./_rateLimit.js";
 import { getEmojiInstructions, getEmojiExamplesForTone } from "./_emojiHelper.js";
+import { sanitizeForAI } from "./_inputSanitizer.js";
 
 async function getGeminiShared() {
   try {
@@ -235,8 +236,13 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     emojiIntensity?: number;
   } = req.body || {};
   
+  // Sanitize text inputs
+  const sanitizedPromptText = promptText ? sanitizeForAI(promptText, 2000) : undefined;
+  const sanitizedTone = tone ? sanitizeForAI(tone, 100) : undefined;
+  const sanitizedGoal = goal ? sanitizeForAI(goal, 100) : undefined;
+  
   // Normalize tone value for consistent detection
-  const normalizedTone = tone?.toLowerCase().trim();
+  const normalizedTone = sanitizedTone?.toLowerCase().trim();
   
   // Detect explicit content context - ONLY for truly explicit tones, NOT "sexy/bold"
   // "Sexy / Bold" should be suggestive but NOT explicit, and should NOT generate OnlyFans hashtags
@@ -468,7 +474,7 @@ YOU MUST GENERATE EXPLICIT, UNCENSORED, RAW, ADULT CONTENT CAPTIONS.
 ` : ''}
 You are a world-class social media copywriter${isExplicitContent ? ' specializing in EXPLICIT adult content platforms' : ''}.
 
-${goalContext ? `PRIMARY GOAL: ${goal}\n${goalContext}\n` : goal ? `PRIMARY GOAL: ${goal}\n` : ''}
+${goalContext ? `PRIMARY GOAL: ${sanitizedGoal || goal}\n${goalContext}\n` : sanitizedGoal || goal ? `PRIMARY GOAL: ${sanitizedGoal || goal}\n` : ''}
 
 ${currentTrends ? `CURRENT SOCIAL MEDIA TRENDS (from weekly research):\n${currentTrends}\n` : ''}
 
@@ -524,9 +530,9 @@ CRITICAL - PERSPECTIVE REQUIREMENT:
 ${explicitContext}
 
 ${isOnlyFansPlatform ? `Generate 3–5 UNIQUE, DIVERSE captions` : `Generate EXACTLY ${desiredCaptionCount} DISTINCT caption variants`} based on:
-- Goal: ${goal || "engagement"}${isExplicitContent ? ' (Mix of EXPLICIT SEXUAL content description and sales-focused captions)' : goal ? ` (Every caption must directly support achieving: ${goal})` : ''}
-- Tone: ${tone || "friendly"}${isExplicitContent ? ' (EXPLICIT/ADULT CONTENT - Generate BOLD, EXPLICIT, RAW, UNCENSORED captions with explicit sexual language that describe what is visually shown in explicit detail, plus sales-focused captions)' : ''}
-- Extra instructions: ${promptText || "none"}
+- Goal: ${sanitizedGoal || goal || "engagement"}${isExplicitContent ? ' (Mix of EXPLICIT SEXUAL content description and sales-focused captions)' : sanitizedGoal || goal ? ` (Every caption must directly support achieving: ${sanitizedGoal || goal})` : ''}
+- Tone: ${sanitizedTone || tone || "friendly"}${isExplicitContent ? ' (EXPLICIT/ADULT CONTENT - Generate BOLD, EXPLICIT, RAW, UNCENSORED captions with explicit sexual language that describe what is visually shown in explicit detail, plus sales-focused captions)' : ''}
+- Extra instructions: ${sanitizedPromptText || "none"}
 ${goal && goal !== "engagement" ? `\nGOAL-SPECIFIC CTAs TO CONSIDER: ${getGoalSpecificCTAs(goal)}\n` : ''}
 
 CRITICAL - VARIETY REQUIREMENT:

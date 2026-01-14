@@ -2,6 +2,8 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { checkApiKeys, getVerifyAuth, withErrorHandling } from "./_errorHandler.js";
 import { APP_KNOWLEDGE } from "./appKnowledge.js";
+import { enforceRateLimit } from "./_rateLimit.js";
+import { sanitizeForAI } from "./_inputSanitizer.js";
 
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -40,10 +42,28 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     return;
   }
 
+  // Rate limiting: 30 requests per minute per user
+  const ok = await enforceRateLimit({
+    req,
+    res,
+    keyPrefix: "askChatbot",
+    limit: 30,
+    windowMs: 60_000,
+    identifier: user.uid,
+  });
+  if (!ok) return;
+
   const { question } = (req.body as any) || {};
 
   if (!question || typeof question !== "string") {
     res.status(400).json({ error: "Missing or invalid 'question'" });
+    return;
+  }
+
+  // Sanitize input
+  const sanitizedQuestion = sanitizeForAI(question, 5000);
+  if (!sanitizedQuestion) {
+    res.status(400).json({ error: "Question cannot be empty" });
     return;
   }
 
@@ -116,7 +136,7 @@ User UID: ${user.uid}
 User is Admin: ${isAdmin}
 
 User question:
-${question}
+${sanitizedQuestion}
 
 Answer clearly. Friendly tone. Keep responses concise and helpful.
 If the user asks about \"latest\" or \"current\" external trends, you may answer based on your general knowledge, but you do NOT have direct live web access.

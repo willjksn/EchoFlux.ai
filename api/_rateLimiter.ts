@@ -1,32 +1,91 @@
 /**
- * Simple Rate Limiting Utility
- * Uses in-memory store (for Vercel serverless functions)
- * For production, consider using Redis (Upstash) for distributed rate limiting
+ * Rate Limiting Utility with Upstash Redis
+ * Uses distributed Redis for production-ready rate limiting
+ * Falls back to in-memory store if Redis is not configured
  */
 
+import { Ratelimit } from '@upstash/ratelimit';
+import { Redis } from '@upstash/redis';
+
+// In-memory fallback store (for development or if Redis not configured)
 interface RateLimitStore {
   [key: string]: {
     count: number;
     resetTime: number;
   };
 }
-
-// In-memory store (resets on function restart)
-// For production, use Redis or Vercel's built-in rate limiting
 const rateLimitStore: RateLimitStore = {};
 
+// Initialize Upstash Redis if credentials are available
+let redisClient: Redis | null = null;
+let ratelimit: Ratelimit | null = null;
+
+function initRedis() {
+  if (redisClient && ratelimit) {
+    return { redisClient, ratelimit };
+  }
+
+  const upstashUrl = process.env.UPSTASH_REDIS_REST_URL;
+  const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  if (upstashUrl && upstashToken) {
+    try {
+      redisClient = new Redis({
+        url: upstashUrl,
+        token: upstashToken,
+      });
+
+      ratelimit = new Ratelimit({
+        redis: redisClient,
+        limiter: Ratelimit.slidingWindow,
+        analytics: true,
+      });
+
+      return { redisClient, ratelimit };
+    } catch (error) {
+      console.warn('Failed to initialize Upstash Redis, falling back to in-memory rate limiting:', error);
+    }
+  }
+
+  return { redisClient: null, ratelimit: null };
+}
+
 /**
- * Simple rate limiter
+ * Rate limiter with Redis support
  * @param identifier - Unique identifier (e.g., user ID or IP)
  * @param maxRequests - Maximum requests allowed
  * @param windowMs - Time window in milliseconds
  * @returns { allowed: boolean, remaining: number, resetTime: number }
  */
-export function checkRateLimit(
+export async function checkRateLimit(
   identifier: string,
   maxRequests: number = 10,
   windowMs: number = 60000 // 1 minute default
-): { allowed: boolean; remaining: number; resetTime: number } {
+): Promise<{ allowed: boolean; remaining: number; resetTime: number }> {
+  const { ratelimit } = initRedis();
+
+  // Use Upstash Redis if available
+  if (ratelimit) {
+    try {
+      const windowSeconds = Math.floor(windowMs / 1000);
+      const result = await ratelimit.limit(identifier, {
+        rate: maxRequests,
+        window: `${windowSeconds}s`,
+      });
+
+      const now = Date.now();
+      return {
+        allowed: result.success,
+        remaining: result.remaining,
+        resetTime: now + windowMs, // Approximate reset time
+      };
+    } catch (error) {
+      console.error('Rate limit check failed, falling back to in-memory:', error);
+      // Fall through to in-memory fallback
+    }
+  }
+
+  // Fallback to in-memory rate limiting
   const now = Date.now();
   const key = identifier;
 

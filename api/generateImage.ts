@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { verifyAuth } from "./verifyAuth.js";
 import { getModelForTask } from "./_modelRouter.js";
 import { enforceRateLimit } from "./_rateLimit.js";
+import { sanitizeForAI } from "./_inputSanitizer.js";
 
 // Import OpenAI with ESM syntax
 import OpenAI from "openai";
@@ -34,6 +35,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: "Missing or invalid 'prompt'" });
   }
 
+  // Sanitize prompt input
+  const sanitizedPrompt = sanitizeForAI(prompt, 2000);
+  if (!sanitizedPrompt) {
+    return res.status(400).json({ error: "Prompt cannot be empty" });
+  }
+
   try {
     // If explicit content is requested, use Replicate NSFW models instead of OpenAI
     if (allowExplicit) {
@@ -42,7 +49,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!replicateApiToken) {
         return res.status(200).json({
           imageData: null,
-          prompt: prompt,
+          prompt: sanitizedPrompt,
           error: "Replicate API not configured",
           note: "REPLICATE_API_TOKEN environment variable is required for explicit content generation.",
         });
@@ -56,7 +63,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const model = "alicewuv/whiskii-gen"; // NSFW-Uncensored Stable Diffusion XL
       
       // Enhance prompt for NSFW content
-      let enhancedPrompt = prompt;
+      let enhancedPrompt = sanitizedPrompt;
       try {
         const geminiModel = await getModelForTask('image-prompt', user.uid);
         const systemPrompt = `
@@ -72,7 +79,7 @@ Include details about:
 Keep it concise but descriptive. Return ONLY the enhanced prompt, nothing else.
 `;
         const result = await geminiModel.generateContent({
-          contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\nUser prompt: ${prompt}` }] }],
+          contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\nUser prompt: ${sanitizedPrompt}` }] }],
         });
         enhancedPrompt = result.response.text().trim().replace(/^(prompt|enhanced prompt|suggested prompt):\s*/i, '').trim();
       } catch (promptError) {
