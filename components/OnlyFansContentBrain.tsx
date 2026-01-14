@@ -1220,7 +1220,17 @@ export const OnlyFansContentBrain: React.FC = () => {
                     return hashtags.length > 0 ? `${caption} ${hashtags.join(' ')}` : caption;
                 });
             }
-            setGeneratedCaptions(Array.isArray(captions) ? captions : []);
+            
+            // Filter out used captions before setting state
+            const encoder = new TextEncoder();
+            const filteredCaptions = captions.filter((caption) => {
+                const data = encoder.encode(caption);
+                const binaryString = Array.from(data, byte => String.fromCharCode(byte)).join('');
+                const captionHash = btoa(binaryString).substring(0, 50);
+                return !usedCaptionsHash.has(captionHash);
+            });
+            
+            setGeneratedCaptions(Array.isArray(filteredCaptions) ? filteredCaptions : []);
             showToast?.('Captions generated successfully!', 'success');
 
             // Lightweight usage tracking (best-effort)
