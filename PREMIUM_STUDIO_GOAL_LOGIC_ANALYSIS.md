@@ -18,7 +18,7 @@
 ### Current Fan Data Structure
 ```typescript
 preferences?: {
-    subscriptionTier?: 'VIP' | 'Regular' | 'New';  // Based on sessions, not subscription status
+    subscriptionTier?: 'VIP' | 'Regular' | 'Free';  // Free = Free Plan, Regular/VIP = Subscribed
     spendingLevel?: number;
     totalSessions?: number;
     isBigSpender?: boolean;
@@ -27,7 +27,10 @@ preferences?: {
 }
 ```
 
-**Problem**: `subscriptionTier` indicates engagement level (VIP/Regular/New) but **doesn't indicate subscription status** (subscribed vs free plan).
+**Solution**: `subscriptionTier` now indicates subscription status:
+- **Free** = Free plan (not subscribed)
+- **Regular** = Subscribed (regular subscriber)
+- **VIP** = Subscribed (VIP subscriber)
 
 ### Current AI Prompt Logic
 - Goal is passed to API but not intelligently interpreted based on fan status
@@ -83,11 +86,10 @@ preferences?: {
 
 ### 1. Add Subscription Status to Fan Preferences
 
-**Enhance Fan Data Structure**:
+**Fan Data Structure (UPDATED)**:
 ```typescript
 preferences?: {
-    subscriptionTier?: 'VIP' | 'Regular' | 'New';
-    subscriptionStatus?: 'Subscribed' | 'Free Plan' | 'Inactive' | 'Unknown';  // NEW
+    subscriptionTier?: 'VIP' | 'Regular' | 'Free';  // Free = Free Plan, Regular/VIP = Subscribed
     spendingLevel?: number;
     totalSessions?: number;
     isBigSpender?: boolean;
@@ -96,11 +98,11 @@ preferences?: {
 }
 ```
 
-**Default Logic**:
-- If `subscriptionStatus` not set, infer from `subscriptionTier`:
-  - VIP/Regular with sessions → Likely "Subscribed"
-  - New with no sessions → Likely "Free Plan"
-  - No activity in 30+ days → "Inactive"
+**Subscription Status Inference**:
+- **Free** tier → "Free Plan" (not subscribed)
+- **Regular** tier → "Subscribed" (regular subscriber)
+- **VIP** tier → "Subscribed" (VIP subscriber)
+- No activity in 30+ days → "Inactive" (regardless of tier)
 
 ### 2. Add "Free to Paid Plan" Goal Option
 
@@ -131,10 +133,12 @@ preferences?: {
 // Determine fan subscription context
 let fanSubscriptionContext = '';
 if (selectedFanId && fanPreferences) {
-    const subscriptionStatus = fanPreferences.subscriptionStatus || 
-        (fanPreferences.subscriptionTier === 'VIP' || fanPreferences.subscriptionTier === 'Regular' 
-            ? 'Subscribed' 
-            : 'Free Plan');
+    // Infer subscription status from tier: Free = Free Plan, Regular/VIP = Subscribed
+    const subscriptionStatus = fanPreferences.subscriptionTier === 'Free' 
+        ? 'Free Plan' 
+        : (fanPreferences.subscriptionTier === 'Regular' || fanPreferences.subscriptionTier === 'VIP')
+        ? 'Subscribed'
+        : 'Unknown';
     
     // Build context based on goal + subscription status
     if (captionGoal === 'subscriber-retention') {

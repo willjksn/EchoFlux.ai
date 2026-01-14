@@ -110,7 +110,7 @@ export const OnlyFansStudio: React.FC = () => {
                         totalSessions: data.totalSessions || 0,
                         isBigSpender: data.isBigSpender || false,
                         isLoyalFan: data.isLoyalFan || false,
-                        subscriptionTier: data.subscriptionTier || 'New',
+                        subscriptionTier: data.subscriptionTier || 'Free',
                         lastSessionDate: data.lastSessionDate,
                         engagementHistory: data.engagementHistory || []
                     }

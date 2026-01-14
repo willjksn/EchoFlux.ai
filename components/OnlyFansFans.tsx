@@ -24,7 +24,7 @@ interface Fan {
         communicationStyle?: 'casual' | 'formal' | 'flirty' | 'direct' | 'like Explicit';
         totalSessions?: number;
         spendingLevel?: number;
-        subscriptionTier?: 'VIP' | 'Regular' | 'New';
+        subscriptionTier?: 'VIP' | 'Regular' | 'Free';
         isLoyalFan?: boolean;
         isBigSpender?: boolean;
         lastSessionDate?: string;
@@ -65,7 +65,7 @@ export const OnlyFansFans: React.FC = () => {
     const [isLoadingSessionHistory, setIsLoadingSessionHistory] = useState<Record<string, boolean>>({});
     const [newFanName, setNewFanName] = useState('');
     const [newFanSpendingLevel, setNewFanSpendingLevel] = useState<number>(0);
-    const [newFanTier, setNewFanTier] = useState<'VIP' | 'Regular' | 'New'>('New');
+    const [newFanTier, setNewFanTier] = useState<'VIP' | 'Regular' | 'Free'>('Free');
     const [newFanNotes, setNewFanNotes] = useState('');
     const [newFanPreferredTone, setNewFanPreferredTone] = useState<string>('');
     const [newFanFavoriteSessionType, setNewFanFavoriteSessionType] = useState<string>('');
@@ -101,7 +101,7 @@ export const OnlyFansFans: React.FC = () => {
                         totalSessions: data.totalSessions || 0,
                         isBigSpender: data.isBigSpender || (data.spendingLevel && data.spendingLevel >= 4) || false,
                         isLoyalFan: data.isLoyalFan || (data.totalSessions && data.totalSessions >= 5) || false,
-                        subscriptionTier: data.subscriptionTier || (data.totalSessions >= 10 ? 'VIP' : data.totalSessions >= 3 ? 'Regular' : 'New'),
+                        subscriptionTier: data.subscriptionTier || (data.totalSessions >= 10 ? 'VIP' : data.totalSessions >= 3 ? 'Regular' : 'Free'),
                         lastSessionDate: data.lastSessionDate?.toDate ? data.lastSessionDate.toDate().toISOString() : (data.lastSessionDate || undefined),
                         engagementHistory: data.engagementHistory || [],
                         notes: data.notes || '',
@@ -445,7 +445,7 @@ export const OnlyFansFans: React.FC = () => {
         // Pre-fill all fields with existing fan data
         setNewFanName(fan.name);
         setNewFanSpendingLevel(fan.preferences.spendingLevel || 0);
-        setNewFanTier(fan.preferences.subscriptionTier || 'New');
+        setNewFanTier(fan.preferences.subscriptionTier || 'Free');
         setNewFanNotes(fan.preferences.notes || '');
         setNewFanPreferredTone(fan.preferences.preferredTone || '');
         setNewFanFavoriteSessionType(fan.preferences.favoriteSessionType || '');
@@ -513,7 +513,7 @@ export const OnlyFansFans: React.FC = () => {
             // Reset form
             setNewFanName('');
             setNewFanSpendingLevel(0);
-            setNewFanTier('New');
+            setNewFanTier('Free');
             setNewFanNotes('');
             setNewFanPreferredTone('');
             setNewFanFavoriteSessionType('');
@@ -1068,7 +1068,7 @@ export const OnlyFansFans: React.FC = () => {
                                     setShowAddFanModal(false);
                                     setNewFanName('');
                                     setNewFanSpendingLevel(0);
-                                    setNewFanTier('New');
+                                    setNewFanTier('Free');
                                     setNewFanNotes('');
                                     setNewFanPreferredTone('');
                                     setNewFanFavoriteSessionType('');
@@ -1135,7 +1135,7 @@ export const OnlyFansFans: React.FC = () => {
                                         onChange={(e) => setNewFanTier(e.target.value as any)}
                                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     >
-                                        <option value="New">New</option>
+                                        <option value="Free">Free</option>
                                         <option value="Regular">Regular</option>
                                         <option value="VIP">VIP</option>
                                     </select>
@@ -1319,7 +1319,7 @@ export const OnlyFansFans: React.FC = () => {
                                     setShowAddFanModal(false);
                                     setNewFanName('');
                                     setNewFanSpendingLevel(0);
-                                    setNewFanTier('New');
+                                    setNewFanTier('Free');
                                     setNewFanNotes('');
                                     setNewFanPreferredTone('');
                                     setNewFanFavoriteSessionType('');
@@ -1407,7 +1407,7 @@ export const OnlyFansFans: React.FC = () => {
                                         setShowAddFanModal(false);
                                         setNewFanName('');
                                         setNewFanSpendingLevel(0);
-                                        setNewFanTier('New');
+                                        setNewFanTier('Free');
                                         setNewFanNotes('');
                                         setNewFanPreferredTone('');
                                         setNewFanFavoriteSessionType('');
@@ -1502,7 +1502,7 @@ export const OnlyFansFans: React.FC = () => {
                                         onChange={(e) => setNewFanTier(e.target.value as any)}
                                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     >
-                                        <option value="New">New</option>
+                                        <option value="Free">Free</option>
                                         <option value="Regular">Regular</option>
                                         <option value="VIP">VIP</option>
                                     </select>

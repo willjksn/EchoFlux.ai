@@ -85,10 +85,12 @@
 // In handleGenerateSubscriberMessages
 let subscriptionContext = '';
 if (selectedFanId && fanPreferences) {
-    const subscriptionStatus = fanPreferences.subscriptionStatus || 
-        (fanPreferences.subscriptionTier === 'VIP' || fanPreferences.subscriptionTier === 'Regular' 
-            ? 'Subscribed' 
-            : 'Free Plan');
+    // Infer subscription status from tier: Free = Free Plan, Regular/VIP = Subscribed
+    const subscriptionStatus = fanPreferences.subscriptionTier === 'Free' 
+        ? 'Free Plan' 
+        : (fanPreferences.subscriptionTier === 'Regular' || fanPreferences.subscriptionTier === 'VIP')
+        ? 'Subscribed'
+        : 'Unknown';
     
     if (messageType === 'Welcome sequence') {
         if (subscriptionStatus === 'Subscribed') {
@@ -188,10 +190,12 @@ FAN STATUS UNKNOWN - GENERIC WIN-BACK:
 // In handleGenerateScenario
 let monetizationContext = '';
 if (selectedFanId && fanPreferences) {
-    const subscriptionStatus = fanPreferences.subscriptionStatus || 
-        (fanPreferences.subscriptionTier === 'VIP' || fanPreferences.subscriptionTier === 'Regular' 
-            ? 'Subscribed' 
-            : 'Free Plan');
+    // Infer subscription status from tier: Free = Free Plan, Regular/VIP = Subscribed
+    const subscriptionStatus = fanPreferences.subscriptionTier === 'Free' 
+        ? 'Free Plan' 
+        : (fanPreferences.subscriptionTier === 'Regular' || fanPreferences.subscriptionTier === 'VIP')
+        ? 'Subscribed'
+        : 'Unknown';
     
     if (subscriptionStatus === 'Subscribed') {
         monetizationContext = `
@@ -263,10 +267,12 @@ ENDING CTA REQUIREMENTS:
 // In generateAISuggestions
 let subscriptionContext = '';
 if (currentFanId && currentFanPrefs) {
-    const subscriptionStatus = currentFanPrefs.subscriptionStatus || 
-        (currentFanPrefs.subscriptionTier === 'VIP' || currentFanPrefs.subscriptionTier === 'Regular' 
-            ? 'Subscribed' 
-            : 'Free Plan');
+    // Infer subscription status from tier: Free = Free Plan, Regular/VIP = Subscribed
+    const subscriptionStatus = currentFanPrefs.subscriptionTier === 'Free' 
+        ? 'Free Plan' 
+        : (currentFanPrefs.subscriptionTier === 'Regular' || currentFanPrefs.subscriptionTier === 'VIP')
+        ? 'Subscribed'
+        : 'Unknown';
     
     if (subscriptionStatus === 'Subscribed') {
         subscriptionContext = `

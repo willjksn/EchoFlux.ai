@@ -8,7 +8,7 @@ interface Fan {
     id: string;
     name: string;
     preferences?: {
-        subscriptionTier?: 'VIP' | 'Regular' | 'New';
+        subscriptionTier?: 'VIP' | 'Regular' | 'Free';
         spendingLevel?: number;
         totalSessions?: number;
         isBigSpender?: boolean;
@@ -49,7 +49,7 @@ export const FanSelector: React.FC<FanSelectorProps> = ({
                     id: doc.id,
                     name: data.name || doc.id,
                     preferences: {
-                        subscriptionTier: data.subscriptionTier || (data.totalSessions >= 10 ? 'VIP' : data.totalSessions >= 3 ? 'Regular' : 'New'),
+                        subscriptionTier: data.subscriptionTier || (data.totalSessions >= 10 ? 'VIP' : data.totalSessions >= 3 ? 'Regular' : 'Free'),
                         spendingLevel: data.spendingLevel || 0,
                         totalSessions: data.totalSessions || 0,
                         isBigSpender: data.isBigSpender || false,
