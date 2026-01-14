@@ -1312,7 +1312,7 @@ export const BioPageBuilder: React.FC = () => {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Form Background</label>
-                                    <input type="color" value={bioPage.emailCapture.formBackgroundColor || '#d1dbf0'} onChange={e => updateEmailCapture('formBackgroundColor', e.target.value)} className="h-10 w-full rounded cursor-pointer border-2 border-gray-500 dark:border-gray-400 md:border md:border-gray-300 md:dark:border-gray-600 lg:border lg:border-gray-300 lg:dark:border-gray-600 bg-white dark:bg-gray-700" />
+                                    <input type="color" value={bioPage.emailCapture.formBackgroundColor || '#d1dbf0'} onChange={e => updateEmailCapture('formBackgroundColor', e.target.value)} className="h-10 w-full rounded cursor-pointer border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 md:border-2 md:border-gray-500 md:dark:border-gray-400 lg:border lg:border-gray-300 lg:dark:border-gray-600" />
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Title Color</label>
@@ -1320,7 +1320,7 @@ export const BioPageBuilder: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Input Background</label>
-                                    <input type="color" value={bioPage.emailCapture.inputBackgroundColor || '#f9fafb'} onChange={e => updateEmailCapture('inputBackgroundColor', e.target.value)} className="h-10 w-full rounded cursor-pointer border-2 border-gray-500 dark:border-gray-400 md:border md:border-gray-300 md:dark:border-gray-600 lg:border lg:border-gray-300 lg:dark:border-gray-600 bg-white dark:bg-gray-700" />
+                                    <input type="color" value={bioPage.emailCapture.inputBackgroundColor || '#f9fafb'} onChange={e => updateEmailCapture('inputBackgroundColor', e.target.value)} className="h-10 w-full rounded cursor-pointer border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 md:border-2 md:border-gray-500 md:dark:border-gray-400 lg:border lg:border-gray-300 lg:dark:border-gray-600" />
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Input Text</label>
@@ -1332,7 +1332,7 @@ export const BioPageBuilder: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Button Text</label>
-                                    <input type="color" value={bioPage.emailCapture.buttonTextColor || '#111827'} onChange={e => updateEmailCapture('buttonTextColor', e.target.value)} className="h-10 w-full rounded cursor-pointer border-2 border-gray-500 dark:border-gray-400 md:border md:border-gray-300 md:dark:border-gray-600 lg:border lg:border-gray-300 lg:dark:border-gray-600 bg-white dark:bg-gray-700" />
+                                    <input type="color" value={bioPage.emailCapture.buttonTextColor || '#111827'} onChange={e => updateEmailCapture('buttonTextColor', e.target.value)} className="h-10 w-full rounded cursor-pointer border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 md:border-2 md:border-gray-500 md:dark:border-gray-400 lg:border lg:border-gray-300 lg:dark:border-gray-600" />
                                 </div>
                             </div>
                         </div>

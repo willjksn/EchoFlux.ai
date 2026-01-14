@@ -1033,6 +1033,7 @@ export const OnlyFansContentBrain: React.FC = () => {
         setCurrentCaptionForAI('');
         setEditedCaptions(new Map());
         setUsedCaptions(new Set());
+        setUsedCaptionsHash(new Set()); // Clear used captions hash for new generation
         
         setIsGenerating(true);
         setError(null);
@@ -2303,6 +2304,7 @@ Output format:
         setCurrentCaptionForAI('');
         setEditedCaptions(new Map());
         setUsedCaptions(new Set());
+        setUsedCaptionsHash(new Set()); // Clear used captions hash for new media
         
         setUploadedMediaFile(file);
         const previewUrl = URL.createObjectURL(file);
