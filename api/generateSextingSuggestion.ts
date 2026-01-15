@@ -4,6 +4,8 @@ import { getModelForTask } from "./_modelRouter.js";
 import { enforceRateLimit } from "./_rateLimit.js";
 import { getEmojiInstructions, getEmojiExamplesForTone } from "./_emojiHelper.js";
 import { parseJSON } from "./_geminiShared.js";
+import { getAdminDb } from "./_firebaseAdmin.js";
+import { canUseAi, recordAiUsage } from "./_aiUsage.js";
 
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -52,7 +54,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   });
   if (!ok) return;
 
-    const {
+  const {
     sessionContext,
     fanContext,
     personalityContext,
@@ -63,6 +65,24 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   } = req.body || {};
 
   try {
+    const db = getAdminDb();
+    const userDoc = await db.collection("users").doc(user.uid).get();
+    const userData = userDoc.data();
+    const userPlan = userData?.plan || "Free";
+    const userRole = userData?.role;
+
+    const usageCheck = await canUseAi(user.uid, "sexting_session", userPlan, userRole);
+    if (!usageCheck.allowed) {
+      res.status(200).json({
+        success: false,
+        error: "AI usage limit reached",
+        note: `You've reached your monthly sexting assistant limit (${usageCheck.limit}). Upgrade for more.`,
+        limit: usageCheck.limit,
+        remaining: usageCheck.remaining,
+      });
+      return;
+    }
+
     const model = await getModelForTask("sexting_session", user.uid);
 
     const roleplayType = sessionContext?.roleplayType || "Girlfriend Experience";
@@ -168,6 +188,8 @@ Guidelines:
     if (!Array.isArray(suggestions) || suggestions.length === 0) {
       throw new Error("Model returned no suggestions");
     }
+
+    await recordAiUsage(user.uid, "sexting_session", userPlan, userRole, 1);
 
     res.status(200).json({
       success: true,

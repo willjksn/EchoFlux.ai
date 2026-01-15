@@ -19,6 +19,8 @@ interface ModelUsageStats {
   };
   requestsByDay: Array<{ date: string; count: number; cost: number }>;
   topUsers: Array<{ userId: string; userName: string; requests: number; cost: number }>;
+  runawayUsers: Array<{ userId: string; userName: string; requests24h: number; cost24h: number }>;
+  alerts: Array<{ type: "cost" | "error_rate" | "runaway"; message: string }>;
   errorRate: number;
   averageCostPerRequest: number;
 }
@@ -87,6 +89,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       requestsByCostTier: { low: 0, medium: 0, high: 0 },
       requestsByDay: [],
       topUsers: [],
+      runawayUsers: [],
+      alerts: [],
       errorRate: 0,
       averageCostPerRequest: 0,
     };
@@ -98,6 +102,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let successCount = 0;
     let totalCost = 0;
     const userRequestMap = new Map<string, { requests: number; cost: number }>();
+    const last24hCutoff = Date.now() - 24 * 60 * 60 * 1000;
+    const user24hMap = new Map<string, { requests: number; cost: number }>();
 
     logs.forEach((log: any) => {
       // Count by model
@@ -129,6 +135,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const userStats = userRequestMap.get(log.userId)!;
         userStats.requests++;
         userStats.cost += log.estimatedCost || 0;
+
+        const ts = new Date(log.timestamp).getTime();
+        if (ts >= last24hCutoff) {
+          if (!user24hMap.has(log.userId)) {
+            user24hMap.set(log.userId, { requests: 0, cost: 0 });
+          }
+          const user24h = user24hMap.get(log.userId)!;
+          user24h.requests++;
+          user24h.cost += log.estimatedCost || 0;
+        }
       }
 
       // Track success/errors
@@ -161,6 +177,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     stats.totalCost = totalCost;
     stats.errorRate = logs.length > 0 ? ((logs.length - successCount) / logs.length) * 100 : 0;
     stats.averageCostPerRequest = logs.length > 0 ? totalCost / logs.length : 0;
+
+    // Runaway usage detection (last 24h)
+    const runawayThreshold = 200; // requests in 24h
+    stats.runawayUsers = Array.from(user24hMap.entries())
+      .filter(([, data]) => data.requests >= runawayThreshold)
+      .map(([userId, data]) => {
+        const user = usersMap.get(userId);
+        return {
+          userId,
+          userName: user?.name || "Unknown User",
+          requests24h: data.requests,
+          cost24h: data.cost,
+        };
+      })
+      .sort((a, b) => b.requests24h - a.requests24h);
+
+    // Alerts
+    const costAlertThreshold = 10; // USD
+    const errorAlertThreshold = 5; // %
+    if (stats.totalCost >= costAlertThreshold) {
+      stats.alerts.push({
+        type: "cost",
+        message: `Total AI cost exceeded $${costAlertThreshold.toFixed(2)} in the last ${daysNum} days.`,
+      });
+    }
+    if (stats.errorRate >= errorAlertThreshold) {
+      stats.alerts.push({
+        type: "error_rate",
+        message: `Error rate exceeded ${errorAlertThreshold}% in the last ${daysNum} days.`,
+      });
+    }
+    if (stats.runawayUsers.length > 0) {
+      stats.alerts.push({
+        type: "runaway",
+        message: `Runaway usage detected (≥ ${runawayThreshold} requests in 24h).`,
+      });
+    }
 
     return res.status(200).json(stats);
   } catch (err: any) {

@@ -575,6 +575,7 @@ export const Strategy: React.FC = () => {
 
     // Debounced autosave for edits (captions, statuses, etc.) so leaving/reloading doesn’t lose changes.
     const autosaveTimerRef = useRef<number | null>(null);
+    const lastAutosaveHashRef = useRef<string | null>(null);
     useEffect(() => {
         if (!user?.id) return;
         if (!selectedStrategy?.id) return;
@@ -600,9 +601,21 @@ export const Strategy: React.FC = () => {
                 platformFocus,
                 updatedAt: new Date().toISOString(),
             };
+            const payloadHash = JSON.stringify({
+                id: selectedStrategy.id,
+                plan,
+                niche,
+                audience,
+                goal,
+                tone,
+                duration,
+                platformFocus,
+            });
+            if (lastAutosaveHashRef.current === payloadHash) return;
+            lastAutosaveHashRef.current = payloadHash;
             setDoc(doc(db, 'users', user.id, 'strategies', selectedStrategy.id), payload, { merge: true })
                 .catch(err => console.error('Autosave failed:', err));
-        }, 1000);
+        }, 5000);
 
         return () => {
             if (autosaveTimerRef.current) {

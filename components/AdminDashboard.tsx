@@ -62,6 +62,12 @@ const DEFAULT_MODEL_USAGE_STATS: ModelUsageStats = {
         { userId: 'unknown-1', userName: 'Unknown User', requests: 24, cost: 0 },
         { userId: 'unknown-2', userName: 'Unknown User', requests: 19, cost: 0 },
     ],
+    runawayUsers: [
+        { userId: 'will', userName: 'Will', requests24h: 220, cost24h: 0 },
+    ],
+    alerts: [
+        { type: "runaway", message: "Runaway usage detected (≥ 200 requests in 24h)." },
+    ],
 };
 
 const StatCard: React.FC<{ title: string; value: string | number; icon: React.ReactNode }> = ({ title, value, icon }) => (
@@ -778,6 +784,15 @@ export const AdminDashboard: React.FC = () => {
                     </div>
                 ) : modelUsageStats ? (
                     <div className="space-y-6">
+                        {(modelUsageStats.alerts || []).length > 0 && (
+                            <div className="space-y-2">
+                                {(modelUsageStats.alerts || []).map((alert, idx) => (
+                                    <div key={idx} className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
+                                        {alert.message}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                         {/* Key Metrics */}
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg border border-blue-200 dark:border-blue-700">
@@ -886,6 +901,20 @@ export const AdminDashboard: React.FC = () => {
                                                 <span className="text-sm text-gray-600 dark:text-gray-400">{user.requests} requests</span>
                                                 <span className="text-sm font-semibold text-gray-900 dark:text-white">${user.cost.toFixed(2)}</span>
                                             </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {(modelUsageStats.runawayUsers || []).length > 0 && (
+                            <div>
+                                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Runaway Usage (Last 24h)</h4>
+                                <div className="space-y-2">
+                                    {(modelUsageStats.runawayUsers || []).map((user, idx) => (
+                                        <div key={`${user.userId}-${idx}`} className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                                            <span className="text-sm font-medium text-red-900 dark:text-red-200">{user.userName}</span>
+                                            <span className="text-sm text-red-700 dark:text-red-300">{user.requests24h} requests • ${user.cost24h.toFixed(2)}</span>
                                         </div>
                                     ))}
                                 </div>

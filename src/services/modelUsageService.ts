@@ -53,6 +53,8 @@ export interface ModelUsageStats {
   };
   requestsByDay: Array<{ date: string; count: number; cost: number }>;
   topUsers: Array<{ userId: string; userName: string; requests: number; cost: number }>;
+  runawayUsers: Array<{ userId: string; userName: string; requests24h: number; cost24h: number }>;
+  alerts: Array<{ type: "cost" | "error_rate" | "runaway"; message: string }>;
   errorRate: number;
   averageCostPerRequest: number;
 }

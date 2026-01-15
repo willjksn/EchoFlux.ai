@@ -147,3 +147,18 @@ export async function getCaptionUsageStats(
   }
 }
 
+export async function canGenerateCaptions(
+  userId: string,
+  userPlan: string,
+  userRole?: string
+): Promise<{ allowed: boolean; limit: number; remaining: number; month: string }> {
+  const stats = await getCaptionUsageStats(userId, userPlan, userRole);
+  if (userRole === "Admin") return { ...stats, allowed: true };
+  return {
+    allowed: stats.remaining > 0,
+    limit: stats.limit,
+    remaining: stats.remaining,
+    month: stats.month,
+  };
+}
+

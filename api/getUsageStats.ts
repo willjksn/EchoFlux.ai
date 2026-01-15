@@ -9,6 +9,7 @@ import { getAdminDb } from "./_firebaseAdmin.js";
 import { getStrategyUsageStats } from "./_strategyUsage.js";
 import { getTavilyUsageStats } from "./_tavilyUsage.js";
 import { getWeeklyPlanUsageStats } from "./_weeklyPlanUsage.js";
+import { getAiUsageStats } from "./_aiUsage.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "GET") {
@@ -36,16 +37,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     const userPlan = userData?.plan || 'Free';
     const userRole = userData?.role;
 
-    const [strategyStats, tavilyStats, weeklyPlanStats] = await Promise.all([
+    const [strategyStats, tavilyStats, weeklyPlanStats, generalAiStats, sextingAiStats] = await Promise.all([
       getStrategyUsageStats(authUser.uid, userPlan, userRole),
       getTavilyUsageStats(authUser.uid, userPlan, userRole),
       getWeeklyPlanUsageStats(authUser.uid, userPlan, userRole),
+      getAiUsageStats(authUser.uid, "general_ai", userPlan, userRole),
+      getAiUsageStats(authUser.uid, "sexting_session", userPlan, userRole),
     ]);
 
     res.status(200).json({
       strategy: strategyStats,
       tavily: tavilyStats,
       weeklyPlan: weeklyPlanStats,
+      ai: {
+        general: generalAiStats,
+        sextingSession: sextingAiStats,
+      },
     });
     return;
   } catch (error: any) {

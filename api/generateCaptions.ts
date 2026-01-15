@@ -12,6 +12,8 @@ import { getOnlyFansResearchContext } from "./_onlyfansResearch.js";
 import { enforceRateLimit } from "./_rateLimit.js";
 import { getEmojiInstructions, getEmojiExamplesForTone } from "./_emojiHelper.js";
 import { sanitizeForAI } from "./_inputSanitizer.js";
+import { buildCacheKey, getCachedResponse, setCachedResponse } from "./_aiCache.js";
+import { canGenerateCaptions, recordCaptionGeneration } from "./_captionUsage.js";
 
 async function getGeminiShared() {
   try {
@@ -214,6 +216,17 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     // Continue with default Free plan
   }
 
+  const usageCheck = await canGenerateCaptions(authUser.uid, userPlan, userRole);
+  if (!usageCheck.allowed) {
+    res.status(200).json([
+      {
+        caption: `You've reached your monthly AI caption limit (${usageCheck.limit}). Upgrade your plan to generate more captions.`,
+        hashtags: [],
+      },
+    ]);
+    return;
+  }
+
   const {
     mediaUrl,
     mediaUrls,
@@ -240,6 +253,27 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   const sanitizedPromptText = promptText ? sanitizeForAI(promptText, 2000) : undefined;
   const sanitizedTone = tone ? sanitizeForAI(tone, 100) : undefined;
   const sanitizedGoal = goal ? sanitizeForAI(goal, 100) : undefined;
+
+  const canCache = !mediaData && !mediaUrl && (!mediaUrls || mediaUrls.length === 0);
+  const cacheKey = canCache
+    ? buildCacheKey({
+        userId: authUser.uid,
+        task: "generateCaptions",
+        promptText: sanitizedPromptText,
+        tone: sanitizedTone,
+        goal: sanitizedGoal,
+        platforms,
+        emojiEnabled,
+        emojiIntensity,
+      })
+    : null;
+  if (cacheKey) {
+    const cached = await getCachedResponse(cacheKey);
+    if (cached?.captions) {
+      res.status(200).json(cached.captions);
+      return;
+    }
+  }
   
   // Normalize tone value for consistent detection
   const normalizedTone = sanitizedTone?.toLowerCase().trim();
@@ -935,11 +969,14 @@ ${shouldGenerateOnlyFansHashtags ? `HASHTAG REQUIREMENTS:
 
   // Record caption generation usage (only after successful generation)
   try {
-    const { recordCaptionGeneration } = await import("./_captionUsage.js");
     await recordCaptionGeneration(authUser.uid, userPlan, userRole, captions.length);
   } catch (usageError) {
     // Don't fail the request if usage tracking fails
     console.error("Failed to record caption generation usage:", usageError);
+  }
+
+  if (cacheKey) {
+    await setCachedResponse(cacheKey, { captions });
   }
 
   res.status(200).json(captions);

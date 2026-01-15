@@ -3,7 +3,7 @@ import { useAppContext } from './AppContext';
 import { SparklesIcon, RefreshIcon, DownloadIcon, UploadIcon, XMarkIcon, CopyIcon, ImageIcon, TrashIcon } from './icons/UIIcons';
 import { auth, storage, db } from '../firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { collection, addDoc, Timestamp, query, getDocs, orderBy, getDoc, doc, setDoc, deleteDoc, where } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, query, getDocs, orderBy, getDoc, doc, setDoc, deleteDoc, where, limit } from 'firebase/firestore';
 import { OnlyFansCalendarEvent } from './OnlyFansCalendar';
 import { FanSelector } from './FanSelector';
 import { loadEmojiSettings } from '../src/utils/loadEmojiSettings';
@@ -1852,7 +1852,7 @@ Output format:
             const predictItems: any[] = [];
             try {
                 const predictRef = collection(db, 'users', user.id, 'onlyfans_predict_history');
-                const predictQuery = query(predictRef, orderBy('createdAt', 'desc'));
+                const predictQuery = query(predictRef, orderBy('createdAt', 'desc'), limit(25));
                 const predictSnapshot = await getDocs(predictQuery);
                 predictSnapshot.forEach((doc) => {
                     const data = doc.data();
@@ -1881,7 +1881,7 @@ Output format:
             const repurposeItems: any[] = [];
             try {
                 const repurposeRef = collection(db, 'users', user.id, 'onlyfans_repurpose_history');
-                const repurposeQuery = query(repurposeRef, orderBy('createdAt', 'desc'));
+                const repurposeQuery = query(repurposeRef, orderBy('createdAt', 'desc'), limit(25));
                 const repurposeSnapshot = await getDocs(repurposeQuery);
                 repurposeSnapshot.forEach((doc) => {
                     const data = doc.data();
@@ -1911,7 +1911,7 @@ Output format:
             try {
                 const gapAnalysisRef = collection(db, 'users', user.id, 'onlyfans_content_brain_history');
                 // Avoid composite index requirement (type + createdAt). Fetch by createdAt and filter by type in-memory.
-                const gapAnalysisQuery = query(gapAnalysisRef, orderBy('createdAt', 'desc'));
+                const gapAnalysisQuery = query(gapAnalysisRef, orderBy('createdAt', 'desc'), limit(25));
                 const gapAnalysisSnapshot = await getDocs(gapAnalysisQuery);
                 gapAnalysisSnapshot.forEach((doc) => {
                     const data = doc.data();
@@ -1962,7 +1962,7 @@ Output format:
             // Load predict history from OnlyFans-specific collection
             try {
                 const predictRef = collection(db, 'users', user.id, 'onlyfans_predict_history');
-                const predictQuery = query(predictRef, orderBy('createdAt', 'desc'));
+                const predictQuery = query(predictRef, orderBy('createdAt', 'desc'), limit(25));
                 const predictSnapshot = await getDocs(predictQuery);
                 predictSnapshot.forEach((doc) => {
                     const data = doc.data();
@@ -1990,7 +1990,7 @@ Output format:
             // Load repurpose history from OnlyFans-specific collection
             try {
                 const repurposeRef = collection(db, 'users', user.id, 'onlyfans_repurpose_history');
-                const repurposeQuery = query(repurposeRef, orderBy('createdAt', 'desc'));
+                const repurposeQuery = query(repurposeRef, orderBy('createdAt', 'desc'), limit(25));
                 const repurposeSnapshot = await getDocs(repurposeQuery);
                 repurposeSnapshot.forEach((doc) => {
                     const data = doc.data();
@@ -2065,7 +2065,7 @@ Output format:
             
             // Keep only last 10 - get all, delete oldest if > 10
             try {
-                const q = query(historyRef, orderBy('createdAt', 'desc'));
+                const q = query(historyRef, orderBy('createdAt', 'desc'), limit(25));
                 const snapshot = await getDocs(q);
                 if (snapshot.size > 10) {
                     const docs = snapshot.docs;
@@ -2143,7 +2143,7 @@ Output format:
             
             // Keep only last 10 - get all, delete oldest if > 10
             try {
-                const q = query(historyRef, orderBy('createdAt', 'desc'));
+                const q = query(historyRef, orderBy('createdAt', 'desc'), limit(25));
                 const snapshot = await getDocs(q);
                 if (snapshot.size > 10) {
                     const docs = snapshot.docs;
@@ -2224,7 +2224,7 @@ Output format:
         if (!user?.id) return;
         try {
             const historyRef = collection(db, 'users', user.id, 'onlyfans_content_brain_history');
-            const q = query(historyRef, orderBy('createdAt', 'desc'));
+            const q = query(historyRef, orderBy('createdAt', 'desc'), limit(25));
             const snapshot = await getDocs(q);
             const items: any[] = [];
             snapshot.forEach((doc) => {
@@ -2244,7 +2244,7 @@ Output format:
         if (!user?.id) return;
         try {
             const historyRef = collection(db, 'users', user.id, 'onlyfans_content_brain_history');
-            const q = query(historyRef, orderBy('createdAt', 'desc'));
+            const q = query(historyRef, orderBy('createdAt', 'desc'), limit(25));
             const snapshot = await getDocs(q);
             const items: any[] = [];
             snapshot.forEach((doc) => {
@@ -2264,7 +2264,7 @@ Output format:
         if (!user?.id) return;
         try {
             const historyRef = collection(db, 'users', user.id, 'onlyfans_content_brain_history');
-            const q = query(historyRef, orderBy('createdAt', 'desc'));
+            const q = query(historyRef, orderBy('createdAt', 'desc'), limit(25));
             const snapshot = await getDocs(q);
             const items: any[] = [];
             snapshot.forEach((doc) => {
@@ -2284,7 +2284,7 @@ Output format:
         if (!user?.id) return;
         try {
             const historyRef = collection(db, 'users', user.id, 'onlyfans_content_brain_history');
-            const q = query(historyRef, orderBy('createdAt', 'desc'));
+            const q = query(historyRef, orderBy('createdAt', 'desc'), limit(25));
             const snapshot = await getDocs(q);
             const items: any[] = [];
             snapshot.forEach((doc) => {

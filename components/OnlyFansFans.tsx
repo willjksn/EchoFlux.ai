@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAppContext } from './AppContext';
 import { UserIcon, SearchIcon, StarIcon, SparklesIcon, TrashIcon, EditIcon, PlusIcon, XMarkIcon } from './icons/UIIcons';
 import { auth, db } from '../firebaseConfig';
-import { collection, getDocs, doc, getDoc, setDoc, deleteDoc, updateDoc, query, orderBy, limit, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, setDoc, deleteDoc, updateDoc, query, orderBy, limit, Timestamp, where } from 'firebase/firestore';
 
 type FanActivityType = 'session' | 'rating' | 'content' | 'calendar' | 'media';
 
@@ -191,24 +191,24 @@ export const OnlyFansFans: React.FC = () => {
         try {
             const sessionsSnap = await getDocs(query(
                 collection(db, 'users', user.id, 'onlyfans_sexting_sessions'),
-                orderBy('createdAt', 'desc')
+                where('fanId', '==', fanId),
+                orderBy('createdAt', 'desc'),
+                limit(25)
             ));
             
             const sessions: any[] = [];
             sessionsSnap.forEach(doc => {
                 const data = doc.data();
-                if (data.fanId === fanId) {
-                    sessions.push({
-                        id: doc.id,
-                        ...data,
-                        createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date()),
-                        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : (data.updatedAt ? new Date(data.updatedAt) : new Date()),
-                        messages: (data.messages || []).map((msg: any) => ({
-                            ...msg,
-                            timestamp: msg.timestamp?.toDate ? msg.timestamp.toDate() : (msg.timestamp ? new Date(msg.timestamp) : new Date()),
-                        })),
-                    });
-                }
+                sessions.push({
+                    id: doc.id,
+                    ...data,
+                    createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date()),
+                    updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : (data.updatedAt ? new Date(data.updatedAt) : new Date()),
+                    messages: (data.messages || []).map((msg: any) => ({
+                        ...msg,
+                        timestamp: msg.timestamp?.toDate ? msg.timestamp.toDate() : (msg.timestamp ? new Date(msg.timestamp) : new Date()),
+                    })),
+                });
             });
             
             setSessionHistory({ ...sessionHistory, [fanId]: sessions });

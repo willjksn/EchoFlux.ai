@@ -7,6 +7,7 @@ import { trackModelUsage } from "./trackModelUsage.js";
 import { getLatestTrends } from "./_trendsHelper.js";
 import { ComposeInsightLimitError, enforceAndRecordComposeInsightUsage } from "./_composeInsightsUsage.js";
 import { enforceRateLimit } from "./_rateLimit.js";
+import { enqueueAiJob, processAiJob } from "./_aiQueue.js";
 
 /**
  * Smart Content Gap Analysis
@@ -57,7 +58,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     useWeeklyTrends = false
   } = (req.body as any) || {};
 
-  try {
+  const buildPayload = async () => {
     const db = getAdminDb();
 
     // Enforce Pro limits (2/mo) and record usage attempt (counts toward monthly usage)
@@ -287,13 +288,29 @@ GUIDELINES:
       success: true,
     });
 
-    res.status(200).json({
+    return {
       success: true,
       analysis: data.analysis || {},
       gaps: data.gaps || [],
       suggestions: data.suggestions || [],
       summary: data.summary || '',
-    });
+    };
+  };
+
+  try {
+    if (req.body?.queue === true) {
+      const jobId = await enqueueAiJob({
+        userId: user.uid,
+        jobType: "content_gap_analysis",
+        payload: req.body || {},
+      });
+      processAiJob(jobId, async () => buildPayload());
+      res.status(202).json({ queued: true, jobId });
+      return;
+    }
+
+    const payload = await buildPayload();
+    res.status(200).json(payload);
   } catch (error: any) {
     console.error("Error analyzing content gaps:", error);
     if (error instanceof ComposeInsightLimitError) {

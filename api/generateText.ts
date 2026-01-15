@@ -6,6 +6,9 @@ import { getOnlyFansResearchContext } from "./_onlyfansResearch.js";
 import { getOnlyFansWeeklyTrends } from "./_trendsHelper.js";
 import { enforceRateLimit } from "./_rateLimit.js";
 import { getEmojiInstructions, getEmojiExamplesForTone } from "./_emojiHelper.js";
+import { getAdminDb } from "./_firebaseAdmin.js";
+import { buildCacheKey, getCachedResponse, setCachedResponse } from "./_aiCache.js";
+import { canUseAi, recordAiUsage } from "./_aiUsage.js";
 
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -61,6 +64,23 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   }
 
   try {
+    const db = getAdminDb();
+    const userDoc = await db.collection("users").doc(user.uid).get();
+    const userData = userDoc.data();
+    const userPlan = userData?.plan || "Free";
+    const userRole = userData?.role;
+
+    const usageCheck = await canUseAi(user.uid, "general_ai", userPlan, userRole);
+    if (!usageCheck.allowed) {
+      res.status(200).json({
+        error: "AI usage limit reached",
+        note: `You've reached your monthly AI usage limit (${usageCheck.limit}). Upgrade your plan to increase your allowance.`,
+        limit: usageCheck.limit,
+        remaining: usageCheck.remaining,
+      });
+      return;
+    }
+
     const model = await getModelForTask("caption", user.uid);
     
     const goal = context?.goal || "engagement";
@@ -87,12 +107,6 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     
     if (isOnlyFansPlatform) {
       try {
-        const { getAdminDb } = await import("./_firebaseAdmin.js");
-        const db = getAdminDb();
-        const userDoc = await db.collection("users").doc(user.uid).get();
-        const userData = userDoc.data();
-        const userPlan = userData?.plan || 'Free';
-        const userRole = userData?.role;
         explicitnessLevel = userData?.explicitnessLevel ?? 7;
         
         // Get OnlyFans weekly trends
@@ -173,16 +187,34 @@ ${getEmojiInstructions({ enabled: emojiEnabled !== false, intensity: emojiIntens
 Return ONLY the generated text content, no explanations or meta-commentary.
 `.trim();
 
+    const cacheKey = buildCacheKey({
+      userId: user.uid,
+      task: "generateText",
+      prompt: aiPrompt,
+      emojiEnabled,
+      emojiIntensity,
+    });
+    const cached = await getCachedResponse(cacheKey);
+    if (cached?.text) {
+      res.status(200).json(cached);
+      return;
+    }
+
     const result = await model.generateContent({
       contents: [{ role: "user", parts: [{ text: aiPrompt }] }],
     });
 
     const generatedText = result.response.text().trim();
 
-    res.status(200).json({
+    const payload = {
       text: generatedText,
       caption: generatedText, // For backward compatibility
-    });
+    };
+
+    await setCachedResponse(cacheKey, payload);
+    await recordAiUsage(user.uid, "general_ai", userPlan, userRole);
+
+    res.status(200).json(payload);
     return;
   } catch (error: any) {
     console.error("generateText error:", error);

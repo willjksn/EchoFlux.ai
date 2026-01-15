@@ -5,7 +5,7 @@ export const Terms: React.FC = () => {
         <div className="max-w-4xl mx-auto space-y-8">
             <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-md">
                 <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Terms of Service & Fair Use Policy</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Last updated: December 2025</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Last updated: January 2026</p>
 
                 <div className="mt-6 prose prose-lg dark:prose-invert max-w-none text-gray-700 dark:text-gray-300">
                     <p>
@@ -126,6 +126,12 @@ export const Terms: React.FC = () => {
                         Different subscription tiers may include different soft limits or allowances for AI generation, media
                         storage, or usage of specific tools (for example: number of AI captions per month). These limits are
                         designed to provide room for serious creators while keeping the service stable and sustainable.
+                    </p>
+                    <p className="mt-2">
+                        To keep the platform reliable for everyone, we use <strong>rate limits</strong>, <strong>usage quotas</strong>,
+                        and <strong>burst protection</strong> on AI features. During peak periods, some heavy requests may be placed in
+                        a queue or delayed. We may also cache repeated requests for a short period to reduce costs and improve
+                        responsiveness.
                     </p>
                     
                     <h4>AI Strategy Generation</h4>

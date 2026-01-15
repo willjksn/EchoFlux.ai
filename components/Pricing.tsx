@@ -18,6 +18,7 @@ const allCreatorTiers = [
         features: [
             '1 AI strategy generation (basic)',
             '10 AI captions',
+            'Fair-use AI limits & rate limits',
             'Basic Link-in-Bio (1 link)',
             'Media Library',
             '100 MB Storage'
@@ -34,6 +35,7 @@ const allCreatorTiers = [
             '2 AI strategy generations',
             'Live trend research',
             '500 AI captions',
+            'Fair-use AI limits & queued heavy tasks',
             'Link-in-Bio Builder (5 links)',
             'Media Library',
             'Visual Content Calendar',
@@ -52,6 +54,7 @@ const allCreatorTiers = [
             '5 AI strategy generations',
             'Enhanced live trend research',
             '1,500 AI captions',
+            'Fair-use AI limits & priority queueing',
             'Link-in-Bio Builder (unlimited links)',
             'Media Library',
             'Visual Content Calendar',
