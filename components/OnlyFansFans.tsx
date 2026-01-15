@@ -193,7 +193,7 @@ export const OnlyFansFans: React.FC = () => {
                 collection(db, 'users', user.id, 'onlyfans_sexting_sessions'),
                 where('fanId', '==', fanId),
                 orderBy('createdAt', 'desc'),
-                limit(25)
+                limit(15)
             ));
             
             const sessions: any[] = [];
