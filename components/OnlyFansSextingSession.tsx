@@ -423,20 +423,20 @@ NATURAL PERSONALIZATION GUIDELINES:
             updatedAt: new Date(),
         };
 
-        // Save session to history
-        try {
-            await addDoc(collection(db, 'users', user.id, 'onlyfans_sexting_sessions'), {
-                ...finalSession,
-                createdAt: Timestamp.fromDate(finalSession.createdAt),
-                updatedAt: Timestamp.fromDate(finalSession.updatedAt),
-                messages: finalSession.messages.map(msg => ({
-                    ...msg,
-                    timestamp: Timestamp.fromDate(msg.timestamp),
-                })),
-            });
+        if (finalSession.fanId) {
+            // Save session to history (fan-selected sessions only)
+            try {
+                await addDoc(collection(db, 'users', user.id, 'onlyfans_sexting_sessions'), {
+                    ...finalSession,
+                    createdAt: Timestamp.fromDate(finalSession.createdAt),
+                    updatedAt: Timestamp.fromDate(finalSession.updatedAt),
+                    messages: finalSession.messages.map(msg => ({
+                        ...msg,
+                        timestamp: Timestamp.fromDate(msg.timestamp),
+                    })),
+                });
 
-            // Update fan stats if fan exists
-            if (finalSession.fanId) {
+                // Update fan stats if fan exists
                 try {
                     const fanRef = doc(db, 'users', user.id, 'onlyfans_fan_preferences', finalSession.fanId);
                     const fanDoc = await getDoc(fanRef);
@@ -450,15 +450,15 @@ NATURAL PERSONALIZATION GUIDELINES:
                 } catch (e) {
                     console.warn('Failed to update fan stats:', e);
                 }
+            } catch (error) {
+                console.error('Error saving session:', error);
+                showToast('Failed to save session', 'error');
             }
-        } catch (error) {
-            console.error('Error saving session:', error);
-            showToast('Failed to save session', 'error');
         }
 
         setActiveSession(null);
         sessionStartTime.current = null;
-        showToast('Session ended and saved', 'success');
+        showToast(finalSession.fanId ? 'Session ended and saved' : 'Session ended (not saved)', 'success');
     };
 
     const copyToClipboard = (text: string) => {

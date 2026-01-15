@@ -4923,52 +4923,88 @@ Output format:
                             type ParsedMessage = { label: string; body: string };
 
                             const normalizeLabel = (raw: string) => raw.replace(/\s+/g, ' ').trim();
+                            const sequenceHeaderRegex = /^(welcome sequence|renewal reminder|ppv follow-up|win-back)\s*:?\s*$/i;
+                            const isSequenceHeader = (line: string) => sequenceHeaderRegex.test(line.trim());
 
                             const parseMessages = (text: string): ParsedMessage[] => {
-                                const cleaned = text
-                                    .replace(/^\s*(welcome sequence|renewal reminder|ppv follow-up|win-back)\s*:?\s*$/gim, '')
-                                    .trim();
+                                const lines = text.split(/\r?\n/);
+                                const results: ParsedMessage[] = [];
+                                let currentLabel = '';
+                                let currentLines: string[] = [];
+                                let sawLabels = false;
 
-                                if (!cleaned) return [];
+                                const pushCurrent = () => {
+                                    const body = currentLines.join('\n').trim();
+                                    if (body) {
+                                        const label = currentLabel || `Message ${results.length + 1}`;
+                                        results.push({ label, body });
+                                    }
+                                    currentLabel = '';
+                                    currentLines = [];
+                                };
 
-                                const splitByMarkers = cleaned.split(/(?=^Message\s*\d+|^Day\s*\d+|^\d+\.)/m);
-                                const segments = splitByMarkers.length > 1
-                                    ? splitByMarkers.map(s => s.trim()).filter(Boolean)
-                                    : cleaned.split(/\n\n+/).map(s => s.trim()).filter(Boolean);
-
-                                const parsed = segments.map((segment, index) => {
-                                    const lines = segment.split('\n');
-                                    const firstLine = lines[0]?.trim() || '';
-                                    let label = `Message ${index + 1}`;
-                                    let bodyLines = lines;
-
-                                    const messageMatch = firstLine.match(/^Message\s*(\d+)\s*[:\-–]?\s*(.*)$/i);
-                                    const dayMatch = firstLine.match(/^Day\s*(\d+)\s*[:\-–]?\s*(.*)$/i);
-                                    const numberedMatch = firstLine.match(/^(\d+)\.\s*(.*)$/);
-
-                                    if (messageMatch) {
-                                        label = `Message ${messageMatch[1]}`;
-                                        const dayInMessage = firstLine.match(/Day\s*\d+/i);
-                                        if (dayInMessage) {
-                                            label = `${label} • ${normalizeLabel(dayInMessage[0])}`;
-                                        }
-                                        bodyLines = messageMatch[2] ? [messageMatch[2], ...lines.slice(1)] : lines.slice(1);
-                                    } else if (dayMatch) {
-                                        label = `Day ${dayMatch[1]}`;
-                                        bodyLines = dayMatch[2] ? [dayMatch[2], ...lines.slice(1)] : lines.slice(1);
-                                    } else if (numberedMatch) {
-                                        label = `Message ${numberedMatch[1]}`;
-                                        bodyLines = numberedMatch[2] ? [numberedMatch[2], ...lines.slice(1)] : lines.slice(1);
+                                for (const rawLine of lines) {
+                                    const trimmed = rawLine.trim();
+                                    if (!trimmed) {
+                                        if (currentLines.length > 0) currentLines.push('');
+                                        continue;
                                     }
 
-                                    const body = bodyLines.join('\n').trim();
-                                    return {
-                                        label,
-                                        body: body || segment.trim(),
-                                    };
-                                });
+                                    if (isSequenceHeader(trimmed)) {
+                                        continue;
+                                    }
 
-                                return parsed.length > 0 ? parsed : [{ label: 'Message 1', body: cleaned }];
+                                    const messageMatch = trimmed.match(/^Message\s*(\d+)\s*[:\-–]?\s*(.*)$/i);
+                                    const dayMatch = trimmed.match(/^Day\s*(\d+)\s*[:\-–]?\s*(.*)$/i);
+                                    const numberedMatch = trimmed.match(/^(\d+)\.\s*(.*)$/);
+
+                                    if (messageMatch || dayMatch || numberedMatch) {
+                                        sawLabels = true;
+                                        if (currentLines.length > 0) pushCurrent();
+
+                                        if (messageMatch) {
+                                            currentLabel = `Message ${messageMatch[1]}`;
+                                            const dayInMessage = trimmed.match(/Day\s*\d+/i);
+                                            if (dayInMessage) {
+                                                currentLabel = `${currentLabel} • ${normalizeLabel(dayInMessage[0])}`;
+                                            }
+                                            const remainder = (messageMatch[2] || '').trim();
+                                            if (remainder && !isSequenceHeader(remainder)) {
+                                                currentLines.push(remainder);
+                                            }
+                                            continue;
+                                        }
+
+                                        if (dayMatch) {
+                                            currentLabel = `Day ${dayMatch[1]}`;
+                                            const remainder = (dayMatch[2] || '').trim();
+                                            if (remainder && !isSequenceHeader(remainder)) {
+                                                currentLines.push(remainder);
+                                            }
+                                            continue;
+                                        }
+
+                                        if (numberedMatch) {
+                                            currentLabel = `Message ${numberedMatch[1]}`;
+                                            const remainder = (numberedMatch[2] || '').trim();
+                                            if (remainder && !isSequenceHeader(remainder)) {
+                                                currentLines.push(remainder);
+                                            }
+                                            continue;
+                                        }
+                                    }
+
+                                    currentLines.push(trimmed);
+                                }
+
+                                if (currentLines.length > 0) pushCurrent();
+
+                                if (!results.length && sawLabels === false) {
+                                    const fallback = text.split(/\n\n+/).map(s => s.trim()).filter(Boolean);
+                                    return fallback.map((body, idx) => ({ label: `Message ${idx + 1}`, body }));
+                                }
+
+                                return results;
                             };
 
                             const messages = parseMessages(generatedMessages);
