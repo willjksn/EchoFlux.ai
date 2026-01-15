@@ -784,15 +784,21 @@ export const AdminDashboard: React.FC = () => {
                     </div>
                 ) : modelUsageStats ? (
                     <div className="space-y-6">
-                        {(modelUsageStats.alerts || []).length > 0 && (
-                            <div className="space-y-2">
-                                {(modelUsageStats.alerts || []).map((alert, idx) => (
+                        {/* Alerts Panel - Always Visible */}
+                        <div className="space-y-2">
+                            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">System Alerts</h4>
+                            {(modelUsageStats.alerts || []).length > 0 ? (
+                                (modelUsageStats.alerts || []).map((alert, idx) => (
                                     <div key={idx} className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
                                         {alert.message}
                                     </div>
-                                ))}
-                            </div>
-                        )}
+                                ))
+                            ) : (
+                                <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400">
+                                    No alerts. All systems operating normally.
+                                </div>
+                            )}
+                        </div>
                         {/* Key Metrics */}
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg border border-blue-200 dark:border-blue-700">
@@ -907,9 +913,10 @@ export const AdminDashboard: React.FC = () => {
                             </div>
                         )}
 
-                        {(modelUsageStats.runawayUsers || []).length > 0 && (
-                            <div>
-                                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Runaway Usage (Last 24h)</h4>
+                        {/* Runaway Usage Panel - Always Visible */}
+                        <div>
+                            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Runaway Usage (Last 24h)</h4>
+                            {(modelUsageStats.runawayUsers || []).length > 0 ? (
                                 <div className="space-y-2">
                                     {(modelUsageStats.runawayUsers || []).map((user, idx) => (
                                         <div key={`${user.userId}-${idx}`} className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
@@ -918,8 +925,12 @@ export const AdminDashboard: React.FC = () => {
                                         </div>
                                     ))}
                                 </div>
-                            </div>
-                        )}
+                            ) : (
+                                <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                                    <span className="text-sm text-gray-600 dark:text-gray-400">No runaway usage detected. All users within normal limits.</span>
+                                </div>
+                            )}
+                        </div>
 
                         {/* Daily Usage Chart */}
                         {modelUsageStats.requestsByDay.length > 0 && (
