@@ -40,7 +40,7 @@ interface UIContextType {
 
     // Feedback
     toast: Toast | null;
-    showToast: (message: string, type: 'success' | 'error') => void;
+    showToast: (message: string, type: 'success' | 'error' | 'info') => void;
     
     // Pricing
     pricingView: 'Creator' | 'Business' | null;
@@ -293,7 +293,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         setPaymentPlan(null);
     };
 
-    const showToast = (message: string, type: 'success' | 'error') => {
+    const showToast = (message: string, type: 'success' | 'error' | 'info') => {
         setToast({ message, type });
         setTimeout(() => setToast(null), 3000);
     };

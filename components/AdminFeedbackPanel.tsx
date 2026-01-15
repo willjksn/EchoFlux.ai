@@ -91,7 +91,19 @@ export const AdminFeedbackPanel: React.FC = () => {
         body: JSON.stringify({ text }),
       });
 
-      const data = await res.json();
+      // Handle 404 - endpoint doesn't exist yet
+      if (res.status === 404) {
+        throw new Error('Sentiment analysis feature is not available');
+      }
+
+      // Handle non-JSON responses
+      let data;
+      try {
+        data = await res.json();
+      } catch (parseError) {
+        throw new Error('Failed to parse sentiment analysis response');
+      }
+
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Failed to analyze sentiment');
       }

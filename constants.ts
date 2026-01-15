@@ -26,6 +26,7 @@ export const defaultSettings: Settings = {
     YouTube: false,
     LinkedIn: true,
     Facebook: true,
+    Pinterest: false,
   }
 };
 

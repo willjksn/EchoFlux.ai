@@ -56,7 +56,7 @@ import { lazy, Suspense } from 'react';
 // Lazy load heavy components for code splitting
 const Strategy = lazy(() => import('./components/Strategy').then(module => ({ default: module.Strategy })));
 const OnlyFansStudio = lazy(() => import('./components/OnlyFansStudio').then(module => ({ default: module.OnlyFansStudio })));
-const Autopilot = lazy(() => import('./components/Autopilot').then(module => ({ default: module.default || module.Autopilot })));
+const Autopilot = lazy(() => import('./components/Autopilot'));
 
 const pageTitles: Record<Page, string> = {
     dashboard: 'Dashboard',
@@ -663,18 +663,20 @@ const AppContent: React.FC = () => {
     // If user is authenticated and whitelisted, they can bypass
     const canBypass = isAuthenticated && user && canBypassMaintenance(user.email);
     
-    // Debug maintenance mode - always log to help troubleshoot
-    console.log('🔧 Maintenance Mode Check', { 
-        maintenanceEnabled, 
-        envValue: import.meta.env.VITE_MAINTENANCE_MODE,
-        envType: typeof import.meta.env.VITE_MAINTENANCE_MODE,
-        bypassMaintenance, 
-        canBypass, 
-        isAuthenticated, 
-        userEmail: user?.email,
+    // Debug maintenance mode - only log in development or when maintenance is actually enabled
+    if (import.meta.env.DEV || maintenanceEnabled) {
+        console.log('🔧 Maintenance Mode Check', { 
+            maintenanceEnabled, 
+            envValue: import.meta.env.VITE_MAINTENANCE_MODE,
+            envType: typeof import.meta.env.VITE_MAINTENANCE_MODE,
+            bypassMaintenance, 
+            canBypass, 
+            isAuthenticated, 
+            userEmail: user?.email,
         allowedEmail,
         willShowMaintenance: maintenanceEnabled && !canBypass && !bypassMaintenance
-    });
+        });
+    }
     
     // CRITICAL: Show maintenance page if enabled and user can't bypass
     // This MUST happen BEFORE any other rendering logic, including auth loading and landing page

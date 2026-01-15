@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { MessageCard } from './MessageCard';
-import { Platform, Message, DashboardFilters, MessageType, CalendarEvent, MessageCategory } from '../types';
+import { Platform, Message, DashboardFilters, MessageType, CalendarEvent, MessageCategory, SocialStats, Plan } from '../types';
 import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
 import { DashboardIcon, FlagIcon, SearchIcon, StarIcon, CalendarIcon, SparklesIcon, TrendingIcon, CheckCircleIcon, UserIcon, ArrowUpCircleIcon, KanbanIcon, BriefcaseIcon, LinkIcon, RocketIcon, ArrowUpIcon, ChatIcon, DollarSignIcon, HeartIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
@@ -446,7 +446,8 @@ export const Dashboard: React.FC = () => {
     // Also include events from calendarEvents context (exclude OnlyFans events)
     const eventsFromContext: CalendarEvent[] = (calendarEvents || []).filter(e => {
       // Exclude OnlyFans platform events
-      if (e.platform === 'OnlyFans' || (e.platform as any) === 'OnlyFans') return false;
+      const platformValue = e.platform as unknown as string;
+      if (platformValue === 'OnlyFans') return false;
       // Always include reminders from the calendar_events collection (no platform/status)
       if ((e as any).reminderType && !(e as any).platform) return true;
       // Include scheduled, published, and draft events (do not future-filter here; consumers can decide)
@@ -752,12 +753,21 @@ export const Dashboard: React.FC = () => {
             } else if (isMounted) {
               setAdminBillingError(data.error || 'Billing data unavailable');
             }
+          } else if (resp.status === 403) {
+            // User is not admin, skip billing data silently
+            if (isMounted) setAdminBillingError(null);
           } else if (isMounted) {
             setAdminBillingError('Billing data unavailable');
           }
-        } catch (e) {
-          console.warn('Admin dashboard: failed to load billing events', e);
-          if (isMounted) setAdminBillingError('Billing data unavailable');
+        } catch (e: any) {
+          // Silently handle 403 (unauthorized) - user is not admin
+          if (e?.status === 403 || (typeof e === 'object' && e?.message?.includes('403'))) {
+            // User is not admin, skip billing data
+            if (isMounted) setAdminBillingError(null);
+          } else {
+            console.warn('Admin dashboard: failed to load billing events', e);
+            if (isMounted) setAdminBillingError('Billing data unavailable');
+          }
         } finally {
           if (isMounted) setIsLoadingAdminBilling(false);
         }
@@ -952,7 +962,7 @@ export const Dashboard: React.FC = () => {
     }
   };
   
-  const [filters] = useState<DashboardFilters>({ platform: 'All', messageType: 'All', sentiment: 'All', status: 'All', category: 'All' });
+  const [filters, setFilters] = useState<DashboardFilters>({ platform: 'All', messageType: 'All', sentiment: 'All', status: 'All', category: 'All' });
   const [searchTerm] = useState('');
   
   // Track if we've updated social stats this session to avoid repeated calls
@@ -1073,7 +1083,7 @@ export const Dashboard: React.FC = () => {
   }, [effectiveCalendarEvents]);
 
   const accountName = selectedClient ? selectedClient.name : 'Main Account';
-  const currentStats = selectedClient ? selectedClient.socialStats : user?.socialStats;
+  const currentStats = (selectedClient?.socialStats || user?.socialStats || {}) as Record<Platform, SocialStats>;
   
   // Debug logging for Admin account switching
   useEffect(() => {
@@ -1271,7 +1281,7 @@ export const Dashboard: React.FC = () => {
                         ) : (
                           <button
                             onClick={handlePlanMyWeek}
-                            disabled={isPlanningWeek || (user?.plan === 'Free' && weeklyPlanUsage && weeklyPlanUsage.remaining <= 0)}
+                            disabled={isPlanningWeek || (user?.plan === 'Free' && !!weeklyPlanUsage && weeklyPlanUsage.remaining <= 0)}
                             className="text-sm text-primary-600 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {isPlanningWeek ? 'Planning…' : 'Regenerate'}
@@ -1302,7 +1312,7 @@ export const Dashboard: React.FC = () => {
                               ) : (
                                 <button
                                   onClick={handlePlanMyWeek}
-                                  disabled={isPlanningWeek || (user?.plan === 'Free' && weeklyPlanUsage && weeklyPlanUsage.remaining <= 0)}
+                                  disabled={isPlanningWeek || (user?.plan === 'Free' && !!weeklyPlanUsage && weeklyPlanUsage.remaining <= 0)}
                                   className="mt-2 inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                   Plan my week
@@ -2047,6 +2057,7 @@ export const Dashboard: React.FC = () => {
             {(() => {
               // Generate actionable recommendations based on user data
               const recommendations: Array<{ type: 'success' | 'info' | 'warning' | 'tip'; title: string; description: string; action?: () => void; actionLabel?: string }> = [];
+              const effectivePlan = (user?.plan ?? 'Free') as Plan;
               
               // Check posting frequency based on the most relevant timestamp.
               // createdAt doesn't change when you publish, so prefer publishedAt.
@@ -2108,7 +2119,7 @@ export const Dashboard: React.FC = () => {
               }
               
               // Automation page is not part of the current tester-ready workflow; route users to Compose instead.
-              if (user?.plan !== 'Free') {
+              if (effectivePlan !== 'Free') {
                 recommendations.push({
                   type: 'tip',
                   title: 'Try AI Content Generation',
@@ -2321,6 +2332,7 @@ export const Dashboard: React.FC = () => {
                           className={`group p-3.5 rounded-xl border ${badge.bg} ${badge.border} hover:shadow-lg transition-all cursor-pointer backdrop-blur-sm`}
                           onClick={() => {
                             setComposeContext({
+                              topic: suggestion.title,
                               media: null,
                               results: [],
                               captionText: suggestion.title + ': ' + suggestion.description,
@@ -2358,6 +2370,7 @@ export const Dashboard: React.FC = () => {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setComposeContext({
+                                  topic: suggestion.title,
                                   media: null,
                                   results: [],
                                   captionText: suggestion.title + ': ' + suggestion.description,
@@ -2725,7 +2738,8 @@ export const Dashboard: React.FC = () => {
               Threads: 0,
               YouTube: 0,
               LinkedIn: 0,
-              Facebook: 0
+              Facebook: 0,
+              Pinterest: 0
             };
             
             leadsThisMonth.forEach(lead => {
@@ -2959,8 +2973,8 @@ export const Dashboard: React.FC = () => {
               : totalInvestment.toFixed(2);
             
             // Revenue per follower
-            const currentStats = user?.socialStats || {};
-            const totalFollowers = currentStats ? Object.values(currentStats).reduce((sum, stats) => sum + (stats?.followers || 0), 0) : 0;
+            const currentStats = (user?.socialStats || {}) as Record<Platform, SocialStats>;
+            const totalFollowers = Object.values(currentStats).reduce((sum, stats) => sum + (stats?.followers || 0), 0);
             const revenuePerFollower = totalFollowers > 0 
               ? (estimatedRevenue / totalFollowers).toFixed(2)
               : '0';
@@ -3099,8 +3113,8 @@ export const Dashboard: React.FC = () => {
           {/* Customer Acquisition Funnel - Business Only (Phase 3 Feature 3) */}
           {isBusiness && user?.plan !== 'Agency' && (() => {
             // Calculate funnel metrics from available data
-            const currentStats = user?.socialStats || {};
-            const totalReach = currentStats ? Object.values(currentStats).reduce((sum, stats) => sum + (stats?.followers || 0), 0) : 0;
+            const currentStats = (user?.socialStats || {}) as Record<Platform, SocialStats>;
+            const totalReach = Object.values(currentStats).reduce((sum, stats) => sum + (stats?.followers || 0), 0);
             
             // Estimate traffic based on reach (mock calculation)
             const traffic = Math.floor(totalReach * 1.2); // Assume 20% more traffic than reach

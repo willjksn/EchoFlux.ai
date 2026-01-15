@@ -79,6 +79,7 @@ export interface Settings {
       monthlyGoal?: string;
     };
     monetizedPlatforms?: string[];
+    enableAdminDashboardV2?: boolean;
 }
 
 export interface CaptionResult {
@@ -120,6 +121,11 @@ export interface SocialStats {
     followers: number;
     following: number;
 }
+
+export type SocialStatsByPlatform = Record<Platform, SocialStats> & {
+  totalFollowers?: number;
+  totalReach?: number;
+};
 
 export interface BioLink {
     id: string;
@@ -205,7 +211,7 @@ export interface Client {
   storageLimit: number; 
   settings: Settings;
   approvalLink?: string; 
-  socialStats?: Record<Platform, SocialStats>;
+  socialStats?: SocialStatsByPlatform;
   bioPage?: BioPageConfig;
   referralCode?: string;
   referralStats?: ReferralStats;
@@ -325,7 +331,7 @@ export interface User {
   mediaLibrary: MediaItem[];
   settings: Settings;
   hashtagSets?: HashtagSet[];
-  socialStats?: Record<Platform, SocialStats>;
+  socialStats?: SocialStatsByPlatform;
   goals?: {
     followerGoal?: number; // For Creators: followers goal, For Business: reach goal
     monthlyPostsGoal?: number;
@@ -406,7 +412,7 @@ export interface PaymentPlan {
 
 export interface Toast {
   message: string;
-  type: 'success' | 'error';
+  type: 'success' | 'error' | 'info';
 }
 
 export interface Activity {
@@ -508,6 +514,10 @@ export interface ComposeContextData {
     captionText?: string;
     hashtags?: string;
     generatedCaptions?: Array<{ caption: string; hashtags: string[] }>;
+    media?: MediaItemState | null;
+    results?: CaptionResult[];
+    postGoal?: string;
+    postTone?: string;
 }
 
 export interface MusicTrack {
@@ -565,7 +575,7 @@ export interface CalendarEvent {
     id: string;
     title: string;
     date: string; 
-    type: 'Post' | 'Story' | 'Reel';
+    type: 'Post' | 'Story' | 'Reel' | 'Email';
     platform: Platform;
     status: 'Scheduled' | 'Draft' | 'Published' | 'In Review';
     thumbnail?: string;
@@ -609,6 +619,7 @@ export interface Post {
     status: ApprovalStatus;
     author: { name: string; avatar: string };
     scheduledDate?: string;
+    timestamp?: string;
     createdAt?: string;
     updatedAt?: string;
     publishedAt?: string;
@@ -716,7 +727,7 @@ export interface AppContextType {
   endTour: () => void;
   openPaymentModal: (plan: PaymentPlan) => void;
   closePaymentModal: () => void;
-  showToast: (message: string, type: 'success' | 'error') => void;
+  showToast: (message: string, type: 'success' | 'error' | 'info') => void;
   setUserBaseImage: React.Dispatch<React.SetStateAction<{ data: string; mimeType: string } | null>>;
   setUserCustomVoices: React.Dispatch<React.SetStateAction<CustomVoice[]>>;
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
@@ -742,6 +753,8 @@ export interface AppContextType {
   updateCRMProfile: (profileId: string, data: Partial<CRMProfile>) => void;
   pricingView: 'Creator' | 'Business' | null;
   setPricingView: (view: 'Creator' | 'Business' | null) => void;
+  selectedPlan: Plan | null;
+  setSelectedPlan: (plan: Plan | null) => void;
   socialAccounts: Record<Platform, SocialAccount | null>;
 }
 

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useAppContext } from './AppContext';
 import { Post } from '../types';
 import { db } from '../firebaseConfig';
@@ -64,8 +64,6 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
     const [exportPreview, setExportPreview] = useState<{ post: Post; event: CombinedEvent } | null>(null);
     
     // Hover preview state
-    const [hoveredEventId, setHoveredEventId] = useState<string | null>(null);
-    const [hoverPosition, setHoverPosition] = useState<{ x: number; y: number } | null>(null);
     
     // Reminder form state
     const [eventTitle, setEventTitle] = useState('');
@@ -300,7 +298,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                 createdAt: selectedEvent?.reminder?.createdAt || new Date().toISOString(),
                 userId: user.id,
                 ...(eventContentType === 'custom' ? { customStatus: eventCustomStatus } : {}),
-                ...(selectedFanId ? { fanId: selectedFanId, fanName: selectedFanName } : {}),
+                ...(selectedFanId ? { fanId: selectedFanId, fanName: selectedFanName ?? undefined } : {}),
             };
 
             await setDoc(doc(db, 'users', user.id, 'onlyfans_calendar_events', reminderId), eventData);
@@ -502,23 +500,6 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
         }
     }, [selectedEvent]);
 
-    // Close hover preview when clicking outside (for touch devices)
-    useEffect(() => {
-        const handleClickOutside = (e: MouseEvent | TouchEvent) => {
-            if (hoveredEventId && !(e.target as Element).closest('.hover-preview-container')) {
-                setHoveredEventId(null);
-                setHoverPosition(null);
-            }
-        };
-        if (hoveredEventId) {
-            document.addEventListener('click', handleClickOutside);
-            document.addEventListener('touchstart', handleClickOutside);
-        }
-        return () => {
-            document.removeEventListener('click', handleClickOutside);
-            document.removeEventListener('touchstart', handleClickOutside);
-        };
-    }, [hoveredEventId]);
 
     if (isLoading) {
         return (
@@ -724,89 +705,15 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                         colors = statusColors.Draft;
                                                     }
 
-                                                    const handleMouseEnter = (e: React.MouseEvent) => {
-                                                        if (event.type !== 'post' || !event.post) return;
-                                                        
-                                                        const rect = e.currentTarget.getBoundingClientRect();
-                                                        const viewportWidth = window.innerWidth;
-                                                        const viewportHeight = window.innerHeight;
-                                                        const previewWidth = 320;
-                                                        const previewHeight = 400;
-                                                        
-                                                        let x: number;
-                                                        if (rect.right + previewWidth + 10 > viewportWidth) {
-                                                            x = rect.left - previewWidth - 10;
-                                                            if (x < 10) x = 10;
-                                                        } else {
-                                                            x = rect.right + 10;
-                                                        }
-                                                        
-                                                        let y = rect.top;
-                                                        if (y + previewHeight > viewportHeight - 10) {
-                                                            y = viewportHeight - previewHeight - 10;
-                                                        }
-                                                        if (y < 10) y = 10;
-                                                        
-                                                        setHoveredEventId(event.id);
-                                                        setHoverPosition({ x, y });
-                                                    };
-
-                                                    const handleMouseLeave = () => {
-                                                        if (window.matchMedia('(hover: hover)').matches) {
-                                                            setHoveredEventId(null);
-                                                            setHoverPosition(null);
-                                                        }
-                                                    };
-
-                                                    const handleTouchStart = (e: React.TouchEvent) => {
-                                                        if (event.type !== 'post' || !event.post) return;
-                                                        
-                                                        e.stopPropagation();
-                                                        const touchTarget = e.currentTarget;
-                                                        
-                                                        if (hoveredEventId === event.id) {
-                                                            setHoveredEventId(null);
-                                                            setHoverPosition(null);
-                                                        } else {
-                                                            const rect = touchTarget.getBoundingClientRect();
-                                                            const viewportWidth = window.innerWidth;
-                                                            const viewportHeight = window.innerHeight;
-                                                            const previewWidth = 320;
-                                                            const previewHeight = 400;
-                                                            
-                                                            let x: number;
-                                                            if (rect.right + previewWidth + 10 > viewportWidth) {
-                                                                x = rect.left - previewWidth - 10;
-                                                                if (x < 10) x = 10;
-                                                            } else {
-                                                                x = rect.right + 10;
-                                                            }
-                                                            
-                                                            let y = rect.top;
-                                                            if (y + previewHeight > viewportHeight - 10) {
-                                                                y = viewportHeight - previewHeight - 10;
-                                                            }
-                                                            if (y < 10) y = 10;
-                                                            
-                                                            setHoveredEventId(event.id);
-                                                            setHoverPosition({ x, y });
-                                                        }
-                                                    };
 
                                                     return (
                                                         <div key={event.id}>
                                                             <div 
                                                                 className={`flex flex-col p-2.5 sm:p-2 md:p-2 rounded-lg text-xs sm:text-xs md:text-xs shadow-sm cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all ${colors.bg} ${colors.border} relative min-h-[65px] sm:min-h-[50px]`}
                                                                 onClick={(e) => {
-                                                                    if (hoveredEventId === event.id && window.matchMedia('(pointer: coarse)').matches) {
-                                                                        return;
-                                                                    }
                                                                     e.stopPropagation();
                                                                     handleEventClick(event);
                                                                 }}
-                                                                onMouseEnter={handleMouseEnter}
-                                                                onMouseLeave={handleMouseLeave}
-                                                                onTouchStart={handleTouchStart}
                                                                 title={event.title}
                                                                 style={{ pointerEvents: 'auto' }}
                                                             >
@@ -854,119 +761,6 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                                     </div>
                                                                 )}
 
-                                                                {/* Hover Preview - Desktop & Touch Devices (for posts only) */}
-                                                                {event.type === 'post' && event.post && hoveredEventId === event.id && hoverPosition && (
-                                                                    <div 
-                                                                        className="hover-preview-container fixed z-[100] w-80 bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
-                                                                        style={{
-                                                                            left: `${Math.max(10, Math.min(hoverPosition.x, window.innerWidth - 330))}px`,
-                                                                            top: `${Math.max(10, Math.min(hoverPosition.y, window.innerHeight - 420))}px`,
-                                                                            maxHeight: '400px',
-                                                                            overflowY: 'auto'
-                                                                        }}
-                                                                        onMouseEnter={(e) => {
-                                                                            e.stopPropagation();
-                                                                            setHoveredEventId(event.id);
-                                                                        }}
-                                                                        onMouseLeave={(e) => {
-                                                                            const relatedTarget = e.relatedTarget as HTMLElement;
-                                                                            if (!relatedTarget || !relatedTarget.closest('.hover-preview-container')) {
-                                                                                handleMouseLeave();
-                                                                            }
-                                                                        }}
-                                                                        onTouchStart={(e) => {
-                                                                            e.stopPropagation();
-                                                                        }}
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                        }}
-                                                                    >
-                                                                        <div className="p-4 pointer-events-auto">
-                                                                            {/* Header */}
-                                                                            <div className="flex items-center gap-2 mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
-                                                                                <div className="p-1.5 bg-primary-100 dark:bg-primary-900/30 rounded">
-                                                                                    <span className="text-lg">🔞</span>
-                                                                                </div>
-                                                                                <div className="flex-1 min-w-0">
-                                                                                    <div className="text-sm font-bold text-gray-900 dark:text-white truncate">
-                                                                                        OnlyFans
-                                                                                    </div>
-                                                                                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                                                                                        {new Date(event.date).toLocaleString([], {
-                                                                                            month: 'short',
-                                                                                            day: 'numeric',
-                                                                                            hour: 'numeric',
-                                                                                            minute: '2-digit',
-                                                                                            hour12: true
-                                                                                        })}
-                                                                                    </div>
-                                                                                </div>
-                                                                                <div className={`px-2 py-1 rounded text-[10px] font-medium ${
-                                                                                    event.status === 'Published' 
-                                                                                        ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-                                                                                        : event.status === 'Scheduled'
-                                                                                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                                                                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                                                                                }`}>
-                                                                                    {event.status}
-                                                                                </div>
-                                                                            </div>
-
-                                                                            {/* Media Preview */}
-                                                                            {event.post.mediaUrl && (
-                                                                                <div className="mb-3 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
-                                                                                    {event.post.mediaType === 'video' ? (
-                                                                                        <video 
-                                                                                            src={event.post.mediaUrl} 
-                                                                                            className="w-full h-32 object-cover bg-gray-100 dark:bg-gray-900"
-                                                                                            muted
-                                                                                        />
-                                                                                    ) : (
-                                                                                        <img 
-                                                                                            src={event.post.mediaUrl} 
-                                                                                            alt="Post preview" 
-                                                                                            className="w-full h-32 object-cover bg-gray-100 dark:bg-gray-900" 
-                                                                                        />
-                                                                                    )}
-                                                                                </div>
-                                                                            )}
-
-                                                                            {/* Caption */}
-                                                                            {event.post.content && (
-                                                                                <div className="mb-3">
-                                                                                    <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Caption:</div>
-                                                                                    <p className="text-xs text-gray-900 dark:text-white line-clamp-4 bg-gray-50 dark:bg-gray-700/50 p-2 rounded">
-                                                                                        {event.post.content}
-                                                                                    </p>
-                                                                                </div>
-                                                                            )}
-
-                                                                            {/* Hashtags */}
-                                                                            {event.post.content && extractHashtags(event.post.content).length > 0 && (
-                                                                                <div className="mb-3">
-                                                                                    <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Hashtags:</div>
-                                                                                    <div className="flex flex-wrap gap-1">
-                                                                                        {extractHashtags(event.post.content).slice(0, 5).map((tag, idx) => (
-                                                                                            <span key={idx} className="px-2 py-0.5 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded text-[10px]">
-                                                                                                {tag}
-                                                                                            </span>
-                                                                                        ))}
-                                                                                        {extractHashtags(event.post.content).length > 5 && (
-                                                                                            <span className="text-[10px] text-gray-500 dark:text-gray-400">
-                                                                                                +{extractHashtags(event.post.content).length - 5} more
-                                                                                            </span>
-                                                                                        )}
-                                                                                    </div>
-                                                                                </div>
-                                                                            )}
-
-                                                                            {/* Click hint */}
-                                                                            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 text-[10px] text-gray-500 dark:text-gray-400 text-center">
-                                                                                Click to edit or view full details
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                )}
                                                             </div>
                                                         </div>
                                                     );

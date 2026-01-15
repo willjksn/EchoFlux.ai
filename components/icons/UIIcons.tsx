@@ -18,8 +18,8 @@ export const BellIcon: React.FC = () => (
   </svg>
 );
 
-export const DashboardIcon: React.FC = () => (
-    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
+export const DashboardIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
 );
 
 export const AnalyticsIcon: React.FC = () => (
@@ -76,8 +76,8 @@ export const MenuIcon: React.FC = () => (
     <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" /></svg>
 );
 
-export const ArrowUpIcon: React.FC = () => (
-    <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
+export const ArrowUpIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className || "w-4 h-4 mr-1"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
 );
 
 export const SparklesIcon: React.FC<{ className?: string }> = ({ className }) => (
@@ -243,8 +243,8 @@ export const TargetIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.536 8.464a5 5 0 000 7.072m2.828-9.9a9 9 0 000 12.728M12 21a9 9 0 100-18 9 9 0 000 18z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 12a2 2 0 100-4 2 2 0 000 4z" /></svg>
 );
 
-export const ArrowUpCircleIcon: React.FC = () => (
-    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 11l3-3m0 0l3 3m-3-3v8m0-13a9 9 0 110 18 9 9 0 010-18z" /></svg>
+export const ArrowUpCircleIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 11l3-3m0 0l3 3m-3-3v8m0-13a9 9 0 110 18 9 9 0 010-18z" /></svg>
 );
 
 export const TrashIcon: React.FC<{ className?: string }> = ({ className = "w-5 h-5" }) => (
@@ -323,8 +323,8 @@ export const PlayIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg className={className || "w-6 h-6"} fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
 );
 
-export const DollarSignIcon: React.FC = () => (
-    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c1.104 0 2.05-.28 2.89-.785a.75.75 0 01.89.89c-.505.84-1.785 2.89-1.785 2.89s1.28.205 1.785.785a.75.75 0 01-.89.89c-.84-.505-1.785-1.785-1.785-1.785-1.104 0-2.05.28-2.89.785a.75.75 0 01-.89-.89c.505-.84 1.785-2.89 1.785-2.89s-1.28-.205-1.785-.785a.75.75 0 01.89-.89c.84.505 1.785 1.785 1.785 1.785zM12 6v12" /></svg>
+export const DollarSignIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className || "w-6 h-6"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c1.104 0 2.05-.28 2.89-.785a.75.75 0 01.89.89c-.505.84-1.785 2.89-1.785 2.89s1.28.205 1.785.785a.75.75 0 01-.89.89c-.84-.505-1.785-1.785-1.785-1.785-1.104 0-2.05.28-2.89.785a.75.75 0 01-.89-.89c.505-.84 1.785-2.89 1.785-2.89s-1.28-.205-1.785-.785a.75.75 0 01.89-.89c.84.505 1.785 1.785 1.785 1.785zM12 6v12" /></svg>
 );
 
 export const XMarkIcon: React.FC<{ className?: string }> = ({ className }) => (

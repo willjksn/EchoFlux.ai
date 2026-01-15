@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { CalendarEvent, Platform, Post } from '../types';
 import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
 import { PlusIcon, SparklesIcon, XMarkIcon, TrashIcon, DownloadIcon, CheckCircleIcon, CopyIcon } from './icons/UIIcons';
@@ -38,8 +38,6 @@ export const Calendar: React.FC = () => {
     const [regenerateGoal, setRegenerateGoal] = useState<string>('engagement');
     const [regenerateTone, setRegenerateTone] = useState<string>('friendly');
     const [isSaving, setIsSaving] = useState(false);
-    const [hoveredEventId, setHoveredEventId] = useState<string | null>(null);
-    const [hoverPosition, setHoverPosition] = useState<{ x: number; y: number } | null>(null);
     const [exportPreview, setExportPreview] = useState<{ post: Post; event: CalendarEvent } | null>(null);
     
     // Reminder state
@@ -660,136 +658,15 @@ export const Calendar: React.FC = () => {
                                 setSelectedEvent({ event: evt, post: associatedPost || null });
                             };
 
-                            const handleMouseEnter = (e: React.MouseEvent) => {
-                                // Only show hover on desktop devices that support hover
-                                if (!window.matchMedia('(hover: hover)').matches) {
-                                    return;
-                                }
-                                
-                                // Show hover on desktop
-                                const rect = e.currentTarget.getBoundingClientRect();
-                                const viewportWidth = window.innerWidth;
-                                const viewportHeight = window.innerHeight;
-                                const previewWidth = 320; // w-80 = 320px
-                                const previewHeight = 400; // max height
-                                
-                                // Determine horizontal position
-                                let x: number;
-                                if (rect.right + previewWidth + 10 > viewportWidth) {
-                                    // Position to the left if not enough space on right
-                                    x = rect.left - previewWidth - 10;
-                                    // Ensure it doesn't go off-screen on the left
-                                    if (x < 10) {
-                                        x = 10;
-                                    }
-                                } else {
-                                    x = rect.right + 10;
-                                }
-                                
-                                // Determine vertical position
-                                let y = rect.top;
-                                // If preview would go off bottom, position it above
-                                if (y + previewHeight > viewportHeight - 10) {
-                                    y = viewportHeight - previewHeight - 10;
-                                }
-                                // Ensure it doesn't go off-screen on the top
-                                if (y < 10) {
-                                    y = 10;
-                                }
-                                
-                                setHoveredEventId(evt.id);
-                                setHoverPosition({ x, y });
-                            };
-
-                            const handleMouseLeave = (e: React.MouseEvent) => {
-                                // Only auto-hide on desktop (not touch devices)
-                                if (!window.matchMedia('(hover: hover)').matches) {
-                                    return;
-                                }
-                                
-                                // Check if mouse is moving to the preview container
-                                const relatedTarget = e.relatedTarget as HTMLElement;
-                                if (relatedTarget && relatedTarget.closest('.hover-preview-container')) {
-                                    // Mouse is moving to preview, don't close
-                                    return;
-                                }
-                                
-                                // Close preview with a small delay to allow smooth movement to preview
-                                const timeoutId = setTimeout(() => {
-                                    // Verify that we're not hovering over the preview
-                                    const previewElement = document.querySelector(`[data-preview-id="${evt.id}"]`);
-                                    if (!previewElement || !previewElement.matches(':hover')) {
-                                        setHoveredEventId(null);
-                                        setHoverPosition(null);
-                                    }
-                                }, 150);
-                                
-                                // Store timeout to clear if mouse re-enters
-                                (e.currentTarget as any).mouseLeaveTimeout = timeoutId;
-                            };
-
-                            const handleTouchStart = (e: React.TouchEvent) => {
-                                // Toggle preview on touch devices
-                                e.stopPropagation();
-                                // Prevent click event from firing immediately
-                                const touchTarget = e.currentTarget;
-                                
-                                if (hoveredEventId === evt.id) {
-                                    // Close if already open
-                                    setHoveredEventId(null);
-                                    setHoverPosition(null);
-                                } else {
-                                    // Show preview
-                                    const rect = touchTarget.getBoundingClientRect();
-                                    const viewportWidth = window.innerWidth;
-                                    const viewportHeight = window.innerHeight;
-                                    const previewWidth = 320;
-                                    const previewHeight = 400;
-                                    
-                                    let x: number;
-                                    if (rect.right + previewWidth + 10 > viewportWidth) {
-                                        x = rect.left - previewWidth - 10;
-                                        if (x < 10) x = 10;
-                                    } else {
-                                        x = rect.right + 10;
-                                    }
-                                    
-                                    let y = rect.top;
-                                    if (y + previewHeight > viewportHeight - 10) {
-                                        y = viewportHeight - previewHeight - 10;
-                                    }
-                                    if (y < 10) y = 10;
-                                    
-                                    setHoveredEventId(evt.id);
-                                    setHoverPosition({ x, y });
-                                }
-                            };
 
                             return (
                                 <div 
                                     key={evt.id} 
                                     className={`flex flex-col p-2.5 sm:p-2 md:p-2 rounded-lg text-xs sm:text-xs md:text-xs shadow-sm cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all ${colors.bg} ${colors.border} relative min-h-[65px] sm:min-h-[50px]`}
                                     onClick={(e) => {
-                                        // On touch devices, if preview is showing, don't open modal (user wants to interact with preview)
-                                        // On desktop, always open modal on click
-                                        if (hoveredEventId === evt.id && window.matchMedia('(pointer: coarse)').matches) {
-                                            // Preview is showing on touch device - don't open modal
-                                            return;
-                                        }
                                         e.stopPropagation();
                                         handleEventClick();
                                     }}
-                                    onMouseEnter={(e) => {
-                                        // Clear any pending mouse leave timeout
-                                        const timeoutId = (e.currentTarget as any).mouseLeaveTimeout;
-                                        if (timeoutId) {
-                                            clearTimeout(timeoutId);
-                                            (e.currentTarget as any).mouseLeaveTimeout = null;
-                                        }
-                                        handleMouseEnter(e);
-                                    }}
-                                    onMouseLeave={handleMouseLeave}
-                                    onTouchStart={handleTouchStart}
                                     title={`${evt.title} - ${new Date(evt.date).toLocaleString()}`}
                                     style={{ pointerEvents: 'auto' }}
                                 >
@@ -828,151 +705,6 @@ export const Calendar: React.FC = () => {
                                         </div>
                                     )}
 
-                                    {/* Hover Preview - Desktop & Touch Devices */}
-                                    {hoveredEventId === evt.id && hoverPosition && (
-                                        <div 
-                                            data-preview-id={evt.id}
-                                            className="hover-preview-container fixed z-[100] w-80 bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
-                                            style={{
-                                                left: `${Math.max(10, Math.min(hoverPosition.x, window.innerWidth - 330))}px`,
-                                                top: `${Math.max(10, Math.min(hoverPosition.y, window.innerHeight - 420))}px`,
-                                                maxHeight: '400px',
-                                                overflowY: 'auto'
-                                            }}
-                                            onMouseEnter={(e) => {
-                                                e.stopPropagation();
-                                                // Keep preview open when hovering over it
-                                                setHoveredEventId(evt.id);
-                                                // Keep the existing position - don't update it
-                                            }}
-                                            onMouseLeave={(e) => {
-                                                // Only close if we're actually leaving the preview (not just moving within it)
-                                                const relatedTarget = e.relatedTarget as HTMLElement;
-                                                if (!relatedTarget || !relatedTarget.closest('.hover-preview-container')) {
-                                                    // Only auto-hide on desktop (not touch devices)
-                                                    if (window.matchMedia('(hover: hover)').matches) {
-                                                        setHoveredEventId(null);
-                                                        setHoverPosition(null);
-                                                    }
-                                                }
-                                            }}
-                                            onTouchStart={(e) => {
-                                                e.stopPropagation();
-                                                // Keep preview open on touch inside
-                                            }}
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                // Prevent click from closing preview or opening modal
-                                            }}
-                                        >
-                                            <div className="p-4 pointer-events-auto">
-                                                {/* Header */}
-                                                <div className="flex items-center gap-2 mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
-                                                    <div className="p-1.5 bg-primary-100 dark:bg-primary-900/30 rounded">
-                                                        {platformIcons[evt.platform]}
-                                                    </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="text-sm font-bold text-gray-900 dark:text-white truncate">
-                                                            {evt.platform}
-                                                        </div>
-                                                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                                                            {new Date(evt.date).toLocaleString([], {
-                                                                month: 'short',
-                                                                day: 'numeric',
-                                                                hour: 'numeric',
-                                                                minute: '2-digit',
-                                                                hour12: true
-                                                            })}
-                                                        </div>
-                                                    </div>
-                                                    <div className={`px-2 py-1 rounded text-[10px] font-medium ${
-                                                        evt.status === 'Published' 
-                                                            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-                                                            : evt.status === 'Scheduled'
-                                                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                                                    }`}>
-                                                        {evt.status}
-                                                    </div>
-                                                </div>
-
-                                                {/* Media Preview */}
-                                                {(associatedPost?.mediaUrl || ('thumbnail' in evt && evt.thumbnail)) && (
-                                                    <div className="mb-3 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
-                                                        {(associatedPost?.mediaType === 'video' || evt.type === 'Reel') ? (
-                                                            <video 
-                                                                src={associatedPost?.mediaUrl || ('thumbnail' in evt ? evt.thumbnail : undefined)} 
-                                                                className="w-full h-32 object-cover bg-gray-100 dark:bg-gray-900"
-                                                                muted
-                                                            />
-                                                        ) : (
-                                                            <img 
-                                                                src={associatedPost?.mediaUrl || ('thumbnail' in evt ? evt.thumbnail : undefined)} 
-                                                                alt="Post preview" 
-                                                                className="w-full h-32 object-cover bg-gray-100 dark:bg-gray-900" 
-                                                            />
-                                                        )}
-                                                    </div>
-                                                )}
-
-                                                {/* Caption */}
-                                                {associatedPost?.content ? (
-                                                    <div className="mb-3">
-                                                        <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Caption:</div>
-                                                        <p className="text-xs text-gray-900 dark:text-white line-clamp-4 bg-gray-50 dark:bg-gray-700/50 p-2 rounded">
-                                                            {associatedPost.content}
-                                                        </p>
-                                                    </div>
-                                                ) : (
-                                                    <div className="mb-3">
-                                                        <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Title:</div>
-                                                        <p className="text-xs text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700/50 p-2 rounded">
-                                                            {evt.title}
-                                                        </p>
-                                                    </div>
-                                                )}
-
-                                                {/* Hashtags */}
-                                                {associatedPost?.content && extractHashtags(associatedPost.content).length > 0 && (
-                                                    <div className="mb-3">
-                                                        <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Hashtags:</div>
-                                                        <div className="flex flex-wrap gap-1">
-                                                            {extractHashtags(associatedPost.content).slice(0, 5).map((tag, idx) => (
-                                                                <span key={idx} className="px-2 py-0.5 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded text-[10px]">
-                                                                    {tag}
-                                                                </span>
-                                                            ))}
-                                                            {extractHashtags(associatedPost.content).length > 5 && (
-                                                                <span className="text-[10px] text-gray-500 dark:text-gray-400">
-                                                                    +{extractHashtags(associatedPost.content).length - 5} more
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* Platforms */}
-                                                {associatedPost?.platforms && associatedPost.platforms.length > 1 && (
-                                                    <div>
-                                                        <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Platforms:</div>
-                                                        <div className="flex flex-wrap gap-1">
-                                                            {associatedPost.platforms.map((platform, idx) => (
-                                                                <div key={idx} className="flex items-center gap-1 px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">
-                                                                    <span className="w-3 h-3">{platformIcons[platform]}</span>
-                                                                    <span className="text-gray-700 dark:text-gray-300">{platform}</span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* Click hint */}
-                                                <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 text-[10px] text-gray-500 dark:text-gray-400 text-center">
-                                                    Click to edit or view full details
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
                             );
                         })}
@@ -1258,23 +990,6 @@ export const Calendar: React.FC = () => {
         }
     }, [selectedEvent]);
 
-    // Close hover preview when clicking outside (for touch devices)
-    useEffect(() => {
-        const handleClickOutside = (e: MouseEvent | TouchEvent) => {
-            if (hoveredEventId && !(e.target as Element).closest('.hover-preview-container')) {
-                setHoveredEventId(null);
-                setHoverPosition(null);
-            }
-        };
-        if (hoveredEventId) {
-            document.addEventListener('click', handleClickOutside);
-            document.addEventListener('touchstart', handleClickOutside);
-        }
-        return () => {
-            document.removeEventListener('click', handleClickOutside);
-            document.removeEventListener('touchstart', handleClickOutside);
-        };
-    }, [hoveredEventId]);
 
     return (
         <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full">

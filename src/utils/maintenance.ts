@@ -21,8 +21,8 @@ export const isMaintenanceMode = (): boolean => {
                       modeStr === 'yes' ||
                       maintenanceMode === true; // Also handle actual boolean true
     
-    // Debug logging - always log to help troubleshoot
-    if (typeof window !== 'undefined') {
+    // Debug logging - only log in development or when maintenance is enabled
+    if (typeof window !== 'undefined' && (import.meta.env.DEV || isEnabled)) {
         console.log('🔧 Maintenance Mode Check:', {
             envValue: maintenanceMode,
             modeStr: modeStr,
