@@ -70,7 +70,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 if (snap.exists()) {
                     const loaded = snap.data() as User;
 
-                    // Default everyone to Creator while business/agency is hidden
+                    // Default everyone to Creator
                     if (loaded.userType !== 'Creator') {
                         loaded.userType = 'Creator';
                         await setDoc(ref, { userType: 'Creator' }, { merge: true });

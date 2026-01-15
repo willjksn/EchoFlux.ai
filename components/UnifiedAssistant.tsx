@@ -302,11 +302,10 @@ export const UnifiedAssistant: React.FC = () => {
     }
 
     const systemInstruction = `
-      You are the built-in **EchoFlux.ai Voice Assistant**, helping ${userName} use the app and create better content.
+      You are the built-in **EchoFlux.ai Voice Assistant**, helping ${userName} use the app.
 
       CRITICAL PRODUCT LIMITS (DO NOT MISREPRESENT):
       - EchoFlux.ai is currently a creator-focused AI Content Studio & Campaign Planner (offline/planning-first).
-      - Do NOT claim the app provides social listening or competitor tracking in the current version.
       - Do NOT claim the app provides automated DM/comment reply automation or automatic posting.
       ${isAdmin ? '- You HAVE live web search access via Tavily for real-time information. Use the web_search function whenever you need current information, trends, or any web-based research.' : '- You do NOT have live web access. Be honest about uncertainty for time-sensitive questions.'}
 
@@ -404,7 +403,6 @@ export const UnifiedAssistant: React.FC = () => {
 - Providing comprehensive guides on creating content, generating strategies, using the calendar, and more
 - Answering questions about social media strategy, content creation, marketing, and best practices
 - Sharing what tends to work (best practices) and how to use the in-app trends/opportunities tools
-- Giving detailed feedback on your content ideas and strategies
 - Explaining workflows and helping you understand the full functionality of each feature${isAdmin ? '\n- Performing web searches for real-time information using Tavily' : ''}
 
 Just ask me how to do something or what you'd like to learn about!`;

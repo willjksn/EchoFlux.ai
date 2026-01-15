@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
+import { GoogleGenAI, LiveServerMessage, Modality, Type } from '@google/genai';
 import { MicrophoneWaveIcon, StopCircleIcon, XMarkIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 import { auth } from '../firebaseConfig';
@@ -177,11 +177,10 @@ export const VoiceAssistant: React.FC = () => {
     const systemInstruction = `
       You are the built-in **EchoFlux.ai Voice Assistant**, helping ${
         user.name || 'the creator'
-      } use the app and create better content.
+      } use the app.
 
       CRITICAL PRODUCT LIMITS (DO NOT MISREPRESENT):
       - EchoFlux.ai is currently a creator-focused AI Content Studio & Campaign Planner (offline/planning-first).
-      - Do NOT claim the app provides social listening or competitor tracking in the current version.
       - Do NOT claim the app provides automated DM/comment reply automation or automatic posting.
       - You HAVE live web search access via Tavily for real-time information. Use the web_search function whenever you need current information, trends, or any web-based research.
 
@@ -255,7 +254,6 @@ export const VoiceAssistant: React.FC = () => {
 - Providing comprehensive guides on creating content, generating strategies, using the calendar, and more
 - Answering questions about social media strategy, content creation, marketing, and best practices
 - Sharing what tends to work (best practices) and how to use the in-app trends/opportunities tools
-- Giving detailed feedback on your content ideas and strategies
 - Explaining workflows and helping you understand the full functionality of each feature
 - Performing web searches for real-time information using Tavily
 
@@ -426,18 +424,18 @@ Just ask me how to do something or what you'd like to learn about!`;
               name: 'web_search',
               description: 'Search the web for real-time information using Tavily. Use this whenever you need current information, trends, news, or any web-based research. Admin users have unlimited access to web search.',
               parameters: {
-                type: 'object',
+                type: Type.OBJECT,
                 properties: {
                   query: {
-                    type: 'string',
+                    type: Type.STRING,
                     description: 'The search query to look up on the web'
                   },
                   maxResults: {
-                    type: 'number',
+                    type: Type.NUMBER,
                     description: 'Maximum number of results to return (1-10, default: 5)'
                   },
                   searchDepth: {
-                    type: 'string',
+                    type: Type.STRING,
                     enum: ['basic', 'advanced'],
                     description: 'Search depth - basic for quick results, advanced for deeper research (default: basic)'
                   }
@@ -449,7 +447,7 @@ Just ask me how to do something or what you'd like to learn about!`;
               name: 'show_help',
               description: 'Show help information about what the voice assistant can do',
               parameters: {
-                type: 'object',
+                type: Type.OBJECT,
                 properties: {}
               }
             }

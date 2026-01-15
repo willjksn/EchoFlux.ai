@@ -12,7 +12,6 @@ interface UpgradePromptProps {
 export const UpgradePrompt: React.FC<UpgradePromptProps> = ({ featureName, onUpgradeClick, secondaryActionText, onSecondaryActionClick, userType }) => {
     // Determine the appropriate message based on user type and feature
   const getUpgradeMessage = () => {
-    // Business/Agency temporarily hidden; focus on Creator plans
     return 'This premium feature is available on our Pro and Elite plans.';
   };
 

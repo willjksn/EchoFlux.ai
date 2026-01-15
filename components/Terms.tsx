@@ -106,8 +106,7 @@ export const Terms: React.FC = () => {
                     </h3>
                     <p>
                         Plan names, limits, and prices are shown in the Pricing section of the app or on our website. EchoFlux.ai
-                        is currently focused on creator‑oriented planning tools; business/agency features may be paused or hidden
-                        in this version.
+                        is currently focused on creator‑oriented planning tools.
                     </p>
                     <ul className="list-disc pl-6 space-y-2 mt-2">
                         <li>

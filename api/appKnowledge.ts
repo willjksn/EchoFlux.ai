@@ -21,7 +21,6 @@ EchoFlux.ai is an **AI Content Studio & Campaign Planner for creators**.
   - Users **do not need to connect social accounts**.
   - The app focuses on **strategy, campaign planning, content packs, and calendars**.
   - Creators **copy content out** to post manually wherever they like.
-- "Business"/"Agency" modes, **social listening**, **competitor tracking**, and deep analytics are **paused/hidden for now** (not available in the current version) but may return later.
 
 ## Key Surfaces & Workflows
 

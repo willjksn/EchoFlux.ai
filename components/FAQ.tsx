@@ -3,11 +3,11 @@ import React, { useState } from 'react';
 const faqData = [
     {
         question: "Who is EchoFlux.ai for right now?",
-        answer: "We’re focused on creators. Everything is tuned for personal brands: follower growth, engagement, and fast publishing. Business/agency modes are paused until the creator experience is perfect."
+        answer: "We're focused on creators. Everything is tuned for personal brands: follower growth, engagement, and fast publishing."
     },
     {
-        question: "Do you support businesses or agencies?",
-        answer: "Not right now. We’ve hidden business and agency features to perfect the creator experience. We’ll bring them back later after creator launch and testing."
+        question: "What platforms can I plan content for?",
+        answer: "EchoFlux.ai supports content planning for all major social platforms including Instagram, TikTok, Twitter/X, Facebook, LinkedIn, Pinterest, and YouTube. You can also use our OnlyFans Studio for premium content creators. Plan your content once and adapt it for any platform."
     },
     {
         question: "What is AI Content Generation?",
@@ -22,16 +22,12 @@ const faqData = [
         answer: "Yes. Our Smart Link-in-Bio gives you a branded mobile page with optional email capture so you can grow owned audience directly from Instagram or TikTok."
     },
     {
-        question: "Do you offer social listening or competitor tracking?",
-        answer: "Not right now. Social listening and competitor tracking are not available in the current creator-planning version. Current focus: AI content creation, campaign planning, calendar workflows, link-in-bio, and OnlyFans Studio."
-    },
-    {
         question: "Do you have an AI assistant or chatbot?",
-        answer: "Yes. EchoFlux.ai includes an in-app chatbot and (on supported plans) a voice assistant to help with content ideas, planning workflows, and how to use the app. Note: they do not provide social listening or competitor tracking in the current version."
+        answer: "Yes. EchoFlux.ai includes an in-app chatbot to help with planning workflows and how to use the app."
     },
     {
         question: "Can I use EchoFlux.ai without connecting social accounts?",
-        answer: "Yes. EchoFlux.ai is currently designed as an AI Content Studio & Campaign Planner—you generate content and organize everything in a calendar, then copy/export and post to your social platforms manually. Direct posting, deeper analytics, and social listening are planned for a future version."
+        answer: "Yes. EchoFlux.ai is currently designed as an AI Content Studio & Campaign Planner—you generate content and organize everything in a calendar, then copy/export and post to your social platforms manually. Direct posting and deeper analytics are planned for a future version."
     }
 ];
 
