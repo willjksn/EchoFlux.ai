@@ -35,7 +35,7 @@ export const Strategy: React.FC = () => {
     });
     const [duration, setDuration] = useState('4 Weeks');
     const [tone, setTone] = useState('Professional');
-    const [platformFocus, setPlatformFocus] = useState('OnlyFans');
+    const [platformFocus, setPlatformFocus] = useState('Mixed / All');
     
     // Auto-set explicit tone when OnlyFans/Fanvue is selected.
     // IMPORTANT: Do not override user-selected tones like "Sexy / Explicit" for normal platforms.
@@ -71,6 +71,7 @@ export const Strategy: React.FC = () => {
     const [loadingMediaItem, setLoadingMediaItem] = useState<string | null>(null);
     const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
     const autosaveSuspendedRef = useRef(false);
+    const skipAutoloadRef = useRef(false);
     const canUseCalendar = hasCalendarAccess(user);
     
     // Usage stats
@@ -174,6 +175,8 @@ export const Strategy: React.FC = () => {
             const data = JSON.parse(opportunityData);
             if (!data?.opportunity) return false;
 
+            skipAutoloadRef.current = true;
+
             // Clear immediately so it won't re-apply on future renders.
             localStorage.removeItem(`opportunity_for_strategy_${user.id}`);
 
@@ -257,7 +260,8 @@ export const Strategy: React.FC = () => {
         }
     };
 
-    const applyLocalAutosave = () => {
+    const getLocalAutosave = () => {
+        if (skipAutoloadRef.current) return null;
         if (!user?.id) return null;
         const raw = localStorage.getItem(`strategy_autosave_${user.id}`);
         if (!raw) return null;
@@ -278,14 +282,6 @@ export const Strategy: React.FC = () => {
                     })),
                 };
             }
-            setPlan(parsed.plan || null);
-            setSelectedStrategy(parsed);
-            setNiche(parsed.niche || '');
-            setAudience(parsed.audience || '');
-            setGoal(parsed.goal || 'Increase Followers/Fans');
-            if (parsed.tone) setTone(parsed.tone);
-            if (parsed.duration) setDuration(parsed.duration);
-            if (parsed.platformFocus) setPlatformFocus(parsed.platformFocus);
             return parsed;
         } catch (e) {
             console.warn('Failed to parse local strategy autosave:', e);
@@ -294,21 +290,39 @@ export const Strategy: React.FC = () => {
         }
     };
 
+    const applyLocalAutosaveToState = () => {
+        const parsed = getLocalAutosave();
+        if (!parsed) return null;
+        setPlan(parsed.plan || null);
+        setSelectedStrategy(parsed);
+        setNiche(parsed.niche || '');
+        setAudience(parsed.audience || '');
+        setGoal(parsed.goal || 'Increase Followers/Fans');
+        if (parsed.tone) setTone(parsed.tone);
+        if (parsed.duration) setDuration(parsed.duration);
+        if (parsed.platformFocus) setPlatformFocus(parsed.platformFocus);
+        return parsed;
+    };
+
     const loadStrategies = async () => {
         try {
             const result = await getStrategies();
             if (result.success && result.strategies) {
                 let merged = result.strategies;
-                const local = applyLocalAutosave();
-                if (local && !merged.find((s: any) => s.id === local.id)) {
-                    merged = [local, ...merged];
+                if (!skipAutoloadRef.current) {
+                    const local = getLocalAutosave();
+                    if (local && !merged.find((s: any) => s.id === local.id)) {
+                        merged = [local, ...merged];
+                    }
                 }
                 setSavedStrategies(merged);
             }
         } catch (error) {
             console.error("Failed to load strategies:", error);
             // If server load fails, still try to surface local autosave
-            applyLocalAutosave();
+            if (!skipAutoloadRef.current) {
+                applyLocalAutosaveToState();
+            }
         }
     };
 
@@ -358,10 +372,10 @@ export const Strategy: React.FC = () => {
                 }
             }
             // If no active strategy found on server, fall back to local autosave
-            applyLocalAutosave();
+            applyLocalAutosaveToState();
         } catch (error) {
             console.error("Failed to load active roadmap:", error);
-            applyLocalAutosave();
+            applyLocalAutosaveToState();
         }
     };
 
@@ -376,6 +390,7 @@ export const Strategy: React.FC = () => {
         }
         setIsLoading(true);
         autosaveSuspendedRef.current = true;
+        skipAutoloadRef.current = false;
 
         // User is generating intentionally; allow auto-load again in the future.
         if (user?.id) {
@@ -2511,9 +2526,15 @@ export const Strategy: React.FC = () => {
                                     onChange={e => setPlatformFocus(e.target.value)}
                                     className="w-full p-3 border-2 rounded-xl bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
                                 >
-                                    <option value="OnlyFans">OnlyFans</option>
-                                    <option value="Fansly">Fansly</option>
-                                    <option value="Fanvue">Fanvue</option>
+                                    <option>Mixed / All</option>
+                                    <option value="Instagram">Instagram Focus</option>
+                                    <option value="TikTok">TikTok Focus</option>
+                                    <option value="X">X (Twitter) Focus</option>
+                                    <option value="Threads">Threads Focus</option>
+                                    <option value="YouTube">YouTube Focus</option>
+                                    <option value="LinkedIn">LinkedIn Focus</option>
+                                    <option value="Facebook">Facebook Focus</option>
+                                    <option value="Pinterest">Pinterest Focus</option>
                                 </select>
                             </div>
                         </div>

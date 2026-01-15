@@ -4920,36 +4920,69 @@ Output format:
                         </div>
 
                         {generatedMessages?.trim() && (() => {
-                            // Parse messages - split by numbered items (1., 2., 3., etc.) or double newlines
-                            const parseMessages = (text: string): string[] => {
-                                // Try splitting by numbered patterns (1., 2., Day 0, Day 1, etc.)
-                                const numberedSplit = text.split(/(?=^\d+\.|^Day \d+|^Message \d+)/m);
-                                if (numberedSplit.length > 1 && numberedSplit[0].trim() === '') {
-                                    return numberedSplit.slice(1).map(m => m.trim()).filter(m => m.length > 0);
-                                }
-                                
-                                // Try splitting by double newlines
-                                const doubleNewlineSplit = text.split(/\n\n+/);
-                                if (doubleNewlineSplit.length > 1) {
-                                    return doubleNewlineSplit.map(m => m.trim()).filter(m => m.length > 0);
-                                }
-                                
-                                // Fallback: return as single message
-                                return [text.trim()];
+                            type ParsedMessage = { label: string; body: string };
+
+                            const normalizeLabel = (raw: string) => raw.replace(/\s+/g, ' ').trim();
+
+                            const parseMessages = (text: string): ParsedMessage[] => {
+                                const cleaned = text
+                                    .replace(/^\s*(welcome sequence|renewal reminder|ppv follow-up|win-back)\s*:?\s*$/gim, '')
+                                    .trim();
+
+                                if (!cleaned) return [];
+
+                                const splitByMarkers = cleaned.split(/(?=^Message\s*\d+|^Day\s*\d+|^\d+\.)/m);
+                                const segments = splitByMarkers.length > 1
+                                    ? splitByMarkers.map(s => s.trim()).filter(Boolean)
+                                    : cleaned.split(/\n\n+/).map(s => s.trim()).filter(Boolean);
+
+                                const parsed = segments.map((segment, index) => {
+                                    const lines = segment.split('\n');
+                                    const firstLine = lines[0]?.trim() || '';
+                                    let label = `Message ${index + 1}`;
+                                    let bodyLines = lines;
+
+                                    const messageMatch = firstLine.match(/^Message\s*(\d+)\s*[:\-–]?\s*(.*)$/i);
+                                    const dayMatch = firstLine.match(/^Day\s*(\d+)\s*[:\-–]?\s*(.*)$/i);
+                                    const numberedMatch = firstLine.match(/^(\d+)\.\s*(.*)$/);
+
+                                    if (messageMatch) {
+                                        label = `Message ${messageMatch[1]}`;
+                                        const dayInMessage = firstLine.match(/Day\s*\d+/i);
+                                        if (dayInMessage) {
+                                            label = `${label} • ${normalizeLabel(dayInMessage[0])}`;
+                                        }
+                                        bodyLines = messageMatch[2] ? [messageMatch[2], ...lines.slice(1)] : lines.slice(1);
+                                    } else if (dayMatch) {
+                                        label = `Day ${dayMatch[1]}`;
+                                        bodyLines = dayMatch[2] ? [dayMatch[2], ...lines.slice(1)] : lines.slice(1);
+                                    } else if (numberedMatch) {
+                                        label = `Message ${numberedMatch[1]}`;
+                                        bodyLines = numberedMatch[2] ? [numberedMatch[2], ...lines.slice(1)] : lines.slice(1);
+                                    }
+
+                                    const body = bodyLines.join('\n').trim();
+                                    return {
+                                        label,
+                                        body: body || segment.trim(),
+                                    };
+                                });
+
+                                return parsed.length > 0 ? parsed : [{ label: 'Message 1', body: cleaned }];
                             };
-                            
+
                             const messages = parseMessages(generatedMessages);
-                            
+
                             return (
                                 <div className="mt-4 space-y-3">
                                     {messages.map((message, index) => (
                                         <div key={index} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
                                             <div className="flex items-start justify-between gap-3 mb-2">
                                                 <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-                                                    Message {index + 1}
+                                                    {message.label}
                                                 </span>
                                                 <button
-                                                    onClick={() => copyToClipboard(message)}
+                                                    onClick={() => copyToClipboard(message.body)}
                                                     className="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center gap-2 text-sm"
                                                     title="Copy this message"
                                                 >
@@ -4958,7 +4991,7 @@ Output format:
                                                 </button>
                                             </div>
                                             <pre className="whitespace-pre-wrap text-sm text-gray-900 dark:text-white font-sans">
-                                                {message}
+                                                {message.body}
                                             </pre>
                                         </div>
                                     ))}

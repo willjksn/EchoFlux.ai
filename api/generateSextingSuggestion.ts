@@ -155,13 +155,13 @@ Guidelines:
     try {
       const parsed = parseJSON(raw);
       if (Array.isArray(parsed)) {
-        suggestions = parsed.filter((s) => typeof s === "string");
+        suggestions = parsed.filter((s: unknown): s is string => typeof s === "string");
       }
     } catch {
       // Fallback: split lines
       suggestions = raw
         .split("\n")
-        .map((s) => s.replace(/^[-*]\s*/, "").trim())
+        .map((s: string) => s.replace(/^[-*]\s*/, "").trim())
         .filter(Boolean);
     }
 

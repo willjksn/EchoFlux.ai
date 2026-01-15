@@ -71,6 +71,14 @@ export interface Settings {
     prioritizedKeywords: string;
     ignoredKeywords: string;
     connectedAccounts: Record<Platform, boolean>;
+    monetizedModeEnabled?: boolean;
+    monetizedOnboarding?: {
+      postingFrequency?: string;
+      contentHelp?: string[];
+      biggestChallenge?: string;
+      monthlyGoal?: string;
+    };
+    monetizedPlatforms?: string[];
 }
 
 export interface CaptionResult {
