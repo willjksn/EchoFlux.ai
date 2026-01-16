@@ -684,6 +684,7 @@ export const OnlyFansContentBrain: React.FC = () => {
     >('Teasing');
     const [captionGoal, setCaptionGoal] = useState('engagement');
     const [generatedCaptions, setGeneratedCaptions] = useState<string[]>([]);
+    const [useCreatorPersonalityCaptions, setUseCreatorPersonalityCaptions] = useState(false);
     
     // Media upload state (for captions tab)
     const [uploadedMediaFile, setUploadedMediaFile] = useState<File | null>(null);
@@ -727,14 +728,17 @@ export const OnlyFansContentBrain: React.FC = () => {
     // Post ideas state
     const [postIdeaPrompt, setPostIdeaPrompt] = useState('');
     const [generatedPostIdeas, setGeneratedPostIdeas] = useState<string[]>([]);
+    const [useCreatorPersonalityPostIdeas, setUseCreatorPersonalityPostIdeas] = useState(false);
     
     // Shoot concepts state
     const [shootConceptPrompt, setShootConceptPrompt] = useState('');
     const [generatedShootConcepts, setGeneratedShootConcepts] = useState<string[]>([]);
+    const [useCreatorPersonalityShootConcepts, setUseCreatorPersonalityShootConcepts] = useState(false);
     
     // Weekly plan state
     const [weeklyPlanPrompt, setWeeklyPlanPrompt] = useState('');
     const [generatedWeeklyPlan, setGeneratedWeeklyPlan] = useState<any>(null);
+    const [useCreatorPersonalityWeeklyPlan, setUseCreatorPersonalityWeeklyPlan] = useState(false);
     
     // Monetization planner state
     const [monetizationGoals, setMonetizationGoals] = useState<string[]>([]);
@@ -752,6 +756,7 @@ export const OnlyFansContentBrain: React.FC = () => {
     const [messageTone, setMessageTone] = useState<'Warm' | 'Flirty' | 'Direct' | 'Explicit'>(`Warm`);
     const [generatedMessages, setGeneratedMessages] = useState<string>('');
     const [selectedFanId, setSelectedFanId] = useState<string | null>(null);
+    const [useCreatorPersonalityMessaging, setUseCreatorPersonalityMessaging] = useState(false);
     const [selectedFanName, setSelectedFanName] = useState<string | null>(null);
     const [fanPreferences, setFanPreferences] = useState<any>(null);
     const [isLoadingFanPreferences, setIsLoadingFanPreferences] = useState(false);
@@ -859,6 +864,25 @@ export const OnlyFansContentBrain: React.FC = () => {
             }
         };
         loadExplicitnessLevel();
+    }, [user?.id]);
+
+    useEffect(() => {
+        const loadCreatorPersonality = async () => {
+            if (!user?.id) return;
+            try {
+                const userDoc = await getDoc(doc(db, 'users', user.id));
+                if (userDoc.exists()) {
+                    const data = userDoc.data();
+                    setCreatorPersonality(data.creatorPersonality || '');
+                    setAiPersonalitySetting(data.aiPersonality || '');
+                    setAiToneSetting(data.aiTone || '');
+                    setExplicitnessLevelSetting(data.explicitnessLevel ?? 7);
+                }
+            } catch (error) {
+                console.error('Error loading creator personality:', error);
+            }
+        };
+        loadCreatorPersonality();
     }, [user?.id]);
 
     // ------------------------------------------------------------
@@ -1217,6 +1241,12 @@ export const OnlyFansContentBrain: React.FC = () => {
             if (targetAudienceGender) {
                 personalityContext += `\nTarget Audience: ${targetAudienceGender}`;
             }
+            if (explicitnessLevel !== null && explicitnessLevel !== undefined) {
+                personalityContext += `\nExplicitness Level: ${explicitnessLevel}/10`;
+            }
+            if (useCreatorPersonalityCaptions && creatorPersonality) {
+                personalityContext += `\n\nCREATOR PERSONALITY:\n${creatorPersonality}`;
+            }
 
             // Load emoji settings
             const emojiSettings = await loadEmojiSettings(user.id);
@@ -1313,6 +1343,12 @@ export const OnlyFansContentBrain: React.FC = () => {
             
             // Load emoji settings
             const emojiSettings = await loadEmojiSettings(user.id);
+            const settingsContext = [
+                aiPersonalitySetting ? `AI PERSONALITY & TRAINING:\n${aiPersonalitySetting}` : null,
+                aiToneSetting ? `Default AI Tone: ${aiToneSetting}` : null,
+                explicitnessLevelSetting !== null && explicitnessLevelSetting !== undefined ? `Explicitness Level: ${explicitnessLevelSetting}/10` : null,
+                useCreatorPersonalityPostIdeas && creatorPersonality ? `CREATOR PERSONALITY:\n${creatorPersonality}` : null,
+            ].filter(Boolean).join('\n');
             
             const response = await fetch('/api/generateText', {
                 method: 'POST',
@@ -1324,7 +1360,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                     prompt: `Generate 10 creative post ideas tailored for ${selectedPlatform} based on: ${postIdeaPrompt}. 
                     Each idea should be specific, engaging, and tailored for adult content creators. 
                     When natural, include a ${selectedPlatform} mention (e.g., "join me on ${selectedPlatform}") but only if it fits. 
-                    Format as a numbered list with brief descriptions.`,
+                    Format as a numbered list with brief descriptions.${settingsContext ? `\n\n${settingsContext}` : ''}`,
                     context: {
                         goal: 'content-ideas',
                         tone: 'Explicit/Adult Content',
@@ -1374,6 +1410,12 @@ export const OnlyFansContentBrain: React.FC = () => {
         setError(null);
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+            const settingsContext = [
+                aiPersonalitySetting ? `AI PERSONALITY & TRAINING:\n${aiPersonalitySetting}` : null,
+                aiToneSetting ? `Default AI Tone: ${aiToneSetting}` : null,
+                explicitnessLevelSetting !== null && explicitnessLevelSetting !== undefined ? `Explicitness Level: ${explicitnessLevelSetting}/10` : null,
+                useCreatorPersonalityShootConcepts && creatorPersonality ? `CREATOR PERSONALITY:\n${creatorPersonality}` : null,
+            ].filter(Boolean).join('\n');
             
             const response = await fetch('/api/generateText', {
                 method: 'POST',
@@ -1390,7 +1432,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                     - Poses/angles
                     - Mood/energy
                     
-                    Format as a numbered list with detailed descriptions. Make it creative and tailored for adult content.`,
+                    Format as a numbered list with detailed descriptions. Make it creative and tailored for adult content.${settingsContext ? `\n\n${settingsContext}` : ''}`,
                     context: {
                         goal: 'shoot-planning',
                         tone: 'Explicit/Adult Content',
@@ -1438,6 +1480,12 @@ export const OnlyFansContentBrain: React.FC = () => {
         setError(null);
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+            const settingsContext = [
+                aiPersonalitySetting ? `AI PERSONALITY & TRAINING:\n${aiPersonalitySetting}` : null,
+                aiToneSetting ? `Default AI Tone: ${aiToneSetting}` : null,
+                explicitnessLevelSetting !== null && explicitnessLevelSetting !== undefined ? `Explicitness Level: ${explicitnessLevelSetting}/10` : null,
+                useCreatorPersonalityWeeklyPlan && creatorPersonality ? `CREATOR PERSONALITY:\n${creatorPersonality}` : null,
+            ].filter(Boolean).join('\n');
             
             const response = await fetch('/api/generateContentStrategy', {
                 method: 'POST',
@@ -1448,7 +1496,7 @@ export const OnlyFansContentBrain: React.FC = () => {
                 body: JSON.stringify({
                     niche: `Adult Content Creator (${selectedPlatform})`,
                     audience: 'Subscribers and fans',
-                    goal: `${weeklyPlanPrompt || 'Sales Conversion'}\n\n${buildMonetizedContext()}`.trim(), // Personalize if available
+                    goal: `${weeklyPlanPrompt || 'Sales Conversion'}\n\n${buildMonetizedContext()}${settingsContext ? `\n${settingsContext}` : ''}`.trim(), // Personalize if available
                     duration: 1, // 1 week
                     tone: 'Explicit/Adult Content',
                     platformFocus: selectedPlatform,
@@ -1741,6 +1789,12 @@ NATURAL PERSONALIZATION GUIDELINES:
             if (targetAudienceGender) {
                 personalityContext += `\nTarget Audience: ${targetAudienceGender}`;
             }
+            if (explicitnessLevel !== null && explicitnessLevel !== undefined) {
+                personalityContext += `\nExplicitness Level: ${explicitnessLevel}/10`;
+            }
+            if (useCreatorPersonalityMessaging && creatorPersonality) {
+                personalityContext += `\n\nCREATOR PERSONALITY:\n${creatorPersonality}`;
+            }
 
             const prompt = `
 Create a subscriber messaging toolkit for a ${selectedPlatform} creator.
@@ -1836,6 +1890,10 @@ Output format:
     const [history, setHistory] = useState<any[]>([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
     const [showHistoryTab, setShowHistoryTab] = useState(false);
+    const [creatorPersonality, setCreatorPersonality] = useState('');
+    const [aiPersonalitySetting, setAiPersonalitySetting] = useState('');
+    const [aiToneSetting, setAiToneSetting] = useState('');
+    const [explicitnessLevelSetting, setExplicitnessLevelSetting] = useState(7);
     // History state for captions tab (separate from main history tab)
     const [showCaptionsHistory, setShowCaptionsHistory] = useState(false);
     const [captionsPredictHistory, setCaptionsPredictHistory] = useState<any[]>([]);
@@ -3539,6 +3597,22 @@ Output format:
                                 </div>
                             </div>
 
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    onClick={() => setUseCreatorPersonalityCaptions(prev => !prev)}
+                                    disabled={!creatorPersonality}
+                                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+                                        useCreatorPersonalityCaptions
+                                            ? 'bg-primary-600 text-white hover:bg-primary-700'
+                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                    } ${!creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    title={!creatorPersonality ? 'Add a creator personality in Settings → AI Training to enable' : undefined}
+                                >
+                                    <SparklesIcon className="w-4 h-4" />
+                                    Personality
+                                </button>
+                            </div>
+
                             {/* Date and Time Picker - In Main Content Container */}
                             {uploadedMediaUrl && (
                                 <div>
@@ -4046,6 +4120,22 @@ Output format:
                                 />
                             </div>
 
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    onClick={() => setUseCreatorPersonalityPostIdeas(prev => !prev)}
+                                    disabled={!creatorPersonality}
+                                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+                                        useCreatorPersonalityPostIdeas
+                                            ? 'bg-primary-600 text-white hover:bg-primary-700'
+                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                    } ${!creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    title={!creatorPersonality ? 'Add a creator personality in Settings → AI Training to enable' : undefined}
+                                >
+                                    <SparklesIcon className="w-4 h-4" />
+                                    Personality
+                                </button>
+                            </div>
+
 
                             <button
                                 onClick={handleGeneratePostIdeas}
@@ -4200,6 +4290,22 @@ Output format:
                                 />
                             </div>
 
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    onClick={() => setUseCreatorPersonalityShootConcepts(prev => !prev)}
+                                    disabled={!creatorPersonality}
+                                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+                                        useCreatorPersonalityShootConcepts
+                                            ? 'bg-primary-600 text-white hover:bg-primary-700'
+                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                    } ${!creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    title={!creatorPersonality ? 'Add a creator personality in Settings → AI Training to enable' : undefined}
+                                >
+                                    <SparklesIcon className="w-4 h-4" />
+                                    Personality
+                                </button>
+                            </div>
+
 
                             <button
                                 onClick={handleGenerateShootConcepts}
@@ -4352,6 +4458,22 @@ Output format:
                                     placeholder="e.g., 'Focus on intimate content and behind-the-scenes this week' or 'Mix of photosets, videos, and interactive posts'"
                                     className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[100px]"
                                 />
+                            </div>
+
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    onClick={() => setUseCreatorPersonalityWeeklyPlan(prev => !prev)}
+                                    disabled={!creatorPersonality}
+                                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+                                        useCreatorPersonalityWeeklyPlan
+                                            ? 'bg-primary-600 text-white hover:bg-primary-700'
+                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                    } ${!creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    title={!creatorPersonality ? 'Add a creator personality in Settings → AI Training to enable' : undefined}
+                                >
+                                    <SparklesIcon className="w-4 h-4" />
+                                    Personality
+                                </button>
                             </div>
 
 
@@ -4883,6 +5005,22 @@ Output format:
                                     Using preferences for {selectedFanName || 'selected fan'} (tone: {fanPreferences.preferredTone || 'n/a'}).
                                 </p>
                             )}
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                            <button
+                                onClick={() => setUseCreatorPersonalityMessaging(prev => !prev)}
+                                disabled={!creatorPersonality}
+                                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+                                    useCreatorPersonalityMessaging
+                                        ? 'bg-primary-600 text-white hover:bg-primary-700'
+                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                } ${!creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                title={!creatorPersonality ? 'Add a creator personality in Settings → AI Training to enable' : undefined}
+                            >
+                                <SparklesIcon className="w-4 h-4" />
+                                Personality
+                            </button>
                         </div>
 
                         <div className="mt-4 flex items-center justify-between gap-3">

@@ -28,6 +28,10 @@ export const OnlyFansRoleplay: React.FC = () => {
     const [isGeneratingRatings, setIsGeneratingRatings] = useState(false);
     const [isGeneratingLongRating, setIsGeneratingLongRating] = useState(false);
     const [isGeneratingInteractive, setIsGeneratingInteractive] = useState(false);
+    const [creatorPersonality, setCreatorPersonality] = useState('');
+    const [useCreatorPersonalityScenario, setUseCreatorPersonalityScenario] = useState(false);
+    const [useCreatorPersonalityRatings, setUseCreatorPersonalityRatings] = useState(false);
+    const [useCreatorPersonalityInteractive, setUseCreatorPersonalityInteractive] = useState(false);
     
     // Scenario generation state
     const [selectedRoleplayType, setSelectedRoleplayType] = useState<RoleplayType>('GFE (Girlfriend Experience)');
@@ -90,6 +94,7 @@ export const OnlyFansRoleplay: React.FC = () => {
                     const data = userDoc.data();
                     setCreatorGender(data.creatorGender || '');
                     setTargetAudienceGender(data.targetAudienceGender || '');
+                    setCreatorPersonality(data.creatorPersonality || '');
                 }
             } catch (error) {
                 console.error('Error loading gender settings:', error);
@@ -157,6 +162,7 @@ export const OnlyFansRoleplay: React.FC = () => {
             let aiTone = '';
             let creatorGender = '';
             let targetAudienceGender = '';
+            let explicitnessLevel = 7;
             try {
                 const userDoc = await getDoc(doc(db, 'users', user.id));
                 if (userDoc.exists()) {
@@ -165,6 +171,7 @@ export const OnlyFansRoleplay: React.FC = () => {
                     aiTone = userData?.aiTone || '';
                     creatorGender = userData?.creatorGender || '';
                     targetAudienceGender = userData?.targetAudienceGender || '';
+                    explicitnessLevel = userData?.explicitnessLevel ?? 7;
                 }
             } catch (e) {
                 console.error('Error loading AI personality settings:', e);
@@ -241,6 +248,12 @@ NATURAL PERSONALIZATION GUIDELINES:
             }
             if (targetAudienceGender) {
                 personalityContext += `\nTarget Audience: ${targetAudienceGender}`;
+            }
+            if (explicitnessLevel !== null && explicitnessLevel !== undefined) {
+                personalityContext += `\nExplicitness Level: ${explicitnessLevel}/10`;
+            }
+            if (useCreatorPersonalityScenario && creatorPersonality) {
+                personalityContext += `\n\nCREATOR PERSONALITY:\n${creatorPersonality}`;
             }
             
             // Load emoji settings
@@ -650,6 +663,26 @@ Make it creative, engaging, explicit, EXTENSIVE, and tailored for adult content 
         setIsGeneratingPersona(true);
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+            let aiPersonality = '';
+            let aiTone = '';
+            let explicitnessLevel = 7;
+            try {
+                const userDoc = await getDoc(doc(db, 'users', user.id));
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    aiPersonality = userData?.aiPersonality || '';
+                    aiTone = userData?.aiTone || '';
+                    explicitnessLevel = userData?.explicitnessLevel ?? 7;
+                }
+            } catch (e) {
+                console.error('Error loading AI personality settings:', e);
+            }
+            const aiContext = [
+                aiPersonality ? `AI PERSONALITY & TRAINING:\n${aiPersonality}` : null,
+                aiTone ? `Default AI Tone: ${aiTone}` : null,
+                explicitnessLevel !== null && explicitnessLevel !== undefined ? `Explicitness Level: ${explicitnessLevel}/10` : null,
+                creatorPersonality ? `CREATOR PERSONALITY:\n${creatorPersonality}` : null,
+            ].filter(Boolean).join('\n');
             
             // Load emoji settings
             const emojiSettings = await loadEmojiSettings(user.id);
@@ -665,6 +698,7 @@ Make it creative, engaging, explicit, EXTENSIVE, and tailored for adult content 
 
 Persona Name: ${personaName}
 Description: ${personaDescription}${creatorGender ? `\nCreator Gender: ${creatorGender}` : ''}${targetAudienceGender ? `\nTarget Audience: ${targetAudienceGender}` : ''}
+${aiContext ? `\n${aiContext}` : ''}
 
 ${creatorGender && targetAudienceGender ? `IMPORTANT - GENDER CONTEXT:
 - Creator is ${creatorGender} creating content for ${targetAudienceGender === 'Both' ? 'both male and female' : targetAudienceGender === 'All' ? 'all audiences' : targetAudienceGender.toLowerCase()} audiences
@@ -739,6 +773,7 @@ Make it detailed, consistent, explicit, and engaging for adult content monetizat
             let aiTone = '';
             let creatorGender = '';
             let targetAudienceGender = '';
+            let explicitnessLevel = 7;
             try {
                 const userDoc = await getDoc(doc(db, 'users', user.id));
                 if (userDoc.exists()) {
@@ -747,6 +782,7 @@ Make it detailed, consistent, explicit, and engaging for adult content monetizat
                     aiTone = userData?.aiTone || '';
                     creatorGender = userData?.creatorGender || '';
                     targetAudienceGender = userData?.targetAudienceGender || '';
+                    explicitnessLevel = userData?.explicitnessLevel ?? 7;
                 }
             } catch (e) {
                 console.error('Error loading AI personality settings:', e);
@@ -809,6 +845,12 @@ NATURAL PERSONALIZATION GUIDELINES:
             }
             if (targetAudienceGender) {
                 personalityContext += `\nTarget Audience: ${targetAudienceGender}`;
+            }
+            if (explicitnessLevel !== null && explicitnessLevel !== undefined) {
+                personalityContext += `\nExplicitness Level: ${explicitnessLevel}/10`;
+            }
+            if (useCreatorPersonalityRatings && creatorPersonality) {
+                personalityContext += `\n\nCREATOR PERSONALITY:\n${creatorPersonality}`;
             }
             
             // Load emoji settings
@@ -948,6 +990,28 @@ Format as a numbered list (1-10) with engaging, interactive, explicit prompts fr
         setIsGeneratingLongRating(true);
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+            let aiPersonality = '';
+            let aiTone = '';
+            let explicitnessLevel = 7;
+            try {
+                const userDoc = await getDoc(doc(db, 'users', user.id));
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    aiPersonality = userData?.aiPersonality || '';
+                    aiTone = userData?.aiTone || '';
+                    explicitnessLevel = userData?.explicitnessLevel ?? 7;
+                }
+            } catch (e) {
+                console.error('Error loading AI personality settings:', e);
+            }
+            const creatorContext = useCreatorPersonalityRatings && creatorPersonality
+                ? `\nCREATOR PERSONALITY:\n${creatorPersonality}`
+                : '';
+            const aiContext = [
+                aiPersonality ? `AI PERSONALITY & TRAINING:\n${aiPersonality}` : null,
+                aiTone ? `Default AI Tone: ${aiTone}` : null,
+                explicitnessLevel !== null && explicitnessLevel !== undefined ? `Explicitness Level: ${explicitnessLevel}/10` : null,
+            ].filter(Boolean).join('\n');
             
             // Build fan context
             let fanContext = '';
@@ -1005,6 +1069,8 @@ NATURAL PERSONALIZATION GUIDELINES:
                 body: JSON.stringify({
                     prompt: `Write a LONG-FORM, DETAILED, explicit OnlyFans-style body rating from the creator's perspective.
 ${fanContext}
+${creatorContext}
+${aiContext ? `\n${aiContext}` : ''}
 
 🎯 NATURAL CREATOR LANGUAGE & SLANG:
 - Use abbreviations and slang that creators ACTUALLY use on OnlyFans/Fansly/Fanvue naturally
@@ -1164,6 +1230,28 @@ CRITICAL REQUIREMENTS:
         setIsGeneratingInteractive(true);
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+            let aiPersonality = '';
+            let aiTone = '';
+            let explicitnessLevel = 7;
+            try {
+                const userDoc = await getDoc(doc(db, 'users', user.id));
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    aiPersonality = userData?.aiPersonality || '';
+                    aiTone = userData?.aiTone || '';
+                    explicitnessLevel = userData?.explicitnessLevel ?? 7;
+                }
+            } catch (e) {
+                console.error('Error loading AI personality settings:', e);
+            }
+            const creatorContext = useCreatorPersonalityInteractive && creatorPersonality
+                ? `\nCREATOR PERSONALITY:\n${creatorPersonality}`
+                : '';
+            const aiContext = [
+                aiPersonality ? `AI PERSONALITY & TRAINING:\n${aiPersonality}` : null,
+                aiTone ? `Default AI Tone: ${aiTone}` : null,
+                explicitnessLevel !== null && explicitnessLevel !== undefined ? `Explicitness Level: ${explicitnessLevel}/10` : null,
+            ].filter(Boolean).join('\n');
             
             // Build fan context
             let fanContext = '';
@@ -1222,7 +1310,8 @@ NATURAL PERSONALIZATION GUIDELINES:
                 body: JSON.stringify({
                     prompt: `Generate 10 creative interactive post ideas for OnlyFans, Fansly, Fanvue & more that encourage audience participation.
 
-Focus: ${interactivePrompt}${creatorGender ? `\nCreator Gender: ${creatorGender}` : ''}${targetAudienceGender ? `\nTarget Audience: ${targetAudienceGender}` : ''}
+Focus: ${interactivePrompt}${creatorGender ? `\nCreator Gender: ${creatorGender}` : ''}${targetAudienceGender ? `\nTarget Audience: ${targetAudienceGender}` : ''}${creatorContext}
+${aiContext ? `\n${aiContext}` : ''}
 ${fanContext}
 
 🎯 NATURAL CREATOR LANGUAGE & SLANG:
@@ -1774,6 +1863,22 @@ Format as a numbered list with detailed post concepts including captions and eng
                                 />
                             </div>
 
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    onClick={() => setUseCreatorPersonalityScenario(prev => !prev)}
+                                    disabled={!creatorPersonality}
+                                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+                                        useCreatorPersonalityScenario
+                                            ? 'bg-primary-600 text-white hover:bg-primary-700'
+                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                    } ${!creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    title={!creatorPersonality ? 'Add a creator personality in Settings → AI Training to enable' : undefined}
+                                >
+                                    <SparklesIcon className="w-4 h-4" />
+                                    Personality
+                                </button>
+                            </div>
+
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Length
@@ -1999,12 +2104,30 @@ Format as a numbered list with detailed post concepts including captions and eng
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Persona Description:
                                 </label>
-                                <textarea
-                                    value={personaDescription}
-                                    onChange={(e) => setPersonaDescription(e.target.value)}
-                                    placeholder="Describe your persona's personality, style, interests, and unique traits"
-                                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[100px]"
-                                />
+                                <div className="relative">
+                                    <textarea
+                                        value={personaDescription}
+                                        onChange={(e) => setPersonaDescription(e.target.value)}
+                                        placeholder="Describe your persona's personality, style, interests, and unique traits"
+                                        className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[100px]"
+                                    />
+                                    <button
+                                        onClick={async () => {
+                                            try {
+                                                const { askChatbot } = await import('../src/services/geminiService');
+                                                const prompt = 'Help me write an explicit creator persona description for OnlyFans roleplay and messaging. I want it to sound like me and match my creator personality. What should I include?';
+                                                await askChatbot(prompt);
+                                                showToast('AI suggestions available - describe your vibe, tone, and explicit style.', 'info');
+                                            } catch (error) {
+                                                showToast('Failed to load AI suggestions. Please try again.', 'error');
+                                            }
+                                        }}
+                                        className="absolute top-2 right-2 p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                        title="AI Help - Get suggestions for writing your persona description"
+                                    >
+                                        <SparklesIcon className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                                    </button>
+                                </div>
                             </div>
 
                             <button
@@ -2172,6 +2295,22 @@ Format as a numbered list with detailed post concepts including captions and eng
                                 />
                             </div>
 
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    onClick={() => setUseCreatorPersonalityRatings(prev => !prev)}
+                                    disabled={!creatorPersonality}
+                                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+                                        useCreatorPersonalityRatings
+                                            ? 'bg-primary-600 text-white hover:bg-primary-700'
+                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                    } ${!creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    title={!creatorPersonality ? 'Add a creator personality in Settings → AI Training to enable' : undefined}
+                                >
+                                    <SparklesIcon className="w-4 h-4" />
+                                    Personality
+                                </button>
+                            </div>
+
                             <button
                                 onClick={handleGenerateRatings}
                                 disabled={isGeneratingRatings}
@@ -2234,6 +2373,22 @@ Format as a numbered list with detailed post concepts including captions and eng
                                     placeholder="e.g., 'Full body rating for a tall, muscular male fan with tattoos on his chest and arms' or 'Detailed booty rating for a curvy female fan in tight leggings'"
                                     className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[120px]"
                                 />
+                            </div>
+
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    onClick={() => setUseCreatorPersonalityRatings(prev => !prev)}
+                                    disabled={!creatorPersonality}
+                                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+                                        useCreatorPersonalityRatings
+                                            ? 'bg-primary-600 text-white hover:bg-primary-700'
+                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                    } ${!creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    title={!creatorPersonality ? 'Add a creator personality in Settings → AI Training to enable' : undefined}
+                                >
+                                    <SparklesIcon className="w-4 h-4" />
+                                    Personality
+                                </button>
                             </div>
 
                             <div className="space-y-3">
@@ -2452,6 +2607,22 @@ Format as a numbered list with detailed post concepts including captions and eng
                                     placeholder="e.g., 'Poll-style posts to boost engagement' or 'Challenge posts that drive subscriptions'"
                                     className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[100px]"
                                 />
+                            </div>
+
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    onClick={() => setUseCreatorPersonalityInteractive(prev => !prev)}
+                                    disabled={!creatorPersonality}
+                                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+                                        useCreatorPersonalityInteractive
+                                            ? 'bg-primary-600 text-white hover:bg-primary-700'
+                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                    } ${!creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    title={!creatorPersonality ? 'Add a creator personality in Settings → AI Training to enable' : undefined}
+                                >
+                                    <SparklesIcon className="w-4 h-4" />
+                                    Personality
+                                </button>
                             </div>
 
                             <button

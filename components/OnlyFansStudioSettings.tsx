@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from './AppContext';
-import { SettingsIcon, UserIcon } from './icons/UIIcons';
+import { SettingsIcon, UserIcon, SparklesIcon } from './icons/UIIcons';
 import { auth, db } from '../firebaseConfig';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
@@ -18,6 +18,7 @@ export const OnlyFansStudioSettings: React.FC = () => {
     
     // AI Training state
     const [aiPersonality, setAiPersonality] = useState('');
+    const [creatorPersonality, setCreatorPersonality] = useState('');
     const [aiTone, setAiTone] = useState('Teasing');
     const [explicitnessLevel, setExplicitnessLevel] = useState(7); // 0-10 scale
     const [creatorGender, setCreatorGender] = useState('');
@@ -39,6 +40,7 @@ export const OnlyFansStudioSettings: React.FC = () => {
                     const data = userDoc.data();
                     setBio(data.bio || '');
                     setAiPersonality(data.aiPersonality || '');
+                    setCreatorPersonality(data.creatorPersonality || '');
                     setAiTone(data.aiTone || 'Teasing');
                     setExplicitnessLevel(data.explicitnessLevel ?? 7);
                     setCreatorGender(data.creatorGender || '');
@@ -102,6 +104,7 @@ export const OnlyFansStudioSettings: React.FC = () => {
             // Use setDoc with merge: true to handle cases where document might not exist
             await setDoc(doc(db, 'users', user.id), {
                 aiPersonality: aiPersonality || '',
+                creatorPersonality: creatorPersonality || '',
                 aiTone: aiTone,
                 explicitnessLevel: explicitnessLevel,
                 creatorGender: creatorGender || '',
@@ -303,6 +306,39 @@ export const OnlyFansStudioSettings: React.FC = () => {
                             />
                             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                 This helps the AI understand your unique voice and writing style.
+                            </p>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Creator Personality Description
+                            </label>
+                            <div className="relative">
+                                <textarea
+                                    value={creatorPersonality}
+                                    onChange={(e) => setCreatorPersonality(e.target.value)}
+                                    placeholder="Describe yourself as a creator so content sounds like you (e.g., 'Confident, playful, and flirty with teasing hooks' or 'Soft and intimate with direct calls to action')."
+                                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[100px]"
+                                />
+                                <button
+                                    onClick={async () => {
+                                        try {
+                                            const { askChatbot } = await import('../src/services/geminiService');
+                                            const prompt = 'Help me write a creator personality description for my premium content brand. I want content to sound like me. What should I include?';
+                                            await askChatbot(prompt);
+                                            showToast('AI suggestions available - try describing your tone, style, and what makes you unique.', 'info');
+                                        } catch (error) {
+                                            showToast('Failed to load AI suggestions. Please try again.', 'error');
+                                        }
+                                    }}
+                                    className="absolute top-2 right-2 p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                    title="AI Help - Get suggestions for writing your creator personality"
+                                >
+                                    <SparklesIcon className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                                </button>
+                            </div>
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                Used when Personality is enabled to make outputs sound like you.
                             </p>
                         </div>
 

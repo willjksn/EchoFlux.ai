@@ -35,6 +35,11 @@ export const OnlyFansStudio: React.FC = () => {
     const [teaserError, setTeaserError] = useState<string | null>(null);
     const [savedTeaserPacks, setSavedTeaserPacks] = useState<Array<{ id: string; createdAt?: any; data?: any }>>([]);
     const [isLoadingSavedTeaserPacks, setIsLoadingSavedTeaserPacks] = useState(false);
+    const [creatorPersonality, setCreatorPersonality] = useState('');
+    const [useCreatorPersonalityTeaserPack, setUseCreatorPersonalityTeaserPack] = useState(false);
+    const [aiPersonality, setAiPersonality] = useState('');
+    const [aiTone, setAiTone] = useState('');
+    const [explicitnessLevel, setExplicitnessLevel] = useState(7);
 
     // Fan widgets state
     const [fans, setFans] = useState<any[]>([]);
@@ -91,6 +96,25 @@ export const OnlyFansStudio: React.FC = () => {
         loadRecentTeaserPacks();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [showTeaserPackModal, user?.id]);
+
+    useEffect(() => {
+        const loadCreatorPersonality = async () => {
+            if (!user?.id) return;
+            try {
+                const userDoc = await getDoc(doc(db, 'users', user.id));
+                if (userDoc.exists()) {
+                    const data = userDoc.data();
+                    setCreatorPersonality(data.creatorPersonality || '');
+                    setAiPersonality(data.aiPersonality || '');
+                    setAiTone(data.aiTone || '');
+                    setExplicitnessLevel(data.explicitnessLevel ?? 7);
+                }
+            } catch (error) {
+                console.error('Error loading creator personality:', error);
+            }
+        };
+        loadCreatorPersonality();
+    }, [user?.id]);
 
     // Load fan data for dashboard widgets
     const loadFanData = async () => {
@@ -315,6 +339,9 @@ export const OnlyFansStudio: React.FC = () => {
         setTeaserPack(null);
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+            const creatorContext = useCreatorPersonalityTeaserPack && creatorPersonality
+                ? creatorPersonality
+                : '';
             const resp = await fetch('/api/generateTeaserPack', {
                 method: 'POST',
                 headers: {
@@ -325,6 +352,10 @@ export const OnlyFansStudio: React.FC = () => {
                     promotionType: teaserPromotionType,
                     concept: teaserConcept.trim(),
                     tone: teaserTone,
+                    creatorPersonality: creatorContext,
+                    aiPersonality: aiPersonality || '',
+                    aiTone: aiTone || '',
+                    explicitnessLevel: explicitnessLevel ?? 7,
                 }),
             });
             const data = await resp.json().catch(() => ({}));
@@ -676,6 +707,22 @@ export const OnlyFansStudio: React.FC = () => {
                                         className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     />
                                 </div>
+                            </div>
+
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    onClick={() => setUseCreatorPersonalityTeaserPack(prev => !prev)}
+                                    disabled={!creatorPersonality}
+                                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+                                        useCreatorPersonalityTeaserPack
+                                            ? 'bg-primary-600 text-white hover:bg-primary-700'
+                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                    } ${!creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    title={!creatorPersonality ? 'Add a creator personality in Settings → AI Training to enable' : undefined}
+                                >
+                                    <SparklesIcon className="w-4 h-4" />
+                                    Personality
+                                </button>
                             </div>
 
                             <div className="flex items-center justify-between gap-3">
