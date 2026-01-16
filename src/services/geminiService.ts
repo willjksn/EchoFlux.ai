@@ -266,6 +266,14 @@ export async function findTrends(niche: string): Promise<any[]> {
   return res.opportunities || res.trends || [];
 }
 
+export async function findAdultTrends(niche: string): Promise<any[]> {
+  const res = await callFunction("findAdultTrendsByNiche", { niche });
+  if (res.success === false && res.error) {
+    throw new Error(res.note || res.error || "Failed to find trends");
+  }
+  return res.opportunities || res.trends || [];
+}
+
 /* ----------------------------------------------------
    6) Categorize Message
 ---------------------------------------------------- */

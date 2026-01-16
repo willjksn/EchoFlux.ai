@@ -40,7 +40,7 @@ import { UpgradePrompt } from './UpgradePrompt';
 import { useAppContext } from './AppContext';
 import { MobilePreviewModal } from './MobilePreviewModal';
 import { MediaBox } from './MediaBox';
-import { db, storage } from '../firebaseConfig';
+import { auth, db, storage } from '../firebaseConfig';
 import { collection, setDoc, doc, getDocs, deleteDoc, query, where, getDoc, orderBy, Timestamp, addDoc } from 'firebase/firestore';
 // @ts-ignore
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';

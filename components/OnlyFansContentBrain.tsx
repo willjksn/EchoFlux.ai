@@ -7,8 +7,21 @@ import { collection, addDoc, Timestamp, query, getDocs, orderBy, getDoc, doc, se
 import { OnlyFansCalendarEvent } from './OnlyFansCalendar';
 import { FanSelector } from './FanSelector';
 import { loadEmojiSettings } from '../src/utils/loadEmojiSettings';
+import { findAdultTrends } from '../src/services/geminiService';
 
-type ContentType = 'captions' | 'mediaCaptions' | 'postIdeas' | 'shootConcepts' | 'weeklyPlan' | 'monetizationPlanner' | 'messaging' | 'guides' | 'history';
+type ContentType = 'captions' | 'mediaCaptions' | 'postIdeas' | 'shootConcepts' | 'weeklyPlan' | 'trends' | 'monetizationPlanner' | 'messaging' | 'guides' | 'history';
+
+type AdultTrendOpportunity = {
+    id: string;
+    type: 'Trending Theme' | 'PPV Angle' | 'Interactive Trend' | 'Bundle/Offer' | 'Content Gap';
+    title: string;
+    description: string;
+    platform: 'OnlyFans' | 'Fansly' | 'Fanvue';
+    engagementPotential?: number;
+    trendingVelocity?: 'Rising' | 'Peak' | 'Declining';
+    relatedHashtags?: string[];
+    bestPractices?: string;
+};
 
 // Predict Modal Component (similar to Compose)
 const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: string) => void; onSave?: () => void; showToast?: (message: string, type: 'success' | 'error') => void }> = ({ result, onClose, onCopy, onSave, showToast }) => {
@@ -746,6 +759,16 @@ export const OnlyFansContentBrain: React.FC = () => {
     const [weeklyPlanPrompt, setWeeklyPlanPrompt] = useState('');
     const [generatedWeeklyPlan, setGeneratedWeeklyPlan] = useState<any>(null);
     const [useCreatorPersonalityWeeklyPlan, setUseCreatorPersonalityWeeklyPlan] = useState(false);
+
+    // Trends state (adult monetized)
+    const [trendsNiche, setTrendsNiche] = useState('');
+    const [trendResults, setTrendResults] = useState<AdultTrendOpportunity[]>([]);
+    const [isTrendsLoading, setIsTrendsLoading] = useState(false);
+    const [trendsError, setTrendsError] = useState<string | null>(null);
+    const [trendsLastScanDate, setTrendsLastScanDate] = useState<string | null>(null);
+    const [trendFilterPlatform, setTrendFilterPlatform] = useState<'All' | 'OnlyFans' | 'Fansly' | 'Fanvue'>('All');
+    const [trendFilterType, setTrendFilterType] = useState<'All' | AdultTrendOpportunity['type']>('All');
+    const [trendSortBy, setTrendSortBy] = useState<'relevance' | 'engagement' | 'trending'>('engagement');
     
     // Monetization planner state
     const [monetizationGoals, setMonetizationGoals] = useState<string[]>([]);
@@ -1034,6 +1057,12 @@ export const OnlyFansContentBrain: React.FC = () => {
             loadCaptionsHistory();
         }
     }, [user?.id]);
+
+    useEffect(() => {
+        if (!trendsNiche && user?.niche) {
+            setTrendsNiche(user.niche);
+        }
+    }, [user?.niche, trendsNiche]);
 
     useEffect(() => {
         try {
@@ -1603,6 +1632,28 @@ export const OnlyFansContentBrain: React.FC = () => {
             setError(errorMsg);
         } finally {
             setIsGenerating(false);
+        }
+    };
+
+    const handleFindAdultTrends = async () => {
+        const nicheInput = trendsNiche.trim() || user?.niche || 'Adult Content Creator';
+        setIsTrendsLoading(true);
+        setTrendsError(null);
+        try {
+            const trends = await findAdultTrends(nicheInput);
+            if (!trends || trends.length === 0) {
+                setTrendResults([]);
+                setTrendsError('No trends found. Try a different focus or check back later.');
+                return;
+            }
+            setTrendResults(trends);
+            setTrendsLastScanDate(new Date().toISOString());
+            showToast?.(`Found ${trends.length} trends`, 'success');
+        } catch (error: any) {
+            console.error('Error finding adult trends:', error);
+            setTrendsError(error.message || 'Failed to find trends. Please try again.');
+        } finally {
+            setIsTrendsLoading(false);
         }
     };
 
@@ -3100,6 +3151,7 @@ Output format:
         { id: 'captions', label: 'Captions' },
         { id: 'mediaCaptions', label: 'Image/Video Captions' }, // Hidden but kept for stability
         { id: 'postIdeas', label: 'Content Ideas' },
+        { id: 'trends', label: 'Find Trends' },
         { id: 'shootConcepts', label: 'Shoot Ideas' },
         { id: 'weeklyPlan', label: 'Plan My Week' },
         { id: 'monetizationPlanner', label: 'Drops & PPV' },
@@ -4450,6 +4502,181 @@ Output format:
                                         </button>
                                     </div>
                                 ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Trends Tab */}
+            {activeTab === 'trends' && (
+                <div className="space-y-6">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                                Find Trends
+                            </h2>
+                            {trendsLastScanDate && (
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                    Updated {new Date(trendsLastScanDate).toLocaleDateString()}
+                                </span>
+                            )}
+                        </div>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                            Pulls cached adult creator trends (updated twice weekly) for OnlyFans, Fansly, and Fanvue.
+                        </p>
+
+                        <div className="flex flex-col md:flex-row gap-3">
+                            <input
+                                value={trendsNiche}
+                                onChange={(e) => setTrendsNiche(e.target.value)}
+                                placeholder="e.g., adult content, lingerie sets, girlfriend experience"
+                                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                            />
+                            <button
+                                onClick={handleFindAdultTrends}
+                                disabled={isTrendsLoading}
+                                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                            >
+                                {isTrendsLoading ? (
+                                    <>
+                                        <RefreshIcon className="w-4 h-4 animate-spin" />
+                                        Scanning...
+                                    </>
+                                ) : (
+                                    <>
+                                        <SparklesIcon className="w-4 h-4" />
+                                        Find Trends
+                                    </>
+                                )}
+                            </button>
+                        </div>
+
+                        {trendsError && (
+                            <div className="mt-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-3 rounded-lg">
+                                <p className="text-sm text-red-600 dark:text-red-400">{trendsError}</p>
+                            </div>
+                        )}
+                    </div>
+
+                    {trendResults.length > 0 && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                            <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+                                <div>
+                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Top Trends</h3>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                        Found {trendResults.length} opportunities for "{trendsNiche || user?.niche || 'adult content'}"
+                                    </p>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    <select
+                                        value={trendFilterPlatform}
+                                        onChange={(e) => setTrendFilterPlatform(e.target.value as typeof trendFilterPlatform)}
+                                        className="px-3 py-2 text-xs border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
+                                    >
+                                        <option value="All">All Platforms</option>
+                                        <option value="OnlyFans">OnlyFans</option>
+                                        <option value="Fansly">Fansly</option>
+                                        <option value="Fanvue">Fanvue</option>
+                                    </select>
+                                    <select
+                                        value={trendFilterType}
+                                        onChange={(e) => setTrendFilterType(e.target.value as typeof trendFilterType)}
+                                        className="px-3 py-2 text-xs border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
+                                    >
+                                        <option value="All">All Types</option>
+                                        <option value="Trending Theme">Trending Themes</option>
+                                        <option value="PPV Angle">PPV Angles</option>
+                                        <option value="Interactive Trend">Interactive Trends</option>
+                                        <option value="Bundle/Offer">Bundle/Offer</option>
+                                        <option value="Content Gap">Content Gaps</option>
+                                    </select>
+                                    <select
+                                        value={trendSortBy}
+                                        onChange={(e) => setTrendSortBy(e.target.value as typeof trendSortBy)}
+                                        className="px-3 py-2 text-xs border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
+                                    >
+                                        <option value="engagement">Sort by Engagement</option>
+                                        <option value="trending">Sort by Trending</option>
+                                        <option value="relevance">Sort by Relevance</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="space-y-3">
+                                {(() => {
+                                    let filtered = trendResults.filter((opp) => {
+                                        const platformMatch = trendFilterPlatform === 'All' || opp.platform === trendFilterPlatform;
+                                        const typeMatch = trendFilterType === 'All' || opp.type === trendFilterType;
+                                        return platformMatch && typeMatch;
+                                    });
+
+                                    filtered.sort((a, b) => {
+                                        if (trendSortBy === 'engagement') {
+                                            return (b.engagementPotential || 0) - (a.engagementPotential || 0);
+                                        }
+                                        if (trendSortBy === 'trending') {
+                                            const velocityOrder: Record<string, number> = { Peak: 3, Rising: 2, Declining: 1 };
+                                            return (velocityOrder[b.trendingVelocity || 'Rising'] || 0) - (velocityOrder[a.trendingVelocity || 'Rising'] || 0);
+                                        }
+                                        return 0;
+                                    });
+
+                                    const typeColors: Record<string, string> = {
+                                        'Trending Theme': 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200',
+                                        'PPV Angle': 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-200',
+                                        'Interactive Trend': 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200',
+                                        'Bundle/Offer': 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-200',
+                                        'Content Gap': 'bg-pink-100 text-pink-800 dark:bg-pink-900/50 dark:text-pink-200',
+                                    };
+                                    const velocityColors: Record<string, string> = {
+                                        Rising: 'text-green-600 dark:text-green-400',
+                                        Peak: 'text-red-600 dark:text-red-400',
+                                        Declining: 'text-yellow-600 dark:text-yellow-400',
+                                    };
+
+                                    return filtered.map((result) => (
+                                        <div key={result.id} className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                                            <div className="flex items-start justify-between gap-3 mb-2">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${typeColors[result.type] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'}`}>
+                                                        {result.type}
+                                                    </span>
+                                                    <span className="text-xs text-gray-500 dark:text-gray-400">{result.platform}</span>
+                                                    {result.trendingVelocity && (
+                                                        <span className={`text-xs font-medium ${velocityColors[result.trendingVelocity] || ''}`}>
+                                                            {result.trendingVelocity === 'Rising' && '📈'}
+                                                            {result.trendingVelocity === 'Peak' && '🔥'}
+                                                            {result.trendingVelocity === 'Declining' && '📉'}
+                                                            {result.trendingVelocity}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {result.engagementPotential && (
+                                                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                                                        Potential {result.engagementPotential}/10
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">{result.title}</h4>
+                                            <p className="text-xs text-gray-600 dark:text-gray-300 mb-2">{result.description}</p>
+                                            {result.relatedHashtags && result.relatedHashtags.length > 0 && (
+                                                <div className="flex flex-wrap gap-2 mb-2">
+                                                    {result.relatedHashtags.map((tag, idx) => (
+                                                        <span key={`${tag}-${idx}`} className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full">
+                                                            {tag}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            {result.bestPractices && (
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                    <span className="font-semibold">Tip:</span> {result.bestPractices}
+                                                </p>
+                                            )}
+                                        </div>
+                                    ));
+                                })()}
                             </div>
                         </div>
                     )}

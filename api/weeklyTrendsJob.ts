@@ -154,7 +154,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       },
     ];
 
+    // Adult monetized creator trends (dedicated dataset)
+    const adultTrendQueries = [
+      {
+        category: "adult_platform_updates",
+        query: "OnlyFans Fansly Fanvue platform updates 2024 2025 creator changes",
+      },
+      {
+        category: "adult_content_trends",
+        query: "adult content trends 2024 2025 creator economy explicit content trends",
+      },
+      {
+        category: "adult_ppv_trends",
+        query: "PPV trends adult creators 2024 2025 pricing bundling upsells",
+      },
+      {
+        category: "adult_bundle_strategies",
+        query: "adult content bundle strategies creator bundles 2024 2025",
+      },
+      {
+        category: "adult_session_trends",
+        query: "sexting session trends adult creators tips 2024 2025",
+      },
+      {
+        category: "adult_gfe_trends",
+        query: "girlfriend experience GFE trends adult creators 2024 2025",
+      },
+      {
+        category: "adult_interactive_trends",
+        query: "interactive adult content trends polls games prompts 2024 2025",
+      },
+      {
+        category: "compliance_onlyfans",
+        query: "OnlyFans terms policy updates 2024 2025 prohibited content rules compliance creator guidelines",
+      },
+      {
+        category: "compliance_fansly",
+        query: "Fansly policy updates 2024 2025 content rules compliance creator guidelines",
+      },
+      {
+        category: "compliance_fanvue",
+        query: "Fanvue policy updates 2024 2025 content rules compliance creator guidelines",
+      },
+    ];
+
     const allTrends: TrendData[] = [];
+    const adultTrends: TrendData[] = [];
     const timestamp = new Date().toISOString();
 
     // Fetch trends for each category
@@ -182,6 +227,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       }
     }
 
+    // Fetch adult monetized trends for separate dataset
+    for (const { category, query } of adultTrendQueries) {
+      try {
+        console.log(`[WeeklyTrendsJob] Fetching adult trends for: ${category}`);
+        const searchResult = await searchWeb(query);
+        if (searchResult.success && searchResult.results.length > 0) {
+          adultTrends.push({
+            category,
+            query,
+            results: searchResult.results,
+            timestamp,
+          });
+          console.log(`[WeeklyTrendsJob] Fetched ${searchResult.results.length} adult results for ${category}`);
+        } else {
+          console.log(`[WeeklyTrendsJob] No adult results for ${category}: ${searchResult.note || "Unknown error"}`);
+        }
+      } catch (error: any) {
+        console.error(`[WeeklyTrendsJob] Error fetching adult ${category}:`, error);
+      }
+    }
+
     // Store trends in Firestore
     if (allTrends.length > 0) {
       const db = getAdminDb();
@@ -199,6 +265,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       await db.collection("weekly_trends").doc("latest").set(trendsDoc);
 
       console.log(`[WeeklyTrendsJob] Stored ${allTrends.length} trend categories in Firestore`);
+    }
+
+    if (adultTrends.length > 0) {
+      const db = getAdminDb();
+      const adultDoc = {
+        trends: adultTrends,
+        fetchedAt: timestamp,
+        week: getWeekNumber(new Date()),
+        year: new Date().getFullYear(),
+      };
+      await db.collection("weekly_trends_adult").doc(`week_${getWeekNumber(new Date())}_${new Date().getFullYear()}`).set(adultDoc, { merge: true });
+      await db.collection("weekly_trends_adult").doc("latest").set(adultDoc);
+      console.log(`[WeeklyTrendsJob] Stored ${adultTrends.length} adult trend categories in Firestore`);
     }
 
     res.status(200).json({

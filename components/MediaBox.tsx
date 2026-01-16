@@ -1164,6 +1164,20 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
                   setIsGenerating(false);
                   return;
                 }
+                const adultPlatforms = ['OnlyFans', 'Fansly', 'Fanvue'];
+                const isAdultPlatform = adultPlatforms.includes(selectedPlatform);
+                const rawNiche = user?.userType === 'Business'
+                  ? (user as any)?.businessType
+                  : user?.niche;
+                const stripAdultPlatforms = (value: string) =>
+                  value.replace(/onlyfans|fansly|fanvue/gi, '').replace(/\s+/g, ' ').trim();
+                const safeNiche = isAdultPlatform
+                  ? (rawNiche || 'Adult Content Creator')
+                  : (rawNiche ? stripAdultPlatforms(String(rawNiche)) : '');
+                const safeRecentContent = !isAdultPlatform && mediaItem.captionText
+                  ? stripAdultPlatforms(mediaItem.captionText)
+                  : mediaItem.captionText;
+
                 const response = await fetch('/api/whatToPostNext', {
                   method: 'POST',
                   headers: {
@@ -1172,10 +1186,10 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
                   },
                   body: JSON.stringify({
                     platform: selectedPlatform,
-                    niche: user?.niche || '',
+                    niche: safeNiche,
                     tone: mediaItem.postTone,
                     goal: mediaItem.postGoal,
-                    recentContent: mediaItem.captionText || undefined,
+                    recentContent: safeRecentContent || undefined,
                   }),
                 });
                 if (!response.ok) {

@@ -202,4 +202,51 @@ KEY INSIGHTS FOR ONLYFANS CREATORS:
   }
 }
 
+/**
+ * Helper function to get Adult Monetized weekly trends
+ * Uses a dedicated adult-only weekly_trends_adult dataset
+ */
+export async function getAdultWeeklyTrends(): Promise<string> {
+  try {
+    const app = getAdminApp();
+    const db = getFirestore(app);
+
+    const latestDoc = await db.collection("weekly_trends_adult").doc("latest").get();
+    const adminAdultPresets = await getAdminViralPresets(db, "adult");
+
+    if (!latestDoc.exists) {
+      return "Adult trend data unavailable. Using general adult best practices.";
+    }
+
+    const data = latestDoc.data();
+    if (!data || !data.trends || !Array.isArray(data.trends)) {
+      return "Adult trend data format invalid. Using general adult best practices.";
+    }
+
+    const allTrends = data.trends as TrendData[];
+    const compliance = allTrends.filter((t) => isComplianceCategory(t.category));
+    const nonCompliance = allTrends.filter((t) => !isComplianceCategory(t.category));
+    const formattedCompliance = compliance.map(formatTrendBlock).join("\n\n");
+    const formattedTrends = nonCompliance.map(formatTrendBlock).join("\n\n");
+    const formattedAdminPresets = adminAdultPresets.length ? adminAdultPresets.map(formatPresetBlock).join("\n\n") : "";
+
+    return `
+CURRENT ADULT MONETIZED CREATOR TRENDS & BEST PRACTICES (Fetched: ${data.fetchedAt || "Unknown"}):
+${formattedAdminPresets ? `\n\nADMIN “WHAT’S VIRAL THIS WEEK” PRESETS (Manual refresh):\n${formattedAdminPresets}\n` : ""}
+${formattedCompliance ? `\n\nCOMPLIANCE & POLICY UPDATES (Weekly check):\n${formattedCompliance}\n` : ""}
+${formattedTrends}
+
+KEY INSIGHTS FOR ADULT MONETIZED CREATORS:
+- Focus on monetization and subscriber retention
+- Use trending adult content themes and formats
+- Prioritize PPV, bundles, and session conversion angles
+- Respect platform compliance updates for adult platforms
+- Adapt to creator economy shifts and viewer preferences
+`;
+  } catch (error: any) {
+    console.error("[getAdultWeeklyTrends] Error:", error);
+    return "Adult trend data unavailable. Using general adult best practices.";
+  }
+}
+
 

@@ -54,6 +54,7 @@ export const AdminToolsPanel: React.FC = () => {
   const [searchDepth, setSearchDepth] = useState<SearchDepth>("basic");
   const [bypassCache, setBypassCache] = useState<boolean>(false);
   const [isSearching, setIsSearching] = useState<boolean>(false);
+  const [isRefreshingAdultTrends, setIsRefreshingAdultTrends] = useState<boolean>(false);
   const [response, setResponse] = useState<TavilyResponse | null>(null);
   const [selectedPresetId, setSelectedPresetId] = useState<string>(PRESETS[0]?.id || "");
   const [usageStats, setUsageStats] = useState<any>(null);
@@ -189,6 +190,31 @@ export const AdminToolsPanel: React.FC = () => {
     }
   };
 
+  const runAdultTrendsNow = async () => {
+    setIsRefreshingAdultTrends(true);
+    try {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+      const res = await fetch("/api/adminRunAdultTrendsJob", {
+        method: "POST",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      const data = (await res.json()) as any;
+
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || data?.note || "Adult trends refresh failed");
+      }
+
+      showToast("Adult trends refreshed", "success");
+    } catch (err: any) {
+      console.error("Adult trends refresh failed:", err);
+      showToast(err?.message || "Adult trends refresh failed", "error");
+    } finally {
+      setIsRefreshingAdultTrends(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
@@ -199,15 +225,26 @@ export const AdminToolsPanel: React.FC = () => {
               Run live Tavily searches on demand (admin-only). Use presets to save “what’s viral this week” into Firestore so Gemini uses it immediately.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={runWeeklyTrendsNow}
-            disabled={isSearching}
-            className="px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50"
-            title="Fetch and store weekly trends immediately"
-          >
-            Run Weekly Trends Now
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={runWeeklyTrendsNow}
+              disabled={isSearching}
+              className="px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50"
+              title="Fetch and store weekly trends immediately"
+            >
+              Run Weekly Trends Now
+            </button>
+            <button
+              type="button"
+              onClick={runAdultTrendsNow}
+              disabled={isRefreshingAdultTrends}
+              className="px-4 py-2 rounded-md bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-200 hover:bg-pink-200 dark:hover:bg-pink-900/50 disabled:opacity-50"
+              title="Refresh adult-only trends for Monetized Creator Studio"
+            >
+              {isRefreshingAdultTrends ? "Refreshing Adult Trends..." : "Refresh Adult Trends"}
+            </button>
+          </div>
         </div>
 
         <div className="mt-6 p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">

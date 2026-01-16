@@ -379,6 +379,17 @@ export const ContentIntelligence: React.FC = () => {
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
             
+            const adultPlatforms = ['OnlyFans', 'Fansly', 'Fanvue'];
+            const isAdultPlatform = platformInput && adultPlatforms.includes(platformInput);
+            const stripAdultPlatforms = (value: string) =>
+                value.replace(/onlyfans|fansly|fanvue/gi, '').replace(/\s+/g, ' ').trim();
+            const safeNiche = isAdultPlatform
+                ? (user?.niche || 'Adult Content Creator')
+                : (user?.niche ? stripAdultPlatforms(user.niche) : '');
+            const safeRecentContent = !isAdultPlatform && captionToUse
+                ? stripAdultPlatforms(captionToUse)
+                : captionToUse;
+
             const response = await fetch('/api/whatToPostNext', {
                 method: 'POST',
                 headers: {
@@ -387,8 +398,8 @@ export const ContentIntelligence: React.FC = () => {
                 },
                 body: JSON.stringify({
                     platform: isOnlyFansStudio ? 'OnlyFans' : platformInput,
-                    niche: user?.niche || '',
-                    recentContent: captionToUse || undefined,
+                    niche: isOnlyFansStudio ? (user?.niche || 'Adult Content Creator') : safeNiche,
+                    recentContent: isOnlyFansStudio ? (captionToUse || undefined) : (safeRecentContent || undefined),
                 }),
             });
 
