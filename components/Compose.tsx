@@ -120,7 +120,7 @@ const CaptionGenerator: React.FC = () => {
   if (!user) {
     return (
       <div className="text-center p-8">
-        <p className="text-gray-600 dark:text-gray-400">Please sign in to use Compose.</p>
+        <p className="text-gray-600 dark:text-gray-400">Please sign in to write captions.</p>
       </div>
     );
   }
@@ -133,6 +133,8 @@ const CaptionGenerator: React.FC = () => {
     ...emptyPlatforms
   });
   const [isPublished, setIsPublished] = useState(false);
+  const [usePersonality, setUsePersonality] = useState(false); // Toggle for using creator personality
+  const [useFavoriteHashtags, setUseFavoriteHashtags] = useState(false); // Toggle for using favorite hashtags
 
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
@@ -280,7 +282,7 @@ const CaptionGenerator: React.FC = () => {
       return;
     }
     if (gapsLimit === 0) {
-      showToast('Upgrade to Pro or Elite to unlock Analyze Content Gaps', 'info');
+      showToast("Upgrade to Pro or Elite to unlock What's Missing", 'info');
       setActivePage('pricing');
       return;
     }
@@ -329,7 +331,7 @@ const CaptionGenerator: React.FC = () => {
         try {
           await addDoc(collection(db, 'users', user.id, 'content_gap_analysis_history'), {
             type: 'gap_analysis',
-            title: `Content Gap Analysis - ${new Date().toLocaleDateString()}`,
+            title: `What's Missing - ${new Date().toLocaleDateString()}`,
             data: data,
             createdAt: Timestamp.now(),
           });
@@ -2384,6 +2386,10 @@ const CaptionGenerator: React.FC = () => {
             tone: item.postTone,
             promptText: undefined,
             platforms: [selectedPlatform], // Pass single platform for platform-optimized caption generation
+            usePersonality: usePersonality && settings.creatorPersonality ? true : false,
+            useFavoriteHashtags: useFavoriteHashtags && settings.favoriteHashtags ? true : false,
+            creatorPersonality: usePersonality ? settings.creatorPersonality || null : null,
+            favoriteHashtags: useFavoriteHashtags ? settings.favoriteHashtags || null : null,
           });
 
           let generatedResults: CaptionResult[] = [];
@@ -3107,6 +3113,10 @@ const CaptionGenerator: React.FC = () => {
         tone: composeState.postTone,
         promptText: undefined,
         platforms: firstItemPlatforms.length > 0 ? firstItemPlatforms : undefined, // Pass platforms for hashtag generation
+        usePersonality: usePersonality && settings.creatorPersonality ? true : false,
+        useFavoriteHashtags: useFavoriteHashtags && settings.favoriteHashtags ? true : false,
+        creatorPersonality: usePersonality ? settings.creatorPersonality || null : null,
+        favoriteHashtags: useFavoriteHashtags ? settings.favoriteHashtags || null : null,
       });
 
       let generatedResults: CaptionResult[] = [];
@@ -3614,10 +3624,10 @@ const CaptionGenerator: React.FC = () => {
 
       <div className="text-center">
         <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-          Compose & Schedule
+          Write Captions & Schedule
         </h2>
         <p className="mt-2 text-lg text-gray-500 dark:text-gray-400">
-          Create content, generate AI captions, and schedule posts.
+          Post a pic, get caption ideas, and schedule it.
         </p>
         {isFinite(limit) && (
           <p className="mt-1 text-sm font-semibold text-primary-600 dark:text-primary-400">
@@ -3631,15 +3641,15 @@ const CaptionGenerator: React.FC = () => {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="min-w-0">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent: Analyze Content Gaps, Predictions & Repurposes</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent: What's Missing, What To Post Next & Repurposes</h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                 Usage this month:{' '}
                 <span className="font-semibold text-purple-700 dark:text-purple-300">
-                  Gaps {user.plan === 'Pro' ? `${user.monthlyContentGapsUsed || 0}/2` : `${user.monthlyContentGapsUsed || 0}${(user.plan === 'Elite' || user.plan === 'Agency' || user.role === 'Admin') ? ' (unlimited)' : ''}`}
+                  What's Missing {user.plan === 'Pro' ? `${user.monthlyContentGapsUsed || 0}/2` : `${user.monthlyContentGapsUsed || 0}${(user.plan === 'Elite' || user.plan === 'Agency' || user.role === 'Admin') ? ' (unlimited)' : ''}`}
                 </span>
                 {' • '}
                 <span className="font-semibold text-blue-700 dark:text-blue-300">
-                  Predict {user.plan === 'Pro' ? `${user.monthlyPredictionsUsed || 0}/5` : `${user.monthlyPredictionsUsed || 0}${(user.plan === 'Elite' || user.plan === 'Agency' || user.role === 'Admin') ? ' (unlimited)' : ''}`}
+                  What To Post Next {user.plan === 'Pro' ? `${user.monthlyPredictionsUsed || 0}/5` : `${user.monthlyPredictionsUsed || 0}${(user.plan === 'Elite' || user.plan === 'Agency' || user.role === 'Admin') ? ' (unlimited)' : ''}`}
                 </span>
                 {' • '}
                 <span className="font-semibold text-emerald-700 dark:text-emerald-300">
@@ -3658,8 +3668,8 @@ const CaptionGenerator: React.FC = () => {
           <>
             {(predictHistory.length === 0 && repurposeHistory.length === 0 && gapAnalysisHistory.length === 0) ? (
               <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                <p className="text-sm">No content gap analysis, predictions or repurposes yet.</p>
-                <p className="text-xs mt-1">Use the Analyze Content Gaps, Predict or Repurpose buttons on your posts to see history here.</p>
+                <p className="text-sm">No what's missing checks, what to post next, or repurposes yet.</p>
+                <p className="text-xs mt-1">Use the What's Missing, What To Post Next, or Repurpose buttons on your posts to see history here.</p>
               </div>
             ) : (
             <div className="space-y-3 max-h-64 overflow-y-auto">
@@ -3687,7 +3697,7 @@ const CaptionGenerator: React.FC = () => {
                       )}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs font-semibold text-purple-600 dark:text-purple-400">PREDICT</span>
+                          <span className="text-xs font-semibold text-purple-600 dark:text-purple-400">WHAT TO POST NEXT</span>
                           <span className={`text-xs px-2 py-0.5 rounded ${
                             level === 'High' ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' :
                             level === 'Medium' ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300' :
@@ -3767,7 +3777,7 @@ const CaptionGenerator: React.FC = () => {
 
               {/* Gap Analysis History */}
               {gapAnalysisHistory.map((item) => {
-                const summary = item.data?.summary || item.title || 'Content Gap Analysis';
+                const summary = item.data?.summary || item.title || "What's Missing";
                 return (
                   <div
                     key={item.id}
@@ -3905,6 +3915,12 @@ const CaptionGenerator: React.FC = () => {
               }}
               onAnalyzeContentGaps={handleAnalyzeContentGaps}
               isAnalyzingGaps={isAnalyzingGaps}
+              usePersonality={usePersonality}
+              useFavoriteHashtags={useFavoriteHashtags}
+              creatorPersonality={settings.creatorPersonality}
+              favoriteHashtags={settings.favoriteHashtags}
+              onTogglePersonality={() => setUsePersonality(prev => !prev)}
+              onToggleHashtags={() => setUseFavoriteHashtags(prev => !prev)}
             />
             </div>
           </div>
@@ -3938,6 +3954,12 @@ const CaptionGenerator: React.FC = () => {
                     setUpgradeModalReason('limit');
                     setIsUpgradeModalOpen(true);
                   }}
+                  usePersonality={usePersonality}
+                  useFavoriteHashtags={useFavoriteHashtags}
+                  creatorPersonality={settings.creatorPersonality}
+                  favoriteHashtags={settings.favoriteHashtags}
+                  onTogglePersonality={() => setUsePersonality(prev => !prev)}
+                  onToggleHashtags={() => setUseFavoriteHashtags(prev => !prev)}
                 />
               ))}
               {/* Add Image/Video button - Outside the image box */}
@@ -3980,6 +4002,12 @@ const CaptionGenerator: React.FC = () => {
                   setUpgradeModalReason('limit');
                   setIsUpgradeModalOpen(true);
                 }}
+                usePersonality={usePersonality}
+                useFavoriteHashtags={useFavoriteHashtags}
+                creatorPersonality={settings.creatorPersonality}
+                favoriteHashtags={settings.favoriteHashtags}
+                onTogglePersonality={() => setUsePersonality(prev => !prev)}
+                onToggleHashtags={() => setUseFavoriteHashtags(prev => !prev)}
               />
             ))}
             {/* Add Image/Video button - Outside the image boxes */}
@@ -4469,7 +4497,7 @@ const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: 
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Performance Prediction</h2>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Most Likely to Hit</h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
@@ -4482,7 +4510,7 @@ const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: 
           {/* Prediction Summary */}
           <div className={`p-6 rounded-lg border-2 ${getLevelColor(level)}`}>
             <div className="text-center">
-              <p className="text-sm font-medium mb-2">Predicted Performance</p>
+              <p className="text-sm font-medium mb-2">Likely Performance</p>
               <p className="text-4xl font-bold mb-2">{level}</p>
               <div className="flex items-center justify-center gap-4 mt-4">
                 <div>
@@ -4601,7 +4629,7 @@ const GapAnalysisModal: React.FC<{ analysis: any; onClose: () => void }> = ({ an
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Content Gap Analysis</h2>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">What's Missing</h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"

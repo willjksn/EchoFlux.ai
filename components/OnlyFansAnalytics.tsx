@@ -330,11 +330,11 @@ export const OnlyFansAnalytics: React.FC = () => {
                 </div>
             </div>
 
-            {/* Media Library Stats */}
+            {/* My Vault Stats */}
             <div className="mb-8">
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                     <ImageIcon className="w-5 h-5 text-primary-600 dark:text-primary-400" />
-                    Media Library
+                    My Vault
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                     <StatCard

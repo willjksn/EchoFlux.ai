@@ -28,7 +28,7 @@ export const StatCardGrid: React.FC<StatCardGridProps> = ({ data }) => {
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <StatCard title="Total AI Replies" value={data?.totalReplies ?? 0} />
+            <StatCard title="Total Replies" value={data?.totalReplies ?? 0} />
             <StatCard title={secondMetricTitle} value={data?.newFollowers ?? 0} />
             <StatCard title={thirdMetricTitle} value={`${((data?.engagementIncrease ?? 0)).toFixed(1)}%`} change={data?.engagementIncrease ?? 0} />
         </div>

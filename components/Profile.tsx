@@ -669,7 +669,7 @@ export const Profile: React.FC = () => {
                                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Resets monthly</p>
                             </div>
                             <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Link-in-Bio Clicks</p>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Bio Link Clicks</p>
                                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
                                     {(user as any).linkInBioClicksMonth ?? 0}
                                 </p>

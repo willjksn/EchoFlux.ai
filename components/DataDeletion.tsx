@@ -175,7 +175,7 @@ export const DataDeletion: React.FC = () => {
                     </p>
                     <ul className="list-disc pl-6 space-y-2 mt-4">
                         <li><strong>Account Information:</strong> Name, email, profile picture, bio, and account settings</li>
-                        <li><strong>Media Files:</strong> All images and videos uploaded to your Media Library</li>
+                        <li><strong>Media Files:</strong> All images and videos uploaded to your My Vault</li>
                         <li><strong>Content:</strong> All posts, captions, hashtags, and scheduled content</li>
                         <li><strong>Messages:</strong> All DMs, comments, and inbox messages</li>
                         <li><strong>Social Connections:</strong> All connected social media accounts and their tokens</li>

@@ -1022,6 +1022,59 @@ export const Settings: React.FC = () => {
                             )}
                         </SettingsSection>
 
+                        <SettingsSection title="Creator Personality">
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Personality Description / Brand
+                                    </label>
+                                    <div className="relative">
+                                        <textarea
+                                            value={settings.creatorPersonality || ''}
+                                            onChange={(e) => updateSetting('creatorPersonality', e.target.value)}
+                                            placeholder="Tell the AI about yourself, your brand voice, content style, values, and what makes you unique. This will help AI generate captions that match your personality."
+                                            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[100px]"
+                                            rows={4}
+                                        />
+                                        <button
+                                            onClick={async () => {
+                                                try {
+                                                    const { askChatbot } = await import('../src/services/geminiService');
+                                                    const prompt = "Help me write a personality description for my social media brand. I want the AI to understand my unique voice and style when generating captions. What should I include?";
+                                                    const response = await askChatbot(prompt);
+                                                    showToast('AI suggestions available - check the chat or try describing yourself: your niche, tone preferences, target audience, and what makes your content unique.', 'info');
+                                                } catch (error) {
+                                                    showToast('AI help temporarily unavailable. Try describing your niche, tone, target audience, and what makes your content unique.', 'error');
+                                                }
+                                            }}
+                                            className="absolute top-2 right-2 p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                            title="AI Help - Get suggestions for writing your personality description"
+                                        >
+                                            <SparklesIcon className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                                        </button>
+                                    </div>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        Describe your brand voice, content style, values, and what makes you unique. AI will use this when generating captions.
+                                    </p>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Favorite Hashtags
+                                    </label>
+                                    <textarea
+                                        value={settings.favoriteHashtags || ''}
+                                        onChange={(e) => updateSetting('favoriteHashtags', e.target.value)}
+                                        placeholder="Enter your favorite or frequently used hashtags (one per line or comma-separated). These will be available when generating captions."
+                                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[80px]"
+                                        rows={3}
+                                    />
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        Add hashtags you frequently use. They can be automatically included when generating captions if enabled.
+                                    </p>
+                                </div>
+                            </div>
+                        </SettingsSection>
+
                         <SettingsSection title="Train AI on Your Exact Voice" id="tour-step-voice-training">
                             {!isPremiumFeatureUnlocked ? (
                                 <UpgradePrompt featureName="Custom Voice Training" onUpgradeClick={() => setActivePage('pricing')} />

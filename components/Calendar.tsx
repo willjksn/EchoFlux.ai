@@ -56,7 +56,7 @@ export const Calendar: React.FC = () => {
             <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full">
                 <div className="max-w-4xl mx-auto">
                     <UpgradePrompt
-                        featureName="Calendar"
+                        featureName="My Schedule"
                         onUpgradeClick={() => setActivePage('pricing')}
                     />
                 </div>
@@ -1346,7 +1346,7 @@ export const Calendar: React.FC = () => {
             <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
                 <div className="flex items-center gap-6">
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Content Calendar</h1>
+                        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">My Schedule</h1>
                         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Plan and schedule your content across all platforms</p>
                     </div>
                     <div className="flex items-center bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-1.5 gap-1">

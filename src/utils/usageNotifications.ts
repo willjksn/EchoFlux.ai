@@ -108,7 +108,7 @@ export function checkStrategyUsage(
     
     const warningKey = `strategy-warning-${Math.floor(usagePercent * 10)}`;
     const hasExistingNotification = existingNotifications.some(
-      n => n.id === warningKey || (n.text.includes('AI Strategy') && !n.read)
+      n => n.id === warningKey || (n.text.includes('Plan My Week') && !n.read)
     );
     
     if (hasExistingNotification && remaining > 0) {
@@ -120,7 +120,7 @@ export function checkStrategyUsage(
         shouldNotify: true,
         notification: {
           id: `strategy-limit-${Date.now()}`,
-          text: `⚠️ AI Strategy limit reached! You've used all ${limit} strategies this month. Upgrade to continue.`,
+          text: `⚠️ Plan My Week limit reached! You've used all ${limit} plans this month. Upgrade to continue.`,
           timestamp: 'Just now',
           read: false,
           messageId: 'usage-limit-strategy',
@@ -131,7 +131,7 @@ export function checkStrategyUsage(
         shouldNotify: true,
         notification: {
           id: warningKey,
-          text: `⚠️ AI Strategy limit almost reached! Only ${remaining} strategies remaining (${count}/${limit} used). Upgrade for more.`,
+          text: `⚠️ Plan My Week limit almost reached! Only ${remaining} plans remaining (${count}/${limit} used). Upgrade for more.`,
           timestamp: 'Just now',
           read: false,
           messageId: 'usage-warning-strategy',
@@ -142,7 +142,7 @@ export function checkStrategyUsage(
         shouldNotify: true,
         notification: {
           id: warningKey,
-          text: `💡 AI Strategy usage: ${remaining} remaining (${count}/${limit} used). Consider upgrading for more.`,
+          text: `💡 Plan My Week usage: ${remaining} remaining (${count}/${limit} used). Consider upgrading for more.`,
           timestamp: 'Just now',
           read: false,
           messageId: 'usage-warning-strategy',

@@ -285,7 +285,7 @@ Generate multiple compelling captions (at least 5) that leverage this trend. Eac
         
         setShowAIGeneratedModal(false);
         setActivePage('compose');
-        showToast('Caption loaded in Compose!', 'success');
+        showToast('Caption loaded in Write Captions!', 'success');
     };
 
     // Handle downloading captions
@@ -355,13 +355,13 @@ Generate multiple compelling captions (at least 5) that leverage this trend. Eac
         
         setShowContentModal(false);
         setActivePage('compose');
-        showToast('Opportunity details pre-filled in Compose!', 'success');
+        showToast('Opportunity details pre-filled in Write Captions!', 'success');
     };
 
     if (!isFeatureUnlocked) {
         return (
             <UpgradePrompt 
-                featureName="Trend Detection" 
+                featureName="Trend Finder" 
                 onUpgradeClick={() => setActivePage('pricing')}
                 userType={user?.userType === 'Business' ? 'Business' : 'Creator'}
             />
@@ -372,7 +372,7 @@ Generate multiple compelling captions (at least 5) that leverage this trend. Eac
         <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full">
             <div className="flex justify-between items-center mb-6">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Engagement Opportunities</h1>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Find Trends</h1>
                     <p className="mt-2 text-gray-500 dark:text-gray-400">Let AI find trending topics, hashtags, and partnerships for you.</p>
                 </div>
                 {user?.plan === 'Pro' && (
@@ -394,7 +394,7 @@ Generate multiple compelling captions (at least 5) that leverage this trend. Eac
                                 <TrendingIcon className="w-5 h-5" />
                                 </div>
                                 <div>
-                                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">Discover Trends</h3>
+                                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Trending Now</h3>
                                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                         {lastScanDate ? `Last scanned: ${new Date(lastScanDate).toLocaleDateString()}` : 'Not scanned yet'}
                                         {isAutoScanning && <span className="ml-2 text-primary-600 dark:text-primary-400">⭐ Auto-scanning...</span>}
@@ -490,7 +490,7 @@ Generate multiple compelling captions (at least 5) that leverage this trend. Eac
                             </div>
                         )}
                         <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-                            Enter a topic or niche to find relevant trends and opportunities. {autoScanEnabled && '⭐ Trends will auto-update weekly or scan on-demand.'}
+                            Type a topic to see what's trending. {autoScanEnabled && '⭐ Trends will auto-update weekly or scan on-demand.'}
                         </p>
                         <div className="flex flex-col sm:flex-row gap-2">
                             <input
@@ -565,7 +565,7 @@ Generate multiple compelling captions (at least 5) that leverage this trend. Eac
                          <div className="space-y-4">
                              <div className="flex justify-between items-center mb-4 flex-wrap gap-4">
                                 <div>
-                                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Top Opportunities</h3>
+                                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Top Trends</h3>
                                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                                         Found {results.length} opportunities for "{niche}"
                                         {filterPlatform !== 'All' && ` • Filtered by ${filterPlatform}`}

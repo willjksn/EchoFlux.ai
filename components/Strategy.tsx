@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from './AppContext';
 import { StrategyPlan, Platform, WeekPlan, DayPlan, Post, CalendarEvent, MediaLibraryItem } from '../types';
 import { generateContentStrategy, getStrategies, saveStrategy, updateStrategyStatus, analyzeMediaForPost, generateCaptions } from "../src/services/geminiService";
-import { TargetIcon, SparklesIcon, CalendarIcon, CheckCircleIcon, RocketIcon, DownloadIcon, TrashIcon, ClockIcon, UploadIcon, ImageIcon, XMarkIcon, CopyIcon } from './icons/UIIcons';
+import { TargetIcon, SparklesIcon, CalendarIcon, CheckCircleIcon, RocketIcon, DownloadIcon, TrashIcon, ClockIcon, UploadIcon, ImageIcon, XMarkIcon, CopyIcon, HashtagIcon } from './icons/UIIcons';
 import { UpgradePrompt } from './UpgradePrompt';
 import { storage } from '../firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -36,6 +36,10 @@ export const Strategy: React.FC = () => {
     const [duration, setDuration] = useState('4 Weeks');
     const [tone, setTone] = useState('Professional');
     const [platformFocus, setPlatformFocus] = useState('Mixed / All');
+    const [useContextDescription, setUseContextDescription] = useState(false);
+    const [contextDescription, setContextDescription] = useState('');
+    const [usePersonality, setUsePersonality] = useState(false);
+    const [useFavoriteHashtags, setUseFavoriteHashtags] = useState(false);
     
     // Auto-set explicit tone when OnlyFans/Fanvue is selected.
     // IMPORTANT: Do not override user-selected tones like "Sexy / Explicit" for normal platforms.
@@ -380,7 +384,7 @@ export const Strategy: React.FC = () => {
     };
 
     if (!hasStrategyAccess) {
-         return <UpgradePrompt featureName="AI Content Strategist" onUpgradeClick={() => setActivePage('pricing')} />;
+         return <UpgradePrompt featureName="Plan My Week" onUpgradeClick={() => setActivePage('pricing')} />;
     }
 
     const handleGenerate = async () => {
@@ -445,7 +449,21 @@ export const Strategy: React.FC = () => {
                 }
             }
 
-            const result = await generateContentStrategy(niche, audience, goal, duration, tone, platformFocus, null, undefined);
+            const result = await generateContentStrategy(
+                niche, 
+                audience, 
+                goal, 
+                duration, 
+                tone, 
+                platformFocus, 
+                null, 
+                undefined,
+                useContextDescription ? contextDescription : undefined,
+                usePersonality && settings.creatorPersonality ? true : false,
+                useFavoriteHashtags && settings.favoriteHashtags ? true : false,
+                usePersonality ? settings.creatorPersonality || null : null,
+                useFavoriteHashtags ? settings.favoriteHashtags || null : null
+            );
             if (result && result.weeks) {
                 // Initialize status for all content items
                 const planWithStatus = {
@@ -1244,7 +1262,7 @@ export const Strategy: React.FC = () => {
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-4">
                     <div className="flex-1 min-w-0">
                         <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-primary-600 to-primary-800 dark:from-primary-400 dark:to-primary-600 bg-clip-text text-transparent mb-2">
-                            AI Content Strategist
+                            Plan My Week
                         </h1>
                         <p className="text-base sm:text-lg text-gray-600 dark:text-gray-400">
                             Create an AI-powered content strategy tailored to your primary goal using niche research, current trends, and your content history
@@ -1476,6 +1494,95 @@ export const Strategy: React.FC = () => {
                             {/* OnlyFans removed - use OnlyFans Studio for OnlyFans content */}
                         </select>
                     </div>
+
+                    {/* Context Description Section */}
+                    <div className="col-span-1 md:col-span-2">
+                        <div className="flex items-center gap-2 mb-2">
+                            <input
+                                type="checkbox"
+                                id="useContextDescription"
+                                checked={useContextDescription}
+                                onChange={(e) => setUseContextDescription(e.target.checked)}
+                                className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600"
+                            />
+                            <label htmlFor="useContextDescription" className="text-sm font-semibold text-gray-700 dark:text-white">
+                                Context Description
+                            </label>
+                            <button
+                                onClick={async () => {
+                                    try {
+                                        const { askChatbot } = await import('../src/services/geminiService');
+                                        const prompt = "Help me write a context description for my AI content strategy. What should I include to help the AI understand what type of strategy I'm looking for?";
+                                        const response = await askChatbot(prompt);
+                                        showToast('AI (Describe what you want in your caption, and AI will write it for you.) - Check the chat for suggestions or describe the type of strategy you want (themes, content mix, post types, etc.).', 'info');
+                                    } catch (error) {
+                                        showToast('AI help temporarily unavailable. Try describing the type of strategy you want: themes, content mix, post types, style preferences, etc.', 'error');
+                                    }
+                                }}
+                                className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                title="AI (Describe what you want in your caption, and AI will write it for you.)"
+                            >
+                                <SparklesIcon className="w-4 h-4 text-primary-600 dark:text-primary-400" />
+                            </button>
+                        </div>
+                        {useContextDescription && (
+                            <textarea
+                                value={contextDescription}
+                                onChange={(e) => setContextDescription(e.target.value)}
+                                placeholder="Describe the type of strategy you're looking for (themes, content mix, post types, style preferences, etc.)"
+                                className="w-full px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[100px]"
+                                rows={4}
+                            />
+                        )}
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            Optional: Provide additional context about the type of strategy you want to help the AI generate a more tailored plan.
+                        </p>
+                    </div>
+
+                    {/* Personality & Hashtag Toggle Buttons */}
+                    <div className="col-span-1 md:col-span-2">
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-white mb-2">
+                            Strategy AI Options
+                        </label>
+                        <div className="flex flex-wrap gap-3">
+                            <button
+                                onClick={() => setUsePersonality(!usePersonality)}
+                                disabled={!settings.creatorPersonality}
+                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                                    usePersonality
+                                        ? 'bg-primary-600 text-white hover:bg-primary-700'
+                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                } ${!settings.creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                title={!settings.creatorPersonality ? 'Add a personality description in Settings to enable' : undefined}
+                            >
+                                <CheckCircleIcon className={`w-4 h-4 ${usePersonality ? 'opacity-100' : 'opacity-0'}`} />
+                                Personality
+                            </button>
+                            <button
+                                onClick={() => setUseFavoriteHashtags(!useFavoriteHashtags)}
+                                disabled={!settings.favoriteHashtags}
+                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                                    useFavoriteHashtags
+                                        ? 'bg-primary-600 text-white hover:bg-primary-700'
+                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                } ${!settings.favoriteHashtags ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                title={!settings.favoriteHashtags ? 'Add favorite hashtags in Settings to enable' : undefined}
+                            >
+                                <HashtagIcon className={`w-4 h-4 ${useFavoriteHashtags ? 'opacity-100' : 'opacity-0'}`} />
+                                Hashtags
+                            </button>
+                        </div>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            {usePersonality && useFavoriteHashtags
+                                ? 'AI will use your personality and favorite hashtags when generating strategies.'
+                                : usePersonality
+                                ? 'AI will use your creator personality when generating strategies.'
+                                : useFavoriteHashtags
+                                ? 'AI will use your favorite hashtags when generating strategies.'
+                                : 'Enable toggles above to include your personality or hashtags in AI-generated strategies.'}
+                            {!settings.creatorPersonality && !settings.favoriteHashtags && ' Add them in Settings → AI Training to enable.'}
+                        </p>
+                    </div>
                 </div>
 
                 {/* Generate Button Section */}
@@ -1593,7 +1700,7 @@ export const Strategy: React.FC = () => {
                                 <h4 className="text-sm font-semibold text-emerald-900 dark:text-emerald-300 mb-2">What “success” looks like for this plan</h4>
                                 <ul className="space-y-1">
                                     <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
-                                        <CheckCircleIcon className="w-3 h-3" /> You create posts in Compose and organize them on your Calendar.
+                                        <CheckCircleIcon className="w-3 h-3" /> You create posts in Write Captions and organize them on your My Schedule.
                                     </li>
                                     <li className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
                                         <CheckCircleIcon className="w-3 h-3" /> Each week has a clear mix of nurture, value, and soft promo content (not just back‑to‑back sales posts).
@@ -2317,7 +2424,7 @@ export const Strategy: React.FC = () => {
                                                             onClick={() => setShowMediaLibrary({ weekIndex, dayIndex })}
                                                             disabled={isUploading}
                                                             className="w-16 h-16 flex items-center justify-center border-2 border-dashed border-primary-300 dark:border-primary-600 rounded-lg hover:border-primary-500 dark:hover:border-primary-400 transition-colors disabled:opacity-50 bg-primary-50 dark:bg-primary-900/20"
-                                                            title="Select from Media Library"
+                                                            title="Select from My Vault"
                                                         >
                                                             <ImageIcon className="w-5 h-5 text-primary-600 dark:text-primary-400" />
                                                         </button>
@@ -2340,12 +2447,12 @@ export const Strategy: React.FC = () => {
 
             {/* Save Strategy Modal removed (autosave enabled) */}
 
-            {/* Media Library Modal */}
+            {/* My Vault Modal */}
             {showMediaLibrary && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-xl max-w-4xl w-full mx-4 max-h-[80vh] overflow-y-auto custom-scrollbar">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Select from Media Library</h3>
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Select from My Vault</h3>
                             <button
                                 onClick={() => setShowMediaLibrary(null)}
                                 className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"

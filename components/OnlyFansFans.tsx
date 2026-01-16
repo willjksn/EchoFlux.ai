@@ -631,7 +631,7 @@ export const OnlyFansFans: React.FC = () => {
                     </button>
                 </div>
                 <p className="text-gray-600 dark:text-gray-400">
-                    Central hub for managing fan relationships and tracking engagement across all Premium Content Studio features.
+                    Central hub for managing fan relationships and tracking engagement across all Monetized Creator Studio features.
                 </p>
             </div>
 

@@ -514,7 +514,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Content Calendar</h2>
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">My Schedule</h2>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                         Schedule reminders for posting and filming. This does not post automatically.
                     </p>
@@ -548,7 +548,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
             {/* Important Notice */}
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                 <p className="text-sm text-blue-800 dark:text-blue-200">
-                    <strong>Reminder:</strong> These are manual reminders only. Premium Content Studio does not post to your accounts. 
+                    <strong>Reminder:</strong> These are manual reminders only. Monetized Creator Studio does not post to your accounts. 
                     You must manually upload content to OnlyFans, Fansly, or Fanvue.
                 </p>
             </div>

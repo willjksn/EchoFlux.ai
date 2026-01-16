@@ -12,7 +12,7 @@ export const ContentGapAnalysis: React.FC = () => {
 
     const handleAnalyze = async () => {
         if (!user) {
-            showToast('Please sign in to analyze content gaps', 'error');
+            showToast("Please sign in to check what's missing", 'error');
             return;
         }
 
@@ -34,7 +34,7 @@ export const ContentGapAnalysis: React.FC = () => {
             });
 
             if (!response.ok) {
-                throw new Error('Failed to analyze content gaps');
+                throw new Error("Failed to check what's missing");
             }
 
             const data = await response.json();
@@ -45,7 +45,7 @@ export const ContentGapAnalysis: React.FC = () => {
                 try {
                     await addDoc(collection(db, 'users', user.id, 'content_gap_analysis_history'), {
                         type: 'gap_analysis',
-                        title: `Content Gap Analysis - ${new Date().toLocaleDateString()}`,
+                        title: `What's Missing - ${new Date().toLocaleDateString()}`,
                         data: data,
                         createdAt: Timestamp.now(),
                     });
@@ -53,11 +53,11 @@ export const ContentGapAnalysis: React.FC = () => {
                     console.error('Failed to auto-save content gap analysis:', saveError);
                     // Don't block showing the analysis if save fails
                 }
-                showToast('Content gap analysis complete!', 'success');
+                showToast("What's missing check complete!", 'success');
             }
         } catch (error: any) {
             console.error('Error analyzing content gaps:', error);
-            showToast(error.message || 'Failed to analyze content gaps', 'error');
+            showToast(error.message || "Failed to check what's missing", 'error');
         } finally {
             setIsAnalyzing(false);
         }
@@ -73,12 +73,12 @@ export const ContentGapAnalysis: React.FC = () => {
                 {isAnalyzing ? (
                     <>
                         <RefreshIcon className="w-5 h-5 animate-spin" />
-                        Analyzing...
+                        Checking what's missing...
                     </>
                 ) : (
                     <>
                         <SparklesIcon className="w-5 h-5" />
-                        Analyze Content Gaps
+                        What's Missing
                     </>
                 )}
             </button>
@@ -87,7 +87,7 @@ export const ContentGapAnalysis: React.FC = () => {
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
                     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
                         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Content Gap Analysis</h2>
+                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">What's Missing</h2>
                             <button
                                 onClick={() => setShowModal(false)}
                                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
@@ -107,7 +107,7 @@ export const ContentGapAnalysis: React.FC = () => {
                             {/* Gaps */}
                             {analysis.gaps && analysis.gaps.length > 0 && (
                                 <div>
-                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Identified Gaps</h3>
+                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">What's Missing</h3>
                                     <div className="space-y-3">
                                         {analysis.gaps.map((gap: any, idx: number) => (
                                             <div
@@ -144,7 +144,7 @@ export const ContentGapAnalysis: React.FC = () => {
                             {/* Suggestions */}
                             {analysis.suggestions && analysis.suggestions.length > 0 && (
                                 <div>
-                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Content Suggestions to Fill Gaps</h3>
+                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Ideas to Fill the Gaps</h3>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         {analysis.suggestions.map((suggestion: any, idx: number) => (
                                             <div
@@ -190,11 +190,11 @@ export const ContentGapAnalysis: React.FC = () => {
                                         try {
                                             await addDoc(collection(db, 'users', user.id, 'content_gap_analysis_history'), {
                                                 type: 'gap_analysis',
-                                                title: `Content Gap Analysis - ${new Date().toLocaleDateString()}`,
+                                                title: `What's Missing - ${new Date().toLocaleDateString()}`,
                                                 data: analysis,
                                                 createdAt: Timestamp.now(),
                                             });
-                                            showToast('Content gap analysis saved to history!', 'success');
+                                            showToast("What's missing saved to history!", 'success');
                                         } catch (error) {
                                             console.error('Failed to save content gap analysis:', error);
                                             showToast('Failed to save to history', 'error');

@@ -14,12 +14,12 @@ const faqData = [
         answer: "Upload your images or videos, set your goal and tone, and our AI generates captions and relevant hashtags tailored to your content and target platforms. You can save the result as a draft and plan it in your calendar, then copy/export and post manually on your socials."
     },
     {
-        question: "How does the AI Content Strategist work?",
-        answer: "Tell us your niche and goals, and it builds a multi-week content roadmap with post ideas. Upload media directly to roadmap items, and it adds them as planned content on your calendar so you always know what to post next."
+        question: "How does Plan My Week work?",
+        answer: "Tell us your niche and goals, and it builds a multi-week content roadmap with post ideas. Upload media directly to roadmap items, and it adds them as planned content on your schedule so you always know what to post next."
     },
     {
         question: "Can I replace Linktree with EchoFlux?",
-        answer: "Yes. Our Smart Link-in-Bio gives you a branded mobile page with optional email capture so you can grow owned audience directly from Instagram or TikTok."
+        answer: "Yes. Our Bio Link Page gives you a branded mobile page with optional email capture so you can grow owned audience directly from Instagram or TikTok."
     },
     {
         question: "Do you have an AI assistant or chatbot?",

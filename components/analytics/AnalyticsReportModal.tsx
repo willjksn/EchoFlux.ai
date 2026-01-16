@@ -16,7 +16,7 @@ export const AnalyticsReportModal: React.FC<AnalyticsReportModalProps> = ({ isOp
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
             <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col">
                 <div className="p-6 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">AI Generated Report</h3>
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">Performance Report</h3>
                     <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">
                         <XMarkIcon />
                     </button>

@@ -14,7 +14,7 @@ export const Privacy: React.FC = () => {
                     <p>
                         We may collect personal information from you, such as your name, email address, and payment information when you
                         register for an account. We also collect media files (images and videos) that you upload to our platform, including
-                        those stored in your Media Library, profile pictures, and link-in-bio images.
+                        those stored in your My Vault, profile pictures, and bio link images.
                     </p>
 
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">2. How We Use Your Information</h3>
@@ -22,7 +22,7 @@ export const Privacy: React.FC = () => {
                         We use the information we collect to operate, maintain, and provide to you the features and functionality of the Service.
                         EchoFlux.ai is currently focused on planning and content creation workflows. Social platform connections, inbox syncing,
                         and automated posting/reply features may be unavailable, limited, or in testing depending on your product version.
-                        We store your uploaded media files securely and use them to provide features such as caption generation, Media Library,
+                        We store your uploaded media files securely and use them to provide features such as caption generation, My Vault,
                         content planning, and strategy roadmaps. We may use your email address to send you service-related notices.
                     </p>
                     
@@ -48,10 +48,10 @@ export const Privacy: React.FC = () => {
                     
                     <h4>b. User-Uploaded Media Content</h4>
                     <p>
-                        When you upload images or videos to our platform (including Media Library, profile pictures, link-in-bio images, and media for posts), this content is stored securely on our servers using Firebase Storage. We are committed to protecting this data and will only use it for the explicit purpose of providing our services to you, such as displaying media in your posts, calendar, and strategy roadmaps. We will not use your media to train any AI models, nor will we share it with any third parties beyond what is necessary to provide our services (e.g., displaying media in scheduled posts).
+                        When you upload images or videos to our platform (including My Vault, profile pictures, bio link images, and media for posts), this content is stored securely on our servers using Firebase Storage. We are committed to protecting this data and will only use it for the explicit purpose of providing our services to you, such as displaying media in your posts, schedule, and weekly plans. We will not use your media to train any AI models, nor will we share it with any third parties beyond what is necessary to provide our services (e.g., displaying media in scheduled posts).
                     </p>
                     <p>
-                        You can delete your uploaded media at any time through the Media Library or other relevant features. Deleted media will be removed from our servers, though it may take up to 30 days for complete deletion from backup systems.
+                        You can delete your uploaded media at any time through My Vault or other relevant features. Deleted media will be removed from our servers, though it may take up to 30 days for complete deletion from backup systems.
                     </p>
                     
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-8 mb-2">4. Sharing Your Information</h3>

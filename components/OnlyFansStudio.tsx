@@ -383,16 +383,16 @@ export const OnlyFansStudio: React.FC = () => {
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 text-center">
                     <SparklesIcon className="w-16 h-16 mx-auto mb-4 text-primary-600 dark:text-primary-400" />
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-                        Premium Content Studio
+                        Monetized Creator Studio
                     </h1>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 italic">
                         Built for OnlyFans, Fansly, Fanvue & more
                     </p>
                     <p className="text-lg text-gray-600 dark:text-gray-400 mb-6">
-                        Upgrade to <strong>Creator Elite</strong> or <strong>Agency</strong> to unlock Premium Content Studio.
+                        Upgrade to <strong>Creator Elite</strong> or <strong>Agency</strong> to unlock Monetized Creator Studio.
                     </p>
                     <p className="text-gray-500 dark:text-gray-500 mb-8">
-                        Premium Content Studio provides AI-powered content planning, roleplay ideas, chatting sessions, 
+                        Monetized Creator Studio provides content planning, roleplay ideas, chatting sessions, 
                         fan management, content calendars, and export packages for manual upload.
                     </p>
                     <button
@@ -414,7 +414,7 @@ export const OnlyFansStudio: React.FC = () => {
                     onClick={() => setActiveView('dashboard')}
                     className="mb-4 text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
                 >
-                    ← Back to Premium Content Studio
+                    ← Back to Monetized Creator Studio
                 </button>
                 <ErrorBoundary>
                     <OnlyFansContentBrain />
@@ -431,7 +431,7 @@ export const OnlyFansStudio: React.FC = () => {
                         onClick={() => setActiveView('dashboard')}
                         className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
                     >
-                        ← Back to Premium Content Studio
+                        ← Back to Monetized Creator Studio
                     </button>
                 </div>
                 <OnlyFansRoleplay />
@@ -447,7 +447,7 @@ export const OnlyFansStudio: React.FC = () => {
                         onClick={() => setActiveView('dashboard')}
                         className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
                     >
-                        ← Back to Premium Content Studio
+                        ← Back to Monetized Creator Studio
                     </button>
                 </div>
                 <OnlyFansStudioSettings />
@@ -463,7 +463,7 @@ export const OnlyFansStudio: React.FC = () => {
                         onClick={() => setActiveView('dashboard')}
                         className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
                     >
-                        ← Back to Premium Content Studio
+                        ← Back to Monetized Creator Studio
                     </button>
                 </div>
                 <OnlyFansExportHub />
@@ -479,7 +479,7 @@ export const OnlyFansStudio: React.FC = () => {
                         onClick={() => setActiveView('dashboard')}
                         className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
                     >
-                        ← Back to Premium Content Studio
+                        ← Back to Monetized Creator Studio
                     </button>
                 </div>
                 <OnlyFansCalendar onNavigateToContentBrain={() => setActiveView('contentBrain')} />
@@ -495,7 +495,7 @@ export const OnlyFansStudio: React.FC = () => {
                         onClick={() => setActiveView('dashboard')}
                         className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
                     >
-                        ← Back to Premium Content Studio
+                        ← Back to Monetized Creator Studio
                     </button>
                 </div>
                 <OnlyFansMediaVault />
@@ -511,7 +511,7 @@ export const OnlyFansStudio: React.FC = () => {
                         onClick={() => setActiveView('dashboard')}
                         className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
                     >
-                        ← Back to Premium Content Studio
+                        ← Back to Monetized Creator Studio
                     </button>
                 </div>
                 <OnlyFansGuides />
@@ -527,7 +527,7 @@ export const OnlyFansStudio: React.FC = () => {
                         onClick={() => setActiveView('dashboard')}
                         className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
                     >
-                        ← Back to Premium Content Studio
+                        ← Back to Monetized Creator Studio
                     </button>
                 </div>
                 <ErrorBoundary>
@@ -545,7 +545,7 @@ export const OnlyFansStudio: React.FC = () => {
                         onClick={() => setActiveView('dashboard')}
                         className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
                     >
-                        ← Back to Premium Content Studio
+                        ← Back to Monetized Creator Studio
                     </button>
                 </div>
                 <ErrorBoundary>
@@ -737,7 +737,7 @@ export const OnlyFansStudio: React.FC = () => {
                     <SparklesIcon className="w-8 h-8 text-primary-600 dark:text-primary-400" />
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                            Premium Content Studio
+                            Monetized Creator Studio
                         </h1>
                         <p className="text-sm text-gray-500 dark:text-gray-400 italic mt-1">
                             Built for OnlyFans, Fansly, Fanvue & more
@@ -752,7 +752,7 @@ export const OnlyFansStudio: React.FC = () => {
             {/* Important Notice */}
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
                 <p className="text-sm text-blue-800 dark:text-blue-200">
-                    <strong>Important:</strong> Premium Content Studio does not integrate with or access your premium platform accounts (OnlyFans, Fansly, Fanvue, etc.). 
+                    <strong>Important:</strong> Monetized Creator Studio does not integrate with or access your premium platform accounts (OnlyFans, Fansly, Fanvue, etc.). 
                     This is a planning and content creation tool. All content must be reviewed and uploaded manually to your platform of choice.
                 </p>
             </div>
@@ -789,7 +789,7 @@ export const OnlyFansStudio: React.FC = () => {
                         Content Brain
                     </h2>
                     <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
-                        Generate AI captions, post ideas, shoot concepts, and weekly content plans.
+                        Generate caption ideas, post ideas, shoot concepts, and weekly content plans.
                     </p>
                     <button
                         className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
@@ -834,7 +834,7 @@ export const OnlyFansStudio: React.FC = () => {
                 {/* Content Calendar Card */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
                     <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
-                        Content Calendar
+                        My Schedule
                     </h2>
                     <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
                         Plan your posting schedule with manual upload reminders and content pacing.
@@ -1096,7 +1096,7 @@ export const OnlyFansStudio: React.FC = () => {
                     </h2>
                     <div className="space-y-3 text-gray-600 dark:text-gray-400">
                         <p className="text-sm">• Start a session in <strong>Roleplay & Interactive Ideas</strong> to create your first fan card</p>
-                        <p className="text-sm">• Track fan preferences, spending, and engagement across all Premium Content Studio features</p>
+                        <p className="text-sm">• Track fan preferences, spending, and engagement across all Monetized Creator Studio features</p>
                         <p className="text-sm">• Personalize content generation based on each fan's preferences</p>
                     </div>
                     <button

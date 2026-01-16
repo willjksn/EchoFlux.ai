@@ -59,7 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return;
   }
 
-  const { niche, audience, goal, duration, tone, platformFocus, analyticsData, emojiEnabled, emojiIntensity } = req.body || {};
+  const { niche, audience, goal, duration, tone, platformFocus, analyticsData, emojiEnabled, emojiIntensity, contextDescription, usePersonality, useFavoriteHashtags, creatorPersonality, favoriteHashtags } = req.body || {};
 
   if (!niche || !audience || !goal) {
     res.status(400).json({ error: "Missing required fields: niche, audience, and goal are required" });
@@ -249,6 +249,16 @@ ${explicitnessContext ? `\nEXPLICITNESS LEVEL: ${explicitnessLevel}/10\n${explic
           "videoIdeas": ["Idea 1 for videos", "Idea 2 for videos"]
         }`;
 
+    const safeContextDescription = typeof contextDescription === 'string'
+      ? contextDescription.trim().slice(0, 1500)
+      : '';
+    const safeCreatorPersonality = typeof creatorPersonality === 'string'
+      ? creatorPersonality.trim().slice(0, 1200)
+      : '';
+    const safeFavoriteHashtags = typeof favoriteHashtags === 'string'
+      ? favoriteHashtags.trim().slice(0, 600)
+      : '';
+
     const prompt = `
 You are an elite content strategist specializing in ${niche} for ${audience}. Your expertise is creating data-driven strategies that achieve specific business goals.
 
@@ -274,6 +284,9 @@ Strategy Parameters:
 - Target Audience: ${audience}
 - Niche: ${niche}
 - Duration: ${durationWeeks} week${durationWeeks === 1 ? '' : 's'}${durationWeeks === 1 ? ' (ONE WEEK ONLY - generate content for 7 days, not multiple weeks)' : ''}
+${safeContextDescription ? `\nADDITIONAL CONTEXT & REQUIREMENTS:\n${safeContextDescription}\n\nUse this additional context to tailor the strategy according to the user's specific requirements, preferences, and desired approach.\n` : ''}
+${usePersonality && safeCreatorPersonality ? `\nCREATOR PERSONALITY & BRAND VOICE:\n${safeCreatorPersonality}\n\nUse this personality description to shape the voice, tone, and framing of the strategy.\n` : ''}
+${useFavoriteHashtags && safeFavoriteHashtags ? `\nFAVORITE HASHTAGS:\n${safeFavoriteHashtags}\n\nIncorporate relevant hashtags into the strategy recommendations where appropriate.\n` : ''}
 
 CRITICAL INSTRUCTIONS FOR GOAL ACHIEVEMENT:
 1. Every content piece must directly contribute to achieving "${goal}" - evaluate each topic against: "Does this help achieve ${goal}?"

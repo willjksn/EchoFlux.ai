@@ -65,7 +65,7 @@ export const Terms: React.FC = () => {
                     </p>
                     <ul className="list-disc pl-6 space-y-2 mt-2">
                         <li>
-                            The app focuses on strategy, content ideas, captions, content packs, calendars, and workflow boards
+                            The app focuses on planning, content ideas, captions, content packs, schedules, and workflow boards
                             so you can manually post on the platforms you choose.
                         </li>
                         <li>
@@ -122,8 +122,8 @@ export const Terms: React.FC = () => {
                         5. Fair Use Policy & Monthly Allowances
                     </h3>
                     <p>
-                        Different subscription tiers may include different soft limits or allowances for AI generation, media
-                        storage, or usage of specific tools (for example: number of AI captions per month). These limits are
+                        Different subscription tiers may include different soft limits or allowances for generation, media
+                        storage, or usage of specific tools (for example: number of caption ideas per month). These limits are
                         designed to provide room for serious creators while keeping the service stable and sustainable.
                     </p>
                     <p className="mt-2">
@@ -133,20 +133,20 @@ export const Terms: React.FC = () => {
                         responsiveness.
                     </p>
                     
-                    <h4>AI Strategy Generation</h4>
+                    <h4>Plan My Week</h4>
                     <p>
-                        AI Content Strategist generates multi-week content roadmaps based on your goals, niche, and audience.
-                        Strategy generation uses shared trend research collected by EchoFlux.ai and does not guarantee real‑time
+                        Plan My Week generates multi-week content roadmaps based on your goals, niche, and audience.
+                        Plan generation uses shared trend research collected by EchoFlux.ai and does not guarantee real-time
                         web results for each individual user request.
                     </p>
                     <p className="mt-2">
-                        Your monthly strategy generation allowance (if any) is shown in-app and may vary by plan and product version.
+                        Your monthly plan allowance (if any) is shown in-app and may vary by plan and product version.
                     </p>
                     <p>
-                        Strategy generations reset on your monthly billing date. Unused generations do not roll over to the next month.
+                        Plan generations reset on your monthly billing date. Unused plans do not roll over to the next month.
                     </p>
                     <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                        <strong>Note:</strong> Trend research used for strategy generation is refreshed on a recurring schedule
+                        <strong>Note:</strong> Trend research used for plan generation is refreshed on a recurring schedule
                         (currently twice weekly).
                     </p>
 
@@ -166,16 +166,16 @@ export const Terms: React.FC = () => {
 
                     <h4>Media Storage Allowance</h4>
                      <p>
-                        Users can upload their own media (images and videos) for use in features like caption generation, AI Content Generation, and the Media Library. Each plan comes with a specific storage limit:
+                        Users can upload their own media (images and videos) for use in features like caption generation, content generation, and My Vault. Each plan comes with a specific storage limit:
                     </p>
                     <ul>
                         <li><strong>Free Plan:</strong> 100 MB of media storage.</li>
-                        <li><strong>Caption Pro Plan:</strong> Basic Link-in-Bio only (no Media Library).</li>
+                        <li><strong>Caption Pro Plan:</strong> Basic Bio Link Page only (no My Vault).</li>
                         <li><strong>Creator Pro Plan:</strong> 5 GB of media storage.</li>
                         <li><strong>Creator Elite Plan:</strong> 10 GB of media storage.</li>
                     </ul>
                     <p>
-                        Media uploaded to your Media Library remains stored until you delete it. Storage usage is calculated across all uploaded media including profile pictures, link-in-bio images, and media library items.
+                        Media uploaded to your My Vault remains stored until you delete it. Storage usage is calculated across all uploaded media including profile pictures, bio link images, and vault items.
                     </p>
 
                     <h4>AI Reply Generation (DMs / Comments)</h4>
@@ -186,19 +186,19 @@ export const Terms: React.FC = () => {
                     </p>
 
 
-                    <h4>Media Library</h4>
+                    <h4>My Vault</h4>
                     <p>
-                        All paid plans include access to the Media Library feature, which allows you to upload, organize, and reuse images and videos across your posts. Media stored in your library counts toward your plan's storage allowance.
+                        All paid plans include access to My Vault, which allows you to upload, organize, and reuse images and videos across your posts. Media stored in your vault counts toward your plan's storage allowance.
                     </p>
                     <ul>
-                        <li><strong>Storage Limits:</strong> Media Library storage is included in your plan's overall media storage allowance (see Media Storage Allowance section above).</li>
-                        <li><strong>Retention:</strong> Media remains in your library until you explicitly delete it. Deleted media cannot be recovered.</li>
-                        <li><strong>Usage:</strong> You can select media from your library when composing posts or adding media to strategy roadmap items.</li>
+                        <li><strong>Storage Limits:</strong> My Vault storage is included in your plan's overall media storage allowance (see Media Storage Allowance section above).</li>
+                        <li><strong>Retention:</strong> Media remains in your vault until you explicitly delete it. Deleted media cannot be recovered.</li>
+                        <li><strong>Usage:</strong> You can select media from your vault when composing posts or adding media to plan roadmap items.</li>
                     </ul>
 
-                    <h4>Link-in-Bio Builder</h4>
+                    <h4>Bio Link Page</h4>
                     <p>
-                        All plans include access to the Link-in-Bio Builder feature. Link limits are as follows:
+                        All plans include access to the Bio Link Page feature. Link limits are as follows:
                     </p>
                     <ul>
                         <li><strong>Free Plan:</strong> 1 link maximum.</li>

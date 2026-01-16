@@ -23,8 +23,8 @@ export const AIPoweredInsights: React.FC<AIPoweredInsightsProps> = ({ data }) =>
                     <SparklesIcon className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">AI-Powered Insights</h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Smart Recommendations</p>
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">Insights</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Helpful tips</p>
                 </div>
             </div>
             
@@ -49,7 +49,7 @@ export const AIPoweredInsights: React.FC<AIPoweredInsightsProps> = ({ data }) =>
                     </div>
                     <p className="text-gray-600 dark:text-gray-400 font-medium mb-2">No insights available yet</p>
                     <p className="text-sm text-gray-500 dark:text-gray-500">
-                        Insights will appear here as we analyze your content performance and engagement data.
+                        Insights will appear here after we review your results.
                     </p>
                 </div>
             )}

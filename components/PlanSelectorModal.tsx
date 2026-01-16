@@ -17,10 +17,10 @@ const creatorPlans = [
         priceAnnually: 0,
         description: 'Perfect for getting started',
         features: [
-            '1 AI strategy generation / month (basic)',
-            '10 AI captions / month',
-            'Basic Link-in-Bio (1 link)',
-            'Media Library',
+            '1 weekly plan / month (basic)',
+            '10 caption ideas / month',
+            'Bio Link Page (1 link)',
+            'My Vault',
             '100 MB storage'
         ],
         isRecommended: false
@@ -31,13 +31,13 @@ const creatorPlans = [
         priceAnnually: 23,
         description: 'For creators scaling their brand',
         features: [
-            'AI Content Strategist',
-            '2 AI strategy generations / month',
+            'Plan My Week',
+            '2 plans / month',
             'Live trend research included (16 searches/month)',
-            '500 AI captions / month',
-            'Link-in-Bio Builder (5 links)',
-            'Media Library',
-            'Visual Content Calendar',
+            '500 caption ideas / month',
+            'Bio Link Page (5 links)',
+            'My Vault',
+            'My Schedule',
             '5 GB storage'
         ],
         isRecommended: true
@@ -48,13 +48,13 @@ const creatorPlans = [
         priceAnnually: 47,
         description: 'For professional & OF creators',
         features: [
-            'Advanced Strategy options',
-            '5 AI strategy generations / month',
+            'Advanced Plan My Week options',
+            '5 plans / month',
             'Enhanced live trend research (40 searches/month)',
-            '1,500 AI captions / month',
-            'Link-in-Bio Builder (unlimited links)',
-            'Media Library',
-            'Visual Content Calendar',
+            '1,500 caption ideas / month',
+            'Bio Link Page (unlimited links)',
+            'My Vault',
+            'My Schedule',
             '10 GB storage',
             'OnlyFans Studio (included)'
         ],

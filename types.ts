@@ -80,6 +80,8 @@ export interface Settings {
     };
     monetizedPlatforms?: string[];
     enableAdminDashboardV2?: boolean;
+    creatorPersonality?: string; // Personality description/brand for AI caption generation
+    favoriteHashtags?: string; // Comma-separated favorite hashtags
 }
 
 export interface CaptionResult {

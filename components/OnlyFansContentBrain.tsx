@@ -28,7 +28,7 @@ const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: 
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
                 <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
                     <div>
-                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Performance Prediction</h2>
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Most Likely to Hit</h2>
                         {result.platform && (
                             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                                 Based on {result.platform} platform analysis
@@ -45,7 +45,7 @@ const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: 
                 <div className="flex-1 overflow-y-auto p-6 space-y-6">
                     <div className={`p-6 rounded-lg border-2 ${getLevelColor(level)}`}>
                         <div className="text-center">
-                            <p className="text-sm font-medium mb-2">Predicted Performance</p>
+                            <p className="text-sm font-medium mb-2">Likely Performance</p>
                             <p className="text-4xl font-bold mb-2">{level}</p>
                             <div className="flex items-center justify-center gap-4 mt-4">
                                 <div>
@@ -2968,7 +2968,7 @@ Output format:
             if (data.success) {
                 setContentGapAnalysis(data);
                 setShowGapAnalysisModal(true);
-                await saveToHistory('gap_analysis', `Content Gap Analysis - ${new Date().toLocaleDateString()}`, data);
+                await saveToHistory('gap_analysis', `What's Missing - ${new Date().toLocaleDateString()}`, data);
                 showToast?.('Content gap analysis complete!', 'success');
             }
         } catch (error: any) {
@@ -3117,7 +3117,7 @@ Output format:
                     {user?.plan !== 'Free' && (
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
                             <div className="flex items-center justify-between mb-3">
-                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent: Analyze Content Gaps, Predictions & Repurposes</h3>
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent: What's Missing, What To Post Next & Repurposes</h3>
                                 <button
                                     onClick={() => {
                                         setShowCaptionsHistory(!showCaptionsHistory);
@@ -3142,7 +3142,7 @@ Output format:
                                     ) : (captionsPredictHistory.length === 0 && captionsRepurposeHistory.length === 0 && captionsGapAnalysisHistory.length === 0) ? (
                                         <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                                             <p className="text-sm">No content gap analysis, predictions or repurposes yet.</p>
-                                            <p className="text-xs mt-1">Use the Analyze Content Gaps, Predict Performance or Repurpose Content buttons above to see history here.</p>
+                                            <p className="text-xs mt-1">Use the What's Missing, What To Post Next, or Repurpose Content buttons above to see history here.</p>
                                         </div>
                                     ) : (
                                         <div className="space-y-3 max-h-64 overflow-y-auto">
@@ -3274,7 +3274,7 @@ Output format:
 
                                             {/* Gap Analysis History */}
                                             {captionsGapAnalysisHistory.map((item) => {
-                                                const summary = item.data?.summary || item.title || 'Content Gap Analysis';
+                                                const summary = item.data?.summary || item.title || "What's Missing";
                                                 return (
                                                     <div
                                                         key={item.id}
@@ -3699,7 +3699,7 @@ Output format:
                             {/* Action Buttons - Always Visible */}
                             <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700 space-y-3">
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                    {/* Analyze Content Gaps */}
+                                    {/* What's Missing */}
                                     <button
                                         onClick={handleAnalyzeContentGaps}
                                         disabled={isAnalyzingGaps || isPredicting || isRepurposing}
@@ -3713,12 +3713,12 @@ Output format:
                                         ) : (
                                             <>
                                                 <SparklesIcon className="w-5 h-5" />
-                                                Analyze Content Gaps
+                                                What's Missing
                                             </>
                                         )}
                                     </button>
 
-                                    {/* Predict Performance */}
+                                    {/* What To Post Next */}
                                     <button
                                         onClick={handlePredictPerformance}
                                         disabled={isPredicting || isRepurposing || isAnalyzingGaps || user?.plan === 'Free' || generatedCaptions.length === 0}
@@ -3736,7 +3736,7 @@ Output format:
                                         ) : (
                                             <>
                                                 <SparklesIcon className="w-5 h-5" />
-                                                Predict Performance
+                                                What To Post Next
                                             </>
                                         )}
                                     </button>
@@ -3772,7 +3772,7 @@ Output format:
                     {generatedCaptions.length === 0 && (
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                {/* Analyze Content Gaps */}
+                                {/* What's Missing */}
                                 <button
                                     onClick={handleAnalyzeContentGaps}
                                     disabled={isAnalyzingGaps || isPredicting || isRepurposing}
@@ -3786,12 +3786,12 @@ Output format:
                                     ) : (
                                         <>
                                             <SparklesIcon className="w-5 h-5" />
-                                            Analyze Content Gaps
+                                            What's Missing
                                         </>
                                     )}
                                 </button>
 
-                                {/* Predict Performance */}
+                                {/* What To Post Next */}
                                 <button
                                     onClick={handlePredictPerformance}
                                     disabled={isPredicting || isRepurposing || isAnalyzingGaps || user?.plan === 'Free' || generatedCaptions.length === 0}
@@ -3809,7 +3809,7 @@ Output format:
                                     ) : (
                                         <>
                                             <SparklesIcon className="w-5 h-5" />
-                                            Predict Performance
+                                            What To Post Next
                                         </>
                                     )}
                                 </button>
@@ -5134,7 +5134,7 @@ Output format:
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
                     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
                         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Content Gap Analysis</h2>
+                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">What's Missing</h2>
                             <button
                                 onClick={() => setShowGapAnalysisModal(false)}
                                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"

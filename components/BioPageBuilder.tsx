@@ -850,7 +850,7 @@ export const BioPageBuilder: React.FC = () => {
             <div className="flex-1 overflow-y-auto pr-2 space-y-6">
                 <div className="flex justify-between items-center">
                     <div>
-                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Link in Bio Builder</h2>
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Bio Link Page</h2>
                         {bioPage.username && (
                             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                                 Your bio page: <span className="font-mono text-primary-600 dark:text-primary-400">{window.location.origin}/{bioPage.username.replace('@', '')}</span>

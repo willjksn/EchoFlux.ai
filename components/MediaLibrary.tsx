@@ -273,7 +273,7 @@ export const MediaLibrary: React.FC = () => {
     setTimeout(() => {
       window.dispatchEvent(new CustomEvent('mediaLibraryItemAdded'));
     }, 100);
-    showToast('Opening Compose with selected media...', 'success');
+    showToast('Opening Write Captions with selected media...', 'success');
   };
 
   // Folder management functions
@@ -443,7 +443,7 @@ export const MediaLibrary: React.FC = () => {
   if (!user) {
     return (
       <div className="p-6 text-center">
-        <p className="text-gray-600 dark:text-gray-400">Please sign in to access Media Library.</p>
+        <p className="text-gray-600 dark:text-gray-400">Please sign in to access My Vault.</p>
       </div>
     );
   }
@@ -466,7 +466,7 @@ export const MediaLibrary: React.FC = () => {
             <div className="flex items-center justify-between mb-2">
               <div>
                 <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
-                  Media Library
+                  My Vault
                 </h1>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                   Upload and manage images and videos that you can reuse across your posts.

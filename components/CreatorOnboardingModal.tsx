@@ -62,21 +62,21 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                     {isFreePlan && (
                         <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                             <p className="text-sm text-blue-800 dark:text-blue-200">
-                                <strong>Free Plan Includes:</strong> 1 AI strategy/month, 10 AI captions/month, Basic Link-in-Bio, Media Library (100MB)
+                                <strong>Free Plan Includes:</strong> 1 weekly plan/month, 10 caption ideas/month, Bio Link Page, My Vault (100MB)
                             </p>
                         </div>
                     )}
                     {isProPlan && (
                         <div className="mt-6 p-4 bg-primary-50 dark:bg-primary-900/20 rounded-lg">
                             <p className="text-sm text-primary-800 dark:text-primary-200">
-                                <strong>Pro Plan Includes:</strong> AI Content Strategist, 2 strategies/month, Live trend research, 500 captions/month, Link-in-Bio Builder (5 links), Visual Content Calendar, 5GB storage
+                                <strong>Pro Plan Includes:</strong> Plan My Week, 2 plans/month, Live trend research, 500 caption ideas/month, Bio Link Page (5 links), My Schedule, 5GB storage
                             </p>
                         </div>
                     )}
                     {isElitePlan && (
                         <div className="mt-6 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
                             <p className="text-sm text-purple-800 dark:text-purple-200">
-                                <strong>Elite Plan Includes:</strong> Advanced Strategy options, 5 strategies/month, Enhanced trend research (40 searches/month), 1,500 captions/month, Unlimited links, Visual Content Calendar, 10GB storage, Premium Content Studio
+                                <strong>Elite Plan Includes:</strong> Advanced Plan My Week options, 5 plans/month, Enhanced trend research (40 searches/month), 1,500 caption ideas/month, Unlimited links, My Schedule, 10GB storage, Monetized Creator Studio
                             </p>
                         </div>
                     )}
@@ -148,7 +148,7 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                 <div className="animate-fade-in">
                     <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-white">What's Your Goal?</h2>
                     <p className="mt-2 text-center text-gray-500 dark:text-gray-400">
-                        Help us tailor your strategy to achieve your objectives.
+                        Help us tailor your plan to achieve your objectives.
                     </p>
                     <div className="mt-6 space-y-4">
                         <div>
@@ -182,16 +182,17 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                     <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg text-left">
                         <h3 className="font-semibold text-gray-900 dark:text-white mb-2">What's Next?</h3>
                         <ul className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
-                            <li>• Generate your first AI strategy (1/month available)</li>
-                            <li>• Create AI captions (10/month available)</li>
-                            <li>• Set up your Link-in-Bio (1 link)</li>
-                            <li>• Upload media to your library (100MB storage)</li>
+                            <li>• Generate your first weekly plan (1/month available)</li>
+                            <li>• Create caption ideas (10/month available)</li>
+                            <li>• Set up your Bio Link Page (1 link)</li>
+                            <li>• Upload media to your vault (100MB storage)</li>
+                            <li>• Set up AI Training (AI Personality + Creator Personality)</li>
                         </ul>
                     </div>
                     <div className="mt-4 p-4 border border-gray-200 dark:border-gray-600 rounded-lg bg-white/60 dark:bg-gray-800/40 text-left">
                         <p className="text-sm text-gray-700 dark:text-gray-300">
-                            <strong>Where to start:</strong> use the sidebar to open <strong>Strategy</strong> (your plan), <strong>Compose</strong> (captions),
-                            and <strong>Link in Bio</strong> (your bio page).
+                            <strong>Where to start:</strong> use the sidebar to open <strong>Plan My Week</strong> (your plan), <strong>Write Captions</strong> (captions),
+                            <strong>Bio Link Page</strong> (your bio page), and <strong>Settings → AI Training</strong>.
                         </p>
                     </div>
                 </div>
@@ -208,46 +209,52 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                     </p>
                     <div className="mt-6 space-y-4">
                         <div className="p-4 bg-primary-50 dark:bg-primary-900/20 rounded-lg">
-                            <h3 className="font-semibold text-primary-900 dark:text-primary-200 mb-2">AI Content Strategist</h3>
+                            <h3 className="font-semibold text-primary-900 dark:text-primary-200 mb-2">Plan My Week</h3>
                             <p className="text-sm text-primary-800 dark:text-primary-300">
-                                Get personalized content strategies tailored to your niche and goals. Generate 2 strategies per month with live trend research.
+                                Get personalized content plans tailored to your niche and goals. Generate 2 plans per month with live trend research.
                             </p>
                         </div>
                         <div className="p-4 bg-primary-50 dark:bg-primary-900/20 rounded-lg">
                             <h3 className="font-semibold text-primary-900 dark:text-primary-200 mb-2">Live Trend Research</h3>
                             <p className="text-sm text-primary-800 dark:text-primary-300">
-                                Strategy generation includes live research so your plan aligns with what’s trending right now in your niche.
+                                Plan My Week includes live research so your plan aligns with what's trending right now in your niche.
                             </p>
                         </div>
                         <div className="p-4 bg-primary-50 dark:bg-primary-900/20 rounded-lg">
-                            <h3 className="font-semibold text-primary-900 dark:text-primary-200 mb-2">Visual Content Calendar</h3>
+                            <h3 className="font-semibold text-primary-900 dark:text-primary-200 mb-2">My Schedule</h3>
                             <p className="text-sm text-primary-800 dark:text-primary-300">
-                                Plan and visualize your content schedule. See your posting strategy at a glance.
+                                Plan and visualize your content schedule. See your posting plan at a glance.
                             </p>
                         </div>
                         <div className="p-4 bg-primary-50 dark:bg-primary-900/20 rounded-lg">
-                            <h3 className="font-semibold text-primary-900 dark:text-primary-200 mb-2">Link-in-Bio Builder</h3>
+                            <h3 className="font-semibold text-primary-900 dark:text-primary-200 mb-2">Bio Link Page</h3>
                             <p className="text-sm text-primary-800 dark:text-primary-300">
                                 Create a professional bio page with up to 5 links. Perfect for driving traffic to your content.
                             </p>
                         </div>
                         <div className="p-4 bg-primary-50 dark:bg-primary-900/20 rounded-lg">
-                            <h3 className="font-semibold text-primary-900 dark:text-primary-200 mb-2">500 AI Captions/Month</h3>
+                            <h3 className="font-semibold text-primary-900 dark:text-primary-200 mb-2">500 Caption Ideas/Month</h3>
                             <p className="text-sm text-primary-800 dark:text-primary-300">
-                                Generate engaging captions at scale. Perfect for maintaining a consistent posting schedule.
+                                Generate engaging caption ideas at scale. Perfect for maintaining a consistent posting schedule.
                             </p>
                         </div>
                         <div className="p-4 bg-primary-50 dark:bg-primary-900/20 rounded-lg">
-                            <h3 className="font-semibold text-primary-900 dark:text-primary-200 mb-2">5GB Media Library</h3>
+                            <h3 className="font-semibold text-primary-900 dark:text-primary-200 mb-2">5GB My Vault</h3>
                             <p className="text-sm text-primary-800 dark:text-primary-300">
                                 Upload and organize your content assets so you can reuse them quickly when planning and scheduling.
+                            </p>
+                        </div>
+                        <div className="p-4 bg-primary-50 dark:bg-primary-900/20 rounded-lg">
+                            <h3 className="font-semibold text-primary-900 dark:text-primary-200 mb-2">AI Training (Settings)</h3>
+                            <p className="text-sm text-primary-800 dark:text-primary-300">
+                                Set your AI personality and creator personality so captions and plans sound like you.
                             </p>
                         </div>
                     </div>
                     <div className="mt-4 p-4 border border-primary-200 dark:border-primary-800 rounded-lg bg-white/60 dark:bg-gray-800/40">
                         <p className="text-sm text-gray-700 dark:text-gray-300">
-                            <strong>Where to find it:</strong> open <strong>Strategy</strong> (AI plans), <strong>Calendar</strong> (schedule),
-                            <strong>Compose</strong> (captions), and <strong>Link in Bio</strong> (bio builder).
+                                <strong>Where to find it:</strong> open <strong>Plan My Week</strong> (weekly plans), <strong>My Schedule</strong>,
+                                <strong>Write Captions</strong> (captions), <strong>Bio Link Page</strong>, and <strong>Settings → AI Training</strong>.
                         </p>
                     </div>
                 </div>
@@ -267,28 +274,34 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                         <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
                             <h3 className="font-semibold text-purple-900 dark:text-purple-200 mb-2">1) Build your plan</h3>
                             <p className="text-sm text-purple-800 dark:text-purple-300">
-                                Open <strong>Strategy</strong> to generate a roadmap (Elite: 5 strategies/month + enhanced trend research).
+                                Open <strong>Plan My Week</strong> to generate a roadmap (Elite: 5 plans/month + enhanced trend research).
                             </p>
                         </div>
 
                         <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
                             <h3 className="font-semibold text-purple-900 dark:text-purple-200 mb-2">2) Schedule your week</h3>
                             <p className="text-sm text-purple-800 dark:text-purple-300">
-                                Open <strong>Calendar</strong> to plan and organize what you’ll post and when.
+                                Open <strong>My Schedule</strong> to plan and organize what you’ll post and when.
                             </p>
                         </div>
 
                         <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
                             <h3 className="font-semibold text-purple-900 dark:text-purple-200 mb-2">3) Create faster</h3>
                             <p className="text-sm text-purple-800 dark:text-purple-300">
-                                Use <strong>Compose</strong> for captions and <strong>Media Library</strong> to store/tag content.
+                                Use <strong>Write Captions</strong> for captions and <strong>My Vault</strong> to store/tag content.
+                            </p>
+                        </div>
+                        <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                            <h3 className="font-semibold text-purple-900 dark:text-purple-200 mb-2">4) Set your AI style</h3>
+                            <p className="text-sm text-purple-800 dark:text-purple-300">
+                                Open <strong>Settings → AI Training</strong> and add your AI personality and creator personality.
                             </p>
                         </div>
 
                         <div className="p-4 border border-purple-200 dark:border-purple-800 rounded-lg bg-white/60 dark:bg-gray-800/40">
                             <p className="text-sm text-gray-700 dark:text-gray-300">
-                                <strong>Where to find it:</strong> use the sidebar to open <strong>Strategy</strong>, <strong>Calendar</strong>,
-                                <strong>Compose</strong>, <strong>Media Library</strong>, and <strong>Link in Bio</strong>.
+                                <strong>Where to find it:</strong> use the sidebar to open <strong>Plan My Week</strong>, <strong>My Schedule</strong>,
+                                <strong>Write Captions</strong>, <strong>My Vault</strong>, <strong>Bio Link Page</strong>, and <strong>Settings → AI Training</strong>.
                             </p>
                         </div>
                     </div>
@@ -306,21 +319,27 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                     </p>
                     <div className="mt-6 space-y-4">
                         <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                            <h3 className="font-semibold text-purple-900 dark:text-purple-200 mb-2">Advanced Strategy Options</h3>
+                            <h3 className="font-semibold text-purple-900 dark:text-purple-200 mb-2">Advanced Plan My Week Options</h3>
                             <p className="text-sm text-purple-800 dark:text-purple-300">
-                                Get 5 AI strategies per month with enhanced live trend research (40 searches/month). Deep dive into niche-specific insights.
+                                Get 5 plans per month with enhanced live trend research (40 searches/month). Deep dive into niche-specific insights.
                             </p>
                         </div>
                         <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                            <h3 className="font-semibold text-purple-900 dark:text-purple-200 mb-2">1,500 AI Captions/Month</h3>
+                            <h3 className="font-semibold text-purple-900 dark:text-purple-200 mb-2">1,500 Caption Ideas/Month</h3>
                             <p className="text-sm text-purple-800 dark:text-purple-300">
-                                Scale your content creation with unlimited caption generation. Perfect for daily posting.
+                                Scale your content creation with lots of caption ideas. Perfect for daily posting.
                             </p>
                         </div>
                         <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                            <h3 className="font-semibold text-purple-900 dark:text-purple-200 mb-2">Unlimited Link-in-Bio</h3>
+                            <h3 className="font-semibold text-purple-900 dark:text-purple-200 mb-2">Unlimited Bio Link Page</h3>
                             <p className="text-sm text-purple-800 dark:text-purple-300">
                                 Add as many links as you need. Perfect for creators with multiple revenue streams.
+                            </p>
+                        </div>
+                        <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                            <h3 className="font-semibold text-purple-900 dark:text-purple-200 mb-2">AI Training (Settings)</h3>
+                            <p className="text-sm text-purple-800 dark:text-purple-300">
+                                Set your AI personality and creator personality so everything sounds like you.
                             </p>
                         </div>
                     </div>
@@ -328,11 +347,11 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
             );
         }
 
-        // Step 7: Elite Premium Content Studio (Elite only)
+        // Step 7: Elite Monetized Creator Studio (Elite only)
         if (step === 7 && isElitePlan) {
             return (
                 <div className="animate-fade-in">
-                    <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-white">Premium Content Studio (Elite)</h2>
+                    <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-white">Monetized Creator Studio (Elite)</h2>
                     <p className="mt-2 text-center text-gray-500 dark:text-gray-400">
                         Your Elite plan unlocks OnlyFans, Fansly, and Fanvue-specific tools to help you plan, organize, and scale faster.
                     </p>
@@ -357,7 +376,7 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                         </div>
                         <div className="p-4 border border-purple-200 dark:border-purple-800 rounded-lg bg-white/60 dark:bg-gray-800/40">
                             <p className="text-sm text-gray-700 dark:text-gray-300">
-                                <strong>Where to find it:</strong> open the sidebar and click <strong>Premium Content Studio</strong>.
+                                <strong>Where to find it:</strong> open the sidebar and click <strong>Monetized Creator Studio</strong>.
                             </p>
                         </div>
                     </div>
@@ -404,12 +423,13 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                     <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg text-left">
                         <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Quick Start Guide</h3>
                         <ul className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
-                            <li>• Generate your first AI strategy</li>
-                            <li>• Create AI captions for your posts</li>
-                            <li>• Set up your Link-in-Bio page</li>
-                            <li>• Upload media to your library</li>
-                            {isProPlan && <li>• Explore your Visual Content Calendar</li>}
-                            {isElitePlan && <li>• Explore Premium Content Studio (Content Brain, Studio Calendar, Media Vault)</li>}
+                            <li>• Generate your first weekly plan</li>
+                            <li>• Create caption ideas for your posts</li>
+                            <li>• Set up your Bio Link Page</li>
+                            <li>• Upload media to your vault</li>
+                            <li>• Set up AI Training (AI Personality + Creator Personality)</li>
+                            {isProPlan && <li>• Explore My Schedule</li>}
+                            {isElitePlan && <li>• Explore Monetized Creator Studio (Content Brain, Studio Calendar, Media Vault)</li>}
                         </ul>
                     </div>
                 </div>

@@ -56,8 +56,8 @@ export const FeedbackSurveyModal: React.FC<Props> = ({
             options: [
               { value: "strategy", label: "Strategy" },
               { value: "calendar", label: "Calendar" },
-              { value: "compose", label: "Compose" },
-              { value: "media", label: "Media Library" },
+              { value: "compose", label: "Write Captions" },
+              { value: "media", label: "My Vault" },
             ],
           },
           {
@@ -104,8 +104,8 @@ export const FeedbackSurveyModal: React.FC<Props> = ({
           options: [
             { value: "strategy", label: "Strategy" },
             { value: "calendar", label: "Calendar" },
-            { value: "compose", label: "Compose" },
-            { value: "media", label: "Media Library" },
+            { value: "compose", label: "Write Captions" },
+            { value: "media", label: "My Vault" },
             { value: "not_sure", label: "Not sure yet" },
           ],
         },
@@ -125,8 +125,8 @@ export const FeedbackSurveyModal: React.FC<Props> = ({
           label: "What’s been the most useful so far?",
           options: [
             { value: "strategy_generation", label: "Strategy generation" },
-            { value: "calendar_planning", label: "Calendar planning" },
-            { value: "compose", label: "Compose / captions" },
+            { value: "calendar_planning", label: "Schedule planning" },
+            { value: "compose", label: "Write Captions" },
             { value: "media_organization", label: "Media organization" },
             { value: "no_value_yet", label: "I haven’t found value yet" },
           ],

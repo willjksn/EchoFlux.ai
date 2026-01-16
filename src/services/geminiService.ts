@@ -118,8 +118,12 @@ export async function generateCaptions(opts: {
   tone?: string | null;
   promptText?: string | null;
   platforms?: string[] | null; // Selected platforms for platform-specific hashtags
+  usePersonality?: boolean; // Whether to use creator personality in generation
+  useFavoriteHashtags?: boolean; // Whether to use favorite hashtags in generation
+  creatorPersonality?: string | null; // Creator personality description
+  favoriteHashtags?: string | null; // Favorite hashtags
 }) {
-  const { mediaUrl, mediaUrls, mediaData, goal, tone, promptText, platforms } = opts;
+  const { mediaUrl, mediaUrls, mediaData, goal, tone, promptText, platforms, usePersonality, useFavoriteHashtags, creatorPersonality, favoriteHashtags } = opts;
 
   return await callFunction("generateCaptions", {
     mediaUrl: mediaUrl || null,
@@ -129,6 +133,10 @@ export async function generateCaptions(opts: {
     tone: tone || null,
     promptText: promptText || null,
     platforms: platforms || null, // Pass platforms for hashtag generation
+    usePersonality: usePersonality || false,
+    useFavoriteHashtags: useFavoriteHashtags || false,
+    creatorPersonality: creatorPersonality || null,
+    favoriteHashtags: favoriteHashtags || null,
   });
 }
 
@@ -425,7 +433,12 @@ export async function generateContentStrategy(
   tone: string,
   platformFocus: string,
   analyticsData?: any,
-  postingHistoryAnalysis?: string
+  postingHistoryAnalysis?: string,
+  contextDescription?: string,
+  usePersonality?: boolean,
+  useFavoriteHashtags?: boolean,
+  creatorPersonality?: string | null,
+  favoriteHashtags?: string | null
 ): Promise<any> {
   // Strategy generation can take longer due to niche research and multiple API calls
   // Use 120 seconds (2 minutes) timeout instead of default 30 seconds
@@ -438,6 +451,11 @@ export async function generateContentStrategy(
     platformFocus,
     analyticsData,
     postingHistoryAnalysis,
+    contextDescription: contextDescription || null,
+    usePersonality: usePersonality || false,
+    useFavoriteHashtags: useFavoriteHashtags || false,
+    creatorPersonality: creatorPersonality || null,
+    favoriteHashtags: favoriteHashtags || null,
   }, 120000); // 120 second timeout
   // Return the plan directly (API now returns { plan: StrategyPlan })
   return res.plan || res;

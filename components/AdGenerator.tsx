@@ -11,7 +11,7 @@ export const AdGenerator: React.FC = () => {
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-12 text-center">
         <SparklesIcon className="w-16 h-16 text-primary-600 dark:text-primary-400 mx-auto mb-4" />
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-            AI Ad Generator
+            Ad Ideas
           </h1>
         <p className="text-xl text-gray-600 dark:text-gray-400 mb-2">
           Coming Soon

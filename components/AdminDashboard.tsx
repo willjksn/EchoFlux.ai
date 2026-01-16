@@ -994,18 +994,18 @@ export const AdminDashboard: React.FC = () => {
                 )}
             </div>
 
-            {/* Premium Content Studio AI Model Usage */}
+            {/* Monetized Creator Studio AI Model Usage */}
             {modelUsageStats && (
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md mt-6">
                     <div className="flex items-center justify-between mb-6">
                         <div>
-                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Premium Content Studio AI Model Usage</h3>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Track AI usage specifically for Premium Content Studio features</p>
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Monetized Creator Studio AI Model Usage</h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Track AI usage specifically for Monetized Creator Studio features</p>
                         </div>
                     </div>
 
                     {(() => {
-                        // Filter Premium Content Studio-related tasks
+                        // Filter Monetized Creator Studio-related tasks
                         // Note: Some features (Content Brain, Roleplay) may use shared task types (caption, strategy, etc.)
                         // that are also used by the main app, so they appear in the general analytics
                         const premiumContentStudioTasks = ['sexting_session'];
@@ -1016,7 +1016,7 @@ export const AdminDashboard: React.FC = () => {
                             requestsByDay: [] as Array<{ date: string; count: number; cost: number }>,
                         };
 
-                        // Calculate Premium Content Studio stats from modelUsageStats
+                        // Calculate Monetized Creator Studio stats from modelUsageStats
                         premiumContentStudioTasks.forEach(task => {
                             const count = modelUsageStats.requestsByTask[task as keyof typeof modelUsageStats.requestsByTask] as number || 0;
                             if (count > 0) {
@@ -1026,14 +1026,14 @@ export const AdminDashboard: React.FC = () => {
                         });
 
                         // Calculate cost using average cost per request (more accurate than fixed estimate)
-                        // Premium Content Studio tasks use medium tier, so we use the overall average cost per request
+                        // Monetized Creator Studio tasks use medium tier, so we use the overall average cost per request
                         premiumContentStudioStats.totalCost = premiumContentStudioStats.totalRequests * modelUsageStats.averageCostPerRequest;
 
                         if (premiumContentStudioStats.totalRequests === 0) {
                             return (
                                 <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                                    <p className="text-sm">No Premium Content Studio AI usage data yet</p>
-                                    <p className="text-xs mt-1">Usage will appear here when creators use Premium Content Studio AI features</p>
+                                    <p className="text-sm">No Monetized Creator Studio AI usage data yet</p>
+                                    <p className="text-xs mt-1">Usage will appear here when creators use Monetized Creator Studio AI features</p>
                                     <p className="text-xs mt-2 text-gray-400 dark:text-gray-500">Note: Some features (Content Brain, Roleplay) may use shared task types that appear in general analytics</p>
                                 </div>
                             );
@@ -1044,11 +1044,11 @@ export const AdminDashboard: React.FC = () => {
                                 {/* Key Metrics */}
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <div className="p-4 bg-gradient-to-br from-pink-50 to-pink-100 dark:from-pink-900/20 dark:to-pink-800/20 rounded-lg border border-pink-200 dark:border-pink-700">
-                                        <p className="text-xs font-medium text-pink-700 dark:text-pink-300 mb-1">Total Premium Content Studio Requests</p>
+                                        <p className="text-xs font-medium text-pink-700 dark:text-pink-300 mb-1">Total Monetized Creator Studio Requests</p>
                                         <p className="text-2xl font-bold text-pink-900 dark:text-pink-100">{premiumContentStudioStats.totalRequests.toLocaleString()}</p>
                                     </div>
                                     <div className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-lg border border-purple-200 dark:border-purple-700">
-                                        <p className="text-xs font-medium text-purple-700 dark:text-purple-300 mb-1">Total Premium Content Studio Cost</p>
+                                        <p className="text-xs font-medium text-purple-700 dark:text-purple-300 mb-1">Total Monetized Creator Studio Cost</p>
                                         <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">${premiumContentStudioStats.totalCost.toFixed(2)}</p>
                                     </div>
                                     <div className="p-4 bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/20 dark:to-indigo-800/20 rounded-lg border border-indigo-200 dark:border-indigo-700">
@@ -1057,9 +1057,9 @@ export const AdminDashboard: React.FC = () => {
                                     </div>
                                 </div>
 
-                                {/* Premium Content Studio Tasks Breakdown */}
+                                {/* Monetized Creator Studio Tasks Breakdown */}
                                 <div>
-                                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Premium Content Studio Features Usage</h4>
+                                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Monetized Creator Studio Features Usage</h4>
                                     <div className="space-y-2">
                                         {Object.entries(premiumContentStudioStats.requestsByTask)
                                             .sort(([, a], [, b]) => (b as number) - (a as number))

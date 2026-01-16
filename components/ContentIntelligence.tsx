@@ -147,7 +147,7 @@ export const ContentIntelligence: React.FC = () => {
 
     const handleGapAnalysis = async () => {
         if (!user) {
-            showToast('Please sign in to analyze content gaps', 'error');
+            showToast("Please sign in to check what's missing", 'error');
             return;
         }
 
@@ -169,22 +169,22 @@ export const ContentIntelligence: React.FC = () => {
             });
 
             if (!response.ok) {
-                throw new Error('Failed to analyze content gaps');
+                throw new Error("Failed to check what's missing");
             }
 
             const data = await response.json();
             // Save to history regardless of success flag
-            await saveToHistory('gap_analysis', `Content Gap Analysis - ${new Date().toLocaleDateString()}`, data);
+            await saveToHistory('gap_analysis', `What's Missing - ${new Date().toLocaleDateString()}`, data);
             if (data.success) {
                 setGapAnalysis(data);
                 setShowGapModal(true);
-                showToast('Content gap analysis complete!', 'success');
+                showToast("What's missing check complete!", 'success');
             } else {
-                showToast('Analysis completed but may have issues. Check history for details.', 'warning');
+                showToast("Check completed but may have issues. See history for details.", 'warning');
             }
         } catch (error: any) {
             console.error('Error analyzing content gaps:', error);
-            showToast(error.message || 'Failed to analyze content gaps', 'error');
+            showToast(error.message || "Failed to check what's missing", 'error');
         } finally {
             setIsAnalyzing(false);
         }
@@ -286,7 +286,7 @@ export const ContentIntelligence: React.FC = () => {
 
             const data = await response.json();
             // Save to history regardless of success flag
-            await saveToHistory('optimize', `Caption Optimization - ${isOnlyFansStudio ? 'OnlyFans' : platformInput}`, { ...data, originalCaption: captionToUse, platform: isOnlyFansStudio ? 'OnlyFans' : platformInput });
+            await saveToHistory('optimize', `Make It Stronger - ${isOnlyFansStudio ? 'OnlyFans' : platformInput}`, { ...data, originalCaption: captionToUse, platform: isOnlyFansStudio ? 'OnlyFans' : platformInput });
             if (data.success) {
                 setOptimizeResult(data);
                 setShowOptimizeModal(true);
@@ -359,7 +359,7 @@ export const ContentIntelligence: React.FC = () => {
                     captionToUse = captions[0].caption;
                     setCaptionInput(captionToUse);
                     setGeneratedMediaCaptions(captions);
-                    showToast('Caption generated from media. Predicting...', 'success');
+                    showToast("Caption generated from media. Checking what's likely to hit...", 'success');
                 } else {
                     showToast('Failed to generate caption from media. Please enter a caption manually.', 'error');
                     return;
@@ -398,13 +398,13 @@ export const ContentIntelligence: React.FC = () => {
 
             const data = await response.json();
             // Save to history regardless of success flag
-            await saveToHistory('predict', `Performance Prediction - ${isOnlyFansStudio ? 'OnlyFans' : platformInput}`, { ...data, originalCaption: captionToUse, platform: isOnlyFansStudio ? 'OnlyFans' : platformInput });
+            await saveToHistory('predict', `Most Likely to Hit - ${isOnlyFansStudio ? 'OnlyFans' : platformInput}`, { ...data, originalCaption: captionToUse, platform: isOnlyFansStudio ? 'OnlyFans' : platformInput });
             if (data.success) {
                 setPredictResult(data);
                 setShowPredictModal(true);
                 showToast('Performance predicted!', 'success');
             } else {
-                showToast('Prediction completed but may have issues. Check history for details.', 'warning');
+                showToast("Check completed but may have issues. See history for details.", 'warning');
             }
         } catch (error: any) {
             console.error('Error predicting performance:', error);
@@ -1134,17 +1134,17 @@ export const ContentIntelligence: React.FC = () => {
                             {isAnalyzing ? (
                                 <>
                                     <RefreshIcon className="w-5 h-5 animate-spin" />
-                                    Analyzing...
+                                    Checking...
                                 </>
                             ) : (
                                 <>
                                     <SparklesIcon className="w-5 h-5" />
-                                    Analyze Content Gaps
+                                    What's Missing
                                 </>
                             )}
                         </button>
 
-                        {/* Predict */}
+                        {/* What To Post Next */}
                         <button
                             onClick={handlePredict}
                             disabled={isPredicting || (!captionInput.trim() && generatedMediaCaptions.length === 0)}
@@ -1153,12 +1153,12 @@ export const ContentIntelligence: React.FC = () => {
                             {isPredicting ? (
                                 <>
                                     <RefreshIcon className="w-5 h-5 animate-spin" />
-                                    Predicting...
+                                    Checking...
                                 </>
                             ) : (
                                 <>
                                     <SparklesIcon className="w-5 h-5" />
-                                    Predict Performance
+                                    What To Post Next
                                 </>
                             )}
                         </button>
@@ -1367,7 +1367,7 @@ const GapAnalysisModal: React.FC<{ analysis: any; onClose: () => void; onCopy: (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
                 <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Content Gap Analysis</h2>
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">What's Missing</h2>
                     <button
                         onClick={onClose}
                         className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
@@ -1385,7 +1385,7 @@ const GapAnalysisModal: React.FC<{ analysis: any; onClose: () => void; onCopy: (
 
                     {analysis.gaps && analysis.gaps.length > 0 && (
                         <div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Identified Gaps</h3>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">What's Missing</h3>
                             <div className="space-y-3">
                                 {analysis.gaps.map((gap: any, idx: number) => (
                                     <div
@@ -1421,7 +1421,7 @@ const GapAnalysisModal: React.FC<{ analysis: any; onClose: () => void; onCopy: (
 
                     {analysis.suggestions && analysis.suggestions.length > 0 && (
                         <div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Content Suggestions</h3>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Ideas to Fill the Gaps</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 {analysis.suggestions.map((suggestion: any, idx: number) => (
                                     <div
@@ -1481,7 +1481,7 @@ const OptimizeModal: React.FC<{ result: any; onClose: () => void; onCopy: (text:
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
                 <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Caption Optimization</h2>
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Make It Stronger</h2>
                     <button
                         onClick={onClose}
                         className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
@@ -1510,7 +1510,7 @@ const OptimizeModal: React.FC<{ result: any; onClose: () => void; onCopy: (text:
                     {/* Scores */}
                     {result.scores && (
                         <div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Quality Scores</h3>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Quality Check</h3>
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                                 {Object.entries(result.scores).map(([key, value]: [string, any]) => (
                                     <div key={key} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
@@ -1593,7 +1593,7 @@ const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: 
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
                 <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Performance Prediction</h2>
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Most Likely to Hit</h2>
                     <button
                         onClick={onClose}
                         className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
@@ -1606,7 +1606,7 @@ const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: 
                     {/* Prediction Summary */}
                     <div className={`p-6 rounded-lg border-2 ${getLevelColor(level)}`}>
                         <div className="text-center">
-                            <p className="text-sm font-medium mb-2">Predicted Performance</p>
+                            <p className="text-sm font-medium mb-2">Likely Performance</p>
                             <p className="text-4xl font-bold mb-2">{level}</p>
                             <div className="flex items-center justify-center gap-4 mt-4">
                                 <div>
@@ -1627,7 +1627,7 @@ const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: 
                     {/* Factor Breakdown */}
                     {result.factors && (
                         <div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Factor Analysis</h3>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Why It Might Hit</h3>
                             <div className="space-y-3">
                                 {Object.entries(result.factors).map(([key, value]: [string, any]) => (
                                     <div key={key} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
@@ -1651,7 +1651,7 @@ const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: 
                     {/* Improvements */}
                     {result.improvements && result.improvements.length > 0 && (
                         <div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Improvement Suggestions</h3>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Ways to Improve</h3>
                             <div className="space-y-2">
                                 {result.improvements.map((imp: any, idx: number) => (
                                     <div key={idx} className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
@@ -1677,7 +1677,7 @@ const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: 
                     {/* Optimized Version */}
                     {result.optimizedVersion && (
                         <div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Optimized Version</h3>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Stronger Version</h3>
                             <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
                                 <p className="text-gray-900 dark:text-white whitespace-pre-wrap mb-2">{result.optimizedVersion.caption}</p>
                                 {result.optimizedVersion.expectedBoost && (

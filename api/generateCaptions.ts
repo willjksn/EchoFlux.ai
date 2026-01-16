@@ -237,6 +237,10 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     platforms, // Array of selected platforms for platform-specific hashtags
     emojiEnabled,
     emojiIntensity,
+    usePersonality,
+    useFavoriteHashtags,
+    creatorPersonality,
+    favoriteHashtags,
   }: {
     mediaUrl?: string;
     mediaUrls?: string[];
@@ -247,12 +251,18 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     platforms?: string[]; // Selected platforms for hashtag generation
     emojiEnabled?: boolean;
     emojiIntensity?: number;
+    usePersonality?: boolean;
+    useFavoriteHashtags?: boolean;
+    creatorPersonality?: string;
+    favoriteHashtags?: string;
   } = req.body || {};
   
   // Sanitize text inputs
   const sanitizedPromptText = promptText ? sanitizeForAI(promptText, 2000) : undefined;
   const sanitizedTone = tone ? sanitizeForAI(tone, 100) : undefined;
   const sanitizedGoal = goal ? sanitizeForAI(goal, 100) : undefined;
+  const sanitizedCreatorPersonality = creatorPersonality ? sanitizeForAI(creatorPersonality, 1000) : undefined;
+  const sanitizedFavoriteHashtags = favoriteHashtags ? sanitizeForAI(favoriteHashtags, 500) : undefined;
 
   const canCache = !mediaData && !mediaUrl && (!mediaUrls || mediaUrls.length === 0);
   const cacheKey = canCache
@@ -595,6 +605,32 @@ ${isOnlyFansPlatform ? `
 - Sound like you're texting a friend, not writing a business email
 - Use platform slang organically - it should feel natural, not like you're checking off a list
 - Gemini has knowledge of OnlyFans/Fansly/Fanvue creator culture - use that knowledge to write authentically
+` : ''}
+
+${usePersonality && sanitizedCreatorPersonality ? `
+🎯 CREATOR PERSONALITY & BRAND VOICE (MUST FOLLOW):
+${sanitizedCreatorPersonality}
+
+CRITICAL - PERSONALITY INTEGRATION:
+- The above personality description defines your authentic brand voice, style, values, and what makes you unique
+- ALL generated captions MUST reflect this personality and brand voice
+- Write in a way that matches the described personality, tone, and style
+- Stay true to the brand voice, content style, and values described above
+- This personality should influence word choice, tone, messaging style, and overall caption approach
+- Make captions feel authentic to this specific creator's brand and personality
+` : ''}
+
+${useFavoriteHashtags && sanitizedFavoriteHashtags ? `
+🏷️ FAVORITE HASHTAGS (USE WHEN APPROPRIATE):
+${sanitizedFavoriteHashtags}
+
+HASHTAG INTEGRATION INSTRUCTIONS:
+- The above hashtags are the creator's favorite/frequently used hashtags
+- When generating hashtags for each caption, PRIORITIZE including relevant ones from this list
+- Don't force every hashtag into every caption - only use ones that are relevant and appropriate for that specific caption
+- Mix favorite hashtags with new, relevant hashtags based on the content
+- For platforms that use hashtags (not OnlyFans), include 5-10 hashtags per caption, prioritizing the favorite ones when they fit
+- Hashtags should feel natural and relevant to the caption content
 ` : ''}
 
 ${promptText && (promptText.includes('PERSONALIZE FOR FAN') || promptText.includes('fan')) ? `

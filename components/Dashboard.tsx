@@ -1157,7 +1157,7 @@ export const Dashboard: React.FC = () => {
             </div>
             <div className="flex items-center gap-2 text-xs text-primary-100/80">
               <SparklesIcon className="w-4 h-4" />
-              <span>Best flow: Strategy → Compose → Calendar</span>
+              <span>Best flow: Plan My Week → Write Captions → My Schedule</span>
             </div>
           </div>
 
@@ -1200,13 +1200,13 @@ export const Dashboard: React.FC = () => {
                   {user?.plan !== 'Free' && (
                     <>
                       <QuickAction
-                        label={isBusiness ? 'Marketing Plan' : 'Content Strategy'}
+                        label={isBusiness ? 'Marketing Plan' : 'Plan My Week'}
                         icon={<TrendingIcon className="w-6 h-6" />}
                         color="bg-gradient-to-br from-blue-500 to-cyan-500"
                         onClick={() => setActivePage('strategy')}
                       />
                       <QuickAction
-                        label="View Calendar"
+                        label="View Schedule"
                         icon={<CalendarIcon className="w-6 h-6" />}
                         color="bg-gradient-to-br from-orange-400 to-red-500"
                         onClick={() => setActivePage('calendar')}
@@ -1219,7 +1219,7 @@ export const Dashboard: React.FC = () => {
                       />
                       {(!isBusiness || user?.plan === 'Agency') && (
                         <QuickAction
-                          label="Opportunities"
+                          label="Find Trends"
                           icon={<TrendingIcon className="w-6 h-6" />}
                           color="bg-gradient-to-br from-pink-500 to-rose-500"
                           onClick={() => setActivePage('opportunities')}
@@ -1235,9 +1235,9 @@ export const Dashboard: React.FC = () => {
             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">Content Intelligence</h3>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">Insights</h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    Analyze your content mix and identify gaps
+                    See what's missing in your mix
                   </p>
                 </div>
               </div>
@@ -1251,9 +1251,9 @@ export const Dashboard: React.FC = () => {
                    <div className="flex items-center justify-between mb-4">
                         <h3 className="text-lg font-bold text-gray-900 dark:text-white">Upcoming Schedule</h3>
                         {user?.plan === 'Free' ? (
-                          <span className="text-sm text-gray-400 dark:text-gray-500 cursor-not-allowed">View Calendar</span>
+                          <span className="text-sm text-gray-400 dark:text-gray-500 cursor-not-allowed">View Schedule</span>
                         ) : (
-                          <button onClick={() => setActivePage('calendar')} className="text-sm text-primary-600 hover:underline">View Calendar</button>
+                          <button onClick={() => setActivePage('calendar')} className="text-sm text-primary-600 hover:underline">View Schedule</button>
                         )}
                    </div>
                    <div className="space-y-3">
@@ -1263,9 +1263,9 @@ export const Dashboard: React.FC = () => {
                             <div className="text-center py-8 bg-gray-50 dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
                                 <p className="text-gray-500 text-sm">No upcoming planned content.</p>
                                 {user?.plan === 'Free' ? (
-                                    <span className="mt-2 text-gray-400 dark:text-gray-500 text-sm cursor-not-allowed">Start a content plan</span>
+                                    <span className="mt-2 text-gray-400 dark:text-gray-500 text-sm cursor-not-allowed">Start a weekly plan</span>
                                 ) : (
-                                    <button onClick={() => setActivePage('strategy')} className="mt-2 text-primary-600 text-sm font-medium">Start a content plan</button>
+                                    <button onClick={() => setActivePage('strategy')} className="mt-2 text-primary-600 text-sm font-medium">Start a weekly plan</button>
                                 )}
                             </div>
                         )}
@@ -1275,7 +1275,7 @@ export const Dashboard: React.FC = () => {
               {/* Weekly Plan Suggestions */}
               <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">AI Weekly Plan</h3>
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Weekly Plan</h3>
                         {user?.plan === 'Free' && weeklyPlanUsage && weeklyPlanUsage.remaining <= 0 ? (
                           <span className="text-sm text-gray-400 dark:text-gray-500 cursor-not-allowed">Limit Reached</span>
                         ) : (
@@ -1297,7 +1297,7 @@ export const Dashboard: React.FC = () => {
                    )}
                    <div className="space-y-3">
                         {isPlanningWeek && (
-                          <p className="text-sm text-gray-500 dark:text-gray-400">EchoFlux.ai is planning your week…</p>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">Building your weekly plan…</p>
                         )}
                         {!isPlanningWeek && weeklySuggestions.length === 0 && (
                           <div className="text-center py-8 bg-gray-50 dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
@@ -2464,7 +2464,7 @@ export const Dashboard: React.FC = () => {
                   </div>
                   <div className="p-4 bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 rounded-lg border border-purple-200 dark:border-purple-700 text-center">
                     <p className="text-2xl font-bold text-gray-900 dark:text-white mb-1">{opportunityMessages.length}</p>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">Opportunities</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Trends</p>
                   </div>
                   <div className="p-4 bg-gradient-to-br from-gray-50 to-slate-50 dark:from-gray-900/20 dark:to-slate-900/20 rounded-lg border border-gray-200 dark:border-gray-700 text-center">
                     <p className="text-2xl font-bold text-gray-900 dark:text-white mb-1">{generalMessages.length}</p>
@@ -3272,7 +3272,7 @@ export const Dashboard: React.FC = () => {
                   <ol className="list-decimal pl-5 space-y-1">
                     <li>Generate a content strategy</li>
                     <li>Move items onto your calendar</li>
-                    <li>Use Compose to generate captions</li>
+                    <li>Use Write Captions to generate captions</li>
                     <li>Attach media from your library</li>
                     <li>Copy + post manually to your platforms</li>
                   </ol>

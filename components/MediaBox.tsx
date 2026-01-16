@@ -12,6 +12,7 @@ import {
   SendIcon,
   MobileIcon,
   ImageIcon,
+  HashtagIcon,
   PlusIcon,
   EmojiIcon,
   FaceSmileIcon,
@@ -98,6 +99,12 @@ interface MediaBoxProps {
   isSelected: boolean;
   onToggleSelect: (index: number) => void;
   onPreview: (index: number) => void;
+  usePersonality?: boolean;
+  useFavoriteHashtags?: boolean;
+  creatorPersonality?: string;
+  favoriteHashtags?: string;
+  onTogglePersonality?: () => void;
+  onToggleHashtags?: () => void;
   onPublish: (index: number) => void;
   onSchedule: (index: number) => void;
   onSaveToWorkflow: (index: number, status: 'Draft' | 'Scheduled') => void;
@@ -128,6 +135,12 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   onAIAutoSchedule,
   platformIcons,
   onUpgradeClick,
+  usePersonality = false,
+  useFavoriteHashtags = false,
+  creatorPersonality,
+  favoriteHashtags,
+  onTogglePersonality,
+  onToggleHashtags,
 }) => {
   const { user, setUser, showToast, setActivePage } = useAppContext();
   const [isGenerating, setIsGenerating] = useState(false);
@@ -410,6 +423,10 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
       tone: mediaItem.postTone,
       promptText: undefined,
       platforms: [selectedPlatform], // platform-optimized captions
+      usePersonality: usePersonality && creatorPersonality ? true : false,
+      useFavoriteHashtags: useFavoriteHashtags && favoriteHashtags ? true : false,
+      creatorPersonality: usePersonality ? creatorPersonality || null : null,
+      favoriteHashtags: useFavoriteHashtags ? favoriteHashtags || null : null,
     });
 
     const results = normalizeCaptionResults(res);
@@ -518,6 +535,10 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
         tone: mediaItem.postTone,
         promptText: undefined,
         platforms: [selectedPlatform],
+        usePersonality: usePersonality && creatorPersonality ? true : false,
+        useFavoriteHashtags: useFavoriteHashtags && favoriteHashtags ? true : false,
+        creatorPersonality: usePersonality ? creatorPersonality || null : null,
+        favoriteHashtags: useFavoriteHashtags ? favoriteHashtags || null : null,
       });
 
       const generatedResults = normalizeCaptionResults(res);
@@ -841,11 +862,11 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
                 setShowMediaLibraryModal(true);
               }}
               className="flex-1 flex flex-col items-center justify-center h-20 border-2 border-dashed border-primary-300 dark:border-primary-600 bg-primary-50 dark:bg-primary-900/20 rounded-lg cursor-pointer hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors"
-              title="Select from Media Library"
+              title="Select from My Vault"
             >
               <ImageIcon className="w-6 h-6 text-primary-600 dark:text-primary-400" />
               <span className="text-xs text-primary-600 dark:text-primary-400 mt-1">
-                Media Library
+                My Vault
               </span>
             </button>
           </div>
@@ -894,6 +915,52 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
             ))}
           </select>
         </div>
+      </div>
+
+      {/* Personality & Hashtag Toggle Buttons */}
+      <div className="mb-3">
+        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+          AI Generation Options
+        </label>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={onTogglePersonality}
+            disabled={!creatorPersonality}
+            className={`px-3 py-1.5 rounded text-xs font-medium transition-colors flex items-center gap-1.5 ${
+              usePersonality
+                ? 'bg-primary-600 text-white hover:bg-primary-700'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            } ${!creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`}
+            title={!creatorPersonality ? 'Add a personality description in Settings to enable' : undefined}
+          >
+            <CheckCircleIcon className={`w-3.5 h-3.5 ${usePersonality ? 'opacity-100' : 'opacity-0'}`} />
+            Personality
+          </button>
+          <button
+            onClick={onToggleHashtags}
+            disabled={!favoriteHashtags}
+            className={`px-3 py-1.5 rounded text-xs font-medium transition-colors flex items-center gap-1.5 ${
+              useFavoriteHashtags
+                ? 'bg-primary-600 text-white hover:bg-primary-700'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            } ${!favoriteHashtags ? 'opacity-50 cursor-not-allowed' : ''}`}
+            title={!favoriteHashtags ? 'Add favorite hashtags in Settings to enable' : undefined}
+          >
+            <span className={useFavoriteHashtags ? 'opacity-100' : 'opacity-0'}>
+              <HashtagIcon />
+            </span>
+            Hashtags
+          </button>
+        </div>
+        <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+          {usePersonality && useFavoriteHashtags
+            ? 'AI will use your personality and favorite hashtags.'
+            : usePersonality
+            ? 'AI will use your creator personality.'
+            : useFavoriteHashtags
+            ? 'AI will use your favorite hashtags.'
+            : 'Enable toggles to include personality or hashtags.'}
+        </p>
       </div>
 
       {/* Platform Selection - Single Select - Moved below Goal & Tone */}
@@ -1043,11 +1110,10 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
             disabled={
               isAnalyzingGaps ||
               !user ||
-              user.plan === 'Free' ||
               ((user.plan !== 'Pro' && user.plan !== 'Elite' && user.plan !== 'Agency' && user.plan !== 'OnlyFansStudio' && user.role !== 'Admin'))
             }
             className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-all shadow-sm flex items-center justify-center gap-1 ${
-              (!user || user?.plan === 'Free' || (user.plan !== 'Pro' && user.plan !== 'Elite' && user.plan !== 'Agency' && user.plan !== 'OnlyFansStudio' && user.role !== 'Admin'))
+              (!user || (user.plan !== 'Pro' && user.plan !== 'Elite' && user.plan !== 'Agency' && user.plan !== 'OnlyFansStudio' && user.role !== 'Admin'))
                 ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
                 : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed'
             }`}
@@ -1061,8 +1127,8 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
               <>
                 <SparklesIcon className="w-3 h-3" />
                 {user?.plan === 'Pro'
-                  ? `Analyze Content Gaps (${user.monthlyContentGapsUsed || 0}/2)`
-                  : 'Analyze Content Gaps'}
+                  ? `What's Missing (${user.monthlyContentGapsUsed || 0}/2)`
+                  : "What's Missing"}
               </>
             )}
           </button>
@@ -1080,12 +1146,12 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
                   : 0;
 
               if (limit === 0) {
-                showToast('Upgrade to Pro or Elite to unlock Predict', 'info');
+                showToast('Upgrade to Pro or Elite to unlock What To Post Next', 'info');
                 setActivePage('pricing');
                 return;
               }
               if (isFinite(limit) && used >= limit) {
-                showToast('Monthly Predict limit reached. Upgrade to Elite for unlimited access.', 'info');
+                showToast('Monthly What To Post Next limit reached. Upgrade to Elite for unlimited access.', 'info');
                 setActivePage('pricing');
                 return;
               }
@@ -1127,19 +1193,18 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
                 const data = await response.json();
                 if (data.success) {
                   // Optimistically bump local usage
-                  setUser(prev => {
-                    if (!prev) return prev;
-                    const newMonthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
-                    const monthChanged2 = prev.composeInsightsUsageMonth !== newMonthKey;
-                    const base: any = monthChanged2
-                      ? { monthlyContentGapsUsed: 0, monthlyPredictionsUsed: 0, monthlyRepurposesUsed: 0, composeInsightsUsageMonth: newMonthKey }
-                      : { composeInsightsUsageMonth: prev.composeInsightsUsageMonth || newMonthKey };
-                    return {
-                      ...prev,
-                      ...base,
-                      monthlyPredictionsUsed: (monthChanged2 ? 0 : (prev.monthlyPredictionsUsed || 0)) + 1,
-                    };
+                if (user) {
+                  const newMonthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+                  const monthChanged2 = user.composeInsightsUsageMonth !== newMonthKey;
+                  const base: any = monthChanged2
+                    ? { monthlyContentGapsUsed: 0, monthlyPredictionsUsed: 0, monthlyRepurposesUsed: 0, composeInsightsUsageMonth: newMonthKey }
+                    : { composeInsightsUsageMonth: user.composeInsightsUsageMonth || newMonthKey };
+                  await setUser({
+                    ...user,
+                    ...base,
+                    monthlyPredictionsUsed: (monthChanged2 ? 0 : (user.monthlyPredictionsUsed || 0)) + 1,
                   });
+                }
 
                   // Save to history
                   await savePredictToHistory({
@@ -1160,15 +1225,15 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
                 setIsGenerating(false);
               }
             }}
-            disabled={isGenerating || !user || user?.plan === 'Free' || !mediaItem.previewUrl}
+            disabled={isGenerating || !user || !mediaItem.previewUrl}
             className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-all shadow-sm flex items-center justify-center gap-1 ${
-              user?.plan === 'Free' || !mediaItem.previewUrl
+              !mediaItem.previewUrl
                 ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
                 : 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:from-blue-700 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed'
             }`}
           >
             <SparklesIcon className="w-3 h-3" />
-            {user?.plan === 'Pro' ? `Predict (${user.monthlyPredictionsUsed || 0}/5)` : 'Predict'}
+            {user?.plan === 'Pro' ? `What To Post Next (${user.monthlyPredictionsUsed || 0}/5)` : 'What To Post Next'}
           </button>
           <button
             onClick={async () => {
@@ -1231,19 +1296,18 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
                 const data = await response.json();
                 if (data.success && data.repurposedContent) {
                   // Optimistically bump local usage
-                  setUser(prev => {
-                    if (!prev) return prev;
-                    const newMonthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
-                    const monthChanged2 = prev.composeInsightsUsageMonth !== newMonthKey;
-                    const base: any = monthChanged2
-                      ? { monthlyContentGapsUsed: 0, monthlyPredictionsUsed: 0, monthlyRepurposesUsed: 0, composeInsightsUsageMonth: newMonthKey }
-                      : { composeInsightsUsageMonth: prev.composeInsightsUsageMonth || newMonthKey };
-                    return {
-                      ...prev,
-                      ...base,
-                      monthlyRepurposesUsed: (monthChanged2 ? 0 : (prev.monthlyRepurposesUsed || 0)) + 1,
-                    };
+                if (user) {
+                  const newMonthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+                  const monthChanged2 = user.composeInsightsUsageMonth !== newMonthKey;
+                  const base: any = monthChanged2
+                    ? { monthlyContentGapsUsed: 0, monthlyPredictionsUsed: 0, monthlyRepurposesUsed: 0, composeInsightsUsageMonth: newMonthKey }
+                    : { composeInsightsUsageMonth: user.composeInsightsUsageMonth || newMonthKey };
+                  await setUser({
+                    ...user,
+                    ...base,
+                    monthlyRepurposesUsed: (monthChanged2 ? 0 : (user.monthlyRepurposesUsed || 0)) + 1,
                   });
+                }
 
                   // Save to history
                   await saveRepurposeToHistory({
@@ -1264,9 +1328,9 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
                 setIsGenerating(false);
               }
             }}
-            disabled={isGenerating || !user || user?.plan === 'Free' || !mediaItem.previewUrl}
+            disabled={isGenerating || !user || !mediaItem.previewUrl}
             className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center justify-center gap-1 ${
-              user?.plan === 'Free' || !mediaItem.previewUrl
+              !mediaItem.previewUrl
                 ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
                 : 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed'
             }`}
@@ -1442,11 +1506,11 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
           </div>
           {mediaItem.selectedMusic ? (
             <div className="p-2 bg-gray-50 dark:bg-gray-700 rounded-md text-xs">
-              <div className="font-medium text-gray-800 dark:text-gray-200">{mediaItem.selectedMusic.name}</div>
-              <div className="text-gray-600 dark:text-gray-400">{mediaItem.selectedMusic.artist}</div>
-              {mediaItem.selectedMusic.genre && (
+              <div className="font-medium text-gray-800 dark:text-gray-200">{mediaItem.selectedMusic?.name}</div>
+              <div className="text-gray-600 dark:text-gray-400">{mediaItem.selectedMusic?.artist}</div>
+              {mediaItem.selectedMusic?.genre && (
                 <div className="text-gray-500 dark:text-gray-500 mt-1">
-                  {mediaItem.selectedMusic.genre} • {mediaItem.selectedMusic.mood}
+                  {mediaItem.selectedMusic?.genre} • {mediaItem.selectedMusic?.mood}
                 </div>
               )}
               <button
@@ -1615,12 +1679,12 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
         )}
       </div>
 
-      {/* Media Library Modal */}
+      {/* My Vault Modal */}
       {showMediaLibraryModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden flex flex-col">
             <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white">Select from Media Library</h3>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white">Select from My Vault</h3>
               <button
                 onClick={() => setShowMediaLibraryModal(false)}
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-2xl"
@@ -1644,7 +1708,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
                     }}
                     className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
                   >
-                    Go to Media Library
+                    Go to My Vault
                   </button>
                 </div>
               ) : (
@@ -1885,7 +1949,7 @@ const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: 
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Performance Prediction</h2>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Most Likely to Hit</h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
@@ -1898,7 +1962,7 @@ const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: 
           {/* Prediction Summary */}
           <div className={`p-6 rounded-lg border-2 ${getLevelColor(level)}`}>
             <div className="text-center">
-              <p className="text-sm font-medium mb-2">Predicted Performance</p>
+              <p className="text-sm font-medium mb-2">Likely Performance</p>
               <p className="text-4xl font-bold mb-2">{level}</p>
               <div className="flex items-center justify-center gap-4 mt-4">
                 <div>

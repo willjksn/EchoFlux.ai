@@ -213,12 +213,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         <div className="rounded-xl bg-gray-50 dark:bg-white/5 p-3 text-xs text-gray-800 dark:text-gray-200">
                           <div className="flex items-center justify-between">
                             <span className="font-medium">This week&apos;s focus</span>
-                            <span className="text-[0.7rem] text-primary-700 dark:text-primary-100">Strategy · Creator</span>
+                            <span className="text-[0.7rem] text-primary-700 dark:text-primary-100">Plan My Week · Creator</span>
                           </div>
                           <ul className="mt-2 space-y-1 text-[0.7rem] text-gray-600 dark:text-gray-300">
-                            <li>• AI-generated content roadmap with image/video ideas</li>
-                            <li>• AI captions and content packs ready to copy</li>
-                            <li>• Media Library with reusable assets</li>
+                            <li>• Personalized content roadmap with image/video ideas</li>
+                            <li>• Caption ideas and content packs ready to copy</li>
+                            <li>• My Vault with reusable assets</li>
                             <li>• Analytics-style insights guiding content decisions</li>
                           </ul>
                         </div>
@@ -268,7 +268,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                                 <ul className="space-y-3 text-sm text-gray-500 dark:text-gray-400">
                                     <li className="flex items-start"><SparklesIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>AI Content Assistant with conversion-optimized captions</span></li>
                                     <li className="flex items-start"><TargetIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Multi-week content roadmaps & revenue-driven campaign planning</span></li>
-                                    <li className="flex items-start"><ImageIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Media Library for organizing exclusive content assets</span></li>
+                                    <li className="flex items-start"><ImageIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>My Vault for organizing exclusive content assets</span></li>
                                     <li className="flex items-start"><CalendarIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Strategic content calendar to maximize subscriber engagement</span></li>
                                 </ul>
                             </div>
@@ -276,7 +276,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                                 <h4 className="font-semibold text-gray-900 dark:text-white text-lg">Growth & Monetization</h4>
                                 <ul className="space-y-3 text-sm text-gray-500 dark:text-gray-400">
                                     <li className="flex items-start"><div className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0 flex items-center"><AnalyticsIcon /></div> <span>Revenue & Engagement Analytics</span></li>
-                                    <li className="flex items-start"><GlobeIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Smart Link-in-Bio with subscriber capture</span></li>
+                                    <li className="flex items-start"><GlobeIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Bio Link Page with subscriber capture</span></li>
                                     <li className="flex items-start"><ChatIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>AI Chatting Sessions for personalized fan engagement</span></li>
                                     <li className="flex items-start"><SparklesIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Subscriber conversion optimization tools</span></li>
                                 </ul>
@@ -299,32 +299,32 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                 </div>
                 <div className="mt-12">
                     <dl className="space-y-10 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-x-8 md:gap-y-10">
-                        <Feature icon={<TargetIcon />} title="AI Content Strategist">
-                           Generate multi-week content roadmaps tailored to your niche and revenue goals. Push ideas into conversion-focused campaigns and see them as planned content on your calendar.
+                        <Feature icon={<TargetIcon />} title="Plan My Week">
+                           Generate weekly content plans tailored to your niche and goals. Push ideas into campaigns and see them as planned content on your schedule.
                         </Feature>
                         <Feature icon={<KanbanIcon />} title="Workflow Board">
                            Move posts from Draft to Ready-to-Post in a simple kanban view. Review, edit, and copy revenue-focused content packs before you publish.
                         </Feature>
-                        <Feature icon={<CalendarIcon />} title="Visual Content Calendar">
+                        <Feature icon={<CalendarIcon />} title="My Schedule">
                            See every planned post on a beautiful calendar. Click any slot to open the content, adjust timing, and copy captions/scripts.
                         </Feature>
-                        <Feature icon={<ImageIcon />} title="Media Library">
+                        <Feature icon={<ImageIcon />} title="My Vault">
                            Upload and organize images and videos in your personal media library. Reuse assets across campaigns and keep everything in one place.
                         </Feature>
-                        <Feature icon={<SparklesIcon />} title="Premium Content Studio - Content Brain (Elite)">
-                           AI-powered content planning suite for monetized creators. Generate captions, post ideas, weekly plans, and strategic content calendars optimized for revenue goals. Built for OnlyFans, Fansly, Fanvue & more.
+                        <Feature icon={<SparklesIcon />} title="Monetized Creator Studio - Content Brain (Elite)">
+                           Content planning suite for monetized creators. Generate captions, post ideas, weekly plans, and schedules optimized for revenue goals. Built for OnlyFans, Fansly, Fanvue & more.
                         </Feature>
-                        <Feature icon={<ChatIcon />} title="Premium Content Studio - Engagement Tools (Elite)">
-                           Roleplay & Chatting Sessions with real-time AI suggestions for subscriber engagement. Fan Management tracks VIPs, preferences, and spending patterns to maximize revenue opportunities.
+                        <Feature icon={<ChatIcon />} title="Monetized Creator Studio - Engagement Tools (Elite)">
+                           Roleplay & Chatting Sessions with real-time suggestions for subscriber engagement. Fan Management tracks VIPs, preferences, and spending patterns to maximize revenue opportunities.
                         </Feature>
-                        <Feature icon={<GlobeIcon />} title="Smart Link-in-Bio">
+                        <Feature icon={<GlobeIcon />} title="Bio Link Page">
                            Build a beautiful, creator-branded bio page with links and subscriber capture to convert visitors into paying fans.
                         </Feature>
                         <Feature icon={<ChatIcon />} title="Creator Assistant & Ideas">
                            Ask questions, generate new content angles, and brainstorm revenue-driving campaigns with a creator-focused AI assistant inside the app.
                         </Feature>
-                        <Feature icon={<AnalyticsIcon />} title="Premium Content Studio - Export & Analytics (Elite)">
-                           Export Hub creates ready-to-upload content packages. Funnel Teaser Packs generate cross-platform promo content. Analytics track performance to optimize revenue. Manual posting, account-safe.
+                        <Feature icon={<AnalyticsIcon />} title="Monetized Creator Studio - Export & Stats (Elite)">
+                           Export Hub creates ready-to-upload content packages. Funnel Teaser Packs generate cross-platform promo content. Stats track performance to optimize revenue. Manual posting, account-safe.
                         </Feature>
                     </dl>
                 </div>
@@ -360,7 +360,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
 
                     <div className="relative">
                         <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">3. Generate & Plan Campaigns</h3>
-                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Use Strategy, the Workflow Board, and the Calendar to build full content packs and a 14-day plan. Copy captions and scripts, then post on any platform you choose.</p>
+                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Use Plan My Week, the Workflow Board, and My Schedule to build full content packs and a 14-day plan. Copy captions and scripts, then post on any platform you choose.</p>
                     </div>
                 </div>
             </div>
@@ -411,8 +411,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                             <ul className="mt-4 space-y-4">
                                 <li><button onClick={() => onNavigateRequest('dashboard')} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-left">Command Center</button></li>
                                 <li><button onClick={() => onNavigateRequest('compose')} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-left">Content Studio</button></li>
-                                <li><button onClick={() => onNavigateRequest('bio')} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-left">Link in Bio</button></li>
-                                <li><button onClick={() => onNavigateRequest('analytics')} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-left">Analytics</button></li>
+                                <li><button onClick={() => onNavigateRequest('bio')} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-left">Bio Link Page</button></li>
+                                <li><button onClick={() => onNavigateRequest('analytics')} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-left">What's Working</button></li>
                             </ul>
                         </div>
                         <div className="mt-12 md:mt-0">

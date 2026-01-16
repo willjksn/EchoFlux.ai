@@ -175,14 +175,14 @@ export const OnlyFansGuides: React.FC = () => {
                 'Use good lighting and composition',
                 'Edit content for professional appearance',
                 'Keep content fresh and varied',
-                'Plan content in advance using the Content Calendar',
+                'Plan content in advance using My Schedule',
             ],
         },
         {
             category: 'Consistency',
             practices: [
                 'Post regularly (daily or multiple times per week)',
-                'Use the Content Calendar to plan your posting schedule',
+                'Use My Schedule to plan your posting schedule',
                 'Maintain consistent posting times',
                 'Keep your brand voice and style consistent',
             ],
@@ -304,7 +304,7 @@ export const OnlyFansGuides: React.FC = () => {
                                 Manual Upload Guide
                             </h2>
                             <p className="text-gray-600 dark:text-gray-400 mb-6">
-                                Follow these steps to manually upload content to your OnlyFans, Fansly, or Fanvue account using content prepared in Premium Content Studio.
+                                Follow these steps to manually upload content to your OnlyFans, Fansly, or Fanvue account using content prepared in Monetized Creator Studio.
                             </p>
                         </div>
                         {uploadSteps.map((step, index) => (
@@ -339,7 +339,7 @@ export const OnlyFansGuides: React.FC = () => {
                                 Best Times to Post
                             </h2>
                             <p className="text-gray-600 dark:text-gray-400 mb-6">
-                                Posting at optimal times can significantly increase engagement and monetization. Use the Content Calendar to schedule your posts.
+                                Posting at optimal times can significantly increase engagement and monetization. Use My Schedule to schedule your posts.
                             </p>
                         </div>
                         <div className="grid gap-4">

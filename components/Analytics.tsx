@@ -276,7 +276,7 @@ export const Analytics: React.FC = () => {
              <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="flex-1">
                     <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-                        {selectedClient ? `Analytics for: ${selectedClient.name}` : 'Analytics'}
+                        {selectedClient ? `What's Working for: ${selectedClient.name}` : "What's Working"}
                     </h2>
                 </div>
                 <div className="flex items-center gap-4">
