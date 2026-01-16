@@ -267,6 +267,11 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
             const next = tourSteps[tourStep + 1];
             // Navigate to the page for the next step if needed
             if (next.page && activePageState !== next.page) {
+                if (next.page === 'settings') {
+                    try {
+                        localStorage.setItem('settingsActiveTab', 'ai-training');
+                    } catch {}
+                }
                 // Hide overlay immediately by resetting targetRect
                 // Navigate to new page
                 setActivePage(next.page);

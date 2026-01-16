@@ -619,7 +619,11 @@ const AppContent: React.FC = () => {
             await setUser({ ...user, hasCompletedOnboarding: true });
         }
         setOnboardingStep('none');
-        startTour();
+        try {
+            localStorage.setItem('settingsActiveTab', 'ai-training');
+        } catch {}
+        setActivePage('settings');
+        setTimeout(() => startTour(), 600);
     };
     
     // Removed handleUserTypeSelected - all users are Creators now

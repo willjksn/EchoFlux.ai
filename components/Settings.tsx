@@ -208,6 +208,14 @@ export const Settings: React.FC = () => {
     const [activeTab, setActiveTab] = useState<SettingsTab>('general');
     const [fileName, setFileName] = useState<string | null>(null);
     const [isUploadingVoice, setIsUploadingVoice] = useState(false);
+
+    useEffect(() => {
+        const tabOverride = localStorage.getItem('settingsActiveTab') as SettingsTab | null;
+        if (tabOverride && tabOverride !== activeTab) {
+            setActiveTab(tabOverride);
+            localStorage.removeItem('settingsActiveTab');
+        }
+    }, [activeTab]);
     const [connectingPlatform, setConnectingPlatform] = useState<Platform | null>(null);
     const [showInstagramSetupModal, setShowInstagramSetupModal] = useState(false);
     const [showCancelModal, setShowCancelModal] = useState(false);
@@ -830,6 +838,7 @@ export const Settings: React.FC = () => {
                         <button
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id)}
+                            id={tab.id === 'ai-training' ? 'tour-step-5-ai-training-tab' : undefined}
                             className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all whitespace-nowrap flex-1 justify-center ${
                                 activeTab === tab.id
                                     ? 'bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-md'

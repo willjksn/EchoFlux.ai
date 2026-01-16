@@ -80,14 +80,22 @@ export const getTourStepsForPlan = (user: User): TourStep[] => {
     let steps: TourStep[] = [
       { elementId: 'tour-step-1-dashboard', page: 'dashboard', title: 'Your Command Center', content: 'This is your home base. Check stats, upcoming posts, and urgent items.', position: 'top' },
       { elementId: 'tour-step-theme-toggle', page: 'dashboard', title: 'Light / Dark Mode', content: 'Use the sun/moon button (top right) to toggle themes anytime.', position: 'left' },
-      { elementId: 'tour-step-3-compose-nav', page: 'compose', title: 'AI Content Suite', content: 'Generate captions quickly. Image/video generation is disabled in this build.', position: 'right' },
+      { elementId: 'tour-step-3-compose-nav', page: 'compose', title: 'Write Captions', content: 'Generate caption ideas quickly and keep your posting flow moving.', position: 'right' },
     ];
     
     if (user.hasAutopilot) {
         steps.push({ elementId: 'tour-step-autopilot-nav', page: 'autopilot', title: 'AI Autopilot', content: 'Define a goal, and Autopilot will generate a full content strategy and create posts for your approval.', position: 'right' });
     }
     
-    steps.push({ elementId: 'tour-step-5-profile-avatar', title: 'Your Profile & Settings', content: 'Access your profile, manage billing, or sign out. You can also create your "Link in Bio" page from the sidebar!', position: 'bottom' });
+    steps.push({
+        elementId: 'tour-step-5-ai-training-tab',
+        page: 'settings',
+        title: 'AI Training',
+        content: 'Set your AI Personality and Creator Personality so captions and plans sound like you.',
+        position: 'bottom',
+    });
+
+    steps.push({ elementId: 'tour-step-5-profile-avatar', title: 'Your Profile & Settings', content: 'Access your profile, manage billing, or sign out. You can also create your "Bio Link Page" from the sidebar!', position: 'bottom' });
     
     return steps;
 };
