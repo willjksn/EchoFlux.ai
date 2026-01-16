@@ -311,11 +311,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         <Feature icon={<ImageIcon />} title="My Vault">
                            Upload and organize images and videos in your personal media library. Reuse assets across campaigns and keep everything in one place.
                         </Feature>
-                        <Feature icon={<SparklesIcon />} title="Monetized Creator Studio - Content Brain (Elite)">
-                           Content planning suite for monetized creators. Generate captions, post ideas, weekly plans, and schedules optimized for revenue goals. Built for OnlyFans, Fansly, Fanvue & more.
+                        <Feature icon={<SparklesIcon />} title="Monetized Creator Studio - Content Ideas (Elite)">
+                           Plan drops, write captions, and map the week in creator language. Built for OnlyFans, Fansly, Fanvue & more.
                         </Feature>
-                        <Feature icon={<ChatIcon />} title="Monetized Creator Studio - Engagement Tools (Elite)">
-                           Roleplay & Chatting Sessions with real-time suggestions for subscriber engagement. Fan Management tracks VIPs, preferences, and spending patterns to maximize revenue opportunities.
+                        <Feature icon={<ChatIcon />} title="Monetized Creator Studio - DM Sessions (Elite)">
+                           Scripts & Roleplay plus DM session planning. Fan notes track VIPs, regulars, and whales.
                         </Feature>
                         <Feature icon={<GlobeIcon />} title="Bio Link Page">
                            Build a beautiful, creator-branded bio page with links and subscriber capture to convert visitors into paying fans.
@@ -323,8 +323,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         <Feature icon={<ChatIcon />} title="Creator Assistant & Ideas">
                            Ask questions, generate new content angles, and brainstorm revenue-driving campaigns with a creator-focused AI assistant inside the app.
                         </Feature>
-                        <Feature icon={<AnalyticsIcon />} title="Monetized Creator Studio - Export & Stats (Elite)">
-                           Export Hub creates ready-to-upload content packages. Funnel Teaser Packs generate cross-platform promo content. Stats track performance to optimize revenue. Manual posting, account-safe.
+                        <Feature icon={<AnalyticsIcon />} title="Monetized Creator Studio - Post Packs & Wins (Elite)">
+                           Copy & Post Packs for manual posting. Promo packs for drops. What’s Working keeps performance notes in one place.
                         </Feature>
                     </dl>
                 </div>

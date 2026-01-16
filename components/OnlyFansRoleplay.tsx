@@ -12,8 +12,8 @@ type RoleplayTab = 'scenarios' | 'sexting' | 'persona' | 'ratings' | 'interactiv
 type RoleplayType = 
     | 'GFE (Girlfriend Experience)'
     | 'Dominant / Submissive'
-    | 'Teacher / Student'
-    | 'Boss / Assistant'
+    | 'Class after hours'
+    | 'Office after dark'
     | 'Fitness Trainer'
     | 'Soft Mommy / Daddy'
     | 'Nurse / Patient'
@@ -130,8 +130,8 @@ export const OnlyFansRoleplay: React.FC = () => {
     const roleplayTypes: RoleplayType[] = [
         'GFE (Girlfriend Experience)',
         'Dominant / Submissive',
-        'Teacher / Student',
-        'Boss / Assistant',
+        'Class after hours',
+        'Office after dark',
         'Fitness Trainer',
         'Soft Mommy / Daddy',
         'Nurse / Patient',
@@ -1610,11 +1610,11 @@ Format as a numbered list with detailed post concepts including captions and eng
     };
 
     const tabs: { id: RoleplayTab; label: string }[] = [
-        { id: 'scenarios', label: 'Roleplay Scenarios' },
-        { id: 'sexting', label: 'Chat/Sexting Session' },
+        { id: 'scenarios', label: 'Roleplay Scripts' },
+        { id: 'sexting', label: 'DM Session Planner' },
         { id: 'persona', label: 'Persona Builder' },
-        { id: 'ratings', label: 'Body Ratings' },
-        { id: 'interactive', label: 'Interactive Posts' },
+        { id: 'ratings', label: 'Rating Prompts' },
+        { id: 'interactive', label: 'Interactive Prompts' },
     ];
 
     return (
@@ -1624,11 +1624,11 @@ Format as a numbered list with detailed post concepts including captions and eng
                 <div className="flex items-center gap-3 mb-2">
                     <SparklesIcon className="w-8 h-8 text-primary-600 dark:text-primary-400" />
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                        Roleplay & Interactive Ideas
+                        Scripts & Roleplay
                     </h1>
                 </div>
                 <p className="text-gray-600 dark:text-gray-400">
-                    Generate roleplay scenarios, build personas, create rating prompts, and design interactive posts for OnlyFans, Fansly, and Fanvue.
+                    Pick a vibe and get scripts, prompts, and scenes ready to use.
                 </p>
             </div>
 
@@ -1656,14 +1656,14 @@ Format as a numbered list with detailed post concepts including captions and eng
                 ))}
             </div>
 
-            {/* Sexting Session Tab */}
+            {/* DM Session Planner Tab */}
             {activeTab === 'sexting' && (
                 <div className="space-y-6">
                     <OnlyFansSextingSession />
                 </div>
             )}
 
-            {/* Roleplay Scenarios Tab */}
+            {/* Roleplay Scripts Tab */}
             {activeTab === 'scenarios' && (
                 <div className="space-y-6">
                     {/* Saved Items Section */}
@@ -1739,13 +1739,13 @@ Format as a numbered list with detailed post concepts including captions and eng
                     {/* Roleplay Type Selection */}
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                            Generate Roleplay Scenario
+                            Create a Roleplay Script
                         </h2>
                         <div className="space-y-4">
                             {/* Fan Selector */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Personalize for Fan (Optional):
+                                    Personalize for fan (optional):
                                 </label>
                                 <FanSelector
                                     selectedFanId={selectedFanId}
@@ -1770,7 +1770,7 @@ Format as a numbered list with detailed post concepts including captions and eng
                             
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Roleplay Type
+                                    Roleplay vibe
                                 </label>
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
                                     {roleplayTypes.filter((type) => type !== 'Custom').map((type) => (

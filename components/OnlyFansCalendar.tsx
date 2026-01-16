@@ -118,7 +118,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
             onlyFansPosts.forEach(post => {
                 events.push({
                     id: `post-${post.id}`,
-                    title: post.content?.substring(0, 30) + '...' || 'Post',
+                    title: post.content?.substring(0, 30) + '...' || 'Drop',
                     date: post.scheduledDate || new Date().toISOString(),
                     type: 'post',
                     status: post.status as 'Draft' | 'Scheduled' | 'Published',
@@ -379,7 +379,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
             });
 
             setIsEditing(false);
-            showToast('Post updated successfully!', 'success');
+            showToast('Drop updated!', 'success');
         } catch (error) {
             console.error('Failed to update post:', error);
             showToast('Failed to update post. Please try again.', 'error');
@@ -458,7 +458,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
             // Close the modal
             setSelectedEvent(null);
             
-            showToast('Post deleted successfully!', 'success');
+            showToast('Drop deleted!', 'success');
         } catch (error) {
             console.error('Failed to delete post:', error);
             showToast('Failed to delete post. Please try again.', 'error');
@@ -514,9 +514,9 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">My Schedule</h2>
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Weekly Money Calendar</h2>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                        Schedule reminders for posting and filming. This does not post automatically.
+                        Plan drops, sessions, promos, and reschedule fast. Manual posting only.
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -532,7 +532,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                             className="px-4 py-2 text-sm bg-gradient-to-r from-primary-600 to-primary-500 text-white rounded-md hover:from-primary-700 hover:to-primary-600 flex items-center gap-2 font-medium shadow-md transition-all"
                         >
                             <PlusIcon className="w-4 h-4" />
-                            New Post
+                            Add drop
                         </button>
                     )}
                     <button
@@ -540,7 +540,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                         className="px-4 py-2 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 flex items-center gap-2"
                     >
                         <PlusIcon className="w-4 h-4" />
-                        Add Reminder
+                        Add reminder
                     </button>
                 </div>
             </div>
@@ -548,7 +548,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
             {/* Important Notice */}
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                 <p className="text-sm text-blue-800 dark:text-blue-200">
-                    <strong>Reminder:</strong> These are manual reminders only. Monetized Creator Studio does not post to your accounts. 
+                    <strong>Reminder:</strong> These are manual reminders only. This studio does not post to your accounts. 
                     You must manually upload content to OnlyFans, Fansly, or Fanvue.
                 </p>
             </div>
@@ -806,7 +806,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                     </div>
                                     <div>
                                         <div className="flex items-center gap-2">
-                                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Scheduled Post Preview</h3>
+                                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Scheduled Drop Preview</h3>
                                             {selectedEvent.status && (
                                                 <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
                                                     selectedEvent.status === 'Published' 
@@ -1017,7 +1017,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                         className="px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors disabled:opacity-50 flex items-center gap-2"
                                     >
                                         <TrashIcon className="w-4 h-4" />
-                                        Delete Post
+                                                Delete Drop
                                     </button>
                                     <div className="flex items-center gap-3">
                                         <button
@@ -1090,7 +1090,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                             {/* Reminder Type */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Reminder Type *
+                                    Reminder *
                                 </label>
                                 <div className="flex gap-2">
                                     <button
@@ -1102,7 +1102,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                 : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300'
                                         }`}
                                     >
-                                        📤 Post Reminder
+                                        📤 Drop Reminder
                                     </button>
                                     <button
                                         type="button"
@@ -1126,7 +1126,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                             {/* Content Type */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Content Type *
+                                    Drop Type *
                                 </label>
                                 <div className="flex gap-2">
                                     <button
@@ -1138,7 +1138,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                 : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300'
                                         }`}
                                     >
-                                        Free
+                                        Teaser
                                     </button>
                                     <button
                                         type="button"
@@ -1149,7 +1149,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                 : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300'
                                         }`}
                                     >
-                                        Paid
+                                        PPV Drop
                                     </button>
                                     <button
                                         type="button"
@@ -1160,7 +1160,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                 : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300'
                                         }`}
                                     >
-                                        Custom
+                                        Bundle/Custom
                                     </button>
                                 </div>
                             </div>
@@ -1370,7 +1370,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                             : 'No planned date';
                                         const mediaUrl = post.mediaUrl || 'No media URL (text-only post)';
                                         
-                                        const exportContent = `Post Export\n${'='.repeat(50)}\nPlatform: OnlyFans\nPlanned Date/Time: ${scheduled}\nStatus: ${post.status}\nMedia: ${mediaUrl}\n\nCaption:\n${post.content}\n${'='.repeat(50)}`;
+                                        const exportContent = `Drop Export\n${'='.repeat(50)}\nPlatform: OnlyFans\nPlanned Date/Time: ${scheduled}\nStatus: ${post.status}\nMedia: ${mediaUrl}\n\nCaption:\n${post.content}\n${'='.repeat(50)}`;
                                         
                                         const blob = new Blob([exportContent], { type: 'text/plain' });
                                         const url = URL.createObjectURL(blob);

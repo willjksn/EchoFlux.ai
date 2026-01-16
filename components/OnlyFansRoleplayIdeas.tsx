@@ -436,11 +436,11 @@ Format as a numbered list (1-12) with complete prompt text. Make them creative, 
     };
 
     const tabs: { id: typeof activeTab; label: string }[] = [
-        { id: 'roleplay', label: 'Roleplay Scenarios' },
-        { id: 'sexting', label: 'Chat/Sexting Session' },
+        { id: 'roleplay', label: 'Roleplay Scripts' },
+        { id: 'sexting', label: 'DM Session Planner' },
         { id: 'persona', label: 'Persona Builder' },
-        { id: 'interactive', label: 'Interactive Posts' },
-        { id: 'ratings', label: 'Body Ratings' },
+        { id: 'interactive', label: 'Interactive Prompts' },
+        { id: 'ratings', label: 'Rating Prompts' },
     ];
 
     return (
@@ -450,11 +450,11 @@ Format as a numbered list (1-12) with complete prompt text. Make them creative, 
                 <div className="flex items-center gap-3 mb-2">
                     <SparklesIcon className="w-8 h-8 text-primary-600 dark:text-primary-400" />
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                        Roleplay & Interactive Ideas
+                        Scripts & Roleplay
                     </h1>
                 </div>
                 <p className="text-gray-600 dark:text-gray-400">
-                    Generate roleplay scenarios, personas, interactive post ideas, and body rating prompts.
+                    Pick a vibe and get scripts, prompts, and scenes ready to use.
                 </p>
             </div>
 

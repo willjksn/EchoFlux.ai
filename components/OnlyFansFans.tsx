@@ -26,6 +26,8 @@ interface Fan {
         spendingLevel?: number;
         subscriptionTier?: 'Free' | 'Paid';
         isVIP?: boolean;
+        isWhale?: boolean;
+        isRegular?: boolean;
         isLoyalFan?: boolean;
         isBigSpender?: boolean;
         lastSessionDate?: string;
@@ -79,12 +81,11 @@ export const OnlyFansFans: React.FC = () => {
     const [newFanName, setNewFanName] = useState('');
     const [newFanSpendingLevel, setNewFanSpendingLevel] = useState<number>(0);
     const [newFanTier, setNewFanTier] = useState<'Free' | 'Paid'>('Free');
-    const [newFanIsVIP, setNewFanIsVIP] = useState<boolean>(false);
+    const [newFanType, setNewFanType] = useState<'Whale' | 'VIP' | 'Regular' | ''>('');
     const [newFanNotes, setNewFanNotes] = useState('');
     const [newFanPreferredTone, setNewFanPreferredTone] = useState<string>('');
     const [newFanFavoriteSessionType, setNewFanFavoriteSessionType] = useState<string>('');
     const [newFanCommunicationStyle, setNewFanCommunicationStyle] = useState<string>('');
-    const [newFanPreferredLanguage, setNewFanPreferredLanguage] = useState<string>('');
     const [newFanLanguagePreferences, setNewFanLanguagePreferences] = useState<string>('');
     const [newFanSuggestedFlow, setNewFanSuggestedFlow] = useState<string>('');
     const [newFanPastNotes, setNewFanPastNotes] = useState<string>('');
@@ -336,8 +337,8 @@ export const OnlyFansFans: React.FC = () => {
                 return false;
             }
         }).length,
-        bigSpenders: fans.filter(f => f.preferences.isBigSpender || (f.preferences.spendingLevel || 0) >= 4).length,
-        loyalFans: fans.filter(f => f.preferences.isLoyalFan || (f.preferences.totalSessions || 0) >= 5).length,
+        bigSpenders: fans.filter(f => f.preferences.isWhale || f.preferences.isBigSpender || (f.preferences.spendingLevel || 0) >= 4).length,
+        loyalFans: fans.filter(f => f.preferences.isRegular || f.preferences.isLoyalFan || (f.preferences.totalSessions || 0) >= 5).length,
     };
 
     // Filter and sort fans
@@ -356,9 +357,9 @@ export const OnlyFansFans: React.FC = () => {
 
         // Apply type filter
         if (fanFilter === 'bigSpenders') {
-            filtered = filtered.filter(fan => fan.preferences.isBigSpender || (fan.preferences.spendingLevel || 0) >= 4);
+            filtered = filtered.filter(fan => fan.preferences.isWhale || fan.preferences.isBigSpender || (fan.preferences.spendingLevel || 0) >= 4);
         } else if (fanFilter === 'loyal') {
-            filtered = filtered.filter(fan => fan.preferences.isLoyalFan || (fan.preferences.totalSessions || 0) >= 5);
+            filtered = filtered.filter(fan => fan.preferences.isRegular || fan.preferences.isLoyalFan || (fan.preferences.totalSessions || 0) >= 5);
         } else if (fanFilter === 'recent') {
             filtered = filtered.filter(fan => {
                 if (!fan.preferences.lastSessionDate) return false;
@@ -508,12 +509,16 @@ export const OnlyFansFans: React.FC = () => {
         setNewFanName(fan.name);
         setNewFanSpendingLevel(fan.preferences.spendingLevel || 0);
         setNewFanTier(fan.preferences.subscriptionTier || 'Free');
-        setNewFanIsVIP(fan.preferences.isVIP || false);
+        setNewFanType(
+            fan.preferences.isWhale ? 'Whale' :
+            fan.preferences.isVIP ? 'VIP' :
+            fan.preferences.isRegular ? 'Regular' :
+            ''
+        );
         setNewFanNotes(fan.preferences.notes || '');
         setNewFanPreferredTone(fan.preferences.preferredTone || '');
         setNewFanFavoriteSessionType(fan.preferences.favoriteSessionType || '');
         setNewFanCommunicationStyle(fan.preferences.communicationStyle || '');
-        setNewFanPreferredLanguage(fan.preferences.preferredLanguage || '');
         setNewFanLanguagePreferences(fan.preferences.languagePreferences || '');
         setNewFanSuggestedFlow(fan.preferences.suggestedFlow || '');
         setNewFanPastNotes(fan.preferences.pastNotes || '');
@@ -541,8 +546,10 @@ export const OnlyFansFans: React.FC = () => {
                 name: newFanName.trim(),
                 spendingLevel: newFanSpendingLevel,
                 subscriptionTier: newFanTier,
-                isVIP: newFanIsVIP,
-                isBigSpender: newFanSpendingLevel >= 4,
+                isVIP: newFanType === 'VIP',
+                isWhale: newFanType === 'Whale',
+                isRegular: newFanType === 'Regular',
+                isBigSpender: newFanType === 'Whale' || newFanSpendingLevel >= 4,
                 notes: newFanNotes.trim() || '',
                 tags: [],
                 updatedAt: Timestamp.now(),
@@ -552,7 +559,6 @@ export const OnlyFansFans: React.FC = () => {
             if (newFanPreferredTone) fanData.preferredTone = newFanPreferredTone;
             if (newFanFavoriteSessionType) fanData.favoriteSessionType = newFanFavoriteSessionType;
             if (newFanCommunicationStyle) fanData.communicationStyle = newFanCommunicationStyle;
-            if (newFanPreferredLanguage) fanData.preferredLanguage = newFanPreferredLanguage;
             if (newFanLanguagePreferences && newFanLanguagePreferences.trim()) {
                 fanData.languagePreferences = newFanLanguagePreferences.trim();
             }
@@ -578,12 +584,11 @@ export const OnlyFansFans: React.FC = () => {
             setNewFanName('');
             setNewFanSpendingLevel(0);
             setNewFanTier('Free');
-            setNewFanIsVIP(false);
+            setNewFanType('');
             setNewFanNotes('');
             setNewFanPreferredTone('');
             setNewFanFavoriteSessionType('');
             setNewFanCommunicationStyle('');
-            setNewFanPreferredLanguage('');
             setNewFanLanguagePreferences('');
             setNewFanSuggestedFlow('');
             setNewFanPastNotes('');
@@ -631,27 +636,27 @@ export const OnlyFansFans: React.FC = () => {
                     </button>
                 </div>
                 <p className="text-gray-600 dark:text-gray-400">
-                    Central hub for managing fan relationships and tracking engagement across all Monetized Creator Studio features.
+                    Track VIPs, regulars, whales, and what they like.
                 </p>
             </div>
 
             {/* Stats Dashboard */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-                    <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Total Fans</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Total fans</div>
                     <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalFans}</div>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-                    <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Active Fans</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Active (30d)</div>
                     <div className="text-2xl font-bold text-primary-600 dark:text-primary-400">{stats.activeFans}</div>
                     <div className="text-xs text-gray-500 dark:text-gray-500">Last 30 days</div>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-                    <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Big Spenders</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Whales</div>
                     <div className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.bigSpenders}</div>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-                    <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Loyal Fans</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Regulars</div>
                     <div className="text-2xl font-bold text-pink-600 dark:text-pink-400">{stats.loyalFans}</div>
                 </div>
             </div>
@@ -674,9 +679,9 @@ export const OnlyFansFans: React.FC = () => {
                         onChange={(e) => setFanFilter(e.target.value as any)}
                         className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
                     >
-                        <option value="all">All Fans</option>
-                        <option value="bigSpenders">Big Spenders</option>
-                        <option value="loyal">Loyal Fans</option>
+                        <option value="all">All fans</option>
+                        <option value="bigSpenders">Whales</option>
+                        <option value="loyal">Regulars</option>
                         <option value="recent">Recent (30 days)</option>
                         <option value="inactive">Inactive (60+ days)</option>
                     </select>
@@ -722,7 +727,7 @@ export const OnlyFansFans: React.FC = () => {
                         <div className="col-span-full text-center py-8 text-gray-500 dark:text-gray-400">Loading fans...</div>
                     ) : filteredFans.length === 0 ? (
                         <div className="col-span-full text-center py-8 text-gray-500 dark:text-gray-400">
-                            {fanSearchQuery || fanFilter !== 'all' ? 'No fans match your filters' : 'No fans yet. Start a session in Roleplay & Interactive Ideas to create your first fan card!'}
+                            {fanSearchQuery || fanFilter !== 'all' ? 'No fans match your filters' : 'No fans yet. Start a session in Scripts & Roleplay to create your first fan card!'}
                         </div>
                     ) : (
                         filteredFans.map((fan) => {
@@ -854,23 +859,33 @@ export const OnlyFansFans: React.FC = () => {
                                         </div>
                                     </div>
 
-                                    {/* Badges */}
+                                    {/* Badge */}
                                     <div className="mt-2 flex gap-1">
-                                        {prefs.isVIP && (
-                                            <span className="text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 px-2 py-0.5 rounded font-semibold">
-                                                VIP
-                                            </span>
-                                        )}
-                                        {prefs.isBigSpender && (
-                                            <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 px-2 py-0.5 rounded">
-                                                💰 Big Spender
-                                            </span>
-                                        )}
-                                        {prefs.isLoyalFan && (
-                                            <span className="text-xs bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300 px-2 py-0.5 rounded">
-                                                ❤️ Loyal
-                                            </span>
-                                        )}
+                                        {(() => {
+                                            const fanType = prefs.isWhale
+                                                ? 'Whale'
+                                                : prefs.isVIP
+                                                ? 'VIP'
+                                                : prefs.isRegular
+                                                ? 'Regular'
+                                                : prefs.isBigSpender
+                                                ? 'Whale'
+                                                : prefs.isLoyalFan
+                                                ? 'Regular'
+                                                : null;
+                                            if (!fanType) return null;
+                                            const badgeClass =
+                                                fanType === 'Whale'
+                                                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                                                    : fanType === 'VIP'
+                                                    ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
+                                                    : 'bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300';
+                                            return (
+                                                <span className={`text-xs px-2 py-0.5 rounded font-semibold ${badgeClass}`}>
+                                                    {fanType}
+                                                </span>
+                                            );
+                                        })()}
                                     </div>
 
                                     {/* Last 5 Items Preview */}
@@ -1290,12 +1305,11 @@ export const OnlyFansFans: React.FC = () => {
                                     setNewFanName('');
                                     setNewFanSpendingLevel(0);
                                     setNewFanTier('Free');
-            setNewFanIsVIP(false);
+                                    setNewFanType('');
                                     setNewFanNotes('');
                                     setNewFanPreferredTone('');
                                     setNewFanFavoriteSessionType('');
                                     setNewFanCommunicationStyle('');
-                                    setNewFanPreferredLanguage('');
                                     setNewFanLanguagePreferences('');
                                     setNewFanSuggestedFlow('');
                                     setNewFanPastNotes('');
@@ -1329,7 +1343,7 @@ export const OnlyFansFans: React.FC = () => {
                                 />
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                         Spending Level (0-5)
@@ -1363,19 +1377,24 @@ export const OnlyFansFans: React.FC = () => {
                                 </div>
 
                                 <div className="flex items-center">
-                                    <label className="flex items-center gap-2 cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={newFanIsVIP}
-                                            onChange={(e) => setNewFanIsVIP(e.target.checked)}
-                                            className="w-4 h-4 text-yellow-600 bg-gray-100 border-gray-300 rounded focus:ring-yellow-500 dark:focus:ring-yellow-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
-                                        />
-                                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                            VIP (Special Treatment)
-                                        </span>
-                                    </label>
+                                    <div className="w-full">
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Fan Type
+                                        </label>
+                                        <select
+                                            value={newFanType}
+                                            onChange={(e) => setNewFanType(e.target.value as 'Whale' | 'VIP' | 'Regular' | '')}
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                        >
+                                            <option value="">Not set</option>
+                                            <option value="Whale">Whale</option>
+                                            <option value="VIP">VIP</option>
+                                            <option value="Regular">Regular</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
+
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
@@ -1434,24 +1453,6 @@ export const OnlyFansFans: React.FC = () => {
                                     </select>
                                 </div>
 
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        Preferred Language
-                                    </label>
-                                    <select
-                                        value={newFanPreferredLanguage}
-                                        onChange={(e) => setNewFanPreferredLanguage(e.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                    >
-                                        <option value="">Not set</option>
-                                        <option value="English">English</option>
-                                        <option value="Spanish">Spanish</option>
-                                        <option value="French">French</option>
-                                        <option value="German">German</option>
-                                        <option value="Portuguese">Portuguese</option>
-                                        <option value="Other">Other</option>
-                                    </select>
-                                </div>
                             </div>
 
                             <div>
@@ -1560,7 +1561,6 @@ export const OnlyFansFans: React.FC = () => {
                                     setNewFanPreferredTone('');
                                     setNewFanFavoriteSessionType('');
                                     setNewFanCommunicationStyle('');
-                                    setNewFanPreferredLanguage('');
                                     setNewFanLanguagePreferences('');
                                     setNewFanSuggestedFlow('');
                                     setNewFanPastNotes('');
@@ -1606,9 +1606,11 @@ export const OnlyFansFans: React.FC = () => {
                                             name: newFanName.trim(),
                                             spendingLevel: newFanSpendingLevel,
                                             subscriptionTier: newFanTier,
-                                            isVIP: newFanIsVIP,
+                                            isVIP: newFanType === 'VIP',
+                                            isWhale: newFanType === 'Whale',
+                                            isRegular: newFanType === 'Regular',
                                             totalSessions: 0,
-                                            isBigSpender: newFanSpendingLevel >= 4,
+                                            isBigSpender: newFanType === 'Whale' || newFanSpendingLevel >= 4,
                                             isLoyalFan: false,
                                             notes: newFanNotes.trim() || '',
                                             tags: [],
@@ -1621,7 +1623,6 @@ export const OnlyFansFans: React.FC = () => {
                                         if (newFanPreferredTone) fanData.preferredTone = newFanPreferredTone;
                                         if (newFanFavoriteSessionType) fanData.favoriteSessionType = newFanFavoriteSessionType;
                                         if (newFanCommunicationStyle) fanData.communicationStyle = newFanCommunicationStyle;
-                                        if (newFanPreferredLanguage) fanData.preferredLanguage = newFanPreferredLanguage;
                                         if (newFanLanguagePreferences && newFanLanguagePreferences.trim()) {
                                             fanData.languagePreferences = newFanLanguagePreferences.trim();
                                         }
@@ -1645,7 +1646,7 @@ export const OnlyFansFans: React.FC = () => {
                                         setNewFanName('');
                                         setNewFanSpendingLevel(0);
                                         setNewFanTier('Free');
-            setNewFanIsVIP(false);
+                                        setNewFanType('');
                                         setNewFanNotes('');
                                         setNewFanPreferredTone('');
                                         setNewFanFavoriteSessionType('');
@@ -1673,7 +1674,7 @@ export const OnlyFansFans: React.FC = () => {
                                 disabled={isSavingFan || !newFanName.trim()}
                                 className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                {isSavingFan ? 'Adding...' : 'Add Fan'}
+                                {isSavingFan ? 'Saving...' : 'Save Fan'}
                             </button>
                         </div>
                     </div>
@@ -1712,7 +1713,7 @@ export const OnlyFansFans: React.FC = () => {
                                 />
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                         Spending Level (0-5)
@@ -1746,17 +1747,21 @@ export const OnlyFansFans: React.FC = () => {
                                 </div>
 
                                 <div className="flex items-center">
-                                    <label className="flex items-center gap-2 cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={newFanIsVIP}
-                                            onChange={(e) => setNewFanIsVIP(e.target.checked)}
-                                            className="w-4 h-4 text-yellow-600 bg-gray-100 border-gray-300 rounded focus:ring-yellow-500 dark:focus:ring-yellow-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
-                                        />
-                                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                            VIP (Special Treatment)
-                                        </span>
-                                    </label>
+                                    <div className="w-full">
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Fan Type
+                                        </label>
+                                        <select
+                                            value={newFanType}
+                                            onChange={(e) => setNewFanType(e.target.value as 'Whale' | 'VIP' | 'Regular' | '')}
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                        >
+                                            <option value="">Not set</option>
+                                            <option value="Whale">Whale</option>
+                                            <option value="VIP">VIP</option>
+                                            <option value="Regular">Regular</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1817,24 +1822,6 @@ export const OnlyFansFans: React.FC = () => {
                                     </select>
                                 </div>
 
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        Preferred Language
-                                    </label>
-                                    <select
-                                        value={newFanPreferredLanguage}
-                                        onChange={(e) => setNewFanPreferredLanguage(e.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                    >
-                                        <option value="">Not set</option>
-                                        <option value="English">English</option>
-                                        <option value="Spanish">Spanish</option>
-                                        <option value="French">French</option>
-                                        <option value="German">German</option>
-                                        <option value="Portuguese">Portuguese</option>
-                                        <option value="Other">Other</option>
-                                    </select>
-                                </div>
                             </div>
 
                             <div>

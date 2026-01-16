@@ -357,21 +357,21 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                     </p>
                     <div className="mt-6 space-y-4">
                         <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                            <h3 className="font-semibold text-purple-900 dark:text-purple-200 mb-2">Content Brain + Planning</h3>
+                            <h3 className="font-semibold text-purple-900 dark:text-purple-200 mb-2">Content Ideas + Planning</h3>
                             <p className="text-sm text-purple-800 dark:text-purple-300">
                                 Generate roleplay ideas, spicy caption sets, and structured content plans tailored to your niche and audience.
                             </p>
                         </div>
                         <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                            <h3 className="font-semibold text-purple-900 dark:text-purple-200 mb-2">Studio Calendar + Workflow</h3>
+                            <h3 className="font-semibold text-purple-900 dark:text-purple-200 mb-2">Weekly Money Calendar</h3>
                             <p className="text-sm text-purple-800 dark:text-purple-300">
-                                Organize what to post, when to post it, and how to repurpose it—so your content engine stays consistent.
+                                Plan drops, sessions, and promos so your week stays consistent.
                             </p>
                         </div>
                         <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                            <h3 className="font-semibold text-purple-900 dark:text-purple-200 mb-2">Media Vault + Export Hub</h3>
+                            <h3 className="font-semibold text-purple-900 dark:text-purple-200 mb-2">My Vault + Post Pack</h3>
                             <p className="text-sm text-purple-800 dark:text-purple-300">
-                                Store, tag, and reuse your media, then export/repurpose content for other platforms without redoing the work.
+                                Store, tag, and reuse your media, then export post packs without redoing the work.
                             </p>
                         </div>
                         <div className="p-4 border border-purple-200 dark:border-purple-800 rounded-lg bg-white/60 dark:bg-gray-800/40">
@@ -429,7 +429,7 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                             <li>• Upload media to your vault</li>
                             <li>• Set up AI Training (AI Personality + Creator Personality)</li>
                             {isProPlan && <li>• Explore My Schedule</li>}
-                            {isElitePlan && <li>• Explore Monetized Creator Studio (Content Brain, Studio Calendar, Media Vault)</li>}
+                            {isElitePlan && <li>• Explore Monetized Creator Studio (Content Ideas, Money Calendar, My Vault)</li>}
                         </ul>
                     </div>
                 </div>

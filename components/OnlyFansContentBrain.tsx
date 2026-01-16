@@ -16,12 +16,154 @@ const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: 
     const level = prediction.level || 'Medium';
     const score = prediction.score || 50;
     const confidence = prediction.confidence || 50;
+    const ideas = result.ideas || result.postIdeas || result.nextPostIdeas;
+    const weeklyMix = Array.isArray(result.weeklyMix) ? result.weeklyMix : [];
+    const bestBet = result.bestBet || result.nextBestBet;
+    const hasIdeas = Array.isArray(ideas) && ideas.length > 0;
 
     const getLevelColor = (level: string) => {
         if (level === 'High') return 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800';
         if (level === 'Medium') return 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800';
         return 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800';
     };
+
+    if (hasIdeas) {
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+                    <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+                        <div>
+                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">What To Post Next</h2>
+                            {result.platform && (
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                    For {result.platform} creators
+                                </p>
+                            )}
+                        </div>
+                        <button
+                            onClick={onClose}
+                            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                        >
+                            <XMarkIcon className="w-6 h-6" />
+                        </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                        {result.summary && (
+                            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                                <p className="text-blue-900 dark:text-blue-200 text-sm">{result.summary}</p>
+                            </div>
+                        )}
+                        {bestBet && (
+                            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                                <p className="text-green-900 dark:text-green-200 text-sm">
+                                    <span className="font-semibold">Best bet:</span> {bestBet}
+                                </p>
+                            </div>
+                        )}
+                        {weeklyMix.length > 0 && (
+                            <div>
+                                <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Suggested Weekly Mix</h3>
+                                <div className="flex flex-wrap gap-2">
+                                    {weeklyMix.map((item: any, idx: number) => (
+                                        <span
+                                            key={`${item.type}-${idx}`}
+                                            className="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-xs text-gray-700 dark:text-gray-200 rounded-full"
+                                        >
+                                            {item.type} x{item.count}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        <div className="space-y-4">
+                            {ideas.map((idea: any, idx: number) => (
+                                <div key={idx} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                    <div className="flex items-start justify-between gap-3 mb-2">
+                                        <div>
+                                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
+                                                Idea {idx + 1}: {idea.title || 'Post idea'}
+                                            </h4>
+                                            {idea.format && (
+                                                <span className="inline-block mt-1 text-xs px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300">
+                                                    {idea.format}
+                                                </span>
+                                            )}
+                                        </div>
+                                        {Array.isArray(idea.tags) && idea.tags.length > 0 && (
+                                            <div className="flex flex-wrap gap-1">
+                                                {idea.tags.map((tag: string, tagIdx: number) => (
+                                                    <span
+                                                        key={`${tag}-${tagIdx}`}
+                                                        className="text-xs px-2 py-0.5 rounded bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200"
+                                                    >
+                                                        {tag}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                    {idea.description && (
+                                        <p className="text-xs text-gray-700 dark:text-gray-300 mb-2">{idea.description}</p>
+                                    )}
+                                    {idea.why && (
+                                        <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
+                                            <span className="font-semibold text-gray-800 dark:text-gray-200">Why it works:</span> {idea.why}
+                                        </p>
+                                    )}
+                                    {idea.hook && (
+                                        <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
+                                            <span className="font-semibold text-gray-800 dark:text-gray-200">Hook:</span> {idea.hook}
+                                        </p>
+                                    )}
+                                    {idea.caption && (
+                                        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md p-3 text-xs text-gray-700 dark:text-gray-300 mb-2">
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className="font-semibold">Caption</span>
+                                                <button
+                                                    onClick={() => onCopy(idea.caption)}
+                                                    className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                                >
+                                                    Copy
+                                                </button>
+                                            </div>
+                                            <p className="whitespace-pre-wrap">{idea.caption}</p>
+                                        </div>
+                                    )}
+                                    {idea.dmLine && (
+                                        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md p-3 text-xs text-gray-700 dark:text-gray-300 mb-2">
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className="font-semibold">DM Line</span>
+                                                <button
+                                                    onClick={() => onCopy(idea.dmLine)}
+                                                    className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                                >
+                                                    Copy
+                                                </button>
+                                            </div>
+                                            <p className="whitespace-pre-wrap">{idea.dmLine}</p>
+                                        </div>
+                                    )}
+                                    {idea.ppvAngle && (
+                                        <p className="text-xs text-gray-600 dark:text-gray-400">
+                                            <span className="font-semibold text-gray-800 dark:text-gray-200">PPV angle:</span> {idea.ppvAngle}
+                                        </p>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+                        <button
+                            onClick={onClose}
+                            className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+                        >
+                            Done
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
@@ -757,6 +899,11 @@ export const OnlyFansContentBrain: React.FC = () => {
     const [generatedMessages, setGeneratedMessages] = useState<string>('');
     const [selectedFanId, setSelectedFanId] = useState<string | null>(null);
     const [useCreatorPersonalityMessaging, setUseCreatorPersonalityMessaging] = useState(false);
+
+    const [aiHelpField, setAiHelpField] = useState<'captions' | 'postIdeas' | 'shootConcepts' | 'weeklyPlan' | 'messaging' | null>(null);
+    const [aiHelpPrompt, setAiHelpPrompt] = useState('');
+    const [isAiHelpGenerating, setIsAiHelpGenerating] = useState(false);
+    const aiHelpRef = useRef<HTMLDivElement>(null);
     const [selectedFanName, setSelectedFanName] = useState<string | null>(null);
     const [fanPreferences, setFanPreferences] = useState<any>(null);
     const [isLoadingFanPreferences, setIsLoadingFanPreferences] = useState(false);
@@ -911,6 +1058,63 @@ export const OnlyFansContentBrain: React.FC = () => {
         if (lines.length === 0) return '';
         return `Premium creator personalization (${selectedPlatform}):\n${lines.map((l) => `- ${l}`).join('\n')}`;
     };
+
+    const runAiHelp = async (
+        baseText: string,
+        instruction: string,
+        context: { goal?: string; tone?: string; platforms?: string[] },
+        onApply: (text: string) => void,
+    ) => {
+        setIsAiHelpGenerating(true);
+        try {
+            const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+            const prompt = instruction.trim()
+                ? `Rewrite the following context based on these instructions:\n${instruction}\n\nCURRENT CONTEXT:\n${baseText || '(empty)'}`.trim()
+                : `Rewrite and improve the following context. Keep the intent but make it clearer and stronger:\n\n${baseText || '(empty)'}`.trim();
+            const response = await fetch('/api/generateText', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({
+                    prompt,
+                    context,
+                }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (data.error) {
+                throw new Error(data.error || data.note || 'Failed to generate text');
+            }
+            const generatedText = data.text || data.caption || '';
+            if (!generatedText) {
+                throw new Error('No text generated');
+            }
+            onApply(generatedText);
+        } catch (error: any) {
+            showToast?.(error.message || 'AI help failed. Please try again.', 'error');
+        } finally {
+            setIsAiHelpGenerating(false);
+            setAiHelpPrompt('');
+            setAiHelpField(null);
+        }
+    };
+
+    // Close AI help popover when clicking outside
+    useEffect(() => {
+        if (!aiHelpField) return;
+        const handleClickOutside = (event: MouseEvent) => {
+            const target = event.target as HTMLElement;
+            if (aiHelpRef.current && !aiHelpRef.current.contains(target) && !target.closest('[title="AI Help"]')) {
+                setAiHelpField(null);
+                setAiHelpPrompt('');
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [aiHelpField]);
 
     // Prefill defaults once (do not overwrite user edits)
     useEffect(() => {
@@ -1104,7 +1308,7 @@ export const OnlyFansContentBrain: React.FC = () => {
         return (
             <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full flex items-center justify-center">
                 <div className="text-center">
-                    <p className="text-red-600 dark:text-red-400 mb-2">Failed to load Content Brain</p>
+                    <p className="text-red-600 dark:text-red-400 mb-2">Failed to load Content Ideas</p>
                     <p className="text-gray-500 dark:text-gray-400 text-sm mb-2">Please ensure you are logged in</p>
                     <button 
                         onClick={() => window.location.reload()} 
@@ -2106,6 +2310,10 @@ Output format:
                 prediction: data.prediction || {},
                 factors: data.factors || {},
                 improvements: data.improvements || [],
+                ideas: data.ideas || data.postIdeas || data.nextPostIdeas || [],
+                bestBet: data.bestBet || data.nextBestBet || '',
+                weeklyMix: Array.isArray(data.weeklyMix) ? data.weeklyMix : [],
+                summary: data.summary || '',
             };
             
             console.log('Saving predict to history with media:', {
@@ -2811,78 +3019,57 @@ Output format:
         }
     };
 
-    // Handle predict performance
+    // Handle what to post next
     const handlePredictPerformance = async () => {
-        if (!currentCaptionForAI.trim() && generatedCaptions.length === 0) {
-            showToast?.('Please generate captions first or enter a caption', 'error');
-            return;
-        }
-
-        const captionToPredict = currentCaptionForAI.trim() || generatedCaptions[0] || '';
-        if (!captionToPredict) {
-            showToast?.('Please enter or generate a caption first', 'error');
-            return;
-        }
-
-        // Capture media URL and type at the time of prediction
+        const recentContent = currentCaptionForAI.trim() || generatedCaptions[0] || '';
         const currentMediaUrl = uploadedMediaUrl;
         const currentMediaType = uploadedMediaType || 'image';
 
         setIsPredicting(true);
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
-            const response = await fetch('/api/predictContentPerformance', {
+            const response = await fetch('/api/whatToPostNext', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
                 body: JSON.stringify({
-                    caption: captionToPredict,
                     platform: selectedPlatform,
-                    mediaType: currentMediaType,
                     niche: user?.niche || 'Adult Content Creator',
                     tone: captionTone,
                     goal: captionGoal,
-                    fanPreferences: selectedFanId && fanPreferences ? {
-                        preferredTone: fanPreferences.preferredTone,
-                        communicationStyle: fanPreferences.communicationStyle,
-                        favoriteSessionType: fanPreferences.favoriteSessionType,
-                        languagePreferences: fanPreferences.languagePreferences,
-                    } : undefined,
+                    recentContent: recentContent || undefined,
                 }),
             });
 
-            if (!response.ok) throw new Error('Failed to predict performance');
+            if (!response.ok) throw new Error('Failed to generate what to post next');
             const data = await response.json();
             if (data.success) {
                 const resultData = {
                     ...data,
-                    originalCaption: captionToPredict,
+                    originalCaption: recentContent,
                     mediaUrl: currentMediaUrl || null,
                     mediaType: currentMediaType,
                 };
                 
-                // Save to history automatically - ensure media is included
                 try {
                     await savePredictToHistory({
                         ...resultData,
                         mediaUrl: currentMediaUrl || null,
                         mediaType: currentMediaType,
                     });
-                    // Reload captions history
                     await loadCaptionsHistory();
                 } catch (saveError: any) {
-                    // Log error but don't block showing the result
-                    console.error('Failed to save prediction to history:', saveError);
+                    console.error('Failed to save what to post next to history:', saveError);
                 }
                 
                 setPredictResult(resultData);
                 setShowPredictModal(true);
-                showToast?.('Performance predicted!', 'success');
+                showToast?.('Ideas ready!', 'success');
             }
         } catch (error: any) {
-            showToast?.(error.message || 'Failed to predict performance', 'error');
+            showToast?.(error.message || 'Failed to generate what to post next', 'error');
         } finally {
             setIsPredicting(false);
         }
@@ -3045,14 +3232,14 @@ Output format:
     }, [showMediaVaultModal]);
 
     const allTabs: { id: ContentType; label: string }[] = [
-        { id: 'captions', label: 'AI Captions' },
+        { id: 'captions', label: 'Captions' },
         { id: 'mediaCaptions', label: 'Image/Video Captions' }, // Hidden but kept for stability
-        { id: 'postIdeas', label: 'Post Ideas' },
-        { id: 'shootConcepts', label: 'Shoot Concepts' },
-        { id: 'weeklyPlan', label: 'Weekly Plan' },
-        { id: 'monetizationPlanner', label: 'Monetization Planner' },
-        { id: 'messaging', label: 'Messaging' },
-        { id: 'guides', label: 'Guides & Tips' },
+        { id: 'postIdeas', label: 'Content Ideas' },
+        { id: 'shootConcepts', label: 'Shoot Ideas' },
+        { id: 'weeklyPlan', label: 'Plan My Week' },
+        { id: 'monetizationPlanner', label: 'Drops & PPV' },
+        { id: 'messaging', label: 'DM Sessions' },
+        { id: 'guides', label: 'Playbooks' },
     ];
     // Filter out mediaCaptions and guides tabs (history is now in captions tab)
     const tabs = allTabs.filter(tab => tab.id !== 'mediaCaptions' && tab.id !== 'guides') as { id: ContentType; label: string }[];
@@ -3064,7 +3251,7 @@ Output format:
                 <div className="flex items-center justify-center min-h-[400px]">
                     <div className="text-center">
                         <RefreshIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 animate-spin mx-auto mb-4" />
-                        <p className="text-gray-600 dark:text-gray-400">Loading Content Brain...</p>
+                        <p className="text-gray-600 dark:text-gray-400">Loading Content Ideas...</p>
                     </div>
                 </div>
             </div>
@@ -3076,7 +3263,7 @@ Output format:
         return (
             <div className="max-w-5xl mx-auto p-6">
                 <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 text-center">
-                    <p className="text-red-600 dark:text-red-400 mb-2">Error loading Content Brain</p>
+                    <p className="text-red-600 dark:text-red-400 mb-2">Error loading Content Ideas</p>
                     <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">{error}</p>
                     <button 
                         onClick={() => {
@@ -3097,8 +3284,8 @@ Output format:
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
             <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Platform Targeting</h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Optimize everything here for OnlyFans, Fansly, or Fanvue.</p>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Platform</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Pick where you’re posting this week.</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                     {platformOptions.map((platform) => (
@@ -3126,11 +3313,11 @@ Output format:
                 <div className="flex items-center gap-3 mb-2">
                     <SparklesIcon className="w-8 h-8 text-primary-600 dark:text-primary-400" />
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                        Content Brain
+                        Content Ideas
                     </h1>
                 </div>
                 <p className="text-gray-600 dark:text-gray-400">
-                    Generate AI-powered captions, ideas, shoot concepts, and content plans for premium creator platforms.
+                    Plan drops, write captions, and map the week in creator language.
                 </p>
             </div>
 
@@ -3199,7 +3386,7 @@ Output format:
                                         </div>
                                     ) : (captionsPredictHistory.length === 0 && captionsRepurposeHistory.length === 0 && captionsGapAnalysisHistory.length === 0) ? (
                                         <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                                            <p className="text-sm">No content gap analysis, predictions or repurposes yet.</p>
+                                            <p className="text-sm">No content gap checks, what to post next ideas, or repurposes yet.</p>
                                             <p className="text-xs mt-1">Use the What's Missing, What To Post Next, or Repurpose Content buttons above to see history here.</p>
                                         </div>
                                     ) : (
@@ -3211,6 +3398,10 @@ Output format:
                                                 const score = prediction.score || 50;
                                                 const mediaUrl = item.data?.mediaUrl;
                                                 const mediaType = item.data?.mediaType || 'image';
+                                                const ideas = item.data?.ideas || item.data?.postIdeas || item.data?.nextPostIdeas;
+                                                const hasIdeas = Array.isArray(ideas) && ideas.length > 0;
+                                                const ideaTitle = hasIdeas ? (ideas[0]?.title || 'Post idea') : '';
+                                                const summary = item.data?.summary || '';
                                                 return (
                                                     <div
                                                         key={item.id}
@@ -3228,18 +3419,31 @@ Output format:
                                                             )}
                                                             <div className="flex-1 min-w-0">
                                                                 <div className="flex items-center gap-2 mb-1">
-                                                                    <span className="text-xs font-semibold text-purple-600 dark:text-purple-400">PREDICT</span>
-                                                                    <span className={`text-xs px-2 py-0.5 rounded ${
-                                                                        level === 'High' ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' :
-                                                                        level === 'Medium' ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300' :
-                                                                        'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
-                                                                    }`}>
-                                                                        {level} ({score}/100)
-                                                                    </span>
+                                                                    <span className="text-xs font-semibold text-purple-600 dark:text-purple-400">WHAT TO POST NEXT</span>
+                                                                    {!hasIdeas && (
+                                                                        <span className={`text-xs px-2 py-0.5 rounded ${
+                                                                            level === 'High' ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' :
+                                                                            level === 'Medium' ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300' :
+                                                                            'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
+                                                                        }`}>
+                                                                            {level} ({score}/100)
+                                                                        </span>
+                                                                    )}
+                                                                    {hasIdeas && (
+                                                                        <span className="text-xs px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300">
+                                                                            {ideas.length} ideas
+                                                                        </span>
+                                                                    )}
                                                                 </div>
-                                                                <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
-                                                                    {item.data?.originalCaption?.substring(0, 100)}...
-                                                                </p>
+                                                                {hasIdeas ? (
+                                                                    <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                                                                        {ideaTitle}{summary ? ` — ${summary}` : ''}
+                                                                    </p>
+                                                                ) : (
+                                                                    <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                                                                        {item.data?.originalCaption?.substring(0, 100)}...
+                                                                    </p>
+                                                                )}
                                                                 <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
                                                                     {item.createdAt?.toDate ? new Date(item.createdAt.toDate()).toLocaleString() : (item.createdAt ? new Date(item.createdAt).toLocaleString() : 'Recently')}
                                                                 </p>
@@ -3416,7 +3620,7 @@ Output format:
                                                     className="flex-1 px-4 py-3 border border-primary-300 dark:border-primary-700 rounded-md bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 hover:bg-primary-100 dark:hover:bg-primary-900/50 text-sm font-medium flex items-center justify-center gap-2"
                                                 >
                                                     <ImageIcon className="w-5 h-5" />
-                                                    From Media Vault
+                                                    From My Vault
                                                 </button>
                                             </div>
                                             <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -3460,10 +3664,20 @@ Output format:
                                 )}
                             </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Additional Context (Optional):
-                                </label>
+                            <div className="relative">
+                                <div className="flex items-center justify-between mb-2">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Additional Context (Optional):
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={() => setAiHelpField(aiHelpField === 'captions' ? null : 'captions')}
+                                        className="text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
+                                        title="AI Help"
+                                    >
+                                        <SparklesIcon className="w-4 h-4" />
+                                    </button>
+                                </div>
                                 <textarea
                                     value={captionPrompt}
                                     onChange={(e) => setCaptionPrompt(e.target.value)}
@@ -3476,6 +3690,59 @@ Output format:
                                     <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                         The AI will automatically analyze your image/video in detail. Use this field to add specific focus or details.
                                     </p>
+                                )}
+                                {aiHelpField === 'captions' && (
+                                    <div
+                                        ref={aiHelpRef}
+                                        className="absolute z-20 right-0 top-full mt-2 w-full md:w-96 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 border border-gray-200 dark:border-gray-600"
+                                    >
+                                        <div className="mb-2">
+                                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white">AI Help</h4>
+                                            <p className="text-xs text-gray-600 dark:text-gray-400">
+                                                Add instructions if needed, or leave blank to improve what you wrote.
+                                            </p>
+                                        </div>
+                                        <textarea
+                                            value={aiHelpPrompt}
+                                            onChange={(e) => setAiHelpPrompt(e.target.value)}
+                                            placeholder="e.g., make it more flirty, focus on PPV, add a tease"
+                                            rows={3}
+                                            className="w-full p-2 text-sm border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 resize-y mb-2"
+                                        />
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => runAiHelp(
+                                                    captionPrompt,
+                                                    aiHelpPrompt,
+                                                    { goal: captionGoal, tone: captionTone, platforms: [selectedPlatform] },
+                                                    (text) => setCaptionPrompt(text),
+                                                )}
+                                                disabled={isAiHelpGenerating}
+                                                className="flex-1 px-3 py-2 text-xs font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+                                            >
+                                                {isAiHelpGenerating ? (
+                                                    <>
+                                                        <RefreshIcon className="w-3 h-3 animate-spin" />
+                                                        Rewriting...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <SparklesIcon className="w-3 h-3" />
+                                                        Rewrite
+                                                    </>
+                                                )}
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setAiHelpField(null);
+                                                    setAiHelpPrompt('');
+                                                }}
+                                                className="px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </div>
                                 )}
                             </div>
 
@@ -3795,9 +4062,9 @@ Output format:
                                     {/* What To Post Next */}
                                     <button
                                         onClick={handlePredictPerformance}
-                                        disabled={isPredicting || isRepurposing || isAnalyzingGaps || user?.plan === 'Free' || generatedCaptions.length === 0}
+                                        disabled={isPredicting || isRepurposing || isAnalyzingGaps || user?.plan === 'Free'}
                                         className={`px-4 py-3 rounded-lg font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 ${
-                                            user?.plan === 'Free' || generatedCaptions.length === 0
+                                            user?.plan === 'Free'
                                                 ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
                                                 : 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:from-blue-700 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed'
                                         }`}
@@ -3805,7 +4072,7 @@ Output format:
                                         {isPredicting ? (
                                             <>
                                                 <RefreshIcon className="w-5 h-5 animate-spin" />
-                                                Predicting...
+                                                Finding ideas...
                                             </>
                                         ) : (
                                             <>
@@ -3868,9 +4135,9 @@ Output format:
                                 {/* What To Post Next */}
                                 <button
                                     onClick={handlePredictPerformance}
-                                    disabled={isPredicting || isRepurposing || isAnalyzingGaps || user?.plan === 'Free' || generatedCaptions.length === 0}
+                                    disabled={isPredicting || isRepurposing || isAnalyzingGaps || user?.plan === 'Free'}
                                     className={`px-4 py-3 rounded-lg font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 ${
-                                        user?.plan === 'Free' || generatedCaptions.length === 0
+                                        user?.plan === 'Free'
                                             ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
                                             : 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:from-blue-700 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed'
                                     }`}
@@ -3878,7 +4145,7 @@ Output format:
                                     {isPredicting ? (
                                         <>
                                             <RefreshIcon className="w-5 h-5 animate-spin" />
-                                            Predicting...
+                                            Finding ideas...
                                         </>
                                     ) : (
                                         <>
@@ -4108,16 +4375,79 @@ Output format:
                         </div>
                         
                         <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    What kind of post ideas are you looking for?
-                                </label>
+                            <div className="relative">
+                                <div className="flex items-center justify-between mb-2">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        What kind of post ideas are you looking for?
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={() => setAiHelpField(aiHelpField === 'postIdeas' ? null : 'postIdeas')}
+                                        className="text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
+                                        title="AI Help"
+                                    >
+                                        <SparklesIcon className="w-4 h-4" />
+                                    </button>
+                                </div>
                                 <textarea
                                     value={postIdeaPrompt}
                                     onChange={(e) => setPostIdeaPrompt(e.target.value)}
                                     placeholder="e.g., 'Interactive content to boost engagement' or 'Behind-the-scenes content ideas'"
                                     className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[100px]"
                                 />
+                                {aiHelpField === 'postIdeas' && (
+                                    <div
+                                        ref={aiHelpRef}
+                                        className="absolute z-20 right-0 top-full mt-2 w-full md:w-96 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 border border-gray-200 dark:border-gray-600"
+                                    >
+                                        <div className="mb-2">
+                                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white">AI Help</h4>
+                                            <p className="text-xs text-gray-600 dark:text-gray-400">
+                                                Add instructions or leave blank to refine what you wrote.
+                                            </p>
+                                        </div>
+                                        <textarea
+                                            value={aiHelpPrompt}
+                                            onChange={(e) => setAiHelpPrompt(e.target.value)}
+                                            placeholder="e.g., more teaser-heavy, focus on PPV, add engagement"
+                                            rows={3}
+                                            className="w-full p-2 text-sm border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 resize-y mb-2"
+                                        />
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => runAiHelp(
+                                                    postIdeaPrompt,
+                                                    aiHelpPrompt,
+                                                    { goal: 'post ideas', tone: captionTone, platforms: [selectedPlatform] },
+                                                    (text) => setPostIdeaPrompt(text),
+                                                )}
+                                                disabled={isAiHelpGenerating}
+                                                className="flex-1 px-3 py-2 text-xs font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+                                            >
+                                                {isAiHelpGenerating ? (
+                                                    <>
+                                                        <RefreshIcon className="w-3 h-3 animate-spin" />
+                                                        Rewriting...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <SparklesIcon className="w-3 h-3" />
+                                                        Rewrite
+                                                    </>
+                                                )}
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setAiHelpField(null);
+                                                    setAiHelpPrompt('');
+                                                }}
+                                                className="px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="flex flex-wrap gap-2">
@@ -4278,16 +4608,79 @@ Output format:
                         </div>
                         
                         <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Describe the type of shoot concept you want:
-                                </label>
+                            <div className="relative">
+                                <div className="flex items-center justify-between mb-2">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Describe the type of shoot concept you want:
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={() => setAiHelpField(aiHelpField === 'shootConcepts' ? null : 'shootConcepts')}
+                                        className="text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
+                                        title="AI Help"
+                                    >
+                                        <SparklesIcon className="w-4 h-4" />
+                                    </button>
+                                </div>
                                 <textarea
                                     value={shootConceptPrompt}
                                     onChange={(e) => setShootConceptPrompt(e.target.value)}
                                     placeholder="e.g., 'Boudoir photoset with vintage vibes' or 'Intimate bedroom scene with natural lighting'"
                                     className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[100px]"
                                 />
+                                {aiHelpField === 'shootConcepts' && (
+                                    <div
+                                        ref={aiHelpRef}
+                                        className="absolute z-20 right-0 top-full mt-2 w-full md:w-96 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 border border-gray-200 dark:border-gray-600"
+                                    >
+                                        <div className="mb-2">
+                                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white">AI Help</h4>
+                                            <p className="text-xs text-gray-600 dark:text-gray-400">
+                                                Add instructions or leave blank to refine what you wrote.
+                                            </p>
+                                        </div>
+                                        <textarea
+                                            value={aiHelpPrompt}
+                                            onChange={(e) => setAiHelpPrompt(e.target.value)}
+                                            placeholder="e.g., more cinematic, tease a PPV set, soft lighting"
+                                            rows={3}
+                                            className="w-full p-2 text-sm border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 resize-y mb-2"
+                                        />
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => runAiHelp(
+                                                    shootConceptPrompt,
+                                                    aiHelpPrompt,
+                                                    { goal: 'shoot concepts', tone: captionTone, platforms: [selectedPlatform] },
+                                                    (text) => setShootConceptPrompt(text),
+                                                )}
+                                                disabled={isAiHelpGenerating}
+                                                className="flex-1 px-3 py-2 text-xs font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+                                            >
+                                                {isAiHelpGenerating ? (
+                                                    <>
+                                                        <RefreshIcon className="w-3 h-3 animate-spin" />
+                                                        Rewriting...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <SparklesIcon className="w-3 h-3" />
+                                                        Rewrite
+                                                    </>
+                                                )}
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setAiHelpField(null);
+                                                    setAiHelpPrompt('');
+                                                }}
+                                                className="px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="flex flex-wrap gap-2">
@@ -4448,16 +4841,79 @@ Output format:
                         </div>
                         
                         <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Your goals or preferences for the week:
-                                </label>
+                            <div className="relative">
+                                <div className="flex items-center justify-between mb-2">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Your goals or preferences for the week:
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={() => setAiHelpField(aiHelpField === 'weeklyPlan' ? null : 'weeklyPlan')}
+                                        className="text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
+                                        title="AI Help"
+                                    >
+                                        <SparklesIcon className="w-4 h-4" />
+                                    </button>
+                                </div>
                                 <textarea
                                     value={weeklyPlanPrompt}
                                     onChange={(e) => setWeeklyPlanPrompt(e.target.value)}
                                     placeholder="e.g., 'Focus on intimate content and behind-the-scenes this week' or 'Mix of photosets, videos, and interactive posts'"
                                     className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[100px]"
                                 />
+                                {aiHelpField === 'weeklyPlan' && (
+                                    <div
+                                        ref={aiHelpRef}
+                                        className="absolute z-20 right-0 top-full mt-2 w-full md:w-96 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 border border-gray-200 dark:border-gray-600"
+                                    >
+                                        <div className="mb-2">
+                                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white">AI Help</h4>
+                                            <p className="text-xs text-gray-600 dark:text-gray-400">
+                                                Add instructions or leave blank to refine what you wrote.
+                                            </p>
+                                        </div>
+                                        <textarea
+                                            value={aiHelpPrompt}
+                                            onChange={(e) => setAiHelpPrompt(e.target.value)}
+                                            placeholder="e.g., 1 PPV drop, 2 teasers, 1 session, win-back focus"
+                                            rows={3}
+                                            className="w-full p-2 text-sm border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 resize-y mb-2"
+                                        />
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => runAiHelp(
+                                                    weeklyPlanPrompt,
+                                                    aiHelpPrompt,
+                                                    { goal: 'weekly plan', tone: captionTone, platforms: [selectedPlatform] },
+                                                    (text) => setWeeklyPlanPrompt(text),
+                                                )}
+                                                disabled={isAiHelpGenerating}
+                                                className="flex-1 px-3 py-2 text-xs font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+                                            >
+                                                {isAiHelpGenerating ? (
+                                                    <>
+                                                        <RefreshIcon className="w-3 h-3 animate-spin" />
+                                                        Rewriting...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <SparklesIcon className="w-3 h-3" />
+                                                        Rewrite
+                                                    </>
+                                                )}
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setAiHelpField(null);
+                                                    setAiHelpPrompt('');
+                                                }}
+                                                className="px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="flex flex-wrap gap-2">
@@ -4976,14 +5432,77 @@ Output format:
                                     <option value="Explicit">Explicit</option>
                                 </select>
                             </div>
-                            <div className="md:col-span-1">
-                                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Context (optional)</label>
-                                <input
+                            <div className="md:col-span-3 relative">
+                                <div className="flex items-center justify-between mb-1">
+                                    <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300">Additional context (optional)</label>
+                                    <button
+                                        type="button"
+                                        onClick={() => setAiHelpField(aiHelpField === 'messaging' ? null : 'messaging')}
+                                        className="text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
+                                        title="AI Help"
+                                    >
+                                        <SparklesIcon className="w-4 h-4" />
+                                    </button>
+                                </div>
+                                <textarea
                                     value={messageContext}
                                     onChange={(e) => setMessageContext(e.target.value)}
                                     placeholder="e.g., promo ends tonight, new PPV drop, discount, theme"
-                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[70px]"
                                 />
+                                {aiHelpField === 'messaging' && (
+                                    <div
+                                        ref={aiHelpRef}
+                                        className="absolute z-20 right-0 top-full mt-2 w-full md:w-96 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 border border-gray-200 dark:border-gray-600"
+                                    >
+                                        <div className="mb-2">
+                                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white">AI Help</h4>
+                                            <p className="text-xs text-gray-600 dark:text-gray-400">
+                                                Add instructions or leave blank to refine what you wrote.
+                                            </p>
+                                        </div>
+                                        <textarea
+                                            value={aiHelpPrompt}
+                                            onChange={(e) => setAiHelpPrompt(e.target.value)}
+                                            placeholder="e.g., win-back tone, tease a bundle, PPV follow-up"
+                                            rows={3}
+                                            className="w-full p-2 text-sm border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 resize-y mb-2"
+                                        />
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => runAiHelp(
+                                                    messageContext,
+                                                    aiHelpPrompt,
+                                                    { goal: messageType, tone: messageTone, platforms: [selectedPlatform] },
+                                                    (text) => setMessageContext(text),
+                                                )}
+                                                disabled={isAiHelpGenerating}
+                                                className="flex-1 px-3 py-2 text-xs font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+                                            >
+                                                {isAiHelpGenerating ? (
+                                                    <>
+                                                        <RefreshIcon className="w-3 h-3 animate-spin" />
+                                                        Rewriting...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <SparklesIcon className="w-3 h-3" />
+                                                        Rewrite
+                                                    </>
+                                                )}
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setAiHelpField(null);
+                                                    setAiHelpPrompt('');
+                                                }}
+                                                className="px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -5182,7 +5701,7 @@ Output format:
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
                     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
                         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Select from Media Vault</h2>
+                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Select from My Vault</h2>
                             <button
                                 onClick={() => setShowMediaVaultModal(false)}
                                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
@@ -5194,7 +5713,7 @@ Output format:
                             {mediaVaultItems.length === 0 ? (
                                 <div className="text-center py-8">
                                     <p className="text-gray-600 dark:text-gray-400">No media in vault yet.</p>
-                                    <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">Upload media to your OnlyFans Media Vault first.</p>
+                                    <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">Upload media to your vault first.</p>
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">

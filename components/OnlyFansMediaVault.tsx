@@ -529,7 +529,7 @@ export const OnlyFansMediaVault: React.FC = () => {
     if (isLoading) {
         return (
             <div className="flex items-center justify-center h-64">
-                <div className="text-gray-500 dark:text-gray-400">Loading media vault...</div>
+                <div className="text-gray-500 dark:text-gray-400">Loading vault...</div>
             </div>
         );
     }
@@ -539,13 +539,13 @@ export const OnlyFansMediaVault: React.FC = () => {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Media Vault</h2>
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">My Vault</h2>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                        Organize and manage your premium content for OnlyFans, Fansly, and Fanvue with AI-powered tagging and organization tools.
+                        Organize teasers, PPVs, bundles, and ready-to-post sets.
                     </p>
                     <p className="text-xs text-primary-600 dark:text-primary-400 mt-1 flex items-center gap-1">
                         <SparklesIcon className="w-3 h-3" />
-                        <span>AI Tagging available - Generate smart tags for outfits, poses, and vibes</span>
+                        <span>Tag by vibe, set type, and drop</span>
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -555,7 +555,7 @@ export const OnlyFansMediaVault: React.FC = () => {
                         className="px-4 py-2 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 flex items-center gap-2 disabled:opacity-50"
                     >
                         <UploadIcon className="w-4 h-4" />
-                        {isUploading ? 'Uploading...' : 'Upload Media'}
+                        {isUploading ? 'Uploading...' : 'Upload'}
                     </button>
                     <input
                         ref={fileInputRef}

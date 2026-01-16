@@ -25,7 +25,7 @@ export const OnlyFansGuides: React.FC = () => {
         {
             title: 'Step 1: Prepare Your Content',
             content: [
-                'Organize your media in the Media Vault with proper folders',
+                'Organize your media in My Vault with clear tags',
                 'Use AI tagging to help organize content by outfits, poses, and vibes',
                 'Ensure content meets OnlyFans guidelines (no prohibited content)',
                 'Check image/video quality and resolution',
@@ -34,7 +34,7 @@ export const OnlyFansGuides: React.FC = () => {
         {
             title: 'Step 2: Generate Captions',
             content: [
-                'Use the Content Brain to generate engaging captions',
+                'Use Content Ideas to generate engaging captions',
                 'Choose appropriate tone (Playful, Teasing, Explicit, etc.)',
                 'Include engagement prompts and strong CTAs',
                 'Customize captions based on your audience and content type',
@@ -175,14 +175,14 @@ export const OnlyFansGuides: React.FC = () => {
                 'Use good lighting and composition',
                 'Edit content for professional appearance',
                 'Keep content fresh and varied',
-                'Plan content in advance using My Schedule',
+                'Plan content in advance using the Weekly Money Calendar',
             ],
         },
         {
             category: 'Consistency',
             practices: [
                 'Post regularly (daily or multiple times per week)',
-                'Use My Schedule to plan your posting schedule',
+                'Use the Weekly Money Calendar to plan your posting schedule',
                 'Maintain consistent posting times',
                 'Keep your brand voice and style consistent',
             ],
@@ -256,7 +256,7 @@ export const OnlyFansGuides: React.FC = () => {
             <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 flex items-start justify-between gap-4">
                 <div className="min-w-0">
                     <p className="text-sm font-semibold text-blue-900 dark:text-blue-200">
-                        Updated Guides (weekly trends + research)
+                        Updated Playbooks (weekly trends + research)
                     </p>
                     <p className="text-xs text-blue-800 dark:text-blue-300">
                         {generatedAt ? `Last generated: ${new Date(generatedAt).toLocaleString()}` : 'Last generated: unknown'}
@@ -278,7 +278,7 @@ export const OnlyFansGuides: React.FC = () => {
         ) : (
             <div className="mb-6 bg-gray-50 dark:bg-gray-700/40 border border-gray-200 dark:border-gray-700 rounded-lg p-4 flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 dark:text-white">Built-in Guides</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white">Built-in Playbooks</p>
                     <p className="text-xs text-gray-600 dark:text-gray-400">
                         Live guides couldn’t be loaded — showing built-in best practices.
                     </p>
@@ -339,7 +339,7 @@ export const OnlyFansGuides: React.FC = () => {
                                 Best Times to Post
                             </h2>
                             <p className="text-gray-600 dark:text-gray-400 mb-6">
-                                Posting at optimal times can significantly increase engagement and monetization. Use My Schedule to schedule your posts.
+                                Posting at optimal times can significantly increase engagement and monetization. Use the Weekly Money Calendar to schedule your posts.
                             </p>
                         </div>
                         <div className="grid gap-4">
@@ -370,7 +370,7 @@ export const OnlyFansGuides: React.FC = () => {
                                 Caption Best Practices
                             </h2>
                             <p className="text-gray-600 dark:text-gray-400 mb-6">
-                                Effective captions drive engagement and monetization. Use the Content Brain to generate optimized captions.
+                                Effective captions drive engagement and monetization. Use Content Ideas to generate optimized captions.
                             </p>
                         </div>
                         {captionTips.map((category, index) => (
@@ -546,12 +546,12 @@ export const OnlyFansGuides: React.FC = () => {
             <div className="mb-6">
                 <div className="flex items-center gap-3 mb-2">
                     <SparklesIcon className="w-8 h-8 text-primary-600 dark:text-primary-400" />
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                        Guides & Tips
-                    </h1>
+                        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+                            Playbooks
+                        </h1>
                 </div>
                 <p className="text-gray-600 dark:text-gray-400">
-                    Learn best practices, strategies, and step-by-step guides for successful premium content creation across OnlyFans, Fansly, and Fanvue.
+                    Clear playbooks for drops, DMs, bundles, and slow weeks.
                 </p>
             </div>
 

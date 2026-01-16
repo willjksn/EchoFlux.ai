@@ -42,7 +42,7 @@ const fallbackReviews: Review[] = [
     country: "UK",
     plan: "Elite",
     rating: 5,
-    text: "I like that it’s built for 🌶️ platforms—Content Brain gives me OnlyFans-ready ideas without me rewriting everything.",
+    text: "I like that it’s built for 🌶️ platforms—Content Ideas gives me OnlyFans-ready ideas without me rewriting everything.",
     showAvatar: false,
     avatarUrl: null,
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(),

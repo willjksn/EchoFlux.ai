@@ -45,7 +45,7 @@ export const OnlyFansAnalytics: React.FC = () => {
         return (
             <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full flex items-center justify-center">
                 <div className="text-center">
-                    <p className="text-red-600 dark:text-red-400 mb-2">Failed to load Analytics.</p>
+                    <p className="text-red-600 dark:text-red-400 mb-2">Failed to load What's Working.</p>
                     <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">Please refresh the page.</p>
                     <button 
                         onClick={() => window.location.reload()} 
@@ -268,7 +268,7 @@ export const OnlyFansAnalytics: React.FC = () => {
                     <div className="flex items-center gap-3">
                         <AnalyticsIcon />
                         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                            Analytics & Insights
+                            What's Working
                         </h1>
                     </div>
                     <div className="flex gap-2">
@@ -291,7 +291,7 @@ export const OnlyFansAnalytics: React.FC = () => {
                     </div>
                 </div>
                 <p className="text-gray-600 dark:text-gray-400">
-                    Track your content creation activity and performance metrics.
+                    Track wins, top content, and performance notes.
                 </p>
             </div>
 

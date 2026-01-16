@@ -6,7 +6,7 @@ import { auth, db } from '../firebaseConfig';
 import { doc, getDoc, collection, addDoc, query, orderBy, limit, getDocs, Timestamp, updateDoc, setDoc } from 'firebase/firestore';
 
 type SessionStatus = 'draft' | 'active' | 'paused' | 'ended';
-type RoleplayType = 'GFE (Girlfriend Experience)' | 'Dominant / Submissive' | 'Teacher / Student' | 'Boss / Assistant' | 'Fitness Trainer' | 'Soft Mommy / Daddy' | 'Nurse / Patient' | 'Celebrity / Fan' | 'Custom';
+type RoleplayType = 'GFE (Girlfriend Experience)' | 'Dominant / Submissive' | 'Class after hours' | 'Office after dark' | 'Fitness Trainer' | 'Soft Mommy / Daddy' | 'Nurse / Patient' | 'Celebrity / Fan' | 'Custom';
 type Tone = 'Soft' | 'Teasing' | 'Playful' | 'Explicit';
 
 interface Message {
@@ -18,11 +18,11 @@ interface Message {
     used?: boolean;
 }
 
-interface AISuggestion {
-    id: string;
-    message: string;
-    confidence: number;
-    reasoning?: string;
+interface SessionPlan {
+    opener: string;
+    messageFlow: string[];
+    paywallMoment: string;
+    closeFollowUp: string;
 }
 
 interface Session {
@@ -62,8 +62,9 @@ export const OnlyFansSextingSession: React.FC = () => {
     const [roleplayType, setRoleplayType] = useState<RoleplayType>('GFE (Girlfriend Experience)');
     const [customRoleplay, setCustomRoleplay] = useState('');
     const [tone, setTone] = useState<Tone>('Teasing');
-    const [aiSuggestions, setAiSuggestions] = useState<AISuggestion[]>([]);
+    const [sessionPlan, setSessionPlan] = useState<SessionPlan | null>(null);
     const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
+    const [sessionLength, setSessionLength] = useState<10 | 20 | 30>(20);
     const [messageInput, setMessageInput] = useState('');
     const [isLoadingFans, setIsLoadingFans] = useState(false);
     const [creatorPersonality, setCreatorPersonality] = useState('');
@@ -125,7 +126,7 @@ export const OnlyFansSextingSession: React.FC = () => {
     // Auto-scroll to bottom when messages change
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [activeSession?.messages, aiSuggestions]);
+    }, [activeSession?.messages, sessionPlan]);
 
     const loadFans = async () => {
         if (!user?.id) return;
@@ -170,6 +171,7 @@ export const OnlyFansSextingSession: React.FC = () => {
             messages: [],
             createdAt: new Date(),
             updatedAt: new Date(),
+            duration: sessionLength,
         };
 
         setActiveSession(newSession);
@@ -225,6 +227,8 @@ export const OnlyFansSextingSession: React.FC = () => {
                 const contextParts = [];
                 const subscriptionTier = currentFanPrefs.subscriptionTier;
                 const isVip = currentFanPrefs.isVIP === true;
+                const isWhale = currentFanPrefs.isWhale === true;
+                const isRegular = currentFanPrefs.isRegular === true;
                 if (subscriptionTier) {
                     contextParts.push(`Subscription tier: ${subscriptionTier}`);
                     if (subscriptionTier === 'Paid') {
@@ -235,6 +239,12 @@ export const OnlyFansSextingSession: React.FC = () => {
                 }
                 if (isVip) {
                     contextParts.push('VIP: Provide special treatment and priority responses.');
+                }
+                if (isWhale) {
+                    contextParts.push('Whale: Prioritize high-ticket PPV drops, bundles, and upsells.');
+                }
+                if (isRegular) {
+                    contextParts.push('Regular: Keep it warm, consistent, and focused on repeat buys.');
                 }
                 if (currentFanPrefs.preferredTone) contextParts.push(`Preferred tone: ${currentFanPrefs.preferredTone}`);
                 if (currentFanPrefs.communicationStyle) contextParts.push(`Communication style: ${currentFanPrefs.communicationStyle}`);
@@ -330,6 +340,8 @@ NATURAL PERSONALIZATION GUIDELINES:
                         roleplayType: session.roleplayType,
                         tone: session.tone,
                         fanName: session.fanName,
+                        sessionLength: session.duration || sessionLength,
+                        goal: 'Upsell PPV, keep them buying, and bring them back',
                     },
                     fanContext: fanContext || undefined,
                     personalityContext: personalityContext || undefined,
@@ -344,23 +356,24 @@ NATURAL PERSONALIZATION GUIDELINES:
             
             if (!response.ok || !data.success) {
                 // Use the detailed error message from the API if available
-                const errorMessage = data.note || data.error || `Failed to generate suggestions (${response.status})`;
+                const errorMessage = data.note || data.error || `Failed to generate a session plan (${response.status})`;
                 console.error('API error response:', { status: response.status, data });
                 throw new Error(errorMessage);
             }
 
-            if (!data.suggestions || !Array.isArray(data.suggestions)) {
+            if (!data.plan || typeof data.plan !== 'object') {
                 throw new Error(data.note || data.error || 'Invalid response format from API');
             }
 
-            setAiSuggestions(data.suggestions.map((s: string, idx: number) => ({
-                id: `suggestion-${Date.now()}-${idx}`,
-                message: s,
-                confidence: 0.85, // Default confidence
-            })));
+            setSessionPlan({
+                opener: data.plan.opener || '',
+                messageFlow: Array.isArray(data.plan.messageFlow) ? data.plan.messageFlow : [],
+                paywallMoment: data.plan.paywallMoment || '',
+                closeFollowUp: data.plan.closeFollowUp || '',
+            });
         } catch (error: any) {
-            console.error('Error generating suggestions:', error);
-            const errorMessage = error.message || 'Failed to generate AI suggestions. Please try again.';
+            console.error('Error generating session plan:', error);
+            const errorMessage = error.message || 'Failed to generate a session plan. Please try again.';
             showToast(errorMessage, 'error');
         } finally {
             setIsGeneratingSuggestions(false);
@@ -387,7 +400,7 @@ NATURAL PERSONALIZATION GUIDELINES:
 
         setActiveSession(updatedSession);
         setMessageInput('');
-        setAiSuggestions([]); // Clear suggestions after sending
+        setSessionPlan(null); // Clear plan after sending
 
         // Generate new suggestions after a short delay
         setTimeout(() => {
@@ -395,8 +408,8 @@ NATURAL PERSONALIZATION GUIDELINES:
         }, 1000);
     };
 
-    const useSuggestion = (suggestion: AISuggestion) => {
-        sendMessage(suggestion.message, true);
+    const useLine = (line: string) => {
+        sendMessage(line, true);
     };
 
     const addFanMessage = (content: string) => {
@@ -632,10 +645,10 @@ NATURAL PERSONALIZATION GUIDELINES:
                         </div>
                     </div>
 
-                    {/* AI Suggestions Panel */}
+                    {/* Session Plan Panel */}
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">AI Suggestions</h3>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Session Plan</h3>
                             {isGeneratingSuggestions && (
                                 <RefreshIcon className="w-5 h-5 animate-spin text-primary-600 dark:text-primary-400" />
                             )}
@@ -643,43 +656,103 @@ NATURAL PERSONALIZATION GUIDELINES:
                         {isGeneratingSuggestions && (
                             <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 mb-3">
                                 <div className="h-4 w-4 border-2 border-gray-300 dark:border-gray-600 border-t-primary-600 dark:border-t-primary-400 rounded-full animate-spin"></div>
-                                <span>Generating suggestions...</span>
+                                <span>Building your session plan...</span>
                             </div>
                         )}
-                        {aiSuggestions.length === 0 ? (
+                        {!sessionPlan ? (
                             <p className="text-gray-500 dark:text-gray-400 text-center py-8">
-                                {isGeneratingSuggestions ? 'Generating suggestions...' : 'No suggestions yet'}
+                                {isGeneratingSuggestions ? 'Building your plan...' : 'No plan yet'}
                             </p>
                         ) : (
-                            <div className="space-y-3">
-                                {aiSuggestions.map((suggestion) => (
-                                    <div
-                                        key={suggestion.id}
-                                        className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600"
-                                    >
-                                        <p className="text-sm text-gray-900 dark:text-white mb-2">{suggestion.message}</p>
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-xs text-gray-500 dark:text-gray-400">
-                                                Confidence: {Math.round(suggestion.confidence * 100)}%
-                                            </span>
-                                            <div className="flex gap-2">
-                                                <button
-                                                    onClick={() => copyToClipboard(suggestion.message)}
-                                                    className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                                >
-                                                    Copy
-                                                </button>
-                                                <button
-                                                    onClick={() => useSuggestion(suggestion)}
-                                                    disabled={activeSession.status !== 'active'}
-                                                    className="text-xs text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 disabled:opacity-50"
-                                                >
-                                                    Use
-                                                </button>
-                                            </div>
+                            <div className="space-y-4">
+                                <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">Opener</span>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => copyToClipboard(sessionPlan.opener)}
+                                                className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                            >
+                                                Copy
+                                            </button>
+                                            <button
+                                                onClick={() => useLine(sessionPlan.opener)}
+                                                disabled={activeSession.status !== 'active'}
+                                                className="text-xs text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 disabled:opacity-50"
+                                            >
+                                                Use
+                                            </button>
                                         </div>
                                     </div>
-                                ))}
+                                    <p className="text-sm text-gray-900 dark:text-white">{sessionPlan.opener}</p>
+                                </div>
+                                <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                                    <div className="text-xs font-semibold text-gray-700 dark:text-gray-200 mb-2">Message flow</div>
+                                    <div className="space-y-2">
+                                        {sessionPlan.messageFlow.map((line, idx) => (
+                                            <div key={`${line}-${idx}`} className="flex items-start justify-between gap-2">
+                                                <p className="text-sm text-gray-900 dark:text-white flex-1">{line}</p>
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={() => copyToClipboard(line)}
+                                                        className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                                    >
+                                                        Copy
+                                                    </button>
+                                                    <button
+                                                        onClick={() => useLine(line)}
+                                                        disabled={activeSession.status !== 'active'}
+                                                        className="text-xs text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 disabled:opacity-50"
+                                                    >
+                                                        Use
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">Paywall moment (PPV drop)</span>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => copyToClipboard(sessionPlan.paywallMoment)}
+                                                className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                            >
+                                                Copy
+                                            </button>
+                                            <button
+                                                onClick={() => useLine(sessionPlan.paywallMoment)}
+                                                disabled={activeSession.status !== 'active'}
+                                                className="text-xs text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 disabled:opacity-50"
+                                            >
+                                                Use
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <p className="text-sm text-gray-900 dark:text-white">{sessionPlan.paywallMoment}</p>
+                                </div>
+                                <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">Close + follow-up</span>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => copyToClipboard(sessionPlan.closeFollowUp)}
+                                                className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                            >
+                                                Copy
+                                            </button>
+                                            <button
+                                                onClick={() => useLine(sessionPlan.closeFollowUp)}
+                                                disabled={activeSession.status !== 'active'}
+                                                className="text-xs text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 disabled:opacity-50"
+                                            >
+                                                Use
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <p className="text-sm text-gray-900 dark:text-white">{sessionPlan.closeFollowUp}</p>
+                                </div>
                             </div>
                         )}
                     </div>
@@ -694,10 +767,10 @@ NATURAL PERSONALIZATION GUIDELINES:
             <div className="mb-6">
                 <div className="flex items-center gap-3 mb-2">
                     <SparklesIcon className="w-8 h-8 text-primary-600 dark:text-primary-400" />
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Chat/Sexting Session Assistant</h1>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">DM Session Planner</h1>
                 </div>
                 <p className="text-gray-600 dark:text-gray-400">
-                    Start an AI-powered chatting/sexting session with real-time suggestions to reduce stress and improve engagement.
+                    Plan a money-mode DM session with an opener, flow, PPV moment, and follow-up.
                 </p>
             </div>
 
@@ -737,7 +810,7 @@ NATURAL PERSONALIZATION GUIDELINES:
                         Roleplay Type:
                     </label>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
-                        {(['GFE (Girlfriend Experience)', 'Dominant / Submissive', 'Teacher / Student', 'Boss / Assistant', 'Fitness Trainer', 'Soft Mommy / Daddy', 'Nurse / Patient', 'Celebrity / Fan'] as RoleplayType[]).map((type) => (
+                        {(['GFE (Girlfriend Experience)', 'Dominant / Submissive', 'Class after hours', 'Office after dark', 'Fitness Trainer', 'Soft Mommy / Daddy', 'Nurse / Patient', 'Celebrity / Fan'] as RoleplayType[]).map((type) => (
                             <button
                                 key={type}
                                 onClick={() => setRoleplayType(type)}
@@ -771,6 +844,29 @@ NATURAL PERSONALIZATION GUIDELINES:
                         />
                     )}
                 </div>
+
+            {/* Session length */}
+            <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Session length
+                </label>
+                <div className="flex flex-wrap gap-2">
+                    {([10, 20, 30] as const).map((minutes) => (
+                        <button
+                            key={minutes}
+                            type="button"
+                            onClick={() => setSessionLength(minutes)}
+                            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                                sessionLength === minutes
+                                    ? 'bg-primary-600 text-white'
+                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                            }`}
+                        >
+                            {minutes} min
+                        </button>
+                    ))}
+                </div>
+            </div>
 
                 {/* Tone */}
                 <div>

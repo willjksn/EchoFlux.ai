@@ -123,7 +123,7 @@ export const OnlyFansExportHub: React.FC = () => {
         setMediaNames(prev => [...prev, ...newNames]);
         setSelectedMediaIds(new Set());
         setShowMediaVault(false);
-        showToast(`Added ${selected.length} item(s) from Media Vault`, 'success');
+        showToast(`Added ${selected.length} item(s) from My Vault`, 'success');
     };
 
     const handleRemoveMedia = (index: number) => {
@@ -256,7 +256,7 @@ export const OnlyFansExportHub: React.FC = () => {
                         date: finalScheduledDate,
                         reminderType: 'post', // Export packages are post reminders
                         contentType: 'free', // Default to free, user can change in calendar
-                        description: `Export package with ${mediaUrls.length || 0} media file(s). ${teaserCaptions.length > 0 ? `Includes ${teaserCaptions.length} teaser captions.` : ''}`,
+                        description: `Post pack with ${mediaUrls.length || 0} media file(s). ${teaserCaptions.length > 0 ? `Includes ${teaserCaptions.length} promo captions.` : ''}`,
                         reminderTime: scheduledTime || undefined,
                         createdAt: new Date().toISOString(),
                         userId: user.id,
@@ -299,8 +299,8 @@ export const OnlyFansExportHub: React.FC = () => {
             setExportPackages(packages);
             
             const successMsg = addToCalendar && finalScheduledDate 
-                ? 'Package saved and added to calendar!'
-                : 'Export package saved!';
+                ? 'Pack saved and added to calendar!'
+                : 'Post pack saved!';
             showToast(successMsg, 'success');
         } catch (error) {
             console.error('Error saving package:', error);
@@ -392,9 +392,9 @@ export const OnlyFansExportHub: React.FC = () => {
                             console.error(`Error downloading ${fileName}:`, error);
                         }
                     }
-                    showToast('Export package downloaded!', 'success');
+                    showToast('Post pack downloaded!', 'success');
                 } else {
-                    showToast('Export package downloaded!', 'success');
+                    showToast('Post pack downloaded!', 'success');
                 }
             }
         } catch (error: any) {
@@ -408,7 +408,7 @@ export const OnlyFansExportHub: React.FC = () => {
         try {
             await deleteDoc(doc(db, 'users', user.id, 'onlyfans_export_packages', id));
             setExportPackages(prev => prev.filter(pkg => pkg.id !== id));
-            showToast('Package deleted', 'success');
+            showToast('Pack deleted', 'success');
         } catch (error) {
             console.error('Error deleting package:', error);
             showToast('Failed to delete package', 'error');
@@ -427,30 +427,30 @@ export const OnlyFansExportHub: React.FC = () => {
                 <div className="flex items-center gap-2 sm:gap-3 mb-2">
                     <DownloadIcon className="w-6 h-6 sm:w-8 sm:h-8 text-primary-600 dark:text-primary-400" />
                     <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
-                        Export Hub
+                        Copy & Post Pack
                     </h1>
                 </div>
                 <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
-                    Create ready-to-upload content packages with captions, media, and checklists for manual upload to OnlyFans, Fansly, or Fanvue.
+                    Everything ready to post: captions, media, promos, and checklists.
                 </p>
             </div>
 
             {/* Create New Package - Mobile Optimized */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 sm:p-6 mb-4 sm:mb-6">
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                    Create Export Package
+                    Create Post Pack
                 </h2>
 
                 <div className="space-y-4">
                     {/* Caption - Mobile Optimized */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            Caption:
+                            Caption / post copy:
                         </label>
                         <textarea
                             value={caption}
                             onChange={(e) => setCaption(e.target.value)}
-                            placeholder="Enter your premium platform caption here (OnlyFans, Fansly, Fanvue)..."
+                            placeholder="Paste your caption or drop text..."
                             className="w-full p-3 sm:p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[120px] text-base sm:text-sm"
                         />
                     </div>
@@ -458,7 +458,7 @@ export const OnlyFansExportHub: React.FC = () => {
                     {/* Media Files */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            Media Files:
+                            Media:
                         </label>
                         <div className="flex flex-col sm:flex-row gap-2 mb-2">
                             <input
@@ -474,14 +474,14 @@ export const OnlyFansExportHub: React.FC = () => {
                                 className="cursor-pointer inline-flex items-center justify-center gap-2 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 transition-all active:scale-95 font-medium"
                             >
                                 <PlusIcon className="w-5 h-5" />
-                                <span>Upload Files</span>
+                                <span>Upload</span>
                             </label>
                             <button
                                 onClick={() => setShowMediaVault(!showMediaVault)}
                                 className="inline-flex items-center justify-center gap-2 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 transition-all active:scale-95 font-medium"
                             >
                                 <FolderIcon className="w-5 h-5" />
-                                <span>From Media Vault</span>
+                                <span>From My Vault</span>
                             </button>
                         </div>
 
@@ -490,7 +490,7 @@ export const OnlyFansExportHub: React.FC = () => {
                             <div className="mt-3 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-md border border-gray-200 dark:border-gray-600 max-h-64 overflow-y-auto">
                                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
                                     <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        Select media from Media Vault ({selectedMediaIds.size} selected)
+                                        Select media from My Vault ({selectedMediaIds.size} selected)
                                     </span>
                                     <div className="flex gap-2">
                                         <button
@@ -533,7 +533,7 @@ export const OnlyFansExportHub: React.FC = () => {
                                 </div>
                                 {mediaVaultItems.length === 0 && (
                                     <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                                        No media in your Media Vault. Upload files first.
+                                        No media in your vault yet. Upload files first.
                                     </p>
                                 )}
                             </div>
@@ -646,11 +646,11 @@ export const OnlyFansExportHub: React.FC = () => {
                         />
                     </div>
 
-                    {/* Teaser Captions */}
+                    {/* Promo Captions */}
                     <div>
                         <div className="flex items-center justify-between mb-2">
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                Teaser Captions for Other Platforms:
+                                Promo captions for other platforms:
                             </label>
                             <button
                                 onClick={handleGenerateTeasers}
@@ -658,7 +658,7 @@ export const OnlyFansExportHub: React.FC = () => {
                                 className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center gap-2"
                             >
                                 <SparklesIcon className="w-4 h-4" />
-                                {isGeneratingTeasers ? 'Generating...' : 'Generate Teasers'}
+                                {isGeneratingTeasers ? 'Generating...' : 'Generate Promos'}
                             </button>
                         </div>
 
@@ -694,7 +694,7 @@ export const OnlyFansExportHub: React.FC = () => {
                             disabled={!caption.trim()}
                             className="flex-1 px-6 py-3.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-base shadow-md transition-all active:scale-95"
                         >
-                            {addToCalendar && (scheduledDate || scheduledTime) ? 'Save & Add to Calendar' : 'Save Package'}
+                            {addToCalendar && (scheduledDate || scheduledTime) ? 'Save & Add to Calendar' : 'Save Pack'}
                         </button>
                         {caption.trim() && (
                             <button
@@ -727,7 +727,7 @@ export const OnlyFansExportHub: React.FC = () => {
             {exportPackages.length > 0 && (
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 sm:p-6">
                     <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                        Saved Export Packages
+                        Saved Post Packs
                     </h2>
                     <div className="space-y-3 sm:space-y-4">
                         {exportPackages.map((pkg) => (
@@ -919,7 +919,7 @@ export const OnlyFansExportHub: React.FC = () => {
                 <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-8 text-center">
                     <FileIcon className="w-12 h-12 mx-auto mb-4 text-gray-400" />
                     <p className="text-gray-600 dark:text-gray-400">
-                        No export packages yet. Create your first package above!
+                        No post packs yet. Create your first pack above!
                     </p>
                 </div>
             )}

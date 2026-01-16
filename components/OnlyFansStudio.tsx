@@ -423,8 +423,7 @@ export const OnlyFansStudio: React.FC = () => {
                         Upgrade to <strong>Creator Elite</strong> or <strong>Agency</strong> to unlock Monetized Creator Studio.
                     </p>
                     <p className="text-gray-500 dark:text-gray-500 mb-8">
-                        Monetized Creator Studio provides content planning, roleplay ideas, chatting sessions, 
-                        fan management, content calendars, and export packages for manual upload.
+                        Plan drops, write promos, run sessions, keep fan notes, and build post packs for manual upload.
                     </p>
                     <button
                         onClick={() => setActivePage('pricing')}
@@ -791,17 +790,42 @@ export const OnlyFansStudio: React.FC = () => {
                         </p>
                     </div>
                 </div>
-                <p className="text-gray-600 dark:text-gray-400 mt-2">
-                    Your AI-powered content and monetization brain. Plan, create, and organize premium content.
+                <p className="text-gray-700 dark:text-gray-300 mt-2 font-medium">
+                    Plan drops, write promos, run sessions, and stay consistent — without guessing.
                 </p>
             </div>
 
             {/* Important Notice */}
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
                 <p className="text-sm text-blue-800 dark:text-blue-200">
-                    <strong>Important:</strong> Monetized Creator Studio does not integrate with or access your premium platform accounts (OnlyFans, Fansly, Fanvue, etc.). 
-                    This is a planning and content creation tool. All content must be reviewed and uploaded manually to your platform of choice.
+                    <strong>Important:</strong> This studio does not connect to your premium platform accounts. 
+                    Use it to plan and prep, then post manually on your platform.
                 </p>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
+                <div className="flex flex-wrap items-center gap-3">
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white">Quick actions</span>
+                    <button
+                        className="px-3 py-2 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+                        onClick={() => setActiveView('calendar')}
+                    >
+                        Plan a drop
+                    </button>
+                    <button
+                        className="px-3 py-2 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+                        onClick={() => setActiveView('roleplay')}
+                    >
+                        Build a session
+                    </button>
+                    <button
+                        className="px-3 py-2 text-sm bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors"
+                        onClick={() => setActiveView('export')}
+                    >
+                        Export pack
+                    </button>
+                </div>
             </div>
 
             {/* Quick Fan Stats Bar */}
@@ -810,19 +834,19 @@ export const OnlyFansStudio: React.FC = () => {
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="text-center">
                             <div className="text-2xl font-bold text-purple-900 dark:text-purple-100">{fanStats.total}</div>
-                            <div className="text-xs text-purple-700 dark:text-purple-300 mt-1">Total Fans</div>
+                        <div className="text-xs text-purple-700 dark:text-purple-300 mt-1">Total fans</div>
                         </div>
                         <div className="text-center">
                             <div className="text-2xl font-bold text-green-600 dark:text-green-400">{fanStats.active}</div>
-                            <div className="text-xs text-purple-700 dark:text-purple-300 mt-1">Active (30d)</div>
+                        <div className="text-xs text-purple-700 dark:text-purple-300 mt-1">Active (30d)</div>
                         </div>
                         <div className="text-center">
                             <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{fanStats.vip}</div>
-                            <div className="text-xs text-purple-700 dark:text-purple-300 mt-1">VIP Fans</div>
+                        <div className="text-xs text-purple-700 dark:text-purple-300 mt-1">VIP</div>
                         </div>
                         <div className="text-center">
                             <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{fanStats.upcomingSessions}</div>
-                            <div className="text-xs text-purple-700 dark:text-purple-300 mt-1">Upcoming Sessions</div>
+                        <div className="text-xs text-purple-700 dark:text-purple-300 mt-1">Sessions coming up</div>
                         </div>
                     </div>
                 </div>
@@ -830,147 +854,147 @@ export const OnlyFansStudio: React.FC = () => {
 
             {/* Main Dashboard Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {/* Content Brain Card */}
+                {/* Content Ideas Card */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
                     <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
-                        Content Brain
+                        Content Ideas
                     </h2>
                     <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
-                        Generate caption ideas, post ideas, shoot concepts, and weekly content plans.
+                        Plan what you’re posting this week and get ideas that sell.
                     </p>
                     <button
                         className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
                         onClick={() => setActiveView('contentBrain')}
                     >
-                        Open Content Brain
+                        Open Content Ideas
                     </button>
                 </div>
 
-                {/* Roleplay & Interactive Ideas Card */}
+                {/* Scripts & Roleplay Card */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
                     <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
-                        Roleplay & Interactive Ideas
+                        Scripts & Roleplay
                     </h2>
                     <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
-                        Generate roleplay scenarios, persona ideas, body rating prompts, and interactive post concepts.
+                        Pick a vibe and get scripts, prompts, and scenes.
                     </p>
                     <button
                         className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
                         onClick={() => setActiveView('roleplay')}
                     >
-                        Generate Ideas
+                        Write a Script
                     </button>
                 </div>
 
                 {/* Funnel Teaser Pack Card (3rd card in the first row on lg screens) */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow border border-primary-100 dark:border-primary-900/40">
                     <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
-                        Funnel Teaser Pack
+                        Drop Promo Pack
                     </h2>
                     <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
-                        Generate IG/X/TikTok teaser copy + subscriber CTAs for your next promo (manual posting).
+                        Teasers, CTAs, and promos for your next drop.
                     </p>
                     <button
                         className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
                         onClick={() => setShowTeaserPackModal(true)}
                     >
-                        Open Teaser Pack
+                        Build Promo Pack
                     </button>
                 </div>
 
                 {/* Content Calendar Card */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
                     <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
-                        My Schedule
+                        Weekly Money Calendar
                     </h2>
                     <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
-                        Plan your posting schedule with manual upload reminders and content pacing.
+                        Plan drops, sessions, promos, and reschedule fast.
                     </p>
                     <button
                         className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
                         onClick={() => setActiveView('calendar')}
                     >
-                        View Calendar
+                        Open Calendar
                     </button>
                 </div>
 
                 {/* Media Vault Card */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
                     <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
-                        Media Vault
+                        My Vault
                     </h2>
                     <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
-                        Organize photos, videos, and teasers with AI tagging and basic editing tools.
+                        Organize teasers, PPVs, bundles, and ready-to-post sets.
                     </p>
                     <button
                         className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
                         onClick={() => setActiveView('mediaVault')}
                     >
-                        Open Media Vault
+                        Open Vault
                     </button>
                 </div>
 
                 {/* Export Hub Card */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
                     <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
-                        Export Hub
+                        Copy & Post Pack
                     </h2>
                     <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
-                        Generate ready-to-upload content packages with captions, media, and checklists.
+                        Everything ready to post: captions, DM scripts, and checklists.
                     </p>
                     <button
                         className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
                         onClick={() => setActiveView('export')}
                     >
-                        Create Export Package
+                        Create Post Pack
                     </button>
                 </div>
 
                 {/* Guides & Tips Card */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
                     <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
-                        Guides & Tips
+                        Playbooks
                     </h2>
                     <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
-                        Step-by-step upload guides, best practices, and monetization strategy tips.
+                        Proven playbooks for drops, DMs, bundles, and slow weeks.
                     </p>
                     <button
                         className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
                         onClick={() => setActiveView('guides')}
                     >
-                        View Guides
+                        View Playbooks
                     </button>
                 </div>
 
                 {/* Analytics & Insights Card */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
                     <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
-                        Analytics & Insights
+                        What's Working
                     </h2>
                     <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
-                        Track content generation, media stats, and manual performance metrics.
+                        Track wins, top content, and performance notes.
                     </p>
                     <button
                         className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
                         onClick={() => setActiveView('analytics')}
                     >
-                        View Analytics
+                        View What's Working
                     </button>
                 </div>
 
                 {/* Fans Card */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
                     <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
-                        Fans
+                        Top Fans & Notes
                     </h2>
                     <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
-                        Manage fan relationships, track engagement, and personalize content across all features.
+                        VIPs, regulars, whales — keep notes and plan sessions.
                     </p>
                     <button
                         className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
                         onClick={() => setActiveView('fans')}
                     >
-                        Manage Fans
+                        Open Fan Notes
                     </button>
                 </div>
 
@@ -980,7 +1004,7 @@ export const OnlyFansStudio: React.FC = () => {
                         Settings
                     </h2>
                     <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm">
-                        Manage your profile, AI training, billing, and preferences.
+                        Manage your profile, preferences, and billing.
                     </p>
                     <button
                         className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium flex items-center justify-center gap-2"
@@ -996,14 +1020,14 @@ export const OnlyFansStudio: React.FC = () => {
             {fans.length > 0 ? (
                 <div className="mt-8 space-y-6">
                     <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                        📋 Fan Activity Dashboard
+                        📋 Who to message today
                     </h2>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {/* Recent Fan Activity */}
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                                 <SparklesIcon className="w-5 h-5 text-primary-600 dark:text-primary-400" />
-                                Recent Activity
+                                Recent activity
                             </h3>
                             {isLoadingFanData ? (
                                 <p className="text-sm text-gray-500 dark:text-gray-400">Loading...</p>
@@ -1036,7 +1060,7 @@ export const OnlyFansStudio: React.FC = () => {
                                 onClick={() => setActiveView('fans')}
                                 className="mt-4 w-full text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium"
                             >
-                                View All Fans →
+                                View Fan Notes →
                             </button>
                         </div>
 
@@ -1044,7 +1068,7 @@ export const OnlyFansStudio: React.FC = () => {
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                                 <span className="text-yellow-600 dark:text-yellow-400">👑</span>
-                                VIP Fans Needing Attention
+                                VIPs to message
                             </h3>
                             {isLoadingFanData ? (
                                 <p className="text-sm text-gray-500 dark:text-gray-400">Loading...</p>
@@ -1074,7 +1098,7 @@ export const OnlyFansStudio: React.FC = () => {
                                                         }}
                                                         className="ml-2 text-xs px-2 py-1 bg-primary-600 text-white rounded hover:bg-primary-700"
                                                     >
-                                                        Start Session
+                                                        Plan session
                                                     </button>
                                                 </div>
                                             </div>
@@ -1082,13 +1106,13 @@ export const OnlyFansStudio: React.FC = () => {
                                     })}
                                 </div>
                             ) : (
-                                <p className="text-sm text-gray-500 dark:text-gray-400">All VIP fans are active! 🎉</p>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">VIPs are active this week 🎉</p>
                             )}
                             <button
                                 onClick={() => setActiveView('fans')}
                                 className="mt-4 w-full text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium"
                             >
-                                View All VIP Fans →
+                                View VIP list →
                             </button>
                         </div>
 
@@ -1096,7 +1120,7 @@ export const OnlyFansStudio: React.FC = () => {
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                                 <span>📅</span>
-                                Upcoming Sessions
+                                Sessions coming up
                             </h3>
                             {isLoadingFanData ? (
                                 <p className="text-sm text-gray-500 dark:text-gray-400">Loading...</p>
@@ -1139,10 +1163,10 @@ export const OnlyFansStudio: React.FC = () => {
             ) : (
                 <div className="mt-8 bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                     <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                        Get Started with Fan Management
+                        Get Started with Fan Notes
                     </h2>
                     <div className="space-y-3 text-gray-600 dark:text-gray-400">
-                        <p className="text-sm">• Start a session in <strong>Roleplay & Interactive Ideas</strong> to create your first fan card</p>
+                        <p className="text-sm">• Start a session in <strong>Scripts & Roleplay</strong> to create your first fan card</p>
                         <p className="text-sm">• Track fan preferences, spending, and engagement across all Monetized Creator Studio features</p>
                         <p className="text-sm">• Personalize content generation based on each fan's preferences</p>
                     </div>
