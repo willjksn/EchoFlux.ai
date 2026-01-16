@@ -1578,20 +1578,10 @@ const OptimizeModal: React.FC<{ result: any; onClose: () => void; onCopy: (text:
 
 // Predict Modal Component
 const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: string) => void }> = ({ result, onClose, onCopy }) => {
-    const prediction = result.prediction || {};
-    const level = prediction.level || 'Medium';
-    const score = prediction.score || 50;
-    const confidence = prediction.confidence || 50;
     const ideas = result.ideas || result.postIdeas || result.nextPostIdeas;
     const weeklyMix = Array.isArray(result.weeklyMix) ? result.weeklyMix : [];
     const bestBet = result.bestBet || result.nextBestBet;
     const hasIdeas = Array.isArray(ideas) && ideas.length > 0;
-
-    const getLevelColor = (level: string) => {
-        if (level === 'High') return 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800';
-        if (level === 'Medium') return 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800';
-        return 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800';
-    };
 
     if (hasIdeas) {
         return (
@@ -1737,7 +1727,7 @@ const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: 
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
                 <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Most Likely to Hit</h2>
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">What To Post Next</h2>
                     <button
                         onClick={onClose}
                         className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
@@ -1746,111 +1736,19 @@ const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: 
                     </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                    {/* Prediction Summary */}
-                    <div className={`p-6 rounded-lg border-2 ${getLevelColor(level)}`}>
-                        <div className="text-center">
-                            <p className="text-sm font-medium mb-2">Likely Performance</p>
-                            <p className="text-4xl font-bold mb-2">{level}</p>
-                            <div className="flex items-center justify-center gap-4 mt-4">
-                                <div>
-                                    <p className="text-xs opacity-75">Score</p>
-                                    <p className="text-2xl font-bold">{score}/100</p>
-                                </div>
-                                <div>
-                                    <p className="text-xs opacity-75">Confidence</p>
-                                    <p className="text-2xl font-bold">{confidence}%</p>
-                                </div>
-                            </div>
-                            {prediction.reasoning && (
-                                <p className="text-sm mt-4 opacity-90">{prediction.reasoning}</p>
-                            )}
-                        </div>
+                <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                    <div className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/40">
+                        <p className="text-sm text-gray-700 dark:text-gray-300">
+                            This looks like a legacy performance result. The new “What To Post Next” gives you a
+                            trend-based roadmap and fresh ideas instead of grading captions.
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                            Click “What To Post Next” again to generate ideas.
+                        </p>
                     </div>
-
-                    {/* Factor Breakdown */}
-                    {result.factors && (
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Why It Might Hit</h3>
-                            <div className="space-y-3">
-                                {Object.entries(result.factors).map(([key, value]: [string, any]) => (
-                                    <div key={key} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <p className="text-sm font-medium text-gray-900 dark:text-white capitalize">
-                                                {key.replace(/([A-Z])/g, ' $1').trim()}
-                                            </p>
-                                            <p className="text-lg font-bold text-primary-600 dark:text-primary-400">
-                                                {value.score || 0}/100
-                                            </p>
-                                        </div>
-                                        {value.analysis && (
-                                            <p className="text-xs text-gray-600 dark:text-gray-400">{value.analysis}</p>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Improvements */}
-                    {result.improvements && result.improvements.length > 0 && (
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Ways to Improve</h3>
-                            <div className="space-y-2">
-                                {result.improvements.map((imp: any, idx: number) => (
-                                    <div key={idx} className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                                        <div className="flex items-start justify-between mb-1">
-                                            <p className="text-sm font-medium text-gray-900 dark:text-white capitalize">{imp.factor}</p>
-                                            <span className={`text-xs px-2 py-1 rounded ${
-                                                imp.priority === 'high' ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300' :
-                                                imp.priority === 'medium' ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300' :
-                                                'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                                            }`}>
-                                                {imp.priority}
-                                            </span>
-                                        </div>
-                                        <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">{imp.currentIssue}</p>
-                                        <p className="text-xs text-gray-700 dark:text-gray-300 font-medium">{imp.suggestion}</p>
-                                        <p className="text-xs text-primary-600 dark:text-primary-400 mt-1">{imp.expectedImpact}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Optimized Version */}
-                    {result.optimizedVersion && (
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Stronger Version</h3>
-                            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                                <p className="text-gray-900 dark:text-white whitespace-pre-wrap mb-2">{result.optimizedVersion.caption}</p>
-                                {result.optimizedVersion.expectedBoost && (
-                                    <p className="text-xs text-green-700 dark:text-green-300 font-medium">
-                                        Expected Boost: {result.optimizedVersion.expectedBoost}
-                                    </p>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Summary */}
-                    {result.summary && (
-                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                            <p className="text-blue-900 dark:text-blue-200 text-sm">{result.summary}</p>
-                        </div>
-                    )}
                 </div>
 
                 <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
-                    {result.optimizedVersion && (
-                        <button
-                            onClick={() => onCopy(result.optimizedVersion.caption)}
-                            className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
-                        >
-                            <CopyIcon className="w-4 h-4" />
-                            Copy Optimized
-                        </button>
-                    )}
                     <button
                         onClick={onClose}
                         className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
