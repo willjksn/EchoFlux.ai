@@ -926,29 +926,27 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
           <button
             onClick={onTogglePersonality}
             disabled={!creatorPersonality}
-            className={`px-3 py-1.5 rounded text-xs font-medium transition-colors flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
               usePersonality
                 ? 'bg-primary-600 text-white hover:bg-primary-700'
                 : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
             } ${!creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`}
             title={!creatorPersonality ? 'Add a personality description in Settings to enable' : undefined}
           >
-            <CheckCircleIcon className={`w-3.5 h-3.5 ${usePersonality ? 'opacity-100' : 'opacity-0'}`} />
+            <SparklesIcon className="w-3.5 h-3.5" />
             Personality
           </button>
           <button
             onClick={onToggleHashtags}
             disabled={!favoriteHashtags}
-            className={`px-3 py-1.5 rounded text-xs font-medium transition-colors flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
               useFavoriteHashtags
                 ? 'bg-primary-600 text-white hover:bg-primary-700'
                 : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
             } ${!favoriteHashtags ? 'opacity-50 cursor-not-allowed' : ''}`}
             title={!favoriteHashtags ? 'Add favorite hashtags in Settings to enable' : undefined}
           >
-            <span className={useFavoriteHashtags ? 'opacity-100' : 'opacity-0'}>
-              <HashtagIcon />
-            </span>
+            <HashtagIcon className="w-3.5 h-3.5" />
             Hashtags
           </button>
         </div>

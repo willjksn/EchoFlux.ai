@@ -1548,27 +1548,27 @@ export const Strategy: React.FC = () => {
                             <button
                                 onClick={() => setUsePersonality(!usePersonality)}
                                 disabled={!settings.creatorPersonality}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
                                     usePersonality
                                         ? 'bg-primary-600 text-white hover:bg-primary-700'
                                         : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                                 } ${!settings.creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 title={!settings.creatorPersonality ? 'Add a personality description in Settings to enable' : undefined}
                             >
-                                <CheckCircleIcon className={`w-4 h-4 ${usePersonality ? 'opacity-100' : 'opacity-0'}`} />
+                                <SparklesIcon className="w-4 h-4" />
                                 Personality
                             </button>
                             <button
                                 onClick={() => setUseFavoriteHashtags(!useFavoriteHashtags)}
                                 disabled={!settings.favoriteHashtags}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
                                     useFavoriteHashtags
                                         ? 'bg-primary-600 text-white hover:bg-primary-700'
                                         : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                                 } ${!settings.favoriteHashtags ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 title={!settings.favoriteHashtags ? 'Add favorite hashtags in Settings to enable' : undefined}
                             >
-                                <HashtagIcon className={`w-4 h-4 ${useFavoriteHashtags ? 'opacity-100' : 'opacity-0'}`} />
+                                <HashtagIcon className="w-4 h-4" />
                                 Hashtags
                             </button>
                         </div>
