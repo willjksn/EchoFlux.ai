@@ -1059,12 +1059,6 @@ export const OnlyFansContentBrain: React.FC = () => {
     }, [user?.id]);
 
     useEffect(() => {
-        if (!trendsNiche && user?.niche) {
-            setTrendsNiche(user.niche);
-        }
-    }, [user?.niche, trendsNiche]);
-
-    useEffect(() => {
         try {
             setIsLoading(false);
             console.log('OnlyFansContentBrain component loaded successfully');
@@ -1636,7 +1630,7 @@ export const OnlyFansContentBrain: React.FC = () => {
     };
 
     const handleFindAdultTrends = async () => {
-        const nicheInput = trendsNiche.trim() || user?.niche || 'Adult Content Creator';
+        const nicheInput = trendsNiche.trim() || 'Adult Content Creator';
         setIsTrendsLoading(true);
         setTrendsError(null);
         try {
@@ -4523,7 +4517,7 @@ Output format:
                             )}
                         </div>
                         <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                            Pulls cached adult creator trends (updated twice weekly) for OnlyFans, Fansly, and Fanvue.
+                            Pulls adult creator trends (updated twice weekly) for OnlyFans, Fansly, and Fanvue.
                         </p>
 
                         <div className="flex flex-col md:flex-row gap-3">
@@ -4565,7 +4559,7 @@ Output format:
                                 <div>
                                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Top Trends</h3>
                                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                                        Found {trendResults.length} opportunities for "{trendsNiche || user?.niche || 'adult content'}"
+                                        Found {trendResults.length} opportunities for "{trendsNiche || 'adult content'}"
                                     </p>
                                 </div>
                                 <div className="flex flex-wrap gap-2">
