@@ -1,11 +1,9 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+﻿import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { checkApiKeys, getVerifyAuth, withErrorHandling } from "./_errorHandler.js";
 import { getModelForTask } from "./_modelRouter.js";
 import { enforceRateLimit } from "./_rateLimit.js";
 import { getEmojiInstructions, getEmojiExamplesForTone } from "./_emojiHelper.js";
 import { parseJSON } from "./_geminiShared.js";
-import { getAdminDb } from "./_firebaseAdmin.js";
-import { canUseAi, recordAiUsage } from "./_aiUsage.js";
 
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -54,7 +52,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   });
   if (!ok) return;
 
-  const {
+    const {
     sessionContext,
     fanContext,
     personalityContext,
@@ -65,32 +63,11 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   } = req.body || {};
 
   try {
-    const db = getAdminDb();
-    const userDoc = await db.collection("users").doc(user.uid).get();
-    const userData = userDoc.data();
-    const userPlan = userData?.plan || "Free";
-    const userRole = userData?.role;
-    const explicitnessLevel = typeof userData?.explicitnessLevel === "number" ? userData.explicitnessLevel : 7;
-
-    const usageCheck = await canUseAi(user.uid, "sexting_session", userPlan, userRole);
-    if (!usageCheck.allowed) {
-      res.status(200).json({
-        success: false,
-        error: "AI usage limit reached",
-        note: `You've reached your monthly sexting assistant limit (${usageCheck.limit}). Upgrade for more.`,
-        limit: usageCheck.limit,
-        remaining: usageCheck.remaining,
-      });
-      return;
-    }
-
     const model = await getModelForTask("sexting_session", user.uid);
 
-  const roleplayType = sessionContext?.roleplayType || "Girlfriend Experience";
-  const tone = sessionContext?.tone || "Flirty";
-  const fanName = sessionContext?.fanName || "Fan";
-  const sessionLength = sessionContext?.sessionLength || 20;
-  const goal = sessionContext?.goal || "Upsell PPV and bring them back";
+    const roleplayType = sessionContext?.roleplayType || "Girlfriend Experience";
+    const tone = sessionContext?.tone || "Flirty";
+    const fanName = sessionContext?.fanName || "Fan";
 
     const emojiGuidance = getEmojiInstructions({
       enabled: emojiEnabled !== false,
@@ -118,33 +95,14 @@ REQUIREMENTS:
         }
     }
 
-    const flowLengthHint =
-      sessionLength <= 10
-        ? "5-7"
-        : sessionLength <= 20
-        ? "8-12"
-        : "10-15";
-
-    const explicitnessContext =
-      explicitnessLevel >= 9
-        ? "Go maximally explicit. Use vivid, raw sexual language and detailed descriptions."
-        : explicitnessLevel >= 7
-        ? "Be very explicit and dirty. Use clear sexual language and heat."
-        : explicitnessLevel >= 5
-        ? "Keep it flirty and suggestive with some explicitness."
-        : "Keep it suggestive and playful, avoid graphic detail.";
-
     const prompt = `
-You are an explicit DM session planner for premium creator platforms (OnlyFans / Fansly / Fanvue).
-Your goal is money mode: upsell PPV, keep them buying, and bring them back.
+You are an explicit sexting co-pilot for premium creator platforms (OnlyFans / Fansly / Fanvue).
+Generate 4-6 short, message-ready suggestions the creator can send immediately.
 
 Session context:
 - Roleplay type: ${roleplayType}
 - Tone: ${tone}
 - Fan name: ${fanName}
-- Session length: ${sessionLength} minutes
-- Goal: ${goal}
-- Explicitness level: ${explicitnessLevel}/10 — ${explicitnessContext}
 ${personalityContext ? personalityContext : ''}
 ${enhancedFanContext || (fanContext ? `- Fan context: ${fanContext}` : "")}
 ${lastFanMessage ? `- Last fan message: "${lastFanMessage}"` : ""}
@@ -152,7 +110,7 @@ ${lastFanMessage ? `- Last fan message: "${lastFanMessage}"` : ""}
 Recent conversation (most recent last):
 ${conversationHistory || "No prior messages provided."}
 
-🚨 CRITICAL - PERSPECTIVE & NATURAL WRITING 🚨
+≡ƒÜ¿ CRITICAL - PERSPECTIVE & NATURAL WRITING ≡ƒÜ¿
 - Write suggestions FROM THE CONTENT CREATOR'S PERSPECTIVE (first person: "I", "my", "me")
 - The suggestions are what the CONTENT CREATOR is sending, NOT what fans/followers are saying
 - Write as if YOU (the content creator) are sending these messages yourself
@@ -165,32 +123,26 @@ ${fanName && fanName !== 'Fan' ? `- When mentioning ${fanName}, YOU are addressi
 - Write like a REAL PERSON, not AI - natural flow, varied sentence structure, authentic voice
 - DO NOT overuse their name - use it sparingly, like you would in real conversation` : ''}
 
-🎯 NATURAL CREATOR LANGUAGE & SLANG:
+≡ƒÄ» NATURAL CREATOR LANGUAGE & SLANG:
 - Use abbreviations and slang that creators ACTUALLY use on OnlyFans/Fansly/Fanvue naturally
 - Common abbreviations: PPV, DM/DMs, sub/subs, custom/customs, unlock/unlocks, tip/tips, OF (OnlyFans)
 - Use casual terms naturally: "babe", "love", "hun", "baby" when appropriate - but don't overuse
 - Write like a REAL CREATOR would text/message - casual, authentic, human, NOT formal or corporate
 - Mix full words and abbreviations naturally - don't force abbreviations, use them when they feel right
-- Example natural: "Hey babe! New PPV in your DMs 💕 Unlock it to see the full set" (sounds human)
+- Example natural: "Hey babe! New PPV in your DMs ≡ƒÆò Unlock it to see the full set" (sounds human)
 - Example forced: "Hello subscriber. Please unlock the Pay-Per-View content in your Direct Messages" (sounds AI)
 - Vary your language - sometimes use "sub", sometimes "subscriber", sometimes "fan" - natural variation
 - Sound like you're texting a friend, not writing a business email
 - Use platform slang organically - it should feel natural, not like you're checking off a list
 
-Required plan structure:
-- Opener (1 line)
-- Message flow (${flowLengthHint} lines)
-- Paywall moment (1 PPV drop line)
-- Close + follow-up (1 line)
-
 Guidelines:
 - Be bold, playful, and explicitly adult (sexting) while respecting the chosen tone.
-- Keep each line concise (1-3 sentences each).
-- Vary style across the flow (teasing, direct, playful).
+- Keep replies concise (1-3 sentences each).
+- Vary style across suggestions (teasing, direct, playful).
 - Personalize with the fan's name when natural.
 - ${emojiGuidance}${emojiExamples}
-- Return ONLY strict JSON object, no prose, like:
-{"opener":"...","messageFlow":["...","..."],"paywallMoment":"...","closeFollowUp":"..."}
+- Return ONLY strict JSON array of strings, no prose, like:
+["Hey love, ...", "How about ..."]
 `.trim();
 
     const result = await model.generateContent({
@@ -199,31 +151,26 @@ Guidelines:
 
     const raw = result.response.text().trim();
 
-    let plan: any = null;
+    let suggestions: string[] = [];
     try {
       const parsed = parseJSON(raw);
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        plan = parsed;
+      if (Array.isArray(parsed)) {
+        suggestions = parsed.filter((s) => typeof s === "string");
       }
     } catch {
-      plan = null;
+      // Fallback: split lines
+      suggestions = raw
+        .split("\n")
+        .map((s) => s.replace(/^[-*]\s*/, "").trim())
+        .filter(Boolean);
     }
 
-    if (!plan) {
-      throw new Error("Model returned no plan");
+    if (!Array.isArray(suggestions) || suggestions.length === 0) {
+      throw new Error("Model returned no suggestions");
     }
-
-    await recordAiUsage(user.uid, "sexting_session", userPlan, userRole, 1);
-
-    const suggestions: string[] = [];
-    if (plan?.opener) suggestions.push(plan.opener);
-    if (Array.isArray(plan?.messageFlow)) suggestions.push(...plan.messageFlow);
-    if (plan?.paywallMoment) suggestions.push(plan.paywallMoment);
-    if (plan?.closeFollowUp) suggestions.push(plan.closeFollowUp);
 
     res.status(200).json({
       success: true,
-      plan,
       suggestions,
     });
   } catch (error: any) {
