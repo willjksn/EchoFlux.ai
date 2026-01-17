@@ -2012,33 +2012,30 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
             }
 
             const bestCaption = captions.length > 0 ? captions[0] : '';
-            let bestCta = action.cta || '';
-            if (!bestCta) {
-                const ctaPrompt = [
-                    `Write ONE short CTA for an adult creator post on ${selectedPlatform}.`,
-                    `Tone: ${finalTone}. Explicitness: ${explicitnessLevelSetting}/10.`,
-                    promptSeed ? `Post idea:\n${promptSeed}` : null,
-                    bestCaption ? `Caption:\n${bestCaption}` : null,
-                    'Keep it concise and action-focused. Return only the CTA sentence.',
-                ].filter(Boolean).join('\n\n');
-                const ctaResponse = await fetch('/api/generateText', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                    },
-                    body: JSON.stringify({
-                        prompt: ctaPrompt,
-                        context: { goal: 'CTA', tone: finalTone, platforms: [selectedPlatform] },
-                    }),
-                });
-                const ctaData = await ctaResponse.json().catch(() => ({}));
-                bestCta = (ctaData.text || ctaData.caption || '').trim();
-            }
+            const ctaPrompt = [
+                `Write ONE short CTA for an adult creator post on ${selectedPlatform}.`,
+                `Tone: ${finalTone}. Explicitness: ${explicitnessLevelSetting}/10.`,
+                promptSeed ? `Post idea:\n${promptSeed}` : null,
+                bestCaption ? `Caption:\n${bestCaption}` : null,
+                'Keep it concise and action-focused. Return only the CTA sentence.',
+            ].filter(Boolean).join('\n\n');
+            const ctaResponse = await fetch('/api/generateText', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({
+                    prompt: ctaPrompt,
+                    context: { goal: 'CTA', tone: finalTone, platforms: [selectedPlatform] },
+                }),
+            });
+            const ctaData = await ctaResponse.json().catch(() => ({}));
+            const bestCta = (ctaData.text || ctaData.caption || '').trim();
 
             updateWeeklyPlanCardState(action.cardKey, {
                 caption: bestCaption,
-                cta: bestCta || action.cta,
+                cta: bestCta,
                 isGenerating: false,
             });
         } catch (error: any) {
