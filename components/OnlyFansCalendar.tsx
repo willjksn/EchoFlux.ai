@@ -116,7 +116,23 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
             );
             
             onlyFansPosts.forEach(post => {
-                const previewUrl = post.mediaUrl || (Array.isArray(post.mediaUrls) ? post.mediaUrls[0] : undefined);
+                // Get preview URL - prefer mediaUrl, fallback to mediaUrls array
+                let previewUrl = post.mediaUrl || (Array.isArray(post.mediaUrls) ? post.mediaUrls[0] : undefined);
+                
+                // Filter out blob URLs (they expire) - only use Firebase Storage URLs or HTTP/HTTPS URLs
+                if (previewUrl && (previewUrl.startsWith('blob:') || previewUrl.startsWith('data:'))) {
+                    // Blob URLs expire, so don't use them for thumbnails
+                    // Try to get a Firebase Storage URL from the post data if available
+                    previewUrl = undefined;
+                }
+                
+                // For videos, check if there's a thumbnail URL, otherwise use the video URL itself
+                // Videos can show their first frame as a thumbnail
+                const isVideo = post.mediaType === 'video';
+                const thumbnailUrl = isVideo 
+                    ? ((post as any).thumbnailUrl || (post as any).posterUrl || previewUrl) 
+                    : previewUrl;
+                
                 events.push({
                     id: `post-${post.id}`,
                     title: post.content?.substring(0, 30) + '...' || 'Drop',
@@ -124,7 +140,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                     type: 'post',
                     status: post.status as 'Draft' | 'Scheduled' | 'Published',
                     post: post,
-                    thumbnail: previewUrl,
+                    thumbnail: thumbnailUrl, // Only set if it's a valid permanent URL
                     contentType: (post as any).contentType,
                 });
             });
@@ -729,12 +745,50 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                                     <div className={`w-2.5 h-2.5 sm:w-2 sm:h-2 rounded-full flex-shrink-0 shadow-sm ${colors.dot}`}></div>
                                                                 </div>
                                                                 {event.type === 'post' && event.thumbnail && (
-                                                                    <div className="mb-1">
-                                                                        <img
-                                                                            src={event.thumbnail}
-                                                                            alt="Preview"
-                                                                            className="w-full h-10 rounded-md object-cover border border-gray-200 dark:border-gray-700"
-                                                                        />
+                                                                    <div className="mb-1 relative w-full h-10">
+                                                                        {event.post?.mediaType === 'video' ? (
+                                                                            // For videos, show video element with first frame as thumbnail
+                                                                            <video
+                                                                                src={event.thumbnail}
+                                                                                className="w-full h-10 rounded-md object-cover border border-gray-200 dark:border-gray-700"
+                                                                                muted
+                                                                                playsInline
+                                                                                preload="metadata"
+                                                                                onError={(e) => {
+                                                                                    // Hide video on error
+                                                                                    const video = e.target as HTMLVideoElement;
+                                                                                    video.style.display = 'none';
+                                                                                    if (process.env.NODE_ENV === 'development') {
+                                                                                        console.warn('Failed to load calendar video thumbnail:', event.thumbnail);
+                                                                                    }
+                                                                                }}
+                                                                            />
+                                                                        ) : (
+                                                                            // For images, show image element
+                                                                            <img
+                                                                                src={event.thumbnail}
+                                                                                alt="Preview"
+                                                                                className="w-full h-10 rounded-md object-cover border border-gray-200 dark:border-gray-700"
+                                                                                onError={(e) => {
+                                                                                    // Hide image on error (e.g., expired blob URL, CORS issue, invalid URL, etc.)
+                                                                                    const img = e.target as HTMLImageElement;
+                                                                                    img.style.display = 'none';
+                                                                                    // Optionally log for debugging in production
+                                                                                    if (process.env.NODE_ENV === 'development') {
+                                                                                        console.warn('Failed to load calendar thumbnail:', event.thumbnail);
+                                                                                    }
+                                                                                }}
+                                                                                loading="lazy"
+                                                                            />
+                                                                        )}
+                                                                        {/* Video play icon overlay */}
+                                                                        {event.post?.mediaType === 'video' && (
+                                                                            <div className="absolute inset-0 flex items-center justify-center bg-black/20 rounded-md">
+                                                                                <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                                                                    <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
+                                                                                </svg>
+                                                                            </div>
+                                                                        )}
                                                                     </div>
                                                                 )}
                                                                 <div 
