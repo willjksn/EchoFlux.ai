@@ -536,6 +536,7 @@ const MonetizationPlanFormatter: React.FC<{ plan: any }> = ({ plan }) => {
 };
 
 type WeeklyPlanDayAction = {
+    cardKey: string;
     weekIndex: number;
     dayIndex: number;
     week: any;
@@ -549,8 +550,22 @@ type WeeklyPlanDayAction = {
     cta?: string;
 };
 
+type WeeklyPlanCardState = {
+    mediaUrl?: string;
+    mediaType?: 'image' | 'video';
+    captions?: string[];
+    isGenerating?: boolean;
+    isUploading?: boolean;
+    used?: boolean;
+    error?: string;
+};
+
 type WeeklyPlanActionHandlers = {
-    onUploadMedia?: (action: WeeklyPlanDayAction) => void;
+    uploadMenuKey?: string | null;
+    cardStateByKey?: Record<string, WeeklyPlanCardState>;
+    onToggleUploadMenu?: (cardKey: string | null) => void;
+    onUploadFile?: (action: WeeklyPlanDayAction, file: File) => void;
+    onSelectFromVault?: (action: WeeklyPlanDayAction) => void;
     onGenerateCaption?: (action: WeeklyPlanDayAction) => void;
     onAddToCalendar?: (action: WeeklyPlanDayAction) => void;
     onCopyForExport?: (action: WeeklyPlanDayAction) => void;
@@ -558,7 +573,11 @@ type WeeklyPlanActionHandlers = {
 
 const WeeklyPlanFormatter: React.FC<{ plan: any } & WeeklyPlanActionHandlers> = ({
     plan,
-    onUploadMedia,
+    uploadMenuKey,
+    cardStateByKey,
+    onToggleUploadMenu,
+    onUploadFile,
+    onSelectFromVault,
     onGenerateCaption,
     onAddToCalendar,
     onCopyForExport,
@@ -641,7 +660,9 @@ const WeeklyPlanFormatter: React.FC<{ plan: any } & WeeklyPlanActionHandlers> = 
                                         const description = day.description;
                                         const angle = day.angle;
                                         const cta = day.cta;
+                                        const cardKey = `week-${weekIndex}-day-${dayIndex}`;
                                         const actionPayload: WeeklyPlanDayAction = {
+                                            cardKey,
                                             weekIndex,
                                             dayIndex,
                                             week,
@@ -654,12 +675,15 @@ const WeeklyPlanFormatter: React.FC<{ plan: any } & WeeklyPlanActionHandlers> = 
                                             angle,
                                             cta,
                                         };
-                                        const showActions = Boolean(onUploadMedia || onGenerateCaption || onAddToCalendar || onCopyForExport);
+                                        const cardState = cardStateByKey?.[cardKey];
+                                        const showActions = Boolean(onUploadFile || onSelectFromVault || onGenerateCaption || onAddToCalendar || onCopyForExport);
+                                        const isUsed = Boolean(cardState?.used);
+                                        const uploadMenuOpen = uploadMenuKey === cardKey;
                                         
                                         return (
                                             <div
                                                 key={dayIndex}
-                                                className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700"
+                                                className={`bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700 ${isUsed ? 'opacity-60' : ''}`}
                                             >
                                                 <div className="flex items-start justify-between gap-4">
                                                     <div className="flex-1">
@@ -670,6 +694,11 @@ const WeeklyPlanFormatter: React.FC<{ plan: any } & WeeklyPlanActionHandlers> = 
                                                             <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded">
                                                                 {postType}
                                                             </span>
+                                                            {isUsed && (
+                                                                <span className="px-2 py-0.5 text-xs font-semibold bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded">
+                                                                    Used
+                                                                </span>
+                                                            )}
                                                         </div>
                                                         <p className="text-sm text-gray-700 dark:text-gray-300 font-medium mb-1">
                                                             {postIdea}
@@ -691,12 +720,42 @@ const WeeklyPlanFormatter: React.FC<{ plan: any } & WeeklyPlanActionHandlers> = 
                                                         )}
                                                     </div>
                                                 </div>
+                                                {cardState?.mediaUrl && (
+                                                    <div className="mt-3">
+                                                        {cardState.mediaType === 'video' ? (
+                                                            <video
+                                                                src={cardState.mediaUrl}
+                                                                className="w-full max-w-sm rounded-lg border border-gray-200 dark:border-gray-700"
+                                                                controls
+                                                            />
+                                                        ) : (
+                                                            <img
+                                                                src={cardState.mediaUrl}
+                                                                alt={postIdea}
+                                                                className="w-full max-w-sm rounded-lg border border-gray-200 dark:border-gray-700 object-cover"
+                                                            />
+                                                        )}
+                                                    </div>
+                                                )}
+                                                {Array.isArray(cardState?.captions) && cardState?.captions.length > 0 && (
+                                                    <div className="mt-3 space-y-2">
+                                                        {cardState.captions.map((caption, captionIndex) => (
+                                                            <div
+                                                                key={captionIndex}
+                                                                className="text-xs text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-gray-700/50 rounded-md border border-gray-200 dark:border-gray-600 p-2 whitespace-pre-wrap"
+                                                            >
+                                                                {caption}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
                                                 {showActions && (
                                                     <div className="mt-3 flex flex-wrap gap-2">
-                                                        {onUploadMedia && (
+                                                        {onUploadFile && onSelectFromVault && (
                                                             <button
-                                                                onClick={() => onUploadMedia(actionPayload)}
-                                                                className="px-2.5 py-1 text-xs font-medium rounded-md bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600"
+                                                                onClick={() => onToggleUploadMenu?.(uploadMenuOpen ? null : cardKey)}
+                                                                className="px-2.5 py-1 text-xs font-medium rounded-md bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-60"
+                                                                disabled={isUsed}
                                                             >
                                                                 Upload media
                                                             </button>
@@ -704,15 +763,17 @@ const WeeklyPlanFormatter: React.FC<{ plan: any } & WeeklyPlanActionHandlers> = 
                                                         {onGenerateCaption && (
                                                             <button
                                                                 onClick={() => onGenerateCaption(actionPayload)}
-                                                                className="px-2.5 py-1 text-xs font-medium rounded-md bg-primary-600 text-white hover:bg-primary-700"
+                                                                className="px-2.5 py-1 text-xs font-medium rounded-md bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-60"
+                                                                disabled={isUsed || !cardState?.mediaUrl || cardState?.isGenerating}
                                                             >
-                                                                Generate caption
+                                                                {cardState?.isGenerating ? 'Generating...' : 'Generate caption'}
                                                             </button>
                                                         )}
                                                         {onAddToCalendar && (
                                                             <button
                                                                 onClick={() => onAddToCalendar(actionPayload)}
-                                                                className="px-2.5 py-1 text-xs font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-700"
+                                                                className="px-2.5 py-1 text-xs font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60"
+                                                                disabled={isUsed}
                                                             >
                                                                 Add to calendar
                                                             </button>
@@ -720,10 +781,36 @@ const WeeklyPlanFormatter: React.FC<{ plan: any } & WeeklyPlanActionHandlers> = 
                                                         {onCopyForExport && (
                                                             <button
                                                                 onClick={() => onCopyForExport(actionPayload)}
-                                                                className="px-2.5 py-1 text-xs font-medium rounded-md bg-emerald-600 text-white hover:bg-emerald-700"
+                                                                className="px-2.5 py-1 text-xs font-medium rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+                                                                disabled={isUsed}
                                                             >
                                                                 Copy for export
                                                             </button>
+                                                        )}
+                                                        {uploadMenuOpen && !isUsed && (
+                                                            <div className="w-full flex flex-wrap gap-2">
+                                                                <label className="px-2.5 py-1 text-xs font-medium rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
+                                                                    Upload from computer
+                                                                    <input
+                                                                        type="file"
+                                                                        accept="image/*,video/*"
+                                                                        className="hidden"
+                                                                        onChange={(event) => {
+                                                                            const file = event.target.files?.[0];
+                                                                            if (file) {
+                                                                                onUploadFile?.(actionPayload, file);
+                                                                            }
+                                                                            event.currentTarget.value = '';
+                                                                        }}
+                                                                    />
+                                                                </label>
+                                                                <button
+                                                                    onClick={() => onSelectFromVault?.(actionPayload)}
+                                                                    className="px-2.5 py-1 text-xs font-medium rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                                                >
+                                                                    Choose from vault
+                                                                </button>
+                                                            </div>
                                                         )}
                                                     </div>
                                                 )}
@@ -794,6 +881,9 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
     const [uploadedMediaType, setUploadedMediaType] = useState<'image' | 'video' | null>(null);
     const [showMediaVaultModal, setShowMediaVaultModal] = useState(false);
     const [mediaVaultItems, setMediaVaultItems] = useState<any[]>([]);
+    const [weeklyPlanUploadMenuKey, setWeeklyPlanUploadMenuKey] = useState<string | null>(null);
+    const [weeklyPlanVaultTargetKey, setWeeklyPlanVaultTargetKey] = useState<string | null>(null);
+    const [weeklyPlanCardState, setWeeklyPlanCardState] = useState<Record<string, WeeklyPlanCardState>>({});
     const [isAnalyzingGaps, setIsAnalyzingGaps] = useState(false);
     const [isPredicting, setIsPredicting] = useState(false);
     const [isRepurposing, setIsRepurposing] = useState(false);
@@ -1752,6 +1842,16 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
         return parts.join('\n');
     };
 
+    const updateWeeklyPlanCardState = (cardKey: string, next: Partial<WeeklyPlanCardState>) => {
+        setWeeklyPlanCardState((prev) => ({
+            ...prev,
+            [cardKey]: {
+                ...prev[cardKey],
+                ...next,
+            },
+        }));
+    };
+
     const getDayOffsetFromName = (dayName?: string) => {
         if (!dayName) return null;
         const key = dayName.trim().slice(0, 3).toLowerCase();
@@ -1783,17 +1883,137 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
         return base;
     };
 
-    const handleWeeklyPlanUploadMedia = (action: WeeklyPlanDayAction) => {
-        const prompt = buildWeeklyPlanPrompt(action);
-        setCaptionPrompt(prompt);
-        setActiveTab('captions');
-        showToast?.('Caption prompt ready. Upload media to generate captions.', 'success');
+    const handleWeeklyPlanUploadFile = async (action: WeeklyPlanDayAction, file: File) => {
+        if (!user?.id) return;
+        updateWeeklyPlanCardState(action.cardKey, { isUploading: true, error: undefined });
+        try {
+            const timestamp = Date.now();
+            const fileExtension = file.name.split('.').pop() || (file.type.startsWith('video/') ? 'mp4' : 'jpg');
+            const storagePath = `users/${user.id}/onlyfans-uploads/${timestamp}.${fileExtension}`;
+            const storageRef = ref(storage, storagePath);
+            await uploadBytes(storageRef, file, { contentType: file.type });
+            const mediaUrl = await getDownloadURL(storageRef);
+            const mediaType = file.type.startsWith('video/') ? 'video' : 'image';
+
+            updateWeeklyPlanCardState(action.cardKey, {
+                mediaUrl,
+                mediaType,
+                isUploading: false,
+            });
+            setWeeklyPlanUploadMenuKey(null);
+
+            // Auto-save to Media Vault
+            try {
+                const uniqueId = `${timestamp}_${Math.random().toString(36).substring(2, 9)}`;
+                const mediaItem = {
+                    id: uniqueId,
+                    userId: user.id,
+                    url: mediaUrl,
+                    name: file.name,
+                    type: mediaType,
+                    mimeType: file.type,
+                    size: file.size,
+                    uploadedAt: new Date().toISOString(),
+                    usedInPosts: [],
+                    tags: [],
+                    folderId: 'general',
+                };
+                await setDoc(doc(db, 'users', user.id, 'onlyfans_media_library', mediaItem.id), mediaItem);
+            } catch (vaultError: any) {
+                console.error('Failed to save to media vault:', vaultError);
+            }
+        } catch (error: any) {
+            console.error('Weekly plan upload error:', error);
+            updateWeeklyPlanCardState(action.cardKey, {
+                isUploading: false,
+                error: error?.message || 'Failed to upload media',
+            });
+            showToast?.('Failed to upload media', 'error');
+        }
+    };
+
+    const handleWeeklyPlanSelectFromVault = (action: WeeklyPlanDayAction) => {
+        setWeeklyPlanVaultTargetKey(action.cardKey);
+        setWeeklyPlanUploadMenuKey(null);
+        setShowMediaVaultModal(true);
     };
 
     const handleWeeklyPlanGenerateCaption = async (action: WeeklyPlanDayAction) => {
-        const prompt = buildWeeklyPlanPrompt(action);
-        setActiveTab('captions');
-        await handleGenerateCaptions(prompt);
+        const cardState = weeklyPlanCardState[action.cardKey];
+        if (!cardState?.mediaUrl) {
+            showToast?.('Upload media before generating captions.', 'error');
+            return;
+        }
+        updateWeeklyPlanCardState(action.cardKey, { isGenerating: true, error: undefined });
+        try {
+            const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+            const promptSeed = buildWeeklyPlanPrompt(action);
+            const personalityContext = [
+                aiPersonalitySetting ? `AI PERSONALITY & TRAINING:\n${aiPersonalitySetting}` : null,
+                aiToneSetting ? `Default AI Tone: ${aiToneSetting}` : null,
+                explicitnessLevelSetting !== null && explicitnessLevelSetting !== undefined
+                    ? `Explicitness Level: ${explicitnessLevelSetting}/10`
+                    : null,
+                useCreatorPersonalityCaptions && creatorPersonality ? `CREATOR PERSONALITY:\n${creatorPersonality}` : null,
+            ].filter(Boolean).join('\n');
+
+            const finalTone = explicitnessLevelSetting >= 8
+                ? 'Explicit'
+                : explicitnessLevelSetting >= 6
+                    ? captionTone === 'Explicit' ? 'Explicit' : captionTone
+                    : captionTone;
+
+            const emojiSettings = await loadEmojiSettings(user.id);
+            const captionsUrl = new URL('/api/generateCaptions', window.location.origin);
+            const response = await fetch(captionsUrl.toString(), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({
+                    mediaUrl: cardState.mediaUrl,
+                    tone: finalTone === 'Explicit' ? 'Sexy / Explicit' : finalTone,
+                    goal: captionGoal,
+                    platforms: [selectedPlatform],
+                    promptText: `${promptSeed}${personalityContext ? `\n\n${personalityContext}` : ''}\n\n[CRITICAL - GENERATE FRESH CAPTIONS: Variety seed ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate unique captions.`,
+                    emojiEnabled: emojiSettings.enabled,
+                    emojiIntensity: emojiSettings.intensity,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to generate captions');
+            }
+
+            const data = await response.json();
+            let captions: string[] = [];
+            if (Array.isArray(data)) {
+                captions = data.map((item: any) => {
+                    const caption = item.caption || '';
+                    const hashtags = Array.isArray(item.hashtags) ? item.hashtags : [];
+                    return hashtags.length > 0 ? `${caption} ${hashtags.join(' ')}` : caption;
+                });
+            } else if (data && typeof data === 'object' && Array.isArray(data.captions)) {
+                captions = data.captions.map((item: any) => {
+                    const caption = item.caption || '';
+                    const hashtags = Array.isArray(item.hashtags) ? item.hashtags : [];
+                    return hashtags.length > 0 ? `${caption} ${hashtags.join(' ')}` : caption;
+                });
+            }
+
+            updateWeeklyPlanCardState(action.cardKey, {
+                captions,
+                isGenerating: false,
+            });
+        } catch (error: any) {
+            console.error('Weekly plan caption error:', error);
+            updateWeeklyPlanCardState(action.cardKey, {
+                isGenerating: false,
+                error: error?.message || 'Failed to generate captions',
+            });
+            showToast?.('Failed to generate captions', 'error');
+        }
     };
 
     const handleWeeklyPlanAddToCalendar = async (action: WeeklyPlanDayAction) => {
@@ -1826,6 +2046,7 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
                 createdAt: new Date().toISOString(),
                 userId: user.id,
             });
+            updateWeeklyPlanCardState(action.cardKey, { used: true });
             showToast?.('Added to your calendar as a reminder.', 'success');
         } catch (error) {
             console.error('Error adding weekly plan to calendar:', error);
@@ -3118,6 +3339,22 @@ Output format:
 
     // Handle selecting media from vault
     const handleSelectFromVault = (item: any) => {
+        if (weeklyPlanVaultTargetKey) {
+            setWeeklyPlanCardState((prev) => ({
+                ...prev,
+                [weeklyPlanVaultTargetKey]: {
+                    ...prev[weeklyPlanVaultTargetKey],
+                    mediaUrl: item.url,
+                    mediaType: item.type === 'video' ? 'video' : 'image',
+                    error: undefined,
+                },
+            }));
+            setWeeklyPlanVaultTargetKey(null);
+            setWeeklyPlanUploadMenuKey(null);
+            setShowMediaVaultModal(false);
+            return;
+        }
+
         // Clear old captions when selecting new media
         setGeneratedCaptions([]);
         setCurrentCaptionForAI('');
@@ -5446,7 +5683,11 @@ Output format:
                             <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
                                 <WeeklyPlanFormatter
                                     plan={generatedWeeklyPlan}
-                                    onUploadMedia={handleWeeklyPlanUploadMedia}
+                                    uploadMenuKey={weeklyPlanUploadMenuKey}
+                                    cardStateByKey={weeklyPlanCardState}
+                                    onToggleUploadMenu={setWeeklyPlanUploadMenuKey}
+                                    onUploadFile={handleWeeklyPlanUploadFile}
+                                    onSelectFromVault={handleWeeklyPlanSelectFromVault}
                                     onGenerateCaption={handleWeeklyPlanGenerateCaption}
                                     onAddToCalendar={handleWeeklyPlanAddToCalendar}
                                     onCopyForExport={handleWeeklyPlanCopyForExport}
@@ -6097,7 +6338,10 @@ Output format:
                         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
                             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Select from My Vault</h2>
                             <button
-                                onClick={() => setShowMediaVaultModal(false)}
+                                onClick={() => {
+                                    setShowMediaVaultModal(false);
+                                    setWeeklyPlanVaultTargetKey(null);
+                                }}
                                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                             >
                                 <XMarkIcon className="w-6 h-6" />
@@ -6129,7 +6373,10 @@ Output format:
                         </div>
                         <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end">
                             <button
-                                onClick={() => setShowMediaVaultModal(false)}
+                                onClick={() => {
+                                    setShowMediaVaultModal(false);
+                                    setWeeklyPlanVaultTargetKey(null);
+                                }}
                                 className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
                             >
                                 Cancel
@@ -6390,7 +6637,11 @@ Output format:
                                         <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
                                             <WeeklyPlanFormatter
                                                 plan={viewingSavedItem.data.plan}
-                                                onUploadMedia={handleWeeklyPlanUploadMedia}
+                                                uploadMenuKey={weeklyPlanUploadMenuKey}
+                                                cardStateByKey={weeklyPlanCardState}
+                                                onToggleUploadMenu={setWeeklyPlanUploadMenuKey}
+                                                onUploadFile={handleWeeklyPlanUploadFile}
+                                                onSelectFromVault={handleWeeklyPlanSelectFromVault}
                                                 onGenerateCaption={handleWeeklyPlanGenerateCaption}
                                                 onAddToCalendar={handleWeeklyPlanAddToCalendar}
                                                 onCopyForExport={handleWeeklyPlanCopyForExport}
