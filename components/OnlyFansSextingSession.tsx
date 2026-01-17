@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from './AppContext';
 import { SparklesIcon, RefreshIcon, CopyIcon, CheckIcon, XMarkIcon, UserIcon, ClockIcon, PlayIcon, PauseIcon, StopIcon, TrashIcon } from './icons/UIIcons';
 import { FanSelector } from './FanSelector';
@@ -64,33 +64,14 @@ export const OnlyFansSextingSession: React.FC = () => {
     const [tone, setTone] = useState<Tone>('Teasing');
     const [aiSuggestions, setAiSuggestions] = useState<AISuggestion[]>([]);
     const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
-    const [sessionLength, setSessionLength] = useState<10 | 20 | 30>(20);
     const [messageInput, setMessageInput] = useState('');
     const [isLoadingFans, setIsLoadingFans] = useState(false);
-    const [creatorPersonality, setCreatorPersonality] = useState('');
-    const [useCreatorPersonalitySexting, setUseCreatorPersonalitySexting] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const sessionStartTime = useRef<Date | null>(null);
 
     // Load fans
     useEffect(() => {
         loadFans();
-    }, [user?.id]);
-
-    useEffect(() => {
-        const loadCreatorPersonality = async () => {
-            if (!user?.id) return;
-            try {
-                const userDoc = await getDoc(doc(db, 'users', user.id));
-                if (userDoc.exists()) {
-                    const data = userDoc.data();
-                    setCreatorPersonality(data.creatorPersonality || '');
-                }
-            } catch (error) {
-                console.error('Error loading creator personality:', error);
-            }
-        };
-        loadCreatorPersonality();
     }, [user?.id]);
 
     // Load fan preferences when fan is selected
@@ -171,7 +152,6 @@ export const OnlyFansSextingSession: React.FC = () => {
             messages: [],
             createdAt: new Date(),
             updatedAt: new Date(),
-            duration: sessionLength,
         };
 
         setActiveSession(newSession);
@@ -207,7 +187,6 @@ export const OnlyFansSextingSession: React.FC = () => {
             let aiTone = '';
             let creatorGender = '';
             let targetAudienceGender = '';
-            let explicitnessLevel = 7;
             try {
                 const userDoc = await getDoc(doc(db, 'users', user.id));
                 if (userDoc.exists()) {
@@ -216,7 +195,6 @@ export const OnlyFansSextingSession: React.FC = () => {
                     aiTone = userData?.aiTone || '';
                     creatorGender = userData?.creatorGender || '';
                     targetAudienceGender = userData?.targetAudienceGender || '';
-                    explicitnessLevel = userData?.explicitnessLevel ?? 7;
                 }
             } catch (e) {
                 console.error('Error loading AI personality settings:', e);
@@ -227,8 +205,6 @@ export const OnlyFansSextingSession: React.FC = () => {
                 const contextParts = [];
                 const subscriptionTier = currentFanPrefs.subscriptionTier;
                 const isVip = currentFanPrefs.isVIP === true;
-                const isWhale = currentFanPrefs.isWhale === true;
-                const isRegular = currentFanPrefs.isRegular === true;
                 if (subscriptionTier) {
                     contextParts.push(`Subscription tier: ${subscriptionTier}`);
                     if (subscriptionTier === 'Paid') {
@@ -239,12 +215,6 @@ export const OnlyFansSextingSession: React.FC = () => {
                 }
                 if (isVip) {
                     contextParts.push('VIP: Provide special treatment and priority responses.');
-                }
-                if (isWhale) {
-                    contextParts.push('Whale: Prioritize high-ticket PPV drops, bundles, and upsells.');
-                }
-                if (isRegular) {
-                    contextParts.push('Regular: Keep it warm, consistent, and focused on repeat buys.');
                 }
                 if (currentFanPrefs.preferredTone) contextParts.push(`Preferred tone: ${currentFanPrefs.preferredTone}`);
                 if (currentFanPrefs.communicationStyle) contextParts.push(`Communication style: ${currentFanPrefs.communicationStyle}`);
@@ -302,15 +272,6 @@ NATURAL PERSONALIZATION GUIDELINES:
             if (targetAudienceGender) {
                 personalityContext += `\nTarget Audience: ${targetAudienceGender}`;
             }
-            if (explicitnessLevel !== null && explicitnessLevel !== undefined) {
-                personalityContext += `\nExplicitness Level: ${explicitnessLevel}/10`;
-                if (explicitnessLevel >= 9) {
-                    personalityContext += `\nStyle: Go extremely explicit and erotic while staying within boundaries.`;
-                }
-            }
-            if (useCreatorPersonalitySexting && creatorPersonality) {
-                personalityContext += `\n\nCREATOR PERSONALITY:\n${creatorPersonality}`;
-            }
 
             // Load emoji settings from user data
             let emojiEnabled = true;
@@ -343,8 +304,6 @@ NATURAL PERSONALIZATION GUIDELINES:
                         roleplayType: session.roleplayType,
                         tone: session.tone,
                         fanName: session.fanName,
-                        sessionLength: session.duration || sessionLength,
-                        goal: 'Upsell PPV, keep them buying, and bring them back',
                     },
                     fanContext: fanContext || undefined,
                     personalityContext: personalityContext || undefined,
@@ -355,55 +314,23 @@ NATURAL PERSONALIZATION GUIDELINES:
                 }),
             });
 
-            // Handle non-200 responses
-            if (!response.ok) {
-                let errorData: any = {};
-                try {
-                    errorData = await response.json();
-                } catch {
-                    // If JSON parsing fails, use status text
-                    errorData = { error: response.statusText || 'Unknown error' };
-                }
-                const errorMessage = errorData.note || errorData.error || `Failed to generate suggestions (${response.status})`;
-                console.error('API error response:', { status: response.status, data: errorData });
-                throw new Error(errorMessage);
-            }
-
             const data = await response.json().catch(() => ({}));
             
-            if (!data.success) {
+            if (!response.ok || !data.success) {
                 // Use the detailed error message from the API if available
-                const errorMessage = data.note || data.error || 'Failed to generate suggestions';
+                const errorMessage = data.note || data.error || `Failed to generate suggestions (${response.status})`;
                 console.error('API error response:', { status: response.status, data });
                 throw new Error(errorMessage);
             }
 
-            // Handle both old format (suggestions array) and new format (plan object)
-            let suggestions: string[] = [];
-            if (data.suggestions && Array.isArray(data.suggestions)) {
-                // Old format: array of suggestion strings
-                suggestions = data.suggestions;
-            } else if (data.plan && typeof data.plan === 'object') {
-                // New format: plan object - convert to suggestions array
-                const plan = data.plan;
-                if (plan.opener) suggestions.push(plan.opener);
-                if (Array.isArray(plan.messageFlow)) {
-                    suggestions.push(...plan.messageFlow);
-                }
-                if (plan.paywallMoment) suggestions.push(plan.paywallMoment);
-                if (plan.closeFollowUp) suggestions.push(plan.closeFollowUp);
-            } else {
+            if (!data.suggestions || !Array.isArray(data.suggestions)) {
                 throw new Error(data.note || data.error || 'Invalid response format from API');
             }
 
-            if (suggestions.length === 0) {
-                throw new Error(data.note || data.error || 'No suggestions generated');
-            }
-
-            setAiSuggestions(suggestions.map((s: string, idx: number) => ({
+            setAiSuggestions(data.suggestions.map((s: string, idx: number) => ({
                 id: `suggestion-${Date.now()}-${idx}`,
                 message: s,
-                confidence: 0.85,
+                confidence: 0.85, // Default confidence
             })));
         } catch (error: any) {
             console.error('Error generating suggestions:', error);
@@ -442,8 +369,8 @@ NATURAL PERSONALIZATION GUIDELINES:
         }, 1000);
     };
 
-    const useLine = (line: string) => {
-        sendMessage(line, true);
+    const useSuggestion = (suggestion: AISuggestion) => {
+        sendMessage(suggestion.message, true);
     };
 
     const addFanMessage = (content: string) => {
@@ -496,20 +423,20 @@ NATURAL PERSONALIZATION GUIDELINES:
             updatedAt: new Date(),
         };
 
-        if (finalSession.fanId) {
-            // Save session to history (fan-selected sessions only)
-            try {
-                await addDoc(collection(db, 'users', user.id, 'onlyfans_sexting_sessions'), {
-                    ...finalSession,
-                    createdAt: Timestamp.fromDate(finalSession.createdAt),
-                    updatedAt: Timestamp.fromDate(finalSession.updatedAt),
-                    messages: finalSession.messages.map(msg => ({
-                        ...msg,
-                        timestamp: Timestamp.fromDate(msg.timestamp),
-                    })),
-                });
+        // Save session to history
+        try {
+            await addDoc(collection(db, 'users', user.id, 'onlyfans_sexting_sessions'), {
+                ...finalSession,
+                createdAt: Timestamp.fromDate(finalSession.createdAt),
+                updatedAt: Timestamp.fromDate(finalSession.updatedAt),
+                messages: finalSession.messages.map(msg => ({
+                    ...msg,
+                    timestamp: Timestamp.fromDate(msg.timestamp),
+                })),
+            });
 
-                // Update fan stats if fan exists
+            // Update fan stats if fan exists
+            if (finalSession.fanId) {
                 try {
                     const fanRef = doc(db, 'users', user.id, 'onlyfans_fan_preferences', finalSession.fanId);
                     const fanDoc = await getDoc(fanRef);
@@ -523,15 +450,15 @@ NATURAL PERSONALIZATION GUIDELINES:
                 } catch (e) {
                     console.warn('Failed to update fan stats:', e);
                 }
-            } catch (error) {
-                console.error('Error saving session:', error);
-                showToast('Failed to save session', 'error');
             }
+        } catch (error) {
+            console.error('Error saving session:', error);
+            showToast('Failed to save session', 'error');
         }
 
         setActiveSession(null);
         sessionStartTime.current = null;
-        showToast(finalSession.fanId ? 'Session ended and saved' : 'Session ended (not saved)', 'success');
+        showToast('Session ended and saved', 'success');
     };
 
     const copyToClipboard = (text: string) => {
@@ -550,7 +477,7 @@ NATURAL PERSONALIZATION GUIDELINES:
                                 {activeSession.fanName ? `Session with ${activeSession.fanName}` : 'Active Session'}
                             </h2>
                             <p className="text-sm text-gray-600 dark:text-gray-400">
-                                {activeSession.roleplayType} • {activeSession.tone} • {activeSession.status}
+                                {activeSession.roleplayType} ΓÇó {activeSession.tone} ΓÇó {activeSession.status}
                             </p>
                         </div>
                         <div className="flex gap-2">
@@ -612,7 +539,7 @@ NATURAL PERSONALIZATION GUIDELINES:
                                                     {msg.timestamp.toLocaleTimeString()}
                                                 </span>
                                                 {msg.aiSuggested && (
-                                                    <span className="text-xs opacity-75 ml-2">✨ AI</span>
+                                                    <span className="text-xs opacity-75 ml-2">Γ£¿ AI</span>
                                                 )}
                                             </div>
                                         </div>
@@ -717,7 +644,7 @@ NATURAL PERSONALIZATION GUIDELINES:
                                                     Copy
                                                 </button>
                                                 <button
-                                                    onClick={() => useLine(suggestion.message)}
+                                                    onClick={() => useSuggestion(suggestion)}
                                                     disabled={activeSession.status !== 'active'}
                                                     className="text-xs text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 disabled:opacity-50"
                                                 >
@@ -741,7 +668,7 @@ NATURAL PERSONALIZATION GUIDELINES:
             <div className="mb-6">
                 <div className="flex items-center gap-3 mb-2">
                     <SparklesIcon className="w-8 h-8 text-primary-600 dark:text-primary-400" />
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Chat/Sexting Session Assistant</h1>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Chat/Sexting Session Assistant</h1>
                 </div>
                 <p className="text-gray-600 dark:text-gray-400">
                     Start an AI-powered chatting/sexting session with real-time suggestions to reduce stress and improve engagement.
@@ -770,9 +697,9 @@ NATURAL PERSONALIZATION GUIDELINES:
                         <div className="mt-3 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
                             <div className="text-xs text-purple-700 dark:text-purple-300">
                                 <p className="font-semibold mb-1">Fan Preferences Loaded:</p>
-                                {fanPreferences.preferredTone && <p>• Tone: {fanPreferences.preferredTone}</p>}
-                                {fanPreferences.communicationStyle && <p>• Style: {fanPreferences.communicationStyle}</p>}
-                                {fanPreferences.favoriteSessionType && <p>• Favorite: {fanPreferences.favoriteSessionType}</p>}
+                                {fanPreferences.preferredTone && <p>ΓÇó Tone: {fanPreferences.preferredTone}</p>}
+                                {fanPreferences.communicationStyle && <p>ΓÇó Style: {fanPreferences.communicationStyle}</p>}
+                                {fanPreferences.favoriteSessionType && <p>ΓÇó Favorite: {fanPreferences.favoriteSessionType}</p>}
                             </div>
                         </div>
                     )}
@@ -819,29 +746,6 @@ NATURAL PERSONALIZATION GUIDELINES:
                     )}
                 </div>
 
-            {/* Session length */}
-            <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Session length
-                </label>
-                <div className="flex flex-wrap gap-2">
-                    {([10, 20, 30] as const).map((minutes) => (
-                        <button
-                            key={minutes}
-                            type="button"
-                            onClick={() => setSessionLength(minutes)}
-                            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                                sessionLength === minutes
-                                    ? 'bg-primary-600 text-white'
-                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                            }`}
-                        >
-                            {minutes} min
-                        </button>
-                    ))}
-                </div>
-            </div>
-
                 {/* Tone */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -862,22 +766,6 @@ NATURAL PERSONALIZATION GUIDELINES:
                             </button>
                         ))}
                     </div>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                    <button
-                        onClick={() => setUseCreatorPersonalitySexting(prev => !prev)}
-                        disabled={!creatorPersonality}
-                        className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
-                            useCreatorPersonalitySexting
-                                ? 'bg-primary-600 text-white hover:bg-primary-700'
-                                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                        } ${!creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        title={!creatorPersonality ? 'Add a creator personality in Settings → AI Training to enable' : undefined}
-                    >
-                        <SparklesIcon className="w-4 h-4" />
-                        Personality
-                    </button>
                 </div>
 
                 {/* Start Session Button */}

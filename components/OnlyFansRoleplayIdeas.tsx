@@ -437,7 +437,7 @@ Format as a numbered list (1-12) with complete prompt text. Make them creative, 
 
     const tabs: { id: typeof activeTab; label: string }[] = [
         { id: 'roleplay', label: 'Roleplay Scripts' },
-        { id: 'sexting', label: 'DM Session Planner' },
+        { id: 'sexting', label: 'Chat/Sexting Session' },
         { id: 'persona', label: 'Persona Builder' },
         { id: 'interactive', label: 'Interactive Prompts' },
         { id: 'ratings', label: 'Rating Prompts' },
@@ -467,12 +467,12 @@ Format as a numbered list (1-12) with complete prompt text. Make them creative, 
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-2 mb-6 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex flex-nowrap gap-2 mb-6 border-b border-gray-200 dark:border-gray-700 overflow-x-auto pb-1">
                 {tabs.map((tab) => (
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
-                        className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
+                        className={`shrink-0 px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
                             activeTab === tab.id
                                 ? 'border-primary-600 text-primary-600 dark:text-primary-400'
                                 : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'

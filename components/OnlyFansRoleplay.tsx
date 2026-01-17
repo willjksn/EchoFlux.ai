@@ -30,6 +30,7 @@ export const OnlyFansRoleplay: React.FC = () => {
     const [isGeneratingInteractive, setIsGeneratingInteractive] = useState(false);
     const [isHelpingRatingPrompt, setIsHelpingRatingPrompt] = useState(false);
     const [isHelpingLongRatingPrompt, setIsHelpingLongRatingPrompt] = useState(false);
+    const [isHelpingScenarioContext, setIsHelpingScenarioContext] = useState(false);
     const [creatorPersonality, setCreatorPersonality] = useState('');
     const [useCreatorPersonalityScenario, setUseCreatorPersonalityScenario] = useState(false);
     const [useCreatorPersonalityRatings, setUseCreatorPersonalityRatings] = useState(false);
@@ -1613,7 +1614,7 @@ Format as a numbered list with detailed post concepts including captions and eng
 
     const tabs: { id: RoleplayTab; label: string }[] = [
         { id: 'scenarios', label: 'Roleplay Scripts' },
-        { id: 'sexting', label: 'DM Session Planner' },
+        { id: 'sexting', label: 'Chat/Sexting Session' },
         { id: 'persona', label: 'Persona Builder' },
         { id: 'ratings', label: 'Rating Prompts' },
         { id: 'interactive', label: 'Interactive Prompts' },
@@ -1642,12 +1643,12 @@ Format as a numbered list with detailed post concepts including captions and eng
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-2 mb-6 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex flex-nowrap gap-2 mb-6 border-b border-gray-200 dark:border-gray-700 overflow-x-auto pb-1">
                 {tabs.map((tab) => (
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
-                        className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
+                        className={`shrink-0 px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
                             activeTab === tab.id
                                 ? 'border-primary-600 text-primary-600 dark:text-primary-400'
                                 : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
@@ -1658,7 +1659,7 @@ Format as a numbered list with detailed post concepts including captions and eng
                 ))}
             </div>
 
-            {/* DM Session Planner Tab */}
+            {/* Chat/Sexting Session Tab */}
             {activeTab === 'sexting' && (
                 <div className="space-y-6">
                     <OnlyFansSextingSession />
@@ -1853,9 +1854,72 @@ Format as a numbered list with detailed post concepts including captions and eng
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Context (Optional)
-                                </label>
+                                <div className="flex items-center justify-between mb-2">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Context (Optional)
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            if (!scenarioContext.trim()) {
+                                                showToast('Add a short context first, then click AI Help to refine it.', 'error');
+                                                return;
+                                            }
+                                            setIsHelpingScenarioContext(true);
+                                            try {
+                                                const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+                                                const prompt = `
+Rewrite this roleplay context so it is clearer, more specific, and helpful for generating a great script.
+
+CURRENT CONTEXT:
+${scenarioContext}
+
+CONTEXT:
+Roleplay Type: ${selectedRoleplayType === 'Custom' ? customRoleplayType : selectedRoleplayType}
+Tone: ${scenarioTone === 'Custom' ? customTone : scenarioTone}
+Creator Personality: ${creatorPersonality || 'Not set'}
+
+OUTPUT:
+Return only the rewritten context.
+                                                `.trim();
+                                                const res = await fetch('/api/generateText', {
+                                                    method: 'POST',
+                                                    headers: {
+                                                        'Content-Type': 'application/json',
+                                                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                                                    },
+                                                    body: JSON.stringify({
+                                                        prompt,
+                                                        context: {
+                                                            goal: 'roleplay context',
+                                                            tone: scenarioTone === 'Custom' ? customTone || 'Explicit' : scenarioTone,
+                                                            platforms: ['OnlyFans', 'Fansly', 'Fanvue'],
+                                                        },
+                                                    }),
+                                                });
+                                                const data = await res.json();
+                                                if (data.error) {
+                                                    throw new Error(data.error || data.note || 'Failed to generate text');
+                                                }
+                                                const rewritten = data.text || data.caption || '';
+                                                if (!rewritten) {
+                                                    throw new Error('No text generated');
+                                                }
+                                                setScenarioContext(rewritten);
+                                                showToast('Context updated.', 'success');
+                                            } catch (error: any) {
+                                                showToast(error?.message || 'AI help failed. Please try again.', 'error');
+                                            } finally {
+                                                setIsHelpingScenarioContext(false);
+                                            }
+                                        }}
+                                        disabled={isHelpingScenarioContext}
+                                        className="text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 disabled:opacity-50"
+                                        title="AI Help"
+                                    >
+                                        <SparklesIcon className="w-4 h-4" />
+                                    </button>
+                                </div>
                                 <textarea
                                     value={scenarioContext}
                                     onChange={(e) => setScenarioContext(e.target.value)}
@@ -2103,16 +2167,10 @@ Format as a numbered list with detailed post concepts including captions and eng
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Persona Description:
-                                </label>
-                                <div className="relative">
-                                    <textarea
-                                        value={personaDescription}
-                                        onChange={(e) => setPersonaDescription(e.target.value)}
-                                        placeholder="Describe your persona's personality, style, interests, and unique traits"
-                                        className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[100px]"
-                                    />
+                                <div className="flex items-center justify-between mb-2">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Persona Description:
+                                    </label>
                                     <button
                                         onClick={async () => {
                                             if (!personaDescription.trim()) {
@@ -2163,12 +2221,18 @@ Return only the rewritten persona description.
                                                 showToast('AI help failed. Please try again.', 'error');
                                             }
                                         }}
-                                        className="absolute top-2 right-2 p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                        className="text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
                                         title="AI Help"
                                     >
-                                        <SparklesIcon className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                                        <SparklesIcon className="w-4 h-4" />
                                     </button>
                                 </div>
+                                <textarea
+                                    value={personaDescription}
+                                    onChange={(e) => setPersonaDescription(e.target.value)}
+                                    placeholder="Describe your persona's personality, style, interests, and unique traits"
+                                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[100px]"
+                                />
                             </div>
 
                             <button
