@@ -553,7 +553,8 @@ type WeeklyPlanDayAction = {
 type WeeklyPlanCardState = {
     mediaUrl?: string;
     mediaType?: 'image' | 'video';
-    captions?: string[];
+    caption?: string;
+    cta?: string;
     isGenerating?: boolean;
     isUploading?: boolean;
     used?: boolean;
@@ -737,19 +738,24 @@ const WeeklyPlanFormatter: React.FC<{ plan: any } & WeeklyPlanActionHandlers> = 
                                                         )}
                                                     </div>
                                                 )}
-                                                {Array.isArray(cardState?.captions) && cardState?.captions.length > 0 && (
+                                                {cardState?.caption && (
                                                     <div className="mt-3 space-y-2">
                                                         <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-                                                            Top captions
+                                                            Best caption
                                                         </div>
-                                                        {cardState.captions.map((caption, captionIndex) => (
-                                                            <div
-                                                                key={captionIndex}
-                                                                className="text-xs text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-gray-700/50 rounded-md border border-gray-200 dark:border-gray-600 p-2 whitespace-pre-wrap"
-                                                            >
-                                                                {caption}
-                                                            </div>
-                                                        ))}
+                                                        <div className="text-xs text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-gray-700/50 rounded-md border border-gray-200 dark:border-gray-600 p-2 whitespace-pre-wrap">
+                                                            {cardState.caption}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {cardState?.cta && (
+                                                    <div className="mt-3 space-y-2">
+                                                        <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                                                            Best CTA
+                                                        </div>
+                                                        <div className="text-xs text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-gray-700/50 rounded-md border border-gray-200 dark:border-gray-600 p-2 whitespace-pre-wrap">
+                                                            {cardState.cta}
+                                                        </div>
                                                     </div>
                                                 )}
                                                 {showActions && (
@@ -2005,9 +2011,34 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
                 });
             }
 
-            const bestCaption = captions.length > 0 ? captions.slice(0, 2) : [];
+            const bestCaption = captions.length > 0 ? captions[0] : '';
+            let bestCta = action.cta || '';
+            if (!bestCta) {
+                const ctaPrompt = [
+                    `Write ONE short CTA for an adult creator post on ${selectedPlatform}.`,
+                    `Tone: ${finalTone}. Explicitness: ${explicitnessLevelSetting}/10.`,
+                    promptSeed ? `Post idea:\n${promptSeed}` : null,
+                    bestCaption ? `Caption:\n${bestCaption}` : null,
+                    'Keep it concise and action-focused. Return only the CTA sentence.',
+                ].filter(Boolean).join('\n\n');
+                const ctaResponse = await fetch('/api/generateText', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                    body: JSON.stringify({
+                        prompt: ctaPrompt,
+                        context: { goal: 'CTA', tone: finalTone, platforms: [selectedPlatform] },
+                    }),
+                });
+                const ctaData = await ctaResponse.json().catch(() => ({}));
+                bestCta = (ctaData.text || ctaData.caption || '').trim();
+            }
+
             updateWeeklyPlanCardState(action.cardKey, {
-                captions: bestCaption,
+                caption: bestCaption,
+                cta: bestCta || action.cta,
                 isGenerating: false,
             });
         } catch (error: any) {
