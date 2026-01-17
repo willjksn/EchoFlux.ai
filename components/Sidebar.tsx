@@ -47,24 +47,24 @@ export const Sidebar: React.FC = () => {
 
   const allNavItems: (Omit<NavItemProps, 'page' | 'label'> & { page: Page | 'admin', label: string })[] = [
     { page: 'dashboard', icon: <DashboardIcon />, label: 'Dashboard' },
-  // Inbox hidden in studio/offline mode (can be re-enabled later)
-  { page: 'inbox', icon: <ChatIcon />, label: 'Inbox' },
-    { page: 'compose', icon: <ComposeIcon />, label: 'Write Captions', tourId: 'tour-step-3-compose-nav' },
-    { page: 'automation', icon: <AutomationIcon />, label: 'Automation' },
-    { page: 'mediaLibrary', icon: <ImageIcon />, label: 'My Vault' },
-    { page: 'approvals', icon: <KanbanIcon />, label: 'Drafts' },
-    { page: 'calendar', icon: <CalendarIcon />, label: 'My Schedule' },
-    { page: 'strategy', icon: <TargetIcon />, label: 'Plan My Week' },
-    { page: 'analytics', icon: <AnalyticsIcon />, label: "What's Working", tourId: 'tour-step-2-analytics-nav' },
     { page: 'opportunities', icon: <TrendingIcon />, label: 'Find Trends', tourId: 'tour-step-opportunities-nav' },
-    { page: 'ads', icon: <SparklesIcon />, label: 'Ad Ideas' },
-    { page: 'team', icon: <TeamIcon />, label: 'Team', tourId: 'tour-step-team-nav' },
-    { page: 'clients', icon: <BriefcaseIcon />, label: 'Clients', tourId: 'tour-step-clients-nav' },
+    { page: 'strategy', icon: <TargetIcon />, label: 'Plan My Week' },
+    { page: 'compose', icon: <ComposeIcon />, label: 'Write Captions', tourId: 'tour-step-3-compose-nav' },
+    { page: 'calendar', icon: <CalendarIcon />, label: 'My Schedule' },
+    { page: 'approvals', icon: <KanbanIcon />, label: 'Drafts' },
+    { page: 'mediaLibrary', icon: <ImageIcon />, label: 'My Vault' },
     { page: 'bio', icon: <GlobeIcon />, label: 'Bio Link Page' },
     { page: 'onlyfansStudio', icon: <SparklesIcon />, label: 'Premium Content Studio' },
     { page: 'emailCenter', icon: <ComposeIcon />, label: 'Email Center' },
     { page: 'settings', icon: <SettingsIcon />, label: 'Settings' },
     { page: 'admin', icon: <AdminIcon />, label: 'Admin' },
+    // Hidden items (filtered out by navItems logic)
+    { page: 'inbox', icon: <ChatIcon />, label: 'Inbox' },
+    { page: 'automation', icon: <AutomationIcon />, label: 'Automation' },
+    { page: 'analytics', icon: <AnalyticsIcon />, label: "What's Working", tourId: 'tour-step-2-analytics-nav' },
+    { page: 'ads', icon: <SparklesIcon />, label: 'Ad Ideas' },
+    { page: 'team', icon: <TeamIcon />, label: 'Team', tourId: 'tour-step-team-nav' },
+    { page: 'clients', icon: <BriefcaseIcon />, label: 'Clients', tourId: 'tour-step-clients-nav' },
   ];
 
   const navItems = allNavItems.filter(item => {

@@ -1157,7 +1157,7 @@ export const Dashboard: React.FC = () => {
             </div>
             <div className="flex items-center gap-2 text-xs text-primary-100/80">
               <SparklesIcon className="w-4 h-4" />
-              <span>Best flow: Plan My Week → Write Captions → My Schedule</span>
+              <span>Best flow: Find Trends → Plan My Week → Write Captions → Schedule</span>
             </div>
           </div>
 
@@ -1189,21 +1189,29 @@ export const Dashboard: React.FC = () => {
 
           {/* Quick Actions - Enhanced */}
           <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Plan your day</h3>
+             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Quick Actions</h3>
              <div className="flex flex-wrap justify-center gap-4">
-                  <QuickAction
-                    label="Create Post"
-                    icon={<SparklesIcon className="w-6 h-6" />}
-                    color="bg-gradient-to-br from-purple-500 to-indigo-600"
-                    onClick={() => setActivePage('compose')}
-                  />
+                  {(!isBusiness || user?.plan === 'Agency') && (
+                    <QuickAction
+                      label="Find Trends"
+                      icon={<TrendingIcon className="w-6 h-6" />}
+                      color="bg-gradient-to-br from-pink-500 to-rose-500"
+                      onClick={() => setActivePage('opportunities')}
+                    />
+                  )}
                   {user?.plan !== 'Free' && (
                     <>
                       <QuickAction
                         label={isBusiness ? 'Marketing Plan' : 'Plan My Week'}
-                        icon={<TrendingIcon className="w-6 h-6" />}
+                        icon={<TargetIcon className="w-6 h-6" />}
                         color="bg-gradient-to-br from-blue-500 to-cyan-500"
                         onClick={() => setActivePage('strategy')}
+                      />
+                      <QuickAction
+                        label="Write Captions"
+                        icon={<SparklesIcon className="w-6 h-6" />}
+                        color="bg-gradient-to-br from-purple-500 to-indigo-600"
+                        onClick={() => setActivePage('compose')}
                       />
                       <QuickAction
                         label="View Schedule"
@@ -1211,20 +1219,6 @@ export const Dashboard: React.FC = () => {
                         color="bg-gradient-to-br from-orange-400 to-red-500"
                         onClick={() => setActivePage('calendar')}
                       />
-                      <QuickAction
-                        label={isPlanningWeek ? 'Planning…' : 'Plan My Week'}
-                        icon={<KanbanIcon className="w-6 h-6" />}
-                        color="bg-gradient-to-br from-emerald-500 to-teal-500"
-                        onClick={handlePlanMyWeek}
-                      />
-                      {(!isBusiness || user?.plan === 'Agency') && (
-                        <QuickAction
-                          label="Find Trends"
-                          icon={<TrendingIcon className="w-6 h-6" />}
-                          color="bg-gradient-to-br from-pink-500 to-rose-500"
-                          onClick={() => setActivePage('opportunities')}
-                        />
-                      )}
                     </>
                   )}
              </div>

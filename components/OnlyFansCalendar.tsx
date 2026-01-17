@@ -727,7 +727,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                     return (
                                                         <div key={event.id}>
                                                             <div 
-                                                                className={`flex flex-col p-2.5 sm:p-2 md:p-2 rounded-lg text-xs sm:text-xs md:text-xs shadow-sm cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all ${colors.bg} ${colors.border} relative min-h-[65px] sm:min-h-[50px]`}
+                                                                className={`flex flex-col p-2 sm:p-1.5 md:p-1.5 rounded-lg text-xs sm:text-[10px] md:text-[10px] shadow-sm cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all ${colors.bg} ${colors.border} relative min-h-[50px] sm:min-h-[40px]`}
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     handleEventClick(event);
@@ -736,21 +736,21 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                                 style={{ pointerEvents: 'auto' }}
                                                             >
                                                                 <div 
-                                                                    className="flex justify-between items-center mb-1.5 sm:mb-1 gap-1"
+                                                                    className="flex justify-between items-center mb-1 sm:mb-0.5 gap-1"
                                                                     style={{ pointerEvents: 'none' }}
                                                                 >
-                                                                    <span className={`font-bold text-xs sm:text-[10px] md:text-[10px] ${colors.text} whitespace-nowrap`}>
+                                                                    <span className={`font-bold text-[10px] sm:text-[9px] md:text-[9px] ${colors.text} whitespace-nowrap`}>
                                                                         {new Date(event.date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
                                                                     </span>
-                                                                    <div className={`w-2.5 h-2.5 sm:w-2 sm:h-2 rounded-full flex-shrink-0 shadow-sm ${colors.dot}`}></div>
+                                                                    <div className={`w-2 h-2 sm:w-1.5 sm:h-1.5 rounded-full flex-shrink-0 shadow-sm ${colors.dot}`}></div>
                                                                 </div>
                                                                 {event.type === 'post' && event.thumbnail && (
-                                                                    <div className="mb-1 relative w-full h-10">
+                                                                    <div className="mb-1 relative w-full h-8">
                                                                         {event.post?.mediaType === 'video' ? (
                                                                             // For videos, show video element with first frame as thumbnail
                                                                             <video
                                                                                 src={event.thumbnail}
-                                                                                className="w-full h-10 rounded-md object-cover border border-gray-200 dark:border-gray-700"
+                                                                                className="w-full h-8 rounded-md object-cover border border-gray-200 dark:border-gray-700"
                                                                                 muted
                                                                                 playsInline
                                                                                 preload="metadata"
@@ -768,7 +768,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                                             <img
                                                                                 src={event.thumbnail}
                                                                                 alt="Preview"
-                                                                                className="w-full h-10 rounded-md object-cover border border-gray-200 dark:border-gray-700"
+                                                                                className="w-full h-8 rounded-md object-cover border border-gray-200 dark:border-gray-700"
                                                                                 onError={(e) => {
                                                                                     // Hide image on error (e.g., expired blob URL, CORS issue, invalid URL, etc.)
                                                                                     const img = e.target as HTMLImageElement;
