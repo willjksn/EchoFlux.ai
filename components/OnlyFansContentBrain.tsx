@@ -739,14 +739,12 @@ const WeeklyPlanFormatter: React.FC<{ plan: any } & WeeklyPlanActionHandlers> = 
                                                 )}
                                                 {Array.isArray(cardState?.captions) && cardState?.captions.length > 0 && (
                                                     <div className="mt-3 space-y-2">
-                                                        {cardState.captions.map((caption, captionIndex) => (
-                                                            <div
-                                                                key={captionIndex}
-                                                                className="text-xs text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-gray-700/50 rounded-md border border-gray-200 dark:border-gray-600 p-2 whitespace-pre-wrap"
-                                                            >
-                                                                {caption}
-                                                            </div>
-                                                        ))}
+                                                        <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                                                            Best caption
+                                                        </div>
+                                                        <div className="text-xs text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-gray-700/50 rounded-md border border-gray-200 dark:border-gray-600 p-2 whitespace-pre-wrap">
+                                                            {cardState.captions[0]}
+                                                        </div>
                                                     </div>
                                                 )}
                                                 {showActions && (
@@ -2002,8 +2000,9 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
                 });
             }
 
+            const bestCaption = captions.length > 0 ? [captions[0]] : [];
             updateWeeklyPlanCardState(action.cardKey, {
-                captions,
+                captions: bestCaption,
                 isGenerating: false,
             });
         } catch (error: any) {
