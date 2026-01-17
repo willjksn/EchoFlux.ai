@@ -559,6 +559,9 @@ type WeeklyPlanCardState = {
     isUploading?: boolean;
     used?: boolean;
     error?: string;
+    showSchedulePicker?: boolean;
+    scheduleDate?: string;
+    scheduleTime?: string;
 };
 
 type WeeklyPlanActionHandlers = {
@@ -569,6 +572,10 @@ type WeeklyPlanActionHandlers = {
     onSelectFromVault?: (action: WeeklyPlanDayAction) => void;
     onGenerateCaption?: (action: WeeklyPlanDayAction) => void;
     onAddToCalendar?: (action: WeeklyPlanDayAction) => void;
+    onToggleSchedulePicker?: (action: WeeklyPlanDayAction) => void;
+    onConfirmSchedule?: (action: WeeklyPlanDayAction) => void;
+    onUpdateScheduleDate?: (action: WeeklyPlanDayAction, value: string) => void;
+    onUpdateScheduleTime?: (action: WeeklyPlanDayAction, value: string) => void;
     onCopyForExport?: (action: WeeklyPlanDayAction) => void;
 };
 
@@ -581,6 +588,10 @@ const WeeklyPlanFormatter: React.FC<{ plan: any } & WeeklyPlanActionHandlers> = 
     onSelectFromVault,
     onGenerateCaption,
     onAddToCalendar,
+    onToggleSchedulePicker,
+    onConfirmSchedule,
+    onUpdateScheduleDate,
+    onUpdateScheduleTime,
     onCopyForExport,
 }) => {
     if (!plan) return null;
@@ -780,7 +791,7 @@ const WeeklyPlanFormatter: React.FC<{ plan: any } & WeeklyPlanActionHandlers> = 
                                                         )}
                                                         {onAddToCalendar && (
                                                             <button
-                                                                onClick={() => onAddToCalendar(actionPayload)}
+                                                                onClick={() => onToggleSchedulePicker?.(actionPayload)}
                                                                 className="px-2.5 py-1 text-xs font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60"
                                                                 disabled={isUsed}
                                                             >
@@ -818,6 +829,34 @@ const WeeklyPlanFormatter: React.FC<{ plan: any } & WeeklyPlanActionHandlers> = 
                                                                     className="px-2.5 py-1 text-xs font-medium rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
                                                                 >
                                                                     Choose from vault
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                        {cardState?.showSchedulePicker && !isUsed && (
+                                                            <div className="w-full flex flex-wrap gap-2 items-end">
+                                                                <div className="flex flex-col gap-1">
+                                                                    <label className="text-xs text-gray-500 dark:text-gray-400">Date</label>
+                                                                    <input
+                                                                        type="date"
+                                                                        value={cardState.scheduleDate || ''}
+                                                                        onChange={(event) => onUpdateScheduleDate?.(actionPayload, event.target.value)}
+                                                                        className="px-2 py-1 text-xs rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200"
+                                                                    />
+                                                                </div>
+                                                                <div className="flex flex-col gap-1">
+                                                                    <label className="text-xs text-gray-500 dark:text-gray-400">Time</label>
+                                                                    <input
+                                                                        type="time"
+                                                                        value={cardState.scheduleTime || ''}
+                                                                        onChange={(event) => onUpdateScheduleTime?.(actionPayload, event.target.value)}
+                                                                        className="px-2 py-1 text-xs rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200"
+                                                                    />
+                                                                </div>
+                                                                <button
+                                                                    onClick={() => onConfirmSchedule?.(actionPayload)}
+                                                                    className="px-2.5 py-1 text-xs font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-700"
+                                                                >
+                                                                    Confirm
                                                                 </button>
                                                             </div>
                                                         )}
@@ -1876,7 +1915,15 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
         return map[key] ?? null;
     };
 
-    const resolveWeeklyPlanDate = (weekIndex: number, day: any, dayIndex: number) => {
+    const resolveWeeklyPlanDate = (weekIndex: number, day: any, dayIndex: number, overrideDate?: string, overrideTime?: string) => {
+        if (overrideDate) {
+            const datePart = overrideDate;
+            const timePart = overrideTime || '12:00';
+            const candidate = new Date(`${datePart}T${timePart}`);
+            if (!Number.isNaN(candidate.getTime())) {
+                return candidate;
+            }
+        }
         if (day?.date) {
             const parsed = new Date(day.date);
             if (!Number.isNaN(parsed.getTime())) {
@@ -1931,6 +1978,7 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
             } catch (vaultError: any) {
                 console.error('Failed to save to media vault:', vaultError);
             }
+            await handleWeeklyPlanGenerateCaption(action, { mediaUrl, mediaType });
         } catch (error: any) {
             console.error('Weekly plan upload error:', error);
             updateWeeklyPlanCardState(action.cardKey, {
@@ -1947,9 +1995,13 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
         setShowMediaVaultModal(true);
     };
 
-    const handleWeeklyPlanGenerateCaption = async (action: WeeklyPlanDayAction) => {
+    const handleWeeklyPlanGenerateCaption = async (
+        action: WeeklyPlanDayAction,
+        overrideMedia?: { mediaUrl: string; mediaType: 'image' | 'video' }
+    ) => {
         const cardState = weeklyPlanCardState[action.cardKey];
-        if (!cardState?.mediaUrl) {
+        const mediaUrl = overrideMedia?.mediaUrl || cardState?.mediaUrl;
+        if (!mediaUrl) {
             showToast?.('Upload media before generating captions.', 'error');
             return;
         }
@@ -1981,7 +2033,7 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
                 body: JSON.stringify({
-                    mediaUrl: cardState.mediaUrl,
+                    mediaUrl,
                     tone: finalTone === 'Explicit' ? 'Sexy / Explicit' : finalTone,
                     goal: captionGoal,
                     platforms: [selectedPlatform],
@@ -2051,7 +2103,14 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
     const handleWeeklyPlanAddToCalendar = async (action: WeeklyPlanDayAction) => {
         if (!user?.id) return;
         try {
-            const plannedDate = resolveWeeklyPlanDate(action.weekIndex, action.day, action.dayIndex);
+            const cardState = weeklyPlanCardState[action.cardKey];
+            const plannedDate = resolveWeeklyPlanDate(
+                action.weekIndex,
+                action.day,
+                action.dayIndex,
+                cardState?.scheduleDate,
+                cardState?.scheduleTime
+            );
             const lower = `${action.postType} ${action.postIdea}`.toLowerCase();
             const reminderType = lower.includes('shoot') || lower.includes('film') ? 'shoot' : 'post';
             const contentType = lower.includes('custom')
@@ -2078,12 +2137,41 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
                 createdAt: new Date().toISOString(),
                 userId: user.id,
             });
-            updateWeeklyPlanCardState(action.cardKey, { used: true });
+            updateWeeklyPlanCardState(action.cardKey, { used: true, showSchedulePicker: false });
             showToast?.('Added to your calendar as a reminder.', 'success');
         } catch (error) {
             console.error('Error adding weekly plan to calendar:', error);
             showToast?.('Failed to add to calendar. Please try again.', 'error');
         }
+    };
+
+    const handleWeeklyPlanToggleSchedulePicker = (action: WeeklyPlanDayAction) => {
+        const cardState = weeklyPlanCardState[action.cardKey];
+        const nextOpen = !cardState?.showSchedulePicker;
+        let scheduleDate = cardState?.scheduleDate;
+        let scheduleTime = cardState?.scheduleTime;
+        if (nextOpen && !scheduleDate) {
+            const plannedDate = resolveWeeklyPlanDate(action.weekIndex, action.day, action.dayIndex);
+            scheduleDate = plannedDate.toISOString().split('T')[0];
+            scheduleTime = scheduleTime || plannedDate.toTimeString().slice(0, 5);
+        }
+        updateWeeklyPlanCardState(action.cardKey, {
+            showSchedulePicker: nextOpen,
+            scheduleDate,
+            scheduleTime,
+        });
+    };
+
+    const handleWeeklyPlanUpdateScheduleDate = (action: WeeklyPlanDayAction, value: string) => {
+        updateWeeklyPlanCardState(action.cardKey, { scheduleDate: value });
+    };
+
+    const handleWeeklyPlanUpdateScheduleTime = (action: WeeklyPlanDayAction, value: string) => {
+        updateWeeklyPlanCardState(action.cardKey, { scheduleTime: value });
+    };
+
+    const handleWeeklyPlanConfirmSchedule = async (action: WeeklyPlanDayAction) => {
+        await handleWeeklyPlanAddToCalendar(action);
     };
 
     const handleWeeklyPlanCopyForExport = (action: WeeklyPlanDayAction) => {
@@ -5722,6 +5810,10 @@ Output format:
                                     onSelectFromVault={handleWeeklyPlanSelectFromVault}
                                     onGenerateCaption={handleWeeklyPlanGenerateCaption}
                                     onAddToCalendar={handleWeeklyPlanAddToCalendar}
+                                    onToggleSchedulePicker={handleWeeklyPlanToggleSchedulePicker}
+                                    onConfirmSchedule={handleWeeklyPlanConfirmSchedule}
+                                    onUpdateScheduleDate={handleWeeklyPlanUpdateScheduleDate}
+                                    onUpdateScheduleTime={handleWeeklyPlanUpdateScheduleTime}
                                     onCopyForExport={handleWeeklyPlanCopyForExport}
                                 />
                             </div>
@@ -6676,6 +6768,10 @@ Output format:
                                                 onSelectFromVault={handleWeeklyPlanSelectFromVault}
                                                 onGenerateCaption={handleWeeklyPlanGenerateCaption}
                                                 onAddToCalendar={handleWeeklyPlanAddToCalendar}
+                                                onToggleSchedulePicker={handleWeeklyPlanToggleSchedulePicker}
+                                                onConfirmSchedule={handleWeeklyPlanConfirmSchedule}
+                                                onUpdateScheduleDate={handleWeeklyPlanUpdateScheduleDate}
+                                                onUpdateScheduleTime={handleWeeklyPlanUpdateScheduleTime}
                                                 onCopyForExport={handleWeeklyPlanCopyForExport}
                                             />
                                         </div>
