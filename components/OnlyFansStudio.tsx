@@ -809,7 +809,7 @@ export const OnlyFansStudio: React.FC = () => {
                     <span className="text-sm font-semibold text-gray-900 dark:text-white">Quick actions</span>
                     <button
                         className="px-3 py-2 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
-                        onClick={() => setActiveView('calendar')}
+                        onClick={() => setActiveView('contentBrain')}
                     >
                         Plan a drop
                     </button>

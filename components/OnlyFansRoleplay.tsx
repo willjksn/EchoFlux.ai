@@ -28,6 +28,8 @@ export const OnlyFansRoleplay: React.FC = () => {
     const [isGeneratingRatings, setIsGeneratingRatings] = useState(false);
     const [isGeneratingLongRating, setIsGeneratingLongRating] = useState(false);
     const [isGeneratingInteractive, setIsGeneratingInteractive] = useState(false);
+    const [isHelpingRatingPrompt, setIsHelpingRatingPrompt] = useState(false);
+    const [isHelpingLongRatingPrompt, setIsHelpingLongRatingPrompt] = useState(false);
     const [creatorPersonality, setCreatorPersonality] = useState('');
     const [useCreatorPersonalityScenario, setUseCreatorPersonalityScenario] = useState(false);
     const [useCreatorPersonalityRatings, setUseCreatorPersonalityRatings] = useState(false);
@@ -2113,17 +2115,56 @@ Format as a numbered list with detailed post concepts including captions and eng
                                     />
                                     <button
                                         onClick={async () => {
+                                            if (!personaDescription.trim()) {
+                                                showToast('Add a short persona description first, then click AI Help to refine it.', 'error');
+                                                return;
+                                            }
                                             try {
-                                                const { askChatbot } = await import('../src/services/geminiService');
-                                                const prompt = 'Help me write an explicit creator persona description for OnlyFans roleplay and messaging. I want it to sound like me and match my creator personality. What should I include?';
-                                                await askChatbot(prompt);
-                                                showToast('AI suggestions available - describe your vibe, tone, and explicit style.', 'info');
+                                                const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+                                                const prompt = `
+Rewrite this persona description for explicit creator roleplay. Keep it aligned with the creator personality and make it clear + usable for scripts.
+
+CURRENT DESCRIPTION:
+${personaDescription}
+
+CONTEXT:
+Creator Personality: ${creatorPersonality || 'Not set'}
+Platform: OnlyFans / Fansly / Fanvue
+
+OUTPUT:
+Return only the rewritten persona description.
+                                                `.trim();
+                                                const res = await fetch('/api/generateText', {
+                                                    method: 'POST',
+                                                    headers: {
+                                                        'Content-Type': 'application/json',
+                                                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                                                    },
+                                                    body: JSON.stringify({
+                                                        prompt,
+                                                        context: {
+                                                            goal: 'roleplay',
+                                                            tone: 'Explicit',
+                                                            platforms: ['OnlyFans', 'Fansly', 'Fanvue'],
+                                                        },
+                                                    }),
+                                                });
+                                                const data = await res.json();
+                                                if (data.error) {
+                                                    throw new Error(data.error || data.note || 'Failed to generate text');
+                                                }
+                                                const rewritten = data.text || data.caption || '';
+                                                if (!rewritten) {
+                                                    throw new Error('No text generated');
+                                                }
+                                                setPersonaDescription(rewritten);
+                                                showToast('Persona updated.', 'success');
                                             } catch (error) {
-                                                showToast('Failed to load AI suggestions. Please try again.', 'error');
+                                                showToast('AI help failed. Please try again.', 'error');
                                             }
                                         }}
                                         className="absolute top-2 right-2 p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                                        title="AI Help - Get suggestions for writing your persona description"
+                                        title="AI Help"
                                     >
                                         <SparklesIcon className="w-5 h-5 text-primary-600 dark:text-primary-400" />
                                     </button>
@@ -2284,9 +2325,74 @@ Format as a numbered list with detailed post concepts including captions and eng
                             </div>
                             
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    What kind of rating prompts do you want?
-                                </label>
+                                <div className="flex items-center justify-between mb-2">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        What kind of rating prompts do you want?
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            if (!ratingPrompt.trim()) {
+                                                showToast('Add a short description first, then click AI Help to refine it.', 'error');
+                                                return;
+                                            }
+                                            setIsHelpingRatingPrompt(true);
+                                            try {
+                                                const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+                                                const prompt = `
+Rewrite this rating prompt request so it's specific, clear, and focused on the exact body part or theme.
+
+CURRENT REQUEST:
+${ratingPrompt}
+
+CONTEXT:
+Creator Personality: ${creatorPersonality || 'Not set'}
+Tone: ${aiToneSetting || 'Not set'}
+Explicitness Level: ${explicitnessLevelSetting ?? 7}/10
+Creator Gender: ${creatorGender || 'Not set'}
+Audience: ${targetAudienceGender || 'Not set'}
+
+OUTPUT:
+Return only the rewritten request.
+                                                `.trim();
+                                                const res = await fetch('/api/generateText', {
+                                                    method: 'POST',
+                                                    headers: {
+                                                        'Content-Type': 'application/json',
+                                                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                                                    },
+                                                    body: JSON.stringify({
+                                                        prompt,
+                                                        context: {
+                                                            goal: 'rating prompts',
+                                                            tone: 'Explicit',
+                                                            platforms: ['OnlyFans', 'Fansly', 'Fanvue'],
+                                                        },
+                                                    }),
+                                                });
+                                                const data = await res.json();
+                                                if (data.error) {
+                                                    throw new Error(data.error || data.note || 'Failed to generate text');
+                                                }
+                                                const rewritten = data.text || data.caption || '';
+                                                if (!rewritten) {
+                                                    throw new Error('No text generated');
+                                                }
+                                                setRatingPrompt(rewritten);
+                                                showToast('Rating prompt updated.', 'success');
+                                            } catch (error: any) {
+                                                showToast(error?.message || 'AI help failed. Please try again.', 'error');
+                                            } finally {
+                                                setIsHelpingRatingPrompt(false);
+                                            }
+                                        }}
+                                        disabled={isHelpingRatingPrompt}
+                                        className="text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 disabled:opacity-50"
+                                        title="AI Help"
+                                    >
+                                        <SparklesIcon className="w-4 h-4" />
+                                    </button>
+                                </div>
                                 <textarea
                                     value={ratingPrompt}
                                     onChange={(e) => setRatingPrompt(e.target.value)}
@@ -2364,9 +2470,75 @@ Format as a numbered list with detailed post concepts including captions and eng
                             </div>
                             
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Describe the body or body part you want to rate in detail
-                                </label>
+                                <div className="flex items-center justify-between mb-2">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Describe the body or body part you want to rate in detail
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            if (!longRatingPrompt.trim()) {
+                                                showToast('Add a short description first, then click AI Help to refine it.', 'error');
+                                                return;
+                                            }
+                                            setIsHelpingLongRatingPrompt(true);
+                                            try {
+                                                const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+                                                const prompt = `
+Rewrite this long-form rating request to be specific, detailed, and clear about the body part or full-body focus.
+
+CURRENT REQUEST:
+${longRatingPrompt}
+
+CONTEXT:
+Creator Personality: ${creatorPersonality || 'Not set'}
+Tone: ${aiToneSetting || 'Not set'}
+Explicitness Level: ${explicitnessLevelSetting ?? 7}/10
+Creator Gender: ${creatorGender || 'Not set'}
+Audience: ${targetAudienceGender || 'Not set'}
+Fan Notes: ${fanPreferences?.suggestedFlow || fanPreferences?.pastNotes || 'Not set'}
+
+OUTPUT:
+Return only the rewritten request.
+                                                `.trim();
+                                                const res = await fetch('/api/generateText', {
+                                                    method: 'POST',
+                                                    headers: {
+                                                        'Content-Type': 'application/json',
+                                                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                                                    },
+                                                    body: JSON.stringify({
+                                                        prompt,
+                                                        context: {
+                                                            goal: 'long-form rating',
+                                                            tone: 'Explicit',
+                                                            platforms: ['OnlyFans', 'Fansly', 'Fanvue'],
+                                                        },
+                                                    }),
+                                                });
+                                                const data = await res.json();
+                                                if (data.error) {
+                                                    throw new Error(data.error || data.note || 'Failed to generate text');
+                                                }
+                                                const rewritten = data.text || data.caption || '';
+                                                if (!rewritten) {
+                                                    throw new Error('No text generated');
+                                                }
+                                                setLongRatingPrompt(rewritten);
+                                                showToast('Long-form rating prompt updated.', 'success');
+                                            } catch (error: any) {
+                                                showToast(error?.message || 'AI help failed. Please try again.', 'error');
+                                            } finally {
+                                                setIsHelpingLongRatingPrompt(false);
+                                            }
+                                        }}
+                                        disabled={isHelpingLongRatingPrompt}
+                                        className="text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 disabled:opacity-50"
+                                        title="AI Help"
+                                    >
+                                        <SparklesIcon className="w-4 h-4" />
+                                    </button>
+                                </div>
                                 <textarea
                                     value={longRatingPrompt}
                                     onChange={(e) => setLongRatingPrompt(e.target.value)}

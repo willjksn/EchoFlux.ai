@@ -5,7 +5,7 @@ import { StrategyPlan, Platform, WeekPlan, DayPlan, Post, CalendarEvent, MediaLi
 import { generateContentStrategy, getStrategies, saveStrategy, updateStrategyStatus, analyzeMediaForPost, generateCaptions } from "../src/services/geminiService";
 import { TargetIcon, SparklesIcon, CalendarIcon, CheckCircleIcon, RocketIcon, DownloadIcon, TrashIcon, ClockIcon, UploadIcon, ImageIcon, XMarkIcon, CopyIcon, HashtagIcon } from './icons/UIIcons';
 import { UpgradePrompt } from './UpgradePrompt';
-import { storage } from '../firebaseConfig';
+import { storage, auth } from '../firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db } from '../firebaseConfig';
 import { doc, setDoc, getDoc, collection, getDocs, query, orderBy, deleteDoc } from 'firebase/firestore';
@@ -1510,17 +1510,60 @@ export const Strategy: React.FC = () => {
                             </label>
                             <button
                                 onClick={async () => {
+                                    if (!contextDescription.trim()) {
+                                        showToast('Add a short description first, then click AI Help to refine it.', 'error');
+                                        return;
+                                    }
                                     try {
-                                        const { askChatbot } = await import('../src/services/geminiService');
-                                        const prompt = "Help me write a context description for my AI content strategy. What should I include to help the AI understand what type of strategy I'm looking for?";
-                                        const response = await askChatbot(prompt);
-                                        showToast('AI (Describe what you want in your caption, and AI will write it for you.) - Check the chat for suggestions or describe the type of strategy you want (themes, content mix, post types, etc.).', 'info');
-                                    } catch (error) {
-                                        showToast('AI help temporarily unavailable. Try describing the type of strategy you want: themes, content mix, post types, style preferences, etc.', 'error');
+                                        const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+                                        const prompt = `
+Rewrite this strategy context description using the inputs below. Keep the intent, make it clear and actionable.
+
+CURRENT DESCRIPTION:
+${contextDescription}
+
+CONTEXT:
+Niche: ${niche || 'Not set'}
+Audience: ${audience || 'Not set'}
+Goal: ${goal || 'Not set'}
+Tone: ${tone || 'Not set'}
+Platform Focus: ${platformFocus || 'Mixed'}
+Duration: ${duration || 'Not set'}
+
+OUTPUT:
+Return only the rewritten context description.
+                                        `.trim();
+                                        const res = await fetch('/api/generateText', {
+                                            method: 'POST',
+                                            headers: {
+                                                'Content-Type': 'application/json',
+                                                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                                            },
+                                            body: JSON.stringify({
+                                                prompt,
+                                                context: {
+                                                    goal,
+                                                    tone,
+                                                    platforms: platformFocus && platformFocus !== 'Mixed / All' ? [platformFocus] : undefined,
+                                                },
+                                            }),
+                                        });
+                                        const data = await res.json();
+                                        if (data.error) {
+                                            throw new Error(data.error || data.note || 'Failed to generate text');
+                                        }
+                                        const rewritten = data.text || data.caption || '';
+                                        if (!rewritten) {
+                                            throw new Error('No text generated');
+                                        }
+                                        setContextDescription(rewritten);
+                                        showToast('Context updated.', 'success');
+                                    } catch (error: any) {
+                                        showToast(error?.message || 'AI help failed. Please try again.', 'error');
                                     }
                                 }}
                                 className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                                title="AI (Describe what you want in your caption, and AI will write it for you.)"
+                                title="AI Help"
                             >
                                 <SparklesIcon className="w-4 h-4 text-primary-600 dark:text-primary-400" />
                             </button>

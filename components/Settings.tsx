@@ -1047,17 +1047,58 @@ export const Settings: React.FC = () => {
                                         />
                                         <button
                                             onClick={async () => {
+                                                if (!settings.creatorPersonality?.trim()) {
+                                                    showToast('Add a short personality description first, then click AI Help to refine it.', 'error');
+                                                    return;
+                                                }
                                                 try {
-                                                    const { askChatbot } = await import('../src/services/geminiService');
-                                                    const prompt = "Help me write a personality description for my social media brand. I want the AI to understand my unique voice and style when generating captions. What should I include?";
-                                                    const response = await askChatbot(prompt);
-                                                    showToast('AI suggestions available - check the chat or try describing yourself: your niche, tone preferences, target audience, and what makes your content unique.', 'info');
-                                                } catch (error) {
-                                                    showToast('AI help temporarily unavailable. Try describing your niche, tone, target audience, and what makes your content unique.', 'error');
+                                                    const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+                                                    const prompt = `
+Rewrite this creator personality description to be clearer and more actionable for caption writing.
+
+CURRENT DESCRIPTION:
+${settings.creatorPersonality}
+
+CONTEXT:
+Niche: ${user?.niche || 'Not set'}
+Tone: ${settings.tone?.formality !== undefined ? `Formality ${settings.tone.formality}` : 'Not set'}
+Humor: ${settings.tone?.humor !== undefined ? `Humor ${settings.tone.humor}` : 'Not set'}
+Empathy: ${settings.tone?.empathy !== undefined ? `Empathy ${settings.tone.empathy}` : 'Not set'}
+Spiciness: ${settings.tone?.spiciness !== undefined ? `Spiciness ${settings.tone.spiciness}` : 'Not set'}
+
+OUTPUT:
+Return only the rewritten personality description.
+                                                    `.trim();
+                                                    const res = await fetch('/api/generateText', {
+                                                        method: 'POST',
+                                                        headers: {
+                                                            'Content-Type': 'application/json',
+                                                            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                                                        },
+                                                        body: JSON.stringify({
+                                                            prompt,
+                                                            context: {
+                                                                goal: 'captions',
+                                                                tone: user?.plan === 'OnlyFansStudio' ? 'Explicit' : undefined,
+                                                            },
+                                                        }),
+                                                    });
+                                                    const data = await res.json();
+                                                    if (data.error) {
+                                                        throw new Error(data.error || data.note || 'Failed to generate text');
+                                                    }
+                                                    const rewritten = data.text || data.caption || '';
+                                                    if (!rewritten) {
+                                                        throw new Error('No text generated');
+                                                    }
+                                                    updateSetting('creatorPersonality', rewritten);
+                                                    showToast('Personality updated.', 'success');
+                                                } catch (error: any) {
+                                                    showToast(error?.message || 'AI help failed. Please try again.', 'error');
                                                 }
                                             }}
                                             className="absolute top-2 right-2 p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                                            title="AI Help - Get suggestions for writing your personality description"
+                                            title="AI Help"
                                         >
                                             <SparklesIcon className="w-5 h-5 text-primary-600 dark:text-primary-400" />
                                         </button>

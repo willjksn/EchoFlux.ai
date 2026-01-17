@@ -952,13 +952,28 @@ export const OnlyFansContentBrain: React.FC = () => {
         instruction: string,
         context: { goal?: string; tone?: string; platforms?: string[] },
         onApply: (text: string) => void,
+        fieldLabel: string,
     ) => {
         setIsAiHelpGenerating(true);
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+            const extraContextLines = [
+                selectedPlatform ? `Platform: ${selectedPlatform}` : null,
+                context.goal ? `Goal: ${context.goal}` : null,
+                context.tone ? `Tone: ${context.tone}` : null,
+                user?.niche ? `Niche: ${user.niche}` : null,
+                creatorPersonality ? `Creator Personality: ${creatorPersonality}` : null,
+                aiPersonalitySetting ? `AI Personality: ${aiPersonalitySetting}` : null,
+                aiToneSetting ? `Default AI Tone: ${aiToneSetting}` : null,
+                explicitnessLevelSetting !== null && explicitnessLevelSetting !== undefined
+                    ? `Explicitness Level: ${explicitnessLevelSetting}/10`
+                    : null,
+                monetizedModeEnabled ? buildMonetizedContext() : null,
+                uploadedMediaType ? `Media attached: ${uploadedMediaType}` : null,
+            ].filter(Boolean).join('\n');
             const prompt = instruction.trim()
-                ? `Rewrite the following context based on these instructions:\n${instruction}\n\nCURRENT CONTEXT:\n${baseText || '(empty)'}`.trim()
-                : `Rewrite and improve the following context. Keep the intent but make it clearer and stronger:\n\n${baseText || '(empty)'}`.trim();
+                ? `You are rewriting the ${fieldLabel} field. Follow the instruction exactly and focus only on what was asked. If media is attached, keep wording consistent with it.\n\nINSTRUCTION:\n${instruction}\n\nCURRENT TEXT:\n${baseText || '(empty)'}\n\nCONTEXT:\n${extraContextLines || 'None'}\n\nOUTPUT:\nReturn only the rewritten ${fieldLabel} text.`
+                : `You are rewriting the ${fieldLabel} field. Improve clarity and focus without adding new topics. If media is attached, keep wording consistent with it.\n\nCURRENT TEXT:\n${baseText || '(empty)'}\n\nCONTEXT:\n${extraContextLines || 'None'}\n\nOUTPUT:\nReturn only the rewritten ${fieldLabel} text.`;
             const response = await fetch('/api/generateText', {
                 method: 'POST',
                 headers: {
@@ -3627,6 +3642,7 @@ Output format:
                                                     aiHelpPrompt,
                                                     { goal: captionGoal, tone: captionTone, platforms: [selectedPlatform] },
                                                     (text) => setCaptionPrompt(text),
+                                                    'Additional Context',
                                                 )}
                                                 disabled={isAiHelpGenerating}
                                                 className="flex-1 px-3 py-2 text-xs font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
@@ -4331,6 +4347,7 @@ Output format:
                                                     aiHelpPrompt,
                                                     { goal: 'post ideas', tone: captionTone, platforms: [selectedPlatform] },
                                                     (text) => setPostIdeaPrompt(text),
+                                                    'Post Ideas Prompt',
                                                 )}
                                                 disabled={isAiHelpGenerating}
                                                 className="flex-1 px-3 py-2 text-xs font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
@@ -4739,6 +4756,7 @@ Output format:
                                                     aiHelpPrompt,
                                                     { goal: 'shoot concepts', tone: captionTone, platforms: [selectedPlatform] },
                                                     (text) => setShootConceptPrompt(text),
+                                                    'Shoot Concepts Prompt',
                                                 )}
                                                 disabled={isAiHelpGenerating}
                                                 className="flex-1 px-3 py-2 text-xs font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
@@ -4972,6 +4990,7 @@ Output format:
                                                     aiHelpPrompt,
                                                     { goal: 'weekly plan', tone: captionTone, platforms: [selectedPlatform] },
                                                     (text) => setWeeklyPlanPrompt(text),
+                                                    'Weekly Plan Goals',
                                                 )}
                                                 disabled={isAiHelpGenerating}
                                                 className="flex-1 px-3 py-2 text-xs font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
@@ -5561,6 +5580,7 @@ Output format:
                                                     aiHelpPrompt,
                                                     { goal: messageType, tone: messageTone, platforms: [selectedPlatform] },
                                                     (text) => setMessageContext(text),
+                                                    'Additional Context',
                                                 )}
                                                 disabled={isAiHelpGenerating}
                                                 className="flex-1 px-3 py-2 text-xs font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"

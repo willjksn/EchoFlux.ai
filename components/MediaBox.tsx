@@ -629,48 +629,66 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
 
     setIsAiHelpGenerating(true);
     try {
-      // Get Firebase auth token
-      const token = auth.currentUser
-        ? await auth.currentUser.getIdToken(true)
-        : null;
-
-      const response = await fetch('/api/generateText', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          prompt: aiHelpPrompt,
-          context: {
-            goal: mediaItem.postGoal,
-            tone: mediaItem.postTone,
-            platforms: (() => {
-              const selectedPlatform = (Object.keys(mediaItem.selectedPlatforms || {}) as Platform[]).find(
-                p => mediaItem.selectedPlatforms?.[p]
-              );
-              return selectedPlatform ? [selectedPlatform] : undefined;
-            })(),
-          },
-        }),
-      });
-
-      const data = await response.json();
-      
-      if (data.error) {
-        throw new Error(data.error || data.note || 'Failed to generate text');
+      const selectedPlatform = (Object.keys(mediaItem.selectedPlatforms || {}) as Platform[]).find(
+        p => mediaItem.selectedPlatforms?.[p]
+      );
+      if (!selectedPlatform) {
+        showToast('Please select a platform first', 'error');
+        setIsAiHelpGenerating(false);
+        return;
       }
 
-      const generatedText = data.text || data.caption || '';
-      
+      const userNiche = user?.userType === 'Business'
+        ? (user as any)?.businessType
+        : user?.niche;
+      const baseCaption = mediaItem.captionText?.trim();
+      const contextLines = [
+        userNiche ? `Niche: ${userNiche}` : null,
+        mediaItem.postGoal ? `Goal: ${mediaItem.postGoal}` : null,
+        mediaItem.postTone ? `Tone: ${mediaItem.postTone}` : null,
+        selectedPlatform ? `Platform: ${selectedPlatform}` : null,
+        usePersonality && creatorPersonality ? `Creator Personality: ${creatorPersonality}` : null,
+        useFavoriteHashtags && favoriteHashtags ? `Favorite Hashtags: ${favoriteHashtags}` : null,
+      ].filter(Boolean).join('\n');
+
+      const promptText = `
+Write a single caption based on the instruction below. If media is provided, use it.
+Keep it aligned with the goal, tone, and platform.
+
+INSTRUCTION:
+${aiHelpPrompt}
+
+CURRENT CAPTION:
+${baseCaption || '(empty)'}
+
+CONTEXT:
+${contextLines || 'None'}
+      `.trim();
+
+      const mimeType = mediaItem.mimeType || 'image/jpeg';
+      const finalMediaUrl = await resolveMediaUrl(mediaItem.data || null, mimeType, mediaItem.previewUrl || undefined);
+
+      const res = await generateCaptions({
+        mediaUrl: finalMediaUrl,
+        mediaData: mediaItem.data ? { data: mediaItem.data, mimeType } : null,
+        goal: mediaItem.postGoal,
+        tone: mediaItem.postTone,
+        promptText,
+        platforms: [selectedPlatform],
+        usePersonality: usePersonality && creatorPersonality ? true : false,
+        useFavoriteHashtags: useFavoriteHashtags && favoriteHashtags ? true : false,
+        creatorPersonality: usePersonality ? creatorPersonality || null : null,
+        favoriteHashtags: useFavoriteHashtags ? favoriteHashtags || null : null,
+      });
+
+      const generatedResults = normalizeCaptionResults(res);
+      const generatedText = firstCaptionTextFromResults(generatedResults);
+
       if (generatedText) {
-        // Insert generated text into caption (replace if empty, append if not)
-        const currentText = mediaItem.captionText || '';
-        const newText = currentText.trim() 
-          ? currentText + '\n\n' + generatedText 
-          : generatedText;
-        onUpdate(index, { captionText: newText });
-        
+        onUpdate(index, {
+          results: generatedResults.length > 0 ? generatedResults : mediaItem.results,
+          captionText: generatedText,
+        });
         setIsAiHelpOpen(false);
         setAiHelpPrompt('');
       } else {
@@ -678,7 +696,7 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
       }
     } catch (error: any) {
       console.error('AI Help generation error:', error);
-      alert(error?.message || 'Failed to generate text. Please try again.');
+      showToast(error?.message || 'Failed to generate text. Please try again.', 'error');
     } finally {
       setIsAiHelpGenerating(false);
     }

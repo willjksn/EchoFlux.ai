@@ -322,17 +322,57 @@ export const OnlyFansStudioSettings: React.FC = () => {
                                 />
                                 <button
                                     onClick={async () => {
+                                        if (!creatorPersonality.trim()) {
+                                            showToast('Add a short personality description first, then click AI Help to refine it.', 'error');
+                                            return;
+                                        }
                                         try {
-                                            const { askChatbot } = await import('../src/services/geminiService');
-                                            const prompt = 'Help me write a creator personality description for my premium content brand. I want content to sound like me. What should I include?';
-                                            await askChatbot(prompt);
-                                            showToast('AI suggestions available - try describing your tone, style, and what makes you unique.', 'info');
-                                        } catch (error) {
-                                            showToast('Failed to load AI suggestions. Please try again.', 'error');
+                                            const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+                                            const prompt = `
+Rewrite this creator personality description to be clear, explicit-ready, and tailored for monetized creator content.
+
+CURRENT DESCRIPTION:
+${creatorPersonality}
+
+CONTEXT:
+Default Tone: ${aiTone || 'Not set'}
+Explicitness Level: ${explicitnessLevel}/10
+Platform: Monetized Creator Studio (OnlyFans/Fansly/Fanvue)
+
+OUTPUT:
+Return only the rewritten personality description.
+                                            `.trim();
+                                            const res = await fetch('/api/generateText', {
+                                                method: 'POST',
+                                                headers: {
+                                                    'Content-Type': 'application/json',
+                                                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                                                },
+                                                body: JSON.stringify({
+                                                    prompt,
+                                                    context: {
+                                                        goal: 'captions',
+                                                        tone: aiTone,
+                                                        platforms: ['OnlyFans', 'Fansly', 'Fanvue'],
+                                                    },
+                                                }),
+                                            });
+                                            const data = await res.json();
+                                            if (data.error) {
+                                                throw new Error(data.error || data.note || 'Failed to generate text');
+                                            }
+                                            const rewritten = data.text || data.caption || '';
+                                            if (!rewritten) {
+                                                throw new Error('No text generated');
+                                            }
+                                            setCreatorPersonality(rewritten);
+                                            showToast('Personality updated.', 'success');
+                                        } catch (error: any) {
+                                            showToast(error?.message || 'AI help failed. Please try again.', 'error');
                                         }
                                     }}
                                     className="absolute top-2 right-2 p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                                    title="AI Help - Get suggestions for writing your creator personality"
+                                    title="AI Help"
                                 >
                                     <SparklesIcon className="w-5 h-5 text-primary-600 dark:text-primary-400" />
                                 </button>
