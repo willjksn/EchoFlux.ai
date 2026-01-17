@@ -215,9 +215,16 @@ Guidelines:
 
     await recordAiUsage(user.uid, "sexting_session", userPlan, userRole, 1);
 
+    const suggestions: string[] = [];
+    if (plan?.opener) suggestions.push(plan.opener);
+    if (Array.isArray(plan?.messageFlow)) suggestions.push(...plan.messageFlow);
+    if (plan?.paywallMoment) suggestions.push(plan.paywallMoment);
+    if (plan?.closeFollowUp) suggestions.push(plan.closeFollowUp);
+
     res.status(200).json({
       success: true,
       plan,
+      suggestions,
     });
   } catch (error: any) {
     console.error("[generateSextingSuggestion] error:", error);
