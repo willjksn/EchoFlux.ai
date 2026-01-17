@@ -1153,7 +1153,7 @@ export const OnlyFansStudio: React.FC = () => {
                     </p>
                     <button
                         className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
-                        onClick={() => openContentBrain('captions')}
+                        onClick={() => openContentBrain('trends')}
                     >
                         Open Content Ideas
                     </button>

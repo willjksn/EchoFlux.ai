@@ -3983,85 +3983,51 @@ Output format:
                                             <p className="text-xs mt-1">Use the What's Missing, What To Post Next, or Repurpose Content buttons above to see history here.</p>
                                         </div>
                                     ) : (
-                                        <div className="space-y-3 max-h-64 overflow-y-auto">
+                                        <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
                                             {/* Predict History */}
                                             {captionsPredictHistory.map((item) => {
                                                 const prediction = item.data?.prediction || {};
                                                 const level = prediction.level || 'Medium';
                                                 const score = prediction.score || 50;
-                                                const mediaUrl = item.data?.mediaUrl;
-                                                const mediaType = item.data?.mediaType || 'image';
                                                 const ideas = item.data?.ideas || item.data?.postIdeas || item.data?.nextPostIdeas;
                                                 const hasIdeas = Array.isArray(ideas) && ideas.length > 0;
                                                 const ideaTitle = hasIdeas ? (ideas[0]?.title || 'Post idea') : '';
                                                 const summary = item.data?.summary || '';
+                                                const displayText = hasIdeas ? `${ideaTitle}${summary ? ` — ${summary}` : ''}` : (item.data?.originalCaption?.substring(0, 100) || 'What to post next');
                                                 return (
                                                     <div
                                                         key={item.id}
-                                                        className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
+                                                        className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-2 bg-gray-50 dark:bg-gray-700/30 rounded border border-gray-200 dark:border-gray-700"
                                                     >
-                                                        <div className="flex items-start justify-between mb-2 gap-3">
-                                                            {mediaUrl && (
-                                                                <div className="flex-shrink-0">
-                                                                    {mediaType === 'video' ? (
-                                                                        <video src={mediaUrl} className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" controls={false} muted />
-                                                                    ) : (
-                                                                        <img src={mediaUrl} alt="Preview" className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
-                                                                    )}
-                                                                </div>
-                                                            )}
-                                                            <div className="flex-1 min-w-0">
-                                                                <div className="flex items-center gap-2 mb-1">
-                                                                    <span className="text-xs font-semibold text-purple-600 dark:text-purple-400">WHAT TO POST NEXT</span>
-                                                                    {!hasIdeas && (
-                                                                        <span className={`text-xs px-2 py-0.5 rounded ${
-                                                                            level === 'High' ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' :
-                                                                            level === 'Medium' ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300' :
-                                                                            'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
-                                                                        }`}>
-                                                                            {level} ({score}/100)
-                                                                        </span>
-                                                                    )}
-                                                                    {hasIdeas && (
-                                                                        <span className="text-xs px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300">
-                                                                            {ideas.length} ideas
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                                {hasIdeas ? (
-                                                                    <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
-                                                                        {ideaTitle}{summary ? ` — ${summary}` : ''}
-                                                                    </p>
-                                                                ) : (
-                                                                    <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
-                                                                        {item.data?.originalCaption?.substring(0, 100)}...
-                                                                    </p>
-                                                                )}
-                                                                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                                                                    {item.createdAt?.toDate ? new Date(item.createdAt.toDate()).toLocaleString() : (item.createdAt ? new Date(item.createdAt).toLocaleString() : 'Recently')}
-                                                                </p>
-                                                            </div>
-                                                            <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                                                                <button
-                                                                    onClick={() => {
-                                                                        setPredictResult(item.data);
-                                                                        setShowPredictModal(true);
-                                                                    }}
-                                                                    className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                                                >
-                                                                    View
-                                                                </button>
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleDeletePredictHistory(item.id);
-                                                                    }}
-                                                                    className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
-                                                                    title="Delete"
-                                                                >
-                                                                    <TrashIcon className="w-4 h-4" />
-                                                                </button>
-                                                            </div>
+                                                        <div className="flex-1">
+                                                            <p className="text-sm font-medium text-gray-900 dark:text-white">
+                                                                {hasIdeas ? `${ideas.length} ideas` : `What to Post Next (${level}, ${score}/100)`}
+                                                            </p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                                {displayText} • {item.createdAt?.toDate ? new Date(item.createdAt.toDate()).toLocaleDateString() : (item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'Recently')}
+                                                            </p>
+                                                        </div>
+                                                        <div className="flex gap-2 sm:justify-end">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setPredictResult(item.data);
+                                                                    setShowPredictModal(true);
+                                                                    setShowCaptionsHistory(false);
+                                                                    showToast?.('Loaded', 'success');
+                                                                }}
+                                                                className="px-2 py-1 text-xs bg-primary-600 text-white rounded hover:bg-primary-700"
+                                                            >
+                                                                Load
+                                                            </button>
+                                                            <button
+                                                                onClick={async (e) => {
+                                                                    e.stopPropagation();
+                                                                    await handleDeletePredictHistory(item.id);
+                                                                }}
+                                                                className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                                                            >
+                                                                Delete
+                                                            </button>
                                                         </div>
                                                     </div>
                                                 );
@@ -4070,58 +4036,41 @@ Output format:
                                             {/* Repurpose History */}
                                             {captionsRepurposeHistory.map((item) => {
                                                 const platforms = item.data?.repurposedContent?.length || 0;
-                                                const mediaUrl = item.data?.mediaUrl;
-                                                const mediaType = item.data?.mediaType || 'image';
+                                                const displayText = item.data?.originalContent?.substring(0, 100) || 'Repurposed content';
                                                 return (
                                                     <div
                                                         key={item.id}
-                                                        className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
+                                                        className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-2 bg-gray-50 dark:bg-gray-700/30 rounded border border-gray-200 dark:border-gray-700"
                                                     >
-                                                        <div className="flex items-start justify-between mb-2 gap-3">
-                                                            {mediaUrl && (
-                                                                <div className="flex-shrink-0">
-                                                                    {mediaType === 'video' ? (
-                                                                        <video src={mediaUrl} className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" controls={false} muted />
-                                                                    ) : (
-                                                                        <img src={mediaUrl} alt="Preview" className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
-                                                                    )}
-                                                                </div>
-                                                            )}
-                                                            <div className="flex-1 min-w-0">
-                                                                <div className="flex items-center gap-2 mb-1">
-                                                                    <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">REPURPOSE</span>
-                                                                    <span className="text-xs text-gray-500 dark:text-gray-400">
-                                                                        {platforms} platforms
-                                                                    </span>
-                                                                </div>
-                                                                <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
-                                                                    {item.data?.originalContent?.substring(0, 100)}...
-                                                                </p>
-                                                                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                                                                    {item.createdAt?.toDate ? new Date(item.createdAt.toDate()).toLocaleString() : (item.createdAt ? new Date(item.createdAt).toLocaleString() : 'Recently')}
-                                                                </p>
-                                                            </div>
-                                                            <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                                                                <button
-                                                                    onClick={() => {
-                                                                        setRepurposeResult(item.data);
-                                                                        setShowRepurposeModal(true);
-                                                                    }}
-                                                                    className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                                                >
-                                                                    View
-                                                                </button>
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleDeleteRepurposeHistory(item.id);
-                                                                    }}
-                                                                    className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
-                                                                    title="Delete"
-                                                                >
-                                                                    <TrashIcon className="w-4 h-4" />
-                                                                </button>
-                                                            </div>
+                                                        <div className="flex-1">
+                                                            <p className="text-sm font-medium text-gray-900 dark:text-white">
+                                                                Repurpose ({platforms} platforms)
+                                                            </p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                                {displayText} • {item.createdAt?.toDate ? new Date(item.createdAt.toDate()).toLocaleDateString() : (item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'Recently')}
+                                                            </p>
+                                                        </div>
+                                                        <div className="flex gap-2 sm:justify-end">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setRepurposeResult(item.data);
+                                                                    setShowRepurposeModal(true);
+                                                                    setShowCaptionsHistory(false);
+                                                                    showToast?.('Loaded', 'success');
+                                                                }}
+                                                                className="px-2 py-1 text-xs bg-primary-600 text-white rounded hover:bg-primary-700"
+                                                            >
+                                                                Load
+                                                            </button>
+                                                            <button
+                                                                onClick={async (e) => {
+                                                                    e.stopPropagation();
+                                                                    await handleDeleteRepurposeHistory(item.id);
+                                                                }}
+                                                                className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                                                            >
+                                                                Delete
+                                                            </button>
                                                         </div>
                                                     </div>
                                                 );
@@ -4133,41 +4082,37 @@ Output format:
                                                 return (
                                                     <div
                                                         key={item.id}
-                                                        className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
+                                                        className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-2 bg-gray-50 dark:bg-gray-700/30 rounded border border-gray-200 dark:border-gray-700"
                                                     >
-                                                        <div className="flex items-start justify-between mb-2 gap-3">
-                                                            <div className="flex-1 min-w-0">
-                                                                <div className="flex items-center gap-2 mb-1">
-                                                                    <span className="text-xs font-semibold text-purple-600 dark:text-purple-400">CONTENT GAP ANALYSIS</span>
-                                                                </div>
-                                                                <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
-                                                                    {summary.substring(0, 100)}...
-                                                                </p>
-                                                                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                                                                    {item.createdAt?.toDate ? new Date(item.createdAt.toDate()).toLocaleString() : (item.createdAt ? new Date(item.createdAt).toLocaleString() : 'Recently')}
-                                                                </p>
-                                                            </div>
-                                                            <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                                                                <button
-                                                                    onClick={() => {
-                                                                        setContentGapAnalysis(item.data);
-                                                                        setShowGapAnalysisModal(true);
-                                                                    }}
-                                                                    className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                                                >
-                                                                    View
-                                                                </button>
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleDeleteGapAnalysisHistory(item.id);
-                                                                    }}
-                                                                    className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
-                                                                    title="Delete"
-                                                                >
-                                                                    <TrashIcon className="w-4 h-4" />
-                                                                </button>
-                                                            </div>
+                                                        <div className="flex-1">
+                                                            <p className="text-sm font-medium text-gray-900 dark:text-white">
+                                                                Content Gap Analysis
+                                                            </p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                                {summary.substring(0, 100)} • {item.createdAt?.toDate ? new Date(item.createdAt.toDate()).toLocaleDateString() : (item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'Recently')}
+                                                            </p>
+                                                        </div>
+                                                        <div className="flex gap-2 sm:justify-end">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setContentGapAnalysis(item.data);
+                                                                    setShowGapAnalysisModal(true);
+                                                                    setShowCaptionsHistory(false);
+                                                                    showToast?.('Loaded', 'success');
+                                                                }}
+                                                                className="px-2 py-1 text-xs bg-primary-600 text-white rounded hover:bg-primary-700"
+                                                            >
+                                                                Load
+                                                            </button>
+                                                            <button
+                                                                onClick={async (e) => {
+                                                                    e.stopPropagation();
+                                                                    await handleDeleteGapAnalysisHistory(item.id);
+                                                                }}
+                                                                className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                                                            >
+                                                                Delete
+                                                            </button>
                                                         </div>
                                                     </div>
                                                 );
@@ -4956,6 +4901,79 @@ Output format:
             {activeTab === 'postIdeas' && (
                 <div className="space-y-6">
                     <PlatformTargetingCard />
+
+                    {/* Saved Post Ideas History */}
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                Saved Post Ideas ({savedPostIdeas.length})
+                            </h3>
+                            <button
+                                onClick={() => setShowPostIdeasHistory(!showPostIdeasHistory)}
+                                className="relative px-3 py-1.5 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
+                            >
+                                {showPostIdeasHistory ? 'Hide' : 'Show'} History
+                                {savedPostIdeas.length > 0 && (
+                                    <span className="absolute -top-2 -right-2 bg-primary-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                                        {savedPostIdeas.length}
+                                    </span>
+                                )}
+                            </button>
+                        </div>
+                        {showPostIdeasHistory && (
+                            <>
+                                {savedPostIdeas.length === 0 ? (
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">No saved post ideas yet.</p>
+                                ) : (
+                                    <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+                                {savedPostIdeas.map((saved, index) => {
+                                    const ideasCount = saved.data?.ideas && Array.isArray(saved.data.ideas) ? saved.data.ideas.length : 0;
+                                    const firstIdea = saved.data?.ideas && Array.isArray(saved.data.ideas) && saved.data.ideas.length > 0 ? saved.data.ideas[0] : '';
+                                    const displayText = firstIdea ? firstIdea.substring(0, 100) : (saved.title || 'Post ideas');
+                                    return (
+                                        <div
+                                            key={saved.id || index}
+                                            className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-2 bg-gray-50 dark:bg-gray-700/30 rounded border border-gray-200 dark:border-gray-700"
+                                        >
+                                            <div className="flex-1">
+                                                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                                                    {saved.title || `Post Ideas (${ideasCount} ideas)`}
+                                                </p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                    {displayText} • {saved.createdAt?.toDate?.() ? new Date(saved.createdAt.toDate()).toLocaleDateString() : new Date(saved.createdAt || Date.now()).toLocaleDateString()}
+                                                </p>
+                                            </div>
+                                            <div className="flex gap-2 sm:justify-end">
+                                                <button
+                                                    onClick={() => {
+                                                        setViewingSavedItem(saved);
+                                                        setShowSavedItemModal(true);
+                                                        setShowPostIdeasHistory(false);
+                                                        showToast?.('Loaded', 'success');
+                                                    }}
+                                                    className="px-2 py-1 text-xs bg-primary-600 text-white rounded hover:bg-primary-700"
+                                                >
+                                                    Load
+                                                </button>
+                                                <button
+                                                    onClick={async (e) => {
+                                                        e.stopPropagation();
+                                                        await handleDeleteSavedItem(saved.id, 'post_ideas');
+                                                    }}
+                                                    className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                                                >
+                                                    Delete
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                            </>
+                        )}
+                    </div>
+
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
@@ -5082,91 +5100,6 @@ Output format:
                         </div>
                     </div>
 
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-                        <div className="flex items-center justify-between mb-3">
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                                Saved Post Ideas ({savedPostIdeas.length})
-                            </h3>
-                            <button
-                                onClick={() => setShowPostIdeasHistory(!showPostIdeasHistory)}
-                                className="relative px-3 py-1.5 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
-                            >
-                                {showPostIdeasHistory ? 'Hide' : 'Show'} History
-                                {savedPostIdeas.length > 0 && (
-                                    <span className="absolute -top-2 -right-2 bg-primary-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                                        {savedPostIdeas.length}
-                                    </span>
-                                )}
-                            </button>
-                        </div>
-                        {showPostIdeasHistory && (
-                            <>
-                                {savedPostIdeas.length === 0 ? (
-                                    <p className="text-sm text-gray-500 dark:text-gray-400">No saved post ideas yet.</p>
-                                ) : (
-                                    <div className="space-y-3 max-h-64 overflow-y-auto">
-                                {savedPostIdeas.map((saved, index) => {
-                                    const mediaUrl = saved.data?.mediaUrl;
-                                    const mediaType = saved.data?.mediaType || 'image';
-                                    return (
-                                        <div
-                                            key={saved.id || index}
-                                            className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
-                                        >
-                                            <div className="flex items-start justify-between mb-2 gap-3">
-                                                {mediaUrl && (
-                                                    <div className="flex-shrink-0">
-                                                        {mediaType === 'video' ? (
-                                                            <video src={mediaUrl} className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
-                                                        ) : (
-                                                            <img src={mediaUrl} alt="Preview" className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
-                                                        )}
-                                                    </div>
-                                                )}
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                                                        {saved.title || `Saved ${new Date(saved.createdAt?.toDate?.() || saved.createdAt).toLocaleDateString()}`}
-                                                    </p>
-                                                    {saved.data?.ideas && Array.isArray(saved.data.ideas) && saved.data.ideas.length > 0 && (
-                                                        <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
-                                                            {saved.data.ideas[0]?.substring(0, 100)}...
-                                                        </p>
-                                                    )}
-                                                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                                                        {saved.createdAt?.toDate?.() ? new Date(saved.createdAt.toDate()).toLocaleString() : 'Recently'}
-                                                    </p>
-                                                </div>
-                                                <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                                                    <button
-                                                        onClick={() => {
-                                                            setViewingSavedItem(saved);
-                                                            setShowSavedItemModal(true);
-                                                        }}
-                                                        className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                                    >
-                                                        View
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleDeleteSavedItem(saved.id, 'post_ideas');
-                                                        }}
-                                                        className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
-                                                        title="Delete"
-                                                    >
-                                                        <TrashIcon className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                            </>
-                        )}
-                    </div>
-
                     {/* Generated Post Ideas */}
                     {Array.isArray(generatedPostIdeas) && generatedPostIdeas.length > 0 && (
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
@@ -5197,28 +5130,100 @@ Output format:
             {/* Trends Tab */}
             {activeTab === 'trends' && (
                 <div className="space-y-6">
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                                Find Trends
-                            </h2>
+                    <PlatformTargetingCard />
+
+                    {/* Trends History Section */}
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                History ({trendsHistory.length})
+                            </h3>
                             <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
                                 <span>Usage: {monthlyTrendsUsed}/10</span>
                                 {trendsLastScanDate && (
                                     <span>Updated {new Date(trendsLastScanDate).toLocaleDateString()}</span>
                                 )}
-                                <button
-                                    onClick={() => setShowTrendsHistory(!showTrendsHistory)}
-                                    className="relative px-3 py-1.5 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
-                                >
-                                    {showTrendsHistory ? 'Hide' : 'Show'} History
-                                    {trendsHistory.length > 0 && (
-                                        <span className="absolute -top-2 -right-2 bg-primary-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                                            {trendsHistory.length}
-                                        </span>
-                                    )}
-                                </button>
                             </div>
+                            <button
+                                onClick={() => {
+                                    setShowTrendsHistory(!showTrendsHistory);
+                                    if (!showTrendsHistory) {
+                                        loadTrendsHistory();
+                                    }
+                                }}
+                                className="relative px-3 py-1.5 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
+                            >
+                                {showTrendsHistory ? 'Hide' : 'Show'} History
+                                {trendsHistory.length > 0 && (
+                                    <span className="absolute -top-2 -right-2 bg-primary-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                                        {trendsHistory.length}
+                                    </span>
+                                )}
+                            </button>
+                        </div>
+                        {showTrendsHistory && (
+                            <>
+                                {trendsHistory.length === 0 ? (
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">No scans yet.</p>
+                                ) : (
+                                    <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+                                        {trendsHistory.map((item) => (
+                                            <div
+                                                key={item.id}
+                                                className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-2 bg-gray-50 dark:bg-gray-700/30 rounded border border-gray-200 dark:border-gray-700"
+                                            >
+                                                <div className="flex-1">
+                                                    <p className="text-sm font-medium text-gray-900 dark:text-white">{item.query || 'Trend scan'}</p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                        {(item.results?.length || 0)} trends • {item.createdAt?.toDate?.() ? new Date(item.createdAt.toDate()).toLocaleDateString() : new Date(item.createdAt || Date.now()).toLocaleDateString()}
+                                                    </p>
+                                                </div>
+                                                <div className="flex gap-2 sm:justify-end">
+                                                    <button
+                                                        onClick={() => {
+                                                            setTrendResults(item.results || []);
+                                                            setTrendsNiche(item.query || '');
+                                                            const createdAt = item.createdAt?.toDate?.() ? item.createdAt.toDate().toISOString() : new Date(item.createdAt || Date.now()).toISOString();
+                                                            setTrendsLastScanDate(createdAt);
+                                                            setShowTrendsHistory(false);
+                                                            showToast?.('Trends loaded', 'success');
+                                                        }}
+                                                        className="px-2 py-1 text-xs bg-primary-600 text-white rounded hover:bg-primary-700"
+                                                    >
+                                                        Load
+                                                    </button>
+                                                    <button
+                                                        onClick={async () => {
+                                                            if (!user?.id) return;
+                                                            if (window.confirm('Delete this scan from history?')) {
+                                                                try {
+                                                                    await deleteDoc(doc(db, 'users', user.id, 'onlyfans_trends_history', item.id));
+                                                                    loadTrendsHistory();
+                                                                    showToast?.('Scan deleted', 'success');
+                                                                } catch (error) {
+                                                                    console.error('Failed to delete scan:', error);
+                                                                    showToast?.('Failed to delete scan', 'error');
+                                                                }
+                                                            }
+                                                        }}
+                                                        className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
+
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                                Find Trends
+                            </h2>
                         </div>
                         <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                             Pulls adult creator trends (updated twice weekly) for OnlyFans, Fansly, and Fanvue.
@@ -5254,8 +5259,6 @@ Output format:
                             <div className="mt-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-3 rounded-lg">
                                 <p className="text-sm text-red-600 dark:text-red-400">{trendsError}</p>
                             </div>
-                        )}
-                            </>
                         )}
                     </div>
 
@@ -5411,64 +5414,6 @@ Output format:
                             </div>
                         </div>
                     )}
-
-                    {showTrendsHistory && (
-                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">History</h3>
-                            {trendsHistory.length === 0 ? (
-                                <p className="text-sm text-gray-500 dark:text-gray-400">No scans yet.</p>
-                            ) : (
-                                <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
-                                    {trendsHistory.map((item) => (
-                                        <div
-                                            key={item.id}
-                                            className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-2 bg-gray-50 dark:bg-gray-700/30 rounded border border-gray-200 dark:border-gray-700"
-                                        >
-                                            <div className="flex-1">
-                                                <p className="text-sm font-medium text-gray-900 dark:text-white">{item.query || 'Trend scan'}</p>
-                                                <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                    {(item.results?.length || 0)} trends • {item.createdAt?.toDate?.() ? new Date(item.createdAt.toDate()).toLocaleDateString() : new Date(item.createdAt || Date.now()).toLocaleDateString()}
-                                                </p>
-                                            </div>
-                                            <div className="flex gap-2 sm:justify-end">
-                                                <button
-                                                    onClick={() => {
-                                                        setTrendResults(item.results || []);
-                                                        setTrendsNiche(item.query || '');
-                                                        const createdAt = item.createdAt?.toDate?.() ? item.createdAt.toDate().toISOString() : new Date(item.createdAt || Date.now()).toISOString();
-                                                        setTrendsLastScanDate(createdAt);
-                                                        setShowTrendsHistory(false);
-                                                        showToast?.('Trends loaded', 'success');
-                                                    }}
-                                                    className="px-2 py-1 text-xs bg-primary-600 text-white rounded hover:bg-primary-700"
-                                                >
-                                                    Load
-                                                </button>
-                                                <button
-                                                    onClick={async () => {
-                                                        if (!user?.id) return;
-                                                        if (window.confirm('Delete this scan from history?')) {
-                                                            try {
-                                                                await deleteDoc(doc(db, 'users', user.id, 'onlyfans_trends_history', item.id));
-                                                                loadTrendsHistory();
-                                                                showToast?.('Scan deleted', 'success');
-                                                            } catch (error) {
-                                                                console.error('Failed to delete scan:', error);
-                                                                showToast?.('Failed to delete scan', 'error');
-                                                            }
-                                                        }
-                                                    }}
-                                                    className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
-                                                >
-                                                    Delete
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    )}
                 </div>
             )}
 
@@ -5476,6 +5421,79 @@ Output format:
             {activeTab === 'shootConcepts' && (
                 <div className="space-y-6">
                     <PlatformTargetingCard />
+
+                    {/* Saved Shoot Concepts History */}
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                Saved Shoot Concepts ({savedShootConcepts.length})
+                            </h3>
+                            <button
+                                onClick={() => setShowShootConceptsHistory(!showShootConceptsHistory)}
+                                className="relative px-3 py-1.5 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
+                            >
+                                {showShootConceptsHistory ? 'Hide' : 'Show'} History
+                                {savedShootConcepts.length > 0 && (
+                                    <span className="absolute -top-2 -right-2 bg-primary-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                                        {savedShootConcepts.length}
+                                    </span>
+                                )}
+                            </button>
+                        </div>
+                        {showShootConceptsHistory && (
+                            <>
+                                {savedShootConcepts.length === 0 ? (
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">No saved shoot concepts yet.</p>
+                                ) : (
+                                    <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+                                {savedShootConcepts.map((saved, index) => {
+                                    const conceptsCount = saved.data?.concepts && Array.isArray(saved.data.concepts) ? saved.data.concepts.length : 0;
+                                    const firstConcept = saved.data?.concepts && Array.isArray(saved.data.concepts) && saved.data.concepts.length > 0 ? saved.data.concepts[0] : '';
+                                    const displayText = firstConcept ? firstConcept.substring(0, 100) : (saved.title || 'Shoot concepts');
+                                    return (
+                                        <div
+                                            key={saved.id || index}
+                                            className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-2 bg-gray-50 dark:bg-gray-700/30 rounded border border-gray-200 dark:border-gray-700"
+                                        >
+                                            <div className="flex-1">
+                                                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                                                    {saved.title || `Shoot Concepts (${conceptsCount} concepts)`}
+                                                </p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                    {displayText} • {saved.createdAt?.toDate?.() ? new Date(saved.createdAt.toDate()).toLocaleDateString() : new Date(saved.createdAt || Date.now()).toLocaleDateString()}
+                                                </p>
+                                            </div>
+                                            <div className="flex gap-2 sm:justify-end">
+                                                <button
+                                                    onClick={() => {
+                                                        setViewingSavedItem(saved);
+                                                        setShowSavedItemModal(true);
+                                                        setShowShootConceptsHistory(false);
+                                                        showToast?.('Loaded', 'success');
+                                                    }}
+                                                    className="px-2 py-1 text-xs bg-primary-600 text-white rounded hover:bg-primary-700"
+                                                >
+                                                    Load
+                                                </button>
+                                                <button
+                                                    onClick={async (e) => {
+                                                        e.stopPropagation();
+                                                        await handleDeleteSavedItem(saved.id, 'shoot_concepts');
+                                                    }}
+                                                    className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                                                >
+                                                    Delete
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                            </>
+                        )}
+                    </div>
+
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
@@ -5602,92 +5620,6 @@ Output format:
                         </div>
                     </div>
 
-                    {/* Saved Shoot Concepts */}
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-                        <div className="flex items-center justify-between mb-3">
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                                Saved Shoot Concepts ({savedShootConcepts.length})
-                            </h3>
-                            <button
-                                onClick={() => setShowShootConceptsHistory(!showShootConceptsHistory)}
-                                className="relative px-3 py-1.5 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
-                            >
-                                {showShootConceptsHistory ? 'Hide' : 'Show'} History
-                                {savedShootConcepts.length > 0 && (
-                                    <span className="absolute -top-2 -right-2 bg-primary-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                                        {savedShootConcepts.length}
-                                    </span>
-                                )}
-                            </button>
-                        </div>
-                        {showShootConceptsHistory && (
-                            <>
-                                {savedShootConcepts.length === 0 ? (
-                                    <p className="text-sm text-gray-500 dark:text-gray-400">No saved shoot concepts yet.</p>
-                                ) : (
-                                    <div className="space-y-3 max-h-64 overflow-y-auto">
-                                {savedShootConcepts.map((saved, index) => {
-                                    const mediaUrl = saved.data?.mediaUrl;
-                                    const mediaType = saved.data?.mediaType || 'image';
-                                    return (
-                                        <div
-                                            key={saved.id || index}
-                                            className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
-                                        >
-                                            <div className="flex items-start justify-between mb-2 gap-3">
-                                                {mediaUrl && (
-                                                    <div className="flex-shrink-0">
-                                                        {mediaType === 'video' ? (
-                                                            <video src={mediaUrl} className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
-                                                        ) : (
-                                                            <img src={mediaUrl} alt="Preview" className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
-                                                        )}
-                                                    </div>
-                                                )}
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                                                        {saved.title || `Saved ${new Date(saved.createdAt?.toDate?.() || saved.createdAt).toLocaleDateString()}`}
-                                                    </p>
-                                                    {saved.data?.concepts && Array.isArray(saved.data.concepts) && saved.data.concepts.length > 0 && (
-                                                        <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
-                                                            {saved.data.concepts[0]?.substring(0, 100)}...
-                                                        </p>
-                                                    )}
-                                                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                                                        {saved.createdAt?.toDate?.() ? new Date(saved.createdAt.toDate()).toLocaleString() : 'Recently'}
-                                                    </p>
-                                                </div>
-                                                <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                                                    <button
-                                                        onClick={() => {
-                                                            setViewingSavedItem(saved);
-                                                            setShowSavedItemModal(true);
-                                                        }}
-                                                        className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                                    >
-                                                        View
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleDeleteSavedItem(saved.id, 'shoot_concepts');
-                                                        }}
-                                                        className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
-                                                        title="Delete"
-                                                    >
-                                                        <TrashIcon className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                            </>
-                        )}
-                    </div>
-
                     {/* Generated Shoot Concepts */}
                     {Array.isArray(generatedShootConcepts) && generatedShootConcepts.length > 0 && (
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
@@ -5719,6 +5651,77 @@ Output format:
             {activeTab === 'weeklyPlan' && (
                 <div className="space-y-6">
                     <PlatformTargetingCard />
+
+                    {/* Saved Weekly Plans History */}
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                Saved Weekly Plans ({savedWeeklyPlans.length})
+                            </h3>
+                            <button
+                                onClick={() => setShowWeeklyPlanHistory(!showWeeklyPlanHistory)}
+                                className="relative px-3 py-1.5 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
+                            >
+                                {showWeeklyPlanHistory ? 'Hide' : 'Show'} History
+                                {savedWeeklyPlans.length > 0 && (
+                                    <span className="absolute -top-2 -right-2 bg-primary-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                                        {savedWeeklyPlans.length}
+                                    </span>
+                                )}
+                            </button>
+                        </div>
+                        {showWeeklyPlanHistory && (
+                            <>
+                                {savedWeeklyPlans.length === 0 ? (
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">No saved weekly plans yet.</p>
+                                ) : (
+                                    <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+                                        {savedWeeklyPlans.map((saved, index) => {
+                                            const planSummary = saved.data?.plan ? getWeeklyPlanSummary(saved.data.plan) : 'Weekly plan';
+                                            return (
+                                                <div
+                                                    key={saved.id || index}
+                                                    className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-2 bg-gray-50 dark:bg-gray-700/30 rounded border border-gray-200 dark:border-gray-700"
+                                                >
+                                                    <div className="flex-1">
+                                                        <p className="text-sm font-medium text-gray-900 dark:text-white">
+                                                            {saved.title || 'Weekly Plan'}
+                                                        </p>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                            {planSummary} • {saved.createdAt?.toDate?.() ? new Date(saved.createdAt.toDate()).toLocaleDateString() : new Date(saved.createdAt || Date.now()).toLocaleDateString()}
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex gap-2 sm:justify-end">
+                                                        <button
+                                                            onClick={() => {
+                                                                setViewingSavedItem(saved);
+                                                                setShowSavedItemModal(true);
+                                                                setShowWeeklyPlanHistory(false);
+                                                                showToast?.('Loaded', 'success');
+                                                            }}
+                                                            className="px-2 py-1 text-xs bg-primary-600 text-white rounded hover:bg-primary-700"
+                                                        >
+                                                            Load
+                                                        </button>
+                                                        <button
+                                                            onClick={async (e) => {
+                                                                e.stopPropagation();
+                                                                await handleDeleteSavedItem(saved.id, 'weekly_plan');
+                                                            }}
+                                                            className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                                                        >
+                                                            Delete
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
+
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
@@ -5845,92 +5848,6 @@ Output format:
                         </div>
                     </div>
 
-                    {/* Saved Weekly Plans */}
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-                        <div className="flex items-center justify-between mb-3">
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                                Saved Weekly Plans ({savedWeeklyPlans.length})
-                            </h3>
-                            <button
-                                onClick={() => setShowWeeklyPlanHistory(!showWeeklyPlanHistory)}
-                                className="relative px-3 py-1.5 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
-                            >
-                                {showWeeklyPlanHistory ? 'Hide' : 'Show'} History
-                                {savedWeeklyPlans.length > 0 && (
-                                    <span className="absolute -top-2 -right-2 bg-primary-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                                        {savedWeeklyPlans.length}
-                                    </span>
-                                )}
-                            </button>
-                        </div>
-                        {showWeeklyPlanHistory && (
-                            <>
-                                {savedWeeklyPlans.length === 0 ? (
-                                    <p className="text-sm text-gray-500 dark:text-gray-400">No saved weekly plans yet.</p>
-                                ) : (
-                                    <div className="space-y-3 max-h-64 overflow-y-auto">
-                                        {savedWeeklyPlans.map((saved, index) => {
-                                            const mediaUrl = saved.data?.mediaUrl;
-                                            const mediaType = saved.data?.mediaType || 'image';
-                                            return (
-                                                <div
-                                                    key={saved.id || index}
-                                                    className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
-                                                >
-                                                    <div className="flex items-start justify-between mb-2 gap-3">
-                                                        {mediaUrl && (
-                                                            <div className="flex-shrink-0">
-                                                                {mediaType === 'video' ? (
-                                                                    <video src={mediaUrl} className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
-                                                                ) : (
-                                                                    <img src={mediaUrl} alt="Preview" className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                        <div className="flex-1 min-w-0">
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                                                                {saved.title || `Saved ${new Date(saved.createdAt?.toDate?.() || saved.createdAt).toLocaleDateString()}`}
-                                                            </p>
-                                                            {saved.data?.plan && (
-                                                                <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
-                                                                    {getWeeklyPlanSummary(saved.data.plan)}
-                                                                </p>
-                                                            )}
-                                                            <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                                                                {saved.createdAt?.toDate?.() ? new Date(saved.createdAt.toDate()).toLocaleString() : 'Recently'}
-                                                            </p>
-                                                        </div>
-                                                        <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                                                            <button
-                                                                onClick={() => {
-                                                                    setViewingSavedItem(saved);
-                                                                    setShowSavedItemModal(true);
-                                                                }}
-                                                                className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                                            >
-                                                                View
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleDeleteSavedItem(saved.id, 'weekly_plan');
-                                                                }}
-                                                                className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
-                                                                title="Delete"
-                                                            >
-                                                                <TrashIcon className="w-4 h-4" />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-                            </>
-                        )}
-                    </div>
-
                     {/* Generated Weekly Plan */}
                     {generatedWeeklyPlan && (
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
@@ -5978,6 +5895,77 @@ Output format:
             {activeTab === 'monetizationPlanner' && (
                 <div className="space-y-6">
                     <PlatformTargetingCard />
+
+                    {/* Saved Monetization Plans History */}
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                Saved Monetization Plans ({savedMonetizationPlans.length})
+                            </h3>
+                            <button
+                                onClick={() => setShowMonetizationHistory(!showMonetizationHistory)}
+                                className="relative px-3 py-1.5 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
+                            >
+                                {showMonetizationHistory ? 'Hide' : 'Show'} History
+                                {savedMonetizationPlans.length > 0 && (
+                                    <span className="absolute -top-2 -right-2 bg-primary-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                                        {savedMonetizationPlans.length}
+                                    </span>
+                                )}
+                            </button>
+                        </div>
+                        {showMonetizationHistory && (
+                            <>
+                                {savedMonetizationPlans.length === 0 ? (
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">No saved monetization plans yet.</p>
+                                ) : (
+                                    <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+                                {savedMonetizationPlans.map((saved, index) => {
+                                    const summary = saved.data?.summary ? saved.data.summary.substring(0, 100) : 'Monetization plan';
+                                    return (
+                                        <div
+                                            key={saved.id || index}
+                                            className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-2 bg-gray-50 dark:bg-gray-700/30 rounded border border-gray-200 dark:border-gray-700"
+                                        >
+                                            <div className="flex-1">
+                                                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                                                    {saved.title || 'Monetization Plan'}
+                                                </p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                    {summary} • {saved.createdAt?.toDate?.() ? new Date(saved.createdAt.toDate()).toLocaleDateString() : new Date(saved.createdAt || Date.now()).toLocaleDateString()}
+                                                </p>
+                                            </div>
+                                            <div className="flex gap-2 sm:justify-end">
+                                                <button
+                                                    onClick={() => {
+                                                        setViewingSavedItem(saved);
+                                                        setShowSavedItemModal(true);
+                                                        setShowMonetizationHistory(false);
+                                                        showToast?.('Loaded', 'success');
+                                                    }}
+                                                    className="px-2 py-1 text-xs bg-primary-600 text-white rounded hover:bg-primary-700"
+                                                >
+                                                    Load
+                                                </button>
+                                                <button
+                                                    onClick={async (e) => {
+                                                        e.stopPropagation();
+                                                        await handleDeleteSavedItem(saved.id, 'monetization_plan');
+                                                    }}
+                                                    className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                                                >
+                                                    Delete
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                                )}
+                            </>
+                        )}
+                    </div>
+
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
@@ -6219,90 +6207,6 @@ Output format:
                                 )}
                             </button>
                         </div>
-                    </div>
-
-                    {/* Saved Monetization Plans */}
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-                        <div className="flex items-center justify-between mb-3">
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                                Saved Monetization Plans ({savedMonetizationPlans.length})
-                            </h3>
-                            <button
-                                onClick={() => setShowMonetizationHistory(!showMonetizationHistory)}
-                                className="relative px-3 py-1.5 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
-                            >
-                                {showMonetizationHistory ? 'Hide' : 'Show'} History
-                                {savedMonetizationPlans.length > 0 && (
-                                    <span className="absolute -top-2 -right-2 bg-primary-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                                        {savedMonetizationPlans.length}
-                                    </span>
-                                )}
-                            </button>
-                        </div>
-                        {showMonetizationHistory && (
-                            <>
-                                {savedMonetizationPlans.length === 0 ? (
-                                    <p className="text-sm text-gray-500 dark:text-gray-400">No saved monetization plans yet.</p>
-                                ) : (
-                                    <div className="space-y-3 max-h-64 overflow-y-auto">
-                                {savedMonetizationPlans.map((saved, index) => {
-                                    const mediaUrl = saved.data?.mediaUrl;
-                                    const mediaType = saved.data?.mediaType || 'image';
-                                    return (
-                                        <div
-                                            key={saved.id || index}
-                                            className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
-                                        >
-                                            <div className="flex items-start justify-between mb-2 gap-3">
-                                                {mediaUrl && (
-                                                    <div className="flex-shrink-0">
-                                                        {mediaType === 'video' ? (
-                                                            <video src={mediaUrl} className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
-                                                        ) : (
-                                                            <img src={mediaUrl} alt="Preview" className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
-                                                        )}
-                                                    </div>
-                                                )}
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                                                        {saved.title || `Saved ${new Date(saved.createdAt?.toDate?.() || saved.createdAt).toLocaleDateString()}`}
-                                                    </p>
-                                                    {saved.data?.summary && (
-                                                        <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
-                                                            {saved.data.summary.substring(0, 100)}...
-                                                        </p>
-                                                    )}
-                                                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                                                        {saved.createdAt?.toDate?.() ? new Date(saved.createdAt.toDate()).toLocaleString() : 'Recently'}
-                                                    </p>
-                                                </div>
-                                                <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                                                    <button
-                                                        onClick={() => {
-                                                            setViewingSavedItem(saved);
-                                                            setShowSavedItemModal(true);
-                                                        }}
-                                                        className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                                    >
-                                                        View
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleDeleteSavedItem(saved.id, 'monetization_plan');
-                                                        }}
-                                                        className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
-                                                        title="Delete"
-                                                    >
-                                                        <TrashIcon className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
                     </div>
 
                     {/* Generated Monetization Plan */}
