@@ -786,7 +786,7 @@ const WeeklyPlanFormatter: React.FC<{ plan: any } & WeeklyPlanActionHandlers> = 
                                                                 className="px-2.5 py-1 text-xs font-medium rounded-md bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-60"
                                                                 disabled={isUsed || !cardState?.mediaUrl || cardState?.isGenerating}
                                                             >
-                                                                {cardState?.isGenerating ? 'Generating...' : 'Generate caption'}
+                                                                {cardState?.isGenerating ? 'Generating...' : 'Regenerate caption'}
                                                             </button>
                                                         )}
                                                         {onAddToCalendar && (
