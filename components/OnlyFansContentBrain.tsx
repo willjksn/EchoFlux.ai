@@ -1458,7 +1458,7 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
     }
 
     const handleGenerateCaptions = async (promptOverride?: string) => {
-        const promptSeed = promptOverride ?? captionPrompt;
+        const promptSeed = (promptOverride ?? captionPrompt) || '';
         if (promptOverride && promptOverride !== captionPrompt) {
             setCaptionPrompt(promptOverride);
         }
@@ -1467,6 +1467,10 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
             // Optional: user can add context but it's not required
         }
 
+        // Set loading state early
+        setIsGenerating(true);
+        setError(null);
+        
         // Clear old captions when regenerating
         setGeneratedCaptions([]);
         setCurrentCaptionForAI('');
@@ -1490,9 +1494,6 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
                 console.error('Error reloading used captions:', error);
             }
         }
-        
-        setIsGenerating(true);
-        setError(null);
         try {
             console.log('Generating captions...');
             const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
@@ -3353,7 +3354,7 @@ Output format:
                     tone: mediaCaptionTone === 'Explicit' ? 'Sexy / Explicit' : mediaCaptionTone,
                     goal: mediaCaptionGoal,
                     platforms: [selectedPlatform],
-                    promptText: `${mediaCaptionPrompt || `Create explicit captions tailored for ${selectedPlatform}. Mention ${selectedPlatform} naturally when it helps drive subs (e.g., "join me on ${selectedPlatform}") but only when it fits the line.`} [Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`.trim(),
+                    promptText: `${(mediaCaptionPrompt || '') || `Create explicit captions tailored for ${selectedPlatform}. Mention ${selectedPlatform} naturally when it helps drive subs (e.g., "join me on ${selectedPlatform}") but only when it fits the line.`} [Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`.trim(),
                     analyticsData: buildAnalyticsData(),
                     emojiEnabled: emojiSettings.enabled,
                     emojiIntensity: emojiSettings.intensity,
@@ -3572,7 +3573,7 @@ Output format:
                     tone: finalTone === 'Explicit' ? 'Sexy / Explicit' : finalTone,
                     goal: captionGoal,
                     platforms: [selectedPlatform],
-                    promptText: `${captionPrompt || `Analyze this image/video in detail and describe what you see. Create explicit ${selectedPlatform} captions based on the actual content shown. Be very descriptive and explicit about what is visually present. Mention ${selectedPlatform} naturally only when it helps drive subs.`} [Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`.trim(),
+                    promptText: `${(captionPrompt || '') || `Analyze this image/video in detail and describe what you see. Create explicit ${selectedPlatform} captions based on the actual content shown. Be very descriptive and explicit about what is visually present. Mention ${selectedPlatform} naturally only when it helps drive subs.`} [Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`.trim(),
                     emojiEnabled: emojiSettings.enabled,
                     emojiIntensity: emojiSettings.intensity,
                 }),
