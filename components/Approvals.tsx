@@ -582,7 +582,7 @@ ${p.content}
                 </div>
             ) : (
             <div className="flex-1 overflow-x-auto overflow-y-hidden">
-                <div className="flex h-full gap-6 justify-center pb-4">
+                <div className="flex h-full gap-6 justify-start sm:justify-center pb-4 px-4">
                     {columns.map(col => {
                         const columnStyles: Record<string, string> = {
                             'Draft': 'from-gray-100 to-gray-50 dark:from-gray-800 dark:to-gray-800/50',

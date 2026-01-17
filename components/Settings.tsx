@@ -913,21 +913,7 @@ export const Settings: React.FC = () => {
                             <ToggleSwitch label="Safe Mode" enabled={settings.safeMode} onChange={(val) => updateSetting('safeMode', val)} />
                             <p className="text-sm text-gray-500 dark:text-gray-400">Prevents the AI from generating replies with profanity or discussing sensitive topics.</p>
                             <hr className="border-gray-200 dark:border-gray-700" />
-                            {user?.plan === 'Free' ? (
-                                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className="font-medium text-gray-700 dark:text-gray-300">Enable Voice Mode</span>
-                                        <span className="text-xs px-2 py-1 rounded bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-400">Pro+</span>
-                                    </div>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">AI Voice Assistant is available on Pro and Elite plans.</p>
-                                    <button
-                                        onClick={() => setActivePage('pricing')}
-                                        className="text-sm text-primary-600 dark:text-primary-400 hover:underline"
-                                    >
-                                        Upgrade to unlock Voice Assistant
-                                    </button>
-                                </div>
-                            ) : (
+                            {user?.role === 'Admin' && (
                                 <>
                                     <ToggleSwitch label="Enable Voice Mode" enabled={settings.voiceMode} onChange={(val) => updateSetting('voiceMode', val)} />
                                     <p className="text-sm text-gray-500 dark:text-gray-400">Enable the floating AI Voice Assistant button for hands-free control.</p>

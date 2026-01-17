@@ -963,26 +963,28 @@ export const OnlyFansStudio: React.FC = () => {
 
             {/* Quick Actions */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-col items-center gap-3">
                     <span className="text-sm font-semibold text-gray-900 dark:text-white">Quick actions</span>
-                    <button
-                        className="px-3 py-2 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
-                        onClick={() => setActiveView('contentBrain')}
-                    >
-                        Plan a drop
-                    </button>
-                    <button
-                        className="px-3 py-2 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
-                        onClick={() => setActiveView('roleplay')}
-                    >
-                        Build a session
-                    </button>
-                    <button
-                        className="px-3 py-2 text-sm bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors"
-                        onClick={() => setActiveView('export')}
-                    >
-                        Export pack
-                    </button>
+                    <div className="flex w-full items-center justify-center gap-3 flex-nowrap overflow-x-auto">
+                        <button
+                            className="px-3 py-2 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+                            onClick={() => setActiveView('contentBrain')}
+                        >
+                            Plan a drop
+                        </button>
+                        <button
+                            className="px-3 py-2 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+                            onClick={() => setActiveView('roleplay')}
+                        >
+                            Build a session
+                        </button>
+                        <button
+                            className="px-3 py-2 text-sm bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors"
+                            onClick={() => setActiveView('export')}
+                        >
+                            Export pack
+                        </button>
+                    </div>
                 </div>
             </div>
 

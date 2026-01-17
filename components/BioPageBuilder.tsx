@@ -845,10 +845,10 @@ export const BioPageBuilder: React.FC = () => {
     };
 
     return (
-        <div className="min-h-[calc(100vh-8rem)] flex flex-col lg:flex-row gap-6">
+            <div className="min-h-[calc(100vh-8rem)] flex flex-col lg:flex-row gap-6">
             {/* Left Editor */}
             <div className="flex-1 overflow-y-auto pr-2 space-y-6">
-                <div className="flex justify-between items-center">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Bio Link Page</h2>
                         {bioPage.username && (
@@ -857,7 +857,7 @@ export const BioPageBuilder: React.FC = () => {
                             </p>
                         )}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
                         {bioPage.username && (
                             <a
                                 href={`${window.location.origin}/${bioPage.username.replace('@', '')}`}

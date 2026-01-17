@@ -388,7 +388,7 @@ Generate multiple compelling captions (at least 5) that leverage this trend. Eac
                 {/* Centered: Trend Finder */}
                 <div className="space-y-6">
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                        <div className="flex items-center justify-between mb-4">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-4">
                             <div className="flex items-center gap-3">
                             <div className="p-2 bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 rounded-full">
                                 <TrendingIcon className="w-5 h-5" />
@@ -401,7 +401,7 @@ Generate multiple compelling captions (at least 5) that leverage this trend. Eac
                                     </p>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                                 <button
                                     onClick={() => setShowHistory(!showHistory)}
                                     className="relative px-3 py-1.5 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
@@ -438,7 +438,7 @@ Generate multiple compelling captions (at least 5) that leverage this trend. Eac
                                         {savedScans.map((scan) => (
                                             <div
                                                 key={scan.id}
-                                                className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                                                className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-2 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50"
                                             >
                                                 <div className="flex-1">
                                                     <p className="text-sm font-medium text-gray-900 dark:text-white">{scan.niche}</p>
@@ -446,7 +446,7 @@ Generate multiple compelling captions (at least 5) that leverage this trend. Eac
                                                         {scan.resultCount || 0} opportunities • {scan.scannedAt?.toDate ? new Date(scan.scannedAt.toDate()).toLocaleDateString() : 'Recently'}
                                                     </p>
                                                 </div>
-                                                <div className="flex gap-2">
+                                                <div className="flex gap-2 sm:justify-end">
                                                     <button
                                                         onClick={() => {
                                                             setResults(scan.results || []);
