@@ -1111,21 +1111,6 @@ Return only the rewritten personality description.
                             </div>
                         </SettingsSection>
 
-                        <SettingsSection title="Train AI on Your Exact Voice" id="tour-step-voice-training">
-                            {!isPremiumFeatureUnlocked ? (
-                                <UpgradePrompt featureName="Custom Voice Training" onUpgradeClick={() => setActivePage('pricing')} />
-                            ) : (
-                                <>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400">Upload a text file with examples of your past replies to help the AI learn your unique style.</p>
-                                    <div className="flex items-center space-x-4">
-                                        <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".txt,.md"/>
-                                        <button onClick={() => fileInputRef.current?.click()} className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors">Upload Document</button>
-                                        {fileName && <span className="text-sm text-gray-600 dark:text-gray-400">{fileName}</span>}
-                                    </div>
-                                </>
-                            )}
-                        </SettingsSection>
-
                         {/* Voice Clones section hidden in AI Content Studio mode */}
                         {false && (
                           <SettingsSection title="Voice Clones" id="voice-clones">

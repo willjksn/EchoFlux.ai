@@ -1338,6 +1338,15 @@ export const BioPageBuilder: React.FC = () => {
                         </div>
                     )}
                 </div>
+                <div className="flex justify-end">
+                    <button
+                        onClick={handlePublish}
+                        disabled={isSaving}
+                        className="px-6 py-2 bg-primary-600 text-white font-bold rounded-md hover:bg-primary-700 flex items-center gap-2 disabled:opacity-50"
+                    >
+                        <CheckCircleIcon className="w-5 h-5" /> {isSaving ? 'Saving...' : 'Publish'}
+                    </button>
+                </div>
 
                 {/* Subscribers (view/export only) */}
                 <BioPageSubscribersPanel />

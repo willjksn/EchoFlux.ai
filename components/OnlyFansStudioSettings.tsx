@@ -295,31 +295,10 @@ export const OnlyFansStudioSettings: React.FC = () => {
                     
                     <div className="space-y-6">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                AI Personality Description
-                            </label>
-                            <textarea
-                                value={aiPersonality}
-                                onChange={(e) => setAiPersonality(e.target.value)}
-                                placeholder="Describe your content style, personality, and how you want the AI to write (e.g., 'Playful and confident with a hint of mystery' or 'Bold and direct, not shy about explicit content')"
-                                className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[100px]"
-                            />
-                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                This helps the AI understand your unique voice and writing style.
-                            </p>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Creator Personality Description
-                            </label>
-                            <div className="relative">
-                                <textarea
-                                    value={creatorPersonality}
-                                    onChange={(e) => setCreatorPersonality(e.target.value)}
-                                    placeholder="Describe yourself as a creator so content sounds like you (e.g., 'Confident, playful, and flirty with teasing hooks' or 'Soft and intimate with direct calls to action')."
-                                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[100px]"
-                                />
+                            <div className="flex items-center justify-between mb-2">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Creator Personality Description
+                                </label>
                                 <button
                                     onClick={async () => {
                                         if (!creatorPersonality.trim()) {
@@ -371,12 +350,18 @@ Return only the rewritten personality description.
                                             showToast(error?.message || 'AI help failed. Please try again.', 'error');
                                         }
                                     }}
-                                    className="absolute top-2 right-2 p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                    className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
                                     title="AI Help"
                                 >
                                     <SparklesIcon className="w-5 h-5 text-primary-600 dark:text-primary-400" />
                                 </button>
                             </div>
+                            <textarea
+                                value={creatorPersonality}
+                                onChange={(e) => setCreatorPersonality(e.target.value)}
+                                placeholder="Describe yourself as a creator so content sounds like you (e.g., 'Confident, playful, and flirty with teasing hooks' or 'Soft and intimate with direct calls to action')."
+                                className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[100px]"
+                            />
                             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                 Used when Personality is enabled to make outputs sound like you.
                             </p>
