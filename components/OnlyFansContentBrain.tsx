@@ -535,7 +535,34 @@ const MonetizationPlanFormatter: React.FC<{ plan: any }> = ({ plan }) => {
     );
 };
 
-const WeeklyPlanFormatter: React.FC<{ plan: any }> = ({ plan }) => {
+type WeeklyPlanDayAction = {
+    weekIndex: number;
+    dayIndex: number;
+    week: any;
+    day: any;
+    dayName: string;
+    postType: string;
+    postIdea: string;
+    focus?: string;
+    description?: string;
+    angle?: string;
+    cta?: string;
+};
+
+type WeeklyPlanActionHandlers = {
+    onUploadMedia?: (action: WeeklyPlanDayAction) => void;
+    onGenerateCaption?: (action: WeeklyPlanDayAction) => void;
+    onAddToCalendar?: (action: WeeklyPlanDayAction) => void;
+    onCopyForExport?: (action: WeeklyPlanDayAction) => void;
+};
+
+const WeeklyPlanFormatter: React.FC<{ plan: any } & WeeklyPlanActionHandlers> = ({
+    plan,
+    onUploadMedia,
+    onGenerateCaption,
+    onAddToCalendar,
+    onCopyForExport,
+}) => {
     if (!plan) return null;
     
     // Handle string plans (try to parse if it's JSON)
@@ -614,6 +641,20 @@ const WeeklyPlanFormatter: React.FC<{ plan: any }> = ({ plan }) => {
                                         const description = day.description;
                                         const angle = day.angle;
                                         const cta = day.cta;
+                                        const actionPayload: WeeklyPlanDayAction = {
+                                            weekIndex,
+                                            dayIndex,
+                                            week,
+                                            day,
+                                            dayName,
+                                            postType,
+                                            postIdea,
+                                            focus,
+                                            description,
+                                            angle,
+                                            cta,
+                                        };
+                                        const showActions = Boolean(onUploadMedia || onGenerateCaption || onAddToCalendar || onCopyForExport);
                                         
                                         return (
                                             <div
@@ -650,6 +691,42 @@ const WeeklyPlanFormatter: React.FC<{ plan: any }> = ({ plan }) => {
                                                         )}
                                                     </div>
                                                 </div>
+                                                {showActions && (
+                                                    <div className="mt-3 flex flex-wrap gap-2">
+                                                        {onUploadMedia && (
+                                                            <button
+                                                                onClick={() => onUploadMedia(actionPayload)}
+                                                                className="px-2.5 py-1 text-xs font-medium rounded-md bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600"
+                                                            >
+                                                                Upload media
+                                                            </button>
+                                                        )}
+                                                        {onGenerateCaption && (
+                                                            <button
+                                                                onClick={() => onGenerateCaption(actionPayload)}
+                                                                className="px-2.5 py-1 text-xs font-medium rounded-md bg-primary-600 text-white hover:bg-primary-700"
+                                                            >
+                                                                Generate caption
+                                                            </button>
+                                                        )}
+                                                        {onAddToCalendar && (
+                                                            <button
+                                                                onClick={() => onAddToCalendar(actionPayload)}
+                                                                className="px-2.5 py-1 text-xs font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-700"
+                                                            >
+                                                                Add to calendar
+                                                            </button>
+                                                        )}
+                                                        {onCopyForExport && (
+                                                            <button
+                                                                onClick={() => onCopyForExport(actionPayload)}
+                                                                className="px-2.5 py-1 text-xs font-medium rounded-md bg-emerald-600 text-white hover:bg-emerald-700"
+                                                            >
+                                                                Copy for export
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         );
                                     })
@@ -672,7 +749,11 @@ const WeeklyPlanFormatter: React.FC<{ plan: any }> = ({ plan }) => {
     );
 };
 
-export const OnlyFansContentBrain: React.FC = () => {
+type OnlyFansContentBrainProps = {
+    initialTab?: ContentType;
+};
+
+export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ initialTab }) => {
     // All hooks must be called unconditionally at the top
     const context = useAppContext();
     const user = context?.user;
@@ -681,7 +762,7 @@ export const OnlyFansContentBrain: React.FC = () => {
     // State management
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<ContentType>('captions' as ContentType);
+    const [activeTab, setActiveTab] = useState<ContentType>(initialTab ?? 'captions');
     const platformOptions: Array<'OnlyFans' | 'Fansly' | 'Fanvue'> = ['OnlyFans', 'Fansly', 'Fanvue'];
     const [selectedPlatform, setSelectedPlatform] = useState<'OnlyFans' | 'Fansly' | 'Fanvue'>('OnlyFans');
     const [isGenerating, setIsGenerating] = useState(false);
@@ -1234,9 +1315,13 @@ export const OnlyFansContentBrain: React.FC = () => {
         );
     }
 
-    const handleGenerateCaptions = async () => {
+    const handleGenerateCaptions = async (promptOverride?: string) => {
+        const promptSeed = promptOverride ?? captionPrompt;
+        if (promptOverride && promptOverride !== captionPrompt) {
+            setCaptionPrompt(promptOverride);
+        }
         // If media is uploaded, require it to be analyzed
-        if (uploadedMediaUrl && !captionPrompt.trim()) {
+        if (uploadedMediaUrl && !promptSeed.trim()) {
             // Optional: user can add context but it's not required
         }
 
@@ -1382,8 +1467,8 @@ export const OnlyFansContentBrain: React.FC = () => {
                     // Target all premium creator platforms we support
                     platforms: [selectedPlatform],
                     promptText: uploadedMediaUrl 
-                        ? `${captionPrompt || `Analyze this image/video in detail and describe what you see. Create explicit captions tailored for ${selectedPlatform}. Mention ${selectedPlatform} naturally when it helps drive subs (e.g., "come see me on ${selectedPlatform}") but only when it fits the line. Be very descriptive and explicit about what is visually present.`}${personalityContext}${fanContext}\n\n[CRITICAL - GENERATE FRESH CAPTIONS: Variety seed ${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${Math.random().toString(36).substr(2, 9)}] - You MUST generate completely NEW, UNIQUE captions that are DIFFERENT from any previous generation. Do NOT reuse, repeat, or modify previous captions. Create entirely fresh content with different wording, structure, and angles each time.`
-                        : `${captionPrompt || `Create explicit captions tailored for ${selectedPlatform}. Mention ${selectedPlatform} naturally when it helps drive subs (e.g., "come see me on ${selectedPlatform}") but only when it fits the line.`}${personalityContext}${fanContext}\n\n[CRITICAL - GENERATE FRESH CAPTIONS: Variety seed ${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${Math.random().toString(36).substr(2, 9)}] - You MUST generate completely NEW, UNIQUE captions that are DIFFERENT from any previous generation. Do NOT reuse, repeat, or modify previous captions. Create entirely fresh content with different wording, structure, and angles each time.`,
+                        ? `${promptSeed || `Analyze this image/video in detail and describe what you see. Create explicit captions tailored for ${selectedPlatform}. Mention ${selectedPlatform} naturally when it helps drive subs (e.g., "come see me on ${selectedPlatform}") but only when it fits the line. Be very descriptive and explicit about what is visually present.`}${personalityContext}${fanContext}\n\n[CRITICAL - GENERATE FRESH CAPTIONS: Variety seed ${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${Math.random().toString(36).substr(2, 9)}] - You MUST generate completely NEW, UNIQUE captions that are DIFFERENT from any previous generation. Do NOT reuse, repeat, or modify previous captions. Create entirely fresh content with different wording, structure, and angles each time.`
+                        : `${promptSeed || `Create explicit captions tailored for ${selectedPlatform}. Mention ${selectedPlatform} naturally when it helps drive subs (e.g., "come see me on ${selectedPlatform}") but only when it fits the line.`}${personalityContext}${fanContext}\n\n[CRITICAL - GENERATE FRESH CAPTIONS: Variety seed ${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${Math.random().toString(36).substr(2, 9)}] - You MUST generate completely NEW, UNIQUE captions that are DIFFERENT from any previous generation. Do NOT reuse, repeat, or modify previous captions. Create entirely fresh content with different wording, structure, and angles each time.`,
                     emojiEnabled: emojiSettings.enabled,
                     emojiIntensity: emojiSettings.intensity,
                 }),
@@ -1652,6 +1737,105 @@ export const OnlyFansContentBrain: React.FC = () => {
         } finally {
             setIsGenerating(false);
         }
+    };
+
+    const buildWeeklyPlanPrompt = (action: WeeklyPlanDayAction) => {
+        const parts = [
+            action.postIdea,
+            action.description ? `Description: ${action.description}` : null,
+            action.angle ? `Angle: ${action.angle}` : null,
+            action.cta ? `CTA: ${action.cta}` : null,
+            action.focus ? `Weekly focus: ${action.focus}` : null,
+            action.postType ? `Format: ${action.postType}` : null,
+            action.dayName ? `Day: ${action.dayName}` : null,
+        ].filter(Boolean);
+        return parts.join('\n');
+    };
+
+    const getDayOffsetFromName = (dayName?: string) => {
+        if (!dayName) return null;
+        const key = dayName.trim().slice(0, 3).toLowerCase();
+        const map: Record<string, number> = {
+            sun: 0,
+            mon: 1,
+            tue: 2,
+            wed: 3,
+            thu: 4,
+            fri: 5,
+            sat: 6,
+        };
+        return map[key] ?? null;
+    };
+
+    const resolveWeeklyPlanDate = (weekIndex: number, day: any, dayIndex: number) => {
+        if (day?.date) {
+            const parsed = new Date(day.date);
+            if (!Number.isNaN(parsed.getTime())) {
+                return parsed;
+            }
+        }
+        const base = new Date();
+        base.setHours(12, 0, 0, 0);
+        const offset = Number.isFinite(day?.dayOffset)
+            ? day.dayOffset
+            : getDayOffsetFromName(day?.day) ?? dayIndex;
+        base.setDate(base.getDate() + weekIndex * 7 + offset);
+        return base;
+    };
+
+    const handleWeeklyPlanUploadMedia = (action: WeeklyPlanDayAction) => {
+        const prompt = buildWeeklyPlanPrompt(action);
+        setCaptionPrompt(prompt);
+        setActiveTab('captions');
+        showToast?.('Caption prompt ready. Upload media to generate captions.', 'success');
+    };
+
+    const handleWeeklyPlanGenerateCaption = async (action: WeeklyPlanDayAction) => {
+        const prompt = buildWeeklyPlanPrompt(action);
+        setActiveTab('captions');
+        await handleGenerateCaptions(prompt);
+    };
+
+    const handleWeeklyPlanAddToCalendar = async (action: WeeklyPlanDayAction) => {
+        if (!user?.id) return;
+        try {
+            const plannedDate = resolveWeeklyPlanDate(action.weekIndex, action.day, action.dayIndex);
+            const lower = `${action.postType} ${action.postIdea}`.toLowerCase();
+            const reminderType = lower.includes('shoot') || lower.includes('film') ? 'shoot' : 'post';
+            const contentType = lower.includes('custom')
+                ? 'custom'
+                : lower.includes('ppv') || lower.includes('paid') || lower.includes('bundle')
+                    ? 'paid'
+                    : 'free';
+            const descriptionParts = [
+                action.description,
+                action.angle ? `Angle: ${action.angle}` : null,
+                action.cta ? `CTA: ${action.cta}` : null,
+                action.focus ? `Weekly focus: ${action.focus}` : null,
+            ].filter(Boolean);
+            const description = descriptionParts.length ? descriptionParts.join('\n') : undefined;
+            const titleBase = action.postIdea || action.postType || 'Planned post';
+            const title = titleBase.length > 80 ? `${titleBase.slice(0, 77)}...` : titleBase;
+
+            await addDoc(collection(db, 'users', user.id, 'onlyfans_calendar_events'), {
+                title,
+                date: plannedDate.toISOString(),
+                reminderType,
+                contentType,
+                description,
+                createdAt: new Date().toISOString(),
+                userId: user.id,
+            });
+            showToast?.('Added to your calendar as a reminder.', 'success');
+        } catch (error) {
+            console.error('Error adding weekly plan to calendar:', error);
+            showToast?.('Failed to add to calendar. Please try again.', 'error');
+        }
+    };
+
+    const handleWeeklyPlanCopyForExport = (action: WeeklyPlanDayAction) => {
+        const text = buildWeeklyPlanPrompt(action);
+        copyToClipboard(text);
     };
 
     const loadTrendsHistory = async () => {
@@ -5260,7 +5444,13 @@ Output format:
                                 </button>
                             </div>
                             <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                                <WeeklyPlanFormatter plan={generatedWeeklyPlan} />
+                                <WeeklyPlanFormatter
+                                    plan={generatedWeeklyPlan}
+                                    onUploadMedia={handleWeeklyPlanUploadMedia}
+                                    onGenerateCaption={handleWeeklyPlanGenerateCaption}
+                                    onAddToCalendar={handleWeeklyPlanAddToCalendar}
+                                    onCopyForExport={handleWeeklyPlanCopyForExport}
+                                />
                             </div>
                         </div>
                     )}
@@ -6198,7 +6388,13 @@ Output format:
                                             </button>
                                         </div>
                                         <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                                            <WeeklyPlanFormatter plan={viewingSavedItem.data.plan} />
+                                            <WeeklyPlanFormatter
+                                                plan={viewingSavedItem.data.plan}
+                                                onUploadMedia={handleWeeklyPlanUploadMedia}
+                                                onGenerateCaption={handleWeeklyPlanGenerateCaption}
+                                                onAddToCalendar={handleWeeklyPlanAddToCalendar}
+                                                onCopyForExport={handleWeeklyPlanCopyForExport}
+                                            />
                                         </div>
                                     </div>
                                 )}

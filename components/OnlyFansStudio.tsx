@@ -26,6 +26,7 @@ type TeaserPack = {
 export const OnlyFansStudio: React.FC = () => {
     const { user, setActivePage, showToast } = useAppContext();
     const [activeView, setActiveView] = useState<ActiveView>('dashboard');
+    const [contentBrainInitialTab, setContentBrainInitialTab] = useState<'captions' | 'weeklyPlan'>('captions');
     const [showTeaserPackModal, setShowTeaserPackModal] = useState(false);
     const [teaserPromotionType, setTeaserPromotionType] = useState<'PPV' | 'New set' | 'Promo' | 'General tease'>('PPV');
     const [teaserConcept, setTeaserConcept] = useState('');
@@ -51,7 +52,7 @@ export const OnlyFansStudio: React.FC = () => {
     });
     const [weeklyTargets, setWeeklyTargets] = useState({ drops: 3, sessions: 2 });
     const [isLoadingFirstWin, setIsLoadingFirstWin] = useState(false);
-    const [showFirstWin, setShowFirstWin] = useState(true);
+    const [showFirstWin, setShowFirstWin] = useState(false);
 
     // Fan widgets state
     const [fans, setFans] = useState<any[]>([]);
@@ -63,6 +64,11 @@ export const OnlyFansStudio: React.FC = () => {
 
     // Check if user has access (OnlyFansStudio, Elite, or Agency plan)
     const hasAccess = user?.plan === 'OnlyFansStudio' || user?.plan === 'Elite' || user?.plan === 'Agency';
+
+    const openContentBrain = (tab: 'captions' | 'weeklyPlan' = 'captions') => {
+        setContentBrainInitialTab(tab);
+        setActiveView('contentBrain');
+    };
 
     // Lightweight usage tracking (best-effort)
     useEffect(() => {
@@ -605,7 +611,7 @@ export const OnlyFansStudio: React.FC = () => {
                     ← Back to Premium Content Studio
                 </button>
                 <ErrorBoundary>
-                    <OnlyFansContentBrain />
+                    <OnlyFansContentBrain key={contentBrainInitialTab} initialTab={contentBrainInitialTab} />
                 </ErrorBoundary>
             </div>
         );
@@ -670,7 +676,7 @@ export const OnlyFansStudio: React.FC = () => {
                         ← Back to Premium Content Studio
                     </button>
                 </div>
-                <OnlyFansCalendar onNavigateToContentBrain={() => setActiveView('contentBrain')} />
+                <OnlyFansCalendar onNavigateToContentBrain={() => openContentBrain('captions')} />
             </div>
         );
     }
@@ -968,7 +974,7 @@ export const OnlyFansStudio: React.FC = () => {
                     <div className="flex w-full items-center justify-center gap-3 flex-nowrap overflow-x-auto">
                         <button
                             className="px-3 py-2 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
-                            onClick={() => setActiveView('contentBrain')}
+                            onClick={() => openContentBrain('captions')}
                         >
                             Plan a drop
                         </button>
@@ -1022,7 +1028,7 @@ export const OnlyFansStudio: React.FC = () => {
                         </div>
                         {!firstWinStatus.weeklyPlan && (
                             <button
-                                onClick={() => setActiveView('contentBrain')}
+                                onClick={() => openContentBrain('weeklyPlan')}
                                 className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
                             >
                                 Do it
@@ -1135,7 +1141,7 @@ export const OnlyFansStudio: React.FC = () => {
                     </p>
                     <button
                         className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
-                        onClick={() => setActiveView('contentBrain')}
+                        onClick={() => openContentBrain('captions')}
                     >
                         Open Content Ideas
                     </button>
