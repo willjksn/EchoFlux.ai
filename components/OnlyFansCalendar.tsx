@@ -747,13 +747,39 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                                 {event.type === 'post' && event.thumbnail && (
                                                                     <div className="mb-1 relative w-full h-8">
                                                                         {event.post?.mediaType === 'video' ? (
-                                                                            // For videos, show video element with first frame as thumbnail
+                                                                            // For videos, prefer thumbnail/poster image if available
+                                                                            (event.post as any)?.thumbnailUrl || (event.post as any)?.posterUrl ? (
+                                                                                <img
+                                                                                    src={(event.post as any).thumbnailUrl || (event.post as any).posterUrl}
+                                                                                    alt="Video preview"
+                                                                                    className="w-full h-8 rounded-md object-cover border border-gray-200 dark:border-gray-700"
+                                                                                    onError={(e) => {
+                                                                                        // Hide image on error, will fallback to video element below
+                                                                                        const img = e.target as HTMLImageElement;
+                                                                                        img.style.display = 'none';
+                                                                                    }}
+                                                                                    loading="lazy"
+                                                                                />
+                                                                            ) : null
+                                                                        ) : null}
+                                                                        {/* Video element - shows first frame as thumbnail when no dedicated thumbnail image */}
+                                                                        {event.post?.mediaType === 'video' && !(event.post as any)?.thumbnailUrl && !(event.post as any)?.posterUrl && (
                                                                             <video
                                                                                 src={event.thumbnail}
                                                                                 className="w-full h-8 rounded-md object-cover border border-gray-200 dark:border-gray-700"
                                                                                 muted
                                                                                 playsInline
                                                                                 preload="metadata"
+                                                                                onLoadedMetadata={(e) => {
+                                                                                    // Seek to first frame to ensure it displays
+                                                                                    const video = e.target as HTMLVideoElement;
+                                                                                    video.currentTime = 0.1; // Seek to 0.1s to get first frame
+                                                                                }}
+                                                                                onSeeked={(e) => {
+                                                                                    // Pause after seeking to first frame
+                                                                                    const video = e.target as HTMLVideoElement;
+                                                                                    video.pause();
+                                                                                }}
                                                                                 onError={(e) => {
                                                                                     // Hide video on error
                                                                                     const video = e.target as HTMLVideoElement;
@@ -762,9 +788,11 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                                                         console.warn('Failed to load calendar video thumbnail:', event.thumbnail);
                                                                                     }
                                                                                 }}
+                                                                                style={{ pointerEvents: 'none' }}
                                                                             />
-                                                                        ) : (
-                                                                            // For images, show image element
+                                                                        )}
+                                                                        {/* Image element for non-video posts */}
+                                                                        {event.post?.mediaType !== 'video' && (
                                                                             <img
                                                                                 src={event.thumbnail}
                                                                                 alt="Preview"
@@ -783,8 +811,8 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                                         )}
                                                                         {/* Video play icon overlay */}
                                                                         {event.post?.mediaType === 'video' && (
-                                                                            <div className="absolute inset-0 flex items-center justify-center bg-black/20 rounded-md">
-                                                                                <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                                                            <div className="absolute inset-0 flex items-center justify-center bg-black/20 rounded-md pointer-events-none">
+                                                                                <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
                                                                                     <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
                                                                                 </svg>
                                                                             </div>
