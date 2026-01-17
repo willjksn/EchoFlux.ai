@@ -1025,6 +1025,10 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
     const [savedShootConcepts, setSavedShootConcepts] = useState<any[]>([]);
     const [savedWeeklyPlans, setSavedWeeklyPlans] = useState<any[]>([]);
     const [savedMonetizationPlans, setSavedMonetizationPlans] = useState<any[]>([]);
+    const [showPostIdeasHistory, setShowPostIdeasHistory] = useState(false);
+    const [showShootConceptsHistory, setShowShootConceptsHistory] = useState(false);
+    const [showWeeklyPlanHistory, setShowWeeklyPlanHistory] = useState(false);
+    const [showMonetizationHistory, setShowMonetizationHistory] = useState(false);
     
     // Collapse state for saved items sections
 
@@ -3957,11 +3961,13 @@ Output format:
                                             loadCaptionsHistory();
                                         }
                                     }}
-                                    className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
+                                    className="relative px-3 py-1.5 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
                                 >
                                     {showCaptionsHistory ? 'Hide' : 'Show'} History
                                     {(captionsPredictHistory.length > 0 || captionsRepurposeHistory.length > 0 || captionsGapAnalysisHistory.length > 0) && (
-                                        <span className="w-2 h-2 bg-red-500 rounded-full" title="History available"></span>
+                                        <span className="absolute -top-2 -right-2 bg-primary-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                                            {captionsPredictHistory.length + captionsRepurposeHistory.length + captionsGapAnalysisHistory.length}
+                                        </span>
                                     )}
                                 </button>
                             </div>
@@ -5081,11 +5087,24 @@ Output format:
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                                 Saved Post Ideas ({savedPostIdeas.length})
                             </h3>
+                            <button
+                                onClick={() => setShowPostIdeasHistory(!showPostIdeasHistory)}
+                                className="relative px-3 py-1.5 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
+                            >
+                                {showPostIdeasHistory ? 'Hide' : 'Show'} History
+                                {savedPostIdeas.length > 0 && (
+                                    <span className="absolute -top-2 -right-2 bg-primary-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                                        {savedPostIdeas.length}
+                                    </span>
+                                )}
+                            </button>
                         </div>
-                        {savedPostIdeas.length === 0 ? (
-                            <p className="text-sm text-gray-500 dark:text-gray-400">No saved post ideas yet.</p>
-                        ) : (
-                            <div className="space-y-3 max-h-64 overflow-y-auto">
+                        {showPostIdeasHistory && (
+                            <>
+                                {savedPostIdeas.length === 0 ? (
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">No saved post ideas yet.</p>
+                                ) : (
+                                    <div className="space-y-3 max-h-64 overflow-y-auto">
                                 {savedPostIdeas.map((saved, index) => {
                                     const mediaUrl = saved.data?.mediaUrl;
                                     const mediaType = saved.data?.mediaType || 'image';
@@ -5143,6 +5162,8 @@ Output format:
                                     );
                                 })}
                             </div>
+                        )}
+                            </>
                         )}
                     </div>
 
@@ -5233,6 +5254,8 @@ Output format:
                             <div className="mt-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-3 rounded-lg">
                                 <p className="text-sm text-red-600 dark:text-red-400">{trendsError}</p>
                             </div>
+                        )}
+                            </>
                         )}
                     </div>
 
@@ -5585,11 +5608,24 @@ Output format:
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                                 Saved Shoot Concepts ({savedShootConcepts.length})
                             </h3>
+                            <button
+                                onClick={() => setShowShootConceptsHistory(!showShootConceptsHistory)}
+                                className="relative px-3 py-1.5 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
+                            >
+                                {showShootConceptsHistory ? 'Hide' : 'Show'} History
+                                {savedShootConcepts.length > 0 && (
+                                    <span className="absolute -top-2 -right-2 bg-primary-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                                        {savedShootConcepts.length}
+                                    </span>
+                                )}
+                            </button>
                         </div>
-                        {savedShootConcepts.length === 0 ? (
-                            <p className="text-sm text-gray-500 dark:text-gray-400">No saved shoot concepts yet.</p>
-                        ) : (
-                            <div className="space-y-3 max-h-64 overflow-y-auto">
+                        {showShootConceptsHistory && (
+                            <>
+                                {savedShootConcepts.length === 0 ? (
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">No saved shoot concepts yet.</p>
+                                ) : (
+                                    <div className="space-y-3 max-h-64 overflow-y-auto">
                                 {savedShootConcepts.map((saved, index) => {
                                     const mediaUrl = saved.data?.mediaUrl;
                                     const mediaType = saved.data?.mediaType || 'image';
@@ -5647,6 +5683,8 @@ Output format:
                                     );
                                 })}
                             </div>
+                        )}
+                            </>
                         )}
                     </div>
 
@@ -5813,68 +5851,83 @@ Output format:
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                                 Saved Weekly Plans ({savedWeeklyPlans.length})
                             </h3>
+                            <button
+                                onClick={() => setShowWeeklyPlanHistory(!showWeeklyPlanHistory)}
+                                className="relative px-3 py-1.5 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
+                            >
+                                {showWeeklyPlanHistory ? 'Hide' : 'Show'} History
+                                {savedWeeklyPlans.length > 0 && (
+                                    <span className="absolute -top-2 -right-2 bg-primary-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                                        {savedWeeklyPlans.length}
+                                    </span>
+                                )}
+                            </button>
                         </div>
-                        {savedWeeklyPlans.length === 0 ? (
-                            <p className="text-sm text-gray-500 dark:text-gray-400">No saved weekly plans yet.</p>
-                        ) : (
-                            <div className="space-y-3 max-h-64 overflow-y-auto">
-                                {savedWeeklyPlans.map((saved, index) => {
-                                    const mediaUrl = saved.data?.mediaUrl;
-                                    const mediaType = saved.data?.mediaType || 'image';
-                                    return (
-                                        <div
-                                            key={saved.id || index}
-                                            className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
-                                        >
-                                            <div className="flex items-start justify-between mb-2 gap-3">
-                                                {mediaUrl && (
-                                                    <div className="flex-shrink-0">
-                                                        {mediaType === 'video' ? (
-                                                            <video src={mediaUrl} className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
-                                                        ) : (
-                                                            <img src={mediaUrl} alt="Preview" className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
+                        {showWeeklyPlanHistory && (
+                            <>
+                                {savedWeeklyPlans.length === 0 ? (
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">No saved weekly plans yet.</p>
+                                ) : (
+                                    <div className="space-y-3 max-h-64 overflow-y-auto">
+                                        {savedWeeklyPlans.map((saved, index) => {
+                                            const mediaUrl = saved.data?.mediaUrl;
+                                            const mediaType = saved.data?.mediaType || 'image';
+                                            return (
+                                                <div
+                                                    key={saved.id || index}
+                                                    className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
+                                                >
+                                                    <div className="flex items-start justify-between mb-2 gap-3">
+                                                        {mediaUrl && (
+                                                            <div className="flex-shrink-0">
+                                                                {mediaType === 'video' ? (
+                                                                    <video src={mediaUrl} className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
+                                                                ) : (
+                                                                    <img src={mediaUrl} alt="Preview" className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
+                                                                )}
+                                                            </div>
                                                         )}
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                                                {saved.title || `Saved ${new Date(saved.createdAt?.toDate?.() || saved.createdAt).toLocaleDateString()}`}
+                                                            </p>
+                                                            {saved.data?.plan && (
+                                                                <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                                                                    {getWeeklyPlanSummary(saved.data.plan)}
+                                                                </p>
+                                                            )}
+                                                            <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                                                {saved.createdAt?.toDate?.() ? new Date(saved.createdAt.toDate()).toLocaleString() : 'Recently'}
+                                                            </p>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setViewingSavedItem(saved);
+                                                                    setShowSavedItemModal(true);
+                                                                }}
+                                                                className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                                            >
+                                                                View
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDeleteSavedItem(saved.id, 'weekly_plan');
+                                                                }}
+                                                                className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                                                                title="Delete"
+                                                            >
+                                                                <TrashIcon className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
                                                     </div>
-                                                )}
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                                                        {saved.title || `Saved ${new Date(saved.createdAt?.toDate?.() || saved.createdAt).toLocaleDateString()}`}
-                                                    </p>
-                                                    {saved.data?.plan && (
-                                                        <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
-                                                            {getWeeklyPlanSummary(saved.data.plan)}
-                                                        </p>
-                                                    )}
-                                                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                                                        {saved.createdAt?.toDate?.() ? new Date(saved.createdAt.toDate()).toLocaleString() : 'Recently'}
-                                                    </p>
                                                 </div>
-                                                <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                                                    <button
-                                                        onClick={() => {
-                                                            setViewingSavedItem(saved);
-                                                            setShowSavedItemModal(true);
-                                                        }}
-                                                        className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                                    >
-                                                        View
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleDeleteSavedItem(saved.id, 'weekly_plan');
-                                                        }}
-                                                        className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
-                                                        title="Delete"
-                                                    >
-                                                        <TrashIcon className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </>
                         )}
                     </div>
 
@@ -6174,11 +6227,24 @@ Output format:
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                                 Saved Monetization Plans ({savedMonetizationPlans.length})
                             </h3>
+                            <button
+                                onClick={() => setShowMonetizationHistory(!showMonetizationHistory)}
+                                className="relative px-3 py-1.5 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
+                            >
+                                {showMonetizationHistory ? 'Hide' : 'Show'} History
+                                {savedMonetizationPlans.length > 0 && (
+                                    <span className="absolute -top-2 -right-2 bg-primary-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                                        {savedMonetizationPlans.length}
+                                    </span>
+                                )}
+                            </button>
                         </div>
-                        {savedMonetizationPlans.length === 0 ? (
-                            <p className="text-sm text-gray-500 dark:text-gray-400">No saved monetization plans yet.</p>
-                        ) : (
-                            <div className="space-y-3 max-h-64 overflow-y-auto">
+                        {showMonetizationHistory && (
+                            <>
+                                {savedMonetizationPlans.length === 0 ? (
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">No saved monetization plans yet.</p>
+                                ) : (
+                                    <div className="space-y-3 max-h-64 overflow-y-auto">
                                 {savedMonetizationPlans.map((saved, index) => {
                                     const mediaUrl = saved.data?.mediaUrl;
                                     const mediaType = saved.data?.mediaType || 'image';
