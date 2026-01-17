@@ -174,6 +174,11 @@ export const Calendar: React.FC = () => {
         const eventsFromPosts: CalendarEvent[] = scheduledPosts.map(post => {
             const platforms = post.platforms || [];
             const previewUrl = post.mediaUrl || (Array.isArray(post.mediaUrls) ? post.mediaUrls[0] : undefined);
+            // For videos, check if there's a thumbnail URL, otherwise use the video URL itself
+            const isVideo = post.mediaType === 'video';
+            const thumbnailUrl = isVideo 
+                ? ((post as any).thumbnailUrl || (post as any).posterUrl || previewUrl) 
+                : previewUrl;
             return platforms.map((platform, idx) => {
                 const eventDate = post.scheduledDate || new Date().toISOString();
                 const parsedDate = new Date(eventDate);
@@ -193,7 +198,8 @@ export const Calendar: React.FC = () => {
                     type: eventType,
                     platform: platform,
                     status: post.status as 'Scheduled' | 'Published' | 'Draft',
-                    thumbnail: previewUrl,
+                    thumbnail: thumbnailUrl, // Only set if it's a valid permanent URL
+                    post: post, // Include the full post object so we can access thumbnailUrl/posterUrl
                 };
             });
         }).flat();
@@ -681,12 +687,79 @@ export const Calendar: React.FC = () => {
                                         <div className={`w-2.5 h-2.5 sm:w-2 sm:h-2 rounded-full flex-shrink-0 shadow-sm ${colors.dot}`}></div>
                                     </div>
                                     {!isReminder && (associatedPost?.mediaUrl || (Array.isArray(associatedPost?.mediaUrls) ? associatedPost?.mediaUrls[0] : undefined) || evt.thumbnail) && (
-                                        <div className="mb-1">
-                                            <img
-                                                src={associatedPost?.mediaUrl || (Array.isArray(associatedPost?.mediaUrls) ? associatedPost?.mediaUrls[0] : undefined) || evt.thumbnail}
-                                                alt="Preview"
-                                                className="w-full h-10 rounded-md object-cover border border-gray-200 dark:border-gray-700"
-                                            />
+                                        <div className="mb-1 relative w-full h-10">
+                                            {/* Video preview - show image if thumbnail/poster exists, otherwise show video element */}
+                                            {(associatedPost?.mediaType === 'video' || evt.type === 'Reel') ? (
+                                                ((associatedPost as any)?.thumbnailUrl || (associatedPost as any)?.posterUrl) ? (
+                                                    <img
+                                                        src={(associatedPost as any).thumbnailUrl || (associatedPost as any).posterUrl}
+                                                        alt="Video preview"
+                                                        className="w-full h-10 rounded-md object-cover border border-gray-200 dark:border-gray-700"
+                                                        onError={(e) => {
+                                                            // Hide image on error and fall back to video element
+                                                            const img = e.target as HTMLImageElement;
+                                                            img.style.display = 'none';
+                                                            // Try to show video element instead
+                                                            const videoElement = img.parentElement?.querySelector('video') as HTMLVideoElement;
+                                                            if (videoElement && (associatedPost?.mediaUrl || (Array.isArray(associatedPost?.mediaUrls) ? associatedPost?.mediaUrls[0] : undefined) || evt.thumbnail)) {
+                                                                videoElement.style.display = 'block';
+                                                            }
+                                                        }}
+                                                        loading="lazy"
+                                                    />
+                                                ) : (associatedPost?.mediaUrl || (Array.isArray(associatedPost?.mediaUrls) ? associatedPost?.mediaUrls[0] : undefined) || evt.thumbnail) ? (
+                                                    <video
+                                                        src={associatedPost?.mediaUrl || (Array.isArray(associatedPost?.mediaUrls) ? associatedPost?.mediaUrls[0] : undefined) || evt.thumbnail}
+                                                        className="w-full h-10 rounded-md object-cover border border-gray-200 dark:border-gray-700"
+                                                        muted
+                                                        playsInline
+                                                        preload="metadata"
+                                                        onLoadedMetadata={(e) => {
+                                                            // Seek to first frame to ensure it displays
+                                                            const video = e.target as HTMLVideoElement;
+                                                            video.currentTime = 0.1; // Seek to 0.1s to get first frame
+                                                        }}
+                                                        onSeeked={(e) => {
+                                                            // Pause after seeking to first frame
+                                                            const video = e.target as HTMLVideoElement;
+                                                            video.pause();
+                                                        }}
+                                                        onError={(e) => {
+                                                            // Hide video on error
+                                                            const video = e.target as HTMLVideoElement;
+                                                            video.style.display = 'none';
+                                                            if (process.env.NODE_ENV === 'development') {
+                                                                console.warn('Failed to load calendar video thumbnail:', associatedPost?.mediaUrl || evt.thumbnail);
+                                                            }
+                                                        }}
+                                                        style={{ pointerEvents: 'none' }}
+                                                    />
+                                                ) : null
+                                            ) : (
+                                                <img
+                                                    src={associatedPost?.mediaUrl || (Array.isArray(associatedPost?.mediaUrls) ? associatedPost?.mediaUrls[0] : undefined) || evt.thumbnail}
+                                                    alt="Preview"
+                                                    className="w-full h-10 rounded-md object-cover border border-gray-200 dark:border-gray-700"
+                                                    onError={(e) => {
+                                                        // Hide image on error (e.g., expired blob URL, CORS issue, invalid URL, etc.)
+                                                        const img = e.target as HTMLImageElement;
+                                                        img.style.display = 'none';
+                                                        // Optionally log for debugging in production
+                                                        if (process.env.NODE_ENV === 'development') {
+                                                            console.warn('Failed to load calendar thumbnail:', associatedPost?.mediaUrl || evt.thumbnail);
+                                                        }
+                                                    }}
+                                                    loading="lazy"
+                                                />
+                                            )}
+                                            {/* Video play icon overlay */}
+                                            {(associatedPost?.mediaType === 'video' || evt.type === 'Reel') && (
+                                                <div className="absolute inset-0 flex items-center justify-center bg-black/20 rounded-md pointer-events-none">
+                                                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
+                                                    </svg>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                     <div 

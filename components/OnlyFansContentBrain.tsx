@@ -736,15 +736,72 @@ const WeeklyPlanFormatter: React.FC<{ plan: any } & WeeklyPlanActionHandlers> = 
                                                                     Used
                                                                 </span>
                                                             )}
-                                                            {onToggleEdit && !isUsed && (
-                                                                <button
-                                                                    onClick={() => onToggleEdit(actionPayload)}
-                                                                    className="ml-auto px-2 py-0.5 text-xs font-medium rounded-md bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600"
-                                                                >
-                                                                    {cardState?.isEditing ? 'Done' : 'Edit'}
-                                                                </button>
-                                                            )}
                                                         </div>
+                                                        {/* Content Type and Target Audience - Always Visible */}
+                                                        {!isUsed && (
+                                                            <div className="flex flex-wrap gap-2 mt-2 mb-2">
+                                                                <div className="flex items-center gap-1">
+                                                                    <span className="text-xs text-gray-500 dark:text-gray-400">Type:</span>
+                                                                    <div className="flex gap-1">
+                                                                        <button
+                                                                            onClick={() => onUpdateContentType?.(actionPayload, 'free')}
+                                                                            className={`px-2 py-0.5 text-xs font-medium rounded ${
+                                                                                (cardState?.contentType || 'free') === 'free'
+                                                                                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                                                                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                                                            }`}
+                                                                        >
+                                                                            Free
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => onUpdateContentType?.(actionPayload, 'paid')}
+                                                                            className={`px-2 py-0.5 text-xs font-medium rounded ${
+                                                                                cardState?.contentType === 'paid'
+                                                                                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                                                                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                                                            }`}
+                                                                        >
+                                                                            Paid
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => onUpdateContentType?.(actionPayload, 'custom')}
+                                                                            className={`px-2 py-0.5 text-xs font-medium rounded ${
+                                                                                cardState?.contentType === 'custom'
+                                                                                    ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                                                                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                                                            }`}
+                                                                        >
+                                                                            Custom
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex items-center gap-1">
+                                                                    <span className="text-xs text-gray-500 dark:text-gray-400">Audience:</span>
+                                                                    <div className="flex gap-1">
+                                                                        <button
+                                                                            onClick={() => onUpdateTargetAudience?.(actionPayload, 'free')}
+                                                                            className={`px-2 py-0.5 text-xs font-medium rounded ${
+                                                                                (cardState?.targetAudience || 'free') === 'free'
+                                                                                    ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
+                                                                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                                                            }`}
+                                                                        >
+                                                                            Free Fan
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => onUpdateTargetAudience?.(actionPayload, 'paid')}
+                                                                            className={`px-2 py-0.5 text-xs font-medium rounded ${
+                                                                                cardState?.targetAudience === 'paid'
+                                                                                    ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
+                                                                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                                                            }`}
+                                                                        >
+                                                                            Paid Fan
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                         <p className="text-sm text-gray-700 dark:text-gray-300 font-medium mb-1">
                                                             {postIdea}
                                                         </p>
@@ -766,12 +823,12 @@ const WeeklyPlanFormatter: React.FC<{ plan: any } & WeeklyPlanActionHandlers> = 
                                                     </div>
                                                 </div>
                                                 {cardState?.mediaUrl && (
-                                                    <div className="mt-3">
+                                                    <div className={`mt-3 ${isUsed ? 'opacity-50 grayscale' : ''}`}>
                                                         {cardState.mediaType === 'video' ? (
                                                             <video
                                                                 src={cardState.mediaUrl}
                                                                 className="w-full max-w-sm rounded-lg border border-gray-200 dark:border-gray-700"
-                                                                controls
+                                                                controls={!isUsed}
                                                             />
                                                         ) : (
                                                             <img
@@ -863,33 +920,6 @@ const WeeklyPlanFormatter: React.FC<{ plan: any } & WeeklyPlanActionHandlers> = 
                                                                 >
                                                                     Choose from vault
                                                                 </button>
-                                                            </div>
-                                                        )}
-                                                        {cardState?.isEditing && !isUsed && (
-                                                            <div className="w-full mt-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md border border-gray-200 dark:border-gray-600 space-y-3">
-                                                                <div className="flex flex-col gap-1">
-                                                                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Content Type</label>
-                                                                    <select
-                                                                        value={cardState.contentType || 'free'}
-                                                                        onChange={(e) => onUpdateContentType?.(actionPayload, e.target.value as 'free' | 'paid' | 'custom')}
-                                                                        className="px-2 py-1 text-xs rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200"
-                                                                    >
-                                                                        <option value="free">Free</option>
-                                                                        <option value="paid">Paid</option>
-                                                                        <option value="custom">Custom</option>
-                                                                    </select>
-                                                                </div>
-                                                                <div className="flex flex-col gap-1">
-                                                                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Target Audience</label>
-                                                                    <select
-                                                                        value={cardState.targetAudience || 'free'}
-                                                                        onChange={(e) => onUpdateTargetAudience?.(actionPayload, e.target.value as 'free' | 'paid')}
-                                                                        className="px-2 py-1 text-xs rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200"
-                                                                    >
-                                                                        <option value="free">Free Fan</option>
-                                                                        <option value="paid">Paid Fan</option>
-                                                                    </select>
-                                                                </div>
                                                             </div>
                                                         )}
                                                         {cardState?.showSchedulePicker && !isUsed && (
@@ -1519,7 +1549,8 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
     }
 
     const handleGenerateCaptions = async (promptOverride?: string) => {
-        const promptSeed = (promptOverride ?? captionPrompt) || '';
+        // Ensure promptSeed is always a string
+        const promptSeed = String(promptOverride ?? captionPrompt ?? '');
         if (promptOverride && promptOverride !== captionPrompt) {
             setCaptionPrompt(promptOverride);
         }
@@ -1994,7 +2025,10 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
     
     // Load weekly plan card states when plan is loaded
     useEffect(() => {
-        if (!user?.id || !generatedWeeklyPlan) return;
+        if (!user?.id || !generatedWeeklyPlan) {
+            // Don't clear card states when plan is cleared - they should persist
+            return;
+        }
         
         const loadCardStates = async () => {
             try {
@@ -2005,7 +2039,11 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
                 if (cardStatesDoc.exists()) {
                     const data = cardStatesDoc.data();
                     if (data.cardStates) {
-                        setWeeklyPlanCardState(data.cardStates);
+                        // Merge with existing state to preserve any local changes
+                        setWeeklyPlanCardState(prev => ({
+                            ...prev,
+                            ...data.cardStates,
+                        }));
                     }
                 }
             } catch (error) {
@@ -3738,7 +3776,7 @@ Output format:
                     tone: finalTone === 'Explicit' ? 'Sexy / Explicit' : finalTone,
                     goal: captionGoal,
                     platforms: [selectedPlatform],
-                    promptText: `${(captionPrompt || '') || `Analyze this image/video in detail and describe what you see. Create explicit ${selectedPlatform} captions based on the actual content shown. Be very descriptive and explicit about what is visually present. Mention ${selectedPlatform} naturally only when it helps drive subs.`} [Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`.trim(),
+                    promptText: `${String(captionPrompt || '') || `Analyze this image/video in detail and describe what you see. Create explicit ${selectedPlatform} captions based on the actual content shown. Be very descriptive and explicit about what is visually present. Mention ${selectedPlatform} naturally only when it helps drive subs.`} [Variety seed: ${Date.now()}-${Math.random().toString(36).substr(2, 9)}] - Generate diverse, unique captions each time. Avoid repetition.`.trim(),
                     emojiEnabled: emojiSettings.enabled,
                     emojiIntensity: emojiSettings.intensity,
                 }),

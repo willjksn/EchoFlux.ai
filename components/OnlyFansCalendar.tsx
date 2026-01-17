@@ -746,53 +746,54 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                                 </div>
                                                                 {event.type === 'post' && event.thumbnail && (
                                                                     <div className="mb-1 relative w-full h-8">
+                                                                        {/* Video preview - show image if thumbnail/poster exists, otherwise show video element */}
                                                                         {event.post?.mediaType === 'video' ? (
-                                                                            // For videos, prefer thumbnail/poster image if available
                                                                             (event.post as any)?.thumbnailUrl || (event.post as any)?.posterUrl ? (
                                                                                 <img
                                                                                     src={(event.post as any).thumbnailUrl || (event.post as any).posterUrl}
                                                                                     alt="Video preview"
                                                                                     className="w-full h-8 rounded-md object-cover border border-gray-200 dark:border-gray-700"
                                                                                     onError={(e) => {
-                                                                                        // Hide image on error, will fallback to video element below
+                                                                                        // Hide image on error and fall back to video element
                                                                                         const img = e.target as HTMLImageElement;
                                                                                         img.style.display = 'none';
+                                                                                        // Try to show video element instead
+                                                                                        const videoElement = img.parentElement?.querySelector('video') as HTMLVideoElement;
+                                                                                        if (videoElement && event.thumbnail) {
+                                                                                            videoElement.style.display = 'block';
+                                                                                        }
                                                                                     }}
                                                                                     loading="lazy"
                                                                                 />
+                                                                            ) : event.thumbnail ? (
+                                                                                <video
+                                                                                    src={event.thumbnail}
+                                                                                    className="w-full h-8 rounded-md object-cover border border-gray-200 dark:border-gray-700"
+                                                                                    muted
+                                                                                    playsInline
+                                                                                    preload="metadata"
+                                                                                    onLoadedMetadata={(e) => {
+                                                                                        // Seek to first frame to ensure it displays
+                                                                                        const video = e.target as HTMLVideoElement;
+                                                                                        video.currentTime = 0.1; // Seek to 0.1s to get first frame
+                                                                                    }}
+                                                                                    onSeeked={(e) => {
+                                                                                        // Pause after seeking to first frame
+                                                                                        const video = e.target as HTMLVideoElement;
+                                                                                        video.pause();
+                                                                                    }}
+                                                                                    onError={(e) => {
+                                                                                        // Hide video on error
+                                                                                        const video = e.target as HTMLVideoElement;
+                                                                                        video.style.display = 'none';
+                                                                                        if (process.env.NODE_ENV === 'development') {
+                                                                                            console.warn('Failed to load calendar video thumbnail:', event.thumbnail);
+                                                                                        }
+                                                                                    }}
+                                                                                    style={{ pointerEvents: 'none' }}
+                                                                                />
                                                                             ) : null
-                                                                        ) : null}
-                                                                        {/* Video element - shows first frame as thumbnail when no dedicated thumbnail image */}
-                                                                        {event.post?.mediaType === 'video' && !(event.post as any)?.thumbnailUrl && !(event.post as any)?.posterUrl && (
-                                                                            <video
-                                                                                src={event.thumbnail}
-                                                                                className="w-full h-8 rounded-md object-cover border border-gray-200 dark:border-gray-700"
-                                                                                muted
-                                                                                playsInline
-                                                                                preload="metadata"
-                                                                                onLoadedMetadata={(e) => {
-                                                                                    // Seek to first frame to ensure it displays
-                                                                                    const video = e.target as HTMLVideoElement;
-                                                                                    video.currentTime = 0.1; // Seek to 0.1s to get first frame
-                                                                                }}
-                                                                                onSeeked={(e) => {
-                                                                                    // Pause after seeking to first frame
-                                                                                    const video = e.target as HTMLVideoElement;
-                                                                                    video.pause();
-                                                                                }}
-                                                                                onError={(e) => {
-                                                                                    // Hide video on error
-                                                                                    const video = e.target as HTMLVideoElement;
-                                                                                    video.style.display = 'none';
-                                                                                    if (process.env.NODE_ENV === 'development') {
-                                                                                        console.warn('Failed to load calendar video thumbnail:', event.thumbnail);
-                                                                                    }
-                                                                                }}
-                                                                                style={{ pointerEvents: 'none' }}
-                                                                            />
-                                                                        )}
-                                                                        {/* Image element for non-video posts */}
-                                                                        {event.post?.mediaType !== 'video' && (
+                                                                        ) : (
                                                                             <img
                                                                                 src={event.thumbnail}
                                                                                 alt="Preview"
@@ -848,16 +849,6 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                                         </span>
                                                                     )}
                                                                 </div>
-                                                                {event.type === 'post' && event.status && (
-                                                                    <div 
-                                                                        className="mt-1.5"
-                                                                        style={{ pointerEvents: 'none' }}
-                                                                    >
-                                                                        <span className="text-[10px] sm:text-[9px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                                                                            {event.status}
-                                                                        </span>
-                                                                    </div>
-                                                                )}
                                                             </div>
                                                             {event.type === 'post' && (
                                                                 <button
