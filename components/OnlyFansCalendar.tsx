@@ -732,7 +732,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                                         <img
                                                                             src={event.thumbnail}
                                                                             alt="Preview"
-                                                                            className="w-full h-14 rounded-md object-cover border border-gray-200 dark:border-gray-700"
+                                                                            className="w-full h-10 rounded-md object-cover border border-gray-200 dark:border-gray-700"
                                                                         />
                                                                     </div>
                                                                 )}

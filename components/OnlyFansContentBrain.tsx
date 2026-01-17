@@ -222,6 +222,8 @@ const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: 
     );
 };
 
+export { OnlyFansContentBrain };
+
 // Repurpose Modal Component (similar to Compose)
 const RepurposeModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: string) => void; onSave?: () => void; showToast?: (message: string, type: 'success' | 'error') => void }> = ({ result, onClose, onCopy, onSave, showToast }) => {
     const repurposedContent = result.repurposedContent || [];
