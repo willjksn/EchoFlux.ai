@@ -2104,6 +2104,10 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
         if (!user?.id) return;
         try {
             const cardState = weeklyPlanCardState[action.cardKey];
+            if (!cardState?.mediaUrl) {
+                showToast?.('Upload media before scheduling this drop.', 'error');
+                return;
+            }
             const plannedDate = resolveWeeklyPlanDate(
                 action.weekIndex,
                 action.day,
@@ -2112,7 +2116,6 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
                 cardState?.scheduleTime
             );
             const lower = `${action.postType} ${action.postIdea}`.toLowerCase();
-            const reminderType = lower.includes('shoot') || lower.includes('film') ? 'shoot' : 'post';
             const contentType = lower.includes('custom')
                 ? 'custom'
                 : lower.includes('ppv') || lower.includes('paid') || lower.includes('bundle')
@@ -2127,18 +2130,25 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
             const description = descriptionParts.length ? descriptionParts.join('\n') : undefined;
             const titleBase = action.postIdea || action.postType || 'Planned post';
             const title = titleBase.length > 80 ? `${titleBase.slice(0, 77)}...` : titleBase;
+            const postId = Date.now().toString();
+            const captionText = cardState?.caption || action.postIdea || '';
+            const ctaText = cardState?.cta || '';
+            const postContent = [captionText, ctaText].filter(Boolean).join('\n\n');
 
-            await addDoc(collection(db, 'users', user.id, 'onlyfans_calendar_events'), {
-                title,
-                date: plannedDate.toISOString(),
-                reminderType,
-                contentType,
+            await setDoc(doc(db, 'users', user.id, 'posts', postId), {
+                id: postId,
+                content: postContent || title,
+                mediaUrl: cardState.mediaUrl,
+                mediaType: cardState.mediaType || 'image',
+                platforms: ['OnlyFans'],
+                status: 'Scheduled',
+                scheduledDate: plannedDate.toISOString(),
+                timestamp: new Date().toISOString(),
                 description,
-                createdAt: new Date().toISOString(),
-                userId: user.id,
+                contentType,
             });
             updateWeeklyPlanCardState(action.cardKey, { used: true, showSchedulePicker: false });
-            showToast?.('Added to your calendar as a reminder.', 'success');
+            showToast?.('Added to your calendar as a scheduled drop.', 'success');
         } catch (error) {
             console.error('Error adding weekly plan to calendar:', error);
             showToast?.('Failed to add to calendar. Please try again.', 'error');

@@ -124,6 +124,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                     status: post.status as 'Draft' | 'Scheduled' | 'Published',
                     post: post,
                     thumbnail: post.mediaUrl || undefined,
+                    contentType: (post as any).contentType,
                 });
             });
         }
@@ -760,8 +761,34 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                                         </span>
                                                                     </div>
                                                                 )}
+                                                                {event.type === 'post' && event.thumbnail && (
+                                                                    <div className="mt-1.5 flex items-center gap-2" style={{ pointerEvents: 'none' }}>
+                                                                        <img
+                                                                            src={event.thumbnail}
+                                                                            alt="Preview"
+                                                                            className="w-10 h-10 rounded-md object-cover border border-gray-200 dark:border-gray-700"
+                                                                        />
+                                                                        {event.contentType && (
+                                                                            <span className="text-[9px] sm:text-[8px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                                                                                {event.contentType}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                )}
 
                                                             </div>
+                                                            {event.type === 'post' && (
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleEventClick(event);
+                                                                        setIsEditing(true);
+                                                                    }}
+                                                                    className="absolute top-2 right-2 px-2 py-0.5 text-[9px] sm:text-[8px] rounded-full bg-white/90 dark:bg-gray-800/80 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 hover:bg-white"
+                                                                >
+                                                                    Edit
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     );
                                                 })}
