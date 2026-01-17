@@ -583,6 +583,7 @@ type WeeklyPlanActionHandlers = {
     onToggleEdit?: (action: WeeklyPlanDayAction) => void;
     onUpdateContentType?: (action: WeeklyPlanDayAction, value: 'free' | 'paid' | 'custom') => void;
     onUpdateTargetAudience?: (action: WeeklyPlanDayAction, value: 'free' | 'paid') => void;
+    onDeleteMedia?: (action: WeeklyPlanDayAction) => void;
 };
 
 const WeeklyPlanFormatter: React.FC<{ plan: any } & WeeklyPlanActionHandlers> = ({
@@ -602,6 +603,7 @@ const WeeklyPlanFormatter: React.FC<{ plan: any } & WeeklyPlanActionHandlers> = 
     onToggleEdit,
     onUpdateContentType,
     onUpdateTargetAudience,
+    onDeleteMedia,
 }) => {
     if (!plan) return null;
     
@@ -857,6 +859,21 @@ const WeeklyPlanFormatter: React.FC<{ plan: any } & WeeklyPlanActionHandlers> = 
                                                                         <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
                                                                     </svg>
                                                                 </div>
+                                                            )}
+                                                            {/* Delete media button */}
+                                                            {!isUsed && onDeleteMedia && (
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        if (window.confirm('Are you sure you want to remove this media? You can upload a new one after.')) {
+                                                                            onDeleteMedia(actionPayload);
+                                                                        }
+                                                                    }}
+                                                                    className="absolute top-1 right-1 p-1 bg-red-600 hover:bg-red-700 text-white rounded-full opacity-80 hover:opacity-100 transition-opacity"
+                                                                    title="Delete media"
+                                                                >
+                                                                    <TrashIcon className="w-3 h-3" />
+                                                                </button>
                                                             )}
                                                         </div>
                                                     )}
@@ -1975,10 +1992,11 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
             const planWithId = { ...plan, id: planId };
             // Store the plan object (not stringified)
             setGeneratedWeeklyPlan(planWithId);
-            // Save to history
+            // Save to history (card states will be saved separately to Firestore as they're updated)
             await saveToHistory('weekly_plan', `Weekly Plan - ${new Date().toLocaleDateString()}`, { 
                 plan: planWithId, 
                 prompt: weeklyPlanPrompt,
+                cardStates: weeklyPlanCardState, // Include any existing card states
             });
             showToast?.('Weekly plan generated successfully!', 'success');
 
@@ -1999,7 +2017,7 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
         }
     };
 
-    const formatWeeklyPlanForCopy = (plan: any): string => {
+    const formatWeeklyPlanForCopy = (plan: any, cardStates?: Record<string, WeeklyPlanCardState>): string => {
         if (!plan) return '';
         
         // Handle string plans
@@ -2090,7 +2108,29 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
                         output += '\n';
                     }
                     
-                    if (cta) {
+                    // Include card state info if available (captions, media, etc.)
+                    const cardKey = `week-${weekIndex}-day-${dayIndex}`;
+                    const cardState = cardStates?.[cardKey];
+                    
+                    if (cardState) {
+                        if (cardState.contentType) {
+                            output += `Content Type: ${cardState.contentType.toUpperCase()}\n`;
+                        }
+                        if (cardState.targetAudience) {
+                            output += `Target Audience: ${cardState.targetAudience === 'paid' ? 'Paid Fan' : 'Free Fan'}\n`;
+                        }
+                        if (cardState.mediaUrl) {
+                            output += `Media: ${cardState.mediaType === 'video' ? 'Video' : 'Image'} uploaded\n`;
+                        }
+                        if (cardState.caption) {
+                            output += `\nGenerated Caption:\n${cardState.caption}\n\n`;
+                        }
+                        if (cardState.cta) {
+                            output += `Generated CTA: ${cardState.cta}\n\n`;
+                        }
+                    }
+                    
+                    if (cta && !cardState?.cta) {
                         output += `CTA: ${cta}\n\n`;
                     }
                     
@@ -2178,6 +2218,39 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
         
         loadCardStates();
     }, [user?.id, generatedWeeklyPlan?.id]);
+
+    // Auto-save card states when modal closes or component unmounts
+    useEffect(() => {
+        if (!user?.id || !generatedWeeklyPlan || Object.keys(weeklyPlanCardState).length === 0) {
+            return;
+        }
+
+        const saveCardStates = async () => {
+            try {
+                const planId = generatedWeeklyPlan.id || `plan_${Date.now()}`;
+                const cardStatesRef = doc(db, 'users', user.id, 'onlyfans_weekly_plan_states', planId);
+                await setDoc(cardStatesRef, {
+                    planId,
+                    cardStates: weeklyPlanCardState,
+                    updatedAt: new Date().toISOString(),
+                }, { merge: true });
+            } catch (error) {
+                console.error('Error auto-saving weekly plan card state:', error);
+            }
+        };
+
+        // Save when modal closes
+        if (!showSavedItemModal && viewingSavedItem?.type === 'weekly_plan') {
+            saveCardStates();
+        }
+
+        // Save on component unmount or when leaving
+        return () => {
+            if (generatedWeeklyPlan) {
+                saveCardStates();
+            }
+        };
+    }, [user?.id, generatedWeeklyPlan?.id, showSavedItemModal, viewingSavedItem?.type, weeklyPlanCardState]);
 
     const getDayOffsetFromName = (dayName?: string) => {
         if (!dayName) return null;
@@ -2494,6 +2567,16 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
 
     const handleWeeklyPlanUpdateTargetAudience = (action: WeeklyPlanDayAction, value: 'free' | 'paid') => {
         updateWeeklyPlanCardState(action.cardKey, { targetAudience: value });
+    };
+
+    const handleWeeklyPlanDeleteMedia = (action: WeeklyPlanDayAction) => {
+        updateWeeklyPlanCardState(action.cardKey, {
+            mediaUrl: undefined,
+            mediaType: undefined,
+            caption: undefined,
+            cta: undefined,
+        });
+        showToast?.('Media removed. You can upload a new one.', 'success');
     };
 
     const handleCreateContentFromTrend = (trend: AdultTrendOpportunity) => {
@@ -6069,7 +6152,19 @@ Output format:
                                                                         if (cardStatesDoc.exists()) {
                                                                             const data = cardStatesDoc.data();
                                                                             if (data.cardStates) {
-                                                                                setWeeklyPlanCardState(data.cardStates);
+                                                                                // Merge with any existing states to preserve changes
+                                                                                setWeeklyPlanCardState(prev => ({
+                                                                                    ...prev,
+                                                                                    ...data.cardStates,
+                                                                                }));
+                                                                            }
+                                                                        } else {
+                                                                            // If no card states in Firestore, try loading from saved item data
+                                                                            if (saved.data?.cardStates) {
+                                                                                setWeeklyPlanCardState(prev => ({
+                                                                                    ...prev,
+                                                                                    ...saved.data.cardStates,
+                                                                                }));
                                                                             }
                                                                         }
                                                                     } catch (error) {
@@ -6237,7 +6332,7 @@ Output format:
                                 </h3>
                                 <button
                                     onClick={() => {
-                                        const formattedText = formatWeeklyPlanForCopy(generatedWeeklyPlan);
+                                        const formattedText = formatWeeklyPlanForCopy(generatedWeeklyPlan, weeklyPlanCardState);
                                         copyToClipboard(formattedText);
                                         showToast?.('Weekly plan copied to clipboard!', 'success');
                                     }}
@@ -6265,6 +6360,7 @@ Output format:
                                     onToggleEdit={handleWeeklyPlanToggleEdit}
                                     onUpdateContentType={handleWeeklyPlanUpdateContentType}
                                     onUpdateTargetAudience={handleWeeklyPlanUpdateTargetAudience}
+                                    onDeleteMedia={handleWeeklyPlanDeleteMedia}
                                 />
                             </div>
                         </div>
@@ -7197,10 +7293,13 @@ Output format:
                                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Weekly Plan</h3>
                                             <button
                                                 onClick={() => {
-                                                    const planToCopy = typeof viewingSavedItem.data.plan === 'string' 
-                                                        ? viewingSavedItem.data.plan 
-                                                        : JSON.stringify(viewingSavedItem.data.plan, null, 2);
-                                                    copyToClipboard(planToCopy);
+                                                    // Get card states from Firestore or saved data
+                                                    const cardStatesToUse = weeklyPlanCardState && Object.keys(weeklyPlanCardState).length > 0 
+                                                        ? weeklyPlanCardState 
+                                                        : viewingSavedItem.data?.cardStates;
+                                                    const formattedText = formatWeeklyPlanForCopy(viewingSavedItem.data.plan, cardStatesToUse);
+                                                    copyToClipboard(formattedText);
+                                                    showToast?.('Weekly plan copied to clipboard!', 'success');
                                                 }}
                                                 className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-1"
                                             >
@@ -7226,6 +7325,7 @@ Output format:
                                                 onToggleEdit={handleWeeklyPlanToggleEdit}
                                                 onUpdateContentType={handleWeeklyPlanUpdateContentType}
                                                 onUpdateTargetAudience={handleWeeklyPlanUpdateTargetAudience}
+                                                onDeleteMedia={handleWeeklyPlanDeleteMedia}
                                             />
                                         </div>
                                     </div>
