@@ -173,6 +173,7 @@ export const Calendar: React.FC = () => {
         // Create calendar events from posts (Scheduled, Published, and Draft)
         const eventsFromPosts: CalendarEvent[] = scheduledPosts.map(post => {
             const platforms = post.platforms || [];
+            const previewUrl = post.mediaUrl || (Array.isArray(post.mediaUrls) ? post.mediaUrls[0] : undefined);
             return platforms.map((platform, idx) => {
                 const eventDate = post.scheduledDate || new Date().toISOString();
                 const parsedDate = new Date(eventDate);
@@ -192,7 +193,7 @@ export const Calendar: React.FC = () => {
                     type: eventType,
                     platform: platform,
                     status: post.status as 'Scheduled' | 'Published' | 'Draft',
-                    thumbnail: post.mediaUrl || undefined,
+                    thumbnail: previewUrl,
                 };
             });
         }).flat();
@@ -679,10 +680,10 @@ export const Calendar: React.FC = () => {
                                         </span>
                                         <div className={`w-2.5 h-2.5 sm:w-2 sm:h-2 rounded-full flex-shrink-0 shadow-sm ${colors.dot}`}></div>
                                     </div>
-                                    {!isReminder && (associatedPost?.mediaUrl || evt.thumbnail) && (
+                                    {!isReminder && (associatedPost?.mediaUrl || (Array.isArray(associatedPost?.mediaUrls) ? associatedPost?.mediaUrls[0] : undefined) || evt.thumbnail) && (
                                         <div className="mb-1">
                                             <img
-                                                src={associatedPost?.mediaUrl || evt.thumbnail}
+                                                src={associatedPost?.mediaUrl || (Array.isArray(associatedPost?.mediaUrls) ? associatedPost?.mediaUrls[0] : undefined) || evt.thumbnail}
                                                 alt="Preview"
                                                 className="w-full h-10 rounded-md object-cover border border-gray-200 dark:border-gray-700"
                                             />

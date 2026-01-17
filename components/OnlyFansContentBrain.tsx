@@ -3818,14 +3818,14 @@ Output format:
     }, [showMediaVaultModal]);
 
     const allTabs: { id: ContentType; label: string }[] = [
-        { id: 'captions', label: 'Captions' },
-        { id: 'mediaCaptions', label: 'Image/Video Captions' }, // Hidden but kept for stability
-        { id: 'postIdeas', label: 'Content Ideas' },
         { id: 'trends', label: 'Find Trends' },
-        { id: 'shootConcepts', label: 'Shoot Ideas' },
         { id: 'weeklyPlan', label: 'Plan My Week' },
+        { id: 'captions', label: 'Captions' },
+        { id: 'postIdeas', label: 'Content Ideas' },
+        { id: 'shootConcepts', label: 'Shoot Ideas' },
         { id: 'monetizationPlanner', label: 'Drops & PPV' },
         { id: 'messaging', label: 'DM Sessions' },
+        { id: 'mediaCaptions', label: 'Image/Video Captions' }, // Hidden but kept for stability
         { id: 'guides', label: 'Playbooks' },
     ];
     // Filter out mediaCaptions and guides tabs (history is now in captions tab)

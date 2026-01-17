@@ -116,6 +116,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
             );
             
             onlyFansPosts.forEach(post => {
+                const previewUrl = post.mediaUrl || (Array.isArray(post.mediaUrls) ? post.mediaUrls[0] : undefined);
                 events.push({
                     id: `post-${post.id}`,
                     title: post.content?.substring(0, 30) + '...' || 'Drop',
@@ -123,7 +124,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                     type: 'post',
                     status: post.status as 'Draft' | 'Scheduled' | 'Published',
                     post: post,
-                    thumbnail: post.mediaUrl || undefined,
+                    thumbnail: previewUrl,
                     contentType: (post as any).contentType,
                 });
             });
