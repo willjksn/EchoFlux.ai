@@ -769,6 +769,10 @@ export const OnlyFansContentBrain: React.FC = () => {
     const [trendFilterPlatform, setTrendFilterPlatform] = useState<'All' | 'OnlyFans' | 'Fansly' | 'Fanvue'>('All');
     const [trendFilterType, setTrendFilterType] = useState<'All' | AdultTrendOpportunity['type']>('All');
     const [trendSortBy, setTrendSortBy] = useState<'relevance' | 'engagement' | 'trending'>('engagement');
+    const [trendsHistory, setTrendsHistory] = useState<any[]>([]);
+    const [showTrendsHistory, setShowTrendsHistory] = useState(true);
+    const [monthlyTrendsUsed, setMonthlyTrendsUsed] = useState<number>(0);
+    const [trendsUsageMonth, setTrendsUsageMonth] = useState<string>('');
     
     // Monetization planner state
     const [monetizationGoals, setMonetizationGoals] = useState<string[]>([]);
@@ -804,10 +808,6 @@ export const OnlyFansContentBrain: React.FC = () => {
     const [savedMonetizationPlans, setSavedMonetizationPlans] = useState<any[]>([]);
     
     // Collapse state for saved items sections
-    const [showSavedPostIdeas, setShowSavedPostIdeas] = useState(true);
-    const [showSavedShootConcepts, setShowSavedShootConcepts] = useState(true);
-    const [showSavedWeeklyPlans, setShowSavedWeeklyPlans] = useState(true);
-    const [showSavedMonetizationPlans, setShowSavedMonetizationPlans] = useState(true);
 
     // Modal state for AI features
     const [optimizeResult, setOptimizeResult] = useState<any>(null);
@@ -1071,6 +1071,16 @@ export const OnlyFansContentBrain: React.FC = () => {
         if (user?.id) {
             loadCaptionsHistory();
         }
+    }, [user?.id]);
+
+    useEffect(() => {
+        if (!user?.id) return;
+        const monthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+        const storedMonth = (user as any)?.monetizedTrendsUsageMonth || monthKey;
+        const used = storedMonth === monthKey ? Number((user as any)?.monthlyMonetizedTrendsUsed || 0) : 0;
+        setMonthlyTrendsUsed(used);
+        setTrendsUsageMonth(storedMonth);
+        loadTrendsHistory();
     }, [user?.id]);
 
     useEffect(() => {
@@ -1348,8 +1358,8 @@ export const OnlyFansContentBrain: React.FC = () => {
             if (targetAudienceGender) {
                 personalityContext += `\nTarget Audience: ${targetAudienceGender}`;
             }
-            if (explicitnessLevel !== null && explicitnessLevel !== undefined) {
-                personalityContext += `\nExplicitness Level: ${explicitnessLevel}/10`;
+            if (explicitnessLevelSetting !== null && explicitnessLevelSetting !== undefined) {
+                personalityContext += `\nExplicitness Level: ${explicitnessLevelSetting}/10`;
             }
             if (useCreatorPersonalityCaptions && creatorPersonality) {
                 personalityContext += `\n\nCREATOR PERSONALITY:\n${creatorPersonality}`;
@@ -1644,7 +1654,61 @@ export const OnlyFansContentBrain: React.FC = () => {
         }
     };
 
+    const loadTrendsHistory = async () => {
+        if (!user?.id) return;
+        try {
+            const historyRef = collection(db, 'users', user.id, 'onlyfans_trends_history');
+            const q = query(historyRef, orderBy('createdAt', 'desc'), limit(10));
+            const snapshot = await getDocs(q);
+            const items: any[] = [];
+            snapshot.forEach((doc) => {
+                items.push({ id: doc.id, ...doc.data() });
+            });
+            setTrendsHistory(items);
+        } catch (error: any) {
+            if (error.code === 'failed-precondition' || error.message?.includes('index')) {
+                try {
+                    const fallbackRef = collection(db, 'users', user.id, 'onlyfans_trends_history');
+                    const fallbackSnap = await getDocs(query(fallbackRef));
+                    const items: any[] = [];
+                    fallbackSnap.forEach((doc) => {
+                        items.push({ id: doc.id, ...doc.data() });
+                    });
+                    items.sort((a, b) => {
+                        const aTime = a.createdAt?.toDate?.()?.getTime() || new Date(a.createdAt || 0).getTime();
+                        const bTime = b.createdAt?.toDate?.()?.getTime() || new Date(b.createdAt || 0).getTime();
+                        return bTime - aTime;
+                    });
+                    setTrendsHistory(items.slice(0, 10));
+                } catch (fallbackError) {
+                    console.error('Error loading trends history (fallback):', fallbackError);
+                }
+            } else {
+                console.error('Error loading trends history:', error);
+            }
+        }
+    };
+
     const handleFindAdultTrends = async () => {
+        if (!user?.id) {
+            showToast?.('Please sign in to scan trends', 'error');
+            return;
+        }
+
+        const monthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+        const hasStudioAccess = user.role === 'Admin' || ['Elite', 'Agency', 'OnlyFansStudio'].includes(user.plan || '');
+        const limit = user.role === 'Admin' ? Infinity : (hasStudioAccess ? 10 : 0);
+        const usedThisMonth = trendsUsageMonth === monthKey ? monthlyTrendsUsed : 0;
+
+        if (limit === 0) {
+            showToast?.('Upgrade to Creator Elite or Agency to unlock Monetized Trends', 'info');
+            return;
+        }
+        if (isFinite(limit) && usedThisMonth >= limit) {
+            showToast?.('Monthly trends limit reached. Upgrade or wait for next month.', 'info');
+            return;
+        }
+
         const nicheInput = trendsNiche.trim() || 'Adult Content Creator';
         setIsTrendsLoading(true);
         setTrendsError(null);
@@ -1657,6 +1721,35 @@ export const OnlyFansContentBrain: React.FC = () => {
             }
             setTrendResults(trends);
             setTrendsLastScanDate(new Date().toISOString());
+            setMonthlyTrendsUsed(usedThisMonth + 1);
+            setTrendsUsageMonth(monthKey);
+            try {
+                await setDoc(doc(db, 'users', user.id), {
+                    monthlyMonetizedTrendsUsed: usedThisMonth + 1,
+                    monetizedTrendsUsageMonth: monthKey,
+                }, { merge: true });
+            } catch (usageError) {
+                console.warn('Failed to update trends usage counters:', usageError);
+            }
+            try {
+                const historyRef = collection(db, 'users', user.id, 'onlyfans_trends_history');
+                await addDoc(historyRef, {
+                    query: nicheInput,
+                    results: trends,
+                    createdAt: Timestamp.now(),
+                });
+                const cleanupQuery = query(historyRef, orderBy('createdAt', 'desc'));
+                const cleanupSnap = await getDocs(cleanupQuery);
+                if (cleanupSnap.docs.length > 10) {
+                    const toDelete = cleanupSnap.docs.slice(10);
+                    for (const docToDelete of toDelete) {
+                        await deleteDoc(docToDelete.ref);
+                    }
+                }
+                loadTrendsHistory();
+            } catch (saveError) {
+                console.warn('Failed to save trends history:', saveError);
+            }
             showToast?.(`Found ${trends.length} trends`, 'success');
         } catch (error: any) {
             console.error('Error finding adult trends:', error);
@@ -1918,8 +2011,8 @@ NATURAL PERSONALIZATION GUIDELINES:
             if (targetAudienceGender) {
                 personalityContext += `\nTarget Audience: ${targetAudienceGender}`;
             }
-            if (explicitnessLevel !== null && explicitnessLevel !== undefined) {
-                personalityContext += `\nExplicitness Level: ${explicitnessLevel}/10`;
+            if (explicitnessLevelSetting !== null && explicitnessLevelSetting !== undefined) {
+                personalityContext += `\nExplicitness Level: ${explicitnessLevelSetting}/10`;
             }
             if (useCreatorPersonalityMessaging && creatorPersonality) {
                 personalityContext += `\n\nCREATOR PERSONALITY:\n${creatorPersonality}`;
@@ -4415,82 +4508,75 @@ Output format:
                         </div>
                     </div>
 
-                    {/* Saved Post Ideas */}
-                    {savedPostIdeas.length > 0 && (
-                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-                            <div className="flex items-center justify-between mb-3">
-                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                                    Saved Post Ideas ({savedPostIdeas.length})
-                                </h3>
-                                <button
-                                    onClick={() => setShowSavedPostIdeas(!showSavedPostIdeas)}
-                                    className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                >
-                                    {showSavedPostIdeas ? 'Hide' : 'Show'} History
-                                </button>
-                            </div>
-                            {showSavedPostIdeas && (
-                                <div className="space-y-3 max-h-64 overflow-y-auto">
-                                    {savedPostIdeas.map((saved, index) => {
-                                        const mediaUrl = saved.data?.mediaUrl;
-                                        const mediaType = saved.data?.mediaType || 'image';
-                                        return (
-                                            <div
-                                                key={saved.id || index}
-                                                className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
-                                            >
-                                                <div className="flex items-start justify-between mb-2 gap-3">
-                                                    {mediaUrl && (
-                                                        <div className="flex-shrink-0">
-                                                            {mediaType === 'video' ? (
-                                                                <video src={mediaUrl} className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
-                                                            ) : (
-                                                                <img src={mediaUrl} alt="Preview" className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                                                            {saved.title || `Saved ${new Date(saved.createdAt?.toDate?.() || saved.createdAt).toLocaleDateString()}`}
-                                                        </p>
-                                                        {saved.data?.ideas && Array.isArray(saved.data.ideas) && saved.data.ideas.length > 0 && (
-                                                            <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
-                                                                {saved.data.ideas[0]?.substring(0, 100)}...
-                                                            </p>
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                Saved Post Ideas ({savedPostIdeas.length})
+                            </h3>
+                        </div>
+                        {savedPostIdeas.length === 0 ? (
+                            <p className="text-sm text-gray-500 dark:text-gray-400">No saved post ideas yet.</p>
+                        ) : (
+                            <div className="space-y-3 max-h-64 overflow-y-auto">
+                                {savedPostIdeas.map((saved, index) => {
+                                    const mediaUrl = saved.data?.mediaUrl;
+                                    const mediaType = saved.data?.mediaType || 'image';
+                                    return (
+                                        <div
+                                            key={saved.id || index}
+                                            className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
+                                        >
+                                            <div className="flex items-start justify-between mb-2 gap-3">
+                                                {mediaUrl && (
+                                                    <div className="flex-shrink-0">
+                                                        {mediaType === 'video' ? (
+                                                            <video src={mediaUrl} className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
+                                                        ) : (
+                                                            <img src={mediaUrl} alt="Preview" className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
                                                         )}
-                                                        <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                                                            {saved.createdAt?.toDate?.() ? new Date(saved.createdAt.toDate()).toLocaleString() : 'Recently'}
+                                                    </div>
+                                                )}
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                                        {saved.title || `Saved ${new Date(saved.createdAt?.toDate?.() || saved.createdAt).toLocaleDateString()}`}
+                                                    </p>
+                                                    {saved.data?.ideas && Array.isArray(saved.data.ideas) && saved.data.ideas.length > 0 && (
+                                                        <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                                                            {saved.data.ideas[0]?.substring(0, 100)}...
                                                         </p>
-                                                    </div>
-                                                    <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                                                        <button
-                                                            onClick={() => {
-                                                                setViewingSavedItem(saved);
-                                                                setShowSavedItemModal(true);
-                                                            }}
-                                                            className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                                        >
-                                                            View
-                                                        </button>
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleDeleteSavedItem(saved.id, 'post_ideas');
-                                                            }}
-                                                            className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
-                                                            title="Delete"
-                                                        >
-                                                            <TrashIcon className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
+                                                    )}
+                                                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                                        {saved.createdAt?.toDate?.() ? new Date(saved.createdAt.toDate()).toLocaleString() : 'Recently'}
+                                                    </p>
+                                                </div>
+                                                <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                                                    <button
+                                                        onClick={() => {
+                                                            setViewingSavedItem(saved);
+                                                            setShowSavedItemModal(true);
+                                                        }}
+                                                        className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                                    >
+                                                        View
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDeleteSavedItem(saved.id, 'post_ideas');
+                                                        }}
+                                                        className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                                                        title="Delete"
+                                                    >
+                                                        <TrashIcon className="w-4 h-4" />
+                                                    </button>
                                                 </div>
                                             </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
-                    )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
 
                     {/* Generated Post Ideas */}
                     {Array.isArray(generatedPostIdeas) && generatedPostIdeas.length > 0 && (
@@ -4527,11 +4613,21 @@ Output format:
                             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
                                 Find Trends
                             </h2>
-                            {trendsLastScanDate && (
-                                <span className="text-xs text-gray-500 dark:text-gray-400">
-                                    Updated {new Date(trendsLastScanDate).toLocaleDateString()}
-                                </span>
-                            )}
+                            <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+                                <span>Usage: {monthlyTrendsUsed}/10</span>
+                                {trendsLastScanDate && (
+                                    <span>Updated {new Date(trendsLastScanDate).toLocaleDateString()}</span>
+                                )}
+                                <button
+                                    onClick={() => setShowTrendsHistory(!showTrendsHistory)}
+                                    className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
+                                >
+                                    {showTrendsHistory ? 'Hide' : 'Show'} History
+                                    {trendsHistory.length > 0 && (
+                                        <span className="w-2 h-2 bg-red-500 rounded-full" title="History available"></span>
+                                    )}
+                                </button>
+                            </div>
                         </div>
                         <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                             Pulls adult creator trends (updated twice weekly) for OnlyFans, Fansly, and Fanvue.
@@ -4691,6 +4787,26 @@ Output format:
                             </div>
                         </div>
                     )}
+
+                    {showTrendsHistory && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">History</h3>
+                            {trendsHistory.length === 0 ? (
+                                <p className="text-sm text-gray-500 dark:text-gray-400">No scans yet.</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    {trendsHistory.map((item) => (
+                                        <div key={item.id} className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700 py-2">
+                                            <span className="truncate max-w-[70%]">{item.query || 'Trend scan'}</span>
+                                            <span className="text-gray-400 dark:text-gray-500">
+                                                {item.createdAt?.toDate?.()?.toLocaleDateString?.() || new Date(item.createdAt || Date.now()).toLocaleDateString()}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -4825,81 +4941,75 @@ Output format:
                     </div>
 
                     {/* Saved Shoot Concepts */}
-                    {savedShootConcepts.length > 0 && (
-                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-                            <div className="flex items-center justify-between mb-3">
-                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                                    Saved Shoot Concepts ({savedShootConcepts.length})
-                                </h3>
-                                <button
-                                    onClick={() => setShowSavedShootConcepts(!showSavedShootConcepts)}
-                                    className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                >
-                                    {showSavedShootConcepts ? 'Hide' : 'Show'} History
-                                </button>
-                            </div>
-                            {showSavedShootConcepts && (
-                                <div className="space-y-3 max-h-64 overflow-y-auto">
-                                    {savedShootConcepts.map((saved, index) => {
-                                        const mediaUrl = saved.data?.mediaUrl;
-                                        const mediaType = saved.data?.mediaType || 'image';
-                                        return (
-                                            <div
-                                                key={saved.id || index}
-                                                className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
-                                            >
-                                                <div className="flex items-start justify-between mb-2 gap-3">
-                                                    {mediaUrl && (
-                                                        <div className="flex-shrink-0">
-                                                            {mediaType === 'video' ? (
-                                                                <video src={mediaUrl} className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
-                                                            ) : (
-                                                                <img src={mediaUrl} alt="Preview" className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                                                            {saved.title || `Saved ${new Date(saved.createdAt?.toDate?.() || saved.createdAt).toLocaleDateString()}`}
-                                                        </p>
-                                                        {saved.data?.concepts && Array.isArray(saved.data.concepts) && saved.data.concepts.length > 0 && (
-                                                            <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
-                                                                {saved.data.concepts[0]?.substring(0, 100)}...
-                                                            </p>
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                Saved Shoot Concepts ({savedShootConcepts.length})
+                            </h3>
+                        </div>
+                        {savedShootConcepts.length === 0 ? (
+                            <p className="text-sm text-gray-500 dark:text-gray-400">No saved shoot concepts yet.</p>
+                        ) : (
+                            <div className="space-y-3 max-h-64 overflow-y-auto">
+                                {savedShootConcepts.map((saved, index) => {
+                                    const mediaUrl = saved.data?.mediaUrl;
+                                    const mediaType = saved.data?.mediaType || 'image';
+                                    return (
+                                        <div
+                                            key={saved.id || index}
+                                            className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
+                                        >
+                                            <div className="flex items-start justify-between mb-2 gap-3">
+                                                {mediaUrl && (
+                                                    <div className="flex-shrink-0">
+                                                        {mediaType === 'video' ? (
+                                                            <video src={mediaUrl} className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
+                                                        ) : (
+                                                            <img src={mediaUrl} alt="Preview" className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
                                                         )}
-                                                        <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                                                            {saved.createdAt?.toDate?.() ? new Date(saved.createdAt.toDate()).toLocaleString() : 'Recently'}
+                                                    </div>
+                                                )}
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                                        {saved.title || `Saved ${new Date(saved.createdAt?.toDate?.() || saved.createdAt).toLocaleDateString()}`}
+                                                    </p>
+                                                    {saved.data?.concepts && Array.isArray(saved.data.concepts) && saved.data.concepts.length > 0 && (
+                                                        <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                                                            {saved.data.concepts[0]?.substring(0, 100)}...
                                                         </p>
-                                                    </div>
-                                                    <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                                                        <button
-                                                            onClick={() => {
-                                                                setViewingSavedItem(saved);
-                                                                setShowSavedItemModal(true);
-                                                            }}
-                                                            className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                                        >
-                                                            View
-                                                        </button>
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleDeleteSavedItem(saved.id, 'shoot_concepts');
-                                                            }}
-                                                            className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
-                                                            title="Delete"
-                                                        >
-                                                            <TrashIcon className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
+                                                    )}
+                                                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                                        {saved.createdAt?.toDate?.() ? new Date(saved.createdAt.toDate()).toLocaleString() : 'Recently'}
+                                                    </p>
+                                                </div>
+                                                <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                                                    <button
+                                                        onClick={() => {
+                                                            setViewingSavedItem(saved);
+                                                            setShowSavedItemModal(true);
+                                                        }}
+                                                        className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                                    >
+                                                        View
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDeleteSavedItem(saved.id, 'shoot_concepts');
+                                                        }}
+                                                        className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                                                        title="Delete"
+                                                    >
+                                                        <TrashIcon className="w-4 h-4" />
+                                                    </button>
                                                 </div>
                                             </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
-                    )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
 
                     {/* Generated Shoot Concepts */}
                     {Array.isArray(generatedShootConcepts) && generatedShootConcepts.length > 0 && (
@@ -5059,81 +5169,75 @@ Output format:
                     </div>
 
                     {/* Saved Weekly Plans */}
-                    {savedWeeklyPlans.length > 0 && (
-                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-                            <div className="flex items-center justify-between mb-3">
-                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                                    Saved Weekly Plans ({savedWeeklyPlans.length})
-                                </h3>
-                                <button
-                                    onClick={() => setShowSavedWeeklyPlans(!showSavedWeeklyPlans)}
-                                    className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                >
-                                    {showSavedWeeklyPlans ? 'Hide' : 'Show'} History
-                                </button>
-                            </div>
-                            {showSavedWeeklyPlans && (
-                                <div className="space-y-3 max-h-64 overflow-y-auto">
-                                    {savedWeeklyPlans.map((saved, index) => {
-                                        const mediaUrl = saved.data?.mediaUrl;
-                                        const mediaType = saved.data?.mediaType || 'image';
-                                        return (
-                                            <div
-                                                key={saved.id || index}
-                                                className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
-                                            >
-                                                <div className="flex items-start justify-between mb-2 gap-3">
-                                                    {mediaUrl && (
-                                                        <div className="flex-shrink-0">
-                                                            {mediaType === 'video' ? (
-                                                                <video src={mediaUrl} className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
-                                                            ) : (
-                                                                <img src={mediaUrl} alt="Preview" className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                                                            {saved.title || `Saved ${new Date(saved.createdAt?.toDate?.() || saved.createdAt).toLocaleDateString()}`}
-                                                        </p>
-                                                        {saved.data?.plan && (
-                                                            <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
-                                                                {getWeeklyPlanSummary(saved.data.plan)}
-                                                            </p>
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                Saved Weekly Plans ({savedWeeklyPlans.length})
+                            </h3>
+                        </div>
+                        {savedWeeklyPlans.length === 0 ? (
+                            <p className="text-sm text-gray-500 dark:text-gray-400">No saved weekly plans yet.</p>
+                        ) : (
+                            <div className="space-y-3 max-h-64 overflow-y-auto">
+                                {savedWeeklyPlans.map((saved, index) => {
+                                    const mediaUrl = saved.data?.mediaUrl;
+                                    const mediaType = saved.data?.mediaType || 'image';
+                                    return (
+                                        <div
+                                            key={saved.id || index}
+                                            className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
+                                        >
+                                            <div className="flex items-start justify-between mb-2 gap-3">
+                                                {mediaUrl && (
+                                                    <div className="flex-shrink-0">
+                                                        {mediaType === 'video' ? (
+                                                            <video src={mediaUrl} className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
+                                                        ) : (
+                                                            <img src={mediaUrl} alt="Preview" className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
                                                         )}
-                                                        <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                                                            {saved.createdAt?.toDate?.() ? new Date(saved.createdAt.toDate()).toLocaleString() : 'Recently'}
+                                                    </div>
+                                                )}
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                                        {saved.title || `Saved ${new Date(saved.createdAt?.toDate?.() || saved.createdAt).toLocaleDateString()}`}
+                                                    </p>
+                                                    {saved.data?.plan && (
+                                                        <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                                                            {getWeeklyPlanSummary(saved.data.plan)}
                                                         </p>
-                                                    </div>
-                                                    <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                                                        <button
-                                                            onClick={() => {
-                                                                setViewingSavedItem(saved);
-                                                                setShowSavedItemModal(true);
-                                                            }}
-                                                            className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                                        >
-                                                            View
-                                                        </button>
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleDeleteSavedItem(saved.id, 'weekly_plan');
-                                                            }}
-                                                            className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
-                                                            title="Delete"
-                                                        >
-                                                            <TrashIcon className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
+                                                    )}
+                                                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                                        {saved.createdAt?.toDate?.() ? new Date(saved.createdAt.toDate()).toLocaleString() : 'Recently'}
+                                                    </p>
+                                                </div>
+                                                <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                                                    <button
+                                                        onClick={() => {
+                                                            setViewingSavedItem(saved);
+                                                            setShowSavedItemModal(true);
+                                                        }}
+                                                        className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                                    >
+                                                        View
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDeleteSavedItem(saved.id, 'weekly_plan');
+                                                        }}
+                                                        className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                                                        title="Delete"
+                                                    >
+                                                        <TrashIcon className="w-4 h-4" />
+                                                    </button>
                                                 </div>
                                             </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
-                    )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
 
                     {/* Generated Weekly Plan */}
                     {generatedWeeklyPlan && (
@@ -5412,81 +5516,75 @@ Output format:
                     </div>
 
                     {/* Saved Monetization Plans */}
-                    {savedMonetizationPlans.length > 0 && (
-                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-                            <div className="flex items-center justify-between mb-3">
-                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                                    Saved Monetization Plans ({savedMonetizationPlans.length})
-                                </h3>
-                                <button
-                                    onClick={() => setShowSavedMonetizationPlans(!showSavedMonetizationPlans)}
-                                    className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                >
-                                    {showSavedMonetizationPlans ? 'Hide' : 'Show'} History
-                                </button>
-                            </div>
-                            {showSavedMonetizationPlans && (
-                                <div className="space-y-3 max-h-64 overflow-y-auto">
-                                    {savedMonetizationPlans.map((saved, index) => {
-                                        const mediaUrl = saved.data?.mediaUrl;
-                                        const mediaType = saved.data?.mediaType || 'image';
-                                        return (
-                                            <div
-                                                key={saved.id || index}
-                                                className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
-                                            >
-                                                <div className="flex items-start justify-between mb-2 gap-3">
-                                                    {mediaUrl && (
-                                                        <div className="flex-shrink-0">
-                                                            {mediaType === 'video' ? (
-                                                                <video src={mediaUrl} className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
-                                                            ) : (
-                                                                <img src={mediaUrl} alt="Preview" className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                                                            {saved.title || `Saved ${new Date(saved.createdAt?.toDate?.() || saved.createdAt).toLocaleDateString()}`}
-                                                        </p>
-                                                        {saved.data?.summary && (
-                                                            <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
-                                                                {saved.data.summary.substring(0, 100)}...
-                                                            </p>
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                Saved Monetization Plans ({savedMonetizationPlans.length})
+                            </h3>
+                        </div>
+                        {savedMonetizationPlans.length === 0 ? (
+                            <p className="text-sm text-gray-500 dark:text-gray-400">No saved monetization plans yet.</p>
+                        ) : (
+                            <div className="space-y-3 max-h-64 overflow-y-auto">
+                                {savedMonetizationPlans.map((saved, index) => {
+                                    const mediaUrl = saved.data?.mediaUrl;
+                                    const mediaType = saved.data?.mediaType || 'image';
+                                    return (
+                                        <div
+                                            key={saved.id || index}
+                                            className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
+                                        >
+                                            <div className="flex items-start justify-between mb-2 gap-3">
+                                                {mediaUrl && (
+                                                    <div className="flex-shrink-0">
+                                                        {mediaType === 'video' ? (
+                                                            <video src={mediaUrl} className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
+                                                        ) : (
+                                                            <img src={mediaUrl} alt="Preview" className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
                                                         )}
-                                                        <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                                                            {saved.createdAt?.toDate?.() ? new Date(saved.createdAt.toDate()).toLocaleString() : 'Recently'}
+                                                    </div>
+                                                )}
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                                        {saved.title || `Saved ${new Date(saved.createdAt?.toDate?.() || saved.createdAt).toLocaleDateString()}`}
+                                                    </p>
+                                                    {saved.data?.summary && (
+                                                        <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                                                            {saved.data.summary.substring(0, 100)}...
                                                         </p>
-                                                    </div>
-                                                    <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                                                        <button
-                                                            onClick={() => {
-                                                                setViewingSavedItem(saved);
-                                                                setShowSavedItemModal(true);
-                                                            }}
-                                                            className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
-                                                        >
-                                                            View
-                                                        </button>
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleDeleteSavedItem(saved.id, 'monetization_plan');
-                                                            }}
-                                                            className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
-                                                            title="Delete"
-                                                        >
-                                                            <TrashIcon className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
+                                                    )}
+                                                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                                        {saved.createdAt?.toDate?.() ? new Date(saved.createdAt.toDate()).toLocaleString() : 'Recently'}
+                                                    </p>
+                                                </div>
+                                                <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                                                    <button
+                                                        onClick={() => {
+                                                            setViewingSavedItem(saved);
+                                                            setShowSavedItemModal(true);
+                                                        }}
+                                                        className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                                    >
+                                                        View
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDeleteSavedItem(saved.id, 'monetization_plan');
+                                                        }}
+                                                        className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                                                        title="Delete"
+                                                    >
+                                                        <TrashIcon className="w-4 h-4" />
+                                                    </button>
                                                 </div>
                                             </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
-                    )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
 
                     {/* Generated Monetization Plan */}
                     {generatedMonetizationPlan && (

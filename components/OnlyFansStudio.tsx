@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAppContext } from './AppContext';
-import { CopyIcon, SparklesIcon, SettingsIcon, XMarkIcon } from './icons/UIIcons';
+import { CopyIcon, SparklesIcon, SettingsIcon, XMarkIcon, CheckCircleIcon, RefreshIcon } from './icons/UIIcons';
 import { OnlyFansContentBrain } from './OnlyFansContentBrain';
 import { OnlyFansRoleplay } from './OnlyFansRoleplay';
 import { OnlyFansStudioSettings } from './OnlyFansStudioSettings';
@@ -40,6 +40,18 @@ export const OnlyFansStudio: React.FC = () => {
     const [aiPersonality, setAiPersonality] = useState('');
     const [aiTone, setAiTone] = useState('');
     const [explicitnessLevel, setExplicitnessLevel] = useState(7);
+    const [firstWinStatus, setFirstWinStatus] = useState({
+        weeklyPlan: false,
+        dropsPlanned: false,
+        sessionsPlanned: false,
+        promoPack: false,
+        exportPack: false,
+        dropsCount: 0,
+        sessionsCount: 0,
+    });
+    const [weeklyTargets, setWeeklyTargets] = useState({ drops: 3, sessions: 2 });
+    const [isLoadingFirstWin, setIsLoadingFirstWin] = useState(false);
+    const [showFirstWin, setShowFirstWin] = useState(true);
 
     // Fan widgets state
     const [fans, setFans] = useState<any[]>([]);
@@ -287,10 +299,148 @@ export const OnlyFansStudio: React.FC = () => {
         }
     };
 
+    const loadFirstWinProgress = async () => {
+        if (!user?.id || activeView !== 'dashboard') return;
+        setIsLoadingFirstWin(true);
+        try {
+            const historySnap = await getDocs(
+                query(
+                    collection(db, 'users', user.id, 'onlyfans_content_brain_history'),
+                    orderBy('createdAt', 'desc'),
+                    limit(25)
+                )
+            );
+            const now = new Date();
+            const weekAgo = new Date();
+            weekAgo.setDate(now.getDate() - 7);
+
+            const latestWeeklyPlan = historySnap.docs.find((d) => d.data()?.type === 'weekly_plan');
+            const hasWeeklyPlan = historySnap.docs.some((d) => {
+                const data = d.data();
+                if (data?.type !== 'weekly_plan') return false;
+                const createdAt = data?.createdAt?.toDate ? data.createdAt.toDate() : new Date(data?.createdAt || 0);
+                return createdAt >= weekAgo;
+            });
+
+            const hasPromoPack = historySnap.docs.some((d) => {
+                const data = d.data();
+                if (data?.type !== 'teaser_pack') return false;
+                const createdAt = data?.createdAt?.toDate ? data.createdAt.toDate() : new Date(data?.createdAt || 0);
+                return createdAt >= weekAgo;
+            });
+
+            const deriveTargets = (plan: any) => {
+                if (!plan) return { drops: 3, sessions: 2 };
+                let parsed = plan;
+                if (typeof plan === 'string') {
+                    try {
+                        parsed = JSON.parse(plan);
+                    } catch {
+                        const sessions = (plan.match(/session/gi) || []).length;
+                        const drops = (plan.match(/ppv|drop|bundle|teaser|promo/gi) || []).length;
+                        return {
+                            drops: drops > 0 ? drops : 3,
+                            sessions: sessions > 0 ? sessions : 2,
+                        };
+                    }
+                }
+                const actual = parsed?.plan || parsed;
+                const weeks = Array.isArray(actual?.weeks) ? actual.weeks : [];
+                const firstWeek = weeks[0] || actual?.week || actual;
+                const items = Array.isArray(firstWeek?.days)
+                    ? firstWeek.days
+                    : Array.isArray(firstWeek?.content)
+                    ? firstWeek.content
+                    : Array.isArray(firstWeek)
+                    ? firstWeek
+                    : [];
+                let drops = 0;
+                let sessions = 0;
+                items.forEach((item: any) => {
+                    const label =
+                        typeof item === 'string'
+                            ? item
+                            : item?.title || item?.label || item?.type || item?.content || '';
+                    const lower = String(label).toLowerCase();
+                    if (lower.includes('session')) {
+                        sessions += 1;
+                    } else if (lower.includes('ppv') || lower.includes('drop') || lower.includes('bundle') || lower.includes('teaser') || lower.includes('promo')) {
+                        drops += 1;
+                    }
+                });
+                return {
+                    drops: drops > 0 ? drops : 3,
+                    sessions: sessions > 0 ? sessions : 2,
+                };
+            };
+
+            const derivedTargets = latestWeeklyPlan
+                ? deriveTargets(latestWeeklyPlan.data()?.data?.plan ?? latestWeeklyPlan.data()?.plan)
+                : { drops: 3, sessions: 2 };
+
+            setWeeklyTargets(derivedTargets);
+
+            const packagesSnap = await getDocs(
+                query(
+                    collection(db, 'users', user.id, 'onlyfans_export_packages'),
+                    orderBy('createdAt', 'desc'),
+                    limit(1)
+                )
+            );
+            const hasExportPack = !packagesSnap.empty && (() => {
+                const createdAt = packagesSnap.docs[0]?.data()?.createdAt?.toDate
+                    ? packagesSnap.docs[0].data().createdAt.toDate()
+                    : new Date(packagesSnap.docs[0]?.data()?.createdAt || 0);
+                return createdAt >= weekAgo;
+            })();
+
+            const eventsSnap = await getDocs(
+                query(
+                    collection(db, 'users', user.id, 'onlyfans_calendar_events'),
+                    orderBy('date', 'desc'),
+                    limit(50)
+                )
+            );
+            let dropsCount = 0;
+            let sessionsCount = 0;
+            eventsSnap.forEach((docSnap) => {
+                const data: any = docSnap.data() || {};
+                const title = (data.title || '').toLowerCase();
+                const eventDate = data.date?.toDate ? data.date.toDate() : new Date(data.date || 0);
+                const withinNextWeek = eventDate >= now && eventDate <= new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+                if (!withinNextWeek) return;
+                const hasFan = Boolean(data.fanId || data.fanName || title.includes('session'));
+                const isPaid = data.contentType === 'paid';
+                const isPost = data.reminderType === 'post' || !data.reminderType;
+                if (hasFan) {
+                    sessionsCount += 1;
+                }
+                if (isPost && !hasFan) {
+                    dropsCount += 1;
+                }
+            });
+
+            setFirstWinStatus({
+                weeklyPlan: hasWeeklyPlan,
+                dropsPlanned: dropsCount >= derivedTargets.drops,
+                sessionsPlanned: sessionsCount >= derivedTargets.sessions,
+                promoPack: hasPromoPack,
+                exportPack: hasExportPack,
+                dropsCount,
+                sessionsCount,
+            });
+        } catch (error) {
+            console.warn('Error loading First Win progress:', error);
+        } finally {
+            setIsLoadingFirstWin(false);
+        }
+    };
+
     // Load fan data when dashboard is active
     useEffect(() => {
         if (activeView === 'dashboard' && user?.id) {
             loadFanData();
+            loadFirstWinProgress();
         }
     }, [activeView, user?.id]);
 
@@ -407,6 +557,14 @@ export const OnlyFansStudio: React.FC = () => {
             showToast?.('Failed to save teaser pack.', 'error');
         }
     };
+
+    const firstWinCompletedCount = [
+        firstWinStatus.weeklyPlan,
+        firstWinStatus.dropsPlanned,
+        firstWinStatus.sessionsPlanned,
+        firstWinStatus.promoPack,
+        firstWinStatus.exportPack,
+    ].filter(Boolean).length;
 
     if (!hasAccess) {
         return (
@@ -826,6 +984,117 @@ export const OnlyFansStudio: React.FC = () => {
                         Export pack
                     </button>
                 </div>
+            </div>
+
+            {/* Weekly Checklist */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
+                <div className="flex items-center justify-between mb-2">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Weekly checklist</h2>
+                    <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+                        <span>{firstWinCompletedCount}/5 done</span>
+                        <button
+                            onClick={loadFirstWinProgress}
+                            disabled={isLoadingFirstWin}
+                            className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-1"
+                        >
+                            <RefreshIcon className={`w-3.5 h-3.5 ${isLoadingFirstWin ? 'animate-spin' : ''}`} />
+                            Refresh
+                        </button>
+                        <button
+                            onClick={() => setShowFirstWin((prev) => !prev)}
+                            className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                        >
+                            {showFirstWin ? 'Hide' : 'Show'}
+                        </button>
+                    </div>
+                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Plan a full week. Targets: {weeklyTargets.drops} drops, {weeklyTargets.sessions} sessions, promo pack, export pack.
+                </p>
+                {showFirstWin && (
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <div className="flex items-center gap-3">
+                            <CheckCircleIcon className={`w-5 h-5 ${firstWinStatus.weeklyPlan ? 'text-green-600' : 'text-gray-300 dark:text-gray-600'}`} />
+                            <span className="text-sm text-gray-900 dark:text-white">Generate week</span>
+                        </div>
+                        {!firstWinStatus.weeklyPlan && (
+                            <button
+                                onClick={() => setActiveView('contentBrain')}
+                                className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                            >
+                                Do it
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex items-center justify-between gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <div className="flex items-center gap-3">
+                            <CheckCircleIcon className={`w-5 h-5 ${firstWinStatus.dropsPlanned ? 'text-green-600' : 'text-gray-300 dark:text-gray-600'}`} />
+                            <span className="text-sm text-gray-900 dark:text-white">Plan {weeklyTargets.drops} drops</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                                {firstWinStatus.dropsCount}/{weeklyTargets.drops}
+                            </span>
+                            {!firstWinStatus.dropsPlanned && (
+                                <button
+                                    onClick={() => setActiveView('calendar')}
+                                    className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                >
+                                    Do it
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <div className="flex items-center gap-3">
+                            <CheckCircleIcon className={`w-5 h-5 ${firstWinStatus.sessionsPlanned ? 'text-green-600' : 'text-gray-300 dark:text-gray-600'}`} />
+                            <span className="text-sm text-gray-900 dark:text-white">Schedule {weeklyTargets.sessions} sessions</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                                {firstWinStatus.sessionsCount}/{weeklyTargets.sessions}
+                            </span>
+                            {!firstWinStatus.sessionsPlanned && (
+                                <button
+                                    onClick={() => setActiveView('fans')}
+                                    className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                                >
+                                    Do it
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <div className="flex items-center gap-3">
+                            <CheckCircleIcon className={`w-5 h-5 ${firstWinStatus.promoPack ? 'text-green-600' : 'text-gray-300 dark:text-gray-600'}`} />
+                            <span className="text-sm text-gray-900 dark:text-white">Build promo pack</span>
+                        </div>
+                        {!firstWinStatus.promoPack && (
+                            <button
+                                onClick={() => setShowTeaserPackModal(true)}
+                                className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                            >
+                                Do it
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex items-center justify-between gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <div className="flex items-center gap-3">
+                            <CheckCircleIcon className={`w-5 h-5 ${firstWinStatus.exportPack ? 'text-green-600' : 'text-gray-300 dark:text-gray-600'}`} />
+                            <span className="text-sm text-gray-900 dark:text-white">Export pack</span>
+                        </div>
+                        {!firstWinStatus.exportPack && (
+                            <button
+                                onClick={() => setActiveView('export')}
+                                className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                            >
+                                Do it
+                            </button>
+                        )}
+                    </div>
+                </div>
+                )}
             </div>
 
             {/* Quick Fan Stats Bar */}

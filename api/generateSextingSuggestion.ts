@@ -70,6 +70,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     const userData = userDoc.data();
     const userPlan = userData?.plan || "Free";
     const userRole = userData?.role;
+    const explicitnessLevel = typeof userData?.explicitnessLevel === "number" ? userData.explicitnessLevel : 7;
 
     const usageCheck = await canUseAi(user.uid, "sexting_session", userPlan, userRole);
     if (!usageCheck.allowed) {
@@ -124,6 +125,15 @@ REQUIREMENTS:
         ? "8-12"
         : "10-15";
 
+    const explicitnessContext =
+      explicitnessLevel >= 9
+        ? "Go maximally explicit. Use vivid, raw sexual language and detailed descriptions."
+        : explicitnessLevel >= 7
+        ? "Be very explicit and dirty. Use clear sexual language and heat."
+        : explicitnessLevel >= 5
+        ? "Keep it flirty and suggestive with some explicitness."
+        : "Keep it suggestive and playful, avoid graphic detail.";
+
     const prompt = `
 You are an explicit DM session planner for premium creator platforms (OnlyFans / Fansly / Fanvue).
 Your goal is money mode: upsell PPV, keep them buying, and bring them back.
@@ -134,6 +144,7 @@ Session context:
 - Fan name: ${fanName}
 - Session length: ${sessionLength} minutes
 - Goal: ${goal}
+- Explicitness level: ${explicitnessLevel}/10 — ${explicitnessContext}
 ${personalityContext ? personalityContext : ''}
 ${enhancedFanContext || (fanContext ? `- Fan context: ${fanContext}` : "")}
 ${lastFanMessage ? `- Last fan message: "${lastFanMessage}"` : ""}

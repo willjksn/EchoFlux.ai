@@ -9,6 +9,10 @@ import { FanSelector } from './FanSelector';
 interface ExportPackage {
     id?: string;
     caption: string;
+    hashtags?: string;
+    ppvText?: string;
+    dmScripts?: string;
+    checklist?: string;
     mediaUrls: string[]; // Changed from File[] to URLs for Firestore persistence
     mediaNames?: string[]; // Store file names for reference
     suggestedTime: string;
@@ -26,6 +30,10 @@ interface MediaItem {
 export const OnlyFansExportHub: React.FC = () => {
     const { user, showToast } = useAppContext();
     const [caption, setCaption] = useState('');
+    const [hashtags, setHashtags] = useState('');
+    const [ppvText, setPpvText] = useState('');
+    const [dmScripts, setDmScripts] = useState('');
+    const [checklist, setChecklist] = useState('');
     const [mediaFiles, setMediaFiles] = useState<File[]>([]);
     const [mediaUrls, setMediaUrls] = useState<string[]>([]);
     const [mediaNames, setMediaNames] = useState<string[]>([]);
@@ -42,6 +50,9 @@ export const OnlyFansExportHub: React.FC = () => {
     const [copiedItem, setCopiedItem] = useState<string | null>(null); // Track what was copied
     const [selectedFanId, setSelectedFanId] = useState<string | null>(null);
     const [selectedFanName, setSelectedFanName] = useState<string | null>(null);
+    const [contentBrainHistory, setContentBrainHistory] = useState<any[]>([]);
+
+    const getLatestHistoryItem = (type: string) => contentBrainHistory.find(item => item.type === type);
 
     // Load media from Media Vault
     useEffect(() => {
@@ -82,6 +93,10 @@ export const OnlyFansExportHub: React.FC = () => {
                     packages.push({
                         id: docSnap.id,
                         caption: data.caption || '',
+                    hashtags: data.hashtags || '',
+                    ppvText: data.ppvText || '',
+                    dmScripts: data.dmScripts || '',
+                    checklist: data.checklist || '',
                         mediaUrls: data.mediaUrls || [],
                         mediaNames: data.mediaNames || [],
                         suggestedTime: data.suggestedTime || '',
@@ -96,6 +111,57 @@ export const OnlyFansExportHub: React.FC = () => {
         };
         loadPackages();
     }, [user?.id]);
+
+    // Load recent Content Ideas history for quick import
+    useEffect(() => {
+        const loadContentBrainHistory = async () => {
+            if (!user?.id) return;
+            try {
+                const historySnap = await getDocs(query(collection(db, 'users', user.id, 'onlyfans_content_brain_history'), orderBy('createdAt', 'desc'), limit(25)));
+                const items: any[] = [];
+                historySnap.forEach((docSnap) => {
+                    items.push({ id: docSnap.id, ...docSnap.data() });
+                });
+                setContentBrainHistory(items);
+            } catch (error) {
+                console.error('Error loading content ideas history:', error);
+            }
+        };
+        loadContentBrainHistory();
+    }, [user?.id]);
+
+    useEffect(() => {
+        if (!contentBrainHistory.length) return;
+
+        const latestPostIdeas = getLatestHistoryItem('post_ideas');
+        const latestMessages = getLatestHistoryItem('subscriber_messages');
+        const latestWeeklyPlan = getLatestHistoryItem('weekly_plan');
+        const latestMonetizationPlan = getLatestHistoryItem('monetization_plan');
+
+        if (!caption.trim() && latestPostIdeas?.data?.ideas?.length) {
+            setCaption(latestPostIdeas.data.ideas[0]);
+        }
+
+        if (!dmScripts.trim() && latestMessages?.data?.text) {
+            setDmScripts(latestMessages.data.text);
+        }
+
+        if (!checklist.trim()) {
+            const checklistParts: string[] = [];
+            if (latestWeeklyPlan?.data?.plan) {
+                const planText = typeof latestWeeklyPlan.data.plan === 'string'
+                    ? latestWeeklyPlan.data.plan
+                    : JSON.stringify(latestWeeklyPlan.data.plan, null, 2);
+                checklistParts.push(`Weekly plan:\n${planText}`);
+            }
+            if (latestMonetizationPlan?.data?.summary) {
+                checklistParts.push(`Monetization plan:\n${latestMonetizationPlan.data.summary}`);
+            }
+            if (checklistParts.length > 0) {
+                setChecklist(checklistParts.join('\n\n'));
+            }
+        }
+    }, [contentBrainHistory, caption, dmScripts, checklist]);
 
     const handleAddMedia = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);
@@ -234,6 +300,10 @@ export const OnlyFansExportHub: React.FC = () => {
 
             const packageData = {
                 caption,
+                hashtags,
+                ppvText,
+                dmScripts,
+                checklist,
                 mediaUrls: mediaUrls.length > 0 ? mediaUrls : mediaFiles.map(f => URL.createObjectURL(f)),
                 mediaNames: mediaNames.length > 0 ? mediaNames : mediaFiles.map(f => f.name),
                 suggestedTime: suggestedTime || (finalScheduledDate ? new Date(finalScheduledDate).toLocaleString() : new Date().toLocaleString()),
@@ -271,6 +341,10 @@ export const OnlyFansExportHub: React.FC = () => {
             
             // Reset form
             setCaption('');
+            setHashtags('');
+            setPpvText('');
+            setDmScripts('');
+            setChecklist('');
             setMediaFiles([]);
             setMediaUrls([]);
             setMediaNames([]);
@@ -289,6 +363,10 @@ export const OnlyFansExportHub: React.FC = () => {
                 packages.push({
                     id: docSnap.id,
                     caption: data.caption || '',
+                    hashtags: data.hashtags || '',
+                    ppvText: data.ppvText || '',
+                    dmScripts: data.dmScripts || '',
+                    checklist: data.checklist || '',
                     mediaUrls: data.mediaUrls || [],
                     mediaNames: data.mediaNames || [],
                     suggestedTime: data.suggestedTime || '',
@@ -320,6 +398,18 @@ export const OnlyFansExportHub: React.FC = () => {
             exportContent += `\n${'='.repeat(50)}\n\n`;
             
             exportContent += `PRIMARY CAPTION:\n${pkg.caption}\n\n`;
+
+            if (pkg.hashtags) {
+                exportContent += `HASHTAGS:\n${pkg.hashtags}\n\n`;
+            }
+
+            if (pkg.ppvText) {
+                exportContent += `PPV TEXT:\n${pkg.ppvText}\n\n`;
+            }
+
+            if (pkg.dmScripts) {
+                exportContent += `DM SCRIPTS:\n${pkg.dmScripts}\n\n`;
+            }
             
             if (pkg.suggestedTime) {
                 exportContent += `SUGGESTED POST TIME:\n${pkg.suggestedTime}\n\n`;
@@ -330,6 +420,10 @@ export const OnlyFansExportHub: React.FC = () => {
                 pkg.teaserCaptions.forEach(({ platform, caption }) => {
                     exportContent += `${platform}:\n${caption}\n\n`;
                 });
+            }
+
+            if (pkg.checklist) {
+                exportContent += `CHECKLIST:\n${pkg.checklist}\n\n`;
             }
             
             exportContent += `${'='.repeat(50)}\n\n`;
@@ -431,7 +525,7 @@ export const OnlyFansExportHub: React.FC = () => {
                     </h1>
                 </div>
                 <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
-                    Everything ready to post: captions, media, promos, and checklists.
+                    Everything ready to post: captions, hashtags, PPV text, DM scripts, promos, and checklists.
                 </p>
             </div>
 
@@ -453,6 +547,123 @@ export const OnlyFansExportHub: React.FC = () => {
                             placeholder="Paste your caption or drop text..."
                             className="w-full p-3 sm:p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[120px] text-base sm:text-sm"
                         />
+                    </div>
+
+                    {/* Quick Import from Content Ideas */}
+                    <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                            <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
+                                Import from Content Ideas
+                            </span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            <button
+                                onClick={() => {
+                                    const item = getLatestHistoryItem('post_ideas');
+                                    if (!item?.data?.ideas?.length) {
+                                        showToast('No saved post ideas yet', 'info');
+                                        return;
+                                    }
+                                    const ideas = item.data.ideas as string[];
+                                    const ideasText = ideas.map((idea) => `- ${idea}`).join('\n');
+                                    setCaption((prev) => prev.trim() ? `${prev}\n\n${ideasText}` : ideas[0]);
+                                    setChecklist((prev) => prev.trim() ? `${prev}\n\nPost ideas:\n${ideasText}` : `Post ideas:\n${ideasText}`);
+                                }}
+                                className="px-3 py-2 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600"
+                            >
+                                Use last Post Ideas
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const item = getLatestHistoryItem('subscriber_messages');
+                                    if (!item?.data?.text) {
+                                        showToast('No saved messaging scripts yet', 'info');
+                                        return;
+                                    }
+                                    setDmScripts(item.data.text);
+                                }}
+                                className="px-3 py-2 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600"
+                            >
+                                Use last Messaging Toolkit
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const item = getLatestHistoryItem('weekly_plan');
+                                    if (!item?.data?.plan) {
+                                        showToast('No saved weekly plans yet', 'info');
+                                        return;
+                                    }
+                                    const planText = typeof item.data.plan === 'string'
+                                        ? item.data.plan
+                                        : JSON.stringify(item.data.plan, null, 2);
+                                    setChecklist((prev) => prev.trim() ? `${prev}\n\nWeekly plan:\n${planText}` : `Weekly plan:\n${planText}`);
+                                }}
+                                className="px-3 py-2 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600"
+                            >
+                                Use last Weekly Plan
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const item = getLatestHistoryItem('monetization_plan');
+                                    if (!item?.data?.summary) {
+                                        showToast('No saved monetization plans yet', 'info');
+                                        return;
+                                    }
+                                    setChecklist((prev) => prev.trim() ? `${prev}\n\nMonetization plan:\n${item.data.summary}` : `Monetization plan:\n${item.data.summary}`);
+                                }}
+                                className="px-3 py-2 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600"
+                            >
+                                Use last Monetization Plan
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Pack Sections */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Hashtags:
+                            </label>
+                            <textarea
+                                value={hashtags}
+                                onChange={(e) => setHashtags(e.target.value)}
+                                placeholder="#teaser #ppv #exclusive"
+                                className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[80px] text-sm"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                PPV Text:
+                            </label>
+                            <textarea
+                                value={ppvText}
+                                onChange={(e) => setPpvText(e.target.value)}
+                                placeholder="Drop text for PPV unlock"
+                                className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[80px] text-sm"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                DM Scripts:
+                            </label>
+                            <textarea
+                                value={dmScripts}
+                                onChange={(e) => setDmScripts(e.target.value)}
+                                placeholder="Paste your DM flow or scripts"
+                                className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[120px] text-sm"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Checklist:
+                            </label>
+                            <textarea
+                                value={checklist}
+                                onChange={(e) => setChecklist(e.target.value)}
+                                placeholder="What to post + where"
+                                className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[120px] text-sm"
+                            />
+                        </div>
                     </div>
 
                     {/* Media Files */}
@@ -696,6 +907,30 @@ export const OnlyFansExportHub: React.FC = () => {
                         >
                             {addToCalendar && (scheduledDate || scheduledTime) ? 'Save & Add to Calendar' : 'Save Pack'}
                         </button>
+                        <button
+                            onClick={() => {
+                                const sections = [
+                                    caption ? `CAPTION:\n${caption}` : '',
+                                    hashtags ? `HASHTAGS:\n${hashtags}` : '',
+                                    ppvText ? `PPV TEXT:\n${ppvText}` : '',
+                                    dmScripts ? `DM SCRIPTS:\n${dmScripts}` : '',
+                                    checklist ? `CHECKLIST:\n${checklist}` : '',
+                                    teaserCaptions.length > 0
+                                        ? `PROMO CAPTIONS:\n${teaserCaptions.map((t) => `${t.platform}: ${t.caption}`).join('\n')}`
+                                        : '',
+                                ].filter(Boolean).join('\n\n');
+                                if (!sections.trim()) {
+                                    showToast('Nothing to copy yet', 'info');
+                                    return;
+                                }
+                                navigator.clipboard.writeText(sections);
+                                showToast('Pack copied!', 'success');
+                            }}
+                            className="px-4 py-3.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 font-medium flex items-center justify-center gap-2 transition-all active:scale-95"
+                        >
+                            <CopyIcon className="w-5 h-5" />
+                            <span>Copy All</span>
+                        </button>
                         {caption.trim() && (
                             <button
                                 onClick={() => {
@@ -793,6 +1028,70 @@ export const OnlyFansExportHub: React.FC = () => {
                                     </div>
                                     <p className="text-xs sm:text-sm text-gray-900 dark:text-white line-clamp-2 mb-2">{pkg.caption}</p>
                                 </div>
+
+                                {pkg.hashtags && (
+                                    <div className="mb-3">
+                                        <div className="flex items-center justify-between mb-1.5">
+                                            <p className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">Hashtags:</p>
+                                            <button
+                                                onClick={() => copyToClipboard(pkg.hashtags || '')}
+                                                className="text-xs px-2 py-1 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded hover:bg-primary-200 dark:hover:bg-primary-900/50 transition-all active:scale-95 flex items-center gap-1"
+                                            >
+                                                <CopyIcon className="w-3 h-3" />
+                                                <span>Copy</span>
+                                            </button>
+                                        </div>
+                                        <p className="text-xs sm:text-sm text-gray-900 dark:text-white line-clamp-2">{pkg.hashtags}</p>
+                                    </div>
+                                )}
+
+                                {pkg.ppvText && (
+                                    <div className="mb-3">
+                                        <div className="flex items-center justify-between mb-1.5">
+                                            <p className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">PPV Text:</p>
+                                            <button
+                                                onClick={() => copyToClipboard(pkg.ppvText || '')}
+                                                className="text-xs px-2 py-1 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded hover:bg-primary-200 dark:hover:bg-primary-900/50 transition-all active:scale-95 flex items-center gap-1"
+                                            >
+                                                <CopyIcon className="w-3 h-3" />
+                                                <span>Copy</span>
+                                            </button>
+                                        </div>
+                                        <p className="text-xs sm:text-sm text-gray-900 dark:text-white line-clamp-2">{pkg.ppvText}</p>
+                                    </div>
+                                )}
+
+                                {pkg.dmScripts && (
+                                    <div className="mb-3">
+                                        <div className="flex items-center justify-between mb-1.5">
+                                            <p className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">DM Scripts:</p>
+                                            <button
+                                                onClick={() => copyToClipboard(pkg.dmScripts || '')}
+                                                className="text-xs px-2 py-1 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded hover:bg-primary-200 dark:hover:bg-primary-900/50 transition-all active:scale-95 flex items-center gap-1"
+                                            >
+                                                <CopyIcon className="w-3 h-3" />
+                                                <span>Copy</span>
+                                            </button>
+                                        </div>
+                                        <p className="text-xs sm:text-sm text-gray-900 dark:text-white line-clamp-3">{pkg.dmScripts}</p>
+                                    </div>
+                                )}
+
+                                {pkg.checklist && (
+                                    <div className="mb-3">
+                                        <div className="flex items-center justify-between mb-1.5">
+                                            <p className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">Checklist:</p>
+                                            <button
+                                                onClick={() => copyToClipboard(pkg.checklist || '')}
+                                                className="text-xs px-2 py-1 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded hover:bg-primary-200 dark:hover:bg-primary-900/50 transition-all active:scale-95 flex items-center gap-1"
+                                            >
+                                                <CopyIcon className="w-3 h-3" />
+                                                <span>Copy</span>
+                                            </button>
+                                        </div>
+                                        <p className="text-xs sm:text-sm text-gray-900 dark:text-white line-clamp-3">{pkg.checklist}</p>
+                                    </div>
+                                )}
 
                                 {pkg.mediaUrls && pkg.mediaUrls.length > 0 && (
                                     <div className="mb-3">
