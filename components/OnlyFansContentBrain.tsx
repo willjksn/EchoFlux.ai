@@ -5163,6 +5163,8 @@ Output format:
                                 })}
                             </div>
                         )}
+                            </>
+                        )}
                     </div>
 
                     {/* Generated Post Ideas */}
