@@ -562,6 +562,9 @@ type WeeklyPlanCardState = {
     showSchedulePicker?: boolean;
     scheduleDate?: string;
     scheduleTime?: string;
+    contentType?: 'free' | 'paid' | 'custom';
+    targetAudience?: 'free' | 'paid';
+    isEditing?: boolean;
 };
 
 type WeeklyPlanActionHandlers = {
@@ -577,6 +580,9 @@ type WeeklyPlanActionHandlers = {
     onUpdateScheduleDate?: (action: WeeklyPlanDayAction, value: string) => void;
     onUpdateScheduleTime?: (action: WeeklyPlanDayAction, value: string) => void;
     onCopyForExport?: (action: WeeklyPlanDayAction) => void;
+    onToggleEdit?: (action: WeeklyPlanDayAction) => void;
+    onUpdateContentType?: (action: WeeklyPlanDayAction, value: 'free' | 'paid' | 'custom') => void;
+    onUpdateTargetAudience?: (action: WeeklyPlanDayAction, value: 'free' | 'paid') => void;
 };
 
 const WeeklyPlanFormatter: React.FC<{ plan: any } & WeeklyPlanActionHandlers> = ({
@@ -593,6 +599,9 @@ const WeeklyPlanFormatter: React.FC<{ plan: any } & WeeklyPlanActionHandlers> = 
     onUpdateScheduleDate,
     onUpdateScheduleTime,
     onCopyForExport,
+    onToggleEdit,
+    onUpdateContentType,
+    onUpdateTargetAudience,
 }) => {
     if (!plan) return null;
     
@@ -706,10 +715,34 @@ const WeeklyPlanFormatter: React.FC<{ plan: any } & WeeklyPlanActionHandlers> = 
                                                             <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded">
                                                                 {postType}
                                                             </span>
+                                                            {cardState?.contentType && (
+                                                                <span className={`px-2 py-0.5 text-xs font-medium rounded ${
+                                                                    cardState.contentType === 'paid' 
+                                                                        ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                                                                        : cardState.contentType === 'custom'
+                                                                        ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                                                                        : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                                                                }`}>
+                                                                    {cardState.contentType.toUpperCase()}
+                                                                </span>
+                                                            )}
+                                                            {cardState?.targetAudience && (
+                                                                <span className="px-2 py-0.5 text-xs font-medium bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 rounded">
+                                                                    {cardState.targetAudience === 'paid' ? 'Paid Fan' : 'Free Fan'}
+                                                                </span>
+                                                            )}
                                                             {isUsed && (
                                                                 <span className="px-2 py-0.5 text-xs font-semibold bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded">
                                                                     Used
                                                                 </span>
+                                                            )}
+                                                            {onToggleEdit && !isUsed && (
+                                                                <button
+                                                                    onClick={() => onToggleEdit(actionPayload)}
+                                                                    className="ml-auto px-2 py-0.5 text-xs font-medium rounded-md bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600"
+                                                                >
+                                                                    {cardState?.isEditing ? 'Done' : 'Edit'}
+                                                                </button>
                                                             )}
                                                         </div>
                                                         <p className="text-sm text-gray-700 dark:text-gray-300 font-medium mb-1">
@@ -830,6 +863,33 @@ const WeeklyPlanFormatter: React.FC<{ plan: any } & WeeklyPlanActionHandlers> = 
                                                                 >
                                                                     Choose from vault
                                                                 </button>
+                                                            </div>
+                                                        )}
+                                                        {cardState?.isEditing && !isUsed && (
+                                                            <div className="w-full mt-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md border border-gray-200 dark:border-gray-600 space-y-3">
+                                                                <div className="flex flex-col gap-1">
+                                                                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Content Type</label>
+                                                                    <select
+                                                                        value={cardState.contentType || 'free'}
+                                                                        onChange={(e) => onUpdateContentType?.(actionPayload, e.target.value as 'free' | 'paid' | 'custom')}
+                                                                        className="px-2 py-1 text-xs rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200"
+                                                                    >
+                                                                        <option value="free">Free</option>
+                                                                        <option value="paid">Paid</option>
+                                                                        <option value="custom">Custom</option>
+                                                                    </select>
+                                                                </div>
+                                                                <div className="flex flex-col gap-1">
+                                                                    <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Target Audience</label>
+                                                                    <select
+                                                                        value={cardState.targetAudience || 'free'}
+                                                                        onChange={(e) => onUpdateTargetAudience?.(actionPayload, e.target.value as 'free' | 'paid')}
+                                                                        className="px-2 py-1 text-xs rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200"
+                                                                    >
+                                                                        <option value="free">Free Fan</option>
+                                                                        <option value="paid">Paid Fan</option>
+                                                                    </select>
+                                                                </div>
                                                             </div>
                                                         )}
                                                         {cardState?.showSchedulePicker && !isUsed && (
@@ -1857,11 +1917,14 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
             const data = await response.json();
             // Handle both object and string responses
             const plan = data.plan || data;
+            // Generate a unique plan ID for this plan
+            const planId = `plan_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+            const planWithId = { ...plan, id: planId };
             // Store the plan object (not stringified)
-            setGeneratedWeeklyPlan(plan);
+            setGeneratedWeeklyPlan(planWithId);
             // Save to history
             await saveToHistory('weekly_plan', `Weekly Plan - ${new Date().toLocaleDateString()}`, { 
-                plan, 
+                plan: planWithId, 
                 prompt: weeklyPlanPrompt,
             });
             showToast?.('Weekly plan generated successfully!', 'success');
@@ -1896,15 +1959,62 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
         return parts.join('\n');
     };
 
-    const updateWeeklyPlanCardState = (cardKey: string, next: Partial<WeeklyPlanCardState>) => {
-        setWeeklyPlanCardState((prev) => ({
-            ...prev,
-            [cardKey]: {
+    const updateWeeklyPlanCardState = async (cardKey: string, next: Partial<WeeklyPlanCardState>) => {
+        setWeeklyPlanCardState((prev) => {
+            const updatedState = {
                 ...prev[cardKey],
                 ...next,
-            },
-        }));
+            };
+            const newState = {
+                ...prev,
+                [cardKey]: updatedState,
+            };
+            
+            // Save to Firestore if we have a weekly plan loaded
+            if (user?.id && generatedWeeklyPlan) {
+                // Use setTimeout to avoid blocking UI update
+                setTimeout(async () => {
+                    try {
+                        const planId = generatedWeeklyPlan.id || `plan_${Date.now()}`;
+                        const cardStatesRef = doc(db, 'users', user.id, 'onlyfans_weekly_plan_states', planId);
+                        await setDoc(cardStatesRef, {
+                            planId,
+                            cardStates: newState,
+                            updatedAt: new Date().toISOString(),
+                        }, { merge: true });
+                    } catch (error) {
+                        console.error('Error saving weekly plan card state:', error);
+                    }
+                }, 0);
+            }
+            
+            return newState;
+        });
     };
+    
+    // Load weekly plan card states when plan is loaded
+    useEffect(() => {
+        if (!user?.id || !generatedWeeklyPlan) return;
+        
+        const loadCardStates = async () => {
+            try {
+                const planId = generatedWeeklyPlan.id || `plan_${Date.now()}`;
+                const cardStatesRef = doc(db, 'users', user.id, 'onlyfans_weekly_plan_states', planId);
+                const cardStatesDoc = await getDoc(cardStatesRef);
+                
+                if (cardStatesDoc.exists()) {
+                    const data = cardStatesDoc.data();
+                    if (data.cardStates) {
+                        setWeeklyPlanCardState(data.cardStates);
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading weekly plan card states:', error);
+            }
+        };
+        
+        loadCardStates();
+    }, [user?.id, generatedWeeklyPlan?.id]);
 
     const getDayOffsetFromName = (dayName?: string) => {
         if (!dayName) return null;
@@ -2121,12 +2231,16 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
                 cardState?.scheduleDate,
                 cardState?.scheduleTime
             );
-            const lower = `${action.postType} ${action.postIdea}`.toLowerCase();
-            const contentType = lower.includes('custom')
-                ? 'custom'
-                : lower.includes('ppv') || lower.includes('paid') || lower.includes('bundle')
-                    ? 'paid'
-                    : 'free';
+            // Use cardState contentType if set, otherwise infer from post type
+            let contentType = cardState?.contentType;
+            if (!contentType) {
+                const lower = `${action.postType} ${action.postIdea}`.toLowerCase();
+                contentType = lower.includes('custom')
+                    ? 'custom'
+                    : lower.includes('ppv') || lower.includes('paid') || lower.includes('bundle')
+                        ? 'paid'
+                        : 'free';
+            }
             const descriptionParts = [
                 action.description,
                 action.angle ? `Angle: ${action.angle}` : null,
@@ -2161,7 +2275,8 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
                 scheduledDate: plannedDate.toISOString(),
                 timestamp: new Date().toISOString(),
                 description,
-                contentType,
+                contentType: contentType || 'free',
+                targetAudience: cardState?.targetAudience || 'free', // free fan or paid fan
             });
             updateWeeklyPlanCardState(action.cardKey, { used: true, showSchedulePicker: false });
             showToast?.('Added to your calendar as a scheduled drop.', 'success');
@@ -2203,6 +2318,19 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
     const handleWeeklyPlanCopyForExport = (action: WeeklyPlanDayAction) => {
         const text = buildWeeklyPlanPrompt(action);
         copyToClipboard(text);
+    };
+
+    const handleWeeklyPlanToggleEdit = (action: WeeklyPlanDayAction) => {
+        const cardState = weeklyPlanCardState[action.cardKey];
+        updateWeeklyPlanCardState(action.cardKey, { isEditing: !cardState?.isEditing });
+    };
+
+    const handleWeeklyPlanUpdateContentType = (action: WeeklyPlanDayAction, value: 'free' | 'paid' | 'custom') => {
+        updateWeeklyPlanCardState(action.cardKey, { contentType: value });
+    };
+
+    const handleWeeklyPlanUpdateTargetAudience = (action: WeeklyPlanDayAction, value: 'free' | 'paid') => {
+        updateWeeklyPlanCardState(action.cardKey, { targetAudience: value });
     };
 
     const handleCreateContentFromTrend = (trend: AdultTrendOpportunity) => {
@@ -5758,10 +5886,34 @@ Output format:
                                                     </div>
                                                     <div className="flex gap-2 sm:justify-end">
                                                         <button
-                                                            onClick={() => {
+                                                            onClick={async () => {
+                                                                const planData = saved.data?.plan || saved.plan;
+                                                                // Ensure plan has an ID
+                                                                const planId = planData?.id || saved.id || `plan_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+                                                                const planWithId = planData ? { ...planData, id: planId } : planData;
+                                                                
+                                                                setGeneratedWeeklyPlan(planWithId);
                                                                 setViewingSavedItem(saved);
                                                                 setShowSavedItemModal(true);
                                                                 setShowWeeklyPlanHistory(false);
+                                                                
+                                                                // Load card states for this plan
+                                                                if (user?.id) {
+                                                                    try {
+                                                                        const cardStatesRef = doc(db, 'users', user.id, 'onlyfans_weekly_plan_states', planId);
+                                                                        const cardStatesDoc = await getDoc(cardStatesRef);
+                                                                        
+                                                                        if (cardStatesDoc.exists()) {
+                                                                            const data = cardStatesDoc.data();
+                                                                            if (data.cardStates) {
+                                                                                setWeeklyPlanCardState(data.cardStates);
+                                                                            }
+                                                                        }
+                                                                    } catch (error) {
+                                                                        console.error('Error loading weekly plan card states:', error);
+                                                                    }
+                                                                }
+                                                                
                                                                 showToast?.('Loaded', 'success');
                                                             }}
                                                             className="px-2 py-1 text-xs bg-primary-600 text-white rounded hover:bg-primary-700"
@@ -5948,6 +6100,9 @@ Output format:
                                     onUpdateScheduleDate={handleWeeklyPlanUpdateScheduleDate}
                                     onUpdateScheduleTime={handleWeeklyPlanUpdateScheduleTime}
                                     onCopyForExport={handleWeeklyPlanCopyForExport}
+                                    onToggleEdit={handleWeeklyPlanToggleEdit}
+                                    onUpdateContentType={handleWeeklyPlanUpdateContentType}
+                                    onUpdateTargetAudience={handleWeeklyPlanUpdateTargetAudience}
                                 />
                             </div>
                         </div>
@@ -6906,6 +7061,9 @@ Output format:
                                                 onUpdateScheduleDate={handleWeeklyPlanUpdateScheduleDate}
                                                 onUpdateScheduleTime={handleWeeklyPlanUpdateScheduleTime}
                                                 onCopyForExport={handleWeeklyPlanCopyForExport}
+                                                onToggleEdit={handleWeeklyPlanToggleEdit}
+                                                onUpdateContentType={handleWeeklyPlanUpdateContentType}
+                                                onUpdateTargetAudience={handleWeeklyPlanUpdateTargetAudience}
                                             />
                                         </div>
                                     </div>
