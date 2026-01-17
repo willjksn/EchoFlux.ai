@@ -66,8 +66,11 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     const model = await getModelForTask("sexting_session", user.uid);
 
     const roleplayType = sessionContext?.roleplayType || "Girlfriend Experience";
-    const tone = sessionContext?.tone || "Flirty";
+    const tone = sessionContext?.tone || "Explicit";
     const fanName = sessionContext?.fanName || "Fan";
+    const explicitnessLevel = 10;
+    const explicitnessContext =
+      "Go maximally explicit. Use vivid, raw sexual language and detailed descriptions.";
 
     const emojiGuidance = getEmojiInstructions({
       enabled: emojiEnabled !== false,
@@ -103,6 +106,7 @@ Session context:
 - Roleplay type: ${roleplayType}
 - Tone: ${tone}
 - Fan name: ${fanName}
+- Explicitness level: ${explicitnessLevel}/10 — ${explicitnessContext}
 ${personalityContext ? personalityContext : ''}
 ${enhancedFanContext || (fanContext ? `- Fan context: ${fanContext}` : "")}
 ${lastFanMessage ? `- Last fan message: "${lastFanMessage}"` : ""}
@@ -136,6 +140,7 @@ ${fanName && fanName !== 'Fan' ? `- When mentioning ${fanName}, YOU are addressi
 - Use platform slang organically - it should feel natural, not like you're checking off a list
 
 Guidelines:
+- Be as explicit as possible. Do not soften or euphemize sexual language.
 - Be bold, playful, and explicitly adult (sexting) while respecting the chosen tone.
 - Keep replies concise (1-3 sentences each).
 - Vary style across suggestions (teasing, direct, playful).
