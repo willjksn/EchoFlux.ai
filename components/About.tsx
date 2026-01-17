@@ -27,7 +27,7 @@ export const About: React.FC = () => {
                         <li><strong>Central Command:</strong> A unified dashboard that surfaces what matters—your upcoming schedule, key priorities, and focus areas—so you never feel lost in the noise.</li>
                         <li><strong>Plan My Week:</strong> Stop guessing what to post. Plan My Week builds multi-week content roadmaps with image and video ideas tailored to your niche and goals. Upload media directly to roadmap items and place them on your schedule for planned publishing.</li>
                         <li><strong>My Vault:</strong> Upload and organize images and videos in your personal vault. Reuse assets across posts, select from vault when writing captions, and keep your content organized for maximum efficiency.</li>
-                        <li><strong>Monetized Creator Studio (Elite users):</strong> An end-to-end workspace for captions, plans, schedules, and media—optimized for premium creator platforms so you can plan, generate, and publish faster.</li>
+                        <li><strong>Premium Content Studio (Elite users):</strong> An end-to-end workspace for captions, plans, schedules, and media—optimized for premium creator platforms so you can plan, generate, and publish faster.</li>
                         <li><strong>Visual Planning:</strong> A beautiful calendar view that lets you preview, edit, and manage all your scheduled content. Click any post to preview, edit date/time/platforms, or delete—all in one place.</li>
                         <li><strong>Conversion Engine:</strong> We close the loop with our "Bio Link Page" builder, turning engagement into owned assets like email lists.</li>
                     </ul>

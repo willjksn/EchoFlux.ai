@@ -203,7 +203,7 @@ KEY INSIGHTS FOR ONLYFANS CREATORS:
 }
 
 /**
- * Helper function to get Adult Monetized weekly trends
+ * Helper function to get Adult Premium weekly trends
  * Uses a dedicated adult-only weekly_trends_adult dataset
  */
 export async function getAdultWeeklyTrends(): Promise<string> {

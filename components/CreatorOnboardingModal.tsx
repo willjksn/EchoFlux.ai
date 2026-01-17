@@ -76,7 +76,7 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                     {isElitePlan && (
                         <div className="mt-6 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
                             <p className="text-sm text-purple-800 dark:text-purple-200">
-                                <strong>Elite Plan Includes:</strong> Advanced Plan My Week options, 5 plans/month, Enhanced trend research (40 searches/month), 1,500 caption ideas/month, Unlimited links, My Schedule, 10GB storage, Monetized Creator Studio
+                                <strong>Elite Plan Includes:</strong> Advanced Plan My Week options, 5 plans/month, Enhanced trend research (40 searches/month), 1,500 caption ideas/month, Unlimited links, My Schedule, 10GB storage, Premium Content Studio
                             </p>
                         </div>
                     )}
@@ -347,11 +347,11 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
             );
         }
 
-        // Step 7: Elite Monetized Creator Studio (Elite only)
+        // Step 7: Elite Premium Content Studio (Elite only)
         if (step === 7 && isElitePlan) {
             return (
                 <div className="animate-fade-in">
-                    <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-white">Monetized Creator Studio (Elite)</h2>
+                    <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-white">Premium Content Studio (Elite)</h2>
                     <p className="mt-2 text-center text-gray-500 dark:text-gray-400">
                         Your Elite plan unlocks OnlyFans, Fansly, and Fanvue-specific tools to help you plan, organize, and scale faster.
                     </p>
@@ -376,7 +376,7 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                         </div>
                         <div className="p-4 border border-purple-200 dark:border-purple-800 rounded-lg bg-white/60 dark:bg-gray-800/40">
                             <p className="text-sm text-gray-700 dark:text-gray-300">
-                                <strong>Where to find it:</strong> open the sidebar and click <strong>Monetized Creator Studio</strong>.
+                                <strong>Where to find it:</strong> open the sidebar and click <strong>Premium Content Studio</strong>.
                             </p>
                         </div>
                     </div>
@@ -429,7 +429,7 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                             <li>• Upload media to your vault</li>
                             <li>• Set up AI Training (AI Personality + Creator Personality)</li>
                             {isProPlan && <li>• Explore My Schedule</li>}
-                            {isElitePlan && <li>• Explore Monetized Creator Studio (Content Ideas, Money Calendar, My Vault)</li>}
+                            {isElitePlan && <li>• Explore Premium Content Studio (Content Ideas, Money Calendar, My Vault)</li>}
                         </ul>
                     </div>
                 </div>

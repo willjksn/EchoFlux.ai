@@ -61,7 +61,7 @@ export const Sidebar: React.FC = () => {
     { page: 'team', icon: <TeamIcon />, label: 'Team', tourId: 'tour-step-team-nav' },
     { page: 'clients', icon: <BriefcaseIcon />, label: 'Clients', tourId: 'tour-step-clients-nav' },
     { page: 'bio', icon: <GlobeIcon />, label: 'Bio Link Page' },
-    { page: 'onlyfansStudio', icon: <SparklesIcon />, label: 'Monetized Creator Studio' },
+    { page: 'onlyfansStudio', icon: <SparklesIcon />, label: 'Premium Content Studio' },
     { page: 'emailCenter', icon: <ComposeIcon />, label: 'Email Center' },
     { page: 'settings', icon: <SettingsIcon />, label: 'Settings' },
     { page: 'admin', icon: <AdminIcon />, label: 'Admin' },

@@ -49,7 +49,7 @@ const allCreatorTiers = [
         priceAnnually: 63,
         description: 'For professional & monetized creators.',
         features: [
-            'Monetized Creator Studio (included)',
+            'Premium Content Studio (included)',
             'Advanced Plan My Week options',
             '5 plans',
             'Enhanced live trend research',

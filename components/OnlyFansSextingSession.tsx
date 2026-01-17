@@ -355,20 +355,52 @@ NATURAL PERSONALIZATION GUIDELINES:
                 }),
             });
 
+            // Handle non-200 responses
+            if (!response.ok) {
+                let errorData: any = {};
+                try {
+                    errorData = await response.json();
+                } catch {
+                    // If JSON parsing fails, use status text
+                    errorData = { error: response.statusText || 'Unknown error' };
+                }
+                const errorMessage = errorData.note || errorData.error || `Failed to generate suggestions (${response.status})`;
+                console.error('API error response:', { status: response.status, data: errorData });
+                throw new Error(errorMessage);
+            }
+
             const data = await response.json().catch(() => ({}));
             
-            if (!response.ok || !data.success) {
+            if (!data.success) {
                 // Use the detailed error message from the API if available
-                const errorMessage = data.note || data.error || `Failed to generate a session plan (${response.status})`;
+                const errorMessage = data.note || data.error || 'Failed to generate suggestions';
                 console.error('API error response:', { status: response.status, data });
                 throw new Error(errorMessage);
             }
 
-            if (!data.suggestions || !Array.isArray(data.suggestions)) {
+            // Handle both old format (suggestions array) and new format (plan object)
+            let suggestions: string[] = [];
+            if (data.suggestions && Array.isArray(data.suggestions)) {
+                // Old format: array of suggestion strings
+                suggestions = data.suggestions;
+            } else if (data.plan && typeof data.plan === 'object') {
+                // New format: plan object - convert to suggestions array
+                const plan = data.plan;
+                if (plan.opener) suggestions.push(plan.opener);
+                if (Array.isArray(plan.messageFlow)) {
+                    suggestions.push(...plan.messageFlow);
+                }
+                if (plan.paywallMoment) suggestions.push(plan.paywallMoment);
+                if (plan.closeFollowUp) suggestions.push(plan.closeFollowUp);
+            } else {
                 throw new Error(data.note || data.error || 'Invalid response format from API');
             }
 
-            setAiSuggestions(data.suggestions.map((s: string, idx: number) => ({
+            if (suggestions.length === 0) {
+                throw new Error(data.note || data.error || 'No suggestions generated');
+            }
+
+            setAiSuggestions(suggestions.map((s: string, idx: number) => ({
                 id: `suggestion-${Date.now()}-${idx}`,
                 message: s,
                 confidence: 0.85,

@@ -240,7 +240,7 @@ export const AdminToolsPanel: React.FC = () => {
               onClick={runAdultTrendsNow}
               disabled={isRefreshingAdultTrends}
               className="px-4 py-2 rounded-md bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-200 hover:bg-pink-200 dark:hover:bg-pink-900/50 disabled:opacity-50"
-              title="Refresh adult-only trends for Monetized Creator Studio"
+              title="Refresh adult-only trends for Premium Content Studio"
             >
               {isRefreshingAdultTrends ? "Refreshing Adult Trends..." : "Refresh Adult Trends"}
             </button>

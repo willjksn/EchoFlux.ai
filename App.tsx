@@ -84,7 +84,7 @@ const pageTitles: Record<Page, string> = {
     ads: 'Ad Ideas',
     mediaLibrary: 'My Vault',
     autopilot: 'AI Autopilot',
-    onlyfansStudio: 'Monetized Creator Studio',
+    onlyfansStudio: 'Premium Content Studio',
     emailCenter: 'Email Center',
 };
 

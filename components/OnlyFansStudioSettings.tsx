@@ -166,11 +166,11 @@ export const OnlyFansStudioSettings: React.FC = () => {
                 <div className="flex items-center gap-3 mb-2">
                     <SettingsIcon className="w-8 h-8 text-primary-600 dark:text-primary-400" />
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                        Monetized Creator Studio Settings
+                        Premium Content Studio Settings
                     </h1>
                 </div>
                 <p className="text-gray-600 dark:text-gray-400">
-                    Manage your Monetized Creator Studio preferences, AI training, and account settings.
+                    Manage your Premium Content Studio preferences, AI training, and account settings.
                 </p>
             </div>
 
@@ -337,7 +337,7 @@ ${creatorPersonality}
 CONTEXT:
 Default Tone: ${aiTone || 'Not set'}
 Explicitness Level: ${explicitnessLevel}/10
-Platform: Monetized Creator Studio (OnlyFans/Fansly/Fanvue)
+Platform: Premium Content Studio (OnlyFans/Fansly/Fanvue)
 
 OUTPUT:
 Return only the rewritten personality description.

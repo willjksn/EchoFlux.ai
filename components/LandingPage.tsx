@@ -311,10 +311,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         <Feature icon={<ImageIcon />} title="My Vault">
                            Upload and organize images and videos in your personal media library. Reuse assets across campaigns and keep everything in one place.
                         </Feature>
-                        <Feature icon={<SparklesIcon />} title="Monetized Creator Studio - Content Ideas (Elite)">
+                        <Feature icon={<SparklesIcon />} title="Premium Content Studio - Content Ideas (Elite)">
                            Plan drops, write captions, and map the week in creator language. Built for OnlyFans, Fansly, Fanvue & more.
                         </Feature>
-                        <Feature icon={<ChatIcon />} title="Monetized Creator Studio - DM Sessions (Elite)">
+                        <Feature icon={<ChatIcon />} title="Premium Content Studio - DM Sessions (Elite)">
                            Scripts & Roleplay plus DM session planning. Fan notes track VIPs, regulars, and whales.
                         </Feature>
                         <Feature icon={<GlobeIcon />} title="Bio Link Page">
@@ -323,7 +323,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         <Feature icon={<ChatIcon />} title="Creator Assistant & Ideas">
                            Ask questions, generate new content angles, and brainstorm revenue-driving campaigns with a creator-focused AI assistant inside the app.
                         </Feature>
-                        <Feature icon={<AnalyticsIcon />} title="Monetized Creator Studio - Post Packs & Wins (Elite)">
+                        <Feature icon={<AnalyticsIcon />} title="Premium Content Studio - Post Packs & Wins (Elite)">
                            Copy & Post Packs for manual posting. Promo packs for drops. What’s Working keeps performance notes in one place.
                         </Feature>
                     </dl>
