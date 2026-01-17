@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { MessageCard } from './MessageCard';
 import { Platform, Message, DashboardFilters, MessageType, CalendarEvent, MessageCategory, SocialStats, Plan } from '../types';
 import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
-import { DashboardIcon, FlagIcon, SearchIcon, StarIcon, CalendarIcon, SparklesIcon, TrendingIcon, CheckCircleIcon, UserIcon, ArrowUpCircleIcon, KanbanIcon, BriefcaseIcon, LinkIcon, RocketIcon, ArrowUpIcon, ChatIcon, DollarSignIcon, HeartIcon } from './icons/UIIcons';
+import { DashboardIcon, FlagIcon, SearchIcon, StarIcon, CalendarIcon, SparklesIcon, TrendingIcon, CheckCircleIcon, UserIcon, ArrowUpCircleIcon, KanbanIcon, BriefcaseIcon, LinkIcon, RocketIcon, ArrowUpIcon, ChatIcon, DollarSignIcon, HeartIcon, TargetIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 import { updateUserSocialStats } from '../src/services/socialStatsService';
 import { auth, db } from '../firebaseConfig';
