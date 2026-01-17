@@ -477,7 +477,7 @@ NATURAL PERSONALIZATION GUIDELINES:
                                 {activeSession.fanName ? `Session with ${activeSession.fanName}` : 'Active Session'}
                             </h2>
                             <p className="text-sm text-gray-600 dark:text-gray-400">
-                                {activeSession.roleplayType} ΓÇó {activeSession.tone} ΓÇó {activeSession.status}
+                                {activeSession.roleplayType} - {activeSession.tone} - {activeSession.status}
                             </p>
                         </div>
                         <div className="flex gap-2">
@@ -539,7 +539,7 @@ NATURAL PERSONALIZATION GUIDELINES:
                                                     {msg.timestamp.toLocaleTimeString()}
                                                 </span>
                                                 {msg.aiSuggested && (
-                                                    <span className="text-xs opacity-75 ml-2">Γ£¿ AI</span>
+                                                    <span className="text-xs opacity-75 ml-2">AI</span>
                                                 )}
                                             </div>
                                         </div>
