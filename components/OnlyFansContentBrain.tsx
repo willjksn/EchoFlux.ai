@@ -2189,6 +2189,19 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
         copyToClipboard(text);
     };
 
+    const handleCreateContentFromTrend = (trend: AdultTrendOpportunity) => {
+        const tags = Array.isArray(trend.relatedHashtags) ? trend.relatedHashtags.join(' ') : '';
+        const promptParts = [
+            `Trend title: ${trend.title}`,
+            trend.description ? `Description: ${trend.description}` : null,
+            tags ? `Tags: ${tags}` : null,
+            `Platform: ${selectedPlatform}`,
+        ].filter(Boolean);
+        setWeeklyPlanPrompt(promptParts.join('\n'));
+        setActiveTab('weeklyPlan');
+        showToast?.('Trend details pre-filled in Plan My Week.', 'success');
+    };
+
     const loadTrendsHistory = async () => {
         if (!user?.id) return;
         try {
@@ -5175,11 +5188,13 @@ Output format:
                                 )}
                                 <button
                                     onClick={() => setShowTrendsHistory(!showTrendsHistory)}
-                                    className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
+                                    className="relative px-3 py-1.5 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
                                 >
                                     {showTrendsHistory ? 'Hide' : 'Show'} History
                                     {trendsHistory.length > 0 && (
-                                        <span className="w-2 h-2 bg-red-500 rounded-full" title="History available"></span>
+                                        <span className="absolute -top-2 -right-2 bg-primary-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                                            {trendsHistory.length}
+                                        </span>
                                     )}
                                 </button>
                             </div>
@@ -5298,44 +5313,75 @@ Output format:
                                     };
 
                                     return filtered.map((result) => (
-                                        <div key={result.id} className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-                                            <div className="flex items-start justify-between gap-3 mb-2">
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${typeColors[result.type] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'}`}>
+                                        <div key={result.id} className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border-2 hover:shadow-md transition-shadow border-gray-100 dark:border-gray-700">
+                                            <div className="flex items-start justify-between mb-3">
+                                                <div className="flex items-center gap-3 flex-wrap">
+                                                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${typeColors[result.type] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'}`}>
                                                         {result.type}
                                                     </span>
                                                     <span className="text-xs text-gray-500 dark:text-gray-400">{result.platform}</span>
                                                     {result.trendingVelocity && (
                                                         <span className={`text-xs font-medium ${velocityColors[result.trendingVelocity] || ''}`}>
-                                                            {result.trendingVelocity === 'Rising' && '📈'}
-                                                            {result.trendingVelocity === 'Peak' && '🔥'}
-                                                            {result.trendingVelocity === 'Declining' && '📉'}
+                                                            {result.trendingVelocity === 'Rising' && '📈'} 
+                                                            {result.trendingVelocity === 'Peak' && '🔥'} 
+                                                            {result.trendingVelocity === 'Declining' && '📉'} 
                                                             {result.trendingVelocity}
                                                         </span>
                                                     )}
                                                 </div>
                                                 {result.engagementPotential && (
-                                                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                                                        Potential {result.engagementPotential}/10
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-xs text-gray-500 dark:text-gray-400">Potential:</span>
+                                                        <div className="flex gap-0.5">
+                                                            {[...Array(10)].map((_, i) => (
+                                                                <div
+                                                                    key={i}
+                                                                    className={`w-1.5 h-1.5 rounded-full ${
+                                                                        i < result.engagementPotential!
+                                                                            ? 'bg-primary-600 dark:bg-primary-400'
+                                                                            : 'bg-gray-200 dark:bg-gray-700'
+                                                                    }`}
+                                                                />
+                                                            ))}
+                                                        </div>
+                                                        <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 ml-1">
+                                                            {result.engagementPotential}/10
+                                                        </span>
                                                     </div>
                                                 )}
                                             </div>
-                                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">{result.title}</h4>
-                                            <p className="text-xs text-gray-600 dark:text-gray-300 mb-2">{result.description}</p>
+                                            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">What&apos;s popular</p>
+                                            <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-2">{result.title}</h4>
+                                            <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">{result.description}</p>
+                                            
                                             {result.relatedHashtags && result.relatedHashtags.length > 0 && (
-                                                <div className="flex flex-wrap gap-2 mb-2">
-                                                    {result.relatedHashtags.map((tag, idx) => (
-                                                        <span key={`${tag}-${idx}`} className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full">
-                                                            {tag}
-                                                        </span>
-                                                    ))}
+                                                <div className="mb-3">
+                                                    <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Tags:</p>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {result.relatedHashtags.map((tag, idx) => (
+                                                            <span key={`${tag}-${idx}`} className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full">
+                                                                {tag}
+                                                            </span>
+                                                        ))}
+                                                    </div>
                                                 </div>
                                             )}
+                                            
                                             {result.bestPractices && (
-                                                <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                    <span className="font-semibold">Tip:</span> {result.bestPractices}
-                                                </p>
+                                                <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-lg">
+                                                    <p className="text-xs font-semibold text-blue-900 dark:text-blue-300 mb-1">💡 Best Practice</p>
+                                                    <p className="text-xs text-blue-700 dark:text-blue-400">{result.bestPractices}</p>
+                                                </div>
                                             )}
+                                            
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={() => handleCreateContentFromTrend(result)}
+                                                    className="flex-1 px-4 py-2 bg-gradient-to-r from-primary-600 to-primary-500 text-white rounded-lg hover:from-primary-700 hover:to-primary-600 text-sm font-semibold shadow-sm transition-all"
+                                                >
+                                                    Create Content →
+                                                </button>
+                                            </div>
                                         </div>
                                     ));
                                 })()}
@@ -5349,13 +5395,51 @@ Output format:
                             {trendsHistory.length === 0 ? (
                                 <p className="text-sm text-gray-500 dark:text-gray-400">No scans yet.</p>
                             ) : (
-                                <div className="space-y-2">
+                                <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
                                     {trendsHistory.map((item) => (
-                                        <div key={item.id} className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700 py-2">
-                                            <span className="truncate max-w-[70%]">{item.query || 'Trend scan'}</span>
-                                            <span className="text-gray-400 dark:text-gray-500">
-                                                {item.createdAt?.toDate?.()?.toLocaleDateString?.() || new Date(item.createdAt || Date.now()).toLocaleDateString()}
-                                            </span>
+                                        <div
+                                            key={item.id}
+                                            className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-2 bg-gray-50 dark:bg-gray-700/30 rounded border border-gray-200 dark:border-gray-700"
+                                        >
+                                            <div className="flex-1">
+                                                <p className="text-sm font-medium text-gray-900 dark:text-white">{item.query || 'Trend scan'}</p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                    {(item.results?.length || 0)} trends • {item.createdAt?.toDate?.() ? new Date(item.createdAt.toDate()).toLocaleDateString() : new Date(item.createdAt || Date.now()).toLocaleDateString()}
+                                                </p>
+                                            </div>
+                                            <div className="flex gap-2 sm:justify-end">
+                                                <button
+                                                    onClick={() => {
+                                                        setTrendResults(item.results || []);
+                                                        setTrendsNiche(item.query || '');
+                                                        const createdAt = item.createdAt?.toDate?.() ? item.createdAt.toDate().toISOString() : new Date(item.createdAt || Date.now()).toISOString();
+                                                        setTrendsLastScanDate(createdAt);
+                                                        setShowTrendsHistory(false);
+                                                        showToast?.('Trends loaded', 'success');
+                                                    }}
+                                                    className="px-2 py-1 text-xs bg-primary-600 text-white rounded hover:bg-primary-700"
+                                                >
+                                                    Load
+                                                </button>
+                                                <button
+                                                    onClick={async () => {
+                                                        if (!user?.id) return;
+                                                        if (window.confirm('Delete this scan from history?')) {
+                                                            try {
+                                                                await deleteDoc(doc(db, 'users', user.id, 'onlyfans_trends_history', item.id));
+                                                                loadTrendsHistory();
+                                                                showToast?.('Scan deleted', 'success');
+                                                            } catch (error) {
+                                                                console.error('Failed to delete scan:', error);
+                                                                showToast?.('Failed to delete scan', 'error');
+                                                            }
+                                                        }
+                                                    }}
+                                                    className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                                                >
+                                                    Delete
+                                                </button>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>

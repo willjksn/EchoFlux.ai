@@ -26,7 +26,7 @@ type TeaserPack = {
 export const OnlyFansStudio: React.FC = () => {
     const { user, setActivePage, showToast } = useAppContext();
     const [activeView, setActiveView] = useState<ActiveView>('dashboard');
-    const [contentBrainInitialTab, setContentBrainInitialTab] = useState<'captions' | 'weeklyPlan'>('captions');
+    const [contentBrainInitialTab, setContentBrainInitialTab] = useState<'captions' | 'weeklyPlan' | 'trends'>('captions');
     const [showTeaserPackModal, setShowTeaserPackModal] = useState(false);
     const [teaserPromotionType, setTeaserPromotionType] = useState<'PPV' | 'New set' | 'Promo' | 'General tease'>('PPV');
     const [teaserConcept, setTeaserConcept] = useState('');
@@ -65,7 +65,7 @@ export const OnlyFansStudio: React.FC = () => {
     // Check if user has access (OnlyFansStudio, Elite, or Agency plan)
     const hasAccess = user?.plan === 'OnlyFansStudio' || user?.plan === 'Elite' || user?.plan === 'Agency';
 
-    const openContentBrain = (tab: 'captions' | 'weeklyPlan' = 'captions') => {
+    const openContentBrain = (tab: 'captions' | 'weeklyPlan' | 'trends' = 'captions') => {
         setContentBrainInitialTab(tab);
         setActiveView('contentBrain');
     };
@@ -974,12 +974,24 @@ export const OnlyFansStudio: React.FC = () => {
                     <div className="flex w-full items-center justify-center gap-3 flex-nowrap overflow-x-auto">
                         <button
                             className="px-3 py-2 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+                            onClick={() => openContentBrain('trends')}
+                        >
+                            Find Trends
+                        </button>
+                        <button
+                            className="px-3 py-2 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+                            onClick={() => openContentBrain('weeklyPlan')}
+                        >
+                            Plan My Week
+                        </button>
+                        <button
+                            className="px-3 py-2 text-sm bg-slate-600 text-white rounded-md hover:bg-slate-700 transition-colors"
                             onClick={() => openContentBrain('captions')}
                         >
                             Plan a drop
                         </button>
                         <button
-                            className="px-3 py-2 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+                            className="px-3 py-2 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
                             onClick={() => setActiveView('roleplay')}
                         >
                             Build a session
