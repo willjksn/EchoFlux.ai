@@ -679,6 +679,15 @@ export const Calendar: React.FC = () => {
                                         </span>
                                         <div className={`w-2.5 h-2.5 sm:w-2 sm:h-2 rounded-full flex-shrink-0 shadow-sm ${colors.dot}`}></div>
                                     </div>
+                                    {!isReminder && (associatedPost?.mediaUrl || evt.thumbnail) && (
+                                        <div className="mb-1">
+                                            <img
+                                                src={associatedPost?.mediaUrl || evt.thumbnail}
+                                                alt="Preview"
+                                                className="w-full h-10 rounded-md object-cover border border-gray-200 dark:border-gray-700"
+                                            />
+                                        </div>
+                                    )}
                                     <div 
                                         className="flex items-center gap-2 min-w-0"
                                         style={{ pointerEvents: 'none' }}
