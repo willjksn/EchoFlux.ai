@@ -1322,7 +1322,8 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
                     const saved = localStorage.getItem(storageKey);
                     if (saved) {
                         const data = JSON.parse(saved);
-                        if (data.uploadedMediaUrl) {
+                        // Only restore media URL if it's a permanent URL (Firebase Storage), not a blob URL
+                        if (data.uploadedMediaUrl && !data.uploadedMediaUrl.startsWith('blob:') && !data.uploadedMediaUrl.startsWith('data:')) {
                             setUploadedMediaUrl(data.uploadedMediaUrl);
                             setUploadedMediaPreview(data.uploadedMediaUrl);
                             setUploadedMediaType(data.uploadedMediaType || 'image');
@@ -2140,10 +2141,20 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
             const ctaText = cardState?.cta || '';
             const postContent = [captionText, ctaText].filter(Boolean).join('\n\n');
 
+            // Ensure mediaUrl is a permanent Firebase Storage URL, not a blob URL
+            let finalMediaUrl = cardState.mediaUrl;
+            if (finalMediaUrl && (finalMediaUrl.startsWith('blob:') || finalMediaUrl.startsWith('data:'))) {
+                // Weekly plan media should already be uploaded to Firebase Storage, but check just in case
+                console.warn('Weekly plan media URL is a blob URL, this should not happen');
+                // Don't save posts with blob URLs - they will expire
+                showToast?.('Media URL expired. Please re-upload the media.', 'error');
+                return;
+            }
+            
             await setDoc(doc(db, 'users', user.id, 'posts', postId), {
                 id: postId,
                 content: postContent || title,
-                mediaUrl: cardState.mediaUrl,
+                mediaUrl: finalMediaUrl, // Use permanent URL
                 mediaType: cardState.mediaType || 'image',
                 platforms: ['OnlyFans'],
                 status: 'Scheduled',
@@ -3247,10 +3258,36 @@ Output format:
 
             // Only save as a post - do NOT create a reminder event for posts
             // Reminders are separate and should only be created manually
+            // Ensure mediaUrl is a permanent Firebase Storage URL, not a blob URL
+            let finalMediaUrl = uploadedMediaUrl;
+            if (finalMediaUrl && (finalMediaUrl.startsWith('blob:') || finalMediaUrl.startsWith('data:'))) {
+                // If it's a blob URL, we need to upload it to Firebase Storage first
+                if (mediaFile) {
+                    try {
+                        const timestamp = Date.now();
+                        const fileExtension = mediaFile.name.split('.').pop() || (mediaFile.type.startsWith('video/') ? 'mp4' : 'jpg');
+                        const storagePath = `users/${user.id}/onlyfans-uploads/${timestamp}.${fileExtension}`;
+                        const storageRef = ref(storage, storagePath);
+                        await uploadBytes(storageRef, mediaFile, { contentType: mediaFile.type });
+                        finalMediaUrl = await getDownloadURL(storageRef);
+                        // Update state with permanent URL
+                        setUploadedMediaUrl(finalMediaUrl);
+                    } catch (uploadError) {
+                        console.error('Error uploading media before saving post:', uploadError);
+                        showToast?.('Failed to upload media. Please try again.', 'error');
+                        return;
+                    }
+                } else {
+                    // No file available, can't save blob URL
+                    showToast?.('Media URL expired. Please re-upload the media.', 'error');
+                    return;
+                }
+            }
+            
             const postData = {
                 id: postId,
                 content: fullCaption,
-                mediaUrl: uploadedMediaUrl,
+                mediaUrl: finalMediaUrl, // Use permanent URL
                 mediaType: uploadedMediaType || 'image',
                 platforms: ['OnlyFans'],
                 status: status,
@@ -4542,11 +4579,38 @@ Output format:
                                                                         const postId = Date.now().toString();
                                                                         const fullCaption = editedCaptions.get(index) ?? caption;
                                                                         const scheduledDateISO = new Date(scheduledDate).toISOString();
+                                                                        
+                                                                        // Ensure mediaUrl is a permanent Firebase Storage URL, not a blob URL
+                                                                        let finalMediaUrl = uploadedMediaUrl;
+                                                                        if (finalMediaUrl && (finalMediaUrl.startsWith('blob:') || finalMediaUrl.startsWith('data:'))) {
+                                                                            // If it's a blob URL, we need to upload it to Firebase Storage first
+                                                                            if (mediaFile) {
+                                                                                try {
+                                                                                    const timestamp = Date.now();
+                                                                                    const fileExtension = mediaFile.name.split('.').pop() || (mediaFile.type.startsWith('video/') ? 'mp4' : 'jpg');
+                                                                                    const storagePath = `users/${user.id}/onlyfans-uploads/${timestamp}.${fileExtension}`;
+                                                                                    const storageRef = ref(storage, storagePath);
+                                                                                    await uploadBytes(storageRef, mediaFile, { contentType: mediaFile.type });
+                                                                                    finalMediaUrl = await getDownloadURL(storageRef);
+                                                                                    // Update state with permanent URL
+                                                                                    setUploadedMediaUrl(finalMediaUrl);
+                                                                                } catch (uploadError) {
+                                                                                    console.error('Error uploading media before saving post:', uploadError);
+                                                                                    showToast?.('Failed to upload media. Please try again.', 'error');
+                                                                                    return;
+                                                                                }
+                                                                            } else {
+                                                                                // No file available, can't save blob URL
+                                                                                showToast?.('Media URL expired. Please re-upload the media.', 'error');
+                                                                                return;
+                                                                            }
+                                                                        }
+                                                                        
                                                                         // Only save as a post - do NOT create a reminder event
                                                                         const postData = {
                                                                             id: postId,
                                                                             content: fullCaption,
-                                                                            mediaUrl: uploadedMediaUrl,
+                                                                            mediaUrl: finalMediaUrl, // Use permanent URL
                                                                             mediaType: uploadedMediaType || 'image',
                                                                             platforms: ['OnlyFans'],
                                                                             status: 'Scheduled',
