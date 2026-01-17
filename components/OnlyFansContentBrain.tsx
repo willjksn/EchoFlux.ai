@@ -704,7 +704,7 @@ const WeeklyPlanFormatter: React.FC<{ plan: any } & WeeklyPlanActionHandlers> = 
                                         return (
                                             <div
                                                 key={dayIndex}
-                                                className={`bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700 ${isUsed ? 'opacity-60' : ''}`}
+                                                className={`bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700 relative ${isUsed ? 'opacity-60' : ''}`}
                                             >
                                                 <div className="flex items-start justify-between gap-4">
                                                     <div className="flex-1">
@@ -821,24 +821,46 @@ const WeeklyPlanFormatter: React.FC<{ plan: any } & WeeklyPlanActionHandlers> = 
                                                             </p>
                                                         )}
                                                     </div>
+                                                    {/* Small thumbnail preview on the right */}
+                                                    {cardState?.mediaUrl && (
+                                                        <div className={`relative w-16 h-16 rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden flex-shrink-0 ${isUsed ? 'opacity-50 grayscale' : ''}`}>
+                                                            {cardState.mediaType === 'video' ? (
+                                                                <video
+                                                                    src={cardState.mediaUrl}
+                                                                    className="w-full h-full object-cover"
+                                                                    muted
+                                                                    playsInline
+                                                                    preload="metadata"
+                                                                    onLoadedMetadata={(e) => {
+                                                                        const video = e.target as HTMLVideoElement;
+                                                                        video.currentTime = 0.1;
+                                                                    }}
+                                                                    onSeeked={(e) => {
+                                                                        const video = e.target as HTMLVideoElement;
+                                                                        video.pause();
+                                                                    }}
+                                                                />
+                                                            ) : (
+                                                                <img
+                                                                    src={cardState.mediaUrl}
+                                                                    alt={postIdea}
+                                                                    className="w-full h-full object-cover"
+                                                                    onError={(e) => {
+                                                                        const img = e.target as HTMLImageElement;
+                                                                        img.style.display = 'none';
+                                                                    }}
+                                                                />
+                                                            )}
+                                                            {cardState.mediaType === 'video' && (
+                                                                <div className="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
+                                                                    <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                                                        <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
+                                                                    </svg>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                {cardState?.mediaUrl && (
-                                                    <div className={`mt-3 ${isUsed ? 'opacity-50 grayscale' : ''}`}>
-                                                        {cardState.mediaType === 'video' ? (
-                                                            <video
-                                                                src={cardState.mediaUrl}
-                                                                className="w-full max-w-sm rounded-lg border border-gray-200 dark:border-gray-700"
-                                                                controls={!isUsed}
-                                                            />
-                                                        ) : (
-                                                            <img
-                                                                src={cardState.mediaUrl}
-                                                                alt={postIdea}
-                                                                className="w-full max-w-sm rounded-lg border border-gray-200 dark:border-gray-700 object-cover"
-                                                            />
-                                                        )}
-                                                    </div>
-                                                )}
                                                 {cardState?.caption && (
                                                     <div className="mt-3 space-y-2">
                                                         <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">
@@ -1975,6 +1997,109 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
         } finally {
             setIsGenerating(false);
         }
+    };
+
+    const formatWeeklyPlanForCopy = (plan: any): string => {
+        if (!plan) return '';
+        
+        // Handle string plans
+        let planData = plan;
+        if (typeof plan === 'string') {
+            try {
+                planData = JSON.parse(plan);
+            } catch (e) {
+                return plan;
+            }
+        }
+        
+        // Handle plan structure: could be plan.plan or plan directly
+        const actualPlan = planData?.plan || planData;
+        
+        let output = '';
+        
+        // Add metrics/goals if they exist
+        const metrics = actualPlan?.metrics || planData?.metrics;
+        if (metrics) {
+            output += 'WEEKLY GOALS & METRICS\n';
+            output += '='.repeat(50) + '\n\n';
+            if (metrics.primaryKPI) {
+                output += `Primary KPI: ${metrics.primaryKPI}\n`;
+            }
+            if (metrics.targetValue) {
+                output += `Target Value: ${metrics.targetValue}\n`;
+            }
+            if (metrics.milestones && Array.isArray(metrics.milestones)) {
+                output += '\nMilestones:\n';
+                metrics.milestones.forEach((milestone: any, idx: number) => {
+                    output += `  ${idx + 1}. ${milestone.description || milestone.targetMetric || 'Milestone'}\n`;
+                });
+            }
+            if (metrics.successCriteria && Array.isArray(metrics.successCriteria)) {
+                output += '\nSuccess Criteria:\n';
+                metrics.successCriteria.forEach((criteria: string, idx: number) => {
+                    output += `  ${idx + 1}. ${criteria}\n`;
+                });
+            }
+            output += '\n' + '='.repeat(50) + '\n\n';
+        }
+        
+        // Add weeks content
+        const weeks = actualPlan?.weeks || [];
+        if (weeks.length > 0) {
+            weeks.forEach((week: any, weekIndex: number) => {
+                const weekNum = week.week || week.weekNumber || weekIndex + 1;
+                const focus = week.focus || week.theme || 'Content Focus';
+                const days = week.days || week.content || [];
+                
+                output += `WEEK ${weekNum}: ${focus}\n`;
+                output += '='.repeat(50) + '\n\n';
+                
+                days.forEach((day: any, dayIndex: number) => {
+                    const dayName = day.day || `Day ${day.dayOffset !== undefined ? day.dayOffset + 1 : dayIndex + 1}`;
+                    const postType = day.postType || day.format || 'Post';
+                    const postIdea = day.postIdea || day.topic || day.content || 'Content idea';
+                    const description = day.description;
+                    const angle = day.angle;
+                    const cta = day.cta;
+                    
+                    output += `${dayName} - ${postType}\n`;
+                    output += '-'.repeat(30) + '\n';
+                    output += `Topic: ${postIdea}\n\n`;
+                    
+                    if (description) {
+                        output += `Description: ${description}\n\n`;
+                    }
+                    
+                    if (angle) {
+                        output += `Angle: ${angle}\n\n`;
+                    }
+                    
+                    if (day.imageIdeas && Array.isArray(day.imageIdeas) && day.imageIdeas.length > 0) {
+                        output += `Image Ideas:\n`;
+                        day.imageIdeas.forEach((idea: string, idx: number) => {
+                            output += `  ${idx + 1}. ${idea}\n`;
+                        });
+                        output += '\n';
+                    }
+                    
+                    if (day.videoIdeas && Array.isArray(day.videoIdeas) && day.videoIdeas.length > 0) {
+                        output += `Video Ideas:\n`;
+                        day.videoIdeas.forEach((idea: string, idx: number) => {
+                            output += `  ${idx + 1}. ${idea}\n`;
+                        });
+                        output += '\n';
+                    }
+                    
+                    if (cta) {
+                        output += `CTA: ${cta}\n\n`;
+                    }
+                    
+                    output += '\n';
+                });
+            });
+        }
+        
+        return output.trim();
     };
 
     const buildWeeklyPlanPrompt = (action: WeeklyPlanDayAction) => {
@@ -6112,10 +6237,9 @@ Output format:
                                 </h3>
                                 <button
                                     onClick={() => {
-                                        const textToCopy = typeof generatedWeeklyPlan === 'string' 
-                                            ? generatedWeeklyPlan 
-                                            : JSON.stringify(generatedWeeklyPlan, null, 2);
-                                        copyToClipboard(textToCopy);
+                                        const formattedText = formatWeeklyPlanForCopy(generatedWeeklyPlan);
+                                        copyToClipboard(formattedText);
+                                        showToast?.('Weekly plan copied to clipboard!', 'success');
                                     }}
                                     className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-1"
                                 >
