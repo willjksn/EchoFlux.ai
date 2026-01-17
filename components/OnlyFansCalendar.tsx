@@ -727,6 +727,15 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                                     </span>
                                                                     <div className={`w-2.5 h-2.5 sm:w-2 sm:h-2 rounded-full flex-shrink-0 shadow-sm ${colors.dot}`}></div>
                                                                 </div>
+                                                                {event.type === 'post' && event.thumbnail && (
+                                                                    <div className="mb-1">
+                                                                        <img
+                                                                            src={event.thumbnail}
+                                                                            alt="Preview"
+                                                                            className="w-full h-14 rounded-md object-cover border border-gray-200 dark:border-gray-700"
+                                                                        />
+                                                                    </div>
+                                                                )}
                                                                 <div 
                                                                     className="flex items-center gap-2 min-w-0"
                                                                     style={{ pointerEvents: 'none' }}
@@ -750,6 +759,11 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                                             {event.status}
                                                                         </span>
                                                                     )}
+                                                                    {event.type === 'post' && event.contentType && (
+                                                                        <span className="text-[9px] sm:text-[8px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 uppercase">
+                                                                            {event.contentType}
+                                                                        </span>
+                                                                    )}
                                                                 </div>
                                                                 {event.type === 'post' && event.status && (
                                                                     <div 
@@ -761,21 +775,6 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                                         </span>
                                                                     </div>
                                                                 )}
-                                                                {event.type === 'post' && event.thumbnail && (
-                                                                    <div className="mt-1.5 flex items-center gap-2" style={{ pointerEvents: 'none' }}>
-                                                                        <img
-                                                                            src={event.thumbnail}
-                                                                            alt="Preview"
-                                                                            className="w-10 h-10 rounded-md object-cover border border-gray-200 dark:border-gray-700"
-                                                                        />
-                                                                        {event.contentType && (
-                                                                            <span className="text-[9px] sm:text-[8px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                                                                                {event.contentType}
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-                                                                )}
-
                                                             </div>
                                                             {event.type === 'post' && (
                                                                 <button
