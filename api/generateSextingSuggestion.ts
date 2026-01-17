@@ -4,6 +4,7 @@ import { getModelForTask } from "./_modelRouter.js";
 import { enforceRateLimit } from "./_rateLimit.js";
 import { getEmojiInstructions, getEmojiExamplesForTone } from "./_emojiHelper.js";
 import { parseJSON } from "./_geminiShared.js";
+import { getAdminDb } from "./_firebaseAdmin.js";
 
 async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== "POST") {
@@ -66,11 +67,31 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     const model = await getModelForTask("sexting_session", user.uid);
 
     const roleplayType = sessionContext?.roleplayType || "Girlfriend Experience";
-    const tone = sessionContext?.tone || "Explicit";
+    const tone = sessionContext?.tone || "Teasing";
     const fanName = sessionContext?.fanName || "Fan";
-    const explicitnessLevel = 10;
-    const explicitnessContext =
-      "Go maximally explicit. Use vivid, raw sexual language and detailed descriptions.";
+    let explicitnessLevel = 7;
+    try {
+      const db = getAdminDb();
+      const userDoc = await db.collection("users").doc(user.uid).get();
+      const userData = userDoc.data();
+      if (typeof userData?.explicitnessLevel === "number") {
+        explicitnessLevel = userData.explicitnessLevel;
+      }
+    } catch (error) {
+      console.warn("[generateSextingSuggestion] failed to load explicitness:", error);
+    }
+
+    const toneLower = String(tone).toLowerCase();
+    const wantsExplicitTone = toneLower === "explicit";
+    const explicitnessContext = wantsExplicitTone
+      ? explicitnessLevel >= 10
+        ? "Go extremely explicit, as intense as possible. Use vivid, raw sexual language and detailed descriptions."
+        : explicitnessLevel >= 8
+        ? "Be very explicit and direct. Use clear sexual language and heat."
+        : explicitnessLevel >= 6
+        ? "Keep it explicit and sexy, but not extreme."
+        : "Keep it flirty and suggestive with light explicitness."
+      : `Respect the "${tone}" tone. Keep it ${toneLower}, avoid graphic sexual language.`;
 
     const emojiGuidance = getEmojiInstructions({
       enabled: emojiEnabled !== false,
@@ -140,7 +161,7 @@ ${fanName && fanName !== 'Fan' ? `- When mentioning ${fanName}, YOU are addressi
 - Use platform slang organically - it should feel natural, not like you're checking off a list
 
 Guidelines:
-- Be as explicit as possible. Do not soften or euphemize sexual language.
+- Follow the chosen tone. Only go extremely explicit when tone is Explicit and explicitness is 10.
 - Be bold, playful, and explicitly adult (sexting) while respecting the chosen tone.
 - Keep replies concise (1-3 sentences each).
 - Vary style across suggestions (teasing, direct, playful).
