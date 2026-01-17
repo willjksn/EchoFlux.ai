@@ -930,7 +930,7 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
     const [showMediaVaultModal, setShowMediaVaultModal] = useState(false);
     const [mediaVaultItems, setMediaVaultItems] = useState<any[]>([]);
     const [weeklyPlanUploadMenuKey, setWeeklyPlanUploadMenuKey] = useState<string | null>(null);
-    const [weeklyPlanVaultTargetKey, setWeeklyPlanVaultTargetKey] = useState<string | null>(null);
+    const [weeklyPlanVaultTargetAction, setWeeklyPlanVaultTargetAction] = useState<WeeklyPlanDayAction | null>(null);
     const [weeklyPlanCardState, setWeeklyPlanCardState] = useState<Record<string, WeeklyPlanCardState>>({});
     const [isAnalyzingGaps, setIsAnalyzingGaps] = useState(false);
     const [isPredicting, setIsPredicting] = useState(false);
@@ -1990,7 +1990,7 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
     };
 
     const handleWeeklyPlanSelectFromVault = (action: WeeklyPlanDayAction) => {
-        setWeeklyPlanVaultTargetKey(action.cardKey);
+        setWeeklyPlanVaultTargetAction(action);
         setWeeklyPlanUploadMenuKey(null);
         setShowMediaVaultModal(true);
     };
@@ -3458,20 +3458,24 @@ Output format:
     };
 
     // Handle selecting media from vault
-    const handleSelectFromVault = (item: any) => {
-        if (weeklyPlanVaultTargetKey) {
+    const handleSelectFromVault = async (item: any) => {
+        if (weeklyPlanVaultTargetAction) {
+            const action = weeklyPlanVaultTargetAction;
+            const mediaUrl = item.url;
+            const mediaType = item.type === 'video' ? 'video' : 'image';
             setWeeklyPlanCardState((prev) => ({
                 ...prev,
-                [weeklyPlanVaultTargetKey]: {
-                    ...prev[weeklyPlanVaultTargetKey],
-                    mediaUrl: item.url,
-                    mediaType: item.type === 'video' ? 'video' : 'image',
+                [action.cardKey]: {
+                    ...prev[action.cardKey],
+                    mediaUrl,
+                    mediaType,
                     error: undefined,
                 },
             }));
-            setWeeklyPlanVaultTargetKey(null);
+            setWeeklyPlanVaultTargetAction(null);
             setWeeklyPlanUploadMenuKey(null);
             setShowMediaVaultModal(false);
+            await handleWeeklyPlanGenerateCaption(action, { mediaUrl, mediaType });
             return;
         }
 
@@ -6464,7 +6468,7 @@ Output format:
                             <button
                                 onClick={() => {
                                     setShowMediaVaultModal(false);
-                                    setWeeklyPlanVaultTargetKey(null);
+                                    setWeeklyPlanVaultTargetAction(null);
                                 }}
                                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                             >
@@ -6499,7 +6503,7 @@ Output format:
                             <button
                                 onClick={() => {
                                     setShowMediaVaultModal(false);
-                                    setWeeklyPlanVaultTargetKey(null);
+                                    setWeeklyPlanVaultTargetAction(null);
                                 }}
                                 className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
                             >
