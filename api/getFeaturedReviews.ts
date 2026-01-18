@@ -1,10 +1,27 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
+import { enforceRateLimit } from "./_rateLimit.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  const ip =
+    (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ||
+    (req.headers["x-real-ip"] as string | undefined) ||
+    "anonymous";
+
+  // Rate limit: 120 requests / minute per IP
+  const ok = await enforceRateLimit({
+    req,
+    res,
+    keyPrefix: "getFeaturedReviews",
+    limit: 120,
+    windowMs: 60 * 1000,
+    identifier: ip,
+  });
+  if (!ok) return;
 
   try {
     const db = getAdminDb();

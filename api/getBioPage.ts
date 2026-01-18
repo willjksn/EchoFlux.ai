@@ -1,11 +1,28 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 // Important: use .js extension so Vercel ESM resolver finds the compiled file
 import { getAdminDb } from "./_firebaseAdmin.js";
+import { enforceRateLimit } from "./_rateLimit.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  const ip =
+    (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ||
+    (req.headers["x-real-ip"] as string | undefined) ||
+    "anonymous";
+
+  // Rate limit: 60 requests / minute per IP
+  const ok = await enforceRateLimit({
+    req,
+    res,
+    keyPrefix: "getBioPage",
+    limit: 60,
+    windowMs: 60 * 1000,
+    identifier: ip,
+  });
+  if (!ok) return;
 
   const { username } = req.query;
 
@@ -116,20 +133,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Check if it's an index error
       if (queryError?.code === 9 || queryError?.message?.includes("index")) {
         console.error("Firestore index required for bioPage.username query:", queryError);
-        // Fallback: Try to get all users and filter (not recommended for production, but works as fallback)
-        console.warn("Falling back to full collection scan - this is inefficient. Please create a Firestore index for bioPage.username");
-        const allUsers = await usersRef.limit(1000).get(); // Limit to prevent huge scans
-        const matchingDocs = allUsers.docs.filter(doc => {
-          const data = doc.data();
-          const bioUsername = data?.bioPage?.username?.replace("@", "").toLowerCase().trim();
-          return bioUsername === cleanUsername;
-        });
-        
-        if (matchingDocs.length === 0) {
-          return res.status(404).json({ error: "Bio page not found" });
+        if (process.env.NODE_ENV === "development") {
+          // Fallback: Try to get all users and filter (development only)
+          console.warn("Dev fallback: full collection scan for bioPage.username (not for production).");
+          const allUsers = await usersRef.limit(1000).get(); // Limit to prevent huge scans
+          const matchingDocs = allUsers.docs.filter(doc => {
+            const data = doc.data();
+            const bioUsername = data?.bioPage?.username?.replace("@", "").toLowerCase().trim();
+            return bioUsername === cleanUsername;
+          });
+
+          if (matchingDocs.length === 0) {
+            return res.status(404).json({ error: "Bio page not found" });
+          }
+
+          userDoc = matchingDocs[0];
+        } else {
+          return res.status(500).json({
+            error: "Bio page lookup is temporarily unavailable. Please try again later.",
+          });
         }
-        
-        userDoc = matchingDocs[0];
       } else {
         // Re-throw if it's not an index error
         throw queryError;

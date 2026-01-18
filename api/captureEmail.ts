@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
+import { enforceRateLimit } from "./_rateLimit.js";
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -19,6 +20,22 @@ function normalizeUsername(username: string) {
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
+  const ip =
+    (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ||
+    (req.headers["x-real-ip"] as string | undefined) ||
+    "anonymous";
+
+  // Rate limit: 10 requests / minute per IP
+  const ok = await enforceRateLimit({
+    req,
+    res,
+    keyPrefix: "captureEmail",
+    limit: 10,
+    windowMs: 60 * 1000,
+    identifier: ip,
+  });
+  if (!ok) return;
 
   const { username, email } = (req.body || {}) as { username?: string; email?: string };
   if (!username || typeof username !== "string") return res.status(400).json({ error: "username is required" });

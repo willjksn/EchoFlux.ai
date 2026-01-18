@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { withErrorHandling } from './_errorHandler.js';
 import { getAdminDb } from './_firebaseAdmin.js';
+import { enforceRateLimit } from './_rateLimit.js';
 
 function isWithinWindow(now: number, startsAt?: string, endsAt?: string): boolean {
   const startOk = startsAt ? now >= new Date(startsAt).getTime() : true;
@@ -13,6 +14,22 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     res.status(405).json({ error: 'Method not allowed' });
     return;
   }
+
+  const ip =
+    (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ||
+    (req.headers["x-real-ip"] as string | undefined) ||
+    "anonymous";
+
+  // Rate limit: 120 requests / minute per IP
+  const ok = await enforceRateLimit({
+    req,
+    res,
+    keyPrefix: "getPublicAnnouncements",
+    limit: 120,
+    windowMs: 60 * 1000,
+    identifier: ip,
+  });
+  if (!ok) return;
 
   const db = getAdminDb();
   const now = Date.now();
