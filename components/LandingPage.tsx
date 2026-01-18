@@ -5,6 +5,7 @@ import { Pricing } from './Pricing';
 import { ReviewsSection } from './ReviewsSection';
 import { Page } from '../types';
 import { WaitlistInlineForm } from './WaitlistInlineForm';
+import { isInviteOnlyMode } from '../src/utils/inviteOnly';
 import { About } from './About';
 import { Terms } from './Terms';
 import { Privacy } from './Privacy';
@@ -32,6 +33,7 @@ const Feature: React.FC<{ icon: React.ReactNode; title: string; children: React.
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetStartedClick, onNavigateRequest }) => {
   const [legalModal, setLegalModal] = useState<'about' | 'terms' | 'privacy' | 'contact' | null>(null);
+  const inviteOnlyMode = isInviteOnlyMode();
   const legalTitle =
     legalModal === 'about'
       ? 'About EchoFlux.ai'
@@ -131,19 +133,29 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                       Want the 7-day trial? Choose Pro or Elite below.
                     </div>
 
-                    <div className="mt-6 text-sm text-gray-700 dark:text-primary-100/90">
-                      Invite-only right now. Join the waitlist and we'll email you if you're selected.
-                    </div>
-
-                    <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4 text-gray-900 shadow-sm
-                      [&_*]:text-gray-900
-                      [&_input]:bg-white [&_input]:border [&_input]:border-gray-300 [&_input]:text-gray-900 [&_input]:placeholder:text-gray-500 [&_input]:rounded-md [&_input]:px-3 [&_input]:py-2 [&_input]:focus:outline-none [&_input]:focus:ring-2 [&_input]:focus:ring-primary-500
-                      [&_button]:bg-primary-600 [&_button]:text-white [&_button]:hover:bg-primary-700 [&_button]:rounded-md [&_button]:px-4 [&_button]:py-2
-                      dark:border-white/20 dark:bg-white/5 dark:text-white dark:[&_*]:text-white
-                      dark:[&_input]:bg-white/10 dark:[&_input]:border-white/30 dark:[&_input]:text-white dark:[&_input]:placeholder:text-gray-300 dark:[&_input]:focus:ring-primary-400
-                      dark:[&_button]:bg-white/10 dark:[&_button]:text-white dark:[&_button]:hover:bg-white/20">
-                      <WaitlistInlineForm />
-                    </div>
+                    {inviteOnlyMode ? (
+                      <>
+                        <div className="mt-6 text-sm text-gray-700 dark:text-primary-100/90">
+                          Invite-only right now. Join the waitlist and we'll email you if you're selected.
+                        </div>
+                        <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4 text-gray-900 shadow-sm
+                          [&_*]:text-gray-900
+                          [&_input]:bg-white [&_input]:border [&_input]:border-gray-300 [&_input]:text-gray-900 [&_input]:placeholder:text-gray-500 [&_input]:rounded-md [&_input]:px-3 [&_input]:py-2 [&_input]:focus:outline-none [&_input]:focus:ring-2 [&_input]:focus:ring-primary-500
+                          [&_button]:bg-primary-600 [&_button]:text-white [&_button]:hover:bg-primary-700 [&_button]:rounded-md [&_button]:px-4 [&_button]:py-2
+                          dark:border-white/20 dark:bg-white/5 dark:text-white dark:[&_*]:text-white
+                          dark:[&_input]:bg-white/10 dark:[&_input]:border-white/30 dark:[&_input]:text-white dark:[&_input]:placeholder:text-gray-300 dark:[&_input]:focus:ring-primary-400
+                          dark:[&_button]:bg-white/10 dark:[&_button]:text-white dark:[&_button]:hover:bg-white/20">
+                          <WaitlistInlineForm />
+                        </div>
+                      </>
+                    ) : (
+                      <div className="mt-6 rounded-xl border border-gray-200 bg-white p-4 text-gray-900 shadow-sm dark:border-white/20 dark:bg-white/5 dark:text-white">
+                        <div className="text-base font-semibold">Try EchoFlux.ai out</div>
+                        <div className="mt-2 text-sm text-gray-700 dark:text-primary-100/90">
+                          Sign up to start planning content. If you have an invite code, enter it on the signup screen.
+                        </div>
+                      </div>
+                    )}
 
                     <div className="mt-6 flex flex-col gap-3">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
