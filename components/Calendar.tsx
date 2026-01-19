@@ -798,7 +798,17 @@ export const Calendar: React.FC = () => {
                         </div>
                     )}
                     <button 
-                        onClick={(e) => { e.stopPropagation(); setActivePage('compose'); }} 
+                        onClick={(e) => { 
+                            e.stopPropagation(); 
+                            // Pass the selected date to compose page via localStorage
+                            const dateStr = new Date(
+                                currentDate.getFullYear(),
+                                currentDate.getMonth(),
+                                currentDay
+                            ).toISOString().split('T')[0];
+                            localStorage.setItem('composeScheduledDate', dateStr);
+                            setActivePage('compose'); 
+                        }} 
                         className="absolute bottom-3 right-3 p-2 bg-gradient-to-r from-primary-500 to-primary-600 text-white hover:from-primary-600 hover:to-primary-700 rounded-full transition-all opacity-0 group-hover:opacity-100 focus:opacity-100 z-10 shadow-lg hover:shadow-xl"
                         title="Add Post to this day"
                         aria-label="Add post"

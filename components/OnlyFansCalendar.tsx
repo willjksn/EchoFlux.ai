@@ -322,7 +322,20 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
             await setDoc(doc(db, 'users', user.id, 'onlyfans_calendar_events', reminderId), eventData);
 
             showToast(selectedEvent?.reminder ? 'Reminder updated!' : 'Reminder created!', 'success');
-            resetReminderForm();
+            
+            // Reset form and close modal immediately
+            setIsCreatingReminder(false);
+            setSelectedEvent(null);
+            setSelectedDate(null);
+            setSelectedFanId(null);
+            setSelectedFanName(null);
+            setEventTitle('');
+            setEventDescription('');
+            setEventReminderType('post');
+            setEventContentType('free');
+            setEventCustomStatus('ordered');
+            setEventDate('');
+            setEventTime('');
         } catch (error) {
             console.error('Error saving reminder:', error);
             showToast('Failed to save reminder', 'error');

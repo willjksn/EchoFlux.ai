@@ -32,7 +32,7 @@ export const InviteCodeManager: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateCount, setGenerateCount] = useState(1);
-  const [generateGrantPlan, setGenerateGrantPlan] = useState<'Free' | 'Pro' | 'Elite'>('Free');
+  const [generateGrantPlan, setGenerateGrantPlan] = useState<'Free' | 'Pro' | 'Elite'>('Pro');
   const [generateMaxUses, setGenerateMaxUses] = useState(1);
   const [generateExpiresAt, setGenerateExpiresAt] = useState<string>(''); // YYYY-MM-DD
 
@@ -113,7 +113,7 @@ export const InviteCodeManager: React.FC = () => {
       
       // Reset form
       setGenerateCount(1);
-      setGenerateGrantPlan('Free');
+      setGenerateGrantPlan('Pro');
       setGenerateMaxUses(1);
       setGenerateExpiresAt('');
       
@@ -274,7 +274,6 @@ export const InviteCodeManager: React.FC = () => {
               onChange={(e) => setGenerateGrantPlan(e.target.value as 'Free' | 'Pro' | 'Elite')}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             >
-              <option value="Free">Free</option>
               <option value="Pro">Pro</option>
               <option value="Elite">Elite</option>
             </select>
@@ -432,7 +431,6 @@ export const InviteCodeManager: React.FC = () => {
                   onChange={(e) => setEditGrantPlan(e.target.value as 'Free' | 'Pro' | 'Elite')}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 >
-                  <option value="Free">Free</option>
                   <option value="Pro">Pro</option>
                   <option value="Elite">Elite</option>
                 </select>

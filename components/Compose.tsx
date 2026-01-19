@@ -455,6 +455,16 @@ const CaptionGenerator: React.FC = () => {
     if (composeContext?.hashtags) {
       // Hashtags are available - they'll be used when generating captions
     }
+    
+    // Check for scheduled date from Calendar (via localStorage)
+    const composeScheduledDate = localStorage.getItem('composeScheduledDate');
+    if (composeScheduledDate) {
+      setIsScheduling(true);
+      // Convert date string (YYYY-MM-DD) to datetime-local format (YYYY-MM-DDTHH:mm)
+      const dateStr = composeScheduledDate + 'T12:00'; // Default to noon
+      setScheduleDate(dateStr);
+      localStorage.removeItem('composeScheduledDate'); // Clear after use
+    }
   }, [composeContext, setComposeState]);
 
   useEffect(() => {
