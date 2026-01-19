@@ -252,6 +252,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Ensure the resulting subscription carries plan metadata, so future subscription.updated events
       // can reliably map back to the correct plan (without needing price→plan reverse mapping).
       subscription_data: {
+        trial_period_days: 7, // 7-day free trial - card required but no charge until trial ends
         metadata: {
           planName,
           billingCycle,

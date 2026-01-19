@@ -577,10 +577,9 @@ export const OnlyFansFans: React.FC = () => {
 
             await setDoc(doc(db, 'users', user.id, 'onlyfans_fan_preferences', editingFan.id), fanData, { merge: true });
             
-            showToast?.('Fan updated successfully!', 'success');
+            // Close modal and reset form first
             setShowEditFanModal(false);
             setEditingFan(null);
-            // Reset form
             setNewFanName('');
             setNewFanSpendingLevel(0);
             setNewFanTier('Free');
@@ -600,11 +599,18 @@ export const OnlyFansFans: React.FC = () => {
                 noCustomRequests: false,
                 timeBoundaryOnly: false,
             });
-            // Reload fans
-            loadFans();
+            
+            // Show success message
+            showToast?.('Fan updated successfully!', 'success');
+            
+            // Reload fans list (don't await - let it happen in background)
+            loadFans().catch(err => {
+                console.error('Error reloading fans after update:', err);
+                // Don't show error to user since save was successful
+            });
         } catch (error) {
             console.error('Error updating fan:', error);
-            showToast?.('Failed to update fan', 'error');
+            showToast?.('Failed to update fan. Please try again.', 'error');
         } finally {
             setIsSavingFan(false);
         }
@@ -814,8 +820,8 @@ export const OnlyFansFans: React.FC = () => {
                                                     <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
                                                         <span className="font-medium">Spending:</span>
                                                         <span className="flex items-center gap-0.5">
-                                                            {Array.from({ length: 5 }).map((_, i) => (
-                                                                <span key={i} className={i < (prefs.spendingLevel || 0) ? 'text-green-600 dark:text-green-400' : 'text-gray-300 dark:text-gray-600'}>
+                                                            {Array.from({ length: prefs.spendingLevel }).map((_, i) => (
+                                                                <span key={i} className="text-green-600 dark:text-green-400">
                                                                     💰
                                                                 </span>
                                                             ))}
@@ -1641,7 +1647,7 @@ export const OnlyFansFans: React.FC = () => {
 
                                         await setDoc(doc(db, 'users', user.id, 'onlyfans_fan_preferences', fanId), fanData);
                                         
-                                        showToast?.('Fan added successfully!', 'success');
+                                        // Clear form and close modal first
                                         setShowAddFanModal(false);
                                         setNewFanName('');
                                         setNewFanSpendingLevel(0);
@@ -1663,7 +1669,15 @@ export const OnlyFansFans: React.FC = () => {
                                             noCustomRequests: false,
                                             timeBoundaryOnly: false,
                                         });
-                                        await loadFans(); // Reload fans list
+                                        
+                                        // Show success message
+                                        showToast?.('Fan added successfully!', 'success');
+                                        
+                                        // Reload fans list (don't await - let it happen in background)
+                                        loadFans().catch(err => {
+                                            console.error('Error reloading fans after save:', err);
+                                            // Don't show error to user since save was successful
+                                        });
                                     } catch (error) {
                                         console.error('Error adding fan:', error);
                                         showToast?.('Failed to add fan. Please try again.', 'error');

@@ -68,6 +68,7 @@ export const OnlyFansSextingSession: React.FC = () => {
     const [isLoadingFans, setIsLoadingFans] = useState(false);
     const [creatorPersonality, setCreatorPersonality] = useState('');
     const [useCreatorPersonalitySexting, setUseCreatorPersonalitySexting] = useState(false);
+    const [showEndSessionModal, setShowEndSessionModal] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const sessionStartTime = useRef<Date | null>(null);
 
@@ -414,8 +415,23 @@ NATURAL PERSONALIZATION GUIDELINES:
         showToast('Session resumed', 'success');
     };
 
-    const endSession = async () => {
+    const endSession = async (skipSave: boolean = false) => {
         if (!activeSession || !user?.id) return;
+
+        // If no fan is selected, show modal to choose: save with fan or continue without saving
+        if (!activeSession.fanId && !skipSave) {
+            setShowEndSessionModal(true);
+            return;
+        }
+
+        // If skipping save, just end the session
+        if (skipSave) {
+            setActiveSession(null);
+            sessionStartTime.current = null;
+            showToast('Session ended', 'success');
+            setShowEndSessionModal(false);
+            return;
+        }
 
         const duration = sessionStartTime.current
             ? Math.round((new Date().getTime() - sessionStartTime.current.getTime()) / 60000)
@@ -459,11 +475,13 @@ NATURAL PERSONALIZATION GUIDELINES:
         } catch (error) {
             console.error('Error saving session:', error);
             showToast('Failed to save session', 'error');
+            return;
         }
 
         setActiveSession(null);
         sessionStartTime.current = null;
         showToast('Session ended and saved', 'success');
+        setShowEndSessionModal(false);
     };
 
     const copyToClipboard = (text: string) => {
@@ -471,9 +489,85 @@ NATURAL PERSONALIZATION GUIDELINES:
         showToast('Copied to clipboard!', 'success');
     };
 
+    // End Session Modal (when no fan selected)
+    const EndSessionModal = () => {
+        const [tempSelectedFanId, setTempSelectedFanId] = useState<string | null>(null);
+        const [tempSelectedFanName, setTempSelectedFanName] = useState<string | null>(null);
+
+        const handleSaveWithFan = async () => {
+            if (!tempSelectedFanId || !activeSession) return;
+            
+            // Update session with selected fan
+            const updatedSession: Session = {
+                ...activeSession,
+                fanId: tempSelectedFanId,
+                fanName: tempSelectedFanName || '',
+            };
+            setActiveSession(updatedSession);
+            
+            // Now end session with fan
+            await endSession(false);
+        };
+
+        if (!showEndSessionModal) return null;
+
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-sm">
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full m-4 p-6">
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                        End Session
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-400 mb-6">
+                        No fan is selected for this session. Would you like to save it or continue without saving?
+                    </p>
+                    
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Select a fan to save this session:
+                            </label>
+                            <FanSelector
+                                selectedFanId={tempSelectedFanId}
+                                onSelectFan={(fanId, fanName) => {
+                                    setTempSelectedFanId(fanId);
+                                    setTempSelectedFanName(fanName);
+                                }}
+                                allowNewFan={true}
+                                compact={true}
+                            />
+                        </div>
+                        
+                        <div className="flex gap-3 pt-4">
+                            <button
+                                onClick={handleSaveWithFan}
+                                disabled={!tempSelectedFanId}
+                                className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Save with Fan
+                            </button>
+                            <button
+                                onClick={() => endSession(true)}
+                                className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+                            >
+                                Continue Without Saving
+                            </button>
+                            <button
+                                onClick={() => setShowEndSessionModal(false)}
+                                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     if (activeSession) {
         return (
             <div className="max-w-6xl mx-auto">
+                <EndSessionModal />
                 {/* Session Header */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-4">
                     <div className="flex items-center justify-between">

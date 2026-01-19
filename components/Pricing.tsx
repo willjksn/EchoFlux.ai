@@ -29,10 +29,10 @@ const allCreatorTiers = [
         name: 'Pro',
         priceMonthly: 29,
         priceAnnually: 23,
-        description: 'For creators scaling their brand.',
+        description: 'For creators building their brand.',
         features: [
             'Plan My Week',
-            '2 plans',
+            '2 content strategies / month',
             'Live trend research',
             '500 caption ideas',
             'Fair-use AI limits & queued heavy tasks',
@@ -41,17 +41,17 @@ const allCreatorTiers = [
             'My Schedule',
             '5 GB Storage'
         ],
-        isRecommended: true
+        isRecommended: false
     },
     {
         name: 'Elite',
         priceMonthly: 79,
         priceAnnually: 63,
-        description: 'For professional & monetized creators.',
+        description: 'For monetized creators maximizing revenue.',
         features: [
             'Premium Content Studio (included)',
             'Advanced Plan My Week options',
-            '5 plans',
+            '5 content strategies / month',
             'Enhanced live trend research',
             '1,500 caption ideas',
             'Fair-use AI limits & priority queueing',
@@ -60,7 +60,7 @@ const allCreatorTiers = [
             'My Schedule',
             '10 GB Storage',
         ],
-        isRecommended: false
+        isRecommended: true
     },
     // Hidden plans - will be available in future updates
     // {
@@ -118,8 +118,8 @@ const allCreatorTiers = [
     // },
 ];
 
-// Only show Free, Pro, and Elite plans
-const creatorTiers = allCreatorTiers.filter(tier => ['Free', 'Pro', 'Elite'].includes(tier.name));
+// Only show Pro and Elite plans (Free plan hidden - users can try with 7-day trial)
+const creatorTiers = allCreatorTiers.filter(tier => ['Pro', 'Elite'].includes(tier.name));
 
 export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateRequest }) => {
     const { user, openPaymentModal, setActivePage, isAuthenticated, pricingView, setPricingView, showToast, setUser, setSelectedPlan } = useAppContext();
@@ -168,7 +168,7 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
     
     const currentPlan = user?.plan;
     // Show only the three focused creator plans in the UI
-    const visibleTierNames: Array<string> = ['Free', 'Pro', 'Elite'];
+    const visibleTierNames: Array<string> = ['Pro', 'Elite'];
     const pricingTiers = creatorTiers.filter((tier) => visibleTierNames.includes(tier.name));
 
     return (
@@ -176,10 +176,10 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="text-center">
                     <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white sm:text-4xl">
-                        Choose the plan that's right for you
+                        Built for Monetized Creators
                     </h2>
                     <p className="mt-4 text-lg text-gray-500 dark:text-gray-400">
-                        Built for creators first. Upgrade when you’re ready.
+                        Start with a free 7-day trial. Cancel anytime. Elite includes Premium Content Studio for OnlyFans, Fansly & Fanvue creators.
                     </p>
                 </div>
 
@@ -198,7 +198,7 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
                     </div>
                 </div>
 
-                <div className="mt-10 grid gap-6 grid-cols-1 md:grid-cols-3 max-w-4xl mx-auto">
+                <div className="mt-10 grid gap-6 grid-cols-1 md:grid-cols-2 max-w-5xl mx-auto justify-items-center">
                     {pricingTiers.map((tier) => {
                         const isCurrentPlan = currentPlan === tier.name;
                         const price = billingCycle === 'monthly' ? tier.priceMonthly : tier.priceAnnually;
@@ -217,8 +217,7 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
                             }
                         };
                         
-                        let buttonText = 'Choose Plan';
-                        if (!isAuthenticated && tier.priceMonthly === 0) buttonText = 'Start for free';
+                        let buttonText = 'Start 7-Day Trial';
                         if (isCurrentPlan) buttonText = 'Current Plan';
 
                         return (
@@ -231,11 +230,9 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
                                 <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-4">{(tier as any).displayName || tier.name}</h3>
                                 <div className="mt-2 min-h-[52px] space-y-1">
                                   <p className="text-sm text-gray-500 dark:text-gray-400">{tier.description}</p>
-                                  {['Pro', 'Elite'].includes(tier.name) && (
-                                    <p className="text-sm font-semibold text-primary-600 dark:text-primary-300">
-                                      Free 7-day Trial
-                                    </p>
-                                  )}
+                                  <p className="text-sm font-semibold text-primary-600 dark:text-primary-300">
+                                    Free 7-Day Trial • Cancel Anytime
+                                  </p>
                                 </div>
                                 <div className="mt-4">
                                     <>

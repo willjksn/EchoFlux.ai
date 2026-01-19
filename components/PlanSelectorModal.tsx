@@ -10,29 +10,16 @@ interface PlanSelectorModalProps {
     onCancel?: () => void; // Optional cancel handler
 }
 
+// Free plan removed - users can try with 7-day trial on Pro/Elite
 const creatorPlans = [
-    { 
-        name: 'Free' as Plan, 
-        priceMonthly: 0,
-        priceAnnually: 0,
-        description: 'Perfect for getting started',
-        features: [
-            '1 weekly plan / month (basic)',
-            '10 caption ideas / month',
-            'Bio Link Page (1 link)',
-            'My Vault',
-            '100 MB storage'
-        ],
-        isRecommended: false
-    },
     { 
         name: 'Pro' as Plan, 
         priceMonthly: 29,
         priceAnnually: 23,
-        description: 'For creators scaling their brand',
+        description: 'For creators building their brand',
         features: [
             'Plan My Week',
-            '2 plans / month',
+            '2 content strategies / month',
             'Live trend research included (16 searches/month)',
             '500 caption ideas / month',
             'Bio Link Page (5 links)',
@@ -40,16 +27,16 @@ const creatorPlans = [
             'My Schedule',
             '5 GB storage'
         ],
-        isRecommended: true
+        isRecommended: false
     },
     { 
         name: 'Elite' as Plan, 
-        priceMonthly: 59,
-        priceAnnually: 47,
-        description: 'For professional & OF creators',
+        priceMonthly: 79,
+        priceAnnually: 63,
+        description: 'For monetized creators maximizing revenue',
         features: [
             'Advanced Plan My Week options',
-            '5 plans / month',
+            '5 content strategies / month',
             'Enhanced live trend research (40 searches/month)',
             '1,500 caption ideas / month',
             'Bio Link Page (unlimited links)',
@@ -58,7 +45,7 @@ const creatorPlans = [
             '10 GB storage',
             'OnlyFans Studio (included)'
         ],
-        isRecommended: false
+        isRecommended: true
     },
 ];
 
@@ -66,8 +53,10 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
     // Default to Creator if no userType (new signups)
     const effectiveUserType = userType || 'Creator';
     const { user, setUser, openPaymentModal, showToast } = useAppContext();
-    // Pre-select current plan if user already has one (e.g., Free from auto-assignment)
-    const [selectedPlan, setSelectedPlan] = useState<Plan | null>(user?.plan === 'Free' ? 'Free' : null);
+    // Pre-select current plan if user already has one (Free plan removed - only Pro/Elite available)
+    const [selectedPlan, setSelectedPlan] = useState<Plan | null>(
+        user?.plan && (user.plan === 'Pro' || user.plan === 'Elite') ? user.plan : null
+    );
     const [isLoading, setIsLoading] = useState(false);
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'annually'>('monthly');
 
@@ -103,29 +92,8 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
                     // If parsing fails, continue; account creation will handle missing data gracefully.
                 }
 
-                // For Free plan, create account immediately (no payment needed)
-                if (selectedPlan === 'Free') {
-                    const result = await createAccountFromPendingSignup();
-                    
-                    if (!result.success) {
-                        showToast(result.error || 'Failed to create account. Please try again.', 'error');
-                        setIsLoading(false);
-                        return;
-                    }
-                    
-                    // Ensure pendingSignup is cleared before reload
-                    // (createAccountFromPendingSignup should have cleared it, but double-check)
-                    try {
-                        localStorage.removeItem('pendingSignup');
-                    } catch {}
-                    
-                    // Wait a moment for auth state and Firestore to sync
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                    
-                    // Reload to get the new user object
-                    window.location.reload();
-                    return;
-                } else {
+                // All plans now require payment (Free plan removed - users can try with 7-day trial)
+                if (selectedPlan === 'Pro' || selectedPlan === 'Elite') {
                     // For paid plans, create account first (needed for Stripe auth)
                     // Then redirect directly to Stripe payment
                     const result = await createAccountFromPendingSignup();
@@ -168,21 +136,16 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
                 }
                 return;
             } else if (user) {
-                // User already exists - just update plan
-                if (selectedPlan === 'Free') {
-                    await setUser({ ...user, plan: selectedPlan });
+                // User already exists - open payment modal for plan upgrade/change
+                const planData = plans.find(p => p.name === selectedPlan);
+                if (planData && openPaymentModal) {
+                    const price = billingCycle === 'annually' ? planData.priceAnnually : planData.priceMonthly;
+                    openPaymentModal({ 
+                        name: selectedPlan, 
+                        price: price,
+                        cycle: billingCycle
+                    });
                     onSelect(selectedPlan);
-                } else {
-                    // For paid plans, open payment modal
-                    const planData = plans.find(p => p.name === selectedPlan);
-                    if (planData && openPaymentModal) {
-                        const price = billingCycle === 'annually' ? planData.priceAnnually : planData.priceMonthly;
-                        openPaymentModal({ 
-                            name: selectedPlan, 
-                            price: price,
-                            cycle: billingCycle
-                        });
-                    }
                 }
             } else {
                 showToast('Please sign up first.', 'error');
@@ -214,7 +177,7 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
                             {isConfirmingPlan ? 'Confirm Your Plan' : 'Choose Your Plan'}
                         </h2>
                         <p className="mt-2 text-gray-500 dark:text-gray-400">
-                            {isConfirmingPlan ? 'Confirm your plan selection to continue.' : 'Select the creator plan that fits your needs.'}
+                            {isConfirmingPlan ? 'Confirm your plan selection to continue.' : 'Start with a free 7-day trial. Cancel anytime.'}
                         </p>
                     </div>
 
@@ -233,7 +196,7 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
                 </div>
 
 
-                <div className="grid gap-6 grid-cols-1 sm:grid-cols-3">
+                <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 max-w-4xl mx-auto justify-items-center">
                     {plans.map((plan) => {
                         const isSelected = selectedPlan === plan.name;
                         return (
