@@ -37,6 +37,10 @@ export async function createAccountFromPendingSignup(): Promise<{ success: boole
 
     let currentUser = auth.currentUser;
     
+    const selectedPlan = pendingSignup.selectedPlan as Plan;
+    const needsPayment = !!selectedPlan && selectedPlan !== 'Free';
+    const effectivePlan: Plan = needsPayment ? 'Free' : (selectedPlan || 'Free');
+
     // Handle Google signup differently
     if (pendingSignup.isGoogleSignup) {
       // For Google signup, the user is already authenticated in Firebase Auth
@@ -73,7 +77,7 @@ export async function createAccountFromPendingSignup(): Promise<{ success: boole
           email: currentUser.email || pendingSignup.email || "",
           avatar: pendingSignup.googlePhotoURL || currentUser.photoURL || `https://picsum.photos/seed/${currentUser.uid}/100/100`,
           bio: "Welcome to EchoFlux.ai!",
-          plan: (pendingSignup.selectedPlan as Plan) || 'Free',
+          plan: effectivePlan,
           role: "User",
           userType: 'Creator',
           signupDate: new Date().toISOString(),
@@ -142,13 +146,13 @@ export async function createAccountFromPendingSignup(): Promise<{ success: boole
             return stats;
           };
           
-          const newUser: User = {
+        const newUser: User = {
             id: currentUser.uid,
             name: pendingSignup.fullName || currentUser.displayName || "New User",
             email: currentUser.email || pendingSignup.email || "",
             avatar: currentUser.photoURL || `https://picsum.photos/seed/${currentUser.uid}/100/100`,
             bio: "Welcome to EchoFlux.ai!",
-            plan: (pendingSignup.selectedPlan as Plan) || 'Free',
+          plan: effectivePlan,
             role: "User",
             userType: 'Creator',
             signupDate: new Date().toISOString(),
@@ -230,7 +234,7 @@ export async function createAccountFromPendingSignup(): Promise<{ success: boole
                 email: currentUser.email || pendingSignup.email || "",
                 avatar: currentUser.photoURL || `https://picsum.photos/seed/${currentUser.uid}/100/100`,
                 bio: "Welcome to EchoFlux.ai!",
-                plan: (pendingSignup.selectedPlan as Plan) || 'Free',
+                plan: effectivePlan,
                 role: "User",
                 userType: 'Creator',
                 signupDate: new Date().toISOString(),
@@ -299,8 +303,7 @@ export async function createAccountFromPendingSignup(): Promise<{ success: boole
 
     // For paid plans, clear pendingSignup so AuthContext can hydrate the user.
     // Keep a paymentAttempt so checkout can resume after reload.
-    const selectedPlan = pendingSignup.selectedPlan as Plan;
-    const isPaidPlan = selectedPlan && selectedPlan !== 'Free';
+    const isPaidPlan = needsPayment;
     
     if (!isPaidPlan) {
       // Free plan - clear pendingSignup immediately since no payment needed
