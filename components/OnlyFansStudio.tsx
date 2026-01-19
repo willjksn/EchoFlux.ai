@@ -561,9 +561,16 @@ export const OnlyFansStudio: React.FC = () => {
         ].filter(Boolean).join('\n\n');
     };
 
+    const normalizeConcept = (value: unknown) => {
+        if (typeof value === 'string') return value.trim();
+        if (typeof value === 'number') return String(value).trim();
+        return '';
+    };
+
     const handleGenerateTeaserPack = async () => {
         if (!user?.id) return;
-        if (!teaserConcept.trim()) {
+        const conceptValue = normalizeConcept(teaserConcept);
+        if (!conceptValue) {
             showToast?.('Add a one-line concept first.', 'error');
             return;
         }
@@ -583,7 +590,7 @@ export const OnlyFansStudio: React.FC = () => {
                 },
                 body: JSON.stringify({
                     promotionType: teaserPromotionType,
-                    concept: teaserConcept.trim(),
+                    concept: conceptValue,
                     tone: teaserTone,
                     creatorPersonality: creatorContext,
                     aiPersonality: aiPersonality || '',
@@ -616,13 +623,14 @@ export const OnlyFansStudio: React.FC = () => {
 
     const handleSaveTeaserPack = async () => {
         if (!user?.id || !teaserPack) return;
+        const conceptValue = normalizeConcept(teaserConcept);
         try {
             await addDoc(collection(db, 'users', user.id, 'onlyfans_content_brain_history'), {
                 type: 'teaser_pack',
                 title: `Teaser Pack - ${new Date().toLocaleDateString()}`,
                 data: {
                     promotionType: teaserPromotionType,
-                    concept: teaserConcept.trim(),
+                    concept: conceptValue,
                     tone: teaserTone,
                     pack: teaserPack,
                 },
@@ -886,7 +894,7 @@ export const OnlyFansStudio: React.FC = () => {
                                                             onClick={() => {
                                                                 setTeaserPromotionType((d.promotionType as any) || 'PPV');
                                                                 setTeaserTone((d.tone as any) || 'Teasing');
-                                                                setTeaserConcept(d.concept || '');
+                                                                setTeaserConcept(typeof d.concept === 'string' ? d.concept : d.concept == null ? '' : String(d.concept));
                                                                 setTeaserPack(pack);
                                                                 setTeaserError(null);
                                                                 showToast?.('Loaded saved teaser pack.', 'success');

@@ -232,7 +232,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   /* ---------- AUTH HANDLERS ---------- */
 
   // Validate signup form
-  const validateSignup = (): boolean => {
+  const validateSignup = (): Record<string, string> => {
     const errors: Record<string, string> = {};
 
     // Invite code:
@@ -242,9 +242,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     if (inviteOnly && !hasInviteCode) {
       errors.inviteCode = 'Invite code is required';
     } else if (hasInviteCode) {
+      // Only block immediately if we already know the code is invalid.
+      // If validation hasn't run yet (inviteCodeValid === null), allow submit to validate server-side.
       if (inviteCodeValid === false) {
         errors.inviteCode = 'Invalid invite code. Please check and try again.';
-      } else if (!inviteGrantPlan) {
+      } else if (inviteCodeValid === true && !inviteGrantPlan) {
         errors.inviteCode = 'Invite code is not configured with access. Please contact support.';
       }
     }
@@ -297,7 +299,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     }
 
     setValidationErrors(errors);
-    return Object.keys(errors).length === 0;
+    return errors;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -352,13 +354,16 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         onClose();
       } else {
         // Sign up - validate first
-        if (!validateSignup()) {
+        const signupErrors = validateSignup();
+        if (Object.keys(signupErrors).length > 0) {
           setIsLoading(false);
-          // Show first error in toast
-          const firstError = Object.values(validationErrors)[0];
+          // Show first error in toast for immediate feedback
+          const firstError = Object.values(signupErrors)[0];
           if (firstError) {
             showToast(firstError, 'error');
           }
+          // Also log for debugging
+          console.log('Signup validation failed:', signupErrors);
           return;
         }
 
