@@ -98,6 +98,7 @@ export const OnlyFansFans: React.FC = () => {
         timeBoundaryOnly: false,
     });
     const [isSavingFan, setIsSavingFan] = useState(false);
+    const [showActivities, setShowActivities] = useState(false);
 
     // Load custom content for a specific fan
     const loadCustomContent = async (fanId: string) => {
@@ -343,8 +344,10 @@ export const OnlyFansFans: React.FC = () => {
         if (selectedFan) {
             loadFanActivity(selectedFan.id);
             loadCustomContent(selectedFan.id);
+            setShowActivities(false); // Reset activities visibility when fan changes
         } else {
             setCustomContent([]);
+            setShowActivities(false);
         }
     }, [selectedFan, fans]);
 
@@ -1044,22 +1047,32 @@ export const OnlyFansFans: React.FC = () => {
                     {/* Last 5 Activities */}
                     {last5Activity.length > 0 && (
                         <div className="mb-4">
-                            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Last 5 Activities</h3>
-                            <div className="space-y-2">
-                                {last5Activity.map((activity) => (
-                                    <div key={activity.id} className="p-2 bg-gray-50 dark:bg-gray-900/40 rounded text-sm">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-gray-900 dark:text-white font-medium">{activity.title}</span>
-                                            <span className="text-xs text-gray-500 dark:text-gray-500">
-                                                {new Date(activity.date).toLocaleDateString()}
-                                            </span>
-                                        </div>
-                                        {activity.description && (
-                                            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{activity.description}</p>
-                                        )}
-                                    </div>
-                                ))}
+                            <div className="flex items-center justify-between mb-2">
+                                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Last 5 Activities</h3>
+                                <button
+                                    onClick={() => setShowActivities(!showActivities)}
+                                    className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium"
+                                >
+                                    {showActivities ? 'Hide' : 'Show'}
+                                </button>
                             </div>
+                            {showActivities && (
+                                <div className="space-y-2">
+                                    {last5Activity.map((activity) => (
+                                        <div key={activity.id} className="p-2 bg-gray-50 dark:bg-gray-900/40 rounded text-sm">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-gray-900 dark:text-white font-medium">{activity.title}</span>
+                                                <span className="text-xs text-gray-500 dark:text-gray-500">
+                                                    {new Date(activity.date).toLocaleDateString()}
+                                                </span>
+                                            </div>
+                                            {activity.description && (
+                                                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{activity.description}</p>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     )}
 
