@@ -922,24 +922,6 @@ export const OnlyFansFans: React.FC = () => {
                                             );
                                         })()}
                                     </div>
-
-                                    {/* Last 5 Items Preview */}
-                                    {isSelected && last5Activity.length > 0 && (
-                                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                                            <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">Last 5 Activities:</div>
-                                            <div className="space-y-1">
-                                                {last5Activity.map((activity) => (
-                                                    <div key={activity.id} className="text-xs text-gray-600 dark:text-gray-400 truncate">
-                                                        <span className="text-gray-400 dark:text-gray-500">
-                                                            {new Date(activity.date).toLocaleDateString()}
-                                                        </span>
-                                                        {' · '}
-                                                        <span>{activity.title}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
                             );
                         })
