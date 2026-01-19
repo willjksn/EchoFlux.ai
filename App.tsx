@@ -210,6 +210,35 @@ const AppContent: React.FC = () => {
     const [onboardingStep, setOnboardingStep] = useState<'plan-selector' | 'creator' | 'none'>('none');
     const [bypassMaintenance, setBypassMaintenance] = useState(false);
     const [isFinalizingCheckout, setIsFinalizingCheckout] = useState(false);
+    const [showCheckoutTransition, setShowCheckoutTransition] = useState(false);
+
+    // Check for checkout transition loading overlay
+    useEffect(() => {
+        // Show loading overlay if we're in a checkout transition
+        const checkoutTransition = typeof window !== 'undefined' ? localStorage.getItem('checkoutTransition') : null;
+        if (checkoutTransition === 'true') {
+            setShowCheckoutTransition(true);
+            // Clear the flag once payment modal opens (handled in paymentAttempt logic)
+            // Also clear it after a timeout as fallback
+            const timeout = setTimeout(() => {
+                try {
+                    localStorage.removeItem('checkoutTransition');
+                } catch {}
+                setShowCheckoutTransition(false);
+            }, 5000);
+            return () => clearTimeout(timeout);
+        }
+    }, []);
+
+    // Clear checkout transition flag when payment modal opens
+    useEffect(() => {
+        if (isPaymentModalOpen && showCheckoutTransition) {
+            try {
+                localStorage.removeItem('checkoutTransition');
+            } catch {}
+            setShowCheckoutTransition(false);
+        }
+    }, [isPaymentModalOpen, showCheckoutTransition]);
 
     // Auto-bypass maintenance for whitelisted users
     useEffect(() => {
@@ -852,36 +881,6 @@ const AppContent: React.FC = () => {
             </div>
         );
     }
-
-    // Check for checkout transition loading overlay
-    const [showCheckoutTransition, setShowCheckoutTransition] = useState(false);
-    
-    useEffect(() => {
-        // Show loading overlay if we're in a checkout transition
-        const checkoutTransition = typeof window !== 'undefined' ? localStorage.getItem('checkoutTransition') : null;
-        if (checkoutTransition === 'true') {
-            setShowCheckoutTransition(true);
-            // Clear the flag once payment modal opens (handled in paymentAttempt logic)
-            // Also clear it after a timeout as fallback
-            const timeout = setTimeout(() => {
-                try {
-                    localStorage.removeItem('checkoutTransition');
-                } catch {}
-                setShowCheckoutTransition(false);
-            }, 5000);
-            return () => clearTimeout(timeout);
-        }
-    }, []);
-
-    // Clear checkout transition flag when payment modal opens
-    useEffect(() => {
-        if (isPaymentModalOpen && showCheckoutTransition) {
-            try {
-                localStorage.removeItem('checkoutTransition');
-            } catch {}
-            setShowCheckoutTransition(false);
-        }
-    }, [isPaymentModalOpen, showCheckoutTransition]);
 
     return (
         <div className="flex h-screen bg-gray-100 dark:bg-gray-900 font-sans w-full overflow-x-hidden">
