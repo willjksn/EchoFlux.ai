@@ -279,7 +279,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                                 <h4 className="font-semibold text-gray-900 dark:text-white text-lg">Content Creation</h4>
                                 <ul className="space-y-3 text-sm text-gray-500 dark:text-gray-400">
                                     <li className="flex items-start"><SparklesIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>AI Content Assistant with conversion-optimized captions</span></li>
-                                    <li className="flex items-start"><TargetIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Multi-week content roadmaps & revenue-driven campaign planning</span></li>
+                                    <li className="flex items-start"><TargetIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Multi-week content roadmaps & strategic content planning</span></li>
                                     <li className="flex items-start"><ImageIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>My Vault for organizing exclusive content assets</span></li>
                                     <li className="flex items-start"><CalendarIcon className="w-4 h-4 mr-2 text-purple-500 mt-0.5 flex-shrink-0" /> <span>Strategic content calendar to maximize subscriber engagement</span></li>
                                 </ul>
@@ -306,22 +306,22 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                     <h2 className="text-base text-primary-600 font-semibold tracking-wide uppercase">Features</h2>
                     <p className="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-4xl">Your AI Content Studio</p>
                     <p className="mt-4 max-w-2xl text-xl text-gray-500 dark:text-gray-400 lg:mx-auto">
-                        Turn ideas into revenue-driving content campaigns, organize them strategically, and scale your subscriber base with AI-powered tools.
+                        Turn ideas into revenue-driving content plans, organize them strategically, and scale your subscriber base with AI-powered tools.
                     </p>
                 </div>
                 <div className="mt-12">
                     <dl className="space-y-10 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-x-8 md:gap-y-10">
                         <Feature icon={<TargetIcon />} title="Plan My Week">
-                           Generate weekly content plans tailored to your niche and goals. Push ideas into campaigns and see them as planned content on your schedule.
+                           Generate weekly content plans tailored to your niche and goals. See your ideas organized as planned content on your schedule.
                         </Feature>
-                        <Feature icon={<KanbanIcon />} title="Workflow Board">
-                           Move posts from Draft to Ready-to-Post in a simple kanban view. Review, edit, and copy revenue-focused content packs before you publish.
+                        <Feature icon={<KanbanIcon />} title="Drafts">
+                           Save and organize your content drafts. Review, edit, and copy revenue-focused content packs before you publish.
                         </Feature>
                         <Feature icon={<CalendarIcon />} title="My Schedule">
                            See every planned post on a beautiful calendar. Click any slot to open the content, adjust timing, and copy captions/scripts.
                         </Feature>
                         <Feature icon={<ImageIcon />} title="My Vault">
-                           Upload and organize images and videos in your personal media library. Reuse assets across campaigns and keep everything in one place.
+                           Upload and organize images and videos in your personal media library. Reuse assets across your content and keep everything in one place.
                         </Feature>
                         <Feature icon={<SparklesIcon />} title="Premium Content Studio - Content Ideas (Elite)">
                            Plan drops, write captions, and map the week in creator language. Built for OnlyFans, Fansly, Fanvue & more.
@@ -333,7 +333,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                            Build a beautiful, creator-branded bio page with links and subscriber capture to convert visitors into paying fans.
                         </Feature>
                         <Feature icon={<ChatIcon />} title="Creator Assistant & Ideas">
-                           Ask questions, generate new content angles, and brainstorm revenue-driving campaigns with a creator-focused AI assistant inside the app.
+                           Ask questions, generate new content angles, and brainstorm revenue-driving content ideas with a creator-focused AI assistant inside the app.
                         </Feature>
                         <Feature icon={<AnalyticsIcon />} title="Premium Content Studio - Post Packs & Wins (Elite)">
                            Copy & Post Packs for manual posting. Promo packs for drops. What’s Working keeps performance notes in one place.
@@ -351,8 +351,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                 </div>
                 <div className="relative mt-12 lg:mt-24 lg:grid lg:grid-cols-3 lg:gap-8 lg:items-center">
                     <div className="relative">
-                        <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">1. Set Up Your Creator Profile</h3>
-                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Tell EchoFlux.ai about your niche, audience, and offers so your campaigns and content are tailored to you.</p>
+                        <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">1. Set Up Your Profile</h3>
+                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Complete quick onboarding to tell EchoFlux.ai about your niche, audience, and goals. This helps AI generate content that matches your brand and drives results.</p>
                     </div>
 
                     <div className="mt-10 -mx-4 relative lg:mt-0" aria-hidden="true">
@@ -361,8 +361,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                     </div>
 
                     <div className="relative">
-                        <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">2. Create Your Content</h3>
-                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Use AI to generate captions, plan multi-week campaigns, and organize everything in your media library. Everything is tailored to your niche and goals.</p>
+                        <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">2. Plan Your Content</h3>
+                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Use Strategy to generate multi-week content roadmaps, or Plan My Week for quick weekly plans. Get AI-powered content ideas tailored to your niche, goals, and posting schedule.</p>
                     </div>
 
                      <div className="mt-10 -mx-4 relative lg:mt-0" aria-hidden="true">
@@ -371,8 +371,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                     </div>
 
                     <div className="relative">
-                        <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">3. Generate & Plan Campaigns</h3>
-                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Use Plan My Week, the Workflow Board, and My Schedule to build full content packs and a 14-day plan. Copy captions and scripts, then post on any platform you choose.</p>
+                        <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">3. Create & Schedule</h3>
+                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Generate AI captions in Write Captions and schedule everything on My Schedule. Copy your content and post manually to any platform—Instagram, TikTok, X, and more.</p>
                     </div>
                 </div>
             </div>
@@ -392,7 +392,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         <LogoIcon />
                         <span className="ml-2 text-xl font-bold" style={{ color: '#2563eb' }}>EchoFlux.ai</span>
                      </button>
-                    <p className="text-gray-500 dark:text-gray-400 text-base">AI Content Studio & Campaign Planner for creators.</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-base">AI Content Studio & Content Planner for creators.</p>
                     <div className="flex space-x-6">
                         <a href="https://x.com/echoflux_ai" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 transition-colors" aria-label="Follow us on X">
                             <span className="sr-only">X</span>
@@ -422,7 +422,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                             <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 tracking-wider uppercase">Products</h3>
                             <ul className="mt-4 space-y-4">
                                 <li><button onClick={() => onNavigateRequest('dashboard')} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-left">Command Center</button></li>
-                                <li><button onClick={() => onNavigateRequest('compose')} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-left">Content Studio</button></li>
+                                <li><button onClick={() => onNavigateRequest('compose')} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-left">Write Captions</button></li>
                                 <li><button onClick={() => onNavigateRequest('bio')} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-left">Bio Link Page</button></li>
                                 <li><button onClick={() => onNavigateRequest('analytics')} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-left">What's Working</button></li>
                             </ul>
