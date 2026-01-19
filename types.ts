@@ -300,7 +300,7 @@ export interface User {
   email: string;
   avatar: string;
   bio: string;
-  plan: Plan;
+  plan: Plan | null; // null when payment is pending
   role: 'Admin' | 'User';
   signupDate: string;
   userType?: UserType;

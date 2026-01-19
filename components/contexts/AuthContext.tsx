@@ -164,8 +164,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     
                     // No pending signup - this might be a Google sign-in for an existing user
                     // or a direct sign-in. Create the user document.
-                    // New users start with Free plan (will be updated when they select a plan during onboarding)
-                    const defaultPlan: Plan = 'Free';
+                    // Since Free plan is removed, we'll set plan to null and prompt for plan selection
+                    // This ensures users must select a plan (Pro/Elite) before using the app
+                    const defaultPlan: Plan | null = null;
                     
                     const newUser: User = {
                         id: fbUser.uid,

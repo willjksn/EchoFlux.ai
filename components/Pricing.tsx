@@ -149,6 +149,16 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
             window.history.replaceState({}, '', window.location.pathname);
         } else if (canceled === 'true') {
             showToast('Payment canceled. You can try again anytime.', 'info');
+            // If user has no plan (payment was canceled), redirect to plan selection
+            if (user && !user.plan) {
+                // User account exists but no plan - redirect to plan selector
+                setTimeout(() => {
+                    // Show plan selector modal or redirect to signup
+                    if (setActivePage) {
+                        setActivePage('pricing');
+                    }
+                }, 1000);
+            }
             // Clean URL
             window.history.replaceState({}, '', window.location.pathname);
         }

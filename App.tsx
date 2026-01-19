@@ -450,6 +450,11 @@ const AppContent: React.FC = () => {
             // New signup flow: Show plan selector first for users who haven't completed onboarding
             // Exception: If they already have a paid plan (Pro/Elite), they've already selected,
             // so proceed directly to onboarding
+            // If plan is null, payment was canceled - show plan selector
+            if (!user.plan) {
+                setOnboardingStep('plan-selector');
+                return;
+            }
             const hasPaidPlan = user.plan === 'Pro' || user.plan === 'Elite' || user.plan === 'Agency';
             
             // If user has a pre-selected plan from landing page, handle it

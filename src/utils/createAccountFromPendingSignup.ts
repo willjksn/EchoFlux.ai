@@ -39,7 +39,9 @@ export async function createAccountFromPendingSignup(): Promise<{ success: boole
     
     const selectedPlan = pendingSignup.selectedPlan as Plan;
     const needsPayment = !!selectedPlan && selectedPlan !== 'Free';
-    const effectivePlan: Plan = needsPayment ? 'Free' : (selectedPlan || 'Free');
+    // For paid plans, don't set plan yet - wait for payment confirmation
+    // This prevents accounts from being finalized with Free plan if payment is canceled
+    const effectivePlan: Plan | null = needsPayment ? null : (selectedPlan || 'Free');
 
     // Handle Google signup differently
     if (pendingSignup.isGoogleSignup) {
@@ -77,7 +79,7 @@ export async function createAccountFromPendingSignup(): Promise<{ success: boole
           email: currentUser.email || pendingSignup.email || "",
           avatar: pendingSignup.googlePhotoURL || currentUser.photoURL || `https://picsum.photos/seed/${currentUser.uid}/100/100`,
           bio: "Welcome to EchoFlux.ai!",
-          plan: effectivePlan,
+          plan: effectivePlan, // null for paid plans until payment confirmed
           role: "User",
           userType: 'Creator',
           signupDate: new Date().toISOString(),
@@ -152,7 +154,7 @@ export async function createAccountFromPendingSignup(): Promise<{ success: boole
             email: currentUser.email || pendingSignup.email || "",
             avatar: currentUser.photoURL || `https://picsum.photos/seed/${currentUser.uid}/100/100`,
             bio: "Welcome to EchoFlux.ai!",
-          plan: effectivePlan,
+          plan: effectivePlan, // null for paid plans until payment confirmed
             role: "User",
             userType: 'Creator',
             signupDate: new Date().toISOString(),
@@ -234,7 +236,7 @@ export async function createAccountFromPendingSignup(): Promise<{ success: boole
                 email: currentUser.email || pendingSignup.email || "",
                 avatar: currentUser.photoURL || `https://picsum.photos/seed/${currentUser.uid}/100/100`,
                 bio: "Welcome to EchoFlux.ai!",
-                plan: effectivePlan,
+                plan: effectivePlan, // null for paid plans until payment confirmed
                 role: "User",
                 userType: 'Creator',
                 signupDate: new Date().toISOString(),
