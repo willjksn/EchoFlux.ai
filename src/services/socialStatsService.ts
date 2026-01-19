@@ -55,12 +55,20 @@ export async function updateUserSocialStats(
     try {
       const aggregatedStats = await getSocialStats();
       // Only use aggregated stats for platforms that don't have real API connections
-      Object.keys(aggregatedStats).forEach(platform => {
-        const platformKey = platform as Platform;
-        if (!realStats[platformKey] || realStats[platformKey].followers === 0) {
-          realStats[platformKey] = aggregatedStats[platformKey];
-        }
-      });
+      if (aggregatedStats && typeof aggregatedStats === 'object') {
+        Object.keys(aggregatedStats).forEach(platform => {
+          const platformKey = platform as Platform;
+          const platformStats = aggregatedStats[platformKey];
+          // Only use if stats exist and have valid structure
+          if (platformStats && typeof platformStats === 'object' && 
+              typeof platformStats.followers === 'number' && 
+              typeof platformStats.following === 'number') {
+            if (!realStats[platformKey] || realStats[platformKey].followers === 0) {
+              realStats[platformKey] = platformStats;
+            }
+          }
+        });
+      }
     } catch (error) {
       // Silently fail - stats will use cached/fallback values
       // Error is logged but not shown to user since it doesn't break functionality
@@ -75,9 +83,17 @@ export async function updateUserSocialStats(
           ...realStats,
           ...Object.keys(currentStats).reduce((acc, platform) => {
             const platformKey = platform as Platform;
-            // Keep current stat if it's higher (might be manually set)
-            if (currentStats[platformKey] && currentStats[platformKey].followers > realStats[platformKey].followers) {
-              acc[platformKey] = currentStats[platformKey];
+            const currentPlatformStats = currentStats[platformKey];
+            const realPlatformStats = realStats[platformKey];
+            // Keep current stat if it's higher (might be manually set) and both are valid
+            if (currentPlatformStats && 
+                typeof currentPlatformStats === 'object' &&
+                typeof currentPlatformStats.followers === 'number' &&
+                realPlatformStats &&
+                typeof realPlatformStats === 'object' &&
+                typeof realPlatformStats.followers === 'number' &&
+                currentPlatformStats.followers > realPlatformStats.followers) {
+              acc[platformKey] = currentPlatformStats;
             }
             return acc;
           }, {} as Record<Platform, { followers: number; following: number }>)

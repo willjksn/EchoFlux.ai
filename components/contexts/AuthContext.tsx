@@ -94,14 +94,37 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         socialStats: loaded.socialStats || generateMockSocialStats(),
                     };
 
-                    // Expire invite-granted access (do not affect Stripe subscribers).
-                    // If expired, downgrade to Free and force user to upgrade via Stripe (Pricing).
+                    // Check for expired subscriptions and invite-granted access
                     try {
                         const status = (mergedUser as any)?.subscriptionStatus as string | undefined;
                         const inviteGrantPlan = (mergedUser as any)?.inviteGrantPlan as string | undefined;
                         const expiresAtIso = (mergedUser as any)?.inviteGrantExpiresAt as string | null | undefined;
                         const hasStripeSubscription = !!(mergedUser as any)?.stripeSubscriptionId;
+                        const subscriptionEndDate = (mergedUser as any)?.subscriptionEndDate as string | null | undefined;
+                        const cancelAtPeriodEnd = (mergedUser as any)?.cancelAtPeriodEnd as boolean | undefined;
+                        const currentPlan = mergedUser.plan;
 
+                        // Check if Stripe subscription has expired (canceled and past end date)
+                        if (hasStripeSubscription && cancelAtPeriodEnd && subscriptionEndDate) {
+                            const endDateMs = new Date(subscriptionEndDate).getTime();
+                            if (Number.isFinite(endDateMs) && endDateMs < Date.now() && currentPlan !== 'Free') {
+                                // Subscription period has ended - downgrade to Free
+                                const nowIso = new Date().toISOString();
+                                (mergedUser as any).plan = 'Free';
+                                (mergedUser as any).subscriptionStatus = 'canceled';
+                                (mergedUser as any).cancelAtPeriodEnd = false;
+
+                                // Persist downgrade so it stays consistent across refresh/devices
+                                await setDoc(ref, {
+                                    plan: 'Free',
+                                    subscriptionStatus: 'canceled',
+                                    cancelAtPeriodEnd: false,
+                                } as any, { merge: true });
+                            }
+                        }
+
+                        // Expire invite-granted access (do not affect Stripe subscribers).
+                        // If expired, downgrade to Free and force user to upgrade via Stripe (Pricing).
                         const isInviteGrant = status === 'invite_grant' || !!inviteGrantPlan;
                         if (isInviteGrant && !hasStripeSubscription && typeof expiresAtIso === 'string' && expiresAtIso) {
                             const expiresMs = new Date(expiresAtIso).getTime();
@@ -120,7 +143,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             }
                         }
                     } catch (e) {
-                        console.warn('Invite grant expiry check failed:', e);
+                        console.warn('Subscription/invite expiry check failed:', e);
                     }
 
                     setUserState(mergedUser);
