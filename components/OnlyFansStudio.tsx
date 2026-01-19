@@ -172,7 +172,10 @@ export const OnlyFansStudio: React.FC = () => {
             const now = Date.now();
             const activeFans = fansList.filter(f => {
                 if (!f.preferences.lastSessionDate) return false;
-                const lastSession = new Date(f.preferences.lastSessionDate).getTime();
+                // Handle Firestore Timestamp or string date
+                const lastSession = f.preferences.lastSessionDate?.toDate 
+                    ? f.preferences.lastSessionDate.toDate().getTime() 
+                    : new Date(f.preferences.lastSessionDate).getTime();
                 const daysSince = (now - lastSession) / (1000 * 60 * 60 * 24);
                 return daysSince <= 30;
             });
@@ -181,6 +184,10 @@ export const OnlyFansStudio: React.FC = () => {
             const bigSpenders = fansList.filter(f => f.preferences.isBigSpender || (f.preferences.spendingLevel || 0) >= 4);
 
             // Load upcoming sessions from calendar (both OnlyFans calendar and regular calendar)
+            // Data sources:
+            // 1. onlyfans_calendar_events - OnlyFans-specific calendar events
+            // 2. onlyfans_saved_session_plans - Saved session plans with scheduled dates
+            // 3. calendar_events - General calendar events filtered for OnlyFans platform or fanId/fanName
             try {
                 // Try OnlyFans calendar events first
                 let upcoming: any[] = [];
@@ -260,7 +267,7 @@ export const OnlyFansStudio: React.FC = () => {
                 setFanStats({
                     total: fansList.length,
                     active: activeFans.length,
-                    vip: vipFans.length,
+                    vip: bigSpenders.length, // Use bigSpenders (Whales) instead of vipFans
                     upcomingSessions: fanSessions.length
                 });
             } catch (e) {
@@ -1201,7 +1208,7 @@ export const OnlyFansStudio: React.FC = () => {
                         </div>
                         <div className="text-center">
                             <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{fanStats.vip}</div>
-                        <div className="text-xs text-purple-700 dark:text-purple-300 mt-1">VIP</div>
+                        <div className="text-xs text-purple-700 dark:text-purple-300 mt-1">Whales</div>
                         </div>
                         <div className="text-center">
                             <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{fanStats.upcomingSessions}</div>
