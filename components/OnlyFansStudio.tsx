@@ -335,13 +335,13 @@ export const OnlyFansStudio: React.FC = () => {
                 console.warn('Error loading past calendar events for activity:', e);
             }
             
-            // Sort by date (most recent first) and take top 5
+            // Sort by date (most recent first) and take top 3
             recentActivity.sort((a, b) => {
                 const dateA = a.date ? new Date(a.date).getTime() : 0;
                 const dateB = b.date ? new Date(b.date).getTime() : 0;
                 return dateB - dateA;
             });
-            setRecentFanActivity(recentActivity.slice(0, 5));
+            setRecentFanActivity(recentActivity.slice(0, 3));
 
             // VIP fans needing attention (inactive > 7 days)
             const vipNeedingAttention = vipFans.filter(f => {
@@ -1379,7 +1379,7 @@ export const OnlyFansStudio: React.FC = () => {
             {fans.length > 0 ? (
                 <div className="mt-8 space-y-6">
                     <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                        📋 Who to message today
+                        📋 Activity & Reminders
                     </h2>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {/* Recent Fan Activity */}
