@@ -267,21 +267,75 @@ export const OnlyFansStudio: React.FC = () => {
                 console.warn('Error loading calendar events:', e);
             }
 
-            // Recent fan activity (last 5 sessions from engagement history)
+            // Recent fan activity - fetch actual completed sessions and past calendar events
             const recentActivity: any[] = [];
-            fansList.forEach(fan => {
-                if (fan.preferences.engagementHistory && Array.isArray(fan.preferences.engagementHistory)) {
-                    fan.preferences.engagementHistory.slice(0, 2).forEach((session: any) => {
-                        recentActivity.push({
-                            fanId: fan.id,
-                            fanName: fan.name,
-                            sessionType: session.sessionType || 'Session',
-                            date: session.date || '',
-                            sessionId: session.sessionId
-                        });
+            
+            // 1. Load actual completed sessions from onlyfans_sexting_sessions
+            try {
+                const sessionsSnap = await getDocs(query(
+                    collection(db, 'users', user.id, 'onlyfans_sexting_sessions'),
+                    orderBy('createdAt', 'desc'),
+                    limit(10)
+                ));
+                
+                sessionsSnap.forEach(doc => {
+                    const data = doc.data();
+                    const sessionDate = data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date());
+                    
+                    // Find fan name if fanId exists
+                    const fan = fansList.find(f => f.id === data.fanId);
+                    const fanName = fan ? fan.name : (data.fanName || 'Unknown Fan');
+                    
+                    recentActivity.push({
+                        fanId: data.fanId,
+                        fanName: fanName,
+                        sessionType: data.sessionType || data.roleplayType || 'Chat/Sexting Session',
+                        date: sessionDate.toISOString(),
+                        sessionId: doc.id,
+                        messageCount: data.messages?.length || 0,
+                        duration: data.duration,
+                        status: data.status || 'completed'
                     });
-                }
-            });
+                });
+            } catch (e) {
+                console.warn('Error loading recent sessions for activity:', e);
+            }
+            
+            // 2. Load recent past calendar events (events that have already occurred)
+            try {
+                // Check OnlyFans calendar events
+                const onlyfansCalendarSnap = await getDocs(query(
+                    collection(db, 'users', user.id, 'onlyfans_calendar_events'),
+                    orderBy('date', 'desc')
+                ));
+                
+                onlyfansCalendarSnap.docs.forEach(d => {
+                    const data = d.data();
+                    if (!data.date) return;
+                    
+                    const eventDate = data.date?.toDate ? data.date.toDate() : new Date(data.date);
+                    const daysSince = (now - eventDate.getTime()) / (1000 * 60 * 60 * 24);
+                    
+                    // Only include events from the past 7 days
+                    if (daysSince >= 0 && daysSince <= 7) {
+                        const fan = fansList.find(f => f.id === data.fanId);
+                        const fanName = fan ? fan.name : (data.fanName || data.title || 'Scheduled Event');
+                        
+                        recentActivity.push({
+                            fanId: data.fanId,
+                            fanName: fanName,
+                            sessionType: data.title || 'Scheduled Session',
+                            date: eventDate.toISOString(),
+                            sessionId: `calendar-${d.id}`,
+                            isCalendarEvent: true
+                        });
+                    }
+                });
+            } catch (e) {
+                console.warn('Error loading past calendar events for activity:', e);
+            }
+            
+            // Sort by date (most recent first) and take top 5
             recentActivity.sort((a, b) => {
                 const dateA = a.date ? new Date(a.date).getTime() : 0;
                 const dateB = b.date ? new Date(b.date).getTime() : 0;
@@ -1347,6 +1401,9 @@ export const OnlyFansStudio: React.FC = () => {
                                                     </div>
                                                     <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                                                         {activity.sessionType}
+                                                        {activity.messageCount > 0 && ` • ${activity.messageCount} messages`}
+                                                        {activity.duration && ` • ${activity.duration} min`}
+                                                        {activity.isCalendarEvent && ' (Scheduled)'}
                                                     </div>
                                                 </div>
                                                 {activity.date && (

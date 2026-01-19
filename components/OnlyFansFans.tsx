@@ -277,6 +277,32 @@ export const OnlyFansFans: React.FC = () => {
                 });
             }
 
+            // Load actual session history from onlyfans_sexting_sessions collection
+            try {
+                const sessionsSnap = await getDocs(query(
+                    collection(db, 'users', user.id, 'onlyfans_sexting_sessions'),
+                    where('fanId', '==', fanId),
+                    orderBy('createdAt', 'desc'),
+                    limit(50)
+                ));
+                sessionsSnap.forEach(doc => {
+                    const data = doc.data();
+                    const sessionDate = data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date());
+                    activities.push({
+                        id: `sexting-session-${doc.id}`,
+                        type: 'session',
+                        date: sessionDate.toISOString(),
+                        title: `${data.sessionType || 'Chat/Sexting Session'}${data.status === 'ended' ? ' (Ended)' : data.status === 'paused' ? ' (Paused)' : ''}`,
+                        description: data.messages && data.messages.length > 0 
+                            ? `${data.messages.length} messages • ${data.duration ? `${data.duration} min` : ''}`
+                            : 'Session started',
+                    });
+                });
+            } catch (e) {
+                // Index might not be ready yet - silently fail
+                console.warn('Could not load session history for timeline (index may not be ready):', e);
+            }
+
             // Load from saved session plans
             try {
                 const sessionPlansSnap = await getDocs(query(

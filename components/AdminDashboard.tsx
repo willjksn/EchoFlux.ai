@@ -526,8 +526,8 @@ export const AdminDashboard: React.FC = () => {
         const distribution: Record<User['plan'], number> = { Free: 0, Caption: 0, Pro: 0, Elite: 0, Agency: 0, Growth: 0, Starter: 0, OnlyFansStudio: 0 };
         
         users.forEach(user => {
-            // Hide Agency, Starter, Growth, and Caption plans from display
-            if (user.plan !== 'Agency' && user.plan !== 'Starter' && user.plan !== 'Growth' && user.plan !== 'Caption' && user.plan in distribution) {
+            // Hide Agency, Starter, Growth, Caption, Free, and OnlyFansStudio plans from display
+            if (user.plan !== 'Agency' && user.plan !== 'Starter' && user.plan !== 'Growth' && user.plan !== 'Caption' && user.plan !== 'Free' && user.plan !== 'OnlyFansStudio' && user.plan in distribution) {
                 distribution[user.plan]++;
             }
         });
@@ -737,7 +737,7 @@ export const AdminDashboard: React.FC = () => {
                         <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Plan Distribution</h3>
                          <div className="space-y-3">
                             {Object.entries(planDistribution)
-                                .filter(([plan]) => plan !== 'Agency' && plan !== 'Starter' && plan !== 'Growth' && plan !== 'Caption') // Hide Agency, Starter, Growth, and Caption
+                                .filter(([plan]) => plan !== 'Agency' && plan !== 'Starter' && plan !== 'Growth' && plan !== 'Caption' && plan !== 'Free' && plan !== 'OnlyFansStudio') // Hide Agency, Starter, Growth, Caption, Free, and OnlyFansStudio
                                 .map(([plan, count]) => {
                                 const percentage = totalUsers > 0 ? (Number(count) / totalUsers * 100).toFixed(1) : "0";
                                 return (
