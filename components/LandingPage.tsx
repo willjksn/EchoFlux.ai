@@ -352,7 +352,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                 <div className="relative mt-12 lg:mt-24 lg:grid lg:grid-cols-3 lg:gap-8 lg:items-center">
                     <div className="relative">
                         <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">1. Set Up Your Profile</h3>
-                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Complete quick onboarding to tell EchoFlux.ai about your niche, audience, and goals. This helps AI generate content that matches your brand and drives results.</p>
+                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Tell EchoFlux.ai about your niche, audience, and goals—whether you're building your brand, growing your following, or monetizing with subscribers. AI generates content tailored to your path.</p>
                     </div>
 
                     <div className="mt-10 -mx-4 relative lg:mt-0" aria-hidden="true">
@@ -362,7 +362,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
 
                     <div className="relative">
                         <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">2. Plan Your Content</h3>
-                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Use Strategy to generate multi-week content roadmaps, or Plan My Week for quick weekly plans. Get AI-powered content ideas tailored to your niche, goals, and posting schedule.</p>
+                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Generate multi-week content roadmaps with Strategy, or quick weekly plans with Plan My Week. For monetized creators, plan exclusive content, drops, and subscriber-focused campaigns that drive revenue.</p>
                     </div>
 
                      <div className="mt-10 -mx-4 relative lg:mt-0" aria-hidden="true">
@@ -372,7 +372,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
 
                     <div className="relative">
                         <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">3. Create & Schedule</h3>
-                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Generate AI captions in Write Captions and schedule everything on My Schedule. Copy your content and post manually to any platform—Instagram, TikTok, X, and more.</p>
+                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Generate revenue-optimized captions in Write Captions, schedule everything on My Schedule, and copy content to post manually. Perfect for all creators—from building your brand to maximizing subscriber revenue.</p>
                     </div>
                 </div>
             </div>
