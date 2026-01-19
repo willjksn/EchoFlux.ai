@@ -142,6 +142,9 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
                         return;
                     }
                     
+                    // Close plan selector immediately to avoid a flash before reload
+                    onSelect(selectedPlan);
+
                     // Persist checkout intent so App.tsx can resume checkout after reload
                     try {
                         localStorage.setItem('paymentAttempt', JSON.stringify({
