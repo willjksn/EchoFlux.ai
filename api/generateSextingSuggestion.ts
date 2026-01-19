@@ -128,7 +128,13 @@ Session context:
 - Tone: ${tone}
 - Fan name: ${fanName}
 - Explicitness level: ${explicitnessLevel}/10 — ${explicitnessContext}
-${personalityContext ? personalityContext : ''}
+${personalityContext ? `${personalityContext}
+
+CRITICAL - CREATOR PERSONALITY INTEGRATION:
+- The above creator personality contains ALL information about this creator: physical attributes, personality traits, preferences, values, style, and what makes them unique
+- Use ALL relevant information from the personality when generating suggestions - this includes physical attributes, traits, preferences, etc.
+- When describing the creator in suggestions, incorporate details from the complete personality description naturally
+- The personality description is comprehensive - use ALL of it, not just parts of it, when relevant to the content being generated` : ''}
 ${enhancedFanContext || (fanContext ? `- Fan context: ${fanContext}` : "")}
 ${lastFanMessage ? `- Last fan message: "${lastFanMessage}"` : ""}
 

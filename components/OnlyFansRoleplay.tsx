@@ -35,6 +35,7 @@ export const OnlyFansRoleplay: React.FC = () => {
     const [useCreatorPersonalityScenario, setUseCreatorPersonalityScenario] = useState(false);
     const [useCreatorPersonalityRatings, setUseCreatorPersonalityRatings] = useState(false);
     const [useCreatorPersonalityInteractive, setUseCreatorPersonalityInteractive] = useState(false);
+    const [useCreatorPersonalityPersona, setUseCreatorPersonalityPersona] = useState(false);
     
     // Scenario generation state
     const [selectedRoleplayType, setSelectedRoleplayType] = useState<RoleplayType>('GFE (Girlfriend Experience)');
@@ -684,7 +685,7 @@ Make it creative, engaging, explicit, EXTENSIVE, and tailored for adult content 
                 aiPersonality ? `AI PERSONALITY & TRAINING:\n${aiPersonality}` : null,
                 aiTone ? `Default AI Tone: ${aiTone}` : null,
                 explicitnessLevel !== null && explicitnessLevel !== undefined ? `Explicitness Level: ${explicitnessLevel}/10` : null,
-                creatorPersonality ? `CREATOR PERSONALITY:\n${creatorPersonality}` : null,
+                useCreatorPersonalityPersona && creatorPersonality ? `CREATOR PERSONALITY:\n${creatorPersonality}` : null,
             ].filter(Boolean).join('\n');
             
             // Load emoji settings
@@ -2233,6 +2234,22 @@ Return only the rewritten persona description.
                                     placeholder="Describe your persona's personality, style, interests, and unique traits"
                                     className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[100px]"
                                 />
+                            </div>
+
+                            <div className="flex flex-wrap gap-2 mb-4">
+                                <button
+                                    onClick={() => setUseCreatorPersonalityPersona(prev => !prev)}
+                                    disabled={!creatorPersonality}
+                                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+                                        useCreatorPersonalityPersona
+                                            ? 'bg-primary-600 text-white hover:bg-primary-700'
+                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                    } ${!creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    title={!creatorPersonality ? 'Add a creator personality in Settings → AI Training to enable' : undefined}
+                                >
+                                    <SparklesIcon className="w-4 h-4" />
+                                    Personality
+                                </button>
                             </div>
 
                             <button

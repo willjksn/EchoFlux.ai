@@ -66,6 +66,8 @@ export const OnlyFansSextingSession: React.FC = () => {
     const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
     const [messageInput, setMessageInput] = useState('');
     const [isLoadingFans, setIsLoadingFans] = useState(false);
+    const [creatorPersonality, setCreatorPersonality] = useState('');
+    const [useCreatorPersonalitySexting, setUseCreatorPersonalitySexting] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const sessionStartTime = useRef<Date | null>(null);
 
@@ -271,6 +273,9 @@ NATURAL PERSONALIZATION GUIDELINES:
             }
             if (targetAudienceGender) {
                 personalityContext += `\nTarget Audience: ${targetAudienceGender}`;
+            }
+            if (useCreatorPersonalitySexting && creatorPersonality) {
+                personalityContext += `\n\nCREATOR PERSONALITY:\n${creatorPersonality}`;
             }
 
             // Load emoji settings from user data
@@ -703,6 +708,23 @@ NATURAL PERSONALIZATION GUIDELINES:
                             </div>
                         </div>
                     )}
+                </div>
+
+                {/* Personality Toggle */}
+                <div className="flex flex-wrap gap-2">
+                    <button
+                        onClick={() => setUseCreatorPersonalitySexting(prev => !prev)}
+                        disabled={!creatorPersonality}
+                        className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+                            useCreatorPersonalitySexting
+                                ? 'bg-primary-600 text-white hover:bg-primary-700'
+                                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                        } ${!creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        title={!creatorPersonality ? 'Add a creator personality in Settings → AI Training to enable' : undefined}
+                    >
+                        <SparklesIcon className="w-4 h-4" />
+                        Personality
+                    </button>
                 </div>
 
                 {/* Roleplay Type */}

@@ -612,12 +612,21 @@ ${usePersonality && sanitizedCreatorPersonality ? `
 ${sanitizedCreatorPersonality}
 
 CRITICAL - PERSONALITY INTEGRATION:
-- The above personality description defines your authentic brand voice, style, values, and what makes you unique
-- ALL generated captions MUST reflect this personality and brand voice
-- Write in a way that matches the described personality, tone, and style
-- Stay true to the brand voice, content style, and values described above
+- The above personality description contains ALL information about this creator: brand voice, style, values, physical attributes, personality traits, preferences, and what makes them unique
+- ALL generated captions MUST reflect and incorporate this complete personality description
+- Write in a way that matches the described personality, tone, style, and characteristics
+- Stay true to the brand voice, content style, values, and all details described above
 - This personality should influence word choice, tone, messaging style, and overall caption approach
-- Make captions feel authentic to this specific creator's brand and personality
+- Make captions feel authentic to this specific creator's complete brand and personality
+
+USING PERSONALITY INFORMATION:
+- When the user asks to "describe myself", "describe yourself", "describe me", or similar prompts, incorporate ALL relevant information from the personality description
+- Use physical attributes (height, weight, body measurements, bust size, etc.) naturally when describing the creator
+- Use personality traits, preferences, values, and other details from the personality description when relevant
+- Use the exact details provided (e.g., "5'2"", "150lbs", "36J bust", "big butt", personality traits, preferences) naturally in captions
+- All personality information should be woven naturally into captions, not forced - use it when it enhances the content
+- For roleplay, messaging, or any content that describes the creator, use the complete personality description as the source of truth
+- The personality description is comprehensive - use ALL of it, not just parts of it, when relevant to the content being generated
 ` : ''}
 
 ${useFavoriteHashtags && sanitizedFavoriteHashtags ? `

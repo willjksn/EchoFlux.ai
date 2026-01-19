@@ -285,7 +285,13 @@ Strategy Parameters:
 - Niche: ${niche}
 - Duration: ${durationWeeks} week${durationWeeks === 1 ? '' : 's'}${durationWeeks === 1 ? ' (ONE WEEK ONLY - generate content for 7 days, not multiple weeks)' : ''}
 ${safeContextDescription ? `\nADDITIONAL CONTEXT & REQUIREMENTS:\n${safeContextDescription}\n\nUse this additional context to tailor the strategy according to the user's specific requirements, preferences, and desired approach.\n` : ''}
-${usePersonality && safeCreatorPersonality ? `\nCREATOR PERSONALITY & BRAND VOICE:\n${safeCreatorPersonality}\n\nUse this personality description to shape the voice, tone, and framing of the strategy.\n` : ''}
+${usePersonality && safeCreatorPersonality ? `\nCREATOR PERSONALITY & BRAND VOICE:\n${safeCreatorPersonality}\n\nCRITICAL - PERSONALITY INTEGRATION:
+- The above personality description contains ALL information about this creator: brand voice, style, values, physical attributes, personality traits, preferences, and what makes them unique
+- Use this COMPLETE personality description to shape the voice, tone, framing, and content of the entire strategy
+- When generating content ideas, incorporate relevant details from the personality (physical attributes, traits, preferences, etc.) when they enhance the content
+- If the strategy includes content that describes the creator, use ALL relevant information from the personality description
+- The personality description is comprehensive - use ALL of it, not just parts of it, when creating content that reflects or describes this creator
+- Make the strategy feel authentic to this specific creator's complete brand and personality\n` : ''}
 ${useFavoriteHashtags && safeFavoriteHashtags ? `\nFAVORITE HASHTAGS:\n${safeFavoriteHashtags}\n\nIncorporate relevant hashtags into the strategy recommendations where appropriate.\n` : ''}
 
 CRITICAL INSTRUCTIONS FOR GOAL ACHIEVEMENT:
@@ -429,21 +435,55 @@ IMPORTANT: When generating imageIdeas and videoIdeas:
       // For one-week plans, limit to exactly 1 week
       const weeksToProcess = durationWeeks === 1 ? plan.weeks.slice(0, 1) : plan.weeks;
       
-      plan.weeks = weeksToProcess.map((week: any, weekIndex: number) => ({
-        weekNumber: week.weekNumber || weekIndex + 1,
-        theme: week.theme || week.focus || `Week ${weekIndex + 1} Theme`,
-        content: (week.content || []).map((day: any, dayIndex: number) => ({
-          dayOffset: day.dayOffset !== undefined ? day.dayOffset : (weekIndex * 7) + dayIndex,
-          topic: day.topic || day.postIdea || `Content idea ${dayIndex + 1}`,
-          description: day.description || day.details || '', 
-          angle: day.angle || day.hook || '', 
-          cta: day.cta || day.callToAction || '', 
-          format: day.format || (day.postType === 'Reel' ? 'Reel' : day.postType === 'Story' ? 'Story' : 'Post'),
-          platform: day.platform || (Array.isArray(day.platforms) ? day.platforms[0] : platforms[0] || 'Instagram'),
-          imageIdeas: day.imageIdeas || [],
-          videoIdeas: day.videoIdeas || []
-        }))
-      }));
+      plan.weeks = weeksToProcess.map((week: any, weekIndex: number) => {
+        const weekContent = week.content || [];
+        const isSingleWeek = durationWeeks === 1;
+        const maxDayOffset = isSingleWeek ? 6 : (weekIndex + 1) * 7 - 1;
+        const minDayOffset = weekIndex * 7;
+        
+        return {
+          weekNumber: week.weekNumber || weekIndex + 1,
+          theme: week.theme || week.focus || `Week ${weekIndex + 1} Theme`,
+          content: weekContent.map((day: any, dayIndex: number) => {
+            // Calculate dayOffset, ensuring it's within valid range for the week
+            let calculatedDayOffset: number;
+            
+            if (day.dayOffset !== undefined && typeof day.dayOffset === 'number') {
+              // If AI provided dayOffset, validate and clamp it to valid range
+              calculatedDayOffset = Math.max(minDayOffset, Math.min(maxDayOffset, day.dayOffset));
+              
+              // For single week plans, ensure dayOffset is 0-6 (not absolute day from multiple weeks)
+              if (isSingleWeek && calculatedDayOffset > 6) {
+                // If it's beyond 6, wrap it using modulo to distribute across the 7 days
+                calculatedDayOffset = calculatedDayOffset % 7;
+              } else if (isSingleWeek && calculatedDayOffset < 0) {
+                // If negative, use dayIndex as fallback
+                calculatedDayOffset = dayIndex % 7;
+              }
+            } else {
+              // Calculate based on position, but ensure it's within valid range
+              calculatedDayOffset = Math.min(maxDayOffset, (weekIndex * 7) + (dayIndex % 7));
+              
+              // For single week, ensure it's 0-6
+              if (isSingleWeek) {
+                calculatedDayOffset = dayIndex % 7;
+              }
+            }
+            
+            return {
+              dayOffset: calculatedDayOffset,
+              topic: day.topic || day.postIdea || `Content idea ${dayIndex + 1}`,
+              description: day.description || day.details || '', 
+              angle: day.angle || day.hook || '', 
+              cta: day.cta || day.callToAction || '', 
+              format: day.format || (day.postType === 'Reel' ? 'Reel' : day.postType === 'Story' ? 'Story' : 'Post'),
+              platform: day.platform || (Array.isArray(day.platforms) ? day.platforms[0] : platforms[0] || 'Instagram'),
+              imageIdeas: day.imageIdeas || [],
+              videoIdeas: day.videoIdeas || []
+            };
+          })
+        };
+      });
 
       // Post-validate: ensure required fields are always present/non-empty for UI reliability
       const safeString = (v: any) => (typeof v === "string" ? v.trim() : "");
