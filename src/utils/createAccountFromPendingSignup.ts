@@ -1,5 +1,5 @@
 // Utility function to create Firebase account from pending signup data
-import { createUserWithEmailAndPassword, updateProfile, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { createUserWithEmailAndPassword, updateProfile, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../../firebaseConfig';
 import { User, Plan, Platform, SocialStats } from '../../types';
@@ -109,18 +109,173 @@ export async function createAccountFromPendingSignup(): Promise<{ success: boole
       }
     } else {
       // Regular email/password signup - create Firebase account
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        pendingSignup.email,
-        pendingSignup.password
-      );
+      try {
+        const userCredential = await createUserWithEmailAndPassword(
+          auth,
+          pendingSignup.email,
+          pendingSignup.password
+        );
 
-      // Update profile with full name
-      await updateProfile(userCredential.user, {
-        displayName: pendingSignup.fullName || 'New User',
-      });
-      
-      currentUser = userCredential.user;
+        // Update profile with full name
+        await updateProfile(userCredential.user, {
+          displayName: pendingSignup.fullName || 'New User',
+        });
+        
+        currentUser = userCredential.user;
+        
+        // Create Firestore user document immediately
+        // This ensures the document exists before we clear pendingSignup and reload
+        const userRef = doc(db, 'users', currentUser.uid);
+        const userSnap = await getDoc(userRef);
+        
+        if (!userSnap.exists()) {
+          const generateMockSocialStats = (): Record<Platform, SocialStats> => {
+            const stats: any = {};
+            const platforms: Platform[] = ['Instagram','TikTok','X','Threads','YouTube','LinkedIn','Facebook','Pinterest'];
+            platforms.forEach(p => {
+              stats[p] = {
+                followers: Math.floor(Math.random() * 15000) + 50,
+                following: Math.floor(Math.random() * 1000) + 5,
+              };
+            });
+            return stats;
+          };
+          
+          const newUser: User = {
+            id: currentUser.uid,
+            name: pendingSignup.fullName || currentUser.displayName || "New User",
+            email: currentUser.email || pendingSignup.email || "",
+            avatar: currentUser.photoURL || `https://picsum.photos/seed/${currentUser.uid}/100/100`,
+            bio: "Welcome to EchoFlux.ai!",
+            plan: (pendingSignup.selectedPlan as Plan) || 'Free',
+            role: "User",
+            userType: 'Creator',
+            signupDate: new Date().toISOString(),
+            hasCompletedOnboarding: false,
+            notifications: {
+              newMessages: true,
+              weeklySummary: false,
+              trendAlerts: false,
+            },
+            monthlyCaptionGenerationsUsed: 0,
+            monthlyImageGenerationsUsed: 0,
+            monthlyVideoGenerationsUsed: 0,
+            monthlyRepliesUsed: 0,
+            storageUsed: 0,
+            storageLimit: 100,
+            mediaLibrary: [],
+            settings: defaultSettings,
+            socialStats: generateMockSocialStats(),
+          };
+          
+          const removeUndefined = (obj: any): any => {
+            if (!obj || typeof obj !== "object") return obj;
+            const clean: any = {};
+            for (const key in obj) {
+              const value = obj[key];
+              if (value !== undefined) clean[key] = removeUndefined(value);
+            }
+            return clean;
+          };
+          
+          const cleanUser = removeUndefined(newUser);
+          await setDoc(userRef, cleanUser);
+        }
+      } catch (createError: any) {
+        // If email is already in use, try to sign in instead
+        if (createError.code === 'auth/email-already-in-use') {
+          try {
+            // Attempt to sign in with the provided credentials
+            const signInCredential = await signInWithEmailAndPassword(
+              auth,
+              pendingSignup.email,
+              pendingSignup.password
+            );
+            currentUser = signInCredential.user;
+            
+            // Update profile with full name if it's different
+            if (pendingSignup.fullName && currentUser.displayName !== pendingSignup.fullName) {
+              try {
+                await updateProfile(currentUser, {
+                  displayName: pendingSignup.fullName,
+                });
+              } catch (updateError) {
+                // Profile update failed, but sign-in succeeded - continue
+                console.warn('Failed to update profile:', updateError);
+              }
+            }
+            
+            // Check if user document exists, create if it doesn't
+            const userRef = doc(db, 'users', currentUser.uid);
+            const userSnap = await getDoc(userRef);
+            
+            if (!userSnap.exists()) {
+              // User exists in Auth but not in Firestore - create the document
+              const generateMockSocialStats = (): Record<Platform, SocialStats> => {
+                const stats: any = {};
+                const platforms: Platform[] = ['Instagram','TikTok','X','Threads','YouTube','LinkedIn','Facebook','Pinterest'];
+                platforms.forEach(p => {
+                  stats[p] = {
+                    followers: Math.floor(Math.random() * 15000) + 50,
+                    following: Math.floor(Math.random() * 1000) + 5,
+                  };
+                });
+                return stats;
+              };
+              
+              const newUser: User = {
+                id: currentUser.uid,
+                name: pendingSignup.fullName || currentUser.displayName || "New User",
+                email: currentUser.email || pendingSignup.email || "",
+                avatar: currentUser.photoURL || `https://picsum.photos/seed/${currentUser.uid}/100/100`,
+                bio: "Welcome to EchoFlux.ai!",
+                plan: (pendingSignup.selectedPlan as Plan) || 'Free',
+                role: "User",
+                userType: 'Creator',
+                signupDate: new Date().toISOString(),
+                hasCompletedOnboarding: false,
+                notifications: {
+                  newMessages: true,
+                  weeklySummary: false,
+                  trendAlerts: false,
+                },
+                monthlyCaptionGenerationsUsed: 0,
+                monthlyImageGenerationsUsed: 0,
+                monthlyVideoGenerationsUsed: 0,
+                monthlyRepliesUsed: 0,
+                storageUsed: 0,
+                storageLimit: 100,
+                mediaLibrary: [],
+                settings: defaultSettings,
+                socialStats: generateMockSocialStats(),
+              };
+              
+              const removeUndefined = (obj: any): any => {
+                if (!obj || typeof obj !== "object") return obj;
+                const clean: any = {};
+                for (const key in obj) {
+                  const value = obj[key];
+                  if (value !== undefined) clean[key] = removeUndefined(value);
+                }
+                return clean;
+              };
+              
+              const cleanUser = removeUndefined(newUser);
+              await setDoc(userRef, cleanUser);
+            }
+          } catch (signInError: any) {
+            // Sign-in failed - wrong password or other issue
+            throw {
+              code: 'auth/email-already-in-use',
+              message: 'This email is already registered. Please sign in with your existing password.',
+              originalError: signInError
+            };
+          }
+        } else {
+          // Re-throw other errors
+          throw createError;
+        }
+      }
     }
 
     // Mark invite code as used (if provided)
@@ -162,17 +317,25 @@ export async function createAccountFromPendingSignup(): Promise<{ success: boole
 
     return { success: true };
   } catch (error: any) {
-    console.error('Error creating account from pending signup:', error);
+    // Only log non-email-already-in-use errors to avoid console spam
+    // The email-already-in-use case is now handled gracefully by signing in
+    if (error.code !== 'auth/email-already-in-use') {
+      console.error('Error creating account from pending signup:', error);
+    }
     
     // Handle specific Firebase errors
     let errorMessage = 'Failed to create account. Please try again.';
     if (error.code === 'auth/email-already-in-use') {
-      errorMessage = 'This email is already registered. Please sign in instead.';
+      // This should rarely happen now since we try to sign in, but handle it just in case
+      errorMessage = error.message || 'This email is already registered. Please sign in instead.';
       localStorage.removeItem('pendingSignup');
     } else if (error.code === 'auth/weak-password') {
       errorMessage = 'Password is too weak. Please use a stronger password.';
     } else if (error.code === 'auth/popup-closed-by-user') {
       errorMessage = 'Sign-in popup was closed. Please try again.';
+    } else if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
+      errorMessage = 'This email is already registered, but the password is incorrect. Please sign in with your existing password.';
+      localStorage.removeItem('pendingSignup');
     } else if (error.message) {
       errorMessage = error.message;
     }

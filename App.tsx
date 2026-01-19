@@ -634,7 +634,15 @@ const AppContent: React.FC = () => {
         if (user && user.userType !== 'Creator') {
             await setUser({ ...user, userType: 'Creator' });
         }
-        // Proceed to plan-specific onboarding
+        
+        // For paid plans during signup, payment modal is opened in PlanSelectorModal
+        // Just close the plan selector - don't start onboarding yet
+        if (plan === 'Pro' || plan === 'Elite') {
+            setOnboardingStep('none');
+            return;
+        }
+        
+        // For Free plan, proceed to onboarding
         setOnboardingStep('creator');
     };
 

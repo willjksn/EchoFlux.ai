@@ -113,14 +113,21 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
                         return;
                     }
                     
-                    // Wait a moment for auth state to update and user document to be created
-                    await new Promise(resolve => setTimeout(resolve, 1500));
-                    // Reload to get the new user object, then set plan
+                    // Ensure pendingSignup is cleared before reload
+                    // (createAccountFromPendingSignup should have cleared it, but double-check)
+                    try {
+                        localStorage.removeItem('pendingSignup');
+                    } catch {}
+                    
+                    // Wait a moment for auth state and Firestore to sync
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    
+                    // Reload to get the new user object
                     window.location.reload();
                     return;
                 } else {
                     // For paid plans, create account first (needed for Stripe auth)
-                    // If payment fails, user can sign in and retry
+                    // Then redirect directly to Stripe payment
                     const result = await createAccountFromPendingSignup();
                     
                     if (!result.success) {
@@ -135,30 +142,55 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
                         return;
                     }
                     
-                    // Wait a moment for auth state to update
+                    // Wait for auth state to be ready
                     await new Promise(resolve => setTimeout(resolve, 1500));
-
-                    // Persist checkout intent and reload so AuthContext picks up the newly created user doc.
-                    // This avoids a race where the user state is still null on this render, dropping back to landing.
-                    try {
-                        const attemptRaw = localStorage.getItem('paymentAttempt');
-                        const attempt = attemptRaw ? JSON.parse(attemptRaw) : {};
-                        localStorage.setItem('paymentAttempt', JSON.stringify({
-                            ...attempt,
-                            plan: selectedPlan,
-                            billingCycle,
-                            accountCreated: true,
-                            timestamp: Date.now(),
-                            resumeCheckout: true,
-                        }));
-                        // Ensure App.tsx will prompt for this new attempt even if a prior attempt already set the flag.
-                        localStorage.removeItem('paymentAttemptPromptedAt');
-                        localStorage.removeItem('paymentAttemptPrompted');
-                    } catch {}
-
-                    // Close plan selector modal in the current render, then reload to resume checkout reliably.
-                    onSelect(selectedPlan);
-                    window.location.reload();
+                    
+                    // Verify user is authenticated before opening payment modal
+                    const { auth } = await import('../firebaseConfig');
+                    if (!auth.currentUser) {
+                        // If auth isn't ready yet, reload and let App.tsx handle it
+                        try {
+                            localStorage.setItem('paymentAttempt', JSON.stringify({
+                                plan: selectedPlan,
+                                billingCycle,
+                                accountCreated: true,
+                                timestamp: Date.now(),
+                                resumeCheckout: true,
+                            }));
+                            localStorage.removeItem('paymentAttemptPromptedAt');
+                            localStorage.removeItem('paymentAttemptPrompted');
+                        } catch {}
+                        window.location.reload();
+                        return;
+                    }
+                    
+                    // User is authenticated - open payment modal directly
+                    const planData = plans.find(p => p.name === selectedPlan);
+                    if (planData && openPaymentModal) {
+                        const price = billingCycle === 'annually' ? planData.priceAnnually : planData.priceMonthly;
+                        
+                        // Clear pendingSignup if it still exists
+                        try {
+                            localStorage.removeItem('pendingSignup');
+                        } catch {}
+                        
+                        // Close plan selector (this will close the modal)
+                        onSelect(selectedPlan);
+                        
+                        // Small delay to ensure modal closes before opening payment modal
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        
+                        // Open payment modal to redirect to Stripe
+                        openPaymentModal({ 
+                            name: selectedPlan, 
+                            price: price,
+                            cycle: billingCycle
+                        });
+                        setIsLoading(false);
+                    } else {
+                        // Fallback: reload if payment modal can't be opened
+                        window.location.reload();
+                    }
                 }
                 return;
             } else if (user) {
