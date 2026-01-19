@@ -67,6 +67,36 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
     // Otherwise, they're choosing a plan before creating their account
     const isConfirmingPlan = !!user;
 
+    // Check if we should auto-resume checkout when component mounts
+    React.useEffect(() => {
+        if (user && openPaymentModal && !isLoading) {
+            // Check if there's a paymentAttempt with resumeCheckout (user just created account)
+            try {
+                const attemptRaw = localStorage.getItem('paymentAttempt');
+                const attempt = attemptRaw ? JSON.parse(attemptRaw) : null;
+                if (attempt?.accountCreated && attempt?.resumeCheckout && (attempt?.plan === 'Pro' || attempt?.plan === 'Elite')) {
+                    const cycle = (attempt?.billingCycle === 'annually' ? 'annually' : 'monthly') as 'monthly' | 'annually';
+                    const planData = attempt.plan === 'Pro'
+                        ? { name: 'Pro' as Plan, price: cycle === 'annually' ? 23 : 29, cycle }
+                        : { name: 'Elite' as Plan, price: cycle === 'annually' ? 47 : 59, cycle };
+                    
+                    // Mark as prompted to prevent duplicate openings
+                    const attemptTs = typeof attempt?.timestamp === 'number' ? attempt.timestamp : null;
+                    if (attemptTs) {
+                        localStorage.setItem('paymentAttemptPromptedAt', String(attemptTs));
+                    }
+                    
+                    // Open payment modal and close plan selector
+                    openPaymentModal(planData);
+                    onSelect(planData.name);
+                    return;
+                }
+            } catch (e) {
+                console.warn('Failed to resume checkout:', e);
+            }
+        }
+    }, [user, openPaymentModal, onSelect]);
+
     const handleContinue = async () => {
         if (!selectedPlan) return;
         
@@ -125,13 +155,13 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
                         localStorage.setItem('checkoutTransition', 'true');
                     } catch {}
 
-                    // Keep loading state visible and close modal smoothly
-                    // Don't call onSelect here - keep modal visible during transition to avoid flash
+                    // Keep loading state visible during transition
                     // The reload will happen and App.tsx will open payment modal
-                    // Small delay to ensure state is saved and loading overlay is visible
-                    await new Promise(resolve => setTimeout(resolve, 200));
+                    // Longer delay to ensure all state is saved and UI is ready
+                    await new Promise(resolve => setTimeout(resolve, 300));
                     
                     // Reload so AuthContext can hydrate the user and App.tsx can open checkout
+                    // The loading overlay will remain visible during reload
                     window.location.reload();
                 }
                 return;

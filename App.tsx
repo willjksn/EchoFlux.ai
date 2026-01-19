@@ -430,19 +430,37 @@ const AppContent: React.FC = () => {
                         ? { name: 'Pro', price: cycle === 'annually' ? 23 : 29, cycle }
                         : { name: 'Elite', price: cycle === 'annually' ? 47 : 59, cycle };
 
-                    // Clear checkout transition flag since payment modal is opening
-                    try {
-                        localStorage.removeItem('checkoutTransition');
-                    } catch {}
-                    
-                    openPaymentModal(planData);
+                    // Mark that we're prompting for this attempt
                     if (attemptTs) {
                         localStorage.setItem('paymentAttemptPromptedAt', String(attemptTs));
                     } else {
                         // Backward compatibility: if timestamp missing, fall back to simple flag.
                         localStorage.setItem('paymentAttemptPrompted', 'true');
                     }
+                    
                     setOnboardingStep('none');
+                    
+                    // Use setTimeout to ensure openPaymentModal is ready and UI is rendered
+                    setTimeout(() => {
+                        if (openPaymentModal) {
+                            openPaymentModal(planData);
+                            // Clear checkout transition flag after modal opens
+                            try {
+                                localStorage.removeItem('checkoutTransition');
+                            } catch {}
+                        } else {
+                            // Retry once more if openPaymentModal wasn't ready
+                            setTimeout(() => {
+                                if (openPaymentModal) {
+                                    openPaymentModal(planData);
+                                    try {
+                                        localStorage.removeItem('checkoutTransition');
+                                    } catch {}
+                                }
+                            }, 200);
+                        }
+                    }, 200);
+                    
                     return;
                 }
             } catch {}
@@ -451,7 +469,19 @@ const AppContent: React.FC = () => {
             // Exception: If they already have a paid plan (Pro/Elite), they've already selected,
             // so proceed directly to onboarding
             // If plan is null, payment was canceled - show plan selector
-            if (!user.plan) {
+            // BUT: Don't show plan selector if we're resuming a checkout (paymentAttempt exists or checkoutTransition is active)
+            const hasActiveCheckoutResume = (() => {
+                try {
+                    const attemptRaw = localStorage.getItem('paymentAttempt');
+                    const attempt = attemptRaw ? JSON.parse(attemptRaw) : null;
+                    const checkoutTransition = localStorage.getItem('checkoutTransition');
+                    return (attempt?.accountCreated && attempt?.resumeCheckout && (attempt?.plan === 'Pro' || attempt?.plan === 'Elite')) || checkoutTransition === 'true';
+                } catch {
+                    return false;
+                }
+            })();
+            
+            if (!user.plan && !hasActiveCheckoutResume) {
                 setOnboardingStep('plan-selector');
                 return;
             }
