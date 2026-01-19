@@ -796,9 +796,9 @@ NATURAL PERSONALIZATION GUIDELINES:
                         <div className="mt-3 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
                             <div className="text-xs text-purple-700 dark:text-purple-300">
                                 <p className="font-semibold mb-1">Fan Preferences Loaded:</p>
-                                {fanPreferences.preferredTone && <p>ΓÇó Tone: {fanPreferences.preferredTone}</p>}
-                                {fanPreferences.communicationStyle && <p>ΓÇó Style: {fanPreferences.communicationStyle}</p>}
-                                {fanPreferences.favoriteSessionType && <p>ΓÇó Favorite: {fanPreferences.favoriteSessionType}</p>}
+                                {fanPreferences.preferredTone && <p>• Tone: {fanPreferences.preferredTone}</p>}
+                                {fanPreferences.communicationStyle && <p>• Style: {fanPreferences.communicationStyle}</p>}
+                                {fanPreferences.favoriteSessionType && <p>• Favorite: {fanPreferences.favoriteSessionType}</p>}
                             </div>
                         </div>
                     )}

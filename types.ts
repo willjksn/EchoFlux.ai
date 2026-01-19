@@ -346,6 +346,7 @@ export interface User {
   subscriptionEndDate?: string; // ISO timestamp when subscription ends (if cancelled)
   cancelAtPeriodEnd?: boolean; // Whether subscription is set to cancel at period end
   subscriptionStartDate?: string; // ISO timestamp when current subscription started
+  trialEndDate?: string; // ISO timestamp when trial period ends (for trial notifications)
   billingCycle?: 'monthly' | 'annually'; // Billing cycle for current plan
   pendingPlan?: Plan | null; // Scheduled downgrade plan (effective at next renewal)
   pendingBillingCycle?: 'monthly' | 'annually' | null; // Scheduled downgrade billing cycle

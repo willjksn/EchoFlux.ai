@@ -96,6 +96,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               fromPlan = (existing.data() as any)?.plan || null;
             } catch {}
 
+            // Capture trial end date if subscription is in trial
+            const trialEndDate = subscription.trial_end 
+              ? new Date(subscription.trial_end * 1000).toISOString() 
+              : null;
+
             await userRef.set({
               plan: planName,
               userType: 'Creator', // Ensure userType is set for onboarding flow
@@ -106,6 +111,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               billingCycle,
               cancelAtPeriodEnd: false,
               subscriptionEndDate: null,
+              trialEndDate, // Store trial end date for notifications
               monthlyCaptionGenerationsUsed: 0,
               monthlyImageGenerationsUsed: 0,
               monthlyVideoGenerationsUsed: 0,
@@ -153,6 +159,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const billingCycle = subscription.items.data[0]?.price.recurring?.interval === 'year' ? 'annual' : 'monthly';
 
           const periodEnd = subscription.current_period_end;
+          // Capture trial end date if subscription is in trial
+          const trialEndDate = subscription.trial_end 
+            ? new Date(subscription.trial_end * 1000).toISOString() 
+            : null;
           
           await userDoc.ref.set({
             plan: planName,
@@ -163,6 +173,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             subscriptionEndDate: subscription.cancel_at_period_end && periodEnd
               ? new Date(periodEnd * 1000).toISOString()
               : null,
+            trialEndDate, // Update trial end date for notifications
           }, { merge: true });
 
           console.log(`Subscription updated for user ${userDoc.id}: ${subscription.status}`);
@@ -209,11 +220,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const userDoc = usersSnapshot.docs[0];
           
           // Reset usage counters on successful payment
+          // Clear trial end date if this is the first payment after trial
           await userDoc.ref.set({
             monthlyCaptionGenerationsUsed: 0,
             monthlyImageGenerationsUsed: 0,
             monthlyVideoGenerationsUsed: 0,
             lastPaymentDate: new Date().toISOString(),
+            trialEndDate: null, // Clear trial end date after first payment
           }, { merge: true });
 
           console.log(`Payment succeeded for user ${userDoc.id}`);
@@ -233,10 +246,76 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         if (!usersSnapshot.empty) {
           const userDoc = usersSnapshot.docs[0];
+          const userData = userDoc.data();
           
-          // Optionally downgrade or notify user
-          console.log(`Payment failed for user ${userDoc.id}`);
-          // You might want to send an email notification here
+          // Create payment failure notification for user
+          const userNotificationsRef = db.collection('users').doc(userDoc.id).collection('notifications');
+          await userNotificationsRef.add({
+            id: `payment-failed-${Date.now()}`,
+            text: `💳 Payment failed for your subscription. Please update your payment method in Settings to avoid service interruption.`,
+            timestamp: new Date().toISOString(),
+            read: false,
+            messageId: 'payment-failed',
+            createdAt: new Date(),
+          });
+
+          // Create admin alert for payment failure
+          const adminAlertsRef = db.collection('admin_alerts');
+          const alertData = {
+            type: 'payment_failed',
+            message: `Payment failed for user: ${userData.name || userData.email || userDoc.id} (${userDoc.id})`,
+            severity: 'high',
+            userId: userDoc.id,
+            userName: userData.name || 'Unknown',
+            metadata: {
+              customerId,
+              invoiceId: invoice.id,
+              amount: invoice.amount_due,
+              currency: invoice.currency,
+            },
+            createdAt: new Date(),
+            read: false,
+          };
+          
+          await adminAlertsRef.add(alertData);
+
+          // Send email notification for critical payment failures
+          try {
+            const { sendEmail } = await import('./_mailer.js');
+            const adminUsers = await db.collection('users')
+              .where('role', '==', 'Admin')
+              .limit(5)
+              .get();
+            
+            for (const adminDoc of adminUsers.docs) {
+              const adminData = adminDoc.data();
+              const adminEmail = adminData.email;
+              if (adminEmail) {
+                await sendEmail({
+                  to: adminEmail,
+                  subject: `🚨 Payment Failed: ${userData.name || userData.email || userDoc.id}`,
+                  text: `Payment failed for user ${userData.name || userData.email || userDoc.id} (${userDoc.id}).
+
+Amount: ${(invoice.amount_due / 100).toFixed(2)} ${invoice.currency?.toUpperCase()}
+Invoice ID: ${invoice.id}
+Customer ID: ${customerId}
+
+Please check the admin dashboard for more details.`,
+                  html: `<h2>Payment Failed Alert</h2>
+<p><strong>User:</strong> ${userData.name || userData.email || userDoc.id} (${userDoc.id})</p>
+<p><strong>Amount:</strong> ${(invoice.amount_due / 100).toFixed(2)} ${invoice.currency?.toUpperCase()}</p>
+<p><strong>Invoice ID:</strong> ${invoice.id}</p>
+<p><strong>Customer ID:</strong> ${customerId}</p>
+<p>Please check the admin dashboard for more details.</p>`,
+                });
+              }
+            }
+          } catch (emailError) {
+            console.warn('Failed to send payment failure email notification:', emailError);
+            // Don't fail the webhook if email fails
+          }
+
+          console.log(`Payment failed for user ${userDoc.id} - notifications created`);
         }
         break;
       }

@@ -308,11 +308,65 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, [user?.id]);
 
-  // Check usage limits when user data changes
+  // Fetch admin alerts if user is admin
+  useEffect(() => {
+    if (!user || user.role !== 'Admin') return;
+
+    let cancelled = false;
+
+    const fetchAdminAlerts = async () => {
+      try {
+        const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+        if (!token || cancelled) return;
+
+        // Fetch unread admin alerts from Firestore
+        const adminAlertsRef = collection(db, 'admin_alerts');
+        const alertsQuery = query(adminAlertsRef, orderBy('createdAt', 'desc'));
+        
+        const unsubscribe = onSnapshot(alertsQuery, (snapshot) => {
+          if (cancelled) return;
+
+          const alerts = snapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() }))
+            .filter((alert: any) => !alert.read)
+            .slice(0, 10); // Limit to 10 most recent unread alerts
+
+          // Convert admin alerts to notifications
+          const adminNotifications: Notification[] = alerts.map((alert: any) => ({
+            id: `admin-${alert.id}`,
+            text: alert.message || 'Admin alert',
+            timestamp: alert.createdAt?.toDate?.()?.toLocaleString() || 'Just now',
+            read: false,
+            messageId: `admin-${alert.type || 'alert'}`,
+          }));
+
+          // Add admin notifications to existing notifications
+          setNotifications((prev) => {
+            const existingIds = new Set(prev.map(n => n.id));
+            const toAdd = adminNotifications.filter(n => !existingIds.has(n.id));
+            return [...toAdd, ...prev];
+          });
+        }, (error) => {
+          console.warn('Failed to fetch admin alerts:', error);
+        });
+
+        return () => {
+          cancelled = true;
+          unsubscribe();
+        };
+      } catch (err) {
+        console.warn('Failed to setup admin alerts listener:', err);
+      }
+    };
+
+    fetchAdminAlerts();
+  }, [user?.id, user?.role]);
+
+  // Check usage limits and trial end dates when user data changes
   useEffect(() => {
     if (!user) return;
 
-    // Check for usage limit notifications using functional update to avoid dependency issues
+    // Check for usage limit and trial notifications using functional update to avoid dependency issues
     setNotifications(prevNotifications => {
       const newNotifications = checkAllUsageLimits(user, prevNotifications, usageStatsForNotifications);
       
@@ -325,7 +379,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       return prevNotifications;
     });
-  }, [user?.monthlyCaptionGenerationsUsed, user?.monthlyImageGenerationsUsed, user?.monthlyVideoGenerationsUsed, user?.plan, user?.id, usageStatsForNotifications]);
+  }, [user?.monthlyCaptionGenerationsUsed, user?.monthlyImageGenerationsUsed, user?.monthlyVideoGenerationsUsed, user?.storageUsed, user?.storageLimit, user?.plan, user?.id, (user as any)?.trialEndDate, usageStatsForNotifications]);
 
   /*--------------------------------------------------------------------
     SEEDING HELPERS

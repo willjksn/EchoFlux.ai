@@ -284,6 +284,152 @@ export function checkImageUsage(
 }
 
 /**
+ * Check storage usage and create notification if approaching limit
+ */
+export function checkStorageUsage(
+  user: User,
+  existingNotifications: Notification[]
+): UsageCheckResult {
+  const storageUsed = user.storageUsed || 0;
+  const storageLimit = user.storageLimit || 100; // Default to 100 MB (Free plan)
+  const usagePercent = storageLimit > 0 ? storageUsed / storageLimit : 0;
+
+  if (usagePercent === 0) {
+    return { shouldNotify: false, notification: null };
+  }
+
+  // Check if we've already notified about this specific threshold
+  const warningKey = `storage-warning-${Math.floor(usagePercent * 10)}`;
+  const hasExistingNotification = existingNotifications.some(
+    n => n.id === warningKey || (n.text.includes('Storage') && !n.read)
+  );
+
+  if (hasExistingNotification && usagePercent < 1.0) {
+    return { shouldNotify: false, notification: null };
+  }
+
+  // Format storage in appropriate units
+  const formatStorage = (mb: number): string => {
+    if (mb >= 1024) {
+      return `${(mb / 1024).toFixed(1)} GB`;
+    }
+    return `${mb.toFixed(0)} MB`;
+  };
+
+  // Create notification based on usage level
+  if (usagePercent >= 1.0) {
+    return {
+      shouldNotify: true,
+      notification: {
+        id: `storage-limit-${Date.now()}`,
+        text: `⚠️ Storage limit reached! You've used ${formatStorage(storageUsed)} of ${formatStorage(storageLimit)}. Delete files or upgrade to continue uploading.`,
+        timestamp: 'Just now',
+        read: false,
+        messageId: 'usage-limit-storage',
+      },
+    };
+  } else if (usagePercent >= CRITICAL_THRESHOLD) {
+    const remaining = storageLimit - storageUsed;
+    return {
+      shouldNotify: true,
+      notification: {
+        id: warningKey,
+        text: `⚠️ Storage limit almost reached! Only ${formatStorage(remaining)} remaining (${formatStorage(storageUsed)}/${formatStorage(storageLimit)} used). Consider upgrading or deleting files.`,
+        timestamp: 'Just now',
+        read: false,
+        messageId: 'usage-warning-storage',
+      },
+    };
+  } else if (usagePercent >= WARNING_THRESHOLD) {
+    const remaining = storageLimit - storageUsed;
+    return {
+      shouldNotify: true,
+      notification: {
+        id: warningKey,
+        text: `💡 Storage usage: ${formatStorage(remaining)} remaining (${formatStorage(storageUsed)}/${formatStorage(storageLimit)} used). Consider upgrading for more storage.`,
+        timestamp: 'Just now',
+        read: false,
+        messageId: 'usage-warning-storage',
+      },
+    };
+  }
+
+  return { shouldNotify: false, notification: null };
+}
+
+/**
+ * Check trial end date and create notification if trial is about to end
+ */
+export function checkTrialEndDate(
+  user: User,
+  existingNotifications: Notification[]
+): UsageCheckResult {
+  const trialEndDate = (user as any)?.trialEndDate as string | null | undefined;
+  
+  // Only check if user has a trial end date and is on a paid plan
+  if (!trialEndDate || !user.plan || user.plan === 'Free') {
+    return { shouldNotify: false, notification: null };
+  }
+
+  const trialEndMs = new Date(trialEndDate).getTime();
+  const nowMs = Date.now();
+  const daysUntilTrialEnd = Math.ceil((trialEndMs - nowMs) / (1000 * 60 * 60 * 24));
+
+  // Check if trial has already ended
+  if (daysUntilTrialEnd < 0) {
+    return { shouldNotify: false, notification: null };
+  }
+
+  // Check if we've already notified about this specific day
+  const notificationKey = `trial-end-${daysUntilTrialEnd}`;
+  const hasExistingNotification = existingNotifications.some(
+    n => n.id === notificationKey || (n.messageId === 'trial-ending' && !n.read)
+  );
+
+  if (hasExistingNotification) {
+    return { shouldNotify: false, notification: null };
+  }
+
+  // Notify at different intervals: 3 days before, 1 day before, and on the day it ends
+  if (daysUntilTrialEnd === 0) {
+    return {
+      shouldNotify: true,
+      notification: {
+        id: notificationKey,
+        text: `⏰ Your 7-day trial ends today! Your subscription will start automatically. Cancel anytime in Settings.`,
+        timestamp: 'Just now',
+        read: false,
+        messageId: 'trial-ending',
+      },
+    };
+  } else if (daysUntilTrialEnd === 1) {
+    return {
+      shouldNotify: true,
+      notification: {
+        id: notificationKey,
+        text: `⏰ Your 7-day trial ends tomorrow! Your subscription will start automatically. Cancel anytime in Settings.`,
+        timestamp: 'Just now',
+        read: false,
+        messageId: 'trial-ending',
+      },
+    };
+  } else if (daysUntilTrialEnd === 3) {
+    return {
+      shouldNotify: true,
+      notification: {
+        id: notificationKey,
+        text: `⏰ Your 7-day trial ends in 3 days. Your subscription will start automatically. Cancel anytime in Settings.`,
+        timestamp: 'Just now',
+        read: false,
+        messageId: 'trial-ending',
+      },
+    };
+  }
+
+  return { shouldNotify: false, notification: null };
+}
+
+/**
  * Check all usage types and return notifications to add
  */
 export function checkAllUsageLimits(
@@ -292,6 +438,18 @@ export function checkAllUsageLimits(
   usageStats?: { strategy: { count: number; limit: number; remaining: number } } | null
 ): Notification[] {
   const notifications: Notification[] = [];
+
+  // Check trial end date
+  const trialCheck = checkTrialEndDate(user, existingNotifications);
+  if (trialCheck.shouldNotify && trialCheck.notification) {
+    notifications.push(trialCheck.notification);
+  }
+
+  // Check storage usage
+  const storageCheck = checkStorageUsage(user, existingNotifications);
+  if (storageCheck.shouldNotify && storageCheck.notification) {
+    notifications.push(storageCheck.notification);
+  }
 
   // Check caption usage
   const captionCheck = checkCaptionUsage(user, existingNotifications);

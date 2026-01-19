@@ -12,7 +12,7 @@ import { OnlyFansAnalytics } from './OnlyFansAnalytics';
 import { OnlyFansFans } from './OnlyFansFans';
 import { ErrorBoundary } from './ErrorBoundary';
 import { auth, db } from '../firebaseConfig';
-import { addDoc, collection, getDocs, limit, orderBy, query, Timestamp, doc, getDoc, where } from 'firebase/firestore';
+import { addDoc, collection, getDocs, limit, orderBy, query, Timestamp, doc, getDoc, where, onSnapshot } from 'firebase/firestore';
 import { UserIcon } from './icons/UIIcons';
 type ActiveView = 'dashboard' | 'contentBrain' | 'roleplay' | 'calendar' | 'mediaVault' | 'export' | 'guides' | 'settings' | 'analytics' | 'fans';
 
@@ -448,6 +448,22 @@ export const OnlyFansStudio: React.FC = () => {
             loadFanData();
             loadFirstWinProgress();
         }
+    }, [activeView, user?.id]);
+
+    // Set up real-time listener for fan updates when dashboard is active
+    useEffect(() => {
+        if (!user?.id || activeView !== 'dashboard') return;
+
+        // Set up real-time listener for fan collection
+        const fansRef = collection(db, 'users', user.id, 'onlyfans_fan_preferences');
+        const unsubscribe = onSnapshot(fansRef, () => {
+            // Reload fan data when fans collection changes
+            loadFanData();
+        }, (error) => {
+            console.warn('Error listening to fan updates:', error);
+        });
+
+        return () => unsubscribe();
     }, [activeView, user?.id]);
 
     const copyToClipboard = async (text: string) => {

@@ -212,6 +212,46 @@ export const AdminDashboard: React.FC = () => {
         fetchModelStats();
     }, [currentUser?.role, modelStatsDays]);
 
+    // Check and create admin alerts periodically
+    useEffect(() => {
+        if (currentUser?.role !== 'Admin') return;
+
+        const checkAlerts = async () => {
+            try {
+                const token = await auth.currentUser?.getIdToken(true);
+                if (!token) return;
+
+                const response = await fetch('/api/checkAdminAlerts', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${token}`,
+                    },
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.alertsCreated > 0) {
+                        showToast(`Created ${data.alertsCreated} new admin alert(s)`, 'success');
+                    }
+                }
+            } catch (error) {
+                // Silent failure - alerts are non-critical
+                if (process.env.NODE_ENV === 'development') {
+                    console.warn('Failed to check admin alerts:', error);
+                }
+            }
+        };
+
+        // Check immediately on load
+        checkAlerts();
+
+        // Then check every 30 minutes
+        const interval = setInterval(checkAlerts, 30 * 60 * 1000);
+
+        return () => clearInterval(interval);
+    }, [currentUser?.role, currentUser?.id]);
+
     useEffect(() => {
         setIsLoading(true);
         setAccessError(null);
