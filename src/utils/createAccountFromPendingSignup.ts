@@ -11,6 +11,7 @@ interface PendingSignupData {
   fullName: string;
   inviteCode?: string;
   selectedPlan: string | null;
+  billingCycle?: 'monthly' | 'annually';
   timestamp: number;
   isGoogleSignup?: boolean;
   googleUid?: string;
@@ -296,8 +297,8 @@ export async function createAccountFromPendingSignup(): Promise<{ success: boole
       }
     }
 
-    // For paid plans, don't clear pendingSignup yet - wait for payment to succeed
-    // This allows user to retry payment if it fails
+    // For paid plans, clear pendingSignup so AuthContext can hydrate the user.
+    // Keep a paymentAttempt so checkout can resume after reload.
     const selectedPlan = pendingSignup.selectedPlan as Plan;
     const isPaidPlan = selectedPlan && selectedPlan !== 'Free';
     
@@ -305,14 +306,17 @@ export async function createAccountFromPendingSignup(): Promise<{ success: boole
       // Free plan - clear pendingSignup immediately since no payment needed
       localStorage.removeItem('pendingSignup');
     } else {
-      // Paid plan - store payment attempt info but keep pendingSignup
-      // This allows user to sign in and retry if payment fails
+      // Paid plan - store payment attempt info so checkout can resume
       localStorage.setItem('paymentAttempt', JSON.stringify({
         email: pendingSignup.email,
         plan: selectedPlan,
+        billingCycle: pendingSignup.billingCycle === 'annually' ? 'annually' : 'monthly',
         timestamp: Date.now(),
-        accountCreated: true
+        accountCreated: true,
+        resumeCheckout: true,
       }));
+      // Clear pendingSignup so AuthContext can create the user document
+      localStorage.removeItem('pendingSignup');
     }
 
     return { success: true };

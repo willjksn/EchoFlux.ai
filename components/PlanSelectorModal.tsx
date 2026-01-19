@@ -142,55 +142,21 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
                         return;
                     }
                     
-                    // Wait for auth state to be ready
-                    await new Promise(resolve => setTimeout(resolve, 1500));
-                    
-                    // Verify user is authenticated before opening payment modal
-                    const { auth } = await import('../firebaseConfig');
-                    if (!auth.currentUser) {
-                        // If auth isn't ready yet, reload and let App.tsx handle it
-                        try {
-                            localStorage.setItem('paymentAttempt', JSON.stringify({
-                                plan: selectedPlan,
-                                billingCycle,
-                                accountCreated: true,
-                                timestamp: Date.now(),
-                                resumeCheckout: true,
-                            }));
-                            localStorage.removeItem('paymentAttemptPromptedAt');
-                            localStorage.removeItem('paymentAttemptPrompted');
-                        } catch {}
-                        window.location.reload();
-                        return;
-                    }
-                    
-                    // User is authenticated - open payment modal directly
-                    const planData = plans.find(p => p.name === selectedPlan);
-                    if (planData && openPaymentModal) {
-                        const price = billingCycle === 'annually' ? planData.priceAnnually : planData.priceMonthly;
-                        
-                        // Clear pendingSignup if it still exists
-                        try {
-                            localStorage.removeItem('pendingSignup');
-                        } catch {}
-                        
-                        // Close plan selector (this will close the modal)
-                        onSelect(selectedPlan);
-                        
-                        // Small delay to ensure modal closes before opening payment modal
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                        
-                        // Open payment modal to redirect to Stripe
-                        openPaymentModal({ 
-                            name: selectedPlan, 
-                            price: price,
-                            cycle: billingCycle
-                        });
-                        setIsLoading(false);
-                    } else {
-                        // Fallback: reload if payment modal can't be opened
-                        window.location.reload();
-                    }
+                    // Persist checkout intent so App.tsx can resume checkout after reload
+                    try {
+                        localStorage.setItem('paymentAttempt', JSON.stringify({
+                            plan: selectedPlan,
+                            billingCycle,
+                            accountCreated: true,
+                            timestamp: Date.now(),
+                            resumeCheckout: true,
+                        }));
+                        localStorage.removeItem('paymentAttemptPromptedAt');
+                        localStorage.removeItem('paymentAttemptPrompted');
+                    } catch {}
+
+                    // Reload so AuthContext can hydrate the user and App.tsx can open checkout
+                    window.location.reload();
                 }
                 return;
             } else if (user) {
