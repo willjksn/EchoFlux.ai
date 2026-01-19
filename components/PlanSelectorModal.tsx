@@ -142,9 +142,6 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
                         return;
                     }
                     
-                    // Close plan selector immediately to avoid a flash before reload
-                    onSelect(selectedPlan);
-
                     // Persist checkout intent so App.tsx can resume checkout after reload
                     try {
                         localStorage.setItem('paymentAttempt', JSON.stringify({
@@ -156,8 +153,16 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
                         }));
                         localStorage.removeItem('paymentAttemptPromptedAt');
                         localStorage.removeItem('paymentAttemptPrompted');
+                        // Set flag to show loading overlay during reload transition
+                        localStorage.setItem('checkoutTransition', 'true');
                     } catch {}
 
+                    // Keep loading state visible and close modal smoothly
+                    // Don't call onSelect here - keep modal visible during transition to avoid flash
+                    // The reload will happen and App.tsx will open payment modal
+                    // Small delay to ensure state is saved and loading overlay is visible
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                    
                     // Reload so AuthContext can hydrate the user and App.tsx can open checkout
                     window.location.reload();
                 }
@@ -191,16 +196,27 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-sm" aria-modal="true">
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-4xl w-full m-4 p-8 animate-fade-in-up max-h-[90vh] overflow-y-auto">
-                <div className="text-center mb-8">
-                    <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-                        {isConfirmingPlan ? 'Confirm Your Plan' : 'Choose Your Plan'}
-                    </h2>
-                    <p className="mt-2 text-gray-500 dark:text-gray-400">
-                        {isConfirmingPlan ? 'Confirm your plan selection to continue.' : 'Select the creator plan that fits your needs.'}
-                    </p>
+        <>
+            {/* Full-screen loading overlay during transition to prevent flash */}
+            {isLoading && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-80 backdrop-blur-sm">
+                    <div className="text-center">
+                        <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent mb-4"></div>
+                        <p className="text-white text-lg font-medium">Setting up your account...</p>
+                        <p className="text-white/70 text-sm mt-2">Redirecting to secure checkout</p>
+                    </div>
                 </div>
+            )}
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-sm" aria-modal="true">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-4xl w-full m-4 p-8 animate-fade-in-up max-h-[90vh] overflow-y-auto">
+                    <div className="text-center mb-8">
+                        <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
+                            {isConfirmingPlan ? 'Confirm Your Plan' : 'Choose Your Plan'}
+                        </h2>
+                        <p className="mt-2 text-gray-500 dark:text-gray-400">
+                            {isConfirmingPlan ? 'Confirm your plan selection to continue.' : 'Select the creator plan that fits your needs.'}
+                        </p>
+                    </div>
 
                 {/* Billing Cycle Toggle */}
                 <div className="flex justify-center items-center space-x-4 mb-6">
@@ -296,6 +312,7 @@ export const PlanSelectorModal: React.FC<PlanSelectorModalProps> = ({ userType, 
                 </div>
             </div>
         </div>
+        </>
     );
 };
 

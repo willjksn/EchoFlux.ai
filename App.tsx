@@ -203,7 +203,7 @@ const AppContent: React.FC = () => {
     const allowedEmail = getAllowedEmail();
     
     // Hooks must be called unconditionally at the top level
-    const { isAuthenticated, isAuthLoading, user, setUser, activePage, setActivePage, startTour, isTourActive, toast, showToast, isCRMOpen, setPricingView, handleLogout, selectedPlan, setSelectedPlan, openPaymentModal } = useAppContext();
+    const { isAuthenticated, isAuthLoading, user, setUser, activePage, setActivePage, startTour, isTourActive, toast, showToast, isCRMOpen, setPricingView, handleLogout, selectedPlan, setSelectedPlan, openPaymentModal, isPaymentModalOpen } = useAppContext();
     
     const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
     const [loginModalInitialView, setLoginModalInitialView] = useState<'login' | 'signup'>('login');
@@ -401,6 +401,11 @@ const AppContent: React.FC = () => {
                         ? { name: 'Pro', price: cycle === 'annually' ? 23 : 29, cycle }
                         : { name: 'Elite', price: cycle === 'annually' ? 47 : 59, cycle };
 
+                    // Clear checkout transition flag since payment modal is opening
+                    try {
+                        localStorage.removeItem('checkoutTransition');
+                    } catch {}
+                    
                     openPaymentModal(planData);
                     if (attemptTs) {
                         localStorage.setItem('paymentAttemptPromptedAt', String(attemptTs));
@@ -848,8 +853,48 @@ const AppContent: React.FC = () => {
         );
     }
 
+    // Check for checkout transition loading overlay
+    const [showCheckoutTransition, setShowCheckoutTransition] = useState(false);
+    
+    useEffect(() => {
+        // Show loading overlay if we're in a checkout transition
+        const checkoutTransition = typeof window !== 'undefined' ? localStorage.getItem('checkoutTransition') : null;
+        if (checkoutTransition === 'true') {
+            setShowCheckoutTransition(true);
+            // Clear the flag once payment modal opens (handled in paymentAttempt logic)
+            // Also clear it after a timeout as fallback
+            const timeout = setTimeout(() => {
+                try {
+                    localStorage.removeItem('checkoutTransition');
+                } catch {}
+                setShowCheckoutTransition(false);
+            }, 5000);
+            return () => clearTimeout(timeout);
+        }
+    }, []);
+
+    // Clear checkout transition flag when payment modal opens
+    useEffect(() => {
+        if (isPaymentModalOpen && showCheckoutTransition) {
+            try {
+                localStorage.removeItem('checkoutTransition');
+            } catch {}
+            setShowCheckoutTransition(false);
+        }
+    }, [isPaymentModalOpen, showCheckoutTransition]);
+
     return (
         <div className="flex h-screen bg-gray-100 dark:bg-gray-900 font-sans w-full overflow-x-hidden">
+            {/* Loading overlay during checkout transition to prevent flash */}
+            {showCheckoutTransition && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-90 backdrop-blur-sm">
+                    <div className="text-center">
+                        <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent mb-4"></div>
+                        <p className="text-white text-lg font-medium">Setting up your account...</p>
+                        <p className="text-white/70 text-sm mt-2">Redirecting to secure checkout</p>
+                    </div>
+                </div>
+            )}
             {onboardingStep === 'plan-selector' && (
                 <PlanSelectorModal userType="Creator" onSelect={handlePlanSelected} onCancel={handlePlanCancel} />
             )}
