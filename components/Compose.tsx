@@ -160,6 +160,8 @@ const CaptionGenerator: React.FC = () => {
   // Scheduling state
   const [isScheduling, setIsScheduling] = useState(false);
   const [scheduleDate, setScheduleDate] = useState('');
+  const pendingScheduleDateRef = useRef<string | null>(null);
+  const hasAppliedPendingScheduleRef = useRef(false);
 
   // Selected checkboxes for bulk actions
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
@@ -309,21 +311,18 @@ const CaptionGenerator: React.FC = () => {
       }
 
       const data = await response.json();
-      if (data.success) {
+      if (data.success && user) {
         // Optimistically bump local usage so UI indicators update immediately.
-        setUser(prev => {
-          if (!prev) return prev;
-          const newMonthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
-          const monthChanged = prev.composeInsightsUsageMonth !== newMonthKey;
-          const base: any = monthChanged
-            ? { monthlyContentGapsUsed: 0, monthlyPredictionsUsed: 0, monthlyRepurposesUsed: 0, composeInsightsUsageMonth: newMonthKey }
-            : { composeInsightsUsageMonth: prev.composeInsightsUsageMonth || newMonthKey };
-          return {
-            ...prev,
-            ...base,
-            monthlyContentGapsUsed: (monthChanged ? 0 : (prev.monthlyContentGapsUsed || 0)) + 1,
-          };
-        });
+        const newMonthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+        const monthChanged = user.composeInsightsUsageMonth !== newMonthKey;
+        const base: any = monthChanged
+          ? { monthlyContentGapsUsed: 0, monthlyPredictionsUsed: 0, monthlyRepurposesUsed: 0, composeInsightsUsageMonth: newMonthKey }
+          : { composeInsightsUsageMonth: user.composeInsightsUsageMonth || newMonthKey };
+        await setUser({
+          id: user.id,
+          ...base,
+          monthlyContentGapsUsed: (monthChanged ? 0 : (user.monthlyContentGapsUsed || 0)) + 1,
+        } as Partial<User>);
 
         setGapAnalysisResult(data);
         setShowGapAnalysisModal(true);
@@ -459,13 +458,36 @@ const CaptionGenerator: React.FC = () => {
     // Check for scheduled date from Calendar (via localStorage)
     const composeScheduledDate = localStorage.getItem('composeScheduledDate');
     if (composeScheduledDate) {
-      setIsScheduling(true);
-      // Convert date string (YYYY-MM-DD) to datetime-local format (YYYY-MM-DDTHH:mm)
-      const dateStr = composeScheduledDate + 'T12:00'; // Default to noon
-      setScheduleDate(dateStr);
+      // Store for the next media item schedule picker (MediaBox)
+      const pendingIso = new Date(`${composeScheduledDate}T12:00`).toISOString();
+      pendingScheduleDateRef.current = pendingIso;
+
+      // If no media items yet, add an empty box with the schedule prefilled
+      if (!hasAppliedPendingScheduleRef.current && composeState.mediaItems.length === 0) {
+        hasAppliedPendingScheduleRef.current = true;
+        setComposeState(prev => ({
+          ...prev,
+          mediaItems: [
+            {
+              id: Date.now().toString(),
+              previewUrl: '',
+              data: '',
+              mimeType: '',
+              type: 'image',
+              results: [],
+              captionText: '',
+              scheduledDate: pendingIso,
+              postGoal: prev.postGoal,
+              postTone: prev.postTone,
+              selectedPlatforms: { ...emptyPlatforms },
+            },
+          ],
+        }));
+      }
+
       localStorage.removeItem('composeScheduledDate'); // Clear after use
     }
-  }, [composeContext, setComposeState]);
+  }, [composeContext, composeState.mediaItems.length, setComposeState]);
 
   useEffect(() => {
     if (!isSpeechRecognitionSupported) return;
@@ -874,6 +896,10 @@ const CaptionGenerator: React.FC = () => {
           const mediaData = JSON.parse(pendingMedia);
           
           // Use functional update to check for duplicates with latest state
+          const pendingScheduledDate = pendingScheduleDateRef.current;
+          if (pendingScheduledDate) {
+            pendingScheduleDateRef.current = null;
+          }
           setComposeState(prev => {
             // Check if this media is already added (prevent duplicates)
             const alreadyExists = prev.mediaItems.some(
@@ -889,6 +915,7 @@ const CaptionGenerator: React.FC = () => {
                 type: mediaData.type,
                 results: [],
                 captionText: '',
+                scheduledDate: pendingScheduledDate || undefined,
                 postGoal: prev.postGoal,
                 postTone: prev.postTone,
                 selectedPlatforms: { ...emptyPlatforms },
@@ -952,6 +979,10 @@ const CaptionGenerator: React.FC = () => {
 
   // Batch upload handlers
   const handleAddMediaBox = () => {
+    const pendingScheduledDate = pendingScheduleDateRef.current;
+    if (pendingScheduledDate) {
+      pendingScheduleDateRef.current = null;
+    }
     const newMediaItem: MediaItemState = {
       id: Date.now().toString(),
       previewUrl: '',
@@ -960,6 +991,7 @@ const CaptionGenerator: React.FC = () => {
       type: 'image',
       results: [],
       captionText: '',
+      scheduledDate: pendingScheduledDate || undefined,
       postGoal: composeState.postGoal,
       postTone: composeState.postTone,
       selectedPlatforms: { ...emptyPlatforms },
@@ -1972,13 +2004,13 @@ const CaptionGenerator: React.FC = () => {
     }
   };
 
-  const handleCaptionGenerationComplete = () => {
+  const handleCaptionGenerationComplete = async () => {
     if (user) {
-      setUser({
-        ...user,
+      await setUser({
+        id: user.id,
         monthlyCaptionGenerationsUsed:
           (user.monthlyCaptionGenerationsUsed || 0) + 1,
-      });
+      } as Partial<User>);
     }
   };
 
@@ -3158,11 +3190,11 @@ const CaptionGenerator: React.FC = () => {
       }));
 
       if (user) {
-        setUser({
-          ...user,
+        await setUser({
+          id: user.id,
           monthlyCaptionGenerationsUsed:
             (user.monthlyCaptionGenerationsUsed || 0) + 1
-        });
+        } as Partial<User>);
       }
     } catch (err) {
       console.error(err);
@@ -4336,7 +4368,7 @@ const CaptionGenerator: React.FC = () => {
   );
 };
 
-type ComposeTab = 'captions';
+type ComposeTab = 'captions' | 'image' | 'video';
 
 const tabs: { id: ComposeTab; label: string; icon: React.ReactNode }[] = [
   { id: 'captions', label: 'Captions', icon: <CaptionIcon /> },
@@ -4439,20 +4471,22 @@ export const Compose: React.FC = () => {
     }
   };
 
-  const handleImageGeneration = () => {
-    if (user)
-      setUser({
-        ...user,
-        monthlyImageGenerationsUsed: user.monthlyImageGenerationsUsed + 1
-      });
+  const handleImageGeneration = async () => {
+    if (user) {
+      await setUser({
+        id: user.id,
+        monthlyImageGenerationsUsed: (user.monthlyImageGenerationsUsed || 0) + 1
+      } as Partial<User>);
+    }
   };
 
-  const handleVideoGeneration = () => {
-    if (user)
-      setUser({
-        ...user,
-        monthlyVideoGenerationsUsed: user.monthlyVideoGenerationsUsed + 1
-      });
+  const handleVideoGeneration = async () => {
+    if (user) {
+      await setUser({
+        id: user.id,
+        monthlyVideoGenerationsUsed: (user.monthlyVideoGenerationsUsed || 0) + 1
+      } as Partial<User>);
+    }
   };
 
   const renderTabContent = () => {

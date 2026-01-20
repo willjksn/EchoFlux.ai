@@ -158,6 +158,7 @@ export const Calendar: React.FC = () => {
                 status: 'Scheduled' as const,
                 reminderType: reminder.reminderType,
                 reminderDescription: reminder.description,
+                thumbnail: undefined, // Reminders don't have thumbnails
             }));
         }
         
@@ -354,6 +355,7 @@ export const Calendar: React.FC = () => {
             status: 'Scheduled' as const,
             reminderType: reminder.reminderType,
             reminderDescription: reminder.description,
+            thumbnail: undefined, // Reminders don't have thumbnails
         } as any));
         
         // Combine and sort by date
@@ -701,15 +703,15 @@ export const Calendar: React.FC = () => {
                                                             img.style.display = 'none';
                                                             // Try to show video element instead
                                                             const videoElement = img.parentElement?.querySelector('video') as HTMLVideoElement;
-                                                            if (videoElement && (associatedPost?.mediaUrl || (Array.isArray(associatedPost?.mediaUrls) ? associatedPost?.mediaUrls[0] : undefined) || evt.thumbnail)) {
+                                                            if (videoElement && (associatedPost?.mediaUrl || (Array.isArray(associatedPost?.mediaUrls) ? associatedPost?.mediaUrls[0] : undefined) || evt?.thumbnail)) {
                                                                 videoElement.style.display = 'block';
                                                             }
                                                         }}
                                                         loading="lazy"
                                                     />
-                                                ) : (associatedPost?.mediaUrl || (Array.isArray(associatedPost?.mediaUrls) ? associatedPost?.mediaUrls[0] : undefined) || evt.thumbnail) ? (
+                                                ) : (associatedPost?.mediaUrl || (Array.isArray(associatedPost?.mediaUrls) ? associatedPost?.mediaUrls[0] : undefined) || evt?.thumbnail) ? (
                                                     <video
-                                                        src={associatedPost?.mediaUrl || (Array.isArray(associatedPost?.mediaUrls) ? associatedPost?.mediaUrls[0] : undefined) || evt.thumbnail}
+                                                        src={associatedPost?.mediaUrl || (Array.isArray(associatedPost?.mediaUrls) ? associatedPost?.mediaUrls[0] : undefined) || evt?.thumbnail}
                                                         className="w-full h-10 rounded-md object-cover border border-gray-200 dark:border-gray-700"
                                                         muted
                                                         playsInline
@@ -729,7 +731,7 @@ export const Calendar: React.FC = () => {
                                                             const video = e.target as HTMLVideoElement;
                                                             video.style.display = 'none';
                                                             if (process.env.NODE_ENV === 'development') {
-                                                                console.warn('Failed to load calendar video thumbnail:', associatedPost?.mediaUrl || evt.thumbnail);
+                                                                console.warn('Failed to load calendar video thumbnail:', associatedPost?.mediaUrl || evt?.thumbnail);
                                                             }
                                                         }}
                                                         style={{ pointerEvents: 'none' }}
@@ -737,7 +739,7 @@ export const Calendar: React.FC = () => {
                                                 ) : null
                                             ) : (
                                                 <img
-                                                    src={associatedPost?.mediaUrl || (Array.isArray(associatedPost?.mediaUrls) ? associatedPost?.mediaUrls[0] : undefined) || evt.thumbnail}
+                                                    src={associatedPost?.mediaUrl || (Array.isArray(associatedPost?.mediaUrls) ? associatedPost?.mediaUrls[0] : undefined) || evt?.thumbnail}
                                                     alt="Preview"
                                                     className="w-full h-10 rounded-md object-cover border border-gray-200 dark:border-gray-700"
                                                     onError={(e) => {
@@ -746,7 +748,7 @@ export const Calendar: React.FC = () => {
                                                         img.style.display = 'none';
                                                         // Optionally log for debugging in production
                                                         if (process.env.NODE_ENV === 'development') {
-                                                            console.warn('Failed to load calendar thumbnail:', associatedPost?.mediaUrl || evt.thumbnail);
+                                                            console.warn('Failed to load calendar thumbnail:', associatedPost?.mediaUrl || evt?.thumbnail);
                                                         }
                                                     }}
                                                     loading="lazy"

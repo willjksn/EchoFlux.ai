@@ -740,6 +740,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const updatePost = async (post: Post) => {
     if (!user) return;
 
+    // Optimistically update local state so calendars refresh immediately
+    setPosts(prev => prev.map(p => (p.id === post.id ? { ...p, ...post } : p)));
+
     await setDoc(doc(db, "users", user.id, "posts", post.id), post, { merge: true }).catch(() =>
       showToast("Failed to update post", "error")
     );

@@ -212,12 +212,19 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
         return weeks;
     }, [currentDate]);
 
+    const toLocalDateKey = (value: Date) => {
+        const year = value.getFullYear();
+        const month = String(value.getMonth() + 1).padStart(2, '0');
+        const day = String(value.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
     // Get events for a specific date
     const getEventsForDate = (date: Date | null): CombinedEvent[] => {
         if (!date) return [];
-        const dateStr = date.toISOString().split('T')[0];
+        const dateStr = toLocalDateKey(date);
         return combinedEvents.filter(evt => {
-            const eventDateStr = new Date(evt.date).toISOString().split('T')[0];
+            const eventDateStr = toLocalDateKey(new Date(evt.date));
             return eventDateStr === dateStr;
         });
     };
@@ -244,7 +251,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
     // Handle date click to create reminder
     const handleDateClick = (date: Date) => {
         setSelectedDate(date);
-        const dateStr = date.toISOString().split('T')[0];
+        const dateStr = toLocalDateKey(date);
         setEventDate(dateStr);
         setEventTime('20:00'); // Default to 8 PM
         setIsCreatingReminder(true);
@@ -262,7 +269,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
             setEventReminderType(reminder.reminderType);
             setEventContentType(reminder.contentType);
             setEventCustomStatus(reminder.customStatus || 'ordered');
-            setEventDate(new Date(reminder.date).toISOString().split('T')[0]);
+            setEventDate(toLocalDateKey(new Date(reminder.date)));
             setEventTime(reminder.reminderTime || '20:00');
             setSelectedFanId(reminder.fanId || null);
             setSelectedFanName(reminder.fanName || null);
@@ -270,7 +277,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
         } else {
             // Open post modal
             const eventDate = new Date(event.date);
-            const dateStr = eventDate.toISOString().split('T')[0];
+            const dateStr = toLocalDateKey(eventDate);
             const timeStr = eventDate.toTimeString().slice(0, 5);
             
             setEditDate(dateStr);
@@ -320,6 +327,13 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
             };
 
             await setDoc(doc(db, 'users', user.id, 'onlyfans_calendar_events', reminderId), eventData);
+
+            // Optimistic local update to ensure it appears immediately
+            setReminders(prev => {
+                const next = prev.filter(r => r.id !== reminderId);
+                const updated = [{ id: reminderId, ...eventData } as OnlyFansCalendarEvent, ...next];
+                return updated.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            });
 
             showToast(selectedEvent?.reminder ? 'Reminder updated!' : 'Reminder created!', 'success');
             
@@ -1138,7 +1152,7 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                 setIsEditing(false);
                                                 setIsRegenerating(false);
                                                 const eventDate = new Date(selectedEvent.date);
-                                                const dateStr = eventDate.toISOString().split('T')[0];
+                                                const dateStr = toLocalDateKey(eventDate);
                                                 const timeStr = eventDate.toTimeString().slice(0, 5);
                                                 setEditDate(dateStr);
                                                 setEditTime(timeStr);
