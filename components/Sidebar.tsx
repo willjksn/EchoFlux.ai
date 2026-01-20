@@ -131,6 +131,7 @@ export const Sidebar: React.FC = () => {
 
 
   const secondaryNavItems: Array<{ page: Page; label: string }> = [
+      { page: 'freeResources', label: 'Free Resources' },
       { page: 'about', label: 'About Us' },
       { page: 'contact', label: 'Contact Us' },
       { page: 'faq', label: 'FAQs' },

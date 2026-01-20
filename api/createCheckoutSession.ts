@@ -184,7 +184,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(401).json({ error: 'Unauthorized', message: authError.message || 'Authentication failed' });
     }
 
-    const { planName, billingCycle } = req.body;
+    const { planName, billingCycle, referralCode } = req.body;
 
     if (!planName || !billingCycle) {
       return res.status(400).json({ error: 'Plan name and billing cycle are required' });
@@ -257,6 +257,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           planName,
           billingCycle,
           userId: decodedToken.uid,
+          ...(referralCode ? { referralCode: referralCode.toUpperCase() } : {}),
         },
       },
       metadata: {
@@ -264,6 +265,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         planName,
         billingCycle,
         userType: 'Creator', // Default to Creator for now
+        ...(referralCode ? { referralCode: referralCode.toUpperCase() } : {}),
       },
       success_url: `${req.headers.origin || process.env.NEXT_PUBLIC_APP_URL || 'https://engagesuite.ai'}/dashboard?payment=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${req.headers.origin || process.env.NEXT_PUBLIC_APP_URL || 'https://engagesuite.ai'}/pricing?canceled=true`,

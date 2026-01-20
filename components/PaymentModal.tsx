@@ -341,6 +341,7 @@ export const PaymentModal: React.FC = () => {
                 body: JSON.stringify({
                     planName: paymentPlan.name,
                     billingCycle: paymentPlan.cycle,
+                    referralCode: typeof window !== 'undefined' ? localStorage.getItem('referralCode') : null,
                     // Promotional codes can be entered directly in Stripe Checkout
                     // Stripe's allow_promotion_codes: true enables this feature
                 }),

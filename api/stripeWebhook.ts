@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import { getFirestore } from 'firebase-admin/firestore';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { recordPlanChangeEvent } from './_planChangeEvents.js';
+import { grantReferralRewardOnConversion } from './_grantReferralReward.js';
 
 // Initialize Firebase Admin if not already initialized
 if (!getApps().length) {
@@ -134,6 +135,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               }
             }
 
+            // Grant referral reward if applicable (Elite plan conversions)
+            const referralCode = session.metadata?.referralCode || subscription.metadata?.referralCode;
+            if (referralCode && planName === 'Elite') {
+              try {
+                await grantReferralRewardOnConversion(userId, planName, referralCode);
+              } catch (err) {
+                console.warn('Failed to grant referral reward from webhook:', err);
+              }
+            }
+
             console.log(`Subscription created for user ${userId}: ${planName}`);
           }
         }
@@ -218,6 +229,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         if (!usersSnapshot.empty) {
           const userDoc = usersSnapshot.docs[0];
+          const userData = userDoc.data();
+          const planName = userData?.plan || 'Free';
           
           // Reset usage counters on successful payment
           // Clear trial end date if this is the first payment after trial
@@ -228,6 +241,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             lastPaymentDate: new Date().toISOString(),
             trialEndDate: null, // Clear trial end date after first payment
           }, { merge: true });
+
+          // Check for referral code and grant reward if this is the first payment after trial
+          // (This handles cases where referral wasn't processed during checkout.session.completed)
+          const subscriptionId = userData?.stripeSubscriptionId;
+          if (subscriptionId && planName === 'Elite') {
+            try {
+              const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+              const referralCode = subscription.metadata?.referralCode;
+              
+              if (referralCode) {
+                // Check if reward was already granted
+                const referralSnapshot = await db.collection('referrals')
+                  .where('refereeId', '==', userDoc.id)
+                  .where('rewardStatus', '==', 'granted')
+                  .limit(1)
+                  .get();
+                
+                if (referralSnapshot.empty) {
+                  // Reward not yet granted, grant it now
+                  await grantReferralRewardOnConversion(userDoc.id, planName, referralCode);
+                }
+              }
+            } catch (err) {
+              console.warn('Failed to check/grant referral reward on payment:', err);
+            }
+          }
 
           console.log(`Payment succeeded for user ${userDoc.id}`);
         }
