@@ -350,14 +350,82 @@ export const OnlyFansStudio: React.FC = () => {
             });
             setRecentFanActivity(recentActivity.slice(0, 3));
 
-            // VIP fans needing attention (inactive > 7 days)
-            const vipNeedingAttention = vipFans.filter(f => {
-                if (!f.preferences.lastSessionDate) return true;
-                const lastSession = new Date(f.preferences.lastSessionDate).getTime();
-                const daysSince = (now - lastSession) / (1000 * 60 * 60 * 24);
-                return daysSince > 7;
-            }).slice(0, 5);
-            setVipFansNeedingAttention(vipNeedingAttention);
+            // Whales & VIPs to message - from reminders and other identification methods
+            const whalesAndVips: any[] = [];
+            
+            // 1. Get Whales (big spenders) and VIPs from fan list
+            const allWhalesAndVips = fansList.filter(f => 
+                f.preferences.isVIP === true || 
+                f.preferences.isBigSpender === true || 
+                (f.preferences.spendingLevel || 0) >= 4
+            );
+            
+            // 2. Find reminders for these fans from onlyfans_calendar_events
+            try {
+                const remindersSnap = await getDocs(query(
+                    collection(db, 'users', user.id, 'onlyfans_calendar_events'),
+                    orderBy('date', 'asc')
+                ));
+                
+                const reminderMap = new Map<string, any>();
+                remindersSnap.docs.forEach(d => {
+                    const data = d.data();
+                    const fanId = data.fanId;
+                    if (fanId) {
+                        const existing = reminderMap.get(fanId);
+                        if (!existing || (data.date?.toDate ? data.date.toDate() : new Date(data.date)) < (existing.date?.toDate ? existing.date.toDate() : new Date(existing.date))) {
+                            reminderMap.set(fanId, { ...data, id: d.id });
+                        }
+                    }
+                });
+                
+                // 3. Match fans with reminders and identify who needs attention
+                allWhalesAndVips.forEach(fan => {
+                    const reminder = reminderMap.get(fan.id);
+                    const hasReminder = !!reminder;
+                    
+                    // Include if:
+                    // - Has a reminder (from calendar events)
+                    // - OR is inactive > 7 days (fallback identification)
+                    const shouldInclude = hasReminder || (() => {
+                        if (!fan.preferences.lastSessionDate) return true;
+                        const lastSession = new Date(fan.preferences.lastSessionDate).getTime();
+                        const daysSince = (now - lastSession) / (1000 * 60 * 60 * 24);
+                        return daysSince > 7;
+                    })();
+                    
+                    if (shouldInclude) {
+                        whalesAndVips.push({
+                            ...fan,
+                            hasReminder,
+                            reminderDate: reminder?.date,
+                            reminderTitle: reminder?.title
+                        });
+                    }
+                });
+                
+                // Sort by: has reminder first, then by last session date (most inactive first)
+                whalesAndVips.sort((a, b) => {
+                    if (a.hasReminder && !b.hasReminder) return -1;
+                    if (!a.hasReminder && b.hasReminder) return 1;
+                    
+                    const dateA = a.preferences.lastSessionDate ? new Date(a.preferences.lastSessionDate).getTime() : 0;
+                    const dateB = b.preferences.lastSessionDate ? new Date(b.preferences.lastSessionDate).getTime() : 0;
+                    return dateB - dateA; // Most inactive first
+                });
+            } catch (e) {
+                console.warn('Error loading reminders for Whales & VIPs:', e);
+                // Fallback to old logic if reminders fail
+                const fallback = allWhalesAndVips.filter(f => {
+                    if (!f.preferences.lastSessionDate) return true;
+                    const lastSession = new Date(f.preferences.lastSessionDate).getTime();
+                    const daysSince = (now - lastSession) / (1000 * 60 * 60 * 24);
+                    return daysSince > 7;
+                });
+                whalesAndVips.push(...fallback);
+            }
+            
+            setVipFansNeedingAttention(whalesAndVips.slice(0, 5));
 
         } catch (error) {
             console.error('Error loading fan data:', error);
@@ -1445,7 +1513,7 @@ export const OnlyFansStudio: React.FC = () => {
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                                 <span className="text-yellow-600 dark:text-yellow-400">👑</span>
-                                VIPs to message
+                                Whales & VIPs to Message
                             </h3>
                             {isLoadingFanData ? (
                                 <p className="text-sm text-gray-500 dark:text-gray-400">Loading...</p>
@@ -1455,16 +1523,48 @@ export const OnlyFansStudio: React.FC = () => {
                                         const daysSince = fan.preferences.lastSessionDate 
                                             ? Math.floor((Date.now() - new Date(fan.preferences.lastSessionDate).getTime()) / (1000 * 60 * 60 * 24))
                                             : null;
+                                        
+                                        // Determine fan type label
+                                        const isWhale = fan.preferences.isBigSpender || (fan.preferences.spendingLevel || 0) >= 4;
+                                        const isVIP = fan.preferences.isVIP === true;
+                                        const fanTypeLabel = isWhale && isVIP ? 'Whale & VIP' : isWhale ? 'Whale' : 'VIP';
+                                        
+                                        // Check if reminder date is upcoming
+                                        let reminderInfo = null;
+                                        if (fan.hasReminder && fan.reminderDate) {
+                                            const reminderDate = fan.reminderDate?.toDate ? fan.reminderDate.toDate() : new Date(fan.reminderDate);
+                                            const daysUntil = Math.floor((reminderDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                                            if (daysUntil >= 0) {
+                                                reminderInfo = daysUntil === 0 ? 'Today' : daysUntil === 1 ? 'Tomorrow' : `In ${daysUntil} days`;
+                                            }
+                                        }
+                                        
                                         return (
                                             <div key={fan.id} className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
                                                 <div className="flex items-start justify-between">
                                                     <div className="flex-1 min-w-0">
-                                                        <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                                                            {fan.name}
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                                                {fan.name}
+                                                            </div>
+                                                            <span className="text-xs px-1.5 py-0.5 bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 rounded">
+                                                                {fanTypeLabel}
+                                                            </span>
                                                         </div>
-                                                        {daysSince !== null && (
+                                                        {fan.hasReminder && reminderInfo && (
+                                                            <div className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
+                                                                📅 Reminder: {reminderInfo}
+                                                                {fan.reminderTitle && ` - ${fan.reminderTitle}`}
+                                                            </div>
+                                                        )}
+                                                        {!fan.hasReminder && daysSince !== null && (
                                                             <div className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
                                                                 {daysSince} days inactive
+                                                            </div>
+                                                        )}
+                                                        {!fan.hasReminder && daysSince === null && (
+                                                            <div className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
+                                                                Needs attention
                                                             </div>
                                                         )}
                                                     </div>
@@ -1483,7 +1583,7 @@ export const OnlyFansStudio: React.FC = () => {
                                     })}
                                 </div>
                             ) : (
-                                <p className="text-sm text-gray-500 dark:text-gray-400">VIPs are active this week 🎉</p>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Whales & VIPs are active this week 🎉</p>
                             )}
                             <button
                                 onClick={() => setActiveView('fans')}
