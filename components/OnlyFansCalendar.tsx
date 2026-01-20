@@ -315,15 +315,15 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
             
             const eventData: Omit<OnlyFansCalendarEvent, 'id'> = {
                 title: eventTitle.trim(),
-                description: eventDescription.trim() || undefined,
                 date: dateTime.toISOString(),
                 reminderType: eventReminderType,
                 contentType: eventContentType,
-                reminderTime: eventTime || undefined,
                 createdAt: selectedEvent?.reminder?.createdAt || new Date().toISOString(),
                 userId: user.id,
+                ...(eventDescription.trim() ? { description: eventDescription.trim() } : {}),
+                ...(eventTime ? { reminderTime: eventTime } : {}),
                 ...(eventContentType === 'custom' ? { customStatus: eventCustomStatus } : {}),
-                ...(selectedFanId ? { fanId: selectedFanId, fanName: selectedFanName ?? undefined } : {}),
+                ...(selectedFanId ? { fanId: selectedFanId, ...(selectedFanName ? { fanName: selectedFanName } : {}) } : {}),
             };
 
             await setDoc(doc(db, 'users', user.id, 'onlyfans_calendar_events', reminderId), eventData);

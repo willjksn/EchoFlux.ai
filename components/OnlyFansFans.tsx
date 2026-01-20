@@ -513,11 +513,11 @@ export const OnlyFansFans: React.FC = () => {
                 date: dateTime.toISOString(),
                 reminderType: 'post' as const,
                 contentType: 'paid' as const,
-                reminderTime: sessionTime,
                 createdAt: new Date().toISOString(),
                 userId: user.id,
                 fanId: sessionFan.id,
                 fanName: sessionFan.name,
+                ...(sessionTime ? { reminderTime: sessionTime } : {}),
             };
 
             await setDoc(doc(db, 'users', user.id, 'onlyfans_calendar_events', eventId), eventData);

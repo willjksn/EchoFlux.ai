@@ -327,10 +327,10 @@ export const OnlyFansExportHub: React.FC = () => {
                         reminderType: 'post', // Export packages are post reminders
                         contentType: 'free', // Default to free, user can change in calendar
                         description: `Post pack with ${mediaUrls.length || 0} media file(s). ${teaserCaptions.length > 0 ? `Includes ${teaserCaptions.length} promo captions.` : ''}`,
-                        reminderTime: scheduledTime || undefined,
                         createdAt: new Date().toISOString(),
                         userId: user.id,
-                        ...(selectedFanId ? { fanId: selectedFanId, fanName: selectedFanName } : {}),
+                        ...(scheduledTime ? { reminderTime: scheduledTime } : {}),
+                        ...(selectedFanId ? { fanId: selectedFanId, ...(selectedFanName ? { fanName: selectedFanName } : {}) } : {}),
                     };
                     await setDoc(doc(db, 'users', user.id, 'onlyfans_calendar_events', onlyFansEventId), onlyFansEvent);
                 } catch (calendarError) {

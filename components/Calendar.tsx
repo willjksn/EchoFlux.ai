@@ -1019,12 +1019,12 @@ export const Calendar: React.FC = () => {
             
             const reminderData = {
                 title: reminderTitle.trim(),
-                description: reminderDescription.trim() || undefined,
                 date: dateTime.toISOString(),
                 reminderType: reminderType,
-                reminderTime: reminderTime || undefined,
                 createdAt: selectedReminder?.createdAt || new Date().toISOString(),
                 userId: user.id,
+                ...(reminderDescription.trim() ? { description: reminderDescription.trim() } : {}),
+                ...(reminderTime ? { reminderTime: reminderTime } : {}),
             };
 
             await setDoc(doc(db, 'users', user.id, 'calendar_events', reminderId), reminderData);

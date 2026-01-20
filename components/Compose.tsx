@@ -4506,13 +4506,13 @@ export const Compose: React.FC = () => {
     switch (activeTab) {
       case 'captions':
         return <CaptionGenerator />;
-    case 'image':
+      case 'image':
         return (
           <div className="p-6 text-center text-gray-500 dark:text-gray-400">
             Image generation is temporarily disabled while we focus on stability.
           </div>
         );
-    case 'video':
+      case 'video':
         return (
           <div className="p-6 text-center text-gray-500 dark:text-gray-400">
             Video generation is temporarily disabled while we focus on stability.
