@@ -296,7 +296,11 @@ const AppContent: React.FC = () => {
 
     // Sync URL with active page for direct access (e.g., /privacy, /terms)
     // Only sync from URL to activePage on initial load or browser navigation (back/forward)
+    // NOTE: For authenticated users, UIContext handles URL syncing, so we only do this for unauthenticated users
     useEffect(() => {
+        // Skip URL syncing for authenticated users - UIContext handles it
+        if (isAuthenticated) return;
+        
         const syncUrlToPage = () => {
             const path = window.location.pathname;
             const hash = window.location.hash.replace('#', '');
@@ -315,7 +319,7 @@ const AppContent: React.FC = () => {
             // Check if URL path matches a page
             // When not authenticated, about/contact are handled by LandingPage modals, so skip URL routing for them
             if (path !== '/' && urlToPage[path]) {
-                if (!isAuthenticated && (path === '/about' || path === '/contact')) {
+                if (path === '/about' || path === '/contact') {
                     // Don't set activePage for about/contact when not authenticated - they're modals
                     return;
                 }
@@ -323,7 +327,7 @@ const AppContent: React.FC = () => {
                 setActivePage(pageFromUrl);
             } else if (hash && urlToPage[`/${hash}`]) {
                 // Support hash-based routing too
-                if (!isAuthenticated && (hash === 'about' || hash === 'contact')) {
+                if (hash === 'about' || hash === 'contact') {
                     // Don't set activePage for about/contact when not authenticated - they're modals
                     return;
                 }
@@ -344,7 +348,12 @@ const AppContent: React.FC = () => {
     }, [isAuthenticated, setActivePage]); // Only run when auth state changes, not when activePage changes
 
     // Update URL when page changes (for privacy policy, terms, etc.)
+    // NOTE: For authenticated users, UIContext handles URL syncing, so we only do this for unauthenticated users
+    // or for pages that UIContext doesn't handle (public pages)
     useEffect(() => {
+        // Skip URL syncing for authenticated users - UIContext handles it
+        if (isAuthenticated) return;
+        
         const pageToPath: Partial<Record<Page, string>> = {
             privacy: '/privacy',
             terms: '/terms',
@@ -359,7 +368,7 @@ const AppContent: React.FC = () => {
         if (path && window.location.pathname !== path) {
             window.history.pushState({}, '', path);
         }
-    }, [activePage]);
+    }, [activePage, isAuthenticated]);
 
     useEffect(() => {
         // Capture referral code from URL (e.g., ?ref=CODE)
