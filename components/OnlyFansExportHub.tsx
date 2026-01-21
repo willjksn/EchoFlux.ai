@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAppContext } from './AppContext';
 import { DownloadIcon, XMarkIcon, PlusIcon, ClockIcon, FileIcon, ImageIcon, VideoIcon, SparklesIcon, FolderIcon, CopyIcon, CheckCircleIcon } from './icons/UIIcons';
 import { auth, db } from '../firebaseConfig';
-import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, Timestamp, setDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, Timestamp, setDoc, limit } from 'firebase/firestore';
 import { OnlyFansCalendarEvent } from './OnlyFansCalendar';
 import { FanSelector } from './FanSelector';
 
@@ -52,7 +52,13 @@ export const OnlyFansExportHub: React.FC = () => {
     const [selectedFanName, setSelectedFanName] = useState<string | null>(null);
     const [contentBrainHistory, setContentBrainHistory] = useState<any[]>([]);
 
-    const getLatestHistoryItem = (type: string) => contentBrainHistory.find(item => item.type === type);
+    const getLatestHistoryItem = (type: string) => {
+        const item = contentBrainHistory.find(item => item.type === type);
+        if (!item) {
+            console.log(`No history item found for type: ${type}. Available types:`, contentBrainHistory.map(i => i.type));
+        }
+        return item;
+    };
 
     // Load media from Media Vault
     useEffect(() => {
@@ -428,7 +434,7 @@ export const OnlyFansExportHub: React.FC = () => {
             
             exportContent += `${'='.repeat(50)}\n\n`;
             exportContent += `UPLOAD CHECKLIST:\n`;
-            exportContent += `□ Review caption and ensure it meets OnlyFans guidelines\n`;
+            exportContent += `□ Review caption and ensure it meets OnlyFans, Fansly, and Fanvue guidelines\n`;
             exportContent += `□ Upload ${pkg.mediaUrls?.length || 0} media file(s)\n`;
             exportContent += `□ Paste the caption\n`;
             exportContent += `□ Set post time to: ${pkg.suggestedTime || 'Your preferred time'}\n`;
@@ -551,9 +557,12 @@ export const OnlyFansExportHub: React.FC = () => {
 
                     {/* Quick Import from Content Ideas */}
                     <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                             <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
                                 Import from Content Ideas
+                            </span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                                (Generate ideas in Content Ideas first)
                             </span>
                         </div>
                         <div className="flex flex-wrap gap-2">
@@ -561,15 +570,17 @@ export const OnlyFansExportHub: React.FC = () => {
                                 onClick={() => {
                                     const item = getLatestHistoryItem('post_ideas');
                                     if (!item?.data?.ideas?.length) {
-                                        showToast('No saved post ideas yet', 'info');
+                                        showToast('No saved post ideas yet. Generate some in Content Ideas first!', 'info');
                                         return;
                                     }
                                     const ideas = item.data.ideas as string[];
                                     const ideasText = ideas.map((idea) => `- ${idea}`).join('\n');
                                     setCaption((prev) => prev.trim() ? `${prev}\n\n${ideasText}` : ideas[0]);
                                     setChecklist((prev) => prev.trim() ? `${prev}\n\nPost ideas:\n${ideasText}` : `Post ideas:\n${ideasText}`);
+                                    showToast(`Imported ${ideas.length} post idea${ideas.length > 1 ? 's' : ''} from Content Ideas!`, 'success');
                                 }}
                                 className="px-3 py-2 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600"
+                                title="Import your most recently generated post ideas from Content Ideas"
                             >
                                 Use last Post Ideas
                             </button>
@@ -623,6 +634,9 @@ export const OnlyFansExportHub: React.FC = () => {
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 Hashtags:
+                                <span className="ml-2 text-xs text-gray-500 dark:text-gray-400 font-normal">
+                                    (Optional - for teaser posts on Instagram, X, TikTok)
+                                </span>
                             </label>
                             <textarea
                                 value={hashtags}
@@ -630,10 +644,16 @@ export const OnlyFansExportHub: React.FC = () => {
                                 placeholder="#teaser #ppv #exclusive"
                                 className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[80px] text-sm"
                             />
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                Use hashtags for teaser posts on social media to drive traffic to your OnlyFans, Fansly, or Fanvue page.
+                            </p>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 PPV Text:
+                                <span className="ml-2 text-xs text-gray-500 dark:text-gray-400 font-normal">
+                                    (Optional - unlock message for paid content)
+                                </span>
                             </label>
                             <textarea
                                 value={ppvText}
@@ -641,10 +661,16 @@ export const OnlyFansExportHub: React.FC = () => {
                                 placeholder="Drop text for PPV unlock"
                                 className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[80px] text-sm"
                             />
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                The message you'll send when fans unlock paid content. Use this to upsell or describe what they're getting.
+                            </p>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 DM Scripts:
+                                <span className="ml-2 text-xs text-gray-500 dark:text-gray-400 font-normal">
+                                    (Optional - messaging templates)
+                                </span>
                             </label>
                             <textarea
                                 value={dmScripts}
@@ -652,10 +678,16 @@ export const OnlyFansExportHub: React.FC = () => {
                                 placeholder="Paste your DM flow or scripts"
                                 className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[120px] text-sm"
                             />
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                Pre-written messages to send to fans. Useful for welcome messages, upsells, or engagement scripts.
+                            </p>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 Checklist:
+                                <span className="ml-2 text-xs text-gray-500 dark:text-gray-400 font-normal">
+                                    (Optional - post reminders)
+                                </span>
                             </label>
                             <textarea
                                 value={checklist}
@@ -663,6 +695,9 @@ export const OnlyFansExportHub: React.FC = () => {
                                 placeholder="What to post + where"
                                 className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[120px] text-sm"
                             />
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                Your personal checklist for this post pack. Note what to post, where, and any reminders.
+                            </p>
                         </div>
                     </div>
 

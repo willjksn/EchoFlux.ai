@@ -802,16 +802,7 @@ export const Calendar: React.FC = () => {
                     <button 
                         onClick={(e) => { 
                             e.stopPropagation(); 
-                            // Get the day from the button's data attribute to ensure correct value
-                            const button = e.currentTarget;
-                            const dayValue = parseInt(button.getAttribute('data-day') || '0', 10);
-                            const year = parseInt(button.getAttribute('data-year') || '0', 10);
-                            const month = parseInt(button.getAttribute('data-month') || '0', 10);
-                            
-                            // Pass the selected date to compose page via localStorage
-                            const dateStr = new Date(year, month, dayValue).toISOString().split('T')[0];
-                            console.log('Calendar plus button clicked:', { dayValue, year, month, dateStr }); // Debug log
-                            localStorage.setItem('composeScheduledDate', dateStr);
+                            // Just navigate to compose - don't prefill date
                             setActivePage('compose'); 
                         }} 
                         data-day={currentDay}

@@ -27,7 +27,7 @@ export const OnlyFansGuides: React.FC = () => {
             content: [
                 'Organize your media in My Vault with clear tags',
                 'Use AI tagging to help organize content by outfits, poses, and vibes',
-                'Ensure content meets OnlyFans guidelines (no prohibited content)',
+                'Ensure content meets OnlyFans, Fansly, and Fanvue guidelines (no prohibited content)',
                 'Check image/video quality and resolution',
             ],
         },
@@ -41,9 +41,9 @@ export const OnlyFansGuides: React.FC = () => {
             ],
         },
         {
-            title: 'Step 3: Upload to OnlyFans',
+            title: 'Step 3: Upload to Your Platform',
             content: [
-                'Log into your OnlyFans account',
+                'Log into your OnlyFans, Fansly, or Fanvue account',
                 'Navigate to the "Posts" section',
                 'Click "Create Post" or "Add Media"',
                 'Select your prepared media files',
@@ -199,8 +199,8 @@ export const OnlyFansGuides: React.FC = () => {
         {
             category: 'Legal & Safety',
             practices: [
-                'Follow OnlyFans terms of service and community guidelines',
-                'Verify subscriber age (OnlyFans handles this, but be aware)',
+                'Follow OnlyFans, Fansly, and Fanvue terms of service and community guidelines',
+                'Verify subscriber age (platforms handle this, but be aware)',
                 'Protect your personal information',
                 'Watermark your content to prevent unauthorized sharing',
                 'Use secure payment methods',
@@ -473,7 +473,7 @@ export const OnlyFansGuides: React.FC = () => {
                                 Best Practices for Success
                             </h2>
                             <p className="text-gray-600 dark:text-gray-400 mb-6">
-                                Follow these best practices to build a successful OnlyFans presence.
+                                Follow these best practices to build a successful presence on OnlyFans, Fansly, and Fanvue.
                             </p>
                         </div>
                         {bestPractices.map((category, index) => (

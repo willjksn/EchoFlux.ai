@@ -1578,7 +1578,18 @@ ${contextLines || 'None'}
             const day = String(date.getDate()).padStart(2, '0');
             const hours = String(date.getHours()).padStart(2, '0');
             const minutes = String(date.getMinutes()).padStart(2, '0');
-            return `${year}-${month}-${day}T${hours}:${minutes}`;
+            const formatted = `${year}-${month}-${day}T${hours}:${minutes}`;
+            console.log('MediaBox: Formatting date for input:', {
+              scheduledDate: mediaItem.scheduledDate,
+              dateObject: date.toString(),
+              year,
+              month,
+              day,
+              hours,
+              minutes,
+              formatted
+            });
+            return formatted;
           })() : ''}
           onChange={(e) => {
             if (user?.plan === 'Free') {

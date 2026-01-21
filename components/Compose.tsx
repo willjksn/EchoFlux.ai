@@ -440,10 +440,9 @@ const CaptionGenerator: React.FC = () => {
     if (composeContext?.platform) {
       setSelectedPlatforms(prev => ({ ...prev, [composeContext.platform!]: true }));
     }
-    if (composeContext?.date) {
-      setIsScheduling(true);
-      setScheduleDate(new Date(composeContext.date).toISOString().slice(0, 16));
-    }
+    // Removed date prefill - users will set date manually if needed
+    // Clear any pending scheduled date ref
+    pendingScheduleDateRef.current = null;
     if (composeContext?.captionText) {
       // Pre-fill caption text from opportunity
       setComposeState(prev => ({
@@ -455,53 +454,7 @@ const CaptionGenerator: React.FC = () => {
       // Hashtags are available - they'll be used when generating captions
     }
     
-    // Check for scheduled date from Calendar (via localStorage)
-    const composeScheduledDate = localStorage.getItem('composeScheduledDate');
-    if (composeScheduledDate) {
-      // Store for the next media item schedule picker (MediaBox)
-      // Use local timezone to avoid date shifting issues
-      const [year, month, day] = composeScheduledDate.split('-').map(Number);
-      const localDate = new Date(year, month - 1, day, 12, 0, 0); // month is 0-indexed
-      const pendingIso = localDate.toISOString();
-      
-      console.log('Compose: Reading scheduled date from localStorage:', {
-        composeScheduledDate,
-        year,
-        month,
-        day,
-        localDate: localDate.toString(),
-        pendingIso,
-        dateString: localDate.toISOString().slice(0, 16)
-      });
-      
-      pendingScheduleDateRef.current = pendingIso;
-
-      // If no media items yet, add an empty box with the schedule prefilled
-      if (!hasAppliedPendingScheduleRef.current && composeState.mediaItems.length === 0) {
-        hasAppliedPendingScheduleRef.current = true;
-        setComposeState(prev => ({
-          ...prev,
-          mediaItems: [
-            {
-              id: Date.now().toString(),
-              previewUrl: '',
-              data: '',
-              mimeType: '',
-              type: 'image',
-              results: [],
-              captionText: '',
-              scheduledDate: pendingIso,
-              postGoal: prev.postGoal,
-              postTone: prev.postTone,
-              selectedPlatforms: { ...emptyPlatforms },
-            },
-          ],
-        }));
-        console.log('Compose: Created mediaItem with scheduledDate:', pendingIso);
-      }
-
-      localStorage.removeItem('composeScheduledDate'); // Clear after use
-    }
+    // Removed date prefill logic - users will set date manually if needed
   }, [composeContext, composeState.mediaItems.length, setComposeState]);
 
   useEffect(() => {
@@ -724,7 +677,9 @@ const CaptionGenerator: React.FC = () => {
     };
     
     // Check immediately when component mounts (if on compose page)
+    // Clear pending scheduled date ref when navigating to compose
     if (activePage === 'compose') {
+      pendingScheduleDateRef.current = null;
       checkForDraft();
     }
     
@@ -911,10 +866,7 @@ const CaptionGenerator: React.FC = () => {
           const mediaData = JSON.parse(pendingMedia);
           
           // Use functional update to check for duplicates with latest state
-          const pendingScheduledDate = pendingScheduleDateRef.current;
-          if (pendingScheduledDate) {
-            pendingScheduleDateRef.current = null;
-          }
+          // Don't use pendingScheduleDateRef - no date prefill
           setComposeState(prev => {
             // Check if this media is already added (prevent duplicates)
             const alreadyExists = prev.mediaItems.some(
@@ -930,7 +882,7 @@ const CaptionGenerator: React.FC = () => {
                 type: mediaData.type,
                 results: [],
                 captionText: '',
-                scheduledDate: pendingScheduledDate || undefined,
+                scheduledDate: undefined,
                 postGoal: prev.postGoal,
                 postTone: prev.postTone,
                 selectedPlatforms: { ...emptyPlatforms },
@@ -994,10 +946,7 @@ const CaptionGenerator: React.FC = () => {
 
   // Batch upload handlers
   const handleAddMediaBox = () => {
-    const pendingScheduledDate = pendingScheduleDateRef.current;
-    if (pendingScheduledDate) {
-      pendingScheduleDateRef.current = null;
-    }
+    // Don't use pendingScheduleDateRef - no date prefill
     const newMediaItem: MediaItemState = {
       id: Date.now().toString(),
       previewUrl: '',
@@ -1006,7 +955,7 @@ const CaptionGenerator: React.FC = () => {
       type: 'image',
       results: [],
       captionText: '',
-      scheduledDate: pendingScheduledDate || undefined,
+      scheduledDate: undefined,
       postGoal: composeState.postGoal,
       postTone: composeState.postTone,
       selectedPlatforms: { ...emptyPlatforms },
