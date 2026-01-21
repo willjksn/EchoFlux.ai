@@ -474,8 +474,9 @@ const AppContent: React.FC = () => {
                     
                     // Use setTimeout to ensure openPaymentModal is ready and UI is rendered
                     setTimeout(() => {
-                        if (openPaymentModal) {
-                            openPaymentModal(planData);
+                        const openModal = openPaymentModal;
+                        if (openModal && typeof openModal === 'function') {
+                            openModal(planData);
                             // Clear checkout transition flag after modal opens
                             try {
                                 localStorage.removeItem('checkoutTransition');
@@ -483,8 +484,9 @@ const AppContent: React.FC = () => {
                         } else {
                             // Retry once more if openPaymentModal wasn't ready
                             setTimeout(() => {
-                                if (openPaymentModal) {
-                                    openPaymentModal(planData);
+                                const retryOpenModal = openPaymentModal;
+                                if (retryOpenModal && typeof retryOpenModal === 'function') {
+                                    retryOpenModal(planData);
                                     try {
                                         localStorage.removeItem('checkoutTransition');
                                     } catch {}
