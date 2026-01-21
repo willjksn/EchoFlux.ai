@@ -459,7 +459,21 @@ const CaptionGenerator: React.FC = () => {
     const composeScheduledDate = localStorage.getItem('composeScheduledDate');
     if (composeScheduledDate) {
       // Store for the next media item schedule picker (MediaBox)
-      const pendingIso = new Date(`${composeScheduledDate}T12:00`).toISOString();
+      // Use local timezone to avoid date shifting issues
+      const [year, month, day] = composeScheduledDate.split('-').map(Number);
+      const localDate = new Date(year, month - 1, day, 12, 0, 0); // month is 0-indexed
+      const pendingIso = localDate.toISOString();
+      
+      console.log('Compose: Reading scheduled date from localStorage:', {
+        composeScheduledDate,
+        year,
+        month,
+        day,
+        localDate: localDate.toString(),
+        pendingIso,
+        dateString: localDate.toISOString().slice(0, 16) // For date input
+      });
+      
       pendingScheduleDateRef.current = pendingIso;
 
       // If no media items yet, add an empty box with the schedule prefilled
@@ -483,6 +497,7 @@ const CaptionGenerator: React.FC = () => {
             },
           ],
         }));
+        console.log('Compose: Created mediaItem with scheduledDate:', pendingIso);
       }
 
       localStorage.removeItem('composeScheduledDate'); // Clear after use
