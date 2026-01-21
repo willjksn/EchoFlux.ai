@@ -51,7 +51,6 @@ import { BioPageView } from './components/BioPageView';
 import { ResetPassword } from './components/ResetPassword';
 import { InviteRequiredPage } from './components/InviteRequiredPage';
 import { isInviteOnlyMode } from './src/utils/inviteOnly';
-import { FreeResources } from './components/FreeResources';
 import { lazy, Suspense } from 'react';
 
 // Lazy load heavy components for code splitting
@@ -87,7 +86,6 @@ const pageTitles: Record<Page, string> = {
     autopilot: 'AI Autopilot',
     onlyfansStudio: 'Premium Content Studio',
     emailCenter: 'Email Center',
-    freeResources: 'Free Resources',
 };
 
 const MainContent: React.FC = () => {
@@ -159,7 +157,6 @@ const MainContent: React.FC = () => {
                 </Suspense>
             );
             case 'emailCenter': return <EmailCenterPage />;
-            case 'freeResources': return <FreeResources />;
             default: return <Dashboard />;
         }
     } catch (error: any) {
@@ -187,7 +184,7 @@ const AppContent: React.FC = () => {
     const pathname = window.location.pathname;
     
     // Exclude known app routes and API routes to avoid conflicts
-    const knownRoutes = ['/', '/dashboard', '/inbox', '/analytics', '/settings', '/compose', '/calendar', '/drafts', '/approvals', '/team', '/opportunities', '/profile', '/about', '/contact', '/pricing', '/clients', '/faq', '/terms', '/privacy', '/dataDeletion', '/admin', '/automation', '/bio', '/strategy', '/ads', '/mediaLibrary', '/autopilot', '/premiumcontentstudio', '/onlyfansStudio', '/reset-password', '/free-resources'];
+    const knownRoutes = ['/', '/dashboard', '/inbox', '/analytics', '/settings', '/compose', '/calendar', '/drafts', '/approvals', '/team', '/opportunities', '/profile', '/about', '/contact', '/pricing', '/clients', '/faq', '/terms', '/privacy', '/dataDeletion', '/admin', '/automation', '/bio', '/strategy', '/ads', '/mediaLibrary', '/autopilot', '/premiumcontentstudio', '/onlyfansStudio', '/reset-password'];
     
     // Check if it's a direct username path (not a known route) or legacy /u/ or /link/ path
     // Also exclude paths that start with /api or contain dots (likely static files)
@@ -297,7 +294,7 @@ const AppContent: React.FC = () => {
         }
     }, [isAuthenticated, user, showToast, setActivePage]);
 
-    // Sync URL with active page for direct access (e.g., /privacy, /terms, /free-resources)
+    // Sync URL with active page for direct access (e.g., /privacy, /terms)
     useEffect(() => {
         const path = window.location.pathname;
         const hash = window.location.hash.replace('#', '');
@@ -311,7 +308,6 @@ const AppContent: React.FC = () => {
             '/contact': 'contact',
             '/pricing': 'pricing',
             '/faq': 'faq',
-            '/free-resources': 'freeResources',
         };
 
         // Check if URL path matches a page
@@ -333,7 +329,6 @@ const AppContent: React.FC = () => {
             contact: '/contact',
             pricing: '/pricing',
             faq: '/faq',
-            freeResources: '/free-resources',
         };
 
         const path = pageToPath[activePage];
@@ -737,7 +732,7 @@ const AppContent: React.FC = () => {
 
     const handleNavigateRequest = (page: Page) => {
         // Free Resources and other public pages should be accessible even when logged in
-        const publicPages: Page[] = ['freeResources', 'pricing', 'about', 'contact', 'faq', 'terms', 'privacy', 'dataDeletion'];
+        const publicPages: Page[] = ['pricing', 'about', 'contact', 'faq', 'terms', 'privacy', 'dataDeletion'];
         
         if (isAuthenticated) {
             setActivePage(page);

@@ -54,7 +54,7 @@ export interface AnalyticsData {
   }[];
 }
 
-export type Page = 'dashboard' | 'analytics' | 'settings' | 'compose' | 'calendar' | 'team' | 'opportunities' | 'profile' | 'about' | 'contact' | 'pricing' | 'clients' | 'faq' | 'terms' | 'privacy' | 'dataDeletion' | 'admin' | 'automation' | 'approvals' | 'bio' | 'strategy' | 'autopilot' | 'ads' | 'mediaLibrary' | 'inbox' | 'onlyfansStudio' | 'emailCenter' | 'freeResources';
+export type Page = 'dashboard' | 'analytics' | 'settings' | 'compose' | 'calendar' | 'team' | 'opportunities' | 'profile' | 'about' | 'contact' | 'pricing' | 'clients' | 'faq' | 'terms' | 'privacy' | 'dataDeletion' | 'admin' | 'automation' | 'approvals' | 'bio' | 'strategy' | 'autopilot' | 'ads' | 'mediaLibrary' | 'inbox' | 'onlyfansStudio' | 'emailCenter';
 
 export interface Settings {
     autoReply: boolean;

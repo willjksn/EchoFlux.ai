@@ -67,7 +67,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
             </div>
             <div className="hidden md:flex items-center justify-end md:flex-1 lg:w-0 space-x-8">
                 <button onClick={() => handleScroll('features')} className="text-base font-medium text-gray-500 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">Features</button>
-                <button onClick={() => onNavigateRequest('freeResources')} className="text-base font-medium text-gray-500 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">Free Resources</button>
                 <button onClick={() => handleScroll('pricing')} className="text-base font-medium text-gray-500 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">Pricing</button>
                 <button onClick={onLoginClick} className="whitespace-nowrap text-base font-medium text-gray-500 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">Sign in</button>
                 <button onClick={handleGetStarted} className="whitespace-nowrap inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-primary-600 hover:bg-primary-700">Get Started</button>
@@ -426,7 +425,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                                 <li><button onClick={() => onNavigateRequest('compose')} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-left">Write Captions</button></li>
                                 <li><button onClick={() => onNavigateRequest('bio')} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-left">Bio Link Page</button></li>
                                 <li><button onClick={() => onNavigateRequest('analytics')} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-left">What's Working</button></li>
-                                <li><button onClick={() => onNavigateRequest('freeResources')} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-left">Free Resources</button></li>
                             </ul>
                         </div>
                         <div className="mt-12 md:mt-0">
