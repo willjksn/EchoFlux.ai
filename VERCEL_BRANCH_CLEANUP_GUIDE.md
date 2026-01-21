@@ -25,20 +25,37 @@
 
 **This removes old preview deployments but new ones will still be created when you push branches.**
 
-### **Option 2: Disable Preview Deployments Entirely (Recommended - Prevents Future Builds)**
+### **Option 2: Disable Preview Deployments via `vercel.json` (Recommended - Prevents Future Builds)**
 
-**This is the better long-term solution:**
+**This is the better long-term solution - configured in code:**
 
-1. Go to Vercel Dashboard → Your Project → **Settings** → **Git**
-2. Scroll down to **"Preview Deployments"**
-3. Change from **"All branches"** to **"Only build production branch"**
-4. Click **Save**
+The `vercel.json` file has been updated to only deploy the `main` branch:
+
+```json
+{
+  "git": {
+    "deploymentEnabled": {
+      "main": true
+    }
+  },
+  "github": {
+    "enabled": true,
+    "silent": true
+  }
+}
+```
 
 **Result:**
 - ✅ Only `main` branch will trigger builds
 - ✅ No more preview deployments for feature branches
 - ✅ Saves build minutes and costs
 - ✅ Your git branches stay intact (you can still use them locally)
+- ✅ Configuration is in code, so it's version-controlled
+
+**After pushing this change:**
+- Future pushes to feature branches won't trigger builds
+- Only pushes to `main` will deploy
+- Existing preview deployments can still be deleted manually in the dashboard
 
 ## What Happens to Your Git Branches?
 
@@ -54,13 +71,12 @@ You can:
 
 ## Recommended Action Plan
 
-**Right Now:**
-1. Go to Vercel → Settings → Git → Preview Deployments
-2. Set to **"Only build production branch"**
-3. This stops all future preview builds
+**✅ Already Done:**
+- `vercel.json` has been updated to only deploy `main` branch
+- After you push this change, future feature branch pushes won't trigger builds
 
-**Optional Cleanup:**
-1. Go to Deployments tab
+**Optional Cleanup (In Vercel Dashboard):**
+1. Go to **Deployments** tab
 2. Delete old preview deployments (they're just taking up space)
 3. Keep the `main` branch deployment
 
@@ -74,4 +90,4 @@ You can:
 - **Vercel Preview Deployments:** Safe to delete (they're just built versions)
 - **Vercel Production Deployment (main):** Keep this - it's your live site
 - **Git Branches:** Keep them - they're your code history and useful for development
-- **Best Solution:** Disable preview deployments in settings to prevent future builds
+- **Best Solution:** ✅ Configured in `vercel.json` - only `main` branch will deploy
