@@ -60,6 +60,121 @@ export const OnlyFansExportHub: React.FC = () => {
         return item;
     };
 
+    // Format weekly plan into readable summary
+    const formatWeeklyPlanSummary = (planData: any): string => {
+        if (!planData) {
+            console.log('formatWeeklyPlanSummary: planData is null/undefined');
+            return '';
+        }
+        
+        try {
+            // Handle case where planData is the plan itself
+            const plan = planData.plan || planData;
+            
+            if (!plan) {
+                console.log('formatWeeklyPlanSummary: plan is null/undefined', planData);
+                return '';
+            }
+            
+            // Check if it has weeks array
+            if (!plan.weeks || !Array.isArray(plan.weeks) || plan.weeks.length === 0) {
+                console.log('formatWeeklyPlanSummary: no weeks found', plan);
+                // If no weeks, try to extract any useful info
+                if (plan.theme) {
+                    return `Theme: ${plan.theme}\n\nSee Content Ideas for full plan details.`;
+                }
+                return 'Weekly plan imported. See Content Ideas for full details.';
+            }
+            
+            let summary = '';
+            
+            // Add theme if available
+            const firstWeek = plan.weeks[0];
+            if (firstWeek.theme) {
+                summary += `Theme: ${firstWeek.theme}\n`;
+            }
+            
+            // Add content count
+            const totalContent = plan.weeks.reduce((total: number, week: any) => {
+                return total + (week.content?.length || week.days?.length || 0);
+            }, 0);
+            summary += `Total posts: ${totalContent} across ${plan.weeks.length} week${plan.weeks.length > 1 ? 's' : ''}\n\n`;
+            
+            // Add key topics from first week
+            const content = firstWeek.content || firstWeek.days || [];
+            if (content.length > 0) {
+                summary += 'Key topics:\n';
+                content.slice(0, 5).forEach((item: any, idx: number) => {
+                    if (item.topic) {
+                        summary += `  ${idx + 1}. ${item.topic}\n`;
+                    }
+                });
+            }
+            
+            const result = summary.trim();
+            if (!result) {
+                return 'Weekly plan imported. See Content Ideas for full details.';
+            }
+            return result;
+        } catch (error) {
+            console.error('Error formatting weekly plan:', error, planData);
+            return 'Weekly plan imported. See Content Ideas for full details.';
+        }
+    };
+
+    // Format monetization plan into readable summary
+    const formatMonetizationPlanSummary = (planData: any): string => {
+        if (!planData) return '';
+        
+        // If it's already a string, return it
+        if (typeof planData === 'string') return planData;
+        
+        // Check for summary field first
+        if (planData.summary && typeof planData.summary === 'string') {
+            return planData.summary;
+        }
+        
+        // Check for description field
+        if (planData.description && typeof planData.description === 'string') {
+            return planData.description;
+        }
+        
+        // Check for overview field
+        if (planData.overview && typeof planData.overview === 'string') {
+            return planData.overview;
+        }
+        
+        // Check for strategy overview with multiple fields
+        if (planData.strategy) {
+            let summary = '';
+            if (typeof planData.strategy === 'string') {
+                summary += `Strategy: ${planData.strategy}\n\n`;
+            }
+            if (planData.description && typeof planData.description === 'string') {
+                summary += `${planData.description}\n\n`;
+            }
+            if (planData.keyPoints && Array.isArray(planData.keyPoints)) {
+                summary += 'Key Points:\n';
+                planData.keyPoints.forEach((point: string, idx: number) => {
+                    summary += `  ${idx + 1}. ${point}\n`;
+                });
+            }
+            if (summary.trim()) return summary.trim();
+        }
+        
+        // Try to find any string field that looks like a description
+        const stringFields = Object.entries(planData)
+            .filter(([key, value]) => typeof value === 'string' && value.length > 50)
+            .map(([key, value]) => value as string);
+        
+        if (stringFields.length > 0) {
+            return stringFields[0]; // Return the first long string field
+        }
+        
+        // Last resort: return a note
+        return 'Monetization plan imported. See Content Ideas for full details.';
+    };
+
     // Load media from Media Vault
     useEffect(() => {
         const loadMediaVault = async () => {
@@ -154,14 +269,17 @@ export const OnlyFansExportHub: React.FC = () => {
 
         if (!checklist.trim()) {
             const checklistParts: string[] = [];
-            if (latestWeeklyPlan?.data?.plan) {
-                const planText = typeof latestWeeklyPlan.data.plan === 'string'
-                    ? latestWeeklyPlan.data.plan
-                    : JSON.stringify(latestWeeklyPlan.data.plan, null, 2);
-                checklistParts.push(`Weekly plan:\n${planText}`);
+            if (latestWeeklyPlan?.data) {
+                const planSummary = formatWeeklyPlanSummary(latestWeeklyPlan.data);
+                if (planSummary && planSummary.trim()) {
+                    checklistParts.push(`Weekly Plan Summary:\n${planSummary}`);
+                }
             }
-            if (latestMonetizationPlan?.data?.summary) {
-                checklistParts.push(`Monetization plan:\n${latestMonetizationPlan.data.summary}`);
+            if (latestMonetizationPlan?.data) {
+                const planSummary = formatMonetizationPlanSummary(latestMonetizationPlan.data);
+                if (planSummary && planSummary.trim()) {
+                    checklistParts.push(`Monetization Plan:\n${planSummary}`);
+                }
             }
             if (checklistParts.length > 0) {
                 setChecklist(checklistParts.join('\n\n'));
@@ -600,29 +718,52 @@ export const OnlyFansExportHub: React.FC = () => {
                             <button
                                 onClick={() => {
                                     const item = getLatestHistoryItem('weekly_plan');
-                                    if (!item?.data?.plan) {
-                                        showToast('No saved weekly plans yet', 'info');
+                                    if (!item?.data) {
+                                        showToast('No saved weekly plans yet. Generate one in Content Ideas first!', 'info');
                                         return;
                                     }
-                                    const planText = typeof item.data.plan === 'string'
-                                        ? item.data.plan
-                                        : JSON.stringify(item.data.plan, null, 2);
-                                    setChecklist((prev) => prev.trim() ? `${prev}\n\nWeekly plan:\n${planText}` : `Weekly plan:\n${planText}`);
+                                    
+                                    // Always use the formatting function - never show raw JSON
+                                    const planSummary = formatWeeklyPlanSummary(item.data);
+                                    if (!planSummary || planSummary.trim() === '') {
+                                        showToast('Could not format weekly plan. See Content Ideas for details.', 'error');
+                                        return;
+                                    }
+                                    
+                                    setChecklist((prev) => {
+                                        const newText = prev.trim() ? `${prev}\n\nWeekly Plan Summary:\n${planSummary}` : `Weekly Plan Summary:\n${planSummary}`;
+                                        return newText;
+                                    });
+                                    showToast('Weekly plan summary imported!', 'success');
                                 }}
                                 className="px-3 py-2 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600"
+                                title="Import a summary of your most recent weekly plan from Content Ideas"
                             >
                                 Use last Weekly Plan
                             </button>
                             <button
                                 onClick={() => {
                                     const item = getLatestHistoryItem('monetization_plan');
-                                    if (!item?.data?.summary) {
-                                        showToast('No saved monetization plans yet', 'info');
+                                    if (!item?.data) {
+                                        showToast('No saved monetization plans yet. Generate one in Content Ideas first!', 'info');
                                         return;
                                     }
-                                    setChecklist((prev) => prev.trim() ? `${prev}\n\nMonetization plan:\n${item.data.summary}` : `Monetization plan:\n${item.data.summary}`);
+                                    
+                                    // Always use the formatting function - never show raw JSON
+                                    const planSummary = formatMonetizationPlanSummary(item.data);
+                                    if (!planSummary || planSummary.trim() === '') {
+                                        showToast('Could not format monetization plan. See Content Ideas for details.', 'error');
+                                        return;
+                                    }
+                                    
+                                    setChecklist((prev) => {
+                                        const newText = prev.trim() ? `${prev}\n\nMonetization Plan:\n${planSummary}` : `Monetization Plan:\n${planSummary}`;
+                                        return newText;
+                                    });
+                                    showToast('Monetization plan imported!', 'success');
                                 }}
                                 className="px-3 py-2 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600"
+                                title="Import your most recent monetization plan from Content Ideas"
                             >
                                 Use last Monetization Plan
                             </button>
