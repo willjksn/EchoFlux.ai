@@ -471,7 +471,7 @@ const CaptionGenerator: React.FC = () => {
         day,
         localDate: localDate.toString(),
         pendingIso,
-        dateString: localDate.toISOString().slice(0, 16) // For date input
+        dateString: localDate.toISOString().slice(0, 16)
       });
       
       pendingScheduleDateRef.current = pendingIso;
