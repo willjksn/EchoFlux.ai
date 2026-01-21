@@ -97,23 +97,35 @@ export const FreeResources: React.FC = () => {
     setDownloading(resource.id);
     
     try {
-      // In a real implementation, you would:
-      // 1. Track the download in your analytics
-      // 2. Send the file via email or direct download
-      // 3. Add the user to your email list if not already subscribed
+      // Fetch the resource from API endpoint
+      const response = await fetch(`/api/getResourceTemplate?resourceId=${resource.id}`);
       
-      // For now, we'll simulate a download
-      await new Promise(resolve => setTimeout(resolve, 500));
+      if (!response.ok) {
+        throw new Error('Failed to download resource');
+      }
+
+      // Get the file content
+      const blob = await response.blob();
       
-      // Create a temporary download link
+      // Determine file extension based on resource type
+      let extension = '.csv';
+      if (resource.id === 'caption-templates' || resource.id === 'engagement-scripts' || resource.id === 'content-strategy-guide') {
+        extension = '.csv';
+      } else if (resource.id.includes('calendar') || resource.id.includes('tracker') || resource.id.includes('worksheet')) {
+        extension = '.csv'; // CSV files open in Excel
+      }
+      
+      // Create a download link
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = resource.downloadUrl;
-      link.download = resource.downloadUrl.split('/').pop() || 'download';
+      link.href = url;
+      link.download = `${resource.id.replace(/-/g, '_')}${extension}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
       
-      showToast(`Downloading ${resource.title}...`, 'success');
+      showToast(`Downloaded ${resource.title}!`, 'success');
       
       // Track download (you can add analytics here)
       if (typeof window !== 'undefined' && (window as any).gtag) {
