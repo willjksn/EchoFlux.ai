@@ -295,38 +295,53 @@ const AppContent: React.FC = () => {
     }, [isAuthenticated, user, showToast, setActivePage]);
 
     // Sync URL with active page for direct access (e.g., /privacy, /terms)
+    // Only sync from URL to activePage on initial load or browser navigation (back/forward)
     useEffect(() => {
-        const path = window.location.pathname;
-        const hash = window.location.hash.replace('#', '');
-        
-        // Map URL paths to pages (public pages accessible to all)
-        const urlToPage: Record<string, Page> = {
-            '/privacy': 'privacy',
-            '/terms': 'terms',
-            '/data-deletion': 'dataDeletion',
-            '/pricing': 'pricing',
-            '/faq': 'faq',
-            '/about': 'about',
-            '/contact': 'contact',
+        const syncUrlToPage = () => {
+            const path = window.location.pathname;
+            const hash = window.location.hash.replace('#', '');
+            
+            // Map URL paths to pages (public pages accessible to all)
+            const urlToPage: Record<string, Page> = {
+                '/privacy': 'privacy',
+                '/terms': 'terms',
+                '/data-deletion': 'dataDeletion',
+                '/pricing': 'pricing',
+                '/faq': 'faq',
+                '/about': 'about',
+                '/contact': 'contact',
+            };
+
+            // Check if URL path matches a page
+            // When not authenticated, about/contact are handled by LandingPage modals, so skip URL routing for them
+            if (path !== '/' && urlToPage[path]) {
+                if (!isAuthenticated && (path === '/about' || path === '/contact')) {
+                    // Don't set activePage for about/contact when not authenticated - they're modals
+                    return;
+                }
+                const pageFromUrl = urlToPage[path];
+                setActivePage(pageFromUrl);
+            } else if (hash && urlToPage[`/${hash}`]) {
+                // Support hash-based routing too
+                if (!isAuthenticated && (hash === 'about' || hash === 'contact')) {
+                    // Don't set activePage for about/contact when not authenticated - they're modals
+                    return;
+                }
+                const pageFromHash = urlToPage[`/${hash}`];
+                setActivePage(pageFromHash);
+            }
         };
 
-        // Check if URL path matches a page
-        // When not authenticated, about/contact are handled by LandingPage modals, so skip URL routing for them
-        if (path !== '/' && urlToPage[path]) {
-            if (!isAuthenticated && (path === '/about' || path === '/contact')) {
-                // Don't set activePage for about/contact when not authenticated - they're modals
-                return;
-            }
-            setActivePage(urlToPage[path]);
-        } else if (hash && urlToPage[`/${hash}`]) {
-            // Support hash-based routing too
-            if (!isAuthenticated && (hash === 'about' || hash === 'contact')) {
-                // Don't set activePage for about/contact when not authenticated - they're modals
-                return;
-            }
-            setActivePage(urlToPage[`/${hash}`]);
-        }
-    }, [isAuthenticated, setActivePage]); // Run when auth state changes or on mount
+        // Initial load: sync URL to activePage (only once on mount or when auth changes)
+        syncUrlToPage();
+
+        // Listen for browser back/forward navigation
+        window.addEventListener('popstate', syncUrlToPage);
+
+        return () => {
+            window.removeEventListener('popstate', syncUrlToPage);
+        };
+    }, [isAuthenticated, setActivePage]); // Only run when auth state changes, not when activePage changes
 
     // Update URL when page changes (for privacy policy, terms, etc.)
     useEffect(() => {
