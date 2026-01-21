@@ -799,30 +799,30 @@ export const Calendar: React.FC = () => {
                             <p className="text-xs text-gray-400 dark:text-gray-500 font-medium">No posts scheduled</p>
                         </div>
                     )}
-                    {(() => {
-                        // Use IIFE to capture currentDay value for this specific button
-                        const capturedDay = currentDay;
-                        return (
-                            <button 
-                                onClick={(e) => { 
-                                    e.stopPropagation(); 
-                                    // Pass the selected date to compose page via localStorage
-                                    const dateStr = new Date(
-                                        currentDate.getFullYear(),
-                                        currentDate.getMonth(),
-                                        capturedDay
-                                    ).toISOString().split('T')[0];
-                                    localStorage.setItem('composeScheduledDate', dateStr);
-                                    setActivePage('compose'); 
-                                }} 
-                                className="absolute bottom-3 right-3 p-2 bg-gradient-to-r from-primary-500 to-primary-600 text-white hover:from-primary-600 hover:to-primary-700 rounded-full transition-all opacity-0 group-hover:opacity-100 focus:opacity-100 z-10 shadow-lg hover:shadow-xl"
-                                title="Add Post to this day"
-                                aria-label="Add post"
-                            >
-                                 <PlusIcon className="w-5 h-5" />
-                            </button>
-                        );
-                    })()}
+                    <button 
+                        onClick={(e) => { 
+                            e.stopPropagation(); 
+                            // Get the day from the button's data attribute to ensure correct value
+                            const button = e.currentTarget;
+                            const dayValue = parseInt(button.getAttribute('data-day') || '0', 10);
+                            const year = parseInt(button.getAttribute('data-year') || '0', 10);
+                            const month = parseInt(button.getAttribute('data-month') || '0', 10);
+                            
+                            // Pass the selected date to compose page via localStorage
+                            const dateStr = new Date(year, month, dayValue).toISOString().split('T')[0];
+                            console.log('Calendar plus button clicked:', { dayValue, year, month, dateStr }); // Debug log
+                            localStorage.setItem('composeScheduledDate', dateStr);
+                            setActivePage('compose'); 
+                        }} 
+                        data-day={currentDay}
+                        data-year={currentDate.getFullYear()}
+                        data-month={currentDate.getMonth()}
+                        className="absolute bottom-3 right-3 p-2 bg-gradient-to-r from-primary-500 to-primary-600 text-white hover:from-primary-600 hover:to-primary-700 rounded-full transition-all opacity-0 group-hover:opacity-100 focus:opacity-100 z-10 shadow-lg hover:shadow-xl"
+                        title="Add Post to this day"
+                        aria-label="Add post"
+                    >
+                         <PlusIcon className="w-5 h-5" />
+                    </button>
                 </div>
             );
             dayCounter++;
