@@ -463,7 +463,7 @@ export const Calendar: React.FC = () => {
 
         // Days of the month
         while (dayCounter <= daysInMonth) {
-            const currentDay = dayCounter;
+            const currentDay = dayCounter; // Capture day value for this iteration
             
             const dayEvents = filteredEvents.filter(e => {
                 const eventDate = new Date(e.date);
@@ -799,24 +799,30 @@ export const Calendar: React.FC = () => {
                             <p className="text-xs text-gray-400 dark:text-gray-500 font-medium">No posts scheduled</p>
                         </div>
                     )}
-                    <button 
-                        onClick={(e) => { 
-                            e.stopPropagation(); 
-                            // Pass the selected date to compose page via localStorage
-                            const dateStr = new Date(
-                                currentDate.getFullYear(),
-                                currentDate.getMonth(),
-                                currentDay
-                            ).toISOString().split('T')[0];
-                            localStorage.setItem('composeScheduledDate', dateStr);
-                            setActivePage('compose'); 
-                        }} 
-                        className="absolute bottom-3 right-3 p-2 bg-gradient-to-r from-primary-500 to-primary-600 text-white hover:from-primary-600 hover:to-primary-700 rounded-full transition-all opacity-0 group-hover:opacity-100 focus:opacity-100 z-10 shadow-lg hover:shadow-xl"
-                        title="Add Post to this day"
-                        aria-label="Add post"
-                    >
-                         <PlusIcon className="w-5 h-5" />
-                    </button>
+                    {(() => {
+                        // Use IIFE to capture currentDay value for this specific button
+                        const capturedDay = currentDay;
+                        return (
+                            <button 
+                                onClick={(e) => { 
+                                    e.stopPropagation(); 
+                                    // Pass the selected date to compose page via localStorage
+                                    const dateStr = new Date(
+                                        currentDate.getFullYear(),
+                                        currentDate.getMonth(),
+                                        capturedDay
+                                    ).toISOString().split('T')[0];
+                                    localStorage.setItem('composeScheduledDate', dateStr);
+                                    setActivePage('compose'); 
+                                }} 
+                                className="absolute bottom-3 right-3 p-2 bg-gradient-to-r from-primary-500 to-primary-600 text-white hover:from-primary-600 hover:to-primary-700 rounded-full transition-all opacity-0 group-hover:opacity-100 focus:opacity-100 z-10 shadow-lg hover:shadow-xl"
+                                title="Add Post to this day"
+                                aria-label="Add post"
+                            >
+                                 <PlusIcon className="w-5 h-5" />
+                            </button>
+                        );
+                    })()}
                 </div>
             );
             dayCounter++;
@@ -1479,7 +1485,11 @@ export const Calendar: React.FC = () => {
                          Add Reminder
                     </button>
                     <button 
-                        onClick={() => setActivePage('compose')} 
+                        onClick={() => {
+                            // Clear any scheduled date from localStorage so compose doesn't prefill
+                            localStorage.removeItem('composeScheduledDate');
+                            setActivePage('compose');
+                        }} 
                         className="px-5 py-2.5 bg-gradient-to-r from-primary-600 to-primary-500 text-white rounded-lg hover:from-primary-700 hover:to-primary-600 text-sm font-semibold flex items-center gap-2 shadow-md transition-all"
                     >
                          <PlusIcon className="w-5 h-5" />
