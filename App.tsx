@@ -300,14 +300,18 @@ const AppContent: React.FC = () => {
         const hash = window.location.hash.replace('#', '');
         
         // Map URL paths to pages (public pages accessible to all)
+        // Note: 'about' and 'contact' are shown in modals on landing page when not authenticated
         const urlToPage: Record<string, Page> = {
             '/privacy': 'privacy',
             '/terms': 'terms',
             '/data-deletion': 'dataDeletion',
-            '/about': 'about',
-            '/contact': 'contact',
             '/pricing': 'pricing',
             '/faq': 'faq',
+            // Only set about/contact as activePage when authenticated (they're modals when not authenticated)
+            ...(isAuthenticated ? {
+                '/about': 'about',
+                '/contact': 'contact',
+            } : {}),
         };
 
         // Check if URL path matches a page
@@ -731,15 +735,19 @@ const AppContent: React.FC = () => {
     };
 
     const handleNavigateRequest = (page: Page) => {
-        // Free Resources and other public pages should be accessible even when logged in
-        const publicPages: Page[] = ['pricing', 'about', 'contact', 'faq', 'terms', 'privacy', 'dataDeletion'];
+        // Public pages that can be accessed when not authenticated
+        // Note: 'about' and 'contact' are handled by LandingPage modals when not authenticated
+        const publicPages: Page[] = ['pricing', 'faq', 'terms', 'privacy', 'dataDeletion'];
         
         if (isAuthenticated) {
             setActivePage(page);
         } else if (publicPages.includes(page)) {
             // For public pages, set the active page even if not authenticated
-            // This will show the page when the user is on the landing page
             setActivePage(page);
+        } else if (page === 'about' || page === 'contact') {
+            // About and Contact are shown in modals on landing page, don't navigate
+            // The LandingPage component handles these via setLegalModal
+            return;
         } else {
             setIsLoginModalOpen(true);
         }
