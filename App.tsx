@@ -300,25 +300,30 @@ const AppContent: React.FC = () => {
         const hash = window.location.hash.replace('#', '');
         
         // Map URL paths to pages (public pages accessible to all)
-        // Note: 'about' and 'contact' are shown in modals on landing page when not authenticated
         const urlToPage: Record<string, Page> = {
             '/privacy': 'privacy',
             '/terms': 'terms',
             '/data-deletion': 'dataDeletion',
             '/pricing': 'pricing',
             '/faq': 'faq',
-            // Only set about/contact as activePage when authenticated (they're modals when not authenticated)
-            ...(isAuthenticated ? {
-                '/about': 'about',
-                '/contact': 'contact',
-            } : {}),
+            '/about': 'about',
+            '/contact': 'contact',
         };
 
         // Check if URL path matches a page
+        // When not authenticated, about/contact are handled by LandingPage modals, so skip URL routing for them
         if (path !== '/' && urlToPage[path]) {
+            if (!isAuthenticated && (path === '/about' || path === '/contact')) {
+                // Don't set activePage for about/contact when not authenticated - they're modals
+                return;
+            }
             setActivePage(urlToPage[path]);
         } else if (hash && urlToPage[`/${hash}`]) {
             // Support hash-based routing too
+            if (!isAuthenticated && (hash === 'about' || hash === 'contact')) {
+                // Don't set activePage for about/contact when not authenticated - they're modals
+                return;
+            }
             setActivePage(urlToPage[`/${hash}`]);
         }
     }, [isAuthenticated, setActivePage]); // Run when auth state changes or on mount
