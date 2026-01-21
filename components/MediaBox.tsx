@@ -1570,7 +1570,16 @@ ${contextLines || 'None'}
         </label>
         <input
           type="datetime-local"
-          value={mediaItem.scheduledDate ? new Date(mediaItem.scheduledDate).toISOString().slice(0, 16) : ''}
+          value={mediaItem.scheduledDate ? (() => {
+            // Convert ISO string to local datetime-local format
+            const date = new Date(mediaItem.scheduledDate);
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            return `${year}-${month}-${day}T${hours}:${minutes}`;
+          })() : ''}
           onChange={(e) => {
             if (user?.plan === 'Free') {
               showToast('Upgrade to Pro or Elite to schedule posts', 'info');
