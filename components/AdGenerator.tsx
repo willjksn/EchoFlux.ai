@@ -298,7 +298,13 @@ export const AdGenerator: React.FC = () => {
         throw new Error(data.error || data.note || 'Failed to generate ads');
       }
 
-      setGeneratedAds(data);
+      const normalized: GeneratedAds = {
+        strategyBrief: data.strategyBrief || null,
+        x: Array.isArray(data.ads?.x) ? data.ads.x : [],
+        instagram: Array.isArray(data.ads?.instagram) ? data.ads.instagram : [],
+        tiktok: Array.isArray(data.ads?.tiktok) ? data.ads.tiktok : [],
+      };
+      setGeneratedAds(normalized);
       showToast('Ads generated successfully', 'success');
     } catch (error: any) {
       console.error('Ad generation failed:', error);
