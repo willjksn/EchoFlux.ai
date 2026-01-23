@@ -11,6 +11,7 @@ import { AdminFeedbackPanel } from './AdminFeedbackPanel';
 import { AdminFeedbackFormBuilder } from './AdminFeedbackFormBuilder';
 import { InviteCodeManager } from './InviteCodeManager';
 import { WaitlistManager } from './WaitlistManager';
+import { AdGenerator } from './AdGenerator';
 import { TeamIcon, DollarSignIcon, UserPlusIcon, ArrowUpCircleIcon, ImageIcon, VideoIcon, LockIcon, TrendingIcon, TrashIcon } from './icons/UIIcons';
 import { db, auth } from '../firebaseConfig';
 import { collection, query, orderBy, onSnapshot, setDoc, doc, getDoc, deleteField, getDocs } from 'firebase/firestore';
@@ -155,7 +156,7 @@ export const AdminDashboard: React.FC = () => {
     const [isLoadingModelStats, setIsLoadingModelStats] = useState(true);
     const [modelStatsDays, setModelStatsDays] = useState<number>(30);
     const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'tools'>('overview');
-    const [toolsTab, setToolsTab] = useState<'toolsHome' | 'referralRewards' | 'announcements' | 'invites' | 'waitlist' | 'email' | 'feedback' | 'feedbackForms' | 'reviews'>('toolsHome');
+    const [toolsTab, setToolsTab] = useState<'toolsHome' | 'referralRewards' | 'announcements' | 'invites' | 'waitlist' | 'email' | 'feedback' | 'feedbackForms' | 'reviews' | 'adGenerator'>('toolsHome');
     const [userStorageMap, setUserStorageMap] = useState<Record<string, number>>({});
     const [currentPage, setCurrentPage] = useState<number>(1);
     const usersPerPage = 20;
@@ -702,6 +703,16 @@ export const AdminDashboard: React.FC = () => {
                         >
                             Reviews
                         </button>
+                        <button
+                            onClick={() => setToolsTab('adGenerator')}
+                            className={`px-4 py-2 rounded-md transition-colors ${
+                                toolsTab === 'adGenerator'
+                                    ? 'bg-primary-600 text-white'
+                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                            }`}
+                        >
+                            AI Ad Generator
+                        </button>
                     </div>
 
                     {toolsTab === 'toolsHome' && (
@@ -719,6 +730,7 @@ export const AdminDashboard: React.FC = () => {
                     {toolsTab === 'feedback' && <AdminFeedbackPanel />}
                     {toolsTab === 'feedbackForms' && <AdminFeedbackFormBuilder />}
                     {toolsTab === 'reviews' && <AdminReviewsPanel />}
+                    {toolsTab === 'adGenerator' && <AdGenerator />}
                 </div>
             )}
             {activeTab === 'overview' && (
