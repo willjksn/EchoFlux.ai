@@ -750,7 +750,14 @@ export const AdGenerator: React.FC = () => {
               disabled={isGeneratingImage || !targetAudience.trim()}
               className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
             >
-              {isGeneratingImage ? 'Generating Image...' : 'Generate Image'}
+              {isGeneratingImage ? (
+                <span className="inline-flex items-center gap-2">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  Generating Image...
+                </span>
+              ) : (
+                'Generate Image'
+              )}
             </button>
             {generatedImageData && (
               <div className="mt-3">
@@ -787,7 +794,14 @@ export const AdGenerator: React.FC = () => {
               disabled={isGeneratingVideo || !targetAudience.trim()}
               className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
             >
-              {isGeneratingVideo ? 'Generating Video...' : 'Generate Video'}
+              {isGeneratingVideo ? (
+                <span className="inline-flex items-center gap-2">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  Generating Video...
+                </span>
+              ) : (
+                'Generate Video'
+              )}
             </button>
             {videoStatus && (
               <p className="text-sm text-gray-600 dark:text-gray-400">{videoStatus}</p>

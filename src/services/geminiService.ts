@@ -148,7 +148,8 @@ export async function generateImage(
   baseImage?: { data: string; mimeType: string } | null,
   allowExplicit: boolean = false
 ): Promise<string> {
-  const res = await callFunction("generateImage", { prompt, baseImage, allowExplicit });
+  // Image generation can take longer than the default 30s
+  const res = await callFunction("generateImage", { prompt, baseImage, allowExplicit }, 90000);
   
   // Handle different response formats
   if (res.imageData) {
@@ -200,12 +201,13 @@ export async function generateVideo(
   aspectRatio?: "16:9" | "9:16" | string,
   allowExplicit: boolean = false
 ): Promise<{ videoUrl?: string; operationId?: string; status?: string; error?: string }> {
+  // Video generation can take longer than the default 30s
   const res = await callFunction("generateVideo", {
     prompt,
     baseImage,
     aspectRatio,
     allowExplicit,
-  });
+  }, 120000);
   
   // Check for errors in response
   if (!res.success && res.error) {
