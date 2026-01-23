@@ -332,7 +332,15 @@ export const AdGenerator: React.FC = () => {
   const buildAdImagePrompt = () => {
     const parts = [
       'Create a high-converting ad image for EchoFlux.ai.',
-      'Style: clean, modern, creator-first SaaS aesthetic.',
+      'Style: EchoFlux UI (light + dark) with clean modern SaaS aesthetic.',
+      'Include EchoFlux dashboard UI as the main visual (sidebar + cards + gradient hero bar).',
+      'Layout: headline + subheadline + CTA button + UI preview (landing hero style).',
+      'Format: social ad creative, 1200x628, lots of whitespace, high contrast CTA.',
+      'Brand colors: Primary Blue #326AE8, Bright Blue #2663E9, Accent Purple #693DDE, Bright Purple #6F39DE.',
+      'Signature gradient: #2663E9 → #6F39DE.',
+      'Neutrals (light): Background #FFFFFF, Page #F9FAFB, Card #F2F3F5, Soft tint #EDF5FE, Borders #D1D8E4.',
+      'Neutrals (dark): Background #111827, Surface #182130, Raised #202938, Sidebar #151C2C, Muted #374050.',
+      'Typography: clean modern sans (Inter-style).',
       `Objective: ${objective}.`,
       `Target Audience: ${targetAudience.trim()}.`,
       keyMessage.trim() ? `Key Message: ${keyMessage.trim()}.` : '',
@@ -429,7 +437,13 @@ export const AdGenerator: React.FC = () => {
           platform: 'TikTok',
           tone: 'Creator-first, calm confidence',
           callToAction: 'Try free for 7 days',
-          additionalContext: keyMessage.trim() || undefined,
+          additionalContext: [
+            keyMessage.trim() || '',
+            'Match EchoFlux UI style guide: gradients #2663E9→#6F39DE, UI cards, clean SaaS aesthetic.',
+            'Overlay style: gradient pill/bar with white text, 6–10 words max hook, 1-line support text.',
+            'Use captions like: “Plan My Week”, “Write Captions”, “Schedule”, “Copy + Post”.',
+            'Include tiny “EchoFlux.ai” stamp in a small gradient pill.',
+          ].filter(Boolean).join(' '),
           duration: 15,
         });
         prompt = adResult?.result?.videoPrompt || '';
@@ -805,7 +819,7 @@ export const AdGenerator: React.FC = () => {
       {generatedAds?.strategyBrief && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-            Strategy Brief
+            Strategy Brief <span className="text-xs font-normal text-gray-500 dark:text-gray-400">(AI-generated)</span>
           </h2>
           <div className="space-y-3 text-gray-700 dark:text-gray-300">
             <div>
@@ -834,7 +848,7 @@ export const AdGenerator: React.FC = () => {
           {generatedAds.x.length > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-                X (Twitter) Ads ({generatedAds.x.length} variants)
+                X (Twitter) Ads ({generatedAds.x.length} variants) <span className="text-xs font-normal text-gray-500 dark:text-gray-400">(AI-generated)</span>
               </h2>
               <div className="space-y-4">
                 {generatedAds.x.map((ad, index) => (
@@ -876,7 +890,7 @@ export const AdGenerator: React.FC = () => {
           {generatedAds.instagram.length > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-                Instagram Ads ({generatedAds.instagram.length} variants)
+                Instagram Ads ({generatedAds.instagram.length} variants) <span className="text-xs font-normal text-gray-500 dark:text-gray-400">(AI-generated)</span>
               </h2>
               <div className="space-y-4">
                 {generatedAds.instagram.map((ad, index) => (
@@ -918,7 +932,7 @@ export const AdGenerator: React.FC = () => {
           {generatedAds.tiktok.length > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-                TikTok Ads ({generatedAds.tiktok.length} variants)
+                TikTok Ads ({generatedAds.tiktok.length} variants) <span className="text-xs font-normal text-gray-500 dark:text-gray-400">(AI-generated)</span>
               </h2>
               <div className="space-y-4">
                 {generatedAds.tiktok.map((ad, index) => (
