@@ -663,10 +663,6 @@ export const AdGenerator: React.FC = () => {
             {isGenerating ? 'Generating Ads...' : 'Generate Ads'}
           </button>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-<<<<<<< HEAD
-            This generates ad copy and hooks. Image/video creative is not auto-generated yet.
-          </p>
-=======
             Generates ad copy and hooks. Use the Creative section below to generate images or videos.
           </p>
         </div>
@@ -726,7 +722,6 @@ export const AdGenerator: React.FC = () => {
               </div>
             )}
           </div>
->>>>>>> feature/ad-generator
         </div>
       </div>
 
