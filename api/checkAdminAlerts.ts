@@ -28,35 +28,66 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Fetch model usage analytics
-    const analyticsResponse = await fetch(`${req.headers.origin || process.env.NEXT_PUBLIC_APP_URL || 'https://engagesuite.ai'}/api/getModelUsageAnalytics?days=7`, {
-      headers: {
-        Authorization: `Bearer ${decodedToken.token || ''}`,
-      },
-    });
+    let analytics: any = {
+      totalCost: 0,
+      errorRate: 0,
+      runawayUsers: [],
+      totalRequests: 0,
+      requestsByModel: {},
+    };
 
-    if (!analyticsResponse.ok) {
-      return res.status(500).json({ error: 'Failed to fetch analytics' });
+    try {
+      // Get the auth token from the original request
+      const authHeader = req.headers.authorization;
+      if (!authHeader) {
+        throw new Error('No authorization header');
+      }
+
+      // Fetch analytics using the same auth token
+      const baseUrl = req.headers.origin || process.env.NEXT_PUBLIC_APP_URL || 'https://engagesuite.ai';
+      const analyticsResponse = await fetch(`${baseUrl}/api/getModelUsageAnalytics?days=7`, {
+        headers: {
+          Authorization: authHeader,
+        },
+      });
+
+      if (analyticsResponse.ok) {
+        const analyticsData = await analyticsResponse.json();
+        if (analyticsData && typeof analyticsData === 'object') {
+          analytics = {
+            totalCost: analyticsData.totalCost || 0,
+            errorRate: analyticsData.errorRate || 0,
+            runawayUsers: Array.isArray(analyticsData.runawayUsers) ? analyticsData.runawayUsers : [],
+            totalRequests: analyticsData.totalRequests || 0,
+            requestsByModel: analyticsData.requestsByModel || {},
+          };
+        }
+      } else {
+        console.warn('Analytics fetch failed with status:', analyticsResponse.status);
+      }
+    } catch (analyticsError: any) {
+      console.warn('Failed to fetch analytics, using defaults:', analyticsError);
+      // Continue with default values - alerts can still be checked
     }
 
-    const analytics = await analyticsResponse.json();
-
     // Check for admin alerts with additional system checks
+    // Ensure all inputs are properly formatted
     const alerts = checkAdminAlerts(
       {
-        totalCost: analytics.totalCost || 0,
-        errorRate: analytics.errorRate || 0,
-        runawayUsers: analytics.runawayUsers || [],
-        totalRequests: analytics.totalRequests || 0,
-        requestsByModel: analytics.requestsByModel || {},
+        totalCost: typeof analytics.totalCost === 'number' ? analytics.totalCost : 0,
+        errorRate: typeof analytics.errorRate === 'number' ? analytics.errorRate : 0,
+        runawayUsers: Array.isArray(analytics.runawayUsers) ? analytics.runawayUsers : [],
+        totalRequests: typeof analytics.totalRequests === 'number' ? analytics.totalRequests : 0,
+        requestsByModel: typeof analytics.requestsByModel === 'object' && analytics.requestsByModel !== null ? analytics.requestsByModel : {},
       },
       {
         // Add system health check (simplified - can be expanded)
-        systemHealth: analytics.errorRate > 20 ? 'down' : analytics.errorRate > 10 ? 'degraded' : 'healthy',
+        systemHealth: (analytics.errorRate || 0) > 20 ? 'down' : (analytics.errorRate || 0) > 10 ? 'degraded' : 'healthy',
         // API quota checks (if available from environment or analytics)
         apiQuotaUsed: process.env.API_QUOTA_USED ? parseInt(process.env.API_QUOTA_USED) : undefined,
         apiQuotaLimit: process.env.API_QUOTA_LIMIT ? parseInt(process.env.API_QUOTA_LIMIT) : undefined,
       }
-    );
+    ) || []; // Ensure alerts is always an array
 
     // Create admin alerts in Firestore (only if they don't already exist)
     const adminAlertsRef = db.collection('admin_alerts');
