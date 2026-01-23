@@ -356,12 +356,23 @@ export const AdGenerator: React.FC = () => {
       const imageBase64 = await generateImage(prompt, null, false);
       const dataUrl = `data:image/png;base64,${imageBase64}`;
       setGeneratedImageData(dataUrl);
+      showToast('Ad image generated', 'success');
+    } catch (error: any) {
+      console.error('Image generation failed:', error);
+      showToast(error?.message || 'Failed to generate image', 'error');
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
 
-      // Save to Storage + Firestore as an ad image
+  const handleSaveGeneratedImage = async () => {
+    if (!generatedImageData) return;
+    try {
+      const base64Data = generatedImageData.split(',')[1];
       const timestamp = Date.now();
       const storagePath = `admin/ad-images/ai-ad-${timestamp}.png`;
       const storageRef = ref(storage, storagePath);
-      const bytes = base64ToBytes(imageBase64);
+      const bytes = base64ToBytes(base64Data);
       await uploadBytes(storageRef, bytes, { contentType: 'image/png' });
       const downloadURL = await getDownloadURL(storageRef);
 
@@ -381,13 +392,21 @@ export const AdGenerator: React.FC = () => {
         description: 'AI-generated ad creative',
       }, ...prev]);
 
-      showToast('Ad image generated and saved', 'success');
+      showToast('Ad image saved to library', 'success');
     } catch (error: any) {
-      console.error('Image generation failed:', error);
-      showToast(error?.message || 'Failed to generate image', 'error');
-    } finally {
-      setIsGeneratingImage(false);
+      console.error('Failed to save generated image:', error);
+      showToast(error?.message || 'Failed to save image', 'error');
     }
+  };
+
+  const handleDownloadGeneratedImage = () => {
+    if (!generatedImageData) return;
+    const link = document.createElement('a');
+    link.href = generatedImageData;
+    link.download = `ai-ad-${Date.now()}.png`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   };
 
   const handleGenerateVideo = async () => {
@@ -437,6 +456,35 @@ export const AdGenerator: React.FC = () => {
     } finally {
       setIsGeneratingVideo(false);
     }
+  };
+
+  const handleSaveGeneratedVideo = async () => {
+    if (!generatedVideoUrl) return;
+    try {
+      const videosRef = collection(db, 'ad_generator_videos');
+      await addDoc(videosRef, {
+        url: generatedVideoUrl,
+        createdAt: new Date(),
+        createdBy: user?.id || 'unknown',
+        objective,
+        targetAudience: targetAudience.trim(),
+        keyMessage: keyMessage.trim() || '',
+      });
+      showToast('Video saved', 'success');
+    } catch (error: any) {
+      console.error('Failed to save video:', error);
+      showToast(error?.message || 'Failed to save video', 'error');
+    }
+  };
+
+  const handleDownloadGeneratedVideo = () => {
+    if (!generatedVideoUrl) return;
+    const link = document.createElement('a');
+    link.href = generatedVideoUrl;
+    link.download = `ai-ad-video-${Date.now()}.mp4`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   };
 
   useEffect(() => {
@@ -693,6 +741,20 @@ export const AdGenerator: React.FC = () => {
             {generatedImageData && (
               <div className="mt-3">
                 <img src={generatedImageData} alt="Generated ad creative" className="w-full rounded-lg border" />
+                <div className="mt-2 flex gap-2">
+                  <button
+                    onClick={handleSaveGeneratedImage}
+                    className="px-3 py-2 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={handleDownloadGeneratedImage}
+                    className="px-3 py-2 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600"
+                  >
+                    Download
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -719,6 +781,20 @@ export const AdGenerator: React.FC = () => {
             {generatedVideoUrl && (
               <div className="mt-3">
                 <video src={generatedVideoUrl} controls className="w-full rounded-lg border" />
+                <div className="mt-2 flex gap-2">
+                  <button
+                    onClick={handleSaveGeneratedVideo}
+                    className="px-3 py-2 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={handleDownloadGeneratedVideo}
+                    className="px-3 py-2 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600"
+                  >
+                    Download
+                  </button>
+                </div>
               </div>
             )}
           </div>
