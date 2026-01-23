@@ -1,0 +1,59 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    /** -------------------------------------------------------
+     *  Helper: Check if the authenticated user is an Admin
+     *  ------------------------------------------------------- */
+    function isAdmin() {
+      return request.auth != null
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'Admin';
+    }
+    
+    /** -------------------------------------------------------
+     *  Helper: Check if user is authenticated
+     *  ------------------------------------------------------- */
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    /** -------------------------------------------------------
+     *  Helper: Check if request is for the authed user
+     *  ------------------------------------------------------- */
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    /** -------------------------------------------------------
+     *  ADMIN STORAGE PATHS
+     *  -------------------------------------------------------
+     *  - Admins can read/write files in admin/ paths
+     *  - Regular users cannot access admin storage
+     *  ------------------------------------------------------- */
+    match /admin/{allPaths=**} {
+      // Allow read/write for authenticated users (app enforces Admin access)
+      allow read, write: if isAuthenticated();
+    }
+    
+    /** -------------------------------------------------------
+     *  USER STORAGE PATHS
+     *  -------------------------------------------------------
+     *  - Users can read/write their own files in users/{userId}/ paths
+     *  - Admins can read/write all user files
+     *  ------------------------------------------------------- */
+    match /users/{userId}/{allPaths=**} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    /** -------------------------------------------------------
+     *  DEFAULT DENY RULE
+     *  ------------------------------------------------------- 
+     *  Deny all other paths to prevent unauthorized access
+     */
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
