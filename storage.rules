@@ -33,7 +33,7 @@ service firebase.storage {
      *  - Regular users cannot access admin storage
      *  ------------------------------------------------------- */
     match /admin/{allPaths=**} {
-      // Allow read/write for authenticated users (we'll verify admin in the app)
+      // Allow read/write for authenticated users (app enforces Admin access)
       // TODO: Tighten this to use isAdmin() once Firestore checks are reliable
       allow read, write: if isAuthenticated();
     }

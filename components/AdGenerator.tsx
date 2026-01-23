@@ -1,12 +1,13 @@
 // components/AdGenerator.tsx
 // AI-powered ad generation for text and video ads (Admin-only)
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { SparklesIcon, UploadIcon, ImageIcon, TrashIcon, CopyIcon, CheckCircleIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 import { storage, db, auth } from '../firebaseConfig';
 import { ref, uploadBytes, getDownloadURL, listAll, deleteObject } from 'firebase/storage';
 import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, limit } from 'firebase/firestore';
+import { generateAd, generateImage, generateVideo, getVideoStatus } from '../src/services/geminiService';
 
 interface AdImage {
   id: string;
@@ -86,17 +87,26 @@ export const AdGenerator: React.FC = () => {
   const [generatedAds, setGeneratedAds] = useState<GeneratedAds | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<{ platform: string; index: number } | null>(null);
   const [isAiHelping, setIsAiHelping] = useState(false);
+  const [adImagePrompt, setAdImagePrompt] = useState('');
+  const [adVideoPrompt, setAdVideoPrompt] = useState('');
+  const [generatedImageData, setGeneratedImageData] = useState<string | null>(null);
+  const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
+  const [videoStatus, setVideoStatus] = useState<string | null>(null);
+  const [videoOperationId, setVideoOperationId] = useState<string | null>(null);
 
   // Check if user is admin
   const isAdmin = user?.role === 'Admin';
 
   // Load existing images
-  React.useEffect(() => {
+  useEffect(() => {
     if (!isAdmin || !user?.id) return;
     loadImages();
   }, [isAdmin, user?.id]);
 
-  React.useEffect(() => {
+  // Load saved ad hooks/copy
+  useEffect(() => {
     if (!isAdmin || !user?.id) return;
     loadSavedAds();
   }, [isAdmin, user?.id]);
@@ -319,6 +329,147 @@ export const AdGenerator: React.FC = () => {
     }
   };
 
+  const buildAdImagePrompt = () => {
+    const parts = [
+      'Create a high-converting ad image for EchoFlux.ai.',
+      'Style: clean, modern, creator-first SaaS aesthetic.',
+      `Objective: ${objective}.`,
+      `Target Audience: ${targetAudience.trim()}.`,
+      keyMessage.trim() ? `Key Message: ${keyMessage.trim()}.` : '',
+      'Include a subtle CTA like "Start 7-day free trial".',
+      'Focus on creators, consistency, planning, and calm confidence.',
+      'No explicit content. Use safe, mainstream visuals.',
+    ].filter(Boolean);
+
+    return parts.join(' ');
+  };
+
+  const handleGenerateImage = async () => {
+    if (!targetAudience.trim()) {
+      showToast('Please enter target audience first', 'error');
+      return;
+    }
+
+    setIsGeneratingImage(true);
+    try {
+      const prompt = adImagePrompt.trim() || buildAdImagePrompt();
+      const imageBase64 = await generateImage(prompt, null, false);
+      const dataUrl = `data:image/png;base64,${imageBase64}`;
+      setGeneratedImageData(dataUrl);
+
+      // Save to Storage + Firestore as an ad image
+      const timestamp = Date.now();
+      const storagePath = `admin/ad-images/ai-ad-${timestamp}.png`;
+      const storageRef = ref(storage, storagePath);
+      const bytes = base64ToBytes(imageBase64);
+      await uploadBytes(storageRef, bytes, { contentType: 'image/png' });
+      const downloadURL = await getDownloadURL(storageRef);
+
+      const imagesRef = collection(db, 'ad_screenshots');
+      const docRef = await addDoc(imagesRef, {
+        name: `AI Ad Creative ${new Date().toLocaleDateString()}`,
+        url: downloadURL,
+        uploadedAt: new Date(),
+        description: 'AI-generated ad creative',
+      });
+
+      setImages(prev => [{
+        id: docRef.id,
+        name: `AI Ad Creative ${new Date().toLocaleDateString()}`,
+        url: downloadURL,
+        uploadedAt: new Date(),
+        description: 'AI-generated ad creative',
+      }, ...prev]);
+
+      showToast('Ad image generated and saved', 'success');
+    } catch (error: any) {
+      console.error('Image generation failed:', error);
+      showToast(error?.message || 'Failed to generate image', 'error');
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
+
+  const handleGenerateVideo = async () => {
+    if (!targetAudience.trim()) {
+      showToast('Please enter target audience first', 'error');
+      return;
+    }
+
+    setIsGeneratingVideo(true);
+    setVideoStatus('Generating video...');
+    setGeneratedVideoUrl(null);
+    try {
+      let prompt = adVideoPrompt.trim();
+
+      if (!prompt) {
+        const adResult = await generateAd({
+          adType: 'video',
+          targetAudience: targetAudience.trim(),
+          goal: objective,
+          platform: 'TikTok',
+          tone: 'Creator-first, calm confidence',
+          callToAction: 'Try free for 7 days',
+          additionalContext: keyMessage.trim() || undefined,
+          duration: 15,
+        });
+        prompt = adResult?.result?.videoPrompt || '';
+      }
+
+      if (!prompt) {
+        throw new Error('Could not generate a video prompt. Please add a prompt and try again.');
+      }
+
+      const result = await generateVideo(prompt, null, '9:16', false);
+      if (result.videoUrl) {
+        setGeneratedVideoUrl(result.videoUrl);
+        setVideoStatus('Video ready');
+      } else if (result.operationId) {
+        setVideoOperationId(result.operationId);
+        setVideoStatus('Rendering video...');
+      } else {
+        throw new Error('Video generation failed. Please try again.');
+      }
+    } catch (error: any) {
+      console.error('Video generation failed:', error);
+      showToast(error?.message || 'Failed to generate video', 'error');
+      setVideoStatus(null);
+    } finally {
+      setIsGeneratingVideo(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!videoOperationId || generatedVideoUrl) return;
+
+    let attempts = 0;
+    const maxAttempts = 60; // ~5 minutes at 5s interval
+    const interval = setInterval(async () => {
+      attempts += 1;
+      try {
+        const status = await getVideoStatus(videoOperationId);
+        if (status.videoUrl) {
+          setGeneratedVideoUrl(status.videoUrl);
+          setVideoStatus('Video ready');
+          clearInterval(interval);
+          setVideoOperationId(null);
+        } else if (status.status) {
+          setVideoStatus(status.status);
+        }
+      } catch (err) {
+        console.warn('Video status check failed:', err);
+      }
+
+      if (attempts >= maxAttempts) {
+        setVideoStatus('Video generation timed out');
+        clearInterval(interval);
+        setVideoOperationId(null);
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [videoOperationId, generatedVideoUrl]);
+
   const handleGenerateAds = async () => {
     if (!targetAudience.trim()) {
       showToast('Please enter target audience', 'error');
@@ -512,8 +663,70 @@ export const AdGenerator: React.FC = () => {
             {isGenerating ? 'Generating Ads...' : 'Generate Ads'}
           </button>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+<<<<<<< HEAD
             This generates ad copy and hooks. Image/video creative is not auto-generated yet.
           </p>
+=======
+            Generates ad copy and hooks. Use the Creative section below to generate images or videos.
+          </p>
+        </div>
+      </div>
+
+      {/* Ad Creative Generation */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+          Ad Creative (AI Images & Videos)
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-3">
+            <h3 className="font-semibold text-gray-900 dark:text-white">Generate Image</h3>
+            <textarea
+              value={adImagePrompt}
+              onChange={(e) => setAdImagePrompt(e.target.value)}
+              placeholder="Optional: describe the ad image you want..."
+              rows={3}
+              className="w-full px-3 py-2 rounded-md bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100"
+            />
+            <button
+              onClick={handleGenerateImage}
+              disabled={isGeneratingImage || !targetAudience.trim()}
+              className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
+            >
+              {isGeneratingImage ? 'Generating Image...' : 'Generate Image'}
+            </button>
+            {generatedImageData && (
+              <div className="mt-3">
+                <img src={generatedImageData} alt="Generated ad creative" className="w-full rounded-lg border" />
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            <h3 className="font-semibold text-gray-900 dark:text-white">Generate Video</h3>
+            <textarea
+              value={adVideoPrompt}
+              onChange={(e) => setAdVideoPrompt(e.target.value)}
+              placeholder="Optional: describe the ad video you want..."
+              rows={3}
+              className="w-full px-3 py-2 rounded-md bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100"
+            />
+            <button
+              onClick={handleGenerateVideo}
+              disabled={isGeneratingVideo || !targetAudience.trim()}
+              className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
+            >
+              {isGeneratingVideo ? 'Generating Video...' : 'Generate Video'}
+            </button>
+            {videoStatus && (
+              <p className="text-sm text-gray-600 dark:text-gray-400">{videoStatus}</p>
+            )}
+            {generatedVideoUrl && (
+              <div className="mt-3">
+                <video src={generatedVideoUrl} controls className="w-full rounded-lg border" />
+              </div>
+            )}
+          </div>
+>>>>>>> feature/ad-generator
         </div>
       </div>
 
