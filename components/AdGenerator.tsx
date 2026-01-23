@@ -332,7 +332,10 @@ export const AdGenerator: React.FC = () => {
   const buildAdImagePrompt = () => {
     const parts = [
       'Create a high-converting ad image for EchoFlux.ai.',
-      'Style: clean, modern, creator-first SaaS aesthetic.',
+      'Style: modern SaaS hero ad, clean UI, soft gradients, minimal layout, professional.',
+      'Include dashboard-style mockups and a friendly illustration or subtle human element.',
+      'Layout: headline + subheadline + CTA button + UI preview (like a landing hero).',
+      'Format: social ad creative, 1200x628, lots of whitespace, high contrast CTA.',
       `Objective: ${objective}.`,
       `Target Audience: ${targetAudience.trim()}.`,
       keyMessage.trim() ? `Key Message: ${keyMessage.trim()}.` : '',
@@ -805,7 +808,7 @@ export const AdGenerator: React.FC = () => {
       {generatedAds?.strategyBrief && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-            Strategy Brief
+            Strategy Brief <span className="text-xs font-normal text-gray-500 dark:text-gray-400">(AI-generated)</span>
           </h2>
           <div className="space-y-3 text-gray-700 dark:text-gray-300">
             <div>
@@ -834,7 +837,7 @@ export const AdGenerator: React.FC = () => {
           {generatedAds.x.length > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-                X (Twitter) Ads ({generatedAds.x.length} variants)
+                X (Twitter) Ads ({generatedAds.x.length} variants) <span className="text-xs font-normal text-gray-500 dark:text-gray-400">(AI-generated)</span>
               </h2>
               <div className="space-y-4">
                 {generatedAds.x.map((ad, index) => (
@@ -876,7 +879,7 @@ export const AdGenerator: React.FC = () => {
           {generatedAds.instagram.length > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-                Instagram Ads ({generatedAds.instagram.length} variants)
+                Instagram Ads ({generatedAds.instagram.length} variants) <span className="text-xs font-normal text-gray-500 dark:text-gray-400">(AI-generated)</span>
               </h2>
               <div className="space-y-4">
                 {generatedAds.instagram.map((ad, index) => (
@@ -918,7 +921,7 @@ export const AdGenerator: React.FC = () => {
           {generatedAds.tiktok.length > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-                TikTok Ads ({generatedAds.tiktok.length} variants)
+                TikTok Ads ({generatedAds.tiktok.length} variants) <span className="text-xs font-normal text-gray-500 dark:text-gray-400">(AI-generated)</span>
               </h2>
               <div className="space-y-4">
                 {generatedAds.tiktok.map((ad, index) => (
