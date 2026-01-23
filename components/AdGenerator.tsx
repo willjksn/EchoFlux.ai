@@ -6,7 +6,7 @@ import { SparklesIcon, UploadIcon, ImageIcon, TrashIcon, CopyIcon, CheckCircleIc
 import { useAppContext } from './AppContext';
 import { storage, db, auth } from '../firebaseConfig';
 import { ref, uploadBytes, getDownloadURL, listAll, deleteObject } from 'firebase/storage';
-import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
+import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, limit } from 'firebase/firestore';
 
 interface AdImage {
   id: string;
@@ -40,6 +40,15 @@ interface GeneratedAds {
   tiktok: AdVariant[];
 }
 
+interface SavedAdSet {
+  id: string;
+  createdAt: Date;
+  objective: string;
+  targetAudience: string;
+  keyMessage: string;
+  ads: GeneratedAds;
+}
+
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -64,6 +73,8 @@ export const AdGenerator: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [savedAds, setSavedAds] = useState<SavedAdSet[]>([]);
+  const [isLoadingSavedAds, setIsLoadingSavedAds] = useState(false);
 
   // Ad generation state
   const [objective, setObjective] = useState('awareness');
@@ -84,6 +95,18 @@ export const AdGenerator: React.FC = () => {
     if (!isAdmin || !user?.id) return;
     loadImages();
   }, [isAdmin, user?.id]);
+
+  React.useEffect(() => {
+    if (!isAdmin || !user?.id) return;
+    loadSavedAds();
+  }, [isAdmin, user?.id]);
+
+  const normalizeGeneratedAds = (data: any): GeneratedAds => ({
+    strategyBrief: data?.strategyBrief || null,
+    x: Array.isArray(data?.ads?.x) ? data.ads.x : Array.isArray(data?.x) ? data.x : [],
+    instagram: Array.isArray(data?.ads?.instagram) ? data.ads.instagram : Array.isArray(data?.instagram) ? data.instagram : [],
+    tiktok: Array.isArray(data?.ads?.tiktok) ? data.ads.tiktok : Array.isArray(data?.tiktok) ? data.tiktok : [],
+  });
 
   const loadImages = async () => {
     if (!user?.id) return;
@@ -113,6 +136,34 @@ export const AdGenerator: React.FC = () => {
       showToast('Failed to load images', 'error');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadSavedAds = async () => {
+    if (!user?.id) return;
+    setIsLoadingSavedAds(true);
+    try {
+      const adsRef = collection(db, 'ad_generator_history');
+      const q = query(adsRef, orderBy('createdAt', 'desc'), limit(20));
+      const snapshot = await getDocs(q);
+      const items: SavedAdSet[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        items.push({
+          id: docSnap.id,
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
+          objective: data.objective || 'awareness',
+          targetAudience: data.targetAudience || '',
+          keyMessage: data.keyMessage || '',
+          ads: normalizeGeneratedAds(data),
+        });
+      });
+      setSavedAds(items);
+    } catch (error) {
+      console.error('Failed to load saved ads:', error);
+      showToast('Failed to load saved ads', 'error');
+    } finally {
+      setIsLoadingSavedAds(false);
     }
   };
 
@@ -298,14 +349,26 @@ export const AdGenerator: React.FC = () => {
         throw new Error(data.error || data.note || 'Failed to generate ads');
       }
 
-      const normalized: GeneratedAds = {
-        strategyBrief: data.strategyBrief || null,
-        x: Array.isArray(data.ads?.x) ? data.ads.x : [],
-        instagram: Array.isArray(data.ads?.instagram) ? data.ads.instagram : [],
-        tiktok: Array.isArray(data.ads?.tiktok) ? data.ads.tiktok : [],
-      };
+      const normalized = normalizeGeneratedAds(data);
       setGeneratedAds(normalized);
       showToast('Ads generated successfully', 'success');
+
+      // Auto-save generated ads for later use
+      try {
+        const adsRef = collection(db, 'ad_generator_history');
+        await addDoc(adsRef, {
+          objective,
+          targetAudience: targetAudience.trim(),
+          keyMessage: keyMessage.trim() || '',
+          strategyBrief: normalized.strategyBrief,
+          ads: normalized,
+          createdAt: new Date(),
+          createdBy: user?.id || 'unknown',
+        });
+        loadSavedAds();
+      } catch (saveError) {
+        console.error('Failed to auto-save ads:', saveError);
+      }
     } catch (error: any) {
       console.error('Ad generation failed:', error);
       showToast(error?.message || 'Failed to generate ads', 'error');
@@ -448,6 +511,9 @@ export const AdGenerator: React.FC = () => {
           >
             {isGenerating ? 'Generating Ads...' : 'Generate Ads'}
           </button>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+            This generates ad copy and hooks. Image/video creative is not auto-generated yet.
+          </p>
         </div>
       </div>
 
@@ -613,6 +679,49 @@ export const AdGenerator: React.FC = () => {
           )}
         </div>
       )}
+
+      {/* Saved Ads */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+          Saved Ad Hooks & Copy
+        </h2>
+        {isLoadingSavedAds ? (
+          <p className="text-gray-600 dark:text-gray-400">Loading saved ads...</p>
+        ) : savedAds.length === 0 ? (
+          <p className="text-gray-600 dark:text-gray-400">No saved ads yet.</p>
+        ) : (
+          <div className="space-y-3">
+            {savedAds.map((item) => (
+              <div
+                key={item.id}
+                className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-900"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {item.createdAt.toLocaleString()}
+                    </p>
+                    <p className="text-sm text-gray-700 dark:text-gray-300">
+                      {item.objective} · {item.targetAudience}
+                    </p>
+                    {item.keyMessage && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">
+                        {item.keyMessage}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setGeneratedAds(item.ads)}
+                    className="px-3 py-2 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600"
+                  >
+                    Load
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Image Library Section */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">

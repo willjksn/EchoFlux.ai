@@ -160,6 +160,16 @@ service cloud.firestore {
     }
 
     /** -------------------------------------------------------
+     *  AD GENERATOR HISTORY COLLECTION
+     *  -------------------------------------------------------
+     *  - Admins can read/write ad generator history
+     *  - Regular users cannot access this collection
+     *  ------------------------------------------------------- */
+    match /ad_generator_history/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    /** -------------------------------------------------------
      *  DEFAULT DENY RULE
      *  ------------------------------------------------------- 
      *  Deny all other collections to prevent unauthorized access
