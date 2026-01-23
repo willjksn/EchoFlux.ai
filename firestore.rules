@@ -170,6 +170,16 @@ service cloud.firestore {
     }
 
     /** -------------------------------------------------------
+     *  AD GENERATOR VIDEOS COLLECTION
+     *  -------------------------------------------------------
+     *  - Admins can read/write generated ad video metadata
+     *  - Regular users cannot access this collection
+     *  ------------------------------------------------------- */
+    match /ad_generator_videos/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    /** -------------------------------------------------------
      *  DEFAULT DENY RULE
      *  ------------------------------------------------------- 
      *  Deny all other collections to prevent unauthorized access
