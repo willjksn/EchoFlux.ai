@@ -90,6 +90,10 @@ export const AdGenerator: React.FC = () => {
   const [adImagePrompt, setAdImagePrompt] = useState('');
   const [adVideoPrompt, setAdVideoPrompt] = useState('');
   const [generatedImageData, setGeneratedImageData] = useState<string | null>(null);
+  const [composedImageData, setComposedImageData] = useState<string | null>(null);
+  const [overlayHeadline, setOverlayHeadline] = useState('Plan smarter. Post consistently.');
+  const [overlaySubheadline, setOverlaySubheadline] = useState('AI Content Studio for creators');
+  const [overlayCta, setOverlayCta] = useState('Start 7-day free trial');
   const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
@@ -352,6 +356,67 @@ export const AdGenerator: React.FC = () => {
     return parts.join(' ');
   };
 
+  const applyOverlayToImage = async (baseDataUrl: string) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = baseDataUrl;
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+    });
+
+    const canvas = document.createElement('canvas');
+    const width = 1200;
+    const height = 628;
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Failed to create canvas context');
+
+    // Background image
+    ctx.drawImage(img, 0, 0, width, height);
+
+    // Overlay gradient bar (top-left hero pill)
+    const gradient = ctx.createLinearGradient(0, 0, 480, 0);
+    gradient.addColorStop(0, '#2663E9');
+    gradient.addColorStop(1, '#6F39DE');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.roundRect(40, 40, 520, 80, 16);
+    ctx.fill();
+
+    // Headline
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '600 28px Inter, system-ui, -apple-system, Segoe UI, sans-serif';
+    ctx.fillText(overlayHeadline || 'Plan smarter. Post consistently.', 64, 90);
+
+    // Subheadline
+    ctx.fillStyle = '#E5E7EB';
+    ctx.font = '400 16px Inter, system-ui, -apple-system, Segoe UI, sans-serif';
+    ctx.fillText(overlaySubheadline || 'AI Content Studio for creators', 64, 128);
+
+    // CTA button
+    ctx.fillStyle = '#2663E9';
+    ctx.beginPath();
+    ctx.roundRect(40, 150, 220, 48, 12);
+    ctx.fill();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '600 16px Inter, system-ui, -apple-system, Segoe UI, sans-serif';
+    ctx.fillText(overlayCta || 'Start 7-day free trial', 60, 182);
+
+    // EchoFlux.ai stamp
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.roundRect(980, 40, 160, 36, 12);
+    ctx.fill();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '600 14px Inter, system-ui, -apple-system, Segoe UI, sans-serif';
+    ctx.fillText('EchoFlux.ai', 1010, 64);
+
+    const composed = canvas.toDataURL('image/png');
+    setComposedImageData(composed);
+  };
+
   const handleGenerateImage = async () => {
     if (!targetAudience.trim()) {
       showToast('Please enter target audience first', 'error');
@@ -364,6 +429,7 @@ export const AdGenerator: React.FC = () => {
       const imageBase64 = await generateImage(prompt, null, false);
       const dataUrl = `data:image/png;base64,${imageBase64}`;
       setGeneratedImageData(dataUrl);
+      await applyOverlayToImage(dataUrl);
       showToast('Ad image generated', 'success');
     } catch (error: any) {
       console.error('Image generation failed:', error);
@@ -374,9 +440,10 @@ export const AdGenerator: React.FC = () => {
   };
 
   const handleSaveGeneratedImage = async () => {
-    if (!generatedImageData) return;
+    const imageToSave = composedImageData || generatedImageData;
+    if (!imageToSave) return;
     try {
-      const base64Data = generatedImageData.split(',')[1];
+      const base64Data = imageToSave.split(',')[1];
       const timestamp = Date.now();
       const storagePath = `admin/ad-images/ai-ad-${timestamp}.png`;
       const storageRef = ref(storage, storagePath);
@@ -408,9 +475,10 @@ export const AdGenerator: React.FC = () => {
   };
 
   const handleDownloadGeneratedImage = () => {
-    if (!generatedImageData) return;
+    const imageToDownload = composedImageData || generatedImageData;
+    if (!imageToDownload) return;
     const link = document.createElement('a');
-    link.href = generatedImageData;
+    link.href = imageToDownload;
     link.download = `ai-ad-${Date.now()}.png`;
     document.body.appendChild(link);
     link.click();
@@ -745,6 +813,37 @@ export const AdGenerator: React.FC = () => {
               rows={3}
               className="w-full px-3 py-2 rounded-md bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100"
             />
+            <div className="grid grid-cols-1 gap-2">
+              <input
+                type="text"
+                value={overlayHeadline}
+                onChange={(e) => setOverlayHeadline(e.target.value)}
+                placeholder="Headline"
+                className="w-full px-3 py-2 rounded-md bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100"
+              />
+              <input
+                type="text"
+                value={overlaySubheadline}
+                onChange={(e) => setOverlaySubheadline(e.target.value)}
+                placeholder="Subheadline"
+                className="w-full px-3 py-2 rounded-md bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100"
+              />
+              <input
+                type="text"
+                value={overlayCta}
+                onChange={(e) => setOverlayCta(e.target.value)}
+                placeholder="CTA text"
+                className="w-full px-3 py-2 rounded-md bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100"
+              />
+              {generatedImageData && (
+                <button
+                  onClick={() => applyOverlayToImage(generatedImageData)}
+                  className="px-3 py-2 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600"
+                >
+                  Apply Overlay
+                </button>
+              )}
+            </div>
             <button
               onClick={handleGenerateImage}
               disabled={isGeneratingImage || !targetAudience.trim()}
@@ -759,9 +858,9 @@ export const AdGenerator: React.FC = () => {
                 'Generate Image'
               )}
             </button>
-            {generatedImageData && (
+            {(composedImageData || generatedImageData) && (
               <div className="mt-3">
-                <img src={generatedImageData} alt="Generated ad creative" className="w-full rounded-lg border" />
+                <img src={composedImageData || generatedImageData || ''} alt="Generated ad creative" className="w-full rounded-lg border" />
                 <div className="mt-2 flex gap-2">
                   <button
                     onClick={handleSaveGeneratedImage}
