@@ -92,8 +92,8 @@ export const AdGenerator: React.FC = () => {
   const [adVideoPrompt, setAdVideoPrompt] = useState('');
   const [generatedImageData, setGeneratedImageData] = useState<string | null>(null);
   const [composedImageData, setComposedImageData] = useState<string | null>(null);
-  const [overlayHeadline, setOverlayHeadline] = useState('Plan smarter. Post consistently.');
-  const [overlaySubheadline, setOverlaySubheadline] = useState('Content Studio for creators');
+  const [overlayHeadline, setOverlayHeadline] = useState('Plan. Write. Schedule.');
+  const [overlaySubheadline, setOverlaySubheadline] = useState('EchoFlux.ai for creators — all-in-one content studio');
   const [overlayCta, setOverlayCta] = useState('Start 7-day free trial');
   const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
@@ -102,6 +102,10 @@ export const AdGenerator: React.FC = () => {
   const [videoOperationId, setVideoOperationId] = useState<string | null>(null);
 
   const getBaseImageForVideo = async (): Promise<{ data: string; mimeType: string } | null> => {
+    if (composedImageData) {
+      const base64Data = composedImageData.split(',')[1];
+      return { data: base64Data, mimeType: 'image/png' };
+    }
     if (generatedImageData) {
       const base64Data = generatedImageData.split(',')[1];
       return { data: base64Data, mimeType: 'image/png' };
@@ -319,6 +323,35 @@ export const AdGenerator: React.FC = () => {
     }
   };
 
+  const buildThirdPartyCopyPack = (): { text: string; hasContent: boolean } => {
+    if (!generatedAds) {
+      return { text: '', hasContent: false };
+    }
+    const firstAd = generatedAds.x[0] || generatedAds.instagram[0] || generatedAds.tiktok[0];
+    const lines: string[] = [];
+    lines.push(`Headline: ${overlayHeadline}`);
+    lines.push(`Subheadline: ${overlaySubheadline}`);
+    lines.push(`CTA: ${overlayCta || generatedAds.strategyBrief?.cta || 'Start 7-day free trial'}`);
+    if (generatedAds.strategyBrief?.keyMessage) {
+      lines.push(`Key message: ${generatedAds.strategyBrief.keyMessage}`);
+    } else if (keyMessage.trim()) {
+      lines.push(`Key message: ${keyMessage.trim()}`);
+    }
+    if (firstAd?.hook) {
+      lines.push(`Hook: ${firstAd.hook}`);
+    }
+    if (firstAd?.benefit) {
+      lines.push(`Benefit: ${firstAd.benefit}`);
+    }
+    if (firstAd?.copy) {
+      lines.push(`Primary text: ${firstAd.copy}`);
+    }
+    if (firstAd?.hashtags?.length) {
+      lines.push(`Hashtags: ${firstAd.hashtags.join(' ')}`);
+    }
+    return { text: lines.join('\n'), hasContent: lines.length > 0 };
+  };
+
   const handleAiHelp = async () => {
     if (!targetAudience.trim()) {
       showToast('Please enter target audience first', 'error');
@@ -362,10 +395,12 @@ export const AdGenerator: React.FC = () => {
   const buildAdImagePrompt = () => {
     const parts = [
       'Create a high-converting ad image for EchoFlux.ai.',
-      'Style: EchoFlux UI (light + dark) with clean modern SaaS aesthetic.',
-      'Include EchoFlux dashboard UI as the main visual (sidebar + cards + gradient hero bar).',
-      'Layout: headline + subheadline + CTA button + UI preview (landing hero style).',
+      'Style: minimal EchoFlux UI with clean modern SaaS aesthetic.',
+      'Include a single EchoFlux dashboard preview as the main visual.',
+      'Layout: simple hero with headline + subheadline + CTA + one UI card.',
+      'Keep it minimal: 1 dashboard, 1-2 cards max, no extra widgets.',
       'Format: social ad creative, 1200x628, lots of whitespace, high contrast CTA.',
+      'Ensure the app name "EchoFlux.ai" is visible in the header or logo area.',
       'Do NOT include people, faces, hands, or real-world photography.',
       'Do NOT include office scenes or stock photo backgrounds.',
       'Only use UI mockups, cards, charts, buttons, gradients, and subtle abstract shapes.',
@@ -981,7 +1016,7 @@ export const AdGenerator: React.FC = () => {
       {generatedAds?.strategyBrief && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-            Strategy Brief <span className="text-xs font-normal text-gray-500 dark:text-gray-400">(AI-generated)</span>
+            Strategy Brief
           </h2>
           <div className="space-y-3 text-gray-700 dark:text-gray-300">
             <div>
@@ -1006,11 +1041,41 @@ export const AdGenerator: React.FC = () => {
       {/* Generated Ads Display */}
       {generatedAds && (
         <div className="space-y-6">
+          {(() => {
+            const pack = buildThirdPartyCopyPack();
+            if (!pack.hasContent) return null;
+            return (
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                  Third-Party Ad Copy Pack
+                </h2>
+                <div className="flex items-start justify-between mb-2">
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    Ready to paste into any ad generator
+                  </span>
+                  <button
+                    onClick={() => copyToClipboard(pack.text, 'pack', 0)}
+                    className="p-2 text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
+                    title="Copy pack"
+                  >
+                    {copiedIndex?.platform === 'pack' ? (
+                      <CheckCircleIcon className="w-5 h-5 text-green-600" />
+                    ) : (
+                      <CopyIcon className="w-5 h-5" />
+                    )}
+                  </button>
+                </div>
+                <pre className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap bg-gray-50 dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                  {pack.text}
+                </pre>
+              </div>
+            );
+          })()}
           {/* X (Twitter) Ads */}
           {generatedAds.x.length > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-                X (Twitter) Ads ({generatedAds.x.length} variants) <span className="text-xs font-normal text-gray-500 dark:text-gray-400">(AI-generated)</span>
+                X (Twitter) Ads ({generatedAds.x.length} variants)
               </h2>
               <div className="space-y-4">
                 {generatedAds.x.map((ad, index) => (
@@ -1052,7 +1117,7 @@ export const AdGenerator: React.FC = () => {
           {generatedAds.instagram.length > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-                Instagram Ads ({generatedAds.instagram.length} variants) <span className="text-xs font-normal text-gray-500 dark:text-gray-400">(AI-generated)</span>
+                Instagram Ads ({generatedAds.instagram.length} variants)
               </h2>
               <div className="space-y-4">
                 {generatedAds.instagram.map((ad, index) => (
@@ -1094,7 +1159,7 @@ export const AdGenerator: React.FC = () => {
           {generatedAds.tiktok.length > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-                TikTok Ads ({generatedAds.tiktok.length} variants) <span className="text-xs font-normal text-gray-500 dark:text-gray-400">(AI-generated)</span>
+                TikTok Ads ({generatedAds.tiktok.length} variants)
               </h2>
               <div className="space-y-4">
                 {generatedAds.tiktok.map((ad, index) => (
