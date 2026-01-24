@@ -6,6 +6,8 @@ import { verifyAuth } from "./verifyAuth.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { getModelForTask } from "./_modelRouter.js";
 import { enforceRateLimit } from "./_rateLimit.js";
+import path from "path";
+import { readdir, readFile, stat } from "fs/promises";
 
 // Brand guardrails for EchoFlux
 const BRAND_VOICE = `
@@ -92,11 +94,113 @@ export default async function handler(
     selectedImageId,
     selectedScreenshotId, // Support both for backward compatibility
     generateStrategy = true,
+    useAppContext = true,
   } = req.body || {};
 
   if (!targetAudience || typeof targetAudience !== "string") {
     res.status(400).json({ error: "targetAudience is required" });
     return;
+  }
+
+  const summarizeAppContext = async (): Promise<string> => {
+    if (!useAppContext) return "";
+
+    const rootDir = process.cwd();
+    const allowDirs = ["components", "src", "api", "public"];
+    const allowFiles = ["README.md", "package.json"];
+    const ignoreDirs = new Set(["node_modules", "dist", "build", ".git", ".vercel", ".next", ".turbo"]);
+    const allowedExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".md", ".json"]);
+    const maxFiles = 60;
+    const maxBytes = 120_000;
+
+    const collected: string[] = [];
+    let totalBytes = 0;
+
+    const shouldIncludeFile = (filePath: string) => {
+      const ext = path.extname(filePath);
+      return allowedExtensions.has(ext);
+    };
+
+    const walkDir = async (dirPath: string, depth: number) => {
+      if (collected.length >= maxFiles || totalBytes >= maxBytes || depth > 4) return;
+      let entries;
+      try {
+        entries = await readdir(dirPath, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        if (collected.length >= maxFiles || totalBytes >= maxBytes) break;
+        const fullPath = path.join(dirPath, entry.name);
+        if (entry.isDirectory()) {
+          if (ignoreDirs.has(entry.name)) continue;
+          await walkDir(fullPath, depth + 1);
+        } else if (entry.isFile()) {
+          const rel = path.relative(rootDir, fullPath);
+          if (!shouldIncludeFile(fullPath)) continue;
+          try {
+            const fileStats = await stat(fullPath);
+            if (fileStats.size > 80_000) continue;
+            const content = await readFile(fullPath, "utf8");
+            const clipped = content.slice(0, 6000);
+            const chunk = `\nFILE: ${rel}\n${clipped}\n`;
+            const chunkBytes = Buffer.byteLength(chunk, "utf8");
+            if (totalBytes + chunkBytes > maxBytes) continue;
+            collected.push(chunk);
+            totalBytes += chunkBytes;
+          } catch {
+            // ignore unreadable files
+          }
+        }
+      }
+    };
+
+    for (const fileName of allowFiles) {
+      if (collected.length >= maxFiles || totalBytes >= maxBytes) break;
+      const fullPath = path.join(rootDir, fileName);
+      try {
+        const content = await readFile(fullPath, "utf8");
+        const clipped = content.slice(0, 6000);
+        const chunk = `\nFILE: ${fileName}\n${clipped}\n`;
+        const chunkBytes = Buffer.byteLength(chunk, "utf8");
+        if (totalBytes + chunkBytes <= maxBytes) {
+          collected.push(chunk);
+          totalBytes += chunkBytes;
+        }
+      } catch {
+        // ignore missing
+      }
+    }
+
+    for (const dirName of allowDirs) {
+      await walkDir(path.join(rootDir, dirName), 0);
+      if (collected.length >= maxFiles || totalBytes >= maxBytes) break;
+    }
+
+    if (collected.length === 0) return "";
+
+    const summaryModel = await getModelForTask("analytics", authUser.uid);
+    const summaryPrompt = `
+You are analyzing the current app codebase to extract marketing-relevant context.
+Summarize the product in 6-10 bullet points. Include: core features, benefits, target creators, workflow, and outcomes.
+Avoid mentioning AI, artificial intelligence, machine learning, or automation.
+Avoid internal implementation details, code terms, or file names.
+Return only bullet points.
+
+CODEBASE EXCERPTS:
+${collected.join("\n")}
+`;
+    const summaryResult = await summaryModel.generateContent({
+      contents: [{ role: "user", parts: [{ text: summaryPrompt }] }],
+    });
+    return summaryResult.response.text().trim();
+  };
+
+  let appContextSummary = "";
+  try {
+    appContextSummary = await summarizeAppContext();
+  } catch (err) {
+    console.warn("Failed to summarize app context:", err);
   }
 
   try {
@@ -129,6 +233,8 @@ ${APPROVED_CLAIMS.map((claim) => `- ${claim}`).join("\n")}
 Important:
 - Do NOT mention AI, artificial intelligence, or “AI-led”
 - Do NOT mention machine learning or automation
+
+${appContextSummary ? `APP CONTEXT SUMMARY:\n${appContextSummary}\n` : ""}
 
 Inputs:
 - Objective: ${objective}
@@ -193,6 +299,8 @@ ${APPROVED_CLAIMS.map((claim) => `- ${claim}`).join("\n")}
 Important:
 - Do NOT mention AI, artificial intelligence, or “AI-led”
 - Do NOT mention machine learning or automation
+
+${appContextSummary ? `APP CONTEXT SUMMARY:\n${appContextSummary}\n` : ""}
 
 STRATEGY BRIEF:
 - Objective: ${finalObjective}

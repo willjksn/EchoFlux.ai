@@ -83,6 +83,7 @@ export const AdGenerator: React.FC = () => {
   const [keyMessage, setKeyMessage] = useState('');
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const [generateStrategy, setGenerateStrategy] = useState(true);
+  const [useAppContext, setUseAppContext] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedAds, setGeneratedAds] = useState<GeneratedAds | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<{ platform: string; index: number } | null>(null);
@@ -656,6 +657,7 @@ export const AdGenerator: React.FC = () => {
           keyMessage: keyMessage.trim() || undefined,
           selectedImageId,
           generateStrategy,
+          useAppContext,
         }),
       });
 
@@ -817,6 +819,18 @@ export const AdGenerator: React.FC = () => {
             />
             <label htmlFor="generateStrategy" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
               Generate strategy brief first (recommended)
+            </label>
+          </div>
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="useAppContext"
+              checked={useAppContext}
+              onChange={(e) => setUseAppContext(e.target.checked)}
+              className="w-4 h-4 text-primary-600 rounded border-gray-300"
+            />
+            <label htmlFor="useAppContext" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+              Analyze current app codebase for ad context
             </label>
           </div>
 
