@@ -543,7 +543,7 @@ export const Dashboard: React.FC = () => {
   
   // Admin-only: User engagement & health metrics
   const [userEngagementData, setUserEngagementData] = useState<{
-    conversionFunnel: { free: number; pro: number; elite: number; total: number };
+    conversionFunnel: { pro: number; elite: number; total: number };
     churnRisk: number; // Users who signed up >30 days ago but have low/no activity
     featureAdoption: { captions: number; images: number; videos: number; anyFeature: number; adImages: number; adVideos: number };
     mostActiveUsers: Array<{ id: string; name: string; email: string; totalUsage: number; plan: string }>;
@@ -610,9 +610,9 @@ export const Dashboard: React.FC = () => {
         const now = new Date();
         const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
         
-        let freeCount = 0;
         let proCount = 0;
         let eliteCount = 0;
+        let totalUsersCount = 0;
         let churnRiskCount = 0;
         let captionsUsers = 0;
         let imagesUsers = 0;
@@ -627,11 +627,11 @@ export const Dashboard: React.FC = () => {
           // Skip admins
           if (userData.role === 'Admin') return;
           
-          // Count plans (only Free, Pro, Elite for funnel)
-          const plan = userData.plan || 'Free';
-          if (plan === 'Free') freeCount++;
-          else if (plan === 'Pro') proCount++;
+          // Count plans (only Pro/Elite for funnel)
+          const plan = userData.plan || null;
+          if (plan === 'Pro') proCount++;
           else if (plan === 'Elite') eliteCount++;
+          totalUsersCount++;
           
           // Calculate usage
           const captions = Number(userData.monthlyCaptionGenerationsUsed || 0);
@@ -667,7 +667,7 @@ export const Dashboard: React.FC = () => {
         userActivity.sort((a, b) => b.totalUsage - a.totalUsage);
         const mostActive = userActivity.slice(0, 5);
         
-        const totalUsers = freeCount + proCount + eliteCount;
+        const totalUsers = totalUsersCount;
         const adImagesSnapshot = await getDocs(collection(db, 'ad_screenshots'));
         const adVideosSnapshot = await getDocs(collection(db, 'ad_generator_videos'));
         const adImagesCount = adImagesSnapshot.size;
@@ -676,7 +676,6 @@ export const Dashboard: React.FC = () => {
         if (isMounted) {
           setUserEngagementData({
             conversionFunnel: {
-              free: freeCount,
               pro: proCount,
               elite: eliteCount,
               total: totalUsers
@@ -3519,20 +3518,6 @@ export const Dashboard: React.FC = () => {
                 <div>
                   <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Conversion Funnel</h4>
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600 dark:text-gray-400">Free</span>
-                      <div className="flex items-center gap-3">
-                        <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                          <div 
-                            className="bg-gray-400 dark:bg-gray-600 h-2 rounded-full" 
-                            style={{ width: `${userEngagementData.conversionFunnel.total > 0 ? (userEngagementData.conversionFunnel.free / userEngagementData.conversionFunnel.total * 100) : 0}%` }}
-                          ></div>
-                        </div>
-                        <span className="text-sm font-semibold text-gray-900 dark:text-white w-12 text-right">
-                          {userEngagementData.conversionFunnel.free}
-                        </span>
-                      </div>
-                    </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-gray-600 dark:text-gray-400">Pro</span>
                       <div className="flex items-center gap-3">
