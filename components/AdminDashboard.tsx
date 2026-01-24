@@ -14,7 +14,7 @@ import { WaitlistManager } from './WaitlistManager';
 import { AdGenerator } from './AdGenerator';
 import { TeamIcon, DollarSignIcon, UserPlusIcon, ArrowUpCircleIcon, ImageIcon, VideoIcon, LockIcon, TrendingIcon, TrashIcon } from './icons/UIIcons';
 import { db, auth } from '../firebaseConfig';
-import { collection, query, orderBy, onSnapshot, setDoc, doc, getDoc, deleteField, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, setDoc, doc, getDoc, deleteField, getDocs, limit } from 'firebase/firestore';
 import { useAppContext } from './AppContext';
 import { defaultSettings } from '../constants';
 import { getModelUsageAnalytics, type ModelUsageStats } from '../src/services/modelUsageService';
@@ -155,6 +155,9 @@ export const AdminDashboard: React.FC = () => {
     const [modelUsageStats, setModelUsageStats] = useState<ModelUsageStats | null>(null);
     const [isLoadingModelStats, setIsLoadingModelStats] = useState(true);
     const [modelStatsDays, setModelStatsDays] = useState<number>(30);
+    const [recentAdImages, setRecentAdImages] = useState<Array<{ id: string; url: string; name: string; uploadedAt?: Date }>>([]);
+    const [recentAdVideos, setRecentAdVideos] = useState<Array<{ id: string; url: string; createdAt?: Date }>>([]);
+    const [isLoadingAdCreatives, setIsLoadingAdCreatives] = useState(false);
     const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'tools'>('overview');
     const [toolsTab, setToolsTab] = useState<'toolsHome' | 'referralRewards' | 'announcements' | 'invites' | 'waitlist' | 'email' | 'feedback' | 'feedbackForms' | 'reviews' | 'adGenerator'>('toolsHome');
     const [userStorageMap, setUserStorageMap] = useState<Record<string, number>>({});
@@ -212,6 +215,53 @@ export const AdminDashboard: React.FC = () => {
 
         fetchModelStats();
     }, [currentUser?.role, modelStatsDays]);
+
+    // Fetch recent ad creatives
+    useEffect(() => {
+        const fetchAdCreatives = async () => {
+            if (currentUser?.role !== 'Admin') return;
+            setIsLoadingAdCreatives(true);
+            try {
+                const imagesSnap = await getDocs(
+                    query(collection(db, 'ad_screenshots'), orderBy('uploadedAt', 'desc'), limit(6))
+                );
+                const videosSnap = await getDocs(
+                    query(collection(db, 'ad_generator_videos'), orderBy('createdAt', 'desc'), limit(6))
+                );
+
+                setRecentAdImages(
+                    imagesSnap.docs.map(docSnap => {
+                        const data = docSnap.data();
+                        return {
+                            id: docSnap.id,
+                            url: data.url || '',
+                            name: data.name || 'Ad Image',
+                            uploadedAt: data.uploadedAt?.toDate ? data.uploadedAt.toDate() : undefined,
+                        };
+                    }).filter(item => item.url)
+                );
+
+                setRecentAdVideos(
+                    videosSnap.docs.map(docSnap => {
+                        const data = docSnap.data();
+                        return {
+                            id: docSnap.id,
+                            url: data.url || '',
+                            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : undefined,
+                        };
+                    }).filter(item => item.url)
+                );
+            } catch (error) {
+                if (process.env.NODE_ENV === 'development') {
+                    console.warn('Failed to fetch ad creatives:', error);
+                }
+            } finally {
+                setIsLoadingAdCreatives(false);
+            }
+        };
+
+        fetchAdCreatives();
+    }, [currentUser?.role]);
 
     // Check and create admin alerts periodically
     useEffect(() => {
@@ -803,6 +853,57 @@ export const AdminDashboard: React.FC = () => {
                             <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No recent activity.</p>
                         )}
                     </ul>
+                </div>
+            </div>
+
+            {/* Recent Ad Creatives */}
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md mt-6">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">Recent Ad Creatives</h3>
+                    {isLoadingAdCreatives && (
+                        <span className="text-xs text-gray-500 dark:text-gray-400">Loading...</span>
+                    )}
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div>
+                        <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Image Ads</h4>
+                        {recentAdImages.length === 0 ? (
+                            <p className="text-sm text-gray-500 dark:text-gray-400">No image ads yet.</p>
+                        ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {recentAdImages.map(image => (
+                                    <div key={image.id} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-900">
+                                        <img src={image.url} alt={image.name} className="w-full h-28 object-cover" />
+                                        <div className="p-2">
+                                            <p className="text-xs text-gray-700 dark:text-gray-300 truncate">{image.name}</p>
+                                            {image.uploadedAt && (
+                                                <p className="text-[11px] text-gray-500 dark:text-gray-400">{image.uploadedAt.toLocaleString()}</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    <div>
+                        <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Video Ads</h4>
+                        {recentAdVideos.length === 0 ? (
+                            <p className="text-sm text-gray-500 dark:text-gray-400">No video ads yet.</p>
+                        ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {recentAdVideos.map(video => (
+                                    <div key={video.id} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-900">
+                                        <video src={video.url} className="w-full h-28 object-cover" controls />
+                                        <div className="p-2">
+                                            {video.createdAt && (
+                                                <p className="text-[11px] text-gray-500 dark:text-gray-400">{video.createdAt.toLocaleString()}</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 

@@ -92,13 +92,38 @@ export const AdGenerator: React.FC = () => {
   const [generatedImageData, setGeneratedImageData] = useState<string | null>(null);
   const [composedImageData, setComposedImageData] = useState<string | null>(null);
   const [overlayHeadline, setOverlayHeadline] = useState('Plan smarter. Post consistently.');
-  const [overlaySubheadline, setOverlaySubheadline] = useState('AI Content Studio for creators');
+  const [overlaySubheadline, setOverlaySubheadline] = useState('Content Studio for creators');
   const [overlayCta, setOverlayCta] = useState('Start 7-day free trial');
   const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
   const [videoStatus, setVideoStatus] = useState<string | null>(null);
   const [videoOperationId, setVideoOperationId] = useState<string | null>(null);
+
+  const getBaseImageForVideo = async (): Promise<{ data: string; mimeType: string } | null> => {
+    if (generatedImageData) {
+      const base64Data = generatedImageData.split(',')[1];
+      return { data: base64Data, mimeType: 'image/png' };
+    }
+
+    if (selectedImageId) {
+      const selected = images.find((img) => img.id === selectedImageId);
+      if (!selected?.url) return null;
+      const response = await fetch(selected.url);
+      const blob = await response.blob();
+      const mimeType = blob.type || 'image/png';
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      const base64Data = dataUrl.split(',')[1];
+      return { data: base64Data, mimeType };
+    }
+
+    return null;
+  };
 
   // Check if user is admin
   const isAdmin = user?.role === 'Admin';
@@ -323,7 +348,7 @@ export const AdGenerator: React.FC = () => {
 
       if (data.suggestion) {
         setKeyMessage(data.suggestion);
-        showToast('AI suggestion generated', 'success');
+        showToast('Suggestion generated', 'success');
       }
     } catch (error: any) {
       console.error('AI help failed:', error);
@@ -397,7 +422,7 @@ export const AdGenerator: React.FC = () => {
     // Subheadline
     ctx.fillStyle = '#E5E7EB';
     ctx.font = '400 16px Inter, system-ui, -apple-system, Segoe UI, sans-serif';
-    ctx.fillText(overlaySubheadline || 'AI Content Studio for creators', 64, 128);
+    ctx.fillText(overlaySubheadline || 'Content Studio for creators', 64, 128);
 
     // CTA button
     ctx.fillStyle = '#2663E9';
@@ -495,6 +520,12 @@ export const AdGenerator: React.FC = () => {
       return;
     }
 
+    const baseImage = await getBaseImageForVideo();
+    if (!baseImage) {
+      showToast('Stable Video Diffusion requires an input image. Generate or select an image first.', 'error');
+      return;
+    }
+
     setIsGeneratingVideo(true);
     setVideoStatus('Generating video...');
     setGeneratedVideoUrl(null);
@@ -525,7 +556,7 @@ export const AdGenerator: React.FC = () => {
         throw new Error('Could not generate a video prompt. Please add a prompt and try again.');
       }
 
-      const result = await generateVideo(prompt, null, '9:16', false);
+      const result = await generateVideo(prompt, baseImage, '9:16', false);
       if (result.videoUrl) {
         setGeneratedVideoUrl(result.videoUrl);
         setVideoStatus('Video ready');

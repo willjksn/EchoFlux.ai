@@ -13,12 +13,11 @@ EchoFlux Voice:
 - Creator-first, supportive, calm confidence
 - Short, clear lines
 - Emphasize consistency and burnout prevention
-- AI-led guidance, not overwhelm
 `;
 
 const APPROVED_CLAIMS = [
   "Plan → create → post workflow designed for creators",
-  "AI-led planning keeps you consistent",
+  "Planning keeps you consistent",
   "Prevents burnout and decision fatigue",
   "Built for monetized creators and new creators starting out",
   "The creators who plan consistently earn 3x more",
@@ -127,6 +126,10 @@ ${BRAND_VOICE}
 APPROVED CLAIMS (use only these):
 ${APPROVED_CLAIMS.map((claim) => `- ${claim}`).join("\n")}
 
+Important:
+- Do NOT mention AI, artificial intelligence, or “AI-led”
+- Do NOT mention machine learning or automation
+
 Inputs:
 - Objective: ${objective}
 - Target Audience: ${targetAudience}
@@ -186,6 +189,10 @@ ${BRAND_VOICE}
 
 APPROVED CLAIMS (use only these):
 ${APPROVED_CLAIMS.map((claim) => `- ${claim}`).join("\n")}
+
+Important:
+- Do NOT mention AI, artificial intelligence, or “AI-led”
+- Do NOT mention machine learning or automation
 
 STRATEGY BRIEF:
 - Objective: ${finalObjective}
