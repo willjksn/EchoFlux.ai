@@ -545,7 +545,7 @@ export const Dashboard: React.FC = () => {
   const [userEngagementData, setUserEngagementData] = useState<{
     conversionFunnel: { free: number; pro: number; elite: number; total: number };
     churnRisk: number; // Users who signed up >30 days ago but have low/no activity
-    featureAdoption: { captions: number; images: number; videos: number; anyFeature: number };
+    featureAdoption: { captions: number; images: number; videos: number; anyFeature: number; adImages: number; adVideos: number };
     mostActiveUsers: Array<{ id: string; name: string; email: string; totalUsage: number; plan: string }>;
     totalUsers: number;
   } | null>(null);
@@ -668,6 +668,10 @@ export const Dashboard: React.FC = () => {
         const mostActive = userActivity.slice(0, 5);
         
         const totalUsers = freeCount + proCount + eliteCount;
+        const adImagesSnapshot = await getDocs(collection(db, 'ad_screenshots'));
+        const adVideosSnapshot = await getDocs(collection(db, 'ad_generator_videos'));
+        const adImagesCount = adImagesSnapshot.size;
+        const adVideosCount = adVideosSnapshot.size;
         
         if (isMounted) {
           setUserEngagementData({
@@ -682,7 +686,9 @@ export const Dashboard: React.FC = () => {
               captions: captionsUsers,
               images: imagesUsers,
               videos: videosUsers,
-              anyFeature: anyFeatureUsers
+              anyFeature: anyFeatureUsers,
+              adImages: adImagesCount,
+              adVideos: adVideosCount,
             },
             mostActiveUsers: mostActive,
             totalUsers
@@ -3590,26 +3596,18 @@ export const Dashboard: React.FC = () => {
                       </p>
                     </div>
                     <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Image Gen</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Ad Image Gen</p>
                       <p className="text-lg font-bold text-gray-900 dark:text-white">
-                        {userEngagementData.featureAdoption.images}
+                        {userEngagementData.featureAdoption.adImages}
                       </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        {userEngagementData.conversionFunnel.total > 0 
-                          ? `${(userEngagementData.featureAdoption.images / userEngagementData.conversionFunnel.total * 100).toFixed(1)}% of users`
-                          : '—'}
-                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Total generated</p>
                     </div>
                     <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Video Gen</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Ad Video Gen</p>
                       <p className="text-lg font-bold text-gray-900 dark:text-white">
-                        {userEngagementData.featureAdoption.videos}
+                        {userEngagementData.featureAdoption.adVideos}
                       </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        {userEngagementData.conversionFunnel.total > 0 
-                          ? `${(userEngagementData.featureAdoption.videos / userEngagementData.conversionFunnel.total * 100).toFixed(1)}% of users`
-                          : '—'}
-                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Total generated</p>
                     </div>
                     <div className="p-3 bg-primary-50 dark:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-700">
                       <p className="text-xs text-primary-700 dark:text-primary-300 mb-1">Any Feature</p>

@@ -14,7 +14,7 @@ import { WaitlistManager } from './WaitlistManager';
 import { AdGenerator } from './AdGenerator';
 import { TeamIcon, DollarSignIcon, UserPlusIcon, ArrowUpCircleIcon, ImageIcon, VideoIcon, LockIcon, TrendingIcon, TrashIcon } from './icons/UIIcons';
 import { db, auth } from '../firebaseConfig';
-import { collection, query, orderBy, onSnapshot, setDoc, doc, getDoc, deleteField, getDocs, limit } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, setDoc, doc, getDoc, deleteField, getDocs } from 'firebase/firestore';
 import { useAppContext } from './AppContext';
 import { defaultSettings } from '../constants';
 import { getModelUsageAnalytics, type ModelUsageStats } from '../src/services/modelUsageService';
@@ -26,6 +26,10 @@ const DEFAULT_MODEL_USAGE_STATS: ModelUsageStats = {
     totalCost: 0.01,
     averageCostPerRequest: 0.0000157,
     errorRate: 2.0,
+    adImageCostsByModel: {},
+    adVideoCostsByModel: {},
+    adImageRequestsByModel: {},
+    adVideoRequestsByModel: {},
     requestsByModel: {
         'gemini-2.0-flash': 354,
         'gemini-2.0-flash-lite': 267,
@@ -155,9 +159,6 @@ export const AdminDashboard: React.FC = () => {
     const [modelUsageStats, setModelUsageStats] = useState<ModelUsageStats | null>(null);
     const [isLoadingModelStats, setIsLoadingModelStats] = useState(true);
     const [modelStatsDays, setModelStatsDays] = useState<number>(30);
-    const [recentAdImages, setRecentAdImages] = useState<Array<{ id: string; url: string; name: string; uploadedAt?: Date }>>([]);
-    const [recentAdVideos, setRecentAdVideos] = useState<Array<{ id: string; url: string; createdAt?: Date }>>([]);
-    const [isLoadingAdCreatives, setIsLoadingAdCreatives] = useState(false);
     const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'tools'>('overview');
     const [toolsTab, setToolsTab] = useState<'toolsHome' | 'referralRewards' | 'announcements' | 'invites' | 'waitlist' | 'email' | 'feedback' | 'feedbackForms' | 'reviews' | 'adGenerator'>('toolsHome');
     const [userStorageMap, setUserStorageMap] = useState<Record<string, number>>({});
@@ -216,52 +217,6 @@ export const AdminDashboard: React.FC = () => {
         fetchModelStats();
     }, [currentUser?.role, modelStatsDays]);
 
-    // Fetch recent ad creatives
-    useEffect(() => {
-        const fetchAdCreatives = async () => {
-            if (currentUser?.role !== 'Admin') return;
-            setIsLoadingAdCreatives(true);
-            try {
-                const imagesSnap = await getDocs(
-                    query(collection(db, 'ad_screenshots'), orderBy('uploadedAt', 'desc'), limit(6))
-                );
-                const videosSnap = await getDocs(
-                    query(collection(db, 'ad_generator_videos'), orderBy('createdAt', 'desc'), limit(6))
-                );
-
-                setRecentAdImages(
-                    imagesSnap.docs.map(docSnap => {
-                        const data = docSnap.data();
-                        return {
-                            id: docSnap.id,
-                            url: data.url || '',
-                            name: data.name || 'Ad Image',
-                            uploadedAt: data.uploadedAt?.toDate ? data.uploadedAt.toDate() : undefined,
-                        };
-                    }).filter(item => item.url)
-                );
-
-                setRecentAdVideos(
-                    videosSnap.docs.map(docSnap => {
-                        const data = docSnap.data();
-                        return {
-                            id: docSnap.id,
-                            url: data.url || '',
-                            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : undefined,
-                        };
-                    }).filter(item => item.url)
-                );
-            } catch (error) {
-                if (process.env.NODE_ENV === 'development') {
-                    console.warn('Failed to fetch ad creatives:', error);
-                }
-            } finally {
-                setIsLoadingAdCreatives(false);
-            }
-        };
-
-        fetchAdCreatives();
-    }, [currentUser?.role]);
 
     // Check and create admin alerts periodically
     useEffect(() => {
@@ -856,62 +811,11 @@ export const AdminDashboard: React.FC = () => {
                 </div>
             </div>
 
-            {/* Recent Ad Creatives */}
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md mt-6">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">Recent Ad Creatives</h3>
-                    {isLoadingAdCreatives && (
-                        <span className="text-xs text-gray-500 dark:text-gray-400">Loading...</span>
-                    )}
-                </div>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div>
-                        <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Image Ads</h4>
-                        {recentAdImages.length === 0 ? (
-                            <p className="text-sm text-gray-500 dark:text-gray-400">No image ads yet.</p>
-                        ) : (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                {recentAdImages.map(image => (
-                                    <div key={image.id} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-900">
-                                        <img src={image.url} alt={image.name} className="w-full h-28 object-cover" />
-                                        <div className="p-2">
-                                            <p className="text-xs text-gray-700 dark:text-gray-300 truncate">{image.name}</p>
-                                            {image.uploadedAt && (
-                                                <p className="text-[11px] text-gray-500 dark:text-gray-400">{image.uploadedAt.toLocaleString()}</p>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                    <div>
-                        <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Video Ads</h4>
-                        {recentAdVideos.length === 0 ? (
-                            <p className="text-sm text-gray-500 dark:text-gray-400">No video ads yet.</p>
-                        ) : (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                {recentAdVideos.map(video => (
-                                    <div key={video.id} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-900">
-                                        <video src={video.url} className="w-full h-28 object-cover" controls />
-                                        <div className="p-2">
-                                            {video.createdAt && (
-                                                <p className="text-[11px] text-gray-500 dark:text-gray-400">{video.createdAt.toLocaleString()}</p>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-
             {/* Model Usage Analytics */}
             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                     <div>
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">AI Model Usage Analytics</h3>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Model Usage Analytics</h3>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Track model usage, costs, and performance</p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -1022,6 +926,39 @@ export const AdminDashboard: React.FC = () => {
                                                 </div>
                                             );
                                         })}
+                                </div>
+                            </div>
+
+                            {/* Ad Generation Costs by Model */}
+                            <div>
+                                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Ad Generation Costs by Model</h4>
+                                <div className="space-y-3">
+                                    <div>
+                                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Image Ads</p>
+                                        {(modelUsageStats.adImageCostsByModel && Object.keys(modelUsageStats.adImageCostsByModel).length > 0) ? (
+                                            Object.entries(modelUsageStats.adImageCostsByModel).map(([model, cost]) => (
+                                                <div key={`img-${model}`} className="flex justify-between text-xs mb-1">
+                                                    <span className="text-gray-600 dark:text-gray-400 font-mono">{model}</span>
+                                                    <span className="text-gray-900 dark:text-white font-semibold">${(Number(cost) || 0).toFixed(4)}</span>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">No ad image costs yet.</p>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Video Ads</p>
+                                        {(modelUsageStats.adVideoCostsByModel && Object.keys(modelUsageStats.adVideoCostsByModel).length > 0) ? (
+                                            Object.entries(modelUsageStats.adVideoCostsByModel).map(([model, cost]) => (
+                                                <div key={`vid-${model}`} className="flex justify-between text-xs mb-1">
+                                                    <span className="text-gray-600 dark:text-gray-400 font-mono">{model}</span>
+                                                    <span className="text-gray-900 dark:text-white font-semibold">${(Number(cost) || 0).toFixed(4)}</span>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">No ad video costs yet.</p>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>

@@ -26,6 +26,8 @@ export type TaskType =
   | 'crm-summary'       // CRM summaries - use balanced model
   | 'chatbot'           // General chatbot - use balanced model
   | 'image-prompt'      // Image prompt expansion - use balanced model
+  | 'image_generation'  // Image generation (non-Gemini)
+  | 'video_generation'  // Video generation (non-Gemini)
   | 'content_gap_analysis'      // Content gap analysis - use balanced model
   | 'caption_optimization'      // Caption optimization - use balanced model
   | 'performance_prediction'   // Performance prediction - use balanced model
@@ -97,6 +99,16 @@ const MODEL_CONFIG: Record<TaskType, {
     model: 'gemini-2.0-flash',
     description: 'Balanced model for image prompt expansion',
     costTier: 'medium',
+  },
+  'image_generation': {
+    model: 'openai-image',
+    description: 'Image generation (OpenAI/Replicate)',
+    costTier: 'high',
+  },
+  'video_generation': {
+    model: 'replicate-video',
+    description: 'Video generation (Replicate)',
+    costTier: 'high',
   },
   'content_gap_analysis': {
     model: 'gemini-2.0-flash',

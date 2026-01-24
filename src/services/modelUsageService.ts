@@ -46,6 +46,10 @@ export interface ModelUsageStats {
   totalCost: number;
   requestsByModel: Record<string, number>;
   requestsByTask: Record<string, number>;
+  adImageCostsByModel?: Record<string, number>;
+  adVideoCostsByModel?: Record<string, number>;
+  adImageRequestsByModel?: Record<string, number>;
+  adVideoRequestsByModel?: Record<string, number>;
   requestsByCostTier: {
     low: number;
     medium: number;

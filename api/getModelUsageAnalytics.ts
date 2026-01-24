@@ -12,6 +12,10 @@ interface ModelUsageStats {
   totalCost: number;
   requestsByModel: Record<string, number>;
   requestsByTask: Record<TaskType, number>;
+  adImageCostsByModel?: Record<string, number>;
+  adVideoCostsByModel?: Record<string, number>;
+  adImageRequestsByModel?: Record<string, number>;
+  adVideoRequestsByModel?: Record<string, number>;
   requestsByCostTier: {
     low: number;
     medium: number;
@@ -86,6 +90,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       totalCost: 0,
       requestsByModel: {},
       requestsByTask: {} as Record<TaskType, number>,
+      adImageCostsByModel: {},
+      adVideoCostsByModel: {},
+      adImageRequestsByModel: {},
+      adVideoRequestsByModel: {},
       requestsByCostTier: { low: 0, medium: 0, high: 0 },
       requestsByDay: [],
       topUsers: [],
@@ -113,6 +121,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Count by task type
       const taskType = log.taskType || 'unknown';
       stats.requestsByTask[taskType as TaskType] = (stats.requestsByTask[taskType as TaskType] || 0) + 1;
+
+      if (taskType === 'image_generation') {
+        const imageModel = log.modelName || 'unknown';
+        stats.adImageRequestsByModel![imageModel] = (stats.adImageRequestsByModel![imageModel] || 0) + 1;
+        stats.adImageCostsByModel![imageModel] = (stats.adImageCostsByModel![imageModel] || 0) + (log.estimatedCost || 0);
+      }
+      if (taskType === 'video_generation') {
+        const videoModel = log.modelName || 'unknown';
+        stats.adVideoRequestsByModel![videoModel] = (stats.adVideoRequestsByModel![videoModel] || 0) + 1;
+        stats.adVideoCostsByModel![videoModel] = (stats.adVideoCostsByModel![videoModel] || 0) + (log.estimatedCost || 0);
+      }
 
       // Count by cost tier
       const costTier = log.costTier || 'medium';

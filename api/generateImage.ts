@@ -3,6 +3,7 @@ import { verifyAuth } from "./verifyAuth.js";
 import { getModelForTask } from "./_modelRouter.js";
 import { enforceRateLimit } from "./_rateLimit.js";
 import { sanitizeForAI } from "./_inputSanitizer.js";
+import { trackModelUsage } from "./trackModelUsage.js";
 
 // Import OpenAI with ESM syntax
 import OpenAI from "openai";
@@ -42,6 +43,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    const imageCost = process.env.IMAGE_GEN_COST_USD ? parseFloat(process.env.IMAGE_GEN_COST_USD) : 0;
+    const logImageUsage = async (modelName: string) => {
+      try {
+        await trackModelUsage({
+          userId: user.uid,
+          taskType: 'image_generation',
+          modelName,
+          costTier: 'high',
+          estimatedCost: imageCost,
+          success: true,
+        });
+      } catch {
+        // no-op
+      }
+    };
+
     // If explicit content is requested, use Replicate NSFW models instead of OpenAI
     if (allowExplicit) {
       const replicateApiToken = process.env.REPLICATE_API_TOKEN;
@@ -122,7 +139,8 @@ Keep it concise but descriptive. Return ONLY the enhanced prompt, nothing else.
         const imageResponse = await fetch(imageUrl);
         const imageBuffer = await imageResponse.arrayBuffer();
         const base64Image = Buffer.from(imageBuffer).toString('base64');
-        
+
+        await logImageUsage(model);
         return res.status(200).json({
           imageData: base64Image,
           prompt: enhancedPrompt,
@@ -131,6 +149,7 @@ Keep it concise but descriptive. Return ONLY the enhanced prompt, nothing else.
         });
       } else if (typeof imageUrl === 'string') {
         // Already base64
+        await logImageUsage(model);
         return res.status(200).json({
           imageData: imageUrl,
           prompt: enhancedPrompt,
@@ -255,6 +274,7 @@ Keep it concise but descriptive. Return ONLY the enhanced prompt, nothing else.
     }
 
     // Return base64 image data
+    await logImageUsage("openai/dall-e-3");
     return res.status(200).json({
       imageData: imageData,
       prompt: enhancedPrompt,

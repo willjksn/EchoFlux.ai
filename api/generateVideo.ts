@@ -4,6 +4,7 @@ import { verifyAuth } from "./verifyAuth.js";
 import { enforceRateLimit } from "./_rateLimit.js";
 import { sanitizeForAI } from "./_inputSanitizer.js";
 import Replicate from "replicate";
+import { trackModelUsage } from "./trackModelUsage.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
@@ -121,6 +122,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const prediction = await replicate.predictions.create({
       model: model,
       input: input,
+    });
+
+    const videoCost = process.env.VIDEO_GEN_COST_USD ? parseFloat(process.env.VIDEO_GEN_COST_USD) : 0;
+    await trackModelUsage({
+      userId: user.uid,
+      taskType: 'video_generation',
+      modelName: model,
+      costTier: 'high',
+      estimatedCost: videoCost,
+      success: true,
     });
 
     // Return prediction ID so frontend can poll for status
