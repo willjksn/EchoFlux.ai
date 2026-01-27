@@ -7,7 +7,7 @@ import { useAppContext } from './AppContext';
 import { storage, db, auth } from '../firebaseConfig';
 import { ref, uploadBytes, getDownloadURL, listAll, deleteObject } from 'firebase/storage';
 import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, limit } from 'firebase/firestore';
-import { generateAd, generateImage, generateVideo, getVideoStatus } from '../src/services/geminiService';
+import { generateAd, generateImage } from '../src/services/geminiService';
 
 interface AdImage {
   id: string;
@@ -89,46 +89,12 @@ export const AdGenerator: React.FC = () => {
   const [copiedIndex, setCopiedIndex] = useState<{ platform: string; index: number } | null>(null);
   const [isAiHelping, setIsAiHelping] = useState(false);
   const [adImagePrompt, setAdImagePrompt] = useState('');
-  const [adVideoPrompt, setAdVideoPrompt] = useState('');
   const [generatedImageData, setGeneratedImageData] = useState<string | null>(null);
   const [composedImageData, setComposedImageData] = useState<string | null>(null);
   const [overlayHeadline, setOverlayHeadline] = useState('Plan. Write. Schedule.');
   const [overlaySubheadline, setOverlaySubheadline] = useState('EchoFlux.ai for creators — all-in-one content studio');
   const [overlayCta, setOverlayCta] = useState('Start 7-day free trial');
-  const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
-  const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
-  const [videoStatus, setVideoStatus] = useState<string | null>(null);
-  const [videoOperationId, setVideoOperationId] = useState<string | null>(null);
-
-  const getBaseImageForVideo = async (): Promise<{ data: string; mimeType: string } | null> => {
-    if (composedImageData) {
-      const base64Data = composedImageData.split(',')[1];
-      return { data: base64Data, mimeType: 'image/png' };
-    }
-    if (generatedImageData) {
-      const base64Data = generatedImageData.split(',')[1];
-      return { data: base64Data, mimeType: 'image/png' };
-    }
-
-    if (selectedImageId) {
-      const selected = images.find((img) => img.id === selectedImageId);
-      if (!selected?.url) return null;
-      const response = await fetch(selected.url);
-      const blob = await response.blob();
-      const mimeType = blob.type || 'image/png';
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-      const base64Data = dataUrl.split(',')[1];
-      return { data: base64Data, mimeType };
-    }
-
-    return null;
-  };
 
   // Check if user is admin
   const isAdmin = user?.role === 'Admin';
@@ -550,127 +516,6 @@ export const AdGenerator: React.FC = () => {
     link.remove();
   };
 
-  const handleGenerateVideo = async () => {
-    if (!targetAudience.trim()) {
-      showToast('Please enter target audience first', 'error');
-      return;
-    }
-
-    const baseImage = await getBaseImageForVideo();
-    if (!baseImage) {
-      showToast('Stable Video Diffusion requires an input image. Generate or select an image first.', 'error');
-      return;
-    }
-
-    setIsGeneratingVideo(true);
-    setVideoStatus('Generating video...');
-    setGeneratedVideoUrl(null);
-    try {
-      let prompt = adVideoPrompt.trim();
-
-      if (!prompt) {
-        const adResult = await generateAd({
-          adType: 'video',
-          targetAudience: targetAudience.trim(),
-          goal: objective,
-          platform: 'TikTok',
-          tone: 'Creator-first, calm confidence',
-          callToAction: 'Try free for 7 days',
-          additionalContext: [
-            keyMessage.trim() || '',
-            'Match EchoFlux UI style guide: gradients #2663E9→#6F39DE, UI cards, clean SaaS aesthetic.',
-            'Overlay style: gradient pill/bar with white text, 6–10 words max hook, 1-line support text.',
-            'Use captions like: “Plan My Week”, “Write Captions”, “Schedule”, “Copy + Post”.',
-            'Include tiny “EchoFlux.ai” stamp in a small gradient pill.',
-          ].filter(Boolean).join(' '),
-          duration: 15,
-        });
-        prompt = adResult?.result?.videoPrompt || '';
-      }
-
-      if (!prompt) {
-        throw new Error('Could not generate a video prompt. Please add a prompt and try again.');
-      }
-
-      const result = await generateVideo(prompt, baseImage, '9:16', false);
-      if (result.videoUrl) {
-        setGeneratedVideoUrl(result.videoUrl);
-        setVideoStatus('Video ready');
-      } else if (result.operationId) {
-        setVideoOperationId(result.operationId);
-        setVideoStatus('Rendering video...');
-      } else {
-        throw new Error('Video generation failed. Please try again.');
-      }
-    } catch (error: any) {
-      console.error('Video generation failed:', error);
-      showToast(error?.message || 'Failed to generate video', 'error');
-      setVideoStatus(null);
-    } finally {
-      setIsGeneratingVideo(false);
-    }
-  };
-
-  const handleSaveGeneratedVideo = async () => {
-    if (!generatedVideoUrl) return;
-    try {
-      const videosRef = collection(db, 'ad_generator_videos');
-      await addDoc(videosRef, {
-        url: generatedVideoUrl,
-        createdAt: new Date(),
-        createdBy: user?.id || 'unknown',
-        objective,
-        targetAudience: targetAudience.trim(),
-        keyMessage: keyMessage.trim() || '',
-      });
-      showToast('Video saved', 'success');
-    } catch (error: any) {
-      console.error('Failed to save video:', error);
-      showToast(error?.message || 'Failed to save video', 'error');
-    }
-  };
-
-  const handleDownloadGeneratedVideo = () => {
-    if (!generatedVideoUrl) return;
-    const link = document.createElement('a');
-    link.href = generatedVideoUrl;
-    link.download = `ai-ad-video-${Date.now()}.mp4`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-  };
-
-  useEffect(() => {
-    if (!videoOperationId || generatedVideoUrl) return;
-
-    let attempts = 0;
-    const maxAttempts = 60; // ~5 minutes at 5s interval
-    const interval = setInterval(async () => {
-      attempts += 1;
-      try {
-        const status = await getVideoStatus(videoOperationId);
-        if (status.videoUrl) {
-          setGeneratedVideoUrl(status.videoUrl);
-          setVideoStatus('Video ready');
-          clearInterval(interval);
-          setVideoOperationId(null);
-        } else if (status.status) {
-          setVideoStatus(status.status);
-        }
-      } catch (err) {
-        console.warn('Video status check failed:', err);
-      }
-
-      if (attempts >= maxAttempts) {
-        setVideoStatus('Video generation timed out');
-        clearInterval(interval);
-        setVideoOperationId(null);
-      }
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [videoOperationId, generatedVideoUrl]);
-
   const handleGenerateAds = async () => {
     if (!targetAudience.trim()) {
       showToast('Please enter target audience', 'error');
@@ -877,7 +722,7 @@ export const AdGenerator: React.FC = () => {
             {isGenerating ? 'Generating Ads...' : 'Generate Ads'}
           </button>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-            Generates ad copy and hooks. Use the Creative section below to generate images or videos.
+            Generates ad copy and hooks. Use the Creative section below to generate images.
           </p>
         </div>
       </div>
@@ -885,9 +730,9 @@ export const AdGenerator: React.FC = () => {
       {/* Ad Creative Generation */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
         <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-          Ad Creative (AI Images & Videos)
+          Ad Creative (AI Images)
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 gap-6">
           <div className="space-y-3">
             <h3 className="font-semibold text-gray-900 dark:text-white">Generate Image</h3>
             <textarea
@@ -954,53 +799,6 @@ export const AdGenerator: React.FC = () => {
                   </button>
                   <button
                     onClick={handleDownloadGeneratedImage}
-                    className="px-3 py-2 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600"
-                  >
-                    Download
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-3">
-            <h3 className="font-semibold text-gray-900 dark:text-white">Generate Video</h3>
-            <textarea
-              value={adVideoPrompt}
-              onChange={(e) => setAdVideoPrompt(e.target.value)}
-              placeholder="Optional: describe the ad video you want..."
-              rows={3}
-              className="w-full px-3 py-2 rounded-md bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100"
-            />
-            <button
-              onClick={handleGenerateVideo}
-              disabled={isGeneratingVideo || !targetAudience.trim()}
-              className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
-            >
-              {isGeneratingVideo ? (
-                <span className="inline-flex items-center gap-2">
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  Generating Video...
-                </span>
-              ) : (
-                'Generate Video'
-              )}
-            </button>
-            {videoStatus && (
-              <p className="text-sm text-gray-600 dark:text-gray-400">{videoStatus}</p>
-            )}
-            {generatedVideoUrl && (
-              <div className="mt-3">
-                <video src={generatedVideoUrl} controls className="w-full rounded-lg border" />
-                <div className="mt-2 flex gap-2">
-                  <button
-                    onClick={handleSaveGeneratedVideo}
-                    className="px-3 py-2 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600"
-                  >
-                    Save
-                  </button>
-                  <button
-                    onClick={handleDownloadGeneratedVideo}
                     className="px-3 py-2 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600"
                   >
                     Download

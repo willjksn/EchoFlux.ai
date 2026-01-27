@@ -47,6 +47,7 @@ export const Sidebar: React.FC = () => {
 
   const allNavItems: (Omit<NavItemProps, 'page' | 'label'> & { page: Page | 'admin', label: string })[] = [
     { page: 'dashboard', icon: <DashboardIcon />, label: 'Dashboard' },
+    { page: 'inbox', icon: <ChatIcon />, label: 'Inbox' },
     { page: 'opportunities', icon: <TrendingIcon />, label: 'Find Trends', tourId: 'tour-step-opportunities-nav' },
     { page: 'strategy', icon: <TargetIcon />, label: 'Plan My Week' },
     { page: 'compose', icon: <ComposeIcon />, label: 'Write Captions', tourId: 'tour-step-3-compose-nav' },
@@ -59,7 +60,6 @@ export const Sidebar: React.FC = () => {
     { page: 'settings', icon: <SettingsIcon />, label: 'Settings' },
     { page: 'admin', icon: <AdminIcon />, label: 'Admin' },
     // Hidden items (filtered out by navItems logic)
-    { page: 'inbox', icon: <ChatIcon />, label: 'Inbox' },
     { page: 'automation', icon: <AutomationIcon />, label: 'Automation' },
     { page: 'analytics', icon: <AnalyticsIcon />, label: "What's Working", tourId: 'tour-step-2-analytics-nav' },
     { page: 'ads', icon: <SparklesIcon />, label: 'Ad Ideas' },
@@ -109,8 +109,12 @@ export const Sidebar: React.FC = () => {
           case 'approvals':
               return ['Elite', 'Agency'].includes(user.plan);
           case 'inbox':
-              // Hide Inbox entirely for now (offline studio mode)
-              return false;
+              // Show Inbox for admins (testing) or when not in offline mode
+              if (OFFLINE_MODE && user.role !== 'Admin') {
+                  return false;
+              }
+              // Show for all plans when not in offline mode, or for admins in offline mode
+              return true;
           case 'team':
           case 'clients':
               // Hide team/clients for now (creator focus); admins handled above

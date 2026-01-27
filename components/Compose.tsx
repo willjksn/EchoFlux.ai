@@ -1139,6 +1139,13 @@ const CaptionGenerator: React.FC = () => {
       );
       return;
     }
+    
+    // Admin-only access for auto-publishing (testing phase)
+    if (user?.role !== 'Admin') {
+      showToast('Auto-publishing is currently in testing. Available to admins only.', 'info');
+      return;
+    }
+    
     const item = composeState.mediaItems[index];
     // Prevent double-publishing
     if (isSaving) {

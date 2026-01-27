@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { CalendarEvent, Platform, Post } from '../types';
 import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
-import { PlusIcon, SparklesIcon, XMarkIcon, TrashIcon, DownloadIcon, CheckCircleIcon, CopyIcon } from './icons/UIIcons';
+import { PlusIcon, SparklesIcon, XMarkIcon, TrashIcon, DownloadIcon, CheckCircleIcon, CopyIcon, SendIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 import { db } from '../firebaseConfig';
 import { doc, setDoc, deleteDoc, collection, query, orderBy, onSnapshot, getDocs } from 'firebase/firestore';
@@ -10,6 +10,7 @@ import { hasCapability } from '../src/services/platformCapabilities';
 import { generateCaptions } from '../src/services/geminiService';
 import { UpgradePrompt } from './UpgradePrompt';
 import { hasCalendarAccess } from '../src/utils/planAccess';
+import { publishInstagramPost, publishTweet } from '../src/services/socialMediaService';
 
 const platformIcons: Record<Platform, React.ReactNode> = {
   Instagram: <InstagramIcon />,
@@ -25,7 +26,7 @@ const platformIcons: Record<Platform, React.ReactNode> = {
 const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export const Calendar: React.FC = () => {
-    const { calendarEvents, setActivePage, posts, user, showToast, updatePost, addCalendarEvent, deletePost } = useAppContext();
+    const { calendarEvents, setActivePage, posts, user, showToast, updatePost, addCalendarEvent, deletePost, socialAccounts } = useAppContext();
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedEvent, setSelectedEvent] = useState<{ event: CalendarEvent; post: Post | null } | null>(null);
     const [isEditing, setIsEditing] = useState(false);
@@ -38,6 +39,7 @@ export const Calendar: React.FC = () => {
     const [regenerateGoal, setRegenerateGoal] = useState<string>('engagement');
     const [regenerateTone, setRegenerateTone] = useState<string>('friendly');
     const [isSaving, setIsSaving] = useState(false);
+    const [isPublishing, setIsPublishing] = useState(false);
     const [exportPreview, setExportPreview] = useState<{ post: Post; event: CalendarEvent } | null>(null);
     
     // Reminder state
@@ -950,6 +952,113 @@ export const Calendar: React.FC = () => {
         }
     };
 
+    // Handle publish post (Admin only - auto-publish to social platforms)
+    const handlePublishPost = async () => {
+        if (!selectedEvent || !selectedEvent.post || !user) return;
+        
+        // Admin-only access for auto-publishing (testing phase)
+        if (user.role !== 'Admin') {
+            showToast('Auto-publishing is currently in testing. Available to admins only.', 'info');
+            return;
+        }
+        
+        const post = selectedEvent.post;
+        const platformsToPost = post.platforms || [selectedEvent.event.platform];
+        
+        if (platformsToPost.length === 0) {
+            showToast('No platforms selected for this post.', 'error');
+            return;
+        }
+        
+        if (!post.content?.trim()) {
+            showToast('Post has no caption content.', 'error');
+            return;
+        }
+        
+        setIsPublishing(true);
+        try {
+            const mediaUrl = post.mediaUrl;
+            const mediaUrls = post.mediaUrls || (mediaUrl ? [mediaUrl] : undefined);
+            
+            // Publish to Instagram if selected
+            const hasInstagram = platformsToPost.includes('Instagram');
+            if (hasInstagram && mediaUrl) {
+                try {
+                    let instagramMediaType: 'IMAGE' | 'REELS' | 'VIDEO' = 'IMAGE';
+                    if (post.mediaType === 'video') {
+                        // Try to determine if it's a Reel (could be enhanced with post metadata)
+                        instagramMediaType = 'VIDEO'; // Default to VIDEO, can be changed to REELS if needed
+                    }
+                    
+                    const additionalImageUrls = mediaUrls && mediaUrls.length > 1 ? mediaUrls.slice(1) : undefined;
+                    const result = await publishInstagramPost(
+                        mediaUrl,
+                        post.content,
+                        instagramMediaType,
+                        undefined, // Immediate publish
+                        additionalImageUrls
+                    );
+                    
+                    if (result.status === 'published') {
+                        console.log('Published to Instagram:', result.mediaId);
+                    }
+                } catch (instagramError: any) {
+                    console.error('Failed to publish to Instagram:', instagramError);
+                    showToast(`Failed to publish to Instagram: ${instagramError.message || 'Please check your connection'}.`, 'error');
+                }
+            }
+            
+            // Publish to X (Twitter) if selected
+            const hasX = platformsToPost.includes('X');
+            if (hasX) {
+                try {
+                    const xMediaUrls = mediaUrls && mediaUrls.length > 0 ? mediaUrls : (mediaUrl ? [mediaUrl] : undefined);
+                    const result = await publishTweet(
+                        post.content,
+                        mediaUrl || undefined,
+                        post.mediaType === 'video' ? 'video' : post.mediaType === 'image' ? 'image' : undefined,
+                        xMediaUrls
+                    );
+                    
+                    console.log('Published to X:', result.tweetId);
+                } catch (xError: any) {
+                    console.error('Failed to publish to X:', xError);
+                    showToast(`Failed to publish to X: ${xError.message || 'Please check your connection'}.`, 'error');
+                }
+            }
+            
+            // Update post status to Published
+            const updatedPost: Post = {
+                ...post,
+                status: 'Published',
+                publishedAt: new Date().toISOString(),
+            };
+            await updatePost(updatedPost);
+            
+            // Update calendar event status
+            const updatedEvent: CalendarEvent = {
+                ...selectedEvent.event,
+                status: 'Published',
+            };
+            await setDoc(doc(db, 'users', user.id, 'calendar_events', updatedEvent.id), updatedEvent);
+            
+            // Update local state
+            setSelectedEvent({
+                event: updatedEvent,
+                post: updatedPost,
+            });
+            
+            showToast(`Published to ${platformsToPost.join(', ')}!`, 'success');
+            // Auto-close modal after successful publish
+            setSelectedEvent(null);
+        } catch (error) {
+            console.error('Failed to publish post:', error);
+            showToast('Failed to publish post. Please try again.', 'error');
+        } finally {
+            setIsPublishing(false);
+        }
+    };
+
     // Handle delete post
     const handleDeletePost = async () => {
         if (!selectedEvent || !user) return;
@@ -1072,6 +1181,7 @@ export const Calendar: React.FC = () => {
         if (!selectedEvent) {
             setIsEditing(false);
             setIsRegenerating(false);
+            setIsPublishing(false);
             setEditDate('');
             setEditTime('');
             setEditGoal('engagement');
@@ -1121,42 +1231,57 @@ export const Calendar: React.FC = () => {
                                                 Edit
                                             </button>
                                             {(selectedEvent.post?.status === 'Draft' || selectedEvent.post?.status === 'Scheduled') && (
-                                                <button
-                                                    onClick={async () => {
-                                                        if (!selectedEvent.post || !user) return;
-                                                        try {
-                                                            const updatedPost: Post = {
-                                                                ...selectedEvent.post,
-                                                                status: 'Published',
-                                                                // Used by Dashboard insights to compute recent posting frequency
-                                                                publishedAt: new Date().toISOString(),
-                                                            };
-                                                            await updatePost(updatedPost);
-                                                            
-                                                            // Update calendar event status
-                                                            const updatedEvent: CalendarEvent = {
-                                                                ...selectedEvent.event,
-                                                                status: 'Published',
-                                                            };
-                                                            await setDoc(doc(db, 'users', user.id, 'calendar_events', updatedEvent.id), updatedEvent);
-                                                            
-                                                            setSelectedEvent({
-                                                                event: updatedEvent,
-                                                                post: updatedPost,
-                                                            });
-                                                            showToast('Marked as Published!', 'success');
-                                                            // Auto-close modal after update (no click-off required)
-                                                            setSelectedEvent(null);
-                                                        } catch (error) {
-                                                            console.error('Failed to mark as published:', error);
-                                                            showToast('Failed to mark as published', 'error');
-                                                        }
-                                                    }}
-                                                    className="px-4 py-2 text-sm font-medium text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors flex items-center gap-2"
-                                                >
-                                                    <CheckCircleIcon className="w-4 h-4" />
-                                                    Mark as Posted
-                                                </button>
+                                                <>
+                                                    {/* Admin-only: Auto-publish to social platforms */}
+                                                    {user?.role === 'Admin' && selectedEvent.post?.status === 'Scheduled' && (
+                                                        <button
+                                                            onClick={handlePublishPost}
+                                                            disabled={isPublishing}
+                                                            className="px-4 py-2 text-sm font-medium text-white bg-green-600 dark:bg-green-700 border border-green-600 dark:border-green-700 rounded-lg hover:bg-green-700 dark:hover:bg-green-800 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            title="Auto-publish to social platforms (Admin only - Testing)"
+                                                        >
+                                                            <SendIcon className="w-4 h-4" />
+                                                            {isPublishing ? 'Publishing...' : 'Publish Now'}
+                                                        </button>
+                                                    )}
+                                                    {/* Mark as Posted (manual) - for non-admins or when auto-publish isn't available */}
+                                                    <button
+                                                        onClick={async () => {
+                                                            if (!selectedEvent.post || !user) return;
+                                                            try {
+                                                                const updatedPost: Post = {
+                                                                    ...selectedEvent.post,
+                                                                    status: 'Published',
+                                                                    // Used by Dashboard insights to compute recent posting frequency
+                                                                    publishedAt: new Date().toISOString(),
+                                                                };
+                                                                await updatePost(updatedPost);
+                                                                
+                                                                // Update calendar event status
+                                                                const updatedEvent: CalendarEvent = {
+                                                                    ...selectedEvent.event,
+                                                                    status: 'Published',
+                                                                };
+                                                                await setDoc(doc(db, 'users', user.id, 'calendar_events', updatedEvent.id), updatedEvent);
+                                                                
+                                                                setSelectedEvent({
+                                                                    event: updatedEvent,
+                                                                    post: updatedPost,
+                                                                });
+                                                                showToast('Marked as Published!', 'success');
+                                                                // Auto-close modal after update (no click-off required)
+                                                                setSelectedEvent(null);
+                                                            } catch (error) {
+                                                                console.error('Failed to mark as published:', error);
+                                                                showToast('Failed to mark as published', 'error');
+                                                            }
+                                                        }}
+                                                        className="px-4 py-2 text-sm font-medium text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors flex items-center gap-2"
+                                                    >
+                                                        <CheckCircleIcon className="w-4 h-4" />
+                                                        Mark as Posted
+                                                    </button>
+                                                </>
                                             )}
                                         </>
                                     )}

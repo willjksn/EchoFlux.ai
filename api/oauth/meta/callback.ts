@@ -163,40 +163,45 @@ export default async function handler(
 
     const db = await getAdminDb();
 
-    // Prepare social accounts data
-    const socialAccounts: any = {
-      Facebook: {
-        accountId: facebookUserId,
-        accessToken: longLivedToken,
-        tokenExpiry: tokenExpiry.toISOString(),
-        connectedAt: new Date().toISOString(),
-      },
-    };
-
-    // Add Instagram if found
-    if (connectedAccounts.length > 0) {
-      const firstAccount = connectedAccounts[0];
-      socialAccounts.Instagram = {
-        accountId: firstAccount.igAccountId,
-        username: firstAccount.igUsername,
-        pageId: firstAccount.pageId,
-        pageToken: firstAccount.pageToken,
-        accessToken: firstAccount.pageToken, // Page token works for IG API calls
-        profilePicture: firstAccount.igProfilePicture,
-        connectedAt: new Date().toISOString(),
-      };
-    }
-
-    // Save to Firestore
-    await db
+    // Save Facebook account to subcollection (matching X/Instagram structure)
+    const facebookAccountRef = db
       .collection("users")
       .doc(user.uid)
-      .set(
-        {
-          socialAccounts,
-        },
-        { merge: true }
-      );
+      .collection("social_accounts")
+      .doc("facebook");
+
+    await facebookAccountRef.set({
+      platform: "Facebook",
+      connected: true,
+      accessToken: longLivedToken,
+      expiresAt: tokenExpiry.toISOString(),
+      accountId: facebookUserId,
+      accountName: userInfo.name || "",
+      lastSyncedAt: new Date().toISOString(),
+    }, { merge: true });
+
+    // Save Instagram account(s) to subcollection if found
+    if (connectedAccounts.length > 0) {
+      const firstAccount = connectedAccounts[0];
+      const instagramAccountRef = db
+        .collection("users")
+        .doc(user.uid)
+        .collection("social_accounts")
+        .doc("instagram");
+
+      await instagramAccountRef.set({
+        platform: "Instagram",
+        connected: true,
+        accessToken: firstAccount.pageToken, // Page token works for IG API calls
+        expiresAt: tokenExpiry.toISOString(), // Use same expiry as Facebook token
+        accountId: firstAccount.igAccountId,
+        accountUsername: firstAccount.igUsername || "",
+        accountName: firstAccount.igUsername || "",
+        pageId: firstAccount.pageId,
+        pageName: firstAccount.pageName,
+        lastSyncedAt: new Date().toISOString(),
+      }, { merge: true });
+    }
 
     // Success - redirect to settings or dashboard
     const successMessage = connectedAccounts.length > 0

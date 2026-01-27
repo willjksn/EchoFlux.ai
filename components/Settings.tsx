@@ -417,7 +417,8 @@ export const Settings: React.FC = () => {
     };
 
     const handleConnectAccount = async (platform: Platform) => {
-        if (OFFLINE_MODE) {
+        // Allow admins to connect accounts even in offline mode (for testing)
+        if (OFFLINE_MODE && user?.role !== 'Admin') {
             showToast('Account connections are disabled in this version. EchoFlux.ai is currently focused on planning and content creation. You can still plan campaigns and copy content to post manually.', 'info');
             return;
         }
@@ -492,7 +493,8 @@ export const Settings: React.FC = () => {
     };
 
     const handleConnectOAuth1 = async () => {
-        if (OFFLINE_MODE) {
+        // Allow admins to connect OAuth1 even in offline mode (for testing)
+        if (OFFLINE_MODE && user?.role !== 'Admin') {
             showToast('X OAuth is disabled in this version. EchoFlux.ai is currently focused on offline planning and content creation.', 'info');
             return;
         }
@@ -592,7 +594,8 @@ export const Settings: React.FC = () => {
     };
 
     const handleDisconnectAccount = async (platform: Platform) => {
-        if (OFFLINE_MODE) {
+        // Allow admins to disconnect accounts even in offline mode (for testing)
+        if (OFFLINE_MODE && user?.role !== 'Admin') {
             showToast('Account connections are disabled in this version.', 'info');
             return;
         }
@@ -817,8 +820,8 @@ export const Settings: React.FC = () => {
 
     const tabs: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
         { id: 'general', label: 'General', icon: <SettingsIcon /> },
-        // Hide live connections tab entirely in offline mode to avoid confusion
-        ...(!OFFLINE_MODE ? [{ id: 'connections', label: 'Connections', icon: <LinkIcon /> } as const] : []),
+        // Show connections tab for admins (testing) or when not in offline mode
+        ...((!OFFLINE_MODE || user?.role === 'Admin') ? [{ id: 'connections', label: 'Connections', icon: <LinkIcon /> } as const] : []),
         { id: 'ai-training', label: 'AI Training', icon: <SparklesIcon /> },
         { id: 'billing', label: 'Billing', icon: <CreditCardIcon /> },
     ];

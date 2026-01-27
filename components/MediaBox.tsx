@@ -1685,8 +1685,8 @@ ${contextLines || 'None'}
             <CalendarIcon className="w-3 h-3" /> Schedule
           </button>
         </div>
-        {/* In offline AI Studio mode, we don't show in-compose publish/schedule controls */}
-        {false && user?.plan !== 'Caption' && (
+        {/* Auto-publishing controls - Admin only for testing */}
+        {user?.role === 'Admin' && user?.plan !== 'Caption' && (
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => onSchedule(index)}
@@ -1700,7 +1700,7 @@ ${contextLines || 'None'}
               onClick={() => onPublish(index)}
               disabled={platformsToPost.length === 0}
               className="flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50"
-              title={platformsToPost.length === 0 ? 'Select at least one platform' : ''}
+              title={platformsToPost.length === 0 ? 'Select at least one platform' : 'Auto-publishing (Admin only - Testing)'}
             >
               <SendIcon className="w-3 h-3" /> Publish
             </button>
