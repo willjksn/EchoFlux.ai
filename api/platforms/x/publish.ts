@@ -420,6 +420,30 @@ async function uploadMediaOAuth1(
  * Returns media_id that can be used in tweet creation
  * Tries OAuth 1.0a first (required for v1.1 media upload), falls back to OAuth 2.0 if available
  */
+/**
+ * Validate that a media URL can be fetched by the server.
+ * Rejects blob:, data:, and relative URLs - server must receive a public HTTPS URL.
+ */
+function validateMediaUrl(url: string): void {
+  if (!url || typeof url !== 'string' || url.trim() === '') {
+    throw new Error('Media URL is empty or invalid');
+  }
+  if (url.startsWith('blob:')) {
+    throw new Error('Blob URLs cannot be used for posting - the image must be uploaded first. Please wait for upload to complete and try again.');
+  }
+  if (url.startsWith('data:')) {
+    throw new Error('Data URLs cannot be used for posting - the image must be uploaded to storage first.');
+  }
+  if (!url.startsWith('https://') && !url.startsWith('http://')) {
+    throw new Error(`Invalid media URL format. Expected https:// URL, got: ${url.substring(0, 50)}...`);
+  }
+  try {
+    new URL(url); // Validate URL is parseable
+  } catch {
+    throw new Error('Media URL is malformed and could not be parsed.');
+  }
+}
+
 export async function uploadMedia(
   accessToken: string,
   mediaUrl: string,
@@ -432,9 +456,12 @@ export async function uploadMedia(
   }
 ): Promise<string> {
   console.log('uploadMedia: Starting upload for', mediaUrl, 'type:', mediaType);
-  
-  // First, download the media from the URL
-  const mediaResponse = await fetch(mediaUrl);
+  validateMediaUrl(mediaUrl);
+
+  // First, download the media from the URL (must be public HTTPS - e.g. Firebase getDownloadURL)
+  const mediaResponse = await fetch(mediaUrl, {
+    headers: { 'User-Agent': 'EchoFlux/1.0' }, // Some hosts reject requests without User-Agent
+  });
   if (!mediaResponse.ok) {
     console.error('uploadMedia: Failed to download media:', mediaResponse.status, mediaResponse.statusText);
     throw new Error(`Failed to download media from URL: ${mediaResponse.statusText}`);

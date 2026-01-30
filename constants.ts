@@ -4,6 +4,9 @@ import { Message, AnalyticsData, TeamMember, Client, Notification, TourStep, Use
 // with planning and generation only, no live social posting.
 export const OFFLINE_MODE = true;
 
+/** Platforms shown on the Connections page. Add others as they are approved. */
+export const CONNECTION_VISIBLE_PLATFORMS = ['Instagram', 'X', 'Facebook'] as const;
+
 export const defaultSettings: Settings = {
   autoReply: true,
   autoRespond: false,

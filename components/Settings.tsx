@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Settings as AppSettings, Platform, CustomVoice, SocialAccount } from '../types';
-import { OFFLINE_MODE } from '../constants';
+import { OFFLINE_MODE, CONNECTION_VISIBLE_PLATFORMS } from '../constants';
 import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
 import { useAppContext } from './AppContext';
 import { UpgradePrompt } from './UpgradePrompt';
@@ -870,7 +870,7 @@ export const Settings: React.FC = () => {
                             <>
                                 <p className="text-sm text-gray-500 dark:text-gray-400">Connect your social media accounts to allow EchoFlux.ai to fetch incoming messages and post replies.</p>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    {(Object.keys(platformIcons) as Platform[]).map(platform => {
+                                    {CONNECTION_VISIBLE_PLATFORMS.map(platform => {
                                         const account = safeSocialAccounts && safeSocialAccounts[platform] ? safeSocialAccounts[platform] : null;
                                         return (
                                             <AccountConnection 

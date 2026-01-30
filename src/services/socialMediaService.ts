@@ -25,21 +25,37 @@ export async function connectSocialAccount(platform: Platform): Promise<void> {
       // We'll do OAuth 2.0 first, then prompt for OAuth 1.0a if needed
     }
     
-    // Get authorization URL from backend
-    // Note: For X/Twitter, backend uses hardcoded redirect URI for exact match
-    // Frontend still sends it for consistency, but backend will use: https://echoflux.ai/api/oauth/x/callback
-    const response = await fetch(`/api/oauth/${platform.toLowerCase()}/authorize`, {
-      method: 'POST',
+    // Map platforms to their OAuth endpoints/methods
+    const platformKey = platform.toLowerCase();
+    const authorizePath = platformKey === 'facebook' ? 'meta' : platformKey;
+    const authorizeMethod = authorizePath === 'meta' ? 'GET' : 'POST';
+    const authorizeUrl = `/api/oauth/${authorizePath}/authorize`;
+
+    // Meta (Facebook/Instagram) uses a direct browser redirect
+    if (authorizePath === 'meta') {
+      window.location.href = authorizeUrl;
+      return;
+    }
+
+    // Build request options (Meta uses GET + redirect, others use POST)
+    const requestInit: RequestInit = {
+      method: authorizeMethod,
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
       },
-      body: JSON.stringify({
-        redirectUri: platform.toLowerCase() === 'x' 
+    };
+
+    if (authorizeMethod === 'POST') {
+      // Note: For X/Twitter, backend uses hardcoded redirect URI for exact match
+      requestInit.body = JSON.stringify({
+        redirectUri: platformKey === 'x'
           ? 'https://echoflux.ai/api/oauth/x/callback' // Exact match for X OAuth
-          : `${window.location.origin}/api/oauth/${platform.toLowerCase()}/callback`,
-      }),
-    });
+          : `${window.location.origin}/api/oauth/${platformKey}/callback`,
+      });
+    }
+
+    const response = await fetch(authorizeUrl, requestInit);
 
     if (!response.ok) {
       let errorMessage = 'Failed to initiate OAuth flow';
