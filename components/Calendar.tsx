@@ -11,6 +11,7 @@ import { generateCaptions } from '../src/services/geminiService';
 import { UpgradePrompt } from './UpgradePrompt';
 import { hasCalendarAccess } from '../src/utils/planAccess';
 import { publishInstagramPost, publishTweet } from '../src/services/socialMediaService';
+import { OFFLINE_MODE } from '../constants';
 
 const platformIcons: Record<Platform, React.ReactNode> = {
   Instagram: <InstagramIcon />,
@@ -956,6 +957,14 @@ export const Calendar: React.FC = () => {
     const handlePublishPost = async () => {
         if (!selectedEvent || !selectedEvent.post || !user) return;
         
+        // In offline mode, only admins can publish (for testing); others see disabled message
+        if (OFFLINE_MODE && user.role !== 'Admin') {
+            showToast(
+                'Scheduling to social platforms is disabled in this version. You can still use the calendar and campaigns to plan content, then post manually.',
+                'error'
+            );
+            return;
+        }
         // Admin-only access for auto-publishing (testing phase)
         if (user.role !== 'Admin') {
             showToast('Auto-publishing is currently in testing. Available to admins only.', 'info');

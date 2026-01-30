@@ -1635,9 +1635,9 @@ ${contextLines || 'None'}
         </button>
       )}
 
-      {/* Action Buttons - Always visible */}
+      {/* Action Buttons - Compact row: Draft, Schedule, Publish (admin) */}
       <div className="flex flex-col gap-2">
-        <div className="grid grid-cols-2 gap-2">
+        <div className={`grid gap-1.5 ${user?.role === 'Admin' && user?.plan !== 'Caption' ? 'grid-cols-3' : 'grid-cols-2'}`}>
           <button
             onClick={() => {
               if (user?.plan === 'Free') {
@@ -1652,14 +1652,14 @@ ${contextLines || 'None'}
               onSaveToWorkflow(index, 'Draft');
             }}
             disabled={platformsToPost.length === 0 || user?.plan === 'Free'}
-            className={`flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium rounded-md transition-colors ${
+            className={`flex items-center justify-center gap-1 px-2 py-1.5 text-[10px] font-medium rounded transition-colors ${
               user?.plan === 'Free'
                 ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
                 : 'text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50'
             }`}
             title={user?.plan === 'Free' ? 'Upgrade to Pro or Elite to save drafts to calendar' : (platformsToPost.length === 0 ? 'Select at least one platform' : 'Save as Draft')}
           >
-            <ClipboardCheckIcon className="w-3 h-3" /> Draft
+            <ClipboardCheckIcon className="w-2.5 h-2.5 shrink-0" /> Draft
           </button>
           <button
             onClick={() => {
@@ -1675,37 +1675,26 @@ ${contextLines || 'None'}
               onSaveToWorkflow(index, 'Scheduled');
             }}
             disabled={platformsToPost.length === 0 || user?.plan === 'Free'}
-            className={`flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium rounded-md transition-colors ${
+            className={`flex items-center justify-center gap-1 px-2 py-1.5 text-[10px] font-medium rounded transition-colors ${
               user?.plan === 'Free'
                 ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
                 : 'text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 disabled:opacity-50'
             }`}
             title={user?.plan === 'Free' ? 'Upgrade to Pro or Elite to access the visual calendar view' : (platformsToPost.length === 0 ? 'Select at least one platform' : 'Add to Calendar')}
           >
-            <CalendarIcon className="w-3 h-3" /> Schedule
+            <CalendarIcon className="w-2.5 h-2.5 shrink-0" /> Schedule
           </button>
-        </div>
-        {/* Auto-publishing controls - Admin only for testing */}
-        {user?.role === 'Admin' && user?.plan !== 'Caption' && (
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => onSchedule(index)}
-              disabled={platformsToPost.length === 0}
-              className="flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-50"
-              title={platformsToPost.length === 0 ? 'Select at least one platform' : ''}
-            >
-              <CalendarIcon className="w-3 h-3" /> Schedule
-            </button>
+          {user?.role === 'Admin' && user?.plan !== 'Caption' && (
             <button
               onClick={() => onPublish(index)}
               disabled={platformsToPost.length === 0}
-              className="flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50"
-              title={platformsToPost.length === 0 ? 'Select at least one platform' : 'Auto-publishing (Admin only - Testing)'}
+              className="flex items-center justify-center gap-1 px-2 py-1.5 text-[10px] font-medium text-white bg-green-600 rounded hover:bg-green-700 transition-colors disabled:opacity-50"
+              title={platformsToPost.length === 0 ? 'Select at least one platform' : 'Publish to social'}
             >
-              <SendIcon className="w-3 h-3" /> Publish
+              <SendIcon className="w-2.5 h-2.5 shrink-0" /> Publish
             </button>
-          </div>
-        )}
+          )}
+        </div>
         {false && user?.plan === 'Caption' && (
           <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
             <p className="text-xs text-blue-800 dark:text-blue-200">

@@ -1132,17 +1132,12 @@ const CaptionGenerator: React.FC = () => {
   };
 
   const handlePublishMedia = async (index: number) => {
-    if (OFFLINE_MODE) {
+    // In offline mode, only admins can publish (for testing); others see disabled message
+    if (OFFLINE_MODE && user?.role !== 'Admin') {
       showToast(
         'Scheduling to social platforms is disabled in this version. You can still use the calendar and campaigns to plan content, then post manually.',
         'error'
       );
-      return;
-    }
-    
-    // Admin-only access for auto-publishing (testing phase)
-    if (user?.role !== 'Admin') {
-      showToast('Auto-publishing is currently in testing. Available to admins only.', 'info');
       return;
     }
     
@@ -1405,7 +1400,8 @@ const CaptionGenerator: React.FC = () => {
   };
 
   const handleScheduleMedia = async (index: number) => {
-    if (OFFLINE_MODE) {
+    // In offline mode, only admins can schedule (for testing)
+    if (OFFLINE_MODE && user?.role !== 'Admin') {
       showToast('Scheduling to social platforms is disabled in this version. You can still use the calendar and campaigns to plan content, then post manually.', 'error');
       return;
     }
