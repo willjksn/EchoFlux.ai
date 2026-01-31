@@ -1030,6 +1030,12 @@ export const Calendar: React.FC = () => {
                     );
                     
                     console.log('Published to X:', result.tweetId);
+                    if (result.mediaSkipped) {
+                        const fallbackMsg = result.mediaError
+                            ? `Published to X (text only – media upload failed: ${result.mediaError})`
+                            : 'Published to X (text only – reconnect X to enable image uploads)';
+                        showToast(fallbackMsg, 'info');
+                    }
                 } catch (xError: any) {
                     console.error('Failed to publish to X:', xError);
                     showToast(`Failed to publish to X: ${xError.message || 'Please check your connection'}.`, 'error');

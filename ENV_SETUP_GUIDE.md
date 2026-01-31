@@ -117,12 +117,10 @@ FIREBASE_SERVICE_ACCOUNT_KEY_BASE64=<paste entire base64 string here>
 5. If you don't have a web app, click "Add app" > Web (</>) icon
 6. Copy the `firebaseConfig` values and use them for the VITE_* variables
 
-### 4. **TWITTER_CLIENT_ID & TWITTER_CLIENT_SECRET**
-1. Go to [Twitter Developer Portal](https://developer.twitter.com/en/portal)
-2. Create a project/app
-3. Go to your app's "Keys and tokens" section
-4. Copy the "Client ID" and "Client Secret"
-5. Add them to `.env.local`
+### 4. **TWITTER/X credentials**
+**For OAuth 2.0 (tweets):** `TWITTER_CLIENT_ID`, `TWITTER_CLIENT_SECRET` (from Keys and tokens → Client ID/Secret)
+
+**For OAuth 1.0a (image uploads):** `TWITTER_API_KEY`, `TWITTER_API_SECRET` (from Keys and tokens → API Key/API Secret). If "Callback URL not approved" persists, add these — they can differ from Client ID/Secret.
 
 ### 5. **INSTAGRAM_CLIENT_ID & INSTAGRAM_CLIENT_SECRET**
 1. Go to [Meta for Developers](https://developers.facebook.com/)

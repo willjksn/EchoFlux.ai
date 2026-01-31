@@ -92,8 +92,7 @@ const AccountConnection: React.FC<{
     isConnecting: boolean;
     onConnect: (platform: Platform) => Promise<void>;
     onDisconnect: (platform: Platform) => Promise<void>;
-    onConnectOAuth1?: () => Promise<void>;
-}> = ({ platform, account, isConnecting, onConnect, onDisconnect, onConnectOAuth1 }) => {
+}> = ({ platform, account, isConnecting, onConnect, onDisconnect }) => {
     const isConnected = account?.connected || false;
     const accountUsername = account?.accountUsername;
     // Check if OAuth 1.0a is connected (for X media uploads)
@@ -150,6 +149,14 @@ const AccountConnection: React.FC<{
                                         {!isFullySupported(platform, 'analytics') && ' ⚠️'}
                                     </span>
                                 )}
+                                {platform === 'X' && (
+                                    <span
+                                        className={`text-xs px-1.5 py-0.5 rounded ${hasOAuth1 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'}`}
+                                        title={hasOAuth1 ? 'Media uploads enabled' : 'Media uploads require additional permission; reconnect X to enable'}
+                                    >
+                                        Media {hasOAuth1 ? 'Enabled' : 'Pending'}
+                                    </span>
+                                )}
                             </div>
                         )}
                     </div>
@@ -166,37 +173,6 @@ const AccountConnection: React.FC<{
                     {isConnecting ? 'Connecting...' : isConnected ? 'Disconnect' : 'Connect'}
                 </button>
             </div>
-            {/* OAuth 1.0a connection for X (required for media uploads) */}
-            {platform === 'X' && isConnected && onConnectOAuth1 && (
-                <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
-                    <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                            <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Media Upload (OAuth 1.0a)
-                            </p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                                {hasOAuth1 
-                                    ? '✓ Connected - Images and videos can be uploaded'
-                                    : 'Required for uploading images and videos to X'}
-                            </p>
-                        </div>
-                        {!hasOAuth1 && (
-                            <button
-                                onClick={onConnectOAuth1}
-                                disabled={isConnecting}
-                                className="ml-3 px-3 py-1.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/50 dark:text-blue-300 dark:hover:bg-blue-900 transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {isConnecting ? 'Connecting...' : 'Connect OAuth 1.0a'}
-                            </button>
-                        )}
-                        {hasOAuth1 && (
-                            <span className="ml-3 px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300">
-                                ✓ Connected
-                            </span>
-                        )}
-                    </div>
-                </div>
-            )}
         </div>
     );
 };
@@ -261,59 +237,6 @@ export const Settings: React.FC = () => {
             isVoiceFeatureUnlocked 
         });
     }
-
-    // Handle OAuth callback from URL params
-    useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
-        const oauthSuccess = params.get('oauth_success');
-        const oauthError = params.get('error');
-        const platform = params.get('platform');
-        const errorMessage = params.get('message');
-        const errorDetails = params.get('details');
-
-        if (oauthSuccess) {
-            const oauthType = params.get('type');
-            const accountName = params.get('account');
-            if (oauthType === 'oauth1') {
-                showToast('OAuth 1.0a connected successfully! You can now upload images and videos to X.', 'success');
-            } else {
-                const platformName = oauthSuccess.charAt(0).toUpperCase() + oauthSuccess.slice(1);
-                const successMessage = accountName 
-                    ? `${platformName} account (${decodeURIComponent(accountName)}) connected successfully!`
-                    : `${platformName} account connected successfully!`;
-                showToast(successMessage, 'success');
-            }
-            // Remove query params from URL
-            window.history.replaceState({}, '', window.location.pathname);
-            // Reload page to refresh social accounts
-            window.location.reload();
-        } else if (oauthError) {
-            // Show specific error messages based on error type
-            let errorMsg = '';
-            
-            if (oauthError === 'no_instagram_account') {
-                errorMsg = 'No Instagram Business Account found. Your Instagram account must be converted to a Business or Creator account and connected to a Facebook Page. See instructions below.';
-            } else if (oauthError === 'token_exchange_failed') {
-                errorMsg = `Token exchange failed. ${errorDetails ? decodeURIComponent(errorDetails).substring(0, 100) : 'Please try again.'}`;
-            } else if (oauthError === 'pages_fetch_failed') {
-                errorMsg = 'Failed to fetch Facebook Pages. Make sure you have at least one Facebook Page.';
-            } else if (oauthError === 'oauth_not_configured') {
-                const platformName = platform ? platform.charAt(0).toUpperCase() + platform.slice(1) : 'OAuth';
-                errorMsg = `${platformName} OAuth is not configured. Please contact support or check your environment variables.`;
-            } else if (oauthError === 'token_exchange_failed') {
-                const platformName = platform ? platform.charAt(0).toUpperCase() + platform.slice(1) : 'Account';
-                errorMsg = `${platformName} token exchange failed. ${errorDetails ? decodeURIComponent(errorDetails).substring(0, 150) : 'Please check your OAuth configuration and try again.'}`;
-            } else if (errorMessage) {
-                errorMsg = decodeURIComponent(errorMessage);
-            } else {
-                errorMsg = `Failed to connect ${platform || 'account'}. Please try again.`;
-            }
-            
-            showToast(errorMsg, 'error');
-            // Remove query params from URL
-            window.history.replaceState({}, '', window.location.pathname);
-        }
-    }, [showToast]);
 
     const handleVoiceFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         if (!user) return;
@@ -585,13 +508,80 @@ export const Settings: React.FC = () => {
             
             // Show detailed error message
             let errorMsg = error.message || 'Failed to connect OAuth 1.0a. Please try again.';
-            if (errorMsg.includes('callback URL') || errorMsg.includes('callback')) {
-                errorMsg = 'Callback URL not recognized. Check X Developer Portal:\n1. Enable OAuth 1.0a (separate from OAuth 2.0)\n2. Add URL to OAuth 1.0a section (not OAuth 2.0)\n3. URL: https://echoflux.ai/api/oauth/x/callback-oauth1\n4. Wait 2-3 minutes after saving';
+            if (errorMsg.includes('callback URL') || errorMsg.includes('callback') || errorMsg.includes('Callback')) {
+                errorMsg = 'OAuth 1.0a callback not approved. In X Developer Portal → App → Settings → App details, add BOTH callback URLs to the list: (1) https://echoflux.ai/api/oauth/x/callback (2) https://echoflux.ai/api/oauth/x/callback-oauth1 — Also try adding TWITTER_API_KEY and TWITTER_API_SECRET (from Keys and tokens tab) to Vercel.';
             }
             showToast(errorMsg, 'error');
             setConnectingPlatform(null);
         }
     };
+
+    // Handle OAuth callback from URL params (single flow for X)
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const oauthSuccess = params.get('oauth_success');
+        const oauthError = params.get('error');
+        const platform = params.get('platform');
+        const errorMessage = params.get('message');
+        const errorDetails = params.get('details');
+
+        if (oauthSuccess) {
+            const oauthType = params.get('type');
+            const accountName = params.get('account');
+            const platformName = oauthSuccess.charAt(0).toUpperCase() + oauthSuccess.slice(1);
+
+            // For X, automatically complete OAuth 1.0a after OAuth 2.0 connects
+            if (oauthSuccess === 'x' && oauthType !== 'oauth1') {
+                const successMessage = accountName 
+                    ? `${platformName} account (${decodeURIComponent(accountName)}) connected. Completing media permissions...`
+                    : `${platformName} account connected. Completing media permissions...`;
+                showToast(successMessage, 'success');
+
+                // Remove query params before starting OAuth 1.0a flow
+                window.history.replaceState({}, '', window.location.pathname);
+                handleConnectOAuth1();
+                return;
+            }
+
+            if (oauthType === 'oauth1') {
+                showToast('X media permissions enabled! You can now upload images and videos.', 'success');
+            } else {
+                const successMessage = accountName 
+                    ? `${platformName} account (${decodeURIComponent(accountName)}) connected successfully!`
+                    : `${platformName} account connected successfully!`;
+                showToast(successMessage, 'success');
+            }
+            // Remove query params from URL
+            window.history.replaceState({}, '', window.location.pathname);
+            // Reload page to refresh social accounts
+            window.location.reload();
+        } else if (oauthError) {
+            // Show specific error messages based on error type
+            let errorMsg = '';
+            
+            if (oauthError === 'no_instagram_account') {
+                errorMsg = 'No Instagram Business Account found. Your Instagram account must be converted to a Business or Creator account and connected to a Facebook Page. See instructions below.';
+            } else if (oauthError === 'token_exchange_failed') {
+                errorMsg = `Token exchange failed. ${errorDetails ? decodeURIComponent(errorDetails).substring(0, 100) : 'Please try again.'}`;
+            } else if (oauthError === 'pages_fetch_failed') {
+                errorMsg = 'Failed to fetch Facebook Pages. Make sure you have at least one Facebook Page.';
+            } else if (oauthError === 'oauth_not_configured') {
+                const platformName = platform ? platform.charAt(0).toUpperCase() + platform.slice(1) : 'OAuth';
+                errorMsg = `${platformName} OAuth is not configured. Please contact support or check your environment variables.`;
+            } else if (oauthError === 'token_exchange_failed') {
+                const platformName = platform ? platform.charAt(0).toUpperCase() + platform.slice(1) : 'Account';
+                errorMsg = `${platformName} token exchange failed. ${errorDetails ? decodeURIComponent(errorDetails).substring(0, 150) : 'Please check your OAuth configuration and try again.'}`;
+            } else if (errorMessage) {
+                errorMsg = decodeURIComponent(errorMessage);
+            } else {
+                errorMsg = `Failed to connect ${platform || 'account'}. Please try again.`;
+            }
+            
+            showToast(errorMsg, 'error');
+            // Remove query params from URL
+            window.history.replaceState({}, '', window.location.pathname);
+        }
+    }, [showToast, handleConnectOAuth1]);
 
     const handleDisconnectAccount = async (platform: Platform) => {
         // Allow admins to disconnect accounts even in offline mode (for testing)
@@ -880,7 +870,6 @@ export const Settings: React.FC = () => {
                                                 isConnecting={connectingPlatform === platform}
                                                 onConnect={handleConnectAccount}
                                                 onDisconnect={handleDisconnectAccount}
-                                                onConnectOAuth1={platform === 'X' ? handleConnectOAuth1 : undefined}
                                             />
                                         );
                                     })}

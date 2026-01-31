@@ -369,7 +369,7 @@ export async function publishTweet(
   mediaUrl?: string,
   mediaType?: 'image' | 'video',
   mediaUrls?: string[] // For multi-image posts
-): Promise<{ tweetId: string; text: string }> {
+): Promise<{ tweetId: string; text: string; mediaSkipped?: boolean; mediaError?: string }> {
   const token = auth.currentUser
     ? await auth.currentUser.getIdToken(true)
     : null;
@@ -402,6 +402,8 @@ export async function publishTweet(
     return {
       tweetId: result.tweetId,
       text: result.text,
+      mediaSkipped: result.mediaSkipped,
+      mediaError: result.mediaError,
     };
   } catch (error: any) {
     console.error('Failed to publish tweet:', error);

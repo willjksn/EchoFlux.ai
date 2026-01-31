@@ -43,19 +43,27 @@ In the same **User authentication settings** section:
 - The URL field might be labeled as "Callback URI", "Redirect URL", or "Callback URL"
 - After adding, you should see the URL appear in a list below
 
-### 3. Verify Environment Variables
+### 3. Add BOTH Callback URLs
 
-In Vercel, ensure these are set (same as OAuth 2.0):
-- `TWITTER_CLIENT_ID` or `X_CLIENT_ID` (used as Consumer Key for OAuth 1.0a)
-- `TWITTER_CLIENT_SECRET` or `X_CLIENT_SECRET` (used as Consumer Secret for OAuth 1.0a)
+X uses one allowlist for callback URLs. You need **both** of these in the list:
+1. `https://echoflux.ai/api/oauth/x/callback` (OAuth 2.0 - for connecting X)
+2. `https://echoflux.ai/api/oauth/x/callback-oauth1` (OAuth 1.0a - for image uploads)
 
-**Important**: In X Developer Portal, these are the same credentials:
-- **OAuth 2.0**: Uses "Client ID" and "Client Secret"
-- **OAuth 1.0a**: Uses the same credentials as "API Key" (Consumer Key) and "API Secret Key" (Consumer Secret)
+If you only have the OAuth 2.0 one, add the OAuth 1.0a URL too.
 
-No additional tokens needed - the same credentials work for both authentication methods.
+### 4. Verify Environment Variables
 
-### 4. Test the Connection
+**Option A (preferred for OAuth 1.0a):** Use API Key and API Secret from X Developer Portal → Keys and tokens:
+- `TWITTER_API_KEY` or `X_API_KEY` = API Key (Consumer Key)
+- `TWITTER_API_SECRET` or `X_API_SECRET` = API Secret (Consumer Secret)
+
+**Option B:** Fallback to Client ID/Secret (may work if same as API Key for your app):
+- `TWITTER_CLIENT_ID` or `X_CLIENT_ID`
+- `TWITTER_CLIENT_SECRET` or `X_CLIENT_SECRET`
+
+**If you get "Callback URL not approved"**: Try adding `TWITTER_API_KEY` and `TWITTER_API_SECRET` from the Keys and tokens tab - these are the OAuth 1.0a consumer credentials and may differ from Client ID/Secret.
+
+### 5. Test the Connection
 
 1. Go to Settings → Connections in your app
 2. Find your X account (should show as "Connected" for OAuth 2.0)
@@ -88,13 +96,14 @@ No additional tokens needed - the same credentials work for both authentication 
 
 - **OAuth 2.0**: Used for posting tweets (text and media IDs)
 - **OAuth 1.0a**: Required for uploading media to X API v1.1 endpoint
-- Both use the same `TWITTER_CLIENT_ID` and `TWITTER_CLIENT_SECRET`
+- OAuth 1.0a uses API Key/Secret (`TWITTER_API_KEY`, `TWITTER_API_SECRET`); falls back to Client ID/Secret
 - User-specific tokens are stored separately in Firestore
 
-### Callback URL
-- **OAuth 2.0 callback**: `https://echoflux.ai/api/oauth/x/callback`
-- **OAuth 1.0a callback**: `https://echoflux.ai/api/oauth/x/callback-oauth1`
-- Both must be registered in X Developer Portal
+### Callback URLs (add BOTH to your app's allowlist)
+- **OAuth 2.0**: `https://echoflux.ai/api/oauth/x/callback`
+- **OAuth 1.0a**: `https://echoflux.ai/api/oauth/x/callback-oauth1`
+- X Developer Portal → App → Settings → App details → Callback URI / Redirect URL
+- Add both URLs; they share one allowlist
 
 ## References
 - [X OAuth 1.0a Documentation](https://docs.x.com/fundamentals/authentication/oauth-1-0a/authorizing-a-request)

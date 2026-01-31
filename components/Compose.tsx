@@ -1314,6 +1314,12 @@ const CaptionGenerator: React.FC = () => {
           );
 
           console.log('Published to X:', result.tweetId);
+          if (result.mediaSkipped) {
+            const fallbackMsg = result.mediaError
+              ? `Published to X (text only – media upload failed: ${result.mediaError})`
+              : 'Published to X (text only – reconnect X to enable image uploads)';
+            showToast(fallbackMsg, 'info');
+          }
         } catch (xError: any) {
           console.error('Failed to publish to X:', xError);
           // Continue with other platforms even if X fails
@@ -1780,6 +1786,12 @@ const CaptionGenerator: React.FC = () => {
             );
 
             console.log(`Published post ${i + 1} to X:`, result.tweetId);
+            if (result.mediaSkipped) {
+              const fallbackMsg = result.mediaError
+                ? `Published to X (text only – media upload failed: ${result.mediaError})`
+                : 'Published to X (text only – reconnect X to enable image uploads)';
+              showToast(fallbackMsg, 'info');
+            }
           } catch (xError: any) {
             console.error(`Failed to publish post ${i + 1} to X:`, xError);
             // Continue with other platforms

@@ -494,9 +494,9 @@ export async function uploadMedia(
   // Note: X API v2 media upload endpoint may not be fully available yet
   // For now, we require OAuth 1.0a for media uploads
   throw new Error(
-    'Media upload requires OAuth 1.0a authentication. ' +
+    'Media upload requires additional X permissions. ' +
     'X API v1.1 media upload endpoint requires OAuth 1.0a credentials. ' +
-    'Please connect OAuth 1.0a in Settings (click "Connect OAuth 1.0a" button for X account) to enable image and video uploads.'
+    'Please reconnect X to enable image and video uploads.'
   );
 }
 
@@ -589,9 +589,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const maxRetries = 1; // Only retry once if we get unauthorized
 
     // Helper function to attempt publishing with retry on unauthorized
-    const attemptPublish = async (): Promise<{ tweetId: string; text: string }> => {
+    const attemptPublish = async (): Promise<{ tweetId: string; text: string; mediaSkipped?: boolean; mediaError?: string }> => {
       // Upload media if provided (support both single and multiple images)
       let mediaIds: string[] | undefined;
+      let mediaSkipped = false;
+      let mediaError: string | undefined;
       
       // Determine which URLs to use - prefer mediaUrls array, fallback to single mediaUrl
       let urlsToUpload: string[] = [];
@@ -608,19 +610,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log('attemptPublish: Original mediaUrls:', mediaUrls);
       
       if (urlsToUpload.length > 0 && mediaType) {
-        // Check OAuth 1.0a credentials upfront before attempting upload
-        const clientId = process.env.TWITTER_CLIENT_ID || process.env.X_CLIENT_ID;
-        const clientSecret = process.env.TWITTER_CLIENT_SECRET || process.env.X_CLIENT_SECRET;
+        // OAuth 1.0a uses API Key/Secret (consumer); fallback to Client ID/Secret
+        const consumerKey = process.env.TWITTER_API_KEY || process.env.X_API_KEY || process.env.TWITTER_CLIENT_ID || process.env.X_CLIENT_ID;
+        const consumerSecret = process.env.TWITTER_API_SECRET || process.env.X_API_SECRET || process.env.TWITTER_CLIENT_SECRET || process.env.X_CLIENT_SECRET;
         const hasOAuth1Tokens = !!(socialAccount.oauthToken && socialAccount.oauthTokenSecret);
-        const hasConsumerKeys = !!(clientId && clientSecret);
+        const hasConsumerKeys = !!(consumerKey && consumerSecret);
         
         if (!hasOAuth1Tokens || !hasConsumerKeys) {
-          throw new Error(
-            'Media upload requires OAuth 1.0a authentication. ' +
-            'Please go to Settings → Connections → X and click "Connect OAuth 1.0a" to enable image and video uploads. ' +
-            'OAuth 1.0a is required for X API v1.1 media upload endpoint.'
-          );
-        }
+          // Fallback: publish text-only so the user doesn't lose their post
+          console.warn('OAuth 1.0a not connected - publishing text-only. User should reconnect X for media uploads.');
+          mediaIds = undefined;
+          mediaSkipped = true;
+          mediaError = 'Media permissions not connected. Image upload skipped.';
+        } else {
         
         try {
           const uploadedIds: string[] = [];
@@ -634,12 +636,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             try {
               console.log(`attemptPublish: Uploading media ${uploadedIds.length + 1}/${urlsToUpload.length}:`, url);
               
-              // OAuth 1.0a credentials already checked above
               const oauth1Credentials = {
                 oauthToken: socialAccount.oauthToken!,
                 oauthTokenSecret: socialAccount.oauthTokenSecret!,
-                consumerKey: clientId!,
-                consumerSecret: clientSecret!,
+                consumerKey: consumerKey!,
+                consumerSecret: consumerSecret!,
               };
               
               console.log('attemptPublish: Using OAuth 1.0a for media upload');
@@ -655,16 +656,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             } catch (singleMediaError: any) {
               console.error(`Failed to upload media ${url}:`, singleMediaError);
               
-              // Provide helpful error message if OAuth 1.0a is missing
               const errorMessage = singleMediaError.message || String(singleMediaError);
-              if (errorMessage.includes('OAuth 1.0a') || 
-                  errorMessage.includes('requires OAuth 1.0a')) {
-                throw new Error(
-                  'Media upload requires OAuth 1.0a authentication. ' +
-                  'Please go to Settings → Connections → X and click "Connect OAuth 1.0a" to enable image and video uploads.'
-                );
+              const isAuthError =
+                errorMessage.includes('Unauthorized') ||
+                errorMessage.includes('401') ||
+                errorMessage.includes('403') ||
+                errorMessage.toLowerCase().includes('could not authenticate you') ||
+                errorMessage.toLowerCase().includes('invalid or expired token');
+
+              if (isAuthError) {
+                console.warn('OAuth 1.0a upload failed due to auth error; publishing text-only.');
+                mediaSkipped = true;
+                mediaError = `Media upload failed. ${errorMessage}`;
+                break;
               }
-              
+
               // Don't continue silently - throw the error so user knows
               throw singleMediaError;
             }
@@ -673,24 +679,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (uploadedIds.length > 0) {
             mediaIds = uploadedIds;
             console.log('attemptPublish: All media uploaded successfully, media_ids:', mediaIds);
-          } else {
+          } else if (!mediaSkipped) {
             console.warn('attemptPublish: No media IDs were successfully uploaded');
             throw new Error('Failed to upload media to X. No media IDs were returned.');
           }
         } catch (mediaError: any) {
           console.error('Media upload failed:', mediaError);
           
-          // Check if error is due to missing OAuth 1.0a
           const errorMessage = mediaError.message || String(mediaError);
-          if (errorMessage.includes('OAuth 1.0a') || errorMessage.includes('requires OAuth 1.0a')) {
-            throw new Error(
-              'Media upload requires OAuth 1.0a authentication. ' +
-              'Please go to Settings → Connections → X and click "Connect OAuth 1.0a" to enable image and video uploads to X.'
-            );
+          const isAuthError =
+            errorMessage.includes('Unauthorized') ||
+            errorMessage.includes('401') ||
+            errorMessage.includes('403') ||
+            errorMessage.toLowerCase().includes('could not authenticate you') ||
+            errorMessage.toLowerCase().includes('invalid or expired token');
+
+          if (isAuthError) {
+            console.warn('OAuth 1.0a upload failed due to auth error; publishing text-only.');
+            mediaSkipped = true;
+            mediaError = `Media upload failed. ${errorMessage}`;
+          } else {
+            // Don't continue silently - throw the error
+            throw new Error(`Media upload failed: ${errorMessage}`);
           }
-          
-          // Don't continue silently - throw the error
-          throw new Error(`Media upload failed: ${errorMessage}`);
+        }
         }
       } else {
         console.log('attemptPublish: No media to upload (urlsToUpload:', urlsToUpload.length, ', mediaType:', mediaType, ')');
@@ -702,7 +714,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       try {
         console.log('attemptPublish: Publishing tweet with text-only:', !mediaIds || mediaIds.length === 0);
         console.log('attemptPublish: Publishing tweet with media_ids:', mediaIds);
-        return await publishTweet(accessToken, text, mediaIds);
+        const tweetResult = await publishTweet(accessToken, text, mediaIds);
+        return { ...tweetResult, mediaSkipped, mediaError };
       } catch (publishError: any) {
         // If we get unauthorized error and haven't retried yet, refresh token and try again
         if (
@@ -734,7 +747,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: true,
       tweetId: result.tweetId,
       text: result.text,
-      message: 'Tweet published successfully',
+      mediaSkipped: result.mediaSkipped,
+      mediaError: result.mediaError,
+      message: result.mediaSkipped
+        ? (result.mediaError
+            ? 'Tweet published (text only - media upload failed)'
+            : 'Tweet published (text only - reconnect X to enable image uploads)')
+        : 'Tweet published successfully',
     });
   } catch (error: any) {
     console.error('X publish error:', error);

@@ -71,13 +71,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const consumerKey = process.env.TWITTER_CLIENT_ID || process.env.X_CLIENT_ID;
-    const consumerSecret = process.env.TWITTER_CLIENT_SECRET || process.env.X_CLIENT_SECRET;
+    // OAuth 1.0a uses API Key (Consumer Key) and API Secret - NOT the same as OAuth 2.0 Client ID/Secret
+    // In X Developer Portal → Keys and tokens: "API Key" and "API Secret" (not "Client ID")
+    const consumerKey = process.env.TWITTER_API_KEY || process.env.X_API_KEY || process.env.TWITTER_CLIENT_ID || process.env.X_CLIENT_ID;
+    const consumerSecret = process.env.TWITTER_API_SECRET || process.env.X_API_SECRET || process.env.TWITTER_CLIENT_SECRET || process.env.X_CLIENT_SECRET;
 
     if (!consumerKey || !consumerSecret) {
       return res.status(500).json({
-        error: 'X OAuth not configured',
-        details: 'Missing TWITTER_CLIENT_ID or TWITTER_CLIENT_SECRET'
+        error: 'X OAuth 1.0a not configured',
+        details: 'Missing credentials. Add TWITTER_API_KEY and TWITTER_API_SECRET (from X Developer Portal → Keys and tokens → API Key/Secret) to Vercel. OAuth 2.0 Client ID/Secret may work if they match.'
       });
     }
 
@@ -187,21 +189,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let errorDetails = responseText || statusText;
       let troubleshootingSteps: string[] = [];
       
-      if (responseText.includes('Invalid callback URL') || 
+      if (responseText.includes('Callback URL') || 
           responseText.includes('callback') || 
-          responseText.includes('Invalid callback url') ||
-          responseText.toLowerCase().includes('callback')) {
-        errorMessage = 'OAuth 1.0a callback URL not registered or invalid';
-        errorDetails = `X rejected the callback URL: "${callbackUrl}"\n\nX's response: ${responseText}`;
+          responseText.includes('415') ||
+          responseText.toLowerCase().includes('callback') ||
+          responseText.includes('not approved')) {
+        errorMessage = 'OAuth 1.0a callback URL not approved';
+        errorDetails = `X rejected the callback. Raw response: ${responseText}\n\nRequired URL (add exactly): ${callbackUrl}`;
         troubleshootingSteps = [
-          '1. Go to X Developer Portal → Your App → Settings → User authentication settings',
-          '2. Make sure OAuth 1.0a is ENABLED (separate from OAuth 2.0)',
-          '3. Find the OAuth 1.0a Callback URLs section (NOT OAuth 2.0 section)',
-          `4. Verify the URL is registered exactly as: ${callbackUrl}`,
-          '5. Check for: no trailing slash, exact case, no extra spaces',
-          '6. If the URL is already there, DELETE it and RE-ADD it',
-          '7. Wait 2-3 minutes after saving before testing again',
-          '8. Make sure App permissions are set to "Read and write"'
+          '1. X Developer Portal → Your App → Settings → App details',
+          '2. Find "Callback URI / Redirect URL" (may be one list for both OAuth 1.0a and 2.0)',
+          `3. Add this EXACT URL: ${callbackUrl}`,
+          '4. Note: This is different from OAuth 2.0 callback - you need BOTH URLs in the list',
+          '5. OAuth 2.0 uses: https://echoflux.ai/api/oauth/x/callback',
+          `6. OAuth 1.0a uses: ${callbackUrl}`,
+          '7. No trailing slash, exact match. Save and wait 2-3 minutes.',
+          '8. If using Client ID/Secret, try adding TWITTER_API_KEY and TWITTER_API_SECRET from Keys and tokens tab'
         ];
       } else if (responseText.includes('Invalid consumer key') || responseText.includes('401')) {
         errorMessage = 'Invalid X API credentials';
@@ -219,7 +222,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         callbackUrl: callbackUrl,
         troubleshootingSteps: troubleshootingSteps.length > 0 ? troubleshootingSteps : undefined,
         help: troubleshootingSteps.length > 0 
-          ? 'Follow the troubleshooting steps above. The most common issue is registering the URL in the OAuth 2.0 section instead of OAuth 1.0a section.'
+          ? 'OAuth 1.0a uses API Key/Secret (not Client ID). Add both callback URLs. If it still fails, add TWITTER_API_KEY and TWITTER_API_SECRET from the Keys and tokens tab.'
           : 'Make sure OAuth 1.0a is enabled in your X Developer Portal and the callback URL is registered.'
       });
     }

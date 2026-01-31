@@ -97,8 +97,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.error('OAuth 1.0a: Could not find matching request token for oauth_token:', oauth_token);
       return res.redirect(`/?error=oauth1_token_mismatch&platform=x&type=oauth1`);
     }
-    const consumerKey = process.env.TWITTER_CLIENT_ID || process.env.X_CLIENT_ID;
-    const consumerSecret = process.env.TWITTER_CLIENT_SECRET || process.env.X_CLIENT_SECRET;
+    const consumerKey = process.env.TWITTER_API_KEY || process.env.X_API_KEY || process.env.TWITTER_CLIENT_ID || process.env.X_CLIENT_ID;
+    const consumerSecret = process.env.TWITTER_API_SECRET || process.env.X_API_SECRET || process.env.TWITTER_CLIENT_SECRET || process.env.X_CLIENT_SECRET;
 
     if (!consumerKey || !consumerSecret) {
       return res.redirect(`/?error=oauth_not_configured&platform=x&type=oauth1`);
