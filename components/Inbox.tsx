@@ -4,6 +4,7 @@ import { Platform, Message, DashboardFilters, MessageType, MessageCategory } fro
 import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
 import { SearchIcon, FlagIcon, StarIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
+import { auth } from '../firebaseConfig';
 import { hasCapability, getPlatformsWithCapability } from '../src/services/platformCapabilities';
 
 const platformFilterIcons: { [key in Platform]: React.ReactNode } = {

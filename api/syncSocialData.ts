@@ -518,7 +518,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const db = getAdminDb();
       const userDoc = await db.collection("users").doc(user.uid).get();
       const userData = userDoc.data();
-      if (!userData || userData.role !== "Admin") {
+      const requestedUserId = typeof req.query.userId === "string" ? req.query.userId : null;
+      const isOwnerRequest = requestedUserId && requestedUserId === user.uid;
+      if (!userData || (userData.role !== "Admin" && !isOwnerRequest)) {
         return res.status(403).json({ error: "Admin access required for manual sync" });
       }
     } catch (authError) {
