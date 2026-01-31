@@ -92,7 +92,8 @@ const AccountConnection: React.FC<{
     isConnecting: boolean;
     onConnect: (platform: Platform) => Promise<void>;
     onDisconnect: (platform: Platform) => Promise<void>;
-}> = ({ platform, account, isConnecting, onConnect, onDisconnect }) => {
+    onEnableMediaUploads?: () => Promise<void>;
+}> = ({ platform, account, isConnecting, onConnect, onDisconnect, onEnableMediaUploads }) => {
     const isConnected = account?.connected || false;
     const accountUsername = account?.accountUsername;
     // Check if OAuth 1.0a is connected (for X media uploads)
@@ -172,6 +173,17 @@ const AccountConnection: React.FC<{
                 >
                     {isConnecting ? 'Connecting...' : isConnected ? 'Disconnect' : 'Connect'}
                 </button>
+                {platform === 'X' && isConnected && !hasOAuth1 && onEnableMediaUploads && (
+                    <div className="mt-2">
+                        <button
+                            onClick={onEnableMediaUploads}
+                            disabled={isConnecting}
+                            className="text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Enable media uploads
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -905,6 +917,7 @@ export const Settings: React.FC = () => {
                                                 isConnecting={connectingPlatform === platform}
                                                 onConnect={handleConnectAccount}
                                                 onDisconnect={handleDisconnectAccount}
+                                                onEnableMediaUploads={platform === 'X' ? handleConnectOAuth1 : undefined}
                                             />
                                         );
                                     })}
