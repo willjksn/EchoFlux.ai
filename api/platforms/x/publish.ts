@@ -253,8 +253,14 @@ async function uploadMediaOAuth1(
       oauth_timestamp: timestamp,
       oauth_version: '1.0',
     };
-    
-    const signature = generateOAuth1Signature('POST', endpoint, oauthParams, consumerSecret, oauthTokenSecret);
+
+    // Include body params in signature for x-www-form-urlencoded requests
+    const signatureParams: Record<string, string> = {
+      ...oauthParams,
+      media_data: mediaBase64,
+    };
+
+    const signature = generateOAuth1Signature('POST', endpoint, signatureParams, consumerSecret, oauthTokenSecret);
     oauthParams.oauth_signature = signature;
     
     const sortedOAuthKeys = Object.keys(oauthParams).sort();
@@ -305,8 +311,15 @@ async function uploadMediaOAuth1(
       oauth_timestamp: timestamp,
       oauth_version: '1.0',
     };
-    
-    const signature = generateOAuth1Signature('POST', endpoint, oauthParams, consumerSecret, oauthTokenSecret);
+
+    const signatureParams: Record<string, string> = {
+      ...oauthParams,
+      command: 'INIT',
+      media_type: 'video/mp4',
+      total_bytes: mediaBuffer.length.toString(),
+    };
+
+    const signature = generateOAuth1Signature('POST', endpoint, signatureParams, consumerSecret, oauthTokenSecret);
     oauthParams.oauth_signature = signature;
     
     const sortedOAuthKeys = Object.keys(oauthParams).sort();
@@ -349,8 +362,16 @@ async function uploadMediaOAuth1(
       oauth_timestamp: appendTimestamp,
       oauth_version: '1.0',
     };
-    
-    const appendSignature = generateOAuth1Signature('POST', endpoint, appendOAuthParams, consumerSecret, oauthTokenSecret);
+
+    const appendSignatureParams: Record<string, string> = {
+      ...appendOAuthParams,
+      command: 'APPEND',
+      media_id: mediaId,
+      media: mediaBuffer.toString('base64'),
+      segment_index: '0',
+    };
+
+    const appendSignature = generateOAuth1Signature('POST', endpoint, appendSignatureParams, consumerSecret, oauthTokenSecret);
     appendOAuthParams.oauth_signature = appendSignature;
     
     const appendSortedKeys = Object.keys(appendOAuthParams).sort();
@@ -388,8 +409,14 @@ async function uploadMediaOAuth1(
       oauth_timestamp: finalizeTimestamp,
       oauth_version: '1.0',
     };
-    
-    const finalizeSignature = generateOAuth1Signature('POST', endpoint, finalizeOAuthParams, consumerSecret, oauthTokenSecret);
+
+    const finalizeSignatureParams: Record<string, string> = {
+      ...finalizeOAuthParams,
+      command: 'FINALIZE',
+      media_id: mediaId,
+    };
+
+    const finalizeSignature = generateOAuth1Signature('POST', endpoint, finalizeSignatureParams, consumerSecret, oauthTokenSecret);
     finalizeOAuthParams.oauth_signature = finalizeSignature;
     
     const finalizeSortedKeys = Object.keys(finalizeOAuthParams).sort();
