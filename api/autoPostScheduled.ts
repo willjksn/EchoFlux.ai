@@ -1,5 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { requireCronAuth } from "./_cronAuth.js";
+import { getAdminDb } from "./_firebaseAdmin.js";
+import { publishXPost } from "./platforms/x/publish.js";
 
 /**
  * Auto-post scheduled posts that are ready to publish
@@ -22,34 +24,96 @@ export default async function handler(
       return;
     }
     
-    // Get all users (or specific user if auth provided)
-    // For now, we'll process all scheduled posts
     const now = new Date();
-    const fiveMinutesFromNow = new Date(now.getTime() + 5 * 60 * 1000); // 5 minute window
+    const db = getAdminDb();
 
     let totalProcessed = 0;
     let totalPosted = 0;
     const errors: string[] = [];
 
-    // Note: This is a simplified version. In production, you'd want to:
-    // 1. Query all users' posts collections
-    // 2. Filter for status='Scheduled' and scheduledDate <= now
-    // 3. Update status to 'Published' and scheduledDate to now
-    // 4. Update linked roadmap items to 'posted' status
+    const scheduledPostsSnapshot = await db
+      .collectionGroup("posts")
+      .where("status", "==", "Scheduled")
+      .get();
 
-    // For now, return success - actual implementation would require:
-    // - Iterating through all users
-    // - Querying their posts
-    // - Publishing scheduled posts
-    // - Updating roadmap status
+    for (const doc of scheduledPostsSnapshot.docs) {
+      const post = doc.data();
+      const scheduledDate = post.scheduledDate ? new Date(post.scheduledDate) : null;
+      if (!scheduledDate || scheduledDate > now) {
+        continue;
+      }
+
+      const pathParts = doc.ref.path.split("/");
+      const userIdIndex = pathParts.indexOf("users") + 1;
+      const userId = pathParts[userIdIndex];
+      if (!userId) {
+        continue;
+      }
+
+      totalProcessed++;
+
+      const platforms: string[] = Array.isArray(post.platforms) ? post.platforms : [];
+      if (!platforms.includes("X")) {
+        continue;
+      }
+
+      try {
+        const socialAccountRef = db
+          .collection("users")
+          .doc(userId)
+          .collection("social_accounts")
+          .doc("x");
+
+        const socialAccountDoc = await socialAccountRef.get();
+        if (!socialAccountDoc.exists) {
+          errors.push(`X account not connected for user ${userId}`);
+          continue;
+        }
+
+        const socialAccount = socialAccountDoc.data();
+        if (!socialAccount?.connected || !socialAccount?.accessToken) {
+          errors.push(`X account missing token for user ${userId}`);
+          continue;
+        }
+
+        const result = await publishXPost({
+          userId,
+          db,
+          socialAccount,
+          socialAccountRef,
+          text: post.content || "",
+          mediaUrl: post.mediaUrl,
+          mediaUrls: post.mediaUrls,
+          mediaType: post.mediaType,
+        });
+
+        await doc.ref.update({
+          status: "Published",
+          publishedAt: now.toISOString(),
+          updatedAt: now.toISOString(),
+          scheduledDate: post.scheduledDate || now.toISOString(),
+          lastPublishResult: {
+            platform: "X",
+            tweetId: result.tweetId,
+            mediaSkipped: result.mediaSkipped || false,
+            mediaError: result.mediaError || null,
+          },
+        });
+
+        totalPosted++;
+      } catch (error: any) {
+        console.error("Failed to auto-post scheduled X post:", error);
+        errors.push(`Post ${doc.id}: ${error?.message || String(error)}`);
+      }
+    }
 
     res.status(200).json({
       success: true,
-      message: "Auto-post service running",
+      message: "Auto-post service completed",
       processed: totalProcessed,
       posted: totalPosted,
       errors: errors.length > 0 ? errors : undefined,
-      timestamp: now.toISOString()
+      timestamp: now.toISOString(),
     });
   } catch (error: any) {
     console.error("Auto-post error:", error);

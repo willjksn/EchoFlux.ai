@@ -527,96 +527,50 @@ export async function uploadMedia(
   );
 }
 
-/**
- * API endpoint handler
- */
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+export async function publishXPost(params: {
+  userId: string;
+  db: any;
+  socialAccount: XAccount;
+  socialAccountRef: any;
+  text: string;
+  mediaUrl?: string;
+  mediaUrls?: string[];
+  mediaType?: 'image' | 'video';
+}): Promise<{ tweetId: string; text: string; mediaSkipped?: boolean; mediaError?: string }> {
+  const {
+    userId,
+    db,
+    socialAccount,
+    socialAccountRef,
+    text,
+    mediaUrl,
+    mediaUrls,
+    mediaType,
+  } = params;
+
+  if (!text) {
+    throw new Error('Missing required field: text');
   }
 
-  try {
-    // Verify authentication
-    const authUser = await verifyAuth(req);
-    if (!authUser || !authUser.uid) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
+  if (text.length > 10000) {
+    throw new Error('Tweet text must be 10,000 characters or less');
+  }
 
-    const {
-      text,
-      mediaUrl, // Single media URL (for backward compatibility)
-      mediaUrls, // Array of media URLs (for multi-image posts)
-      mediaType, // 'image' | 'video'
-    } = req.body;
+  // Log OAuth 1.0a status for debugging
+  const hasOAuth1 = !!(socialAccount.oauthToken && socialAccount.oauthTokenSecret);
+  console.log('X account status:', {
+    hasOAuth2: !!socialAccount.accessToken,
+    hasOAuth1: hasOAuth1,
+    hasMedia: !!(mediaUrl || (mediaUrls && mediaUrls.length > 0)),
+  });
 
-    console.log('X publish request:', {
-      hasText: !!text,
-      textLength: text?.length,
-      hasMediaUrl: !!mediaUrl,
-      hasMediaUrls: !!mediaUrls,
-      mediaUrlsCount: mediaUrls?.length || 0,
-      mediaType: mediaType,
-    });
+  // Refresh token if expired or expiring soon
+  let accessToken = await refreshXToken(socialAccount, userId, db);
+  let retryCount = 0;
+  const maxRetries = 1; // Only retry once if we get unauthorized
 
-    // Validate required fields
-    if (!text) {
-      return res.status(400).json({
-        error: 'Missing required field',
-        details: 'text is required',
-      });
-    }
-
-    // Validate text length (X limit is 280 characters, but can be longer with Twitter Blue)
-    if (text.length > 10000) {
-      return res.status(400).json({
-        error: 'Text too long',
-        details: 'Tweet text must be 10,000 characters or less',
-      });
-    }
-
-    // Get X account from Firestore
-    const adminApp = getAdminApp();
-    const db = adminApp.firestore();
-    
-    const socialAccountRef = db
-      .collection('users')
-      .doc(authUser.uid)
-      .collection('social_accounts')
-      .doc('x');
-
-    const socialAccountDoc = await socialAccountRef.get();
-
-    if (!socialAccountDoc.exists) {
-      return res.status(404).json({
-        error: 'X account not connected',
-        details: 'Please connect your X account in Settings',
-      });
-    }
-
-    const socialAccount = socialAccountDoc.data() as XAccount;
-    
-    if (!socialAccount?.connected || !socialAccount?.accessToken) {
-      return res.status(400).json({
-        error: 'X account not properly connected',
-        details: 'Please reconnect your X account',
-      });
-    }
-
-    // Log OAuth 1.0a status for debugging
-    const hasOAuth1 = !!(socialAccount.oauthToken && socialAccount.oauthTokenSecret);
-    console.log('X account status:', {
-      hasOAuth2: !!socialAccount.accessToken,
-      hasOAuth1: hasOAuth1,
-      hasMedia: !!(mediaUrl || (mediaUrls && mediaUrls.length > 0)),
-    });
-
-    // Refresh token if expired or expiring soon
-    let accessToken = await refreshXToken(socialAccount, authUser.uid, db);
-    let retryCount = 0;
-    const maxRetries = 1; // Only retry once if we get unauthorized
-
-    // Helper function to attempt publishing with retry on unauthorized
-    const attemptPublish = async (): Promise<{ tweetId: string; text: string; mediaSkipped?: boolean; mediaError?: string }> => {
+  // Helper function to attempt publishing with retry on unauthorized
+  const attemptPublish = async (): Promise<{ tweetId: string; text: string; mediaSkipped?: boolean; mediaError?: string }> => {
       // Upload media if provided (support both single and multiple images)
       let mediaIds: string[] | undefined;
       let mediaSkipped = false;
@@ -759,16 +713,87 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const updatedAccount = updatedAccountDoc.data() as XAccount;
           
           // Force refresh token (even if not expired)
-          accessToken = await refreshXToken(updatedAccount, authUser.uid, db);
+          accessToken = await refreshXToken(updatedAccount, userId, db);
           
           // Retry publish
           return attemptPublish();
         }
         throw publishError;
       }
-    };
+  };
 
-    const result = await attemptPublish();
+  return attemptPublish();
+}
+
+/**
+ * API endpoint handler
+ */
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  try {
+    // Verify authentication
+    const authUser = await verifyAuth(req);
+    if (!authUser || !authUser.uid) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const {
+      text,
+      mediaUrl, // Single media URL (for backward compatibility)
+      mediaUrls, // Array of media URLs (for multi-image posts)
+      mediaType, // 'image' | 'video'
+    } = req.body;
+
+    console.log('X publish request:', {
+      hasText: !!text,
+      textLength: text?.length,
+      hasMediaUrl: !!mediaUrl,
+      hasMediaUrls: !!mediaUrls,
+      mediaUrlsCount: mediaUrls?.length || 0,
+      mediaType: mediaType,
+    });
+
+    // Get X account from Firestore
+    const adminApp = getAdminApp();
+    const db = adminApp.firestore();
+    
+    const socialAccountRef = db
+      .collection('users')
+      .doc(authUser.uid)
+      .collection('social_accounts')
+      .doc('x');
+
+    const socialAccountDoc = await socialAccountRef.get();
+
+    if (!socialAccountDoc.exists) {
+      return res.status(404).json({
+        error: 'X account not connected',
+        details: 'Please connect your X account in Settings',
+      });
+    }
+
+    const socialAccount = socialAccountDoc.data() as XAccount;
+    
+    if (!socialAccount?.connected || !socialAccount?.accessToken) {
+      return res.status(400).json({
+        error: 'X account not properly connected',
+        details: 'Please reconnect your X account',
+      });
+    }
+
+    const result = await publishXPost({
+      userId: authUser.uid,
+      db,
+      socialAccount,
+      socialAccountRef,
+      text,
+      mediaUrl,
+      mediaUrls,
+      mediaType,
+    });
 
     return res.status(200).json({
       success: true,
