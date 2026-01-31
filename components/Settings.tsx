@@ -576,9 +576,14 @@ export const Settings: React.FC = () => {
             const oauthType = params.get('type');
             const accountName = params.get('account');
             const platformName = oauthSuccess.charAt(0).toUpperCase() + oauthSuccess.slice(1);
+            const hasXOAuth1 = !!(
+                safeSocialAccounts?.X &&
+                (safeSocialAccounts.X as any).oauthToken &&
+                (safeSocialAccounts.X as any).oauthTokenSecret
+            );
 
             // For X, automatically complete OAuth 1.0a after OAuth 2.0 connects
-            if (oauthSuccess === 'x' && oauthType !== 'oauth1') {
+            if (oauthSuccess === 'x' && oauthType !== 'oauth1' && !hasXOAuth1) {
                 const successMessage = accountName 
                     ? `${platformName} account (${decodeURIComponent(accountName)}) connected. Completing media permissions...`
                     : `${platformName} account connected. Completing media permissions...`;

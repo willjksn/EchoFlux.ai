@@ -2486,9 +2486,28 @@ const CaptionGenerator: React.FC = () => {
   };
 
   const handlePublish = async () => {
-    const platformsToPost = (Object.keys(selectedPlatforms) as Platform[]).filter(
+    let platformsToPost = (Object.keys(selectedPlatforms) as Platform[]).filter(
       p => selectedPlatforms[p]
     );
+    if (platformsToPost.length === 0 && composeState.mediaItems && composeState.mediaItems.length > 0) {
+      const firstWithPlatforms = composeState.mediaItems.find(item =>
+        Object.values(item.selectedPlatforms || {}).some(Boolean)
+      );
+      if (firstWithPlatforms) {
+        platformsToPost = (Object.keys(firstWithPlatforms.selectedPlatforms || {}) as Platform[]).filter(
+          p => firstWithPlatforms.selectedPlatforms?.[p]
+        );
+        if (platformsToPost.length > 0) {
+          setSelectedPlatforms(prev => {
+            const updated: Partial<Record<Platform, boolean>> = { ...prev };
+            (Object.keys(updated) as Platform[]).forEach(platform => {
+              updated[platform] = platformsToPost.includes(platform);
+            });
+            return updated;
+          });
+        }
+      }
+    }
     // Check both single media and mediaItems array
     const hasMedia = composeState.media || (composeState.mediaItems && composeState.mediaItems.length > 0);
     if (!composeState.captionText.trim() && !hasMedia) {

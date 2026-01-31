@@ -47,6 +47,7 @@ export const Inbox: React.FC = () => {
   });
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
+  const [isSyncingX, setIsSyncingX] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
 
   const isBusiness = useMemo(() => {
@@ -217,6 +218,43 @@ export const Inbox: React.FC = () => {
     }
   };
 
+  const handleSyncX = async () => {
+    if (!user?.id || user.role !== 'Admin') return;
+    setIsSyncingX(true);
+    try {
+      const token = auth.currentUser
+        ? await auth.currentUser.getIdToken(true)
+        : null;
+
+      if (!token) {
+        throw new Error('User must be logged in');
+      }
+
+      const response = await fetch(`/api/syncSocialData?userId=${encodeURIComponent(user.id)}&platform=X`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.details || 'Failed to sync X');
+      }
+
+      const result = await response.json();
+      const summary = result?.result
+        ? `DMs: ${result.result.dmsFetched}, Comments: ${result.result.commentsFetched}`
+        : 'Sync completed.';
+      showToast(`X sync complete. ${summary}`, 'success');
+    } catch (error: any) {
+      console.error('Failed to sync X:', error);
+      showToast(error.message || 'Failed to sync X', 'error');
+    } finally {
+      setIsSyncingX(false);
+    }
+  };
+
   if (!user) {
     return <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-full flex items-center justify-center">
       <p className="text-gray-500 dark:text-gray-400">Loading...</p>
@@ -248,6 +286,15 @@ export const Inbox: React.FC = () => {
           >
             Categorize Inbox
           </button>
+          {user?.role === 'Admin' && (
+            <button
+              onClick={handleSyncX}
+              disabled={isSyncingX}
+              className="text-sm font-medium text-primary-600 hover:underline disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {isSyncingX ? 'Syncing X...' : 'Sync X now'}
+            </button>
+          )}
           <div className="flex items-center gap-2 p-1.5 bg-gray-200 dark:bg-gray-700 rounded-full">
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300 pl-3 pr-1 truncate max-w-[220px]">
               Auto-draft replies

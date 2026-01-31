@@ -254,7 +254,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }, { merge: true });
 
     // Build authorization URL
-    const authUrl = `https://api.twitter.com/oauth/authorize?oauth_token=${encodeURIComponent(oauthToken)}`;
+    // Use oauth/authenticate to reduce re-login prompts when possible
+    const authUrl = `https://api.twitter.com/oauth/authenticate?oauth_token=${encodeURIComponent(oauthToken)}`;
 
     return res.status(200).json({
       authUrl,

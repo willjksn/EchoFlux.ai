@@ -14,6 +14,43 @@ interface SyncResult {
   error?: string;
 }
 
+const PLATFORM_NAME_MAP: Record<string, string> = {
+  x: "X",
+  twitter: "X",
+  instagram: "Instagram",
+  facebook: "Facebook",
+  tiktok: "TikTok",
+  threads: "Threads",
+  youtube: "YouTube",
+  linkedin: "LinkedIn",
+  pinterest: "Pinterest",
+};
+
+function normalizePlatformName(platform?: string | null): string | null {
+  if (!platform) return null;
+  const key = platform.toLowerCase();
+  return PLATFORM_NAME_MAP[key] || platform;
+}
+
+async function getSocialAccountsForUser(userId: string, db: any): Promise<Record<string, any>> {
+  const snapshot = await db
+    .collection("users")
+    .doc(userId)
+    .collection("social_accounts")
+    .get();
+
+  const accounts: Record<string, any> = {};
+  snapshot.forEach((doc: any) => {
+    const data = doc.data() || {};
+    const platform = normalizePlatformName(data.platform || doc.id);
+    if (platform) {
+      accounts[platform] = data;
+    }
+  });
+
+  return accounts;
+}
+
 /**
  * Sync DMs and comments for a single platform
  */
@@ -492,6 +529,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const db = getAdminDb();
   try {
     const { userId, platform } = req.query;
+    const normalizedPlatform = typeof platform === "string" ? normalizePlatformName(platform) : null;
 
     // If userId specified, sync only that user
     if (userId && typeof userId === "string") {
@@ -500,17 +538,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(404).json({ error: "User not found" });
       }
 
-      const user = userDoc.data();
-      const socialAccounts = user?.socialAccounts || {};
+      const socialAccounts = await getSocialAccountsForUser(userId, db);
 
       // If platform specified, sync only that platform
-      if (platform && typeof platform === "string") {
-        const account = socialAccounts[platform];
+      if (normalizedPlatform) {
+        const account = socialAccounts[normalizedPlatform];
         if (!account?.connected) {
-          return res.status(400).json({ error: `Platform ${platform} not connected` });
+          return res.status(400).json({ error: `Platform ${normalizedPlatform} not connected` });
         }
 
-        const result = await syncPlatformData(userId, platform, account);
+        const result = await syncPlatformData(userId, normalizedPlatform, account);
         return res.status(200).json({ success: true, result });
       }
 
@@ -527,17 +564,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Sync all users with connected accounts
-    const usersSnapshot = await db
-      .collection("users")
-      .where("socialAccounts", "!=", null)
-      .get();
+    const usersSnapshot = await db.collection("users").get();
 
     const allResults: Record<string, SyncResult[]> = {};
 
     for (const userDoc of usersSnapshot.docs) {
       const userId = userDoc.id;
-      const user = userDoc.data();
-      const socialAccounts = user?.socialAccounts || {};
+      const socialAccounts = await getSocialAccountsForUser(userId, db);
 
       const userResults: SyncResult[] = [];
 

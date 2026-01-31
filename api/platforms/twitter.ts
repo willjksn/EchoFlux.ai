@@ -52,8 +52,8 @@ async function refreshTwitterToken(account: TwitterAccount): Promise<string | nu
       }
 
       try {
-        const clientId = process.env.TWITTER_CLIENT_ID;
-        const clientSecret = process.env.TWITTER_CLIENT_SECRET;
+        const clientId = process.env.TWITTER_CLIENT_ID || process.env.X_CLIENT_ID;
+        const clientSecret = process.env.TWITTER_CLIENT_SECRET || process.env.X_CLIENT_SECRET;
         
         if (!clientId || !clientSecret) {
           console.warn("Twitter OAuth credentials not configured");
