@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from './components/AppContext';
 import { AuthProvider } from './components/contexts/AuthContext';
 import { UIProvider } from './components/contexts/UIContext';
@@ -285,12 +285,21 @@ const AppContent: React.FC = () => {
     }, [isAuthenticated, isAuthLoading]);
 
     // If invite-granted access expired, route user to Pricing to upgrade (Stripe flow remains unchanged).
+    const hasShownExpiredToastRef = useRef(false);
     useEffect(() => {
-        if (!isAuthenticated || !user) return;
+        if (!isAuthenticated || !user) {
+            hasShownExpiredToastRef.current = false;
+            return;
+        }
         const status = (user as any)?.subscriptionStatus as string | undefined;
         if (status === 'invite_grant_expired') {
-            showToast('Your access has expired. Please upgrade to continue.', 'error');
+            if (!hasShownExpiredToastRef.current) {
+                hasShownExpiredToastRef.current = true;
+                showToast('Your access has expired. Please upgrade to continue.', 'error');
+            }
             setActivePage('pricing');
+        } else {
+            hasShownExpiredToastRef.current = false;
         }
     }, [isAuthenticated, user, showToast, setActivePage]);
 

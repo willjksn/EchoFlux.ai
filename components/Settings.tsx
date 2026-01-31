@@ -139,7 +139,7 @@ const AccountConnection: React.FC<{
                                         {!isFullySupported(platform, 'inbox') && ' ⚠️'}
                                     </span>
                                 )}
-                                {hasCapability(platform, 'analytics') && (
+                                {hasCapability(platform, 'analytics') && platform !== 'X' && (
                                     <span 
                                         className="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 cursor-help"
                                         title={isFullySupported(platform, 'analytics') 
@@ -357,27 +357,10 @@ export const Settings: React.FC = () => {
             showToast('Account connections are disabled in this version. EchoFlux.ai is currently focused on planning and content creation. You can still plan campaigns and copy content to post manually.', 'info');
             return;
         }
-        // Block Caption plan from connecting accounts
-        if (user.plan === 'Caption') {
-            showToast('Caption Pro plan does not include social account connections. Upgrade to Pro or higher to connect accounts.', 'error');
-            setPricingView(user.userType || 'Creator');
-            setActivePage('pricing');
-            return;
-        }
-        
         // Show Instagram setup modal if Instagram is not connected
         if (platform === 'Instagram' && !safeSocialAccounts?.Instagram?.connected) {
             setShowInstagramSetupModal(true);
             return;
-        }
-        
-        // Check connection limit for Free plan (1 account max)
-        if (user.plan === 'Free') {
-            const connectedCount = Object.values(safeSocialAccounts).filter(acc => acc?.connected).length;
-            if (connectedCount >= 1) {
-                showToast('Free plan allows only 1 connected social media account. Upgrade to connect more accounts.', 'error');
-                return;
-            }
         }
         
         setConnectingPlatform(platform);
@@ -407,14 +390,6 @@ export const Settings: React.FC = () => {
     
     const handleProceedWithInstagramConnect = async () => {
         setShowInstagramSetupModal(false);
-        // Check connection limit for Free plan (1 account max)
-        if (user.plan === 'Free') {
-            const connectedCount = Object.values(safeSocialAccounts).filter(acc => acc?.connected).length;
-            if (connectedCount >= 1) {
-                showToast('Free plan allows only 1 connected social media account. Upgrade to connect more accounts.', 'error');
-                return;
-            }
-        }
         
         setConnectingPlatform('Instagram');
         try {
@@ -861,11 +836,10 @@ export const Settings: React.FC = () => {
     };
 
     const tabs: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
-        { id: 'general', label: 'General', icon: <SettingsIcon /> },
-        // Show connections tab for admins (testing) or when not in offline mode
-        ...((!OFFLINE_MODE || user?.role === 'Admin') ? [{ id: 'connections', label: 'Connections', icon: <LinkIcon /> } as const] : []),
-        { id: 'ai-training', label: 'AI Training', icon: <SparklesIcon /> },
-        { id: 'billing', label: 'Billing', icon: <CreditCardIcon /> },
+      { id: 'general', label: 'General', icon: <SettingsIcon /> },
+      { id: 'connections', label: 'Connections', icon: <LinkIcon /> },
+      { id: 'ai-training', label: 'AI Training', icon: <SparklesIcon /> },
+      { id: 'billing', label: 'Billing', icon: <CreditCardIcon /> },
     ];
 
     if (!user) return null;
@@ -899,18 +873,8 @@ export const Settings: React.FC = () => {
                 <div className="space-y-6">
                 {activeTab === 'connections' && (
                     <SettingsSection title="Connected Accounts">
-                        {user.plan === 'Caption' ? (
-                            <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                                <p className="text-sm text-blue-800 dark:text-blue-200 mb-2">
-                                    <strong>Caption Pro Plan:</strong> This plan focuses on caption generation only. Social account connections are not included.
-                                </p>
-                                <p className="text-sm text-blue-700 dark:text-blue-300">
-                                    You can still select which platform you want hashtags for when generating captions, but you won't be able to connect accounts or post directly. Upgrade to Pro or higher to connect accounts and enable posting.
-                                </p>
-                            </div>
-                        ) : (
                             <>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">Connect your social media accounts to allow EchoFlux.ai to fetch incoming messages and post replies.</p>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Connect your social media accounts.</p>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     {CONNECTION_VISIBLE_PLATFORMS.map(platform => {
                                         const account = safeSocialAccounts && safeSocialAccounts[platform] ? safeSocialAccounts[platform] : null;
@@ -929,7 +893,7 @@ export const Settings: React.FC = () => {
                                 </div>
                                 <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                                     <p className="text-sm text-blue-800 dark:text-blue-200">
-                                        <strong>Note:</strong> Connecting accounts enables real-time stats and posting capabilities. You'll be redirected to authorize each platform.
+                                        <strong>Note:</strong> You'll be redirected to authorize each platform.
                                     </p>
                                 </div>
                                 {user?.role === 'Admin' && (
@@ -943,7 +907,6 @@ export const Settings: React.FC = () => {
                                     </div>
                                 )}
                             </>
-                        )}
                     </SettingsSection>
                 )}
 
