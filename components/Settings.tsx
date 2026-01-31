@@ -516,6 +516,41 @@ export const Settings: React.FC = () => {
         }
     };
 
+    const handleDebugX = async () => {
+        if (user?.role !== 'Admin') return;
+        try {
+            const token = auth.currentUser
+                ? await auth.currentUser.getIdToken(true)
+                : null;
+
+            if (!token) {
+                throw new Error('User must be logged in');
+            }
+
+            const response = await fetch('/api/oauth/x/debug', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.details || errorData.error || 'Failed to load X debug info');
+            }
+
+            const result = await response.json();
+            console.log('X OAuth debug:', result);
+            showToast(
+                `X Debug — keySource: ${result.keySource}, keyPrefix: ${result.consumerKeyPrefix || 'none'}, oauth1Tokens: ${result.hasOAuth1Tokens ? 'yes' : 'no'}`,
+                'info'
+            );
+        } catch (error: any) {
+            console.error('Failed to load X OAuth debug:', error);
+            showToast(error.message || 'Failed to load X OAuth debug info', 'error');
+        }
+    };
+
     // Handle OAuth callback from URL params (single flow for X)
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
@@ -879,6 +914,16 @@ export const Settings: React.FC = () => {
                                         <strong>Note:</strong> Connecting accounts enables real-time stats and posting capabilities. You'll be redirected to authorize each platform.
                                     </p>
                                 </div>
+                                {user?.role === 'Admin' && (
+                                    <div className="mt-3 flex items-center justify-end">
+                                        <button
+                                            onClick={handleDebugX}
+                                            className="px-3 py-1.5 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 transition-colors"
+                                        >
+                                            Debug X OAuth
+                                        </button>
+                                    </div>
+                                )}
                             </>
                         )}
                     </SettingsSection>
