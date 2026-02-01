@@ -58,12 +58,18 @@ export default async function handler(
       });
     }
 
+    // Only publish posts that became due within the last 15 min (cron window)
+    // Avoids old backlog and future posts; matches cron frequency
+    const windowMs = 15 * 60 * 1000;
+    const windowStart = now.getTime() - windowMs;
+
     for (const doc of scheduledPostsSnapshot.docs) {
       const post = doc.data();
       const scheduledDate = post.scheduledDate ? new Date(post.scheduledDate) : null;
-      if (!scheduledDate || scheduledDate > now) {
-        continue;
-      }
+      if (!scheduledDate || !scheduledDate.getTime()) continue;
+      const t = scheduledDate.getTime();
+      // Must be in past (t <= now) and within last 15 min (t >= windowStart)
+      if (t > now.getTime() || t < windowStart) continue;
 
       const pathParts = doc.ref.path.split("/");
       const userIdIndex = pathParts.indexOf("users") + 1;

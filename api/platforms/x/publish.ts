@@ -23,21 +23,28 @@ interface XAccount {
 async function refreshXToken(
   account: XAccount,
   userId: string,
-  db: any
+  db: any,
+  forceRefresh = false
 ): Promise<string> {
-  // Check if token is expired or expiring soon (within 1 hour)
-  if (account.expiresAt) {
-    const expiresAt = new Date(account.expiresAt);
-    const now = new Date();
-    
-    // Refresh if expired or expires within 1 hour
-    if (expiresAt.getTime() <= now.getTime() || expiresAt.getTime() - now.getTime() < 60 * 60 * 1000) {
-      if (!account.refreshToken) {
-        console.warn('No refresh token available for X account');
-        return account.accessToken; // Return existing token, will fail if expired
-      }
+  const now = new Date();
+  const twoHoursMs = 2 * 60 * 60 * 1000;
 
-      try {
+  // Refresh if: forced, OR no expiresAt (assume stale), OR expired/expiring within 2 hours
+  let shouldRefresh = forceRefresh || !account.expiresAt;
+  if (!shouldRefresh && account.expiresAt) {
+    const expiresAt = new Date(account.expiresAt);
+    shouldRefresh =
+      expiresAt.getTime() <= now.getTime() ||
+      expiresAt.getTime() - now.getTime() < twoHoursMs;
+  }
+
+  if (shouldRefresh) {
+    if (!account.refreshToken) {
+      console.warn('No refresh token available for X account - user must reconnect');
+      return account.accessToken;
+    }
+
+    try {
         const clientId = process.env.TWITTER_CLIENT_ID || process.env.X_CLIENT_ID;
         const clientSecret = process.env.TWITTER_CLIENT_SECRET || process.env.X_CLIENT_SECRET;
         
@@ -88,21 +95,17 @@ async function refreshXToken(
 
           console.log('X access token refreshed successfully');
           return access_token;
-        } else {
-          const errorText = await response.text();
-          console.error('Failed to refresh X token:', errorText);
-          // Return existing token - will fail if expired, but better than nothing
-          return account.accessToken;
-        }
-      } catch (error: any) {
-        console.error('Error refreshing X token:', error);
-        // Return existing token - will fail if expired, but better than nothing
-        return account.accessToken;
-      }
+    } else {
+      const errorText = await response.text();
+      console.error('Failed to refresh X token:', errorText);
+      return account.accessToken;
+    }
+    } catch (error: any) {
+      console.error('Error refreshing X token:', error);
+      return account.accessToken;
     }
   }
 
-  // Token is still valid, return it
   return account.accessToken;
 }
 
@@ -153,9 +156,12 @@ export async function publishTweet(
     const errorMessage = errorData.errors?.[0]?.message || errorData.detail || errorText;
     const errorCode = errorData.errors?.[0]?.code || errorData.title || 'unknown';
     
-    // Provide user-friendly message for duplicate content error
+    // User-friendly messages for common errors
     if (errorMessage?.includes('duplicate') || errorCode === '187') {
       throw new Error('This tweet was already posted. X does not allow posting duplicate content. Please modify your text and try again.');
+    }
+    if (response.status === 429 || errorMessage?.toLowerCase().includes('too many requests')) {
+      throw new Error('X is rate limiting your account. Please wait a few minutes and try again.');
     }
     
     throw new Error(`Failed to publish tweet: ${errorCode} - ${errorMessage}`);
@@ -712,8 +718,8 @@ export async function publishXPost(params: {
           const updatedAccountDoc = await socialAccountRef.get();
           const updatedAccount = updatedAccountDoc.data() as XAccount;
           
-          // Force refresh token (even if not expired)
-          accessToken = await refreshXToken(updatedAccount, userId, db);
+          // Force refresh token (X returned 401 - token invalid regardless of expiresAt)
+          accessToken = await refreshXToken(updatedAccount, userId, db, true);
           
           // Retry publish
           return attemptPublish();
@@ -809,9 +815,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   } catch (error: any) {
     console.error('X publish error:', error);
-    return res.status(500).json({
-      error: 'Failed to publish to X',
-      details: error?.message || String(error),
+    const msg = error?.message || String(error);
+    const isRateLimit = msg.toLowerCase().includes('rate limit');
+    return res.status(isRateLimit ? 429 : 500).json({
+      error: isRateLimit ? 'Rate limited' : 'Failed to publish to X',
+      details: msg,
     });
   }
 }
