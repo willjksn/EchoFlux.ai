@@ -4,7 +4,7 @@ import { CalendarEvent, Platform, Post } from '../types';
 import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
 import { PlusIcon, SparklesIcon, XMarkIcon, TrashIcon, DownloadIcon, CheckCircleIcon, CopyIcon, SendIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
-import { db } from '../firebaseConfig';
+import { db, auth } from '../firebaseConfig';
 import { doc, setDoc, deleteDoc, collection, query, orderBy, onSnapshot, getDocs } from 'firebase/firestore';
 import { hasCapability } from '../src/services/platformCapabilities';
 import { generateCaptions } from '../src/services/geminiService';
@@ -41,6 +41,7 @@ export const Calendar: React.FC = () => {
     const [regenerateTone, setRegenerateTone] = useState<string>('friendly');
     const [isSaving, setIsSaving] = useState(false);
     const [isPublishing, setIsPublishing] = useState(false);
+    const [isRunningScheduledPosts, setIsRunningScheduledPosts] = useState(false);
     const [exportPreview, setExportPreview] = useState<{ post: Post; event: CalendarEvent } | null>(null);
     
     // Reminder state
@@ -1074,6 +1075,30 @@ export const Calendar: React.FC = () => {
         }
     };
 
+    // Admin: manually run the scheduled-posts cron (for testing)
+    const handleRunScheduledPostsNow = async () => {
+        if (!user || user.role !== 'Admin') return;
+        setIsRunningScheduledPosts(true);
+        try {
+            const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+            if (!token) throw new Error('Must be logged in');
+            const res = await fetch('/api/autoPostScheduled?debug=1', {
+                method: 'GET',
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.message || data.error || 'Request failed');
+            const msg = data.posted > 0
+                ? `Posted ${data.posted} to X. Processed: ${data.processed}, In DB: ${data.totalScheduledInDb}`
+                : `Processed: ${data.processed}, Posted: 0. Total Scheduled: ${data.totalScheduledInDb}. ${data.errors?.length ? data.errors.join('; ') : ''}`;
+            showToast(msg, data.posted > 0 ? 'success' : 'info');
+        } catch (e: any) {
+            showToast(e?.message || 'Failed to run scheduled posts', 'error');
+        } finally {
+            setIsRunningScheduledPosts(false);
+        }
+    };
+
     // Handle delete post
     const handleDeletePost = async () => {
         if (!selectedEvent || !user) return;
@@ -1608,6 +1633,16 @@ export const Calendar: React.FC = () => {
                          <div className="flex items-center gap-1.5 sm:gap-2"><span className="w-3 h-3 rounded-full bg-gray-400 dark:bg-gray-500 shadow-sm"></span> <span className="text-gray-700 dark:text-gray-300 font-medium">Draft</span></div>
                          <div className="flex items-center gap-1.5 sm:gap-2"><span className="w-3 h-3 rounded-full bg-orange-500 dark:bg-orange-400 shadow-sm"></span> <span className="text-gray-700 dark:text-gray-300 font-medium">Reminder</span></div>
                     </div>
+                    {user?.role === 'Admin' && (
+                        <button
+                            onClick={handleRunScheduledPostsNow}
+                            disabled={isRunningScheduledPosts}
+                            className="px-4 py-2.5 text-sm font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/30 border border-primary-200 dark:border-primary-800 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Run scheduled posts cron now (Admin)"
+                        >
+                            {isRunningScheduledPosts ? 'Running...' : 'Run scheduled posts now'}
+                        </button>
+                    )}
                     <button 
                         onClick={() => setIsCreatingReminder(true)}
                         className="px-5 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 text-sm font-semibold flex items-center gap-2 shadow-md transition-all"

@@ -1,29 +1,39 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { requireCronAuth } from "./_cronAuth.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
+import { verifyAuth } from "./verifyAuth.js";
 import { publishXPost } from "./platforms/x/publish.js";
 
 /**
  * Auto-post scheduled posts that are ready to publish
- * This endpoint should be called by a cron job (e.g., Vercel Cron) every 5-15 minutes
+ * Cron every 15 min. Admins can trigger manually with ?debug=1 for details.
  */
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ): Promise<void> {
-  // Allow GET for cron jobs, POST for manual triggers
   if (req.method !== "GET" && req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
     return;
   }
 
-  try {
-    // This endpoint is triggered by Vercel Cron. Allow manual smoke tests via CRON_SECRET too.
-    if (!requireCronAuth(req)) {
-      res.status(401).json({ error: "Unauthorized" });
-      return;
+  const isCronAuth = requireCronAuth(req);
+  let isAdminAuth = false;
+  if (!isCronAuth) {
+    const user = await verifyAuth(req);
+    if (user) {
+      const db = getAdminDb();
+      const userDoc = await db.collection("users").doc(user.uid).get();
+      if (userDoc.data()?.role === "Admin") isAdminAuth = true;
     }
-    
+  }
+  if (!isCronAuth && !isAdminAuth) {
+    return res.status(401).json({ error: "Unauthorized. Use CRON_SECRET or Admin auth." });
+  }
+
+  const debug = req.query.debug === "1" || req.query.debug === "true";
+
+  try {
     const now = new Date();
     const db = getAdminDb();
 
@@ -31,10 +41,22 @@ export default async function handler(
     let totalPosted = 0;
     const errors: string[] = [];
 
-    const scheduledPostsSnapshot = await db
-      .collectionGroup("posts")
-      .where("status", "==", "Scheduled")
-      .get();
+    let scheduledPostsSnapshot;
+    try {
+      scheduledPostsSnapshot = await db
+        .collectionGroup("posts")
+        .where("status", "==", "Scheduled")
+        .get();
+    } catch (queryError: any) {
+      const msg = queryError?.message || String(queryError);
+      const needsIndex = msg.includes("index") || msg.includes("Index");
+      console.error("Auto-post Firestore query failed:", queryError);
+      return res.status(500).json({
+        error: "Query failed",
+        message: msg,
+        hint: needsIndex ? "Run: firebase deploy --only firestore:indexes" : undefined,
+      });
+    }
 
     for (const doc of scheduledPostsSnapshot.docs) {
       const post = doc.data();
@@ -53,7 +75,8 @@ export default async function handler(
       totalProcessed++;
 
       const platforms: string[] = Array.isArray(post.platforms) ? post.platforms : [];
-      if (!platforms.includes("X")) {
+      const hasX = platforms.some((p) => p === "X" || p === "Twitter");
+      if (!hasX) {
         continue;
       }
 
@@ -112,6 +135,7 @@ export default async function handler(
       message: "Auto-post service completed",
       processed: totalProcessed,
       posted: totalPosted,
+      totalScheduledInDb: scheduledPostsSnapshot.docs.length,
       errors: errors.length > 0 ? errors : undefined,
       timestamp: now.toISOString(),
     });
