@@ -1247,7 +1247,9 @@ export const Calendar: React.FC = () => {
                                         {platformIcons[selectedEvent.event.platform]}
                                     </div>
                                     <div>
-                                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Scheduled Post Preview</h3>
+                                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                                            {selectedEvent.post?.status === 'Published' ? 'Published Post Preview' : 'Scheduled Post Preview'}
+                                        </h3>
                                         <p className="text-sm text-gray-500 dark:text-gray-400">{selectedEvent.event.platform} • {selectedEvent.event.type}</p>
                                     </div>
                                 </div>
@@ -1334,39 +1336,13 @@ export const Calendar: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* Date & Time - Editable */}
-                            <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                                {isEditing ? (
-                                    <div className="space-y-3">
-                                        <label className="block text-sm font-semibold text-blue-700 dark:text-blue-300 mb-2">
-                                            Scheduled Date & Time:
-                                        </label>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div>
-                                                <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Date</label>
-                                                <input
-                                                    type="date"
-                                                    value={editDate}
-                                                    onChange={(e) => setEditDate(e.target.value)}
-                                                    className="w-full p-2 border rounded-lg bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Time</label>
-                                                <input
-                                                    type="time"
-                                                    value={editTime}
-                                                    onChange={(e) => setEditTime(e.target.value)}
-                                                    className="w-full p-2 border rounded-lg bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                ) : (
+                            {/* Date & Time - Published on vs Scheduled for */}
+                            {selectedEvent.post?.status === 'Published' ? (
+                                <div className="mb-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
                                     <div className="flex items-center gap-2">
-                                        <span className="text-sm font-semibold text-blue-700 dark:text-blue-300">Scheduled for:</span>
-                                        <span className="text-sm text-blue-600 dark:text-blue-400">
-                                            {new Date(selectedEvent.event.date).toLocaleString([], {
+                                        <span className="text-sm font-semibold text-green-700 dark:text-green-300">Published on:</span>
+                                        <span className="text-sm text-green-600 dark:text-green-400">
+                                            {new Date(selectedEvent.post.publishedAt || selectedEvent.event.date).toLocaleString([], {
                                                 weekday: 'long',
                                                 year: 'numeric',
                                                 month: 'long',
@@ -1377,8 +1353,53 @@ export const Calendar: React.FC = () => {
                                             })}
                                         </span>
                                     </div>
-                                )}
-                            </div>
+                                </div>
+                            ) : (
+                                <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                    {isEditing ? (
+                                        <div className="space-y-3">
+                                            <label className="block text-sm font-semibold text-blue-700 dark:text-blue-300 mb-2">
+                                                Scheduled Date & Time:
+                                            </label>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Date</label>
+                                                    <input
+                                                        type="date"
+                                                        value={editDate}
+                                                        onChange={(e) => setEditDate(e.target.value)}
+                                                        className="w-full p-2 border rounded-lg bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Time</label>
+                                                    <input
+                                                        type="time"
+                                                        value={editTime}
+                                                        onChange={(e) => setEditTime(e.target.value)}
+                                                        className="w-full p-2 border rounded-lg bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm font-semibold text-blue-700 dark:text-blue-300">Scheduled for:</span>
+                                            <span className="text-sm text-blue-600 dark:text-blue-400">
+                                                {new Date(selectedEvent.event.date).toLocaleString([], {
+                                                    weekday: 'long',
+                                                    year: 'numeric',
+                                                    month: 'long',
+                                                    day: 'numeric',
+                                                    hour: 'numeric',
+                                                    minute: '2-digit',
+                                                    hour12: true
+                                                })}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
                             {/* Media Preview */}
                             {(selectedEvent.post?.mediaUrl || selectedEvent.event.thumbnail) && (

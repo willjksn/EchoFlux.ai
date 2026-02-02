@@ -98,11 +98,12 @@ async function refreshXToken(
     } else {
       const errorText = await response.text();
       console.error('Failed to refresh X token:', errorText);
-      return account.accessToken;
+      throw new Error('X token could not be renewed. Please disconnect and reconnect X in Settings.');
     }
     } catch (error: any) {
+      if (error?.message?.includes('reconnect')) throw error;
       console.error('Error refreshing X token:', error);
-      return account.accessToken;
+      throw new Error('X token could not be renewed. Please disconnect and reconnect X in Settings.');
     }
   }
 

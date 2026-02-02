@@ -355,6 +355,25 @@ const CaptionGenerator: React.FC = () => {
   } | null>(null);
 
   // Load history on mount and when history is updated
+  // Proactively refresh X token when Compose loads so posting works without reconnecting
+  useEffect(() => {
+    if (!user || !socialAccounts?.X?.connected) return;
+    const run = async () => {
+      try {
+        const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+        if (!token) return;
+        const r = await fetch('/api/oauth/x/refresh', { headers: { Authorization: `Bearer ${token}` } });
+        if (r.status === 401 || r.status === 400) {
+          const data = await r.json().catch(() => ({}));
+          showToast(data?.details || 'X connection expired. Please reconnect in Settings.', 'info');
+        }
+      } catch {
+        // Ignore; publish will show error if token is bad
+      }
+    };
+    run();
+  }, [user?.id, socialAccounts?.X?.connected]);
+
   useEffect(() => {
     if (user?.id) {
       loadHistory();

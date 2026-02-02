@@ -86,6 +86,8 @@ const platformIcons: Record<Platform, React.ReactNode> = {
   Pinterest: <PinterestIcon />,
 };
 
+const COMING_SOON_PLATFORMS: Platform[] = ['Facebook', 'Instagram'];
+
 const AccountConnection: React.FC<{
     platform: Platform;
     account: SocialAccount | null;
@@ -93,7 +95,8 @@ const AccountConnection: React.FC<{
     onConnect: (platform: Platform) => Promise<void>;
     onDisconnect: (platform: Platform) => Promise<void>;
     onEnableMediaUploads?: () => Promise<void>;
-}> = ({ platform, account, isConnecting, onConnect, onDisconnect, onEnableMediaUploads }) => {
+    comingSoon?: boolean;
+}> = ({ platform, account, isConnecting, onConnect, onDisconnect, onEnableMediaUploads, comingSoon }) => {
     const isConnected = account?.connected || false;
     const accountUsername = account?.accountUsername;
     // Check if OAuth 1.0a is connected (for X media uploads)
@@ -162,17 +165,26 @@ const AccountConnection: React.FC<{
                         )}
                     </div>
                 </div>
-                <button
-                    onClick={() => isConnected ? onDisconnect(platform) : onConnect(platform)}
-                    disabled={isConnecting}
-                    className={`px-4 py-1.5 text-sm font-semibold rounded-full transition-colors whitespace-nowrap ${
-                        isConnected
-                            ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-300 dark:hover:bg-red-900'
-                            : 'bg-primary-100 text-primary-700 hover:bg-primary-200 dark:bg-primary-900/50 dark:text-primary-300 dark:hover:bg-primary-900'
-                    } ${isConnecting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                    {isConnecting ? 'Connecting...' : isConnected ? 'Disconnect' : 'Connect'}
-                </button>
+                {comingSoon ? (
+                    <span
+                        className="px-4 py-1.5 text-sm font-semibold rounded-full bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-400 cursor-not-allowed whitespace-nowrap"
+                        title="This platform is not available yet."
+                    >
+                        Coming soon
+                    </span>
+                ) : (
+                    <button
+                        onClick={() => isConnected ? onDisconnect(platform) : onConnect(platform)}
+                        disabled={isConnecting}
+                        className={`px-4 py-1.5 text-sm font-semibold rounded-full transition-colors whitespace-nowrap ${
+                            isConnected
+                                ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-300 dark:hover:bg-red-900'
+                                : 'bg-primary-100 text-primary-700 hover:bg-primary-200 dark:bg-primary-900/50 dark:text-primary-300 dark:hover:bg-primary-900'
+                        } ${isConnecting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                        {isConnecting ? 'Connecting...' : isConnected ? 'Disconnect' : 'Connect'}
+                    </button>
+                )}
                 {platform === 'X' && isConnected && !hasOAuth1 && onEnableMediaUploads && (
                     <div className="mt-2">
                         <button
@@ -224,6 +236,25 @@ export const Settings: React.FC = () => {
         Facebook: null,
         Pinterest: null,
     };
+
+    // Proactively refresh X token when user opens Connections so token stays fresh
+    useEffect(() => {
+        if (activeTab !== 'connections' || !user || !safeSocialAccounts?.X?.connected) return;
+        const run = async () => {
+            try {
+                const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+                if (!token) return;
+                const r = await fetch('/api/oauth/x/refresh', { headers: { Authorization: `Bearer ${token}` } });
+                if (r.status === 401 || r.status === 400) {
+                    const data = await r.json().catch(() => ({}));
+                    showToast(data?.details || 'X connection expired. Please reconnect.', 'info');
+                }
+            } catch {
+                // Ignore
+            }
+        };
+        run();
+    }, [activeTab, user?.id, safeSocialAccounts?.X?.connected]);
     
     const isPremiumFeatureUnlocked = ['Elite', 'Agency'].includes(user?.plan || 'Free') || user?.role === 'Admin';
 
@@ -887,6 +918,7 @@ export const Settings: React.FC = () => {
                                                 onConnect={handleConnectAccount}
                                                 onDisconnect={handleDisconnectAccount}
                                                 onEnableMediaUploads={platform === 'X' ? handleConnectOAuth1 : undefined}
+                                                comingSoon={COMING_SOON_PLATFORMS.includes(platform)}
                                             />
                                         );
                                     })}
