@@ -1,4 +1,4 @@
-﻿import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { checkApiKeys, getVerifyAuth, withErrorHandling } from "./_errorHandler.js";
 import { getModelForTask } from "./_modelRouter.js";
 import { enforceRateLimit } from "./_rateLimit.js";
@@ -130,11 +130,10 @@ Session context:
 - Explicitness level: ${explicitnessLevel}/10 — ${explicitnessContext}
 ${personalityContext ? `${personalityContext}
 
-CRITICAL - CREATOR PERSONALITY INTEGRATION:
-- The above creator personality contains ALL information about this creator: physical attributes, personality traits, preferences, values, style, and what makes them unique
-- Use ALL relevant information from the personality when generating suggestions - this includes physical attributes, traits, preferences, etc.
-- When describing the creator in suggestions, incorporate details from the complete personality description naturally
-- The personality description is comprehensive - use ALL of it, not just parts of it, when relevant to the content being generated` : ''}
+CREATOR PERSONALITY (USE WHEN RELEVANT - CONSISTENT WITH COMPOSE AND PREMIUM CONTENT STUDIO):
+- Use ONLY the creator personality text provided above for THIS user. Never use example or placeholder values as this user's data.
+- Use personality when RELEVANT: traits, preferences, voice, style. Do not force physical attributes into every message—only when it naturally fits (e.g. describing yourself, roleplay).
+- When describing the creator in suggestions, incorporate details from the personality naturally. For general messaging, match voice and style; use physical/details only when relevant.` : ''}
 ${enhancedFanContext || (fanContext ? `- Fan context: ${fanContext}` : "")}
 ${lastFanMessage ? `- Last fan message: "${lastFanMessage}"` : ""}
 

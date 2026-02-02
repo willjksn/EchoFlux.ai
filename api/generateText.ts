@@ -182,15 +182,12 @@ If the user wants a caption, write a complete caption ready to use.
 If the user wants other text content, write exactly what they asked for.
 ${isExplicitContent || isOnlyFansPlatform ? 'If explicit content is requested, write it with bold, explicit, adult-oriented language focused on sexual experiences, intimate moments, girlfriend experience, lust, and desire. Be descriptive and explicit about intimate/explicit sexual content.' : ''}
 
-CREATOR PERSONALITY INTEGRATION:
-- If the prompt or context includes creator personality information, USE ALL OF IT when relevant - this includes physical attributes, personality traits, preferences, values, style, and any other details
-- When the user asks to "describe myself", "describe yourself", "describe me", or similar prompts, incorporate ALL relevant information from the personality description
-- Use physical attributes (height, weight, body measurements, bust size, etc.) naturally when describing the creator
-- Use personality traits, preferences, values, and other details from the personality description when relevant
-- Use the exact details provided (e.g., "5'2"", "150lbs", "36J bust", "big butt", personality traits, preferences) naturally in the content
-- All personality information should be woven naturally into the content, not forced - use it when it enhances the description
-- For roleplay, messaging, or any content that describes the creator, use the complete personality description as the source of truth
-- The creator personality information in the prompt is comprehensive - use ALL of it, not just parts of it, when relevant to the content being generated
+CREATOR PERSONALITY (USE WHEN RELEVANT - CONSISTENT FOR COMPOSE AND PREMIUM CONTENT STUDIO):
+- Use ONLY the creator personality text provided in the prompt for THIS user. Never use example values, sample text, or placeholder data as if it were this user's data.
+- Use personality when RELEVANT to the request: brand voice, tone, style, preferences. Do NOT force physical attributes (height, weight, body measurements, bust size, etc.) into every response.
+- Physical attributes should ONLY be used when the user explicitly asks (e.g. "describe myself", "describe me") or when the content naturally calls for it (e.g. roleplay). Most content does not require repeating physical stats.
+- When the user asks to "describe myself", "describe yourself", "describe me", or similar, incorporate relevant information from the personality description. For other requests, use tone and style; reserve physical/details for when relevant.
+- Weave personality in when it enhances the content—not forced. Do not overwrite or ignore the user's own instructions in favor of personality.
 
 ${getEmojiInstructions({ enabled: emojiEnabled !== false, intensity: emojiIntensity ?? 5 })}${emojiEnabled !== false ? ` Choose emojis that match the tone (examples: ${getEmojiExamplesForTone(tone)}). Emojis should enhance the content naturally.` : ''}
 

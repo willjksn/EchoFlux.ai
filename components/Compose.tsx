@@ -203,6 +203,30 @@ const CaptionGenerator: React.FC = () => {
   const [showGapAnalysisModal, setShowGapAnalysisModal] = useState(false);
   const [isAnalyzingGaps, setIsAnalyzingGaps] = useState(false);
 
+  const handleDeletePredictHistory = async (itemId: string) => {
+    if (!user?.id) return;
+    try {
+      await deleteDoc(doc(db, 'users', user.id, 'compose_predict_history', itemId));
+      setPredictHistory(prev => prev.filter(i => i.id !== itemId));
+      showToast('Deleted from history', 'success');
+    } catch (err: any) {
+      console.error('Failed to delete predict history:', err);
+      showToast(err?.message || 'Failed to delete', 'error');
+    }
+  };
+
+  const handleDeleteRepurposeHistory = async (itemId: string) => {
+    if (!user?.id) return;
+    try {
+      await deleteDoc(doc(db, 'users', user.id, 'compose_repurpose_history', itemId));
+      setRepurposeHistory(prev => prev.filter(i => i.id !== itemId));
+      showToast('Deleted from history', 'success');
+    } catch (err: any) {
+      console.error('Failed to delete repurpose history:', err);
+      showToast(err?.message || 'Failed to delete', 'error');
+    }
+  };
+
   const loadHistory = async () => {
     if (!user?.id) return;
     setLoadingHistory(true);
@@ -3700,15 +3724,11 @@ const CaptionGenerator: React.FC = () => {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="min-w-0">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent: What's Missing, What To Post Next & Repurposes</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent: Ideas for this content & Repurposes</h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                 Usage this month:{' '}
-                <span className="font-semibold text-purple-700 dark:text-purple-300">
-                  What's Missing {user.plan === 'Pro' ? `${user.monthlyContentGapsUsed || 0}/2` : `${user.monthlyContentGapsUsed || 0}${(user.plan === 'Elite' || user.plan === 'Agency' || user.role === 'Admin') ? ' (unlimited)' : ''}`}
-                </span>
-                {' • '}
                 <span className="font-semibold text-blue-700 dark:text-blue-300">
-                  What To Post Next {user.plan === 'Pro' ? `${user.monthlyPredictionsUsed || 0}/5` : `${user.monthlyPredictionsUsed || 0}${(user.plan === 'Elite' || user.plan === 'Agency' || user.role === 'Admin') ? ' (unlimited)' : ''}`}
+                  Ideas for this content {user.plan === 'Pro' ? `${user.monthlyPredictionsUsed || 0}/5` : `${user.monthlyPredictionsUsed || 0}${(user.plan === 'Elite' || user.plan === 'Agency' || user.role === 'Admin') ? ' (unlimited)' : ''}`}
                 </span>
                 {' • '}
                 <span className="font-semibold text-emerald-700 dark:text-emerald-300">
@@ -3725,10 +3745,10 @@ const CaptionGenerator: React.FC = () => {
           </div>
           {showHistory && (
           <>
-            {(predictHistory.length === 0 && repurposeHistory.length === 0 && gapAnalysisHistory.length === 0) ? (
+            {(predictHistory.length === 0 && repurposeHistory.length === 0) ? (
               <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                <p className="text-sm">No what's missing checks, what to post next, or repurposes yet.</p>
-                <p className="text-xs mt-1">Use the What's Missing, What To Post Next, or Repurpose buttons on your posts to see history here.</p>
+                <p className="text-sm">No ideas for this content or repurposes yet.</p>
+                <p className="text-xs mt-1">Use the Ideas for this content or Repurpose buttons on your posts to see history here.</p>
               </div>
             ) : (
             <div className="space-y-3 max-h-64 overflow-y-auto">
@@ -3760,7 +3780,7 @@ const CaptionGenerator: React.FC = () => {
                       )}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs font-semibold text-purple-600 dark:text-purple-400">WHAT TO POST NEXT</span>
+                          <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">IDEAS FOR THIS CONTENT</span>
                           {!hasIdeas && (
                             <span className={`text-xs px-2 py-0.5 rounded ${
                               level === 'High' ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' :
@@ -3789,15 +3809,27 @@ const CaptionGenerator: React.FC = () => {
                           {item.createdAt?.toDate?.() ? new Date(item.createdAt.toDate()).toLocaleString() : 'Recently'}
                         </p>
                       </div>
-                      <button
-                        onClick={() => {
-                          setPredictResult(item.data);
-                          setShowPredictModal(true);
-                        }}
-                        className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 ml-2 flex-shrink-0"
-                      >
-                        View
-                      </button>
+                      <div className="flex flex-col gap-1 flex-shrink-0">
+                        <button
+                          onClick={() => {
+                            setPredictResult(item.data);
+                            setShowPredictModal(true);
+                            showToast('Loaded', 'success');
+                          }}
+                          className="px-2 py-1 text-xs bg-primary-600 text-white rounded hover:bg-primary-700"
+                        >
+                          Load
+                        </button>
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            await handleDeletePredictHistory(item.id);
+                          }}
+                          className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -3837,49 +3869,27 @@ const CaptionGenerator: React.FC = () => {
                           {item.createdAt?.toDate?.() ? new Date(item.createdAt.toDate()).toLocaleString() : 'Recently'}
                         </p>
                       </div>
-                      <button
-                        onClick={() => {
-                          setRepurposeResult(item.data);
-                          setShowRepurposeModal(true);
-                        }}
-                        className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 ml-2 flex-shrink-0"
-                      >
-                        View
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* Gap Analysis History */}
-              {gapAnalysisHistory.map((item) => {
-                const summary = item.data?.summary || item.title || "What's Missing";
-                return (
-                  <div
-                    key={item.id}
-                    className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
-                  >
-                    <div className="flex items-start justify-between mb-2 gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs font-semibold text-purple-600 dark:text-purple-400">CONTENT GAP ANALYSIS</span>
-                        </div>
-                        <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
-                          {summary.substring(0, 100)}...
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                          {item.createdAt?.toDate?.() ? new Date(item.createdAt.toDate()).toLocaleString() : (item.createdAt ? new Date(item.createdAt).toLocaleString() : 'Recently')}
-                        </p>
+                      <div className="flex flex-col gap-1 flex-shrink-0">
+                        <button
+                          onClick={() => {
+                            setRepurposeResult(item.data);
+                            setShowRepurposeModal(true);
+                            showToast('Loaded', 'success');
+                          }}
+                          className="px-2 py-1 text-xs bg-primary-600 text-white rounded hover:bg-primary-700"
+                        >
+                          Load
+                        </button>
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            await handleDeleteRepurposeHistory(item.id);
+                          }}
+                          className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                        >
+                          Delete
+                        </button>
                       </div>
-                      <button
-                        onClick={() => {
-                          setGapAnalysisResult(item.data);
-                          setShowGapAnalysisModal(true);
-                        }}
-                        className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 ml-2 flex-shrink-0"
-                      >
-                        View
-                      </button>
                     </div>
                   </div>
                 );
@@ -3989,8 +3999,6 @@ const CaptionGenerator: React.FC = () => {
                 setUpgradeModalReason('limit');
                 setIsUpgradeModalOpen(true);
               }}
-              onAnalyzeContentGaps={handleAnalyzeContentGaps}
-              isAnalyzingGaps={isAnalyzingGaps}
               usePersonality={usePersonality}
               useFavoriteHashtags={useFavoriteHashtags}
               creatorPersonality={settings.creatorPersonality}
@@ -4030,8 +4038,6 @@ const CaptionGenerator: React.FC = () => {
                     setUpgradeModalReason('limit');
                     setIsUpgradeModalOpen(true);
                   }}
-                  onAnalyzeContentGaps={handleAnalyzeContentGaps}
-                  isAnalyzingGaps={isAnalyzingGaps}
                   usePersonality={usePersonality}
                   useFavoriteHashtags={useFavoriteHashtags}
                   creatorPersonality={settings.creatorPersonality}
@@ -4080,8 +4086,6 @@ const CaptionGenerator: React.FC = () => {
                   setUpgradeModalReason('limit');
                   setIsUpgradeModalOpen(true);
                 }}
-                onAnalyzeContentGaps={handleAnalyzeContentGaps}
-                isAnalyzingGaps={isAnalyzingGaps}
                 usePersonality={usePersonality}
                 useFavoriteHashtags={useFavoriteHashtags}
                 creatorPersonality={settings.creatorPersonality}

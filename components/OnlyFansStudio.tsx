@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAppContext } from './AppContext';
 import { CopyIcon, SparklesIcon, SettingsIcon, XMarkIcon, CheckCircleIcon, RefreshIcon } from './icons/UIIcons';
 import { OnlyFansContentBrain } from './OnlyFansContentBrain';
+import { ContentGapAnalysis } from './ContentGapAnalysis';
 import { OnlyFansRoleplay } from './OnlyFansRoleplay';
 import { OnlyFansStudioSettings } from './OnlyFansStudioSettings';
 import { OnlyFansExportHub } from './OnlyFansExportHub';
@@ -14,7 +15,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { auth, db } from '../firebaseConfig';
 import { addDoc, collection, getDocs, limit, orderBy, query, Timestamp, doc, getDoc, where, onSnapshot } from 'firebase/firestore';
 import { UserIcon } from './icons/UIIcons';
-type ActiveView = 'dashboard' | 'contentBrain' | 'roleplay' | 'calendar' | 'mediaVault' | 'export' | 'guides' | 'settings' | 'analytics' | 'fans';
+type ActiveView = 'dashboard' | 'contentBrain' | 'contentGaps' | 'roleplay' | 'calendar' | 'mediaVault' | 'export' | 'guides' | 'settings' | 'analytics' | 'fans';
 
 type TeaserPack = {
     instagram?: { reelHooks?: string[]; caption?: string; storyFrames?: string[] };
@@ -770,6 +771,28 @@ export const OnlyFansStudio: React.FC = () => {
         );
     }
 
+    if (activeView === 'contentGaps') {
+        return (
+            <div className="max-w-7xl mx-auto">
+                <div className="mb-4 flex items-center gap-3 flex-wrap">
+                    <button
+                        onClick={() => setActiveView('dashboard')}
+                        className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2"
+                    >
+                        ← Back to Premium Content Studio
+                    </button>
+                </div>
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 border border-gray-200 dark:border-gray-700">
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">What's Missing</h2>
+                    <p className="text-gray-600 dark:text-gray-400 mb-6 text-sm">
+                        See what's missing in your content mix and get AI recommendations.
+                    </p>
+                    <ContentGapAnalysis />
+                </div>
+            </div>
+        );
+    }
+
     if (activeView === 'roleplay') {
         return (
             <div className="max-w-7xl mx-auto">
@@ -1154,6 +1177,12 @@ export const OnlyFansStudio: React.FC = () => {
                             onClick={() => setActiveView('export')}
                         >
                             Export pack
+                        </button>
+                        <button
+                            className="px-3 py-2 text-sm bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-md hover:from-purple-700 hover:to-indigo-700 transition-colors"
+                            onClick={() => setActiveView('contentGaps')}
+                        >
+                            What's Missing
                         </button>
                     </div>
                 </div>

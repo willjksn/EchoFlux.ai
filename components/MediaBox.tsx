@@ -111,8 +111,6 @@ interface MediaBoxProps {
   onAIAutoSchedule?: (index: number) => void;
   platformIcons: Record<Platform, React.ReactNode>;
   onUpgradeClick?: () => void; // Callback to show upgrade modal
-  onAnalyzeContentGaps?: () => void; // Callback to analyze content gaps
-  isAnalyzingGaps?: boolean; // Whether content gaps are being analyzed
 }
 
 export const MediaBox: React.FC<MediaBoxProps> = ({
@@ -125,8 +123,6 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   goalOptions,
   toneOptions,
   isSelected,
-  onAnalyzeContentGaps,
-  isAnalyzingGaps = false,
   onToggleSelect,
   onPreview,
   onPublish,
@@ -1058,7 +1054,162 @@ ${contextLines || 'None'}
         </div>
       )}
 
-      {/* Generate Button - Always visible when media exists */}
+      {/* Caption Input - First so users see it before Generate */}
+      <div className="relative mb-3">
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1.5 flex items-center gap-1.5 flex-wrap">
+          <span>Write caption.</span>
+          <button
+            type="button"
+            onClick={() => setIsAiHelpOpen(!isAiHelpOpen)}
+            className="inline-flex items-center gap-1 text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium"
+            title="AI Help - Tell AI what you want"
+          >
+            <SparklesIcon className="w-3.5 h-3.5 flex-shrink-0" />
+            <span>Click here if you want AI to help with your suggestions</span>
+          </button>
+        </p>
+        <div className="relative">
+          <textarea
+            ref={captionTextareaRef}
+            value={mediaItem.captionText}
+            onChange={e => onUpdate(index, { captionText: e.target.value })}
+            placeholder="Write caption..."
+            rows={4}
+            className="w-full p-2.5 pr-14 text-sm border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 resize-y"
+          />
+          <div className="absolute right-2 top-2 flex flex-col gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                if (mediaItem.captionText) {
+                  navigator.clipboard.writeText(mediaItem.captionText);
+                  showToast('Caption copied to clipboard!', 'success');
+                }
+              }}
+              disabled={!mediaItem.captionText || !mediaItem.captionText.trim()}
+              className="p-1 text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 disabled:opacity-30 disabled:cursor-not-allowed"
+              title="Copy caption"
+            >
+              <CopyIcon className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsEmojiPickerOpen(!isEmojiPickerOpen)}
+              className="emoji-button p-1 text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
+              title="Add emoji"
+            >
+              <EmojiIcon className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+        {isAiHelpOpen && (
+          <div
+            ref={aiHelpRef}
+            className="absolute z-20 right-0 top-full mt-1 w-96 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 border border-gray-200 dark:border-gray-600"
+          >
+            <div className="mb-3">
+              <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">AI Help</h4>
+              <p className="text-xs text-gray-600 dark:text-gray-400">Describe what you want in your caption, and AI will write it for you.</p>
+            </div>
+            <textarea
+              value={aiHelpPrompt}
+              onChange={(e) => setAiHelpPrompt(e.target.value)}
+              placeholder="e.g., 'Write a fun caption about my new product launch', 'Create a motivational post about fitness', 'Write an engaging caption for my travel photo'"
+              rows={3}
+              className="w-full p-2 text-sm border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 resize-y mb-2"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={handleAiHelpGenerate}
+                disabled={!aiHelpPrompt.trim() || isAiHelpGenerating}
+                className="flex-1 px-3 py-2 text-xs font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+              >
+                {isAiHelpGenerating ? (
+                  <>
+                    <RefreshIcon className="w-3 h-3 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <SparklesIcon className="w-3 h-3" />
+                    Generate Text
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  setIsAiHelpOpen(false);
+                  setAiHelpPrompt('');
+                }}
+                className="px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+        {isEmojiPickerOpen && (
+          <div
+            ref={emojiPickerRef}
+            className="emoji-picker-container absolute z-20 right-0 top-full mt-1 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-2 flex flex-col border border-gray-200 dark:border-gray-600"
+          >
+            <div className="px-1 pb-2">
+              <input
+                type="text"
+                placeholder="Search emojis..."
+                value={emojiSearchTerm}
+                onChange={e => setEmojiSearchTerm(e.target.value)}
+                className="w-full p-2 border rounded-md bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-sm"
+              />
+            </div>
+            <div className="grid grid-cols-8 gap-1 overflow-y-auto max-h-64 pr-1 scrollbar-thin">
+              {filteredEmojis.map(({ emoji, description }) => (
+                <button
+                  key={description}
+                  type="button"
+                  onClick={() => handleEmojiSelect(emoji)}
+                  className="text-2xl p-1 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 flex justify-center items-center"
+                  title={description}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+            <div className="pt-2 border-t border-gray-200 dark:border-gray-700 grid grid-cols-7 gap-1">
+              {EMOJI_CATEGORIES.map(({name, icon}) => (
+                <button
+                  key={name}
+                  onClick={() => { setActiveEmojiCategory(name); setEmojiSearchTerm(''); }}
+                  className={`p-1.5 rounded-md ${activeEmojiCategory === name && !emojiSearchTerm ? 'bg-primary-100 dark:bg-primary-900/50' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                  title={name}
+                >
+                  <span className={activeEmojiCategory === name && !emojiSearchTerm ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400'}>
+                    {categoryIcons[icon]}
+                  </span>
+                </button>
+              ))}
+            </div>
+            {/* Copy All Button */}
+            <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => {
+                  if (mediaItem.captionText) {
+                    navigator.clipboard.writeText(mediaItem.captionText);
+                    showToast('Caption copied to clipboard!', 'success');
+                  }
+                }}
+                className="w-full px-3 py-2 text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md flex items-center justify-center gap-2 transition-colors"
+                disabled={!mediaItem.captionText || !mediaItem.captionText.trim()}
+              >
+                <CopyIcon className="w-4 h-4" />
+                Copy All
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Generate Button - Below caption input so users see caption box first */}
       {mediaItem.previewUrl && (
         <button
           onClick={handleGenerate}
@@ -1108,46 +1259,9 @@ ${contextLines || 'None'}
         </div>
       )}
 
-      {/* AI Action Buttons - Always visible for Pro/Elite+ (Predict/Repurpose require media uploaded) */}
+      {/* AI Action Buttons - Ideas for this content + Repurpose (What's Missing is on Dashboard) */}
       {user && user.plan !== 'Free' && (
         <div className="mb-3 flex flex-wrap gap-2">
-          {/*
-            Match OnlyFans Studio button colors:
-            - Gaps: purple -> indigo
-            - Predict: blue -> cyan
-            - Repurpose: emerald -> teal
-          */}
-          <button
-            onClick={() => {
-              if (onAnalyzeContentGaps) {
-                onAnalyzeContentGaps();
-              }
-            }}
-            disabled={
-              isAnalyzingGaps ||
-              !user ||
-              ((user.plan !== 'Pro' && user.plan !== 'Elite' && user.plan !== 'Agency' && user.plan !== 'OnlyFansStudio' && user.role !== 'Admin'))
-            }
-            className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-all shadow-sm flex items-center justify-center gap-1 ${
-              (!user || (user.plan !== 'Pro' && user.plan !== 'Elite' && user.plan !== 'Agency' && user.plan !== 'OnlyFansStudio' && user.role !== 'Admin'))
-                ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
-                : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed'
-            }`}
-          >
-            {isAnalyzingGaps ? (
-              <>
-                <RefreshIcon className="w-3 h-3 animate-spin" />
-                Analyzing...
-              </>
-            ) : (
-              <>
-                <SparklesIcon className="w-3 h-3" />
-                {user?.plan === 'Pro'
-                  ? `What's Missing (${user.monthlyContentGapsUsed || 0}/2)`
-                  : "What's Missing"}
-              </>
-            )}
-          </button>
           <button
             onClick={async () => {
               if (!user) return;
@@ -1162,12 +1276,12 @@ ${contextLines || 'None'}
                   : 0;
 
               if (limit === 0) {
-                showToast('Upgrade to Pro or Elite to unlock What To Post Next', 'info');
+                showToast('Upgrade to Pro or Elite to unlock Ideas for this content', 'info');
                 setActivePage('pricing');
                 return;
               }
               if (isFinite(limit) && used >= limit) {
-                showToast('Monthly What To Post Next limit reached. Upgrade to Elite for unlimited access.', 'info');
+                showToast('Monthly Ideas for this content limit reached. Upgrade to Elite for unlimited access.', 'info');
                 setActivePage('pricing');
                 return;
               }
@@ -1262,7 +1376,7 @@ ${contextLines || 'None'}
             }`}
           >
             <SparklesIcon className="w-3 h-3" />
-            {user?.plan === 'Pro' ? `What To Post Next (${user.monthlyPredictionsUsed || 0}/5)` : 'What To Post Next'}
+            {user?.plan === 'Pro' ? `Ideas for this content (${user.monthlyPredictionsUsed || 0}/5)` : 'Ideas for this content'}
           </button>
           <button
             onClick={async () => {
@@ -1369,155 +1483,6 @@ ${contextLines || 'None'}
           </button>
         </div>
       )}
-
-      {/* Caption Input */}
-      <div className="relative mb-3">
-        <textarea
-          ref={captionTextareaRef}
-          value={mediaItem.captionText}
-          onChange={e => onUpdate(index, { captionText: e.target.value })}
-          placeholder="Write caption or select AI suggestion..."
-          rows={4}
-          className="w-full p-2.5 pr-20 text-sm border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 resize-y"
-        />
-        <div className="absolute right-2 top-2 flex flex-col gap-1">
-          <button
-            type="button"
-            onClick={() => {
-              if (mediaItem.captionText) {
-                navigator.clipboard.writeText(mediaItem.captionText);
-                showToast('Caption copied to clipboard!', 'success');
-              }
-            }}
-            disabled={!mediaItem.captionText || !mediaItem.captionText.trim()}
-            className="p-1 text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 disabled:opacity-30 disabled:cursor-not-allowed"
-            title="Copy caption"
-          >
-            <CopyIcon className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsAiHelpOpen(!isAiHelpOpen)}
-            className="p-1 text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
-            title="AI Help - Tell AI what you want"
-          >
-            <SparklesIcon className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsEmojiPickerOpen(!isEmojiPickerOpen)}
-            className="emoji-button p-1 text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
-            title="Add emoji"
-          >
-            <EmojiIcon className="w-4 h-4" />
-          </button>
-        </div>
-        {isAiHelpOpen && (
-          <div
-            ref={aiHelpRef}
-            className="absolute z-20 right-0 top-full mt-1 w-96 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 border border-gray-200 dark:border-gray-600"
-          >
-            <div className="mb-3">
-              <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">AI Help</h4>
-              <p className="text-xs text-gray-600 dark:text-gray-400">Describe what you want in your caption, and AI will write it for you.</p>
-            </div>
-            <textarea
-              value={aiHelpPrompt}
-              onChange={(e) => setAiHelpPrompt(e.target.value)}
-              placeholder="e.g., 'Write a fun caption about my new product launch', 'Create a motivational post about fitness', 'Write an engaging caption for my travel photo'"
-              rows={3}
-              className="w-full p-2 text-sm border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 resize-y mb-2"
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={handleAiHelpGenerate}
-                disabled={!aiHelpPrompt.trim() || isAiHelpGenerating}
-                className="flex-1 px-3 py-2 text-xs font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
-              >
-                {isAiHelpGenerating ? (
-                  <>
-                    <RefreshIcon className="w-3 h-3 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <SparklesIcon className="w-3 h-3" />
-                    Generate Text
-                  </>
-                )}
-              </button>
-              <button
-                onClick={() => {
-                  setIsAiHelpOpen(false);
-                  setAiHelpPrompt('');
-                }}
-                className="px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-        {isEmojiPickerOpen && (
-          <div
-            ref={emojiPickerRef}
-            className="emoji-picker-container absolute z-20 right-0 top-full mt-1 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-2 flex flex-col border border-gray-200 dark:border-gray-600"
-          >
-            <div className="px-1 pb-2">
-              <input
-                type="text"
-                placeholder="Search emojis..."
-                value={emojiSearchTerm}
-                onChange={e => setEmojiSearchTerm(e.target.value)}
-                className="w-full p-2 border rounded-md bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-sm"
-              />
-            </div>
-            <div className="grid grid-cols-8 gap-1 overflow-y-auto max-h-64 pr-1 scrollbar-thin">
-              {filteredEmojis.map(({ emoji, description }) => (
-                <button
-                  key={description}
-                  type="button"
-                  onClick={() => handleEmojiSelect(emoji)}
-                  className="text-2xl p-1 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 flex justify-center items-center"
-                  title={description}
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
-            <div className="pt-2 border-t border-gray-200 dark:border-gray-700 grid grid-cols-7 gap-1">
-              {EMOJI_CATEGORIES.map(({name, icon}) => (
-                <button 
-                  key={name}
-                  onClick={() => { setActiveEmojiCategory(name); setEmojiSearchTerm(''); }}
-                  className={`p-1.5 rounded-md ${activeEmojiCategory === name && !emojiSearchTerm ? 'bg-primary-100 dark:bg-primary-900/50' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
-                  title={name}
-                >
-                  <span className={activeEmojiCategory === name && !emojiSearchTerm ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400'}>
-                    {categoryIcons[icon]}
-                  </span>
-                </button>
-              ))}
-            </div>
-            {/* Copy All Button */}
-            <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
-              <button
-                onClick={() => {
-                  if (mediaItem.captionText) {
-                    navigator.clipboard.writeText(mediaItem.captionText);
-                    showToast('Caption copied to clipboard!', 'success');
-                  }
-                }}
-                className="w-full px-3 py-2 text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md flex items-center justify-center gap-2 transition-colors"
-                disabled={!mediaItem.captionText || !mediaItem.captionText.trim()}
-              >
-                <CopyIcon className="w-4 h-4" />
-                Copy All
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* Music Selection for Videos - Hidden for now */}
       {false && mediaItem.type === 'video' && (

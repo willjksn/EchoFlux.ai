@@ -513,6 +513,13 @@ ONLYFANS EXPLICIT MODE (HIGH INTENSITY):
   const desiredCaptionCount = isOnlyFansPlatform ? 5 : 3;
   // For carousels, we generate the same number of variants, but each must summarize all media.
   const prompt = `
+${sanitizedPromptText ? `
+🚨 USER INSTRUCTIONS ARE PRIMARY (MUST FOLLOW FIRST) 🚨
+- The user provided specific instructions or suggestions for what they want in the caption (see "Extra instructions" / USER INSTRUCTIONS below).
+- You MUST follow and incorporate what the user asked for FIRST. Do not overwrite or ignore the user's instructions.
+- Use the image/media, creator personality, tone, and goal as SUPPORTING context to fulfill the user's request—not to replace it.
+- If the user asked for a certain angle, topic, style, or detail, the caption must reflect that. Tone and goal should align with the user's request.
+` : ''}
 ${isExplicitContent ? `
 🚨 CRITICAL INSTRUCTION - EXPLICIT ADULT CONTENT REQUIRED 🚨
 YOU MUST GENERATE EXPLICIT, UNCENSORED, RAW, ADULT CONTENT CAPTIONS.
@@ -608,25 +615,15 @@ ${isOnlyFansPlatform ? `
 ` : ''}
 
 ${usePersonality && sanitizedCreatorPersonality ? `
-🎯 CREATOR PERSONALITY & BRAND VOICE (MUST FOLLOW):
+🎯 CREATOR PERSONALITY & BRAND VOICE (USE WHEN RELEVANT):
 ${sanitizedCreatorPersonality}
 
-CRITICAL - PERSONALITY INTEGRATION:
-- The above personality description contains ALL information about this creator: brand voice, style, values, physical attributes, personality traits, preferences, and what makes them unique
-- ALL generated captions MUST reflect and incorporate this complete personality description
-- Write in a way that matches the described personality, tone, style, and characteristics
-- Stay true to the brand voice, content style, values, and all details described above
-- This personality should influence word choice, tone, messaging style, and overall caption approach
-- Make captions feel authentic to this specific creator's complete brand and personality
-
-USING PERSONALITY INFORMATION:
-- When the user asks to "describe myself", "describe yourself", "describe me", or similar prompts, incorporate ALL relevant information from the personality description
-- Use physical attributes (height, weight, body measurements, bust size, etc.) naturally when describing the creator
-- Use personality traits, preferences, values, and other details from the personality description when relevant
-- Use the exact details provided (e.g., "5'2"", "150lbs", "36J bust", "big butt", personality traits, preferences) naturally in captions
-- All personality information should be woven naturally into captions, not forced - use it when it enhances the content
-- For roleplay, messaging, or any content that describes the creator, use the complete personality description as the source of truth
-- The personality description is comprehensive - use ALL of it, not just parts of it, when relevant to the content being generated
+CRITICAL - PERSONALITY USAGE (CONSISTENT FOR COMPOSE AND PREMIUM CONTENT STUDIO):
+- Use ONLY the creator personality text provided above for THIS user. Never use example values, sample text, or placeholder data from any other source as if it were this user's data.
+- Use personality when it is RELEVANT to the caption request: brand voice, tone, style, and preferences should influence wording. Do NOT force physical attributes (height, weight, body measurements, bust size, etc.) into every caption.
+- Physical attributes (height, weight, body stats) should ONLY be used when the user explicitly asks (e.g. "describe myself", "describe me") or when the content naturally calls for it (e.g. roleplay, outfit fit). Most captions do not require repeating physical stats.
+- Match the creator's brand voice and style. Weave in personality details when they enhance the content—not in every line. Do not overwrite or ignore the user's own instructions in favor of personality.
+- For roleplay, messaging, or content that describes the creator, use the personality description as the source of truth. For general captions, use tone and style; reserve physical/details for when relevant.
 ` : ''}
 
 ${useFavoriteHashtags && sanitizedFavoriteHashtags ? `
@@ -657,9 +654,9 @@ ${promptText && (promptText.includes('PERSONALIZE FOR FAN') || promptText.includ
 ${explicitContext}
 
 ${isOnlyFansPlatform ? `Generate 3–5 UNIQUE, DIVERSE captions` : `Generate EXACTLY ${desiredCaptionCount} DISTINCT caption variants`} based on:
-- Goal: ${sanitizedGoal || goal || "engagement"}${isExplicitContent ? ' (Mix of EXPLICIT SEXUAL content description and sales-focused captions)' : sanitizedGoal || goal ? ` (Every caption must directly support achieving: ${sanitizedGoal || goal})` : ''}
+${sanitizedPromptText ? `- USER INSTRUCTIONS (FOLLOW FIRST - do not overwrite): ${sanitizedPromptText}\n` : ''}- Goal: ${sanitizedGoal || goal || "engagement"}${isExplicitContent ? ' (Mix of EXPLICIT SEXUAL content description and sales-focused captions)' : sanitizedGoal || goal ? ` (Every caption must directly support achieving: ${sanitizedGoal || goal})` : ''}
 - Tone: ${sanitizedTone || tone || "friendly"}${isExplicitContent ? ' (EXPLICIT/ADULT CONTENT - Generate BOLD, EXPLICIT, RAW, UNCENSORED captions with explicit sexual language that describe what is visually shown in explicit detail, plus sales-focused captions)' : ''}
-- Extra instructions: ${sanitizedPromptText || "none"}
+${!sanitizedPromptText ? `- Extra instructions: none\n` : ''}
 ${goal && goal !== "engagement" ? `\nGOAL-SPECIFIC CTAs TO CONSIDER: ${getGoalSpecificCTAs(goal)}\n` : ''}
 
 CRITICAL - VARIETY REQUIREMENT:

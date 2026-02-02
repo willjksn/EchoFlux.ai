@@ -4365,7 +4365,7 @@ Output format:
                     {user?.plan !== 'Free' && (
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
                             <div className="flex items-center justify-between mb-3">
-                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent: What's Missing, What To Post Next & Repurposes</h3>
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent: Ideas for this content & Repurposes</h3>
                                 <button
                                     onClick={() => {
                                         setShowCaptionsHistory(!showCaptionsHistory);
@@ -4376,9 +4376,9 @@ Output format:
                                     className="relative px-3 py-1.5 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
                                 >
                                     {showCaptionsHistory ? 'Hide' : 'Show'} History
-                                    {(captionsPredictHistory.length > 0 || captionsRepurposeHistory.length > 0 || captionsGapAnalysisHistory.length > 0) && (
+                                    {(captionsPredictHistory.length > 0 || captionsRepurposeHistory.length > 0) && (
                                         <span className="absolute -top-2 -right-2 bg-primary-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                                            {captionsPredictHistory.length + captionsRepurposeHistory.length + captionsGapAnalysisHistory.length}
+                                            {captionsPredictHistory.length + captionsRepurposeHistory.length}
                                         </span>
                                     )}
                                 </button>
@@ -4389,142 +4389,153 @@ Output format:
                                         <div className="text-center py-8">
                                             <RefreshIcon className="w-6 h-6 animate-spin mx-auto text-primary-600 dark:text-primary-400" />
                                         </div>
-                                    ) : (captionsPredictHistory.length === 0 && captionsRepurposeHistory.length === 0 && captionsGapAnalysisHistory.length === 0) ? (
+                                    ) : (captionsPredictHistory.length === 0 && captionsRepurposeHistory.length === 0) ? (
                                         <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                                            <p className="text-sm">No content gap checks, what to post next ideas, or repurposes yet.</p>
-                                            <p className="text-xs mt-1">Use the What's Missing, What To Post Next, or Repurpose Content buttons above to see history here.</p>
+                                            <p className="text-sm">No ideas for this content or repurposes yet.</p>
+                                            <p className="text-xs mt-1">Use the Ideas for this content or Repurpose Content buttons above to see history here.</p>
                                         </div>
                                     ) : (
-                                        <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
-                                            {/* Predict History */}
+                                        <div className="space-y-3 max-h-64 overflow-y-auto custom-scrollbar">
+                                            {/* Predict History - Match Compose card style */}
                                             {captionsPredictHistory.map((item) => {
                                                 const prediction = item.data?.prediction || {};
                                                 const level = prediction.level || 'Medium';
                                                 const score = prediction.score || 50;
+                                                const mediaUrl = item.data?.mediaUrl;
+                                                const mediaType = item.data?.mediaType || 'image';
                                                 const ideas = item.data?.ideas || item.data?.postIdeas || item.data?.nextPostIdeas;
                                                 const hasIdeas = Array.isArray(ideas) && ideas.length > 0;
                                                 const ideaTitle = hasIdeas ? (ideas[0]?.title || 'Post idea') : '';
                                                 const summary = item.data?.summary || '';
-                                                const displayText = hasIdeas ? `${ideaTitle}${summary ? ` — ${summary}` : ''}` : (item.data?.originalCaption?.substring(0, 100) || 'What to post next');
                                                 return (
                                                     <div
                                                         key={item.id}
-                                                        className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-2 bg-gray-50 dark:bg-gray-700/30 rounded border border-gray-200 dark:border-gray-700"
+                                                        className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
                                                     >
-                                                        <div className="flex-1">
-                                                            <p className="text-sm font-medium text-gray-900 dark:text-white">
-                                                                {hasIdeas ? `${ideas.length} ideas` : `What to Post Next (${level}, ${score}/100)`}
-                                                            </p>
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                                {displayText} • {item.createdAt?.toDate ? new Date(item.createdAt.toDate()).toLocaleDateString() : (item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'Recently')}
-                                                            </p>
-                                                        </div>
-                                                        <div className="flex gap-2 sm:justify-end">
-                                                            <button
-                                                                onClick={() => {
-                                                                    setPredictResult(item.data);
-                                                                    setShowPredictModal(true);
-                                                                    setShowCaptionsHistory(false);
-                                                                    showToast?.('Loaded', 'success');
-                                                                }}
-                                                                className="px-2 py-1 text-xs bg-primary-600 text-white rounded hover:bg-primary-700"
-                                                            >
-                                                                Load
-                                                            </button>
-                                                            <button
-                                                                onClick={async (e) => {
-                                                                    e.stopPropagation();
-                                                                    await handleDeletePredictHistory(item.id);
-                                                                }}
-                                                                className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
-                                                            >
-                                                                Delete
-                                                            </button>
+                                                        <div className="flex items-start justify-between gap-3">
+                                                            {mediaUrl && (
+                                                                <div className="flex-shrink-0">
+                                                                    {mediaType === 'video' ? (
+                                                                        <video src={mediaUrl} className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
+                                                                    ) : (
+                                                                        <img src={mediaUrl} alt="Preview" className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">IDEAS FOR THIS CONTENT</span>
+                                                                    {!hasIdeas && (
+                                                                        <span className={`text-xs px-2 py-0.5 rounded ${
+                                                                            level === 'High' ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' :
+                                                                            level === 'Medium' ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300' :
+                                                                            'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
+                                                                        }`}>
+                                                                            {level} ({score}/100)
+                                                                        </span>
+                                                                    )}
+                                                                    {hasIdeas && (
+                                                                        <span className="text-xs px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300">
+                                                                            {ideas.length} ideas
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                {hasIdeas ? (
+                                                                    <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                                                                        {ideaTitle}{summary ? ` — ${summary}` : ''}
+                                                                    </p>
+                                                                ) : (
+                                                                    <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                                                                        {item.data?.originalCaption?.substring(0, 100) || 'Ideas for this content'}...
+                                                                    </p>
+                                                                )}
+                                                                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                                                    {item.createdAt?.toDate ? new Date(item.createdAt.toDate()).toLocaleString() : (item.createdAt ? new Date(item.createdAt).toLocaleString() : 'Recently')}
+                                                                </p>
+                                                            </div>
+                                                            <div className="flex flex-col gap-1 flex-shrink-0">
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setPredictResult(item.data);
+                                                                        setShowPredictModal(true);
+                                                                        setShowCaptionsHistory(false);
+                                                                        showToast?.('Loaded', 'success');
+                                                                    }}
+                                                                    className="px-2 py-1 text-xs bg-primary-600 text-white rounded hover:bg-primary-700"
+                                                                >
+                                                                    Load
+                                                                </button>
+                                                                <button
+                                                                    onClick={async (e) => {
+                                                                        e.stopPropagation();
+                                                                        await handleDeletePredictHistory(item.id);
+                                                                    }}
+                                                                    className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                                                                >
+                                                                    Delete
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 );
                                             })}
                                             
-                                            {/* Repurpose History */}
+                                            {/* Repurpose History - Match Compose card style */}
                                             {captionsRepurposeHistory.map((item) => {
                                                 const platforms = item.data?.repurposedContent?.length || 0;
-                                                const displayText = item.data?.originalContent?.substring(0, 100) || 'Repurposed content';
+                                                const mediaUrl = item.data?.mediaUrl;
+                                                const mediaType = item.data?.mediaType || 'image';
                                                 return (
                                                     <div
                                                         key={item.id}
-                                                        className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-2 bg-gray-50 dark:bg-gray-700/30 rounded border border-gray-200 dark:border-gray-700"
+                                                        className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
                                                     >
-                                                        <div className="flex-1">
-                                                            <p className="text-sm font-medium text-gray-900 dark:text-white">
-                                                                Repurpose ({platforms} platforms)
-                                                            </p>
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                                {displayText} • {item.createdAt?.toDate ? new Date(item.createdAt.toDate()).toLocaleDateString() : (item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'Recently')}
-                                                            </p>
-                                                        </div>
-                                                        <div className="flex gap-2 sm:justify-end">
-                                                            <button
-                                                                onClick={() => {
-                                                                    setRepurposeResult(item.data);
-                                                                    setShowRepurposeModal(true);
-                                                                    setShowCaptionsHistory(false);
-                                                                    showToast?.('Loaded', 'success');
-                                                                }}
-                                                                className="px-2 py-1 text-xs bg-primary-600 text-white rounded hover:bg-primary-700"
-                                                            >
-                                                                Load
-                                                            </button>
-                                                            <button
-                                                                onClick={async (e) => {
-                                                                    e.stopPropagation();
-                                                                    await handleDeleteRepurposeHistory(item.id);
-                                                                }}
-                                                                className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
-                                                            >
-                                                                Delete
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-
-                                            {/* Gap Analysis History */}
-                                            {captionsGapAnalysisHistory.map((item) => {
-                                                const summary = item.data?.summary || item.title || "What's Missing";
-                                                return (
-                                                    <div
-                                                        key={item.id}
-                                                        className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-2 bg-gray-50 dark:bg-gray-700/30 rounded border border-gray-200 dark:border-gray-700"
-                                                    >
-                                                        <div className="flex-1">
-                                                            <p className="text-sm font-medium text-gray-900 dark:text-white">
-                                                                Content Gap Analysis
-                                                            </p>
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                                {summary.substring(0, 100)} • {item.createdAt?.toDate ? new Date(item.createdAt.toDate()).toLocaleDateString() : (item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'Recently')}
-                                                            </p>
-                                                        </div>
-                                                        <div className="flex gap-2 sm:justify-end">
-                                                            <button
-                                                                onClick={() => {
-                                                                    setContentGapAnalysis(item.data);
-                                                                    setShowGapAnalysisModal(true);
-                                                                    setShowCaptionsHistory(false);
-                                                                    showToast?.('Loaded', 'success');
-                                                                }}
-                                                                className="px-2 py-1 text-xs bg-primary-600 text-white rounded hover:bg-primary-700"
-                                                            >
-                                                                Load
-                                                            </button>
-                                                            <button
-                                                                onClick={async (e) => {
-                                                                    e.stopPropagation();
-                                                                    await handleDeleteGapAnalysisHistory(item.id);
-                                                                }}
-                                                                className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
-                                                            >
-                                                                Delete
-                                                            </button>
+                                                        <div className="flex items-start justify-between gap-3">
+                                                            {mediaUrl && (
+                                                                <div className="flex-shrink-0">
+                                                                    {mediaType === 'video' ? (
+                                                                        <video src={mediaUrl} className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
+                                                                    ) : (
+                                                                        <img src={mediaUrl} alt="Preview" className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-600" />
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">REPURPOSE</span>
+                                                                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                                                                        {platforms} platforms
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                                                                    {item.data?.originalContent?.substring(0, 100)}...
+                                                                </p>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                                                    {item.createdAt?.toDate ? new Date(item.createdAt.toDate()).toLocaleString() : (item.createdAt ? new Date(item.createdAt).toLocaleString() : 'Recently')}
+                                                                </p>
+                                                            </div>
+                                                            <div className="flex flex-col gap-1 flex-shrink-0">
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setRepurposeResult(item.data);
+                                                                        setShowRepurposeModal(true);
+                                                                        setShowCaptionsHistory(false);
+                                                                        showToast?.('Loaded', 'success');
+                                                                    }}
+                                                                    className="px-2 py-1 text-xs bg-primary-600 text-white rounded hover:bg-primary-700"
+                                                                >
+                                                                    Load
+                                                                </button>
+                                                                <button
+                                                                    onClick={async (e) => {
+                                                                        e.stopPropagation();
+                                                                        await handleDeleteRepurposeHistory(item.id);
+                                                                    }}
+                                                                    className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                                                                >
+                                                                    Delete
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 );
@@ -5015,32 +5026,13 @@ Output format:
                                 })}
                             </div>
 
-                            {/* Action Buttons - Always Visible */}
+                            {/* Action Buttons - Ideas for this content + Repurpose (What's Missing is on Dashboard) */}
                             <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700 space-y-3">
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                    {/* What's Missing */}
-                                    <button
-                                        onClick={handleAnalyzeContentGaps}
-                                        disabled={isAnalyzingGaps || isPredicting || isRepurposing}
-                                        className="px-4 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium transition-all shadow-md hover:shadow-lg"
-                                    >
-                                        {isAnalyzingGaps ? (
-                                            <>
-                                                <RefreshIcon className="w-5 h-5 animate-spin" />
-                                                Analyzing...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <SparklesIcon className="w-5 h-5" />
-                                                What's Missing
-                                            </>
-                                        )}
-                                    </button>
-
-                                    {/* What To Post Next */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    {/* Ideas for this content */}
                                     <button
                                         onClick={handlePredictPerformance}
-                                        disabled={isPredicting || isRepurposing || isAnalyzingGaps || user?.plan === 'Free'}
+                                        disabled={isPredicting || isRepurposing || user?.plan === 'Free'}
                                         className={`px-4 py-3 rounded-lg font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 ${
                                             user?.plan === 'Free'
                                                 ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
@@ -5055,7 +5047,7 @@ Output format:
                                         ) : (
                                             <>
                                                 <SparklesIcon className="w-5 h-5" />
-                                                What To Post Next
+                                                Ideas for this content
                                             </>
                                         )}
                                     </button>
@@ -5063,7 +5055,7 @@ Output format:
                                     {/* Repurpose Content */}
                                     <button
                                         onClick={handleRepurposeContent}
-                                        disabled={isRepurposing || isPredicting || isAnalyzingGaps || user?.plan === 'Free' || generatedCaptions.length === 0}
+                                        disabled={isRepurposing || isPredicting || user?.plan === 'Free' || generatedCaptions.length === 0}
                                         className={`px-4 py-3 rounded-lg font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 ${
                                             user?.plan === 'Free' || generatedCaptions.length === 0
                                                 ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
@@ -5087,33 +5079,14 @@ Output format:
                         </div>
                     )}
 
-                    {/* Action Buttons - Always Visible (even when no captions) */}
+                    {/* Action Buttons - Ideas for this content + Repurpose (even when no captions) */}
                     {generatedCaptions.length === 0 && (
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                {/* What's Missing */}
-                                <button
-                                    onClick={handleAnalyzeContentGaps}
-                                    disabled={isAnalyzingGaps || isPredicting || isRepurposing}
-                                    className="px-4 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium transition-all shadow-md hover:shadow-lg"
-                                >
-                                    {isAnalyzingGaps ? (
-                                        <>
-                                            <RefreshIcon className="w-5 h-5 animate-spin" />
-                                            Analyzing...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <SparklesIcon className="w-5 h-5" />
-                                            What's Missing
-                                        </>
-                                    )}
-                                </button>
-
-                                {/* What To Post Next */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {/* Ideas for this content */}
                                 <button
                                     onClick={handlePredictPerformance}
-                                    disabled={isPredicting || isRepurposing || isAnalyzingGaps || user?.plan === 'Free'}
+                                    disabled={isPredicting || isRepurposing || user?.plan === 'Free'}
                                     className={`px-4 py-3 rounded-lg font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 ${
                                         user?.plan === 'Free'
                                             ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
@@ -5128,7 +5101,7 @@ Output format:
                                     ) : (
                                         <>
                                             <SparklesIcon className="w-5 h-5" />
-                                            What To Post Next
+                                            Ideas for this content
                                         </>
                                     )}
                                 </button>
@@ -5136,7 +5109,7 @@ Output format:
                                 {/* Repurpose Content */}
                                 <button
                                     onClick={handleRepurposeContent}
-                                    disabled={isRepurposing || isPredicting || isAnalyzingGaps || user?.plan === 'Free' || generatedCaptions.length === 0}
+                                    disabled={isRepurposing || isPredicting || user?.plan === 'Free' || generatedCaptions.length === 0}
                                     className={`px-4 py-3 rounded-lg font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 ${
                                         user?.plan === 'Free' || generatedCaptions.length === 0
                                             ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
