@@ -1057,7 +1057,7 @@ ${contextLines || 'None'}
       {/* Caption Input - First so users see it before Generate */}
       <div className="relative mb-3">
         <p className="text-xs text-gray-500 dark:text-gray-400 mb-1.5 flex items-center gap-1.5 flex-wrap">
-          <span>Write caption.</span>
+          <span>Write your caption here to schedule or publish. Use AI help below if you want suggestions.</span>
           <button
             type="button"
             onClick={() => setIsAiHelpOpen(!isAiHelpOpen)}
@@ -1073,7 +1073,7 @@ ${contextLines || 'None'}
             ref={captionTextareaRef}
             value={mediaItem.captionText}
             onChange={e => onUpdate(index, { captionText: e.target.value })}
-            placeholder="Write caption..."
+            placeholder="Your caption (write here or use AI help above)..."
             rows={4}
             className="w-full p-2.5 pr-14 text-sm border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 resize-y"
           />

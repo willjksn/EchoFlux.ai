@@ -2,13 +2,46 @@ import React, { useState } from 'react';
 import { useAppContext } from './AppContext';
 import { SparklesIcon, RefreshIcon, XMarkIcon, CheckCircleIcon } from './icons/UIIcons';
 import { auth, db } from '../firebaseConfig';
-import { collection, addDoc, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, orderBy, limit, Timestamp } from 'firebase/firestore';
 
 export const ContentGapAnalysis: React.FC = () => {
     const { user, showToast } = useAppContext();
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [isLoadingLastSaved, setIsLoadingLastSaved] = useState(false);
     const [analysis, setAnalysis] = useState<any>(null);
     const [showModal, setShowModal] = useState(false);
+
+    const handleViewLastSaved = async () => {
+        if (!user?.id) {
+            showToast("Please sign in to view saved suggestions", 'error');
+            return;
+        }
+        setIsLoadingLastSaved(true);
+        try {
+            const ref = collection(db, 'users', user.id, 'content_gap_analysis_history');
+            const q = query(ref, orderBy('createdAt', 'desc'), limit(1));
+            const snapshot = await getDocs(q);
+            if (snapshot.empty) {
+                showToast("No saved result. Run What's Missing first.", 'info');
+                return;
+            }
+            const doc = snapshot.docs[0];
+            const saved = doc.data();
+            const data = saved?.data;
+            if (data) {
+                setAnalysis(data);
+                setShowModal(true);
+                showToast("Loaded last saved What's Missing", 'success');
+            } else {
+                showToast("Saved result is empty. Run What's Missing again.", 'info');
+            }
+        } catch (err: any) {
+            console.error('Error loading last saved:', err);
+            showToast(err?.message || "Could not load saved result", 'error');
+        } finally {
+            setIsLoadingLastSaved(false);
+        }
+    };
 
     const handleAnalyze = async () => {
         if (!user) {
@@ -65,23 +98,42 @@ export const ContentGapAnalysis: React.FC = () => {
 
     return (
         <>
-            <button
-                onClick={handleAnalyze}
-                disabled={isAnalyzing}
-                className="w-full px-4 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium transition-all shadow-md hover:shadow-lg"
-            >
-                {isAnalyzing ? (
-                    <>
-                        <RefreshIcon className="w-5 h-5 animate-spin" />
-                        Checking what's missing...
-                    </>
-                ) : (
-                    <>
-                        <SparklesIcon className="w-5 h-5" />
-                        What's Missing
-                    </>
-                )}
-            </button>
+            <div className="flex flex-col sm:flex-row gap-2">
+                <button
+                    onClick={handleAnalyze}
+                    disabled={isAnalyzing}
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium transition-all shadow-md hover:shadow-lg"
+                >
+                    {isAnalyzing ? (
+                        <>
+                            <RefreshIcon className="w-5 h-5 animate-spin" />
+                            Checking what's missing...
+                        </>
+                    ) : (
+                        <>
+                            <SparklesIcon className="w-5 h-5" />
+                            What's Missing
+                        </>
+                    )}
+                </button>
+                <button
+                    type="button"
+                    onClick={handleViewLastSaved}
+                    disabled={isLoadingLastSaved}
+                    className="px-4 py-3 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium transition-colors"
+                >
+                    {isLoadingLastSaved ? (
+                        <>
+                            <RefreshIcon className="w-5 h-5 animate-spin" />
+                            Loading...
+                        </>
+                    ) : (
+                        <>
+                            View last saved
+                        </>
+                    )}
+                </button>
+            </div>
 
             {showModal && analysis && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4">
@@ -186,8 +238,8 @@ export const ContentGapAnalysis: React.FC = () => {
                         <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
                             <button
                                 onClick={async () => {
-                                    if (analysis) {
-                                        try {
+                                    if (!user?.id || !analysis) return;
+                                    try {
                                             await addDoc(collection(db, 'users', user.id, 'content_gap_analysis_history'), {
                                                 type: 'gap_analysis',
                                                 title: `What's Missing - ${new Date().toLocaleDateString()}`,
@@ -195,10 +247,9 @@ export const ContentGapAnalysis: React.FC = () => {
                                                 createdAt: Timestamp.now(),
                                             });
                                             showToast("What's missing saved to history!", 'success');
-                                        } catch (error) {
-                                            console.error('Failed to save content gap analysis:', error);
-                                            showToast('Failed to save to history', 'error');
-                                        }
+                                    } catch (error) {
+                                        console.error('Failed to save content gap analysis:', error);
+                                        showToast('Failed to save to history', 'error');
                                     }
                                 }}
                                 className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
