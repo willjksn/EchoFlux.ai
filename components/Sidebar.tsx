@@ -109,12 +109,8 @@ export const Sidebar: React.FC = () => {
           case 'approvals':
               return ['Elite', 'Agency'].includes(user.plan);
           case 'inbox':
-              // Show Inbox for admins (testing) or when not in offline mode
-              if (OFFLINE_MODE && user.role !== 'Admin') {
-                  return false;
-              }
-              // Show for all plans when not in offline mode, or for admins in offline mode
-              return true;
+              // Hide Inbox for all users (feature disabled)
+              return false;
           case 'team':
           case 'clients':
               // Hide team/clients for now (creator focus); admins handled above

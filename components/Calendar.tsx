@@ -1654,16 +1654,6 @@ export const Calendar: React.FC = () => {
                          <div className="flex items-center gap-1.5 sm:gap-2"><span className="w-3 h-3 rounded-full bg-gray-400 dark:bg-gray-500 shadow-sm"></span> <span className="text-gray-700 dark:text-gray-300 font-medium">Draft</span></div>
                          <div className="flex items-center gap-1.5 sm:gap-2"><span className="w-3 h-3 rounded-full bg-orange-500 dark:bg-orange-400 shadow-sm"></span> <span className="text-gray-700 dark:text-gray-300 font-medium">Reminder</span></div>
                     </div>
-                    {user?.role === 'Admin' && (
-                        <button
-                            onClick={handleRunScheduledPostsNow}
-                            disabled={isRunningScheduledPosts}
-                            className="px-4 py-2.5 text-sm font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/30 border border-primary-200 dark:border-primary-800 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/50 disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Run scheduled posts cron now (Admin)"
-                        >
-                            {isRunningScheduledPosts ? 'Running...' : 'Run scheduled posts now'}
-                        </button>
-                    )}
                     <button 
                         onClick={() => setIsCreatingReminder(true)}
                         className="px-5 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 text-sm font-semibold flex items-center gap-2 shadow-md transition-all"
