@@ -6,6 +6,29 @@ import { verifyAuth } from '../../verifyAuth.js';
 import { getAdminApp } from '../../_firebaseAdmin.js';
 import { createHmac } from 'crypto';
 
+function isInvalidGrantError(payloadText: string): boolean {
+  const text = payloadText || '';
+  return text.toLowerCase().includes('invalid_grant');
+}
+
+async function fetchWithRetry(request: RequestInfo, init: RequestInit, attempts = 3) {
+  let lastError: any;
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      const response = await fetch(request, init);
+      if (response.ok) return response;
+      if (response.status >= 500 || response.status === 429) {
+        lastError = new Error(`HTTP ${response.status}`);
+        continue;
+      }
+      return response;
+    } catch (err: any) {
+      lastError = err;
+    }
+  }
+  throw lastError;
+}
+
 interface XAccount {
   accessToken: string;
   refreshToken?: string;
@@ -28,6 +51,11 @@ async function refreshXToken(
 ): Promise<string> {
   const now = new Date();
   const twoHoursMs = 2 * 60 * 60 * 1000;
+  const socialAccountRef = db
+    .collection('users')
+    .doc(userId)
+    .collection('social_accounts')
+    .doc('x');
 
   // Refresh if: forced, OR no expiresAt (assume stale), OR expired/expiring within 2 hours
   let shouldRefresh = forceRefresh || !account.expiresAt;
@@ -55,7 +83,7 @@ async function refreshXToken(
 
         // Exchange refresh token for new access token
         const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-        const response = await fetch('https://api.twitter.com/2/oauth2/token', {
+        const response = await fetchWithRetry('https://api.twitter.com/2/oauth2/token', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
@@ -79,13 +107,6 @@ async function refreshXToken(
             expiresAt = expirationDate.toISOString();
           }
 
-          // Update token in Firestore
-          const socialAccountRef = db
-            .collection('users')
-            .doc(userId)
-            .collection('social_accounts')
-            .doc('x');
-
           await socialAccountRef.update({
             accessToken: access_token,
             refreshToken: refresh_token || account.refreshToken, // Keep old refresh token if new one not provided
@@ -95,15 +116,35 @@ async function refreshXToken(
 
           console.log('X access token refreshed successfully');
           return access_token;
-    } else {
-      const errorText = await response.text();
-      console.error('Failed to refresh X token:', errorText);
-      throw new Error('X token could not be renewed. Please disconnect and reconnect X in Settings.');
-    }
+        }
+        const errorText = await response.text();
+        console.error('Failed to refresh X token:', errorText);
+        if (response.status === 400 || response.status === 401) {
+          if (isInvalidGrantError(errorText)) {
+            throw new Error('X token could not be renewed. Please disconnect and reconnect X in Settings.');
+          }
+        }
+        // Transient or non-auth failure: keep existing token and attempt publish
+        if (!account.expiresAt) {
+          const softExpiresAt = new Date(now.getTime() + twoHoursMs).toISOString();
+          await socialAccountRef.update({
+            expiresAt: softExpiresAt,
+            lastSyncedAt: new Date().toISOString(),
+          });
+        }
+        return account.accessToken;
     } catch (error: any) {
       if (error?.message?.includes('reconnect')) throw error;
       console.error('Error refreshing X token:', error);
-      throw new Error('X token could not be renewed. Please disconnect and reconnect X in Settings.');
+      // Transient error: keep existing token and attempt publish
+      if (!account.expiresAt) {
+        const softExpiresAt = new Date(now.getTime() + twoHoursMs).toISOString();
+        await socialAccountRef.update({
+          expiresAt: softExpiresAt,
+          lastSyncedAt: new Date().toISOString(),
+        });
+      }
+      return account.accessToken;
     }
   }
 

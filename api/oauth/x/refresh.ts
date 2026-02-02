@@ -2,6 +2,30 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { verifyAuth } from "../../verifyAuth.js";
 import { getAdminDb } from "../../_firebaseAdmin.js";
 
+function isInvalidGrantError(payloadText: string): boolean {
+  const text = payloadText || "";
+  return text.toLowerCase().includes("invalid_grant");
+}
+
+async function fetchWithRetry(request: RequestInfo, init: RequestInit, attempts = 3) {
+  let lastError: any;
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      const response = await fetch(request, init);
+      if (response.ok) return response;
+      // Retry only on transient server errors or rate limits
+      if (response.status >= 500 || response.status === 429) {
+        lastError = new Error(`HTTP ${response.status}`);
+        continue;
+      }
+      return response;
+    } catch (err: any) {
+      lastError = err;
+    }
+  }
+  throw lastError;
+}
+
 /**
  * Proactively refresh X OAuth 2.0 access token.
  * Call this when the user loads Compose or Settings so the token stays fresh.
@@ -75,7 +99,7 @@ export default async function handler(
 
   try {
     const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
-    const response = await fetch("https://api.twitter.com/2/oauth2/token", {
+    const response = await fetchWithRetry("https://api.twitter.com/2/oauth2/token", {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -90,10 +114,24 @@ export default async function handler(
     if (!response.ok) {
       const errorText = await response.text();
       console.error("X token refresh failed:", response.status, errorText);
-      res.status(401).json({
-        error: "Reconnect required",
-        details: "X token could not be renewed. Please disconnect and reconnect X in Settings.",
-      });
+      if (response.status === 400 || response.status === 401) {
+        if (isInvalidGrantError(errorText)) {
+          res.status(401).json({
+            error: "Reconnect required",
+            details: "X token could not be renewed. Please disconnect and reconnect X in Settings.",
+          });
+          return;
+        }
+      }
+      if (!account.expiresAt) {
+        const softExpiresAt = new Date(now.getTime() + twoHoursMs).toISOString();
+        await accountRef.update({
+          expiresAt: softExpiresAt,
+          lastSyncedAt: new Date().toISOString(),
+        });
+      }
+      // Transient or non-auth failure: do not force reconnect
+      res.status(200).json({ refreshed: false, reason: "refresh_failed" });
       return;
     }
 
@@ -116,9 +154,17 @@ export default async function handler(
     res.status(200).json({ refreshed: true });
   } catch (error: any) {
     console.error("X refresh error:", error);
-    res.status(500).json({
-      error: "Refresh failed",
-      details: error?.message || "Please try reconnecting X in Settings.",
+    // Do not force reconnect on transient failures
+    if (!account.expiresAt) {
+      const softExpiresAt = new Date(now.getTime() + twoHoursMs).toISOString();
+      await accountRef.update({
+        expiresAt: softExpiresAt,
+        lastSyncedAt: new Date().toISOString(),
+      });
+    }
+    res.status(200).json({
+      refreshed: false,
+      reason: "refresh_failed",
     });
   }
 }
