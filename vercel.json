@@ -36,6 +36,10 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/api/cronRefreshXTokens",
+      "schedule": "0 */6 * * *"
+    },
+    {
       "path": "/api/weeklyTrendsJob",
       "schedule": "0 0 * * 1,4"
     },
