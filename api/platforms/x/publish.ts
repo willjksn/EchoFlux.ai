@@ -50,20 +50,21 @@ async function refreshXToken(
   forceRefresh = false
 ): Promise<string> {
   const now = new Date();
-  const twoHoursMs = 2 * 60 * 60 * 1000;
+  // X access tokens expire in 2 hours; refresh when <1h left so we stay ahead
+  const oneHourMs = 1 * 60 * 60 * 1000;
   const socialAccountRef = db
     .collection('users')
     .doc(userId)
     .collection('social_accounts')
     .doc('x');
 
-  // Refresh if: forced, OR no expiresAt (assume stale), OR expired/expiring within 2 hours
+  // Refresh if: forced, OR no expiresAt (assume stale), OR expired/expiring within 1 hour
   let shouldRefresh = forceRefresh || !account.expiresAt;
   if (!shouldRefresh && account.expiresAt) {
     const expiresAt = new Date(account.expiresAt);
     shouldRefresh =
       expiresAt.getTime() <= now.getTime() ||
-      expiresAt.getTime() - now.getTime() < twoHoursMs;
+      expiresAt.getTime() - now.getTime() < oneHourMs;
   }
 
   if (shouldRefresh) {
@@ -126,7 +127,7 @@ async function refreshXToken(
         }
         // Transient or non-auth failure: keep existing token and attempt publish
         if (!account.expiresAt) {
-          const softExpiresAt = new Date(now.getTime() + twoHoursMs).toISOString();
+          const softExpiresAt = new Date(now.getTime() + oneHourMs).toISOString();
           await socialAccountRef.update({
             expiresAt: softExpiresAt,
             lastSyncedAt: new Date().toISOString(),
@@ -138,7 +139,7 @@ async function refreshXToken(
       console.error('Error refreshing X token:', error);
       // Transient error: keep existing token and attempt publish
       if (!account.expiresAt) {
-        const softExpiresAt = new Date(now.getTime() + twoHoursMs).toISOString();
+        const softExpiresAt = new Date(now.getTime() + oneHourMs).toISOString();
         await socialAccountRef.update({
           expiresAt: softExpiresAt,
           lastSyncedAt: new Date().toISOString(),
@@ -859,8 +860,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.error('X publish error:', error);
     const msg = error?.message || String(error);
     const isRateLimit = msg.toLowerCase().includes('rate limit');
-    return res.status(isRateLimit ? 429 : 500).json({
-      error: isRateLimit ? 'Rate limited' : 'Failed to publish to X',
+    const isUnauthorized =
+      msg.toLowerCase().includes('unauthorized') ||
+      msg.toLowerCase().includes('reconnect') ||
+      msg.toLowerCase().includes('invalid_grant');
+    if (isUnauthorized) {
+      return res.status(401).json({
+        error: 'X connection expired',
+        details: 'Your X connection expired or was revoked. Please reconnect your X account in Settings to post again.',
+      });
+    }
+    if (isRateLimit) {
+      return res.status(429).json({
+        error: 'Rate limited',
+        details: msg,
+      });
+    }
+    return res.status(500).json({
+      error: 'Failed to publish to X',
       details: msg,
     });
   }

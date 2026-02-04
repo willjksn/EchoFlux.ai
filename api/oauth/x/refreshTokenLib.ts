@@ -30,7 +30,8 @@ export async function fetchWithRetry(
   throw lastError;
 }
 
-const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+/** X access tokens expire in 2 hours; refresh when less than 1 hour left so we stay ahead */
+const REFRESH_BEFORE_EXPIRY_MS = 1 * 60 * 60 * 1000;
 
 export type RefreshResult =
   | { refreshed: true }
@@ -41,7 +42,7 @@ export type RefreshResult =
 type DocRef = { update: (data: object) => Promise<void> };
 
 /**
- * Refresh one user's X token if expired or expiring within 2 hours.
+ * Refresh one user's X token if expired or expiring within 1 hour.
  * Updates Firestore on success. Idempotent; safe to call from cron.
  */
 export async function refreshXTokenForAccount(
@@ -81,7 +82,7 @@ export async function refreshXTokenForAccount(
     options?.forceRefresh === true ||
     !expiresAt ||
     expiresAt.getTime() <= now.getTime() ||
-    expiresAt.getTime() - now.getTime() < TWO_HOURS_MS;
+    expiresAt.getTime() - now.getTime() < REFRESH_BEFORE_EXPIRY_MS;
 
   if (!shouldRefresh) {
     return { refreshed: false, reason: "token_still_valid" };
@@ -113,7 +114,7 @@ export async function refreshXTokenForAccount(
         }
       }
       if (!account.expiresAt) {
-        const softExpiresAt = new Date(now.getTime() + TWO_HOURS_MS).toISOString();
+        const softExpiresAt = new Date(now.getTime() + REFRESH_BEFORE_EXPIRY_MS).toISOString();
         await accountRef.update({
           expiresAt: softExpiresAt,
           lastSyncedAt: new Date().toISOString(),
@@ -142,7 +143,7 @@ export async function refreshXTokenForAccount(
   } catch (error: any) {
     console.error("X refresh error for user", userId, error);
     if (!account.expiresAt) {
-      const softExpiresAt = new Date(now.getTime() + TWO_HOURS_MS).toISOString();
+      const softExpiresAt = new Date(now.getTime() + REFRESH_BEFORE_EXPIRY_MS).toISOString();
       await accountRef.update({
         expiresAt: softExpiresAt,
         lastSyncedAt: new Date().toISOString(),
