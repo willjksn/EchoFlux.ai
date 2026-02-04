@@ -28,6 +28,10 @@ const faqData = [
     {
         question: "Can I use EchoFlux.ai without connecting social accounts?",
         answer: "Yes. EchoFlux.ai is currently designed as an AI Content Studio & Campaign Planner—you generate content and organize everything in a calendar, then copy/export and post to your social platforms manually. Direct posting and deeper analytics are planned for a future version."
+    },
+    {
+        question: "What happens after the 7-day trial?",
+        answer: "When your trial ends, we charge your card for the plan you chose (Pro or Elite). If you cancel anytime before the trial ends, you won't be charged. You can cancel from Settings or by contacting us. We'll also send you a reminder before your trial ends."
     }
 ];
 

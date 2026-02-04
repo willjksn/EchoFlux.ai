@@ -189,7 +189,7 @@ export const Pricing: React.FC<PricingProps> = ({ onGetStartedClick, onNavigateR
                         Built for Monetized Creators
                     </h2>
                     <p className="mt-4 text-lg text-gray-500 dark:text-gray-400">
-                        Start with a free 7-day trial. Cancel anytime. Elite includes Premium Content Studio for OnlyFans, Fansly & Fanvue creators.
+                        Start with a 7-day free trial of Pro or Elite. No charge until the trial ends. Cancel anytime. Elite includes Premium Content Studio for OnlyFans, Fansly & Fanvue creators.
                     </p>
                 </div>
 

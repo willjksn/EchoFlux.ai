@@ -3692,7 +3692,7 @@ const CaptionGenerator: React.FC = () => {
               </div>
               {user?.plan === 'Free' && (
                 <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
-                  💡 <strong>Tip:</strong> Upgrade to Caption Pro ($9/mo) for 100 captions/month, or Pro ($29/mo) for unlimited features!
+                  💡 <strong>Tip:</strong> Upgrade to Pro ($29/mo) for 500 captions/month, calendar, Plan My Week, and more—or try the 7-day free trial.
                 </p>
               )}
               {user?.plan === 'Caption' && (
