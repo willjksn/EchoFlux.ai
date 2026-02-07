@@ -1,7 +1,6 @@
 import React from 'react';
 import { Page } from '../types';
-import { DashboardIcon, AnalyticsIcon, SettingsIcon, LogoIcon, ComposeIcon, TrendingIcon, TeamIcon, RocketIcon, BriefcaseIcon, AdminIcon, AutomationIcon, CalendarIcon, KanbanIcon, GlobeIcon, TargetIcon, SparklesIcon, ImageIcon, ChatIcon } from './icons/UIIcons';
-import { OFFLINE_MODE } from '../constants';
+import { DashboardIcon, AnalyticsIcon, SettingsIcon, LogoIcon, ComposeIcon, TrendingIcon, TeamIcon, RocketIcon, BriefcaseIcon, AdminIcon, CalendarIcon, KanbanIcon, GlobeIcon, TargetIcon, SparklesIcon, ImageIcon, ChatIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 
 interface NavItemProps {
@@ -60,7 +59,6 @@ export const Sidebar: React.FC = () => {
     { page: 'settings', icon: <SettingsIcon />, label: 'Settings' },
     { page: 'admin', icon: <AdminIcon />, label: 'Admin' },
     // Hidden items (filtered out by navItems logic)
-    { page: 'automation', icon: <AutomationIcon />, label: 'Automation' },
     { page: 'analytics', icon: <AnalyticsIcon />, label: "What's Working", tourId: 'tour-step-2-analytics-nav' },
     { page: 'ads', icon: <SparklesIcon />, label: 'Ad Ideas' },
     { page: 'team', icon: <TeamIcon />, label: 'Team', tourId: 'tour-step-team-nav' },
@@ -82,12 +80,6 @@ export const Sidebar: React.FC = () => {
           case 'analytics':
               // Hide Analytics in offline studio mode (depends on live social data)
               return false;
-          case 'automation':
-              // Hide Automation in offline mode until social connections are working
-              if (OFFLINE_MODE) {
-                  return false;
-              }
-              return user.plan !== 'Free';
           case 'calendar':
               return user.plan !== 'Free';
           case 'bio':
