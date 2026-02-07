@@ -86,7 +86,7 @@ const platformIcons: Record<Platform, React.ReactNode> = {
   Pinterest: <PinterestIcon />,
 };
 
-const COMING_SOON_PLATFORMS: Platform[] = ['Facebook', 'Instagram'];
+const COMING_SOON_PLATFORMS: Platform[] = [];
 
 const AccountConnection: React.FC<{
     platform: Platform;

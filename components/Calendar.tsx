@@ -10,7 +10,7 @@ import { hasCapability } from '../src/services/platformCapabilities';
 import { generateCaptions } from '../src/services/geminiService';
 import { UpgradePrompt } from './UpgradePrompt';
 import { hasCalendarAccess } from '../src/utils/planAccess';
-import { publishInstagramPost, publishTweet } from '../src/services/socialMediaService';
+import { publishFacebookPost, publishInstagramPost, publishTweet } from '../src/services/socialMediaService';
 import { OFFLINE_MODE } from '../constants';
 
 const platformIcons: Record<Platform, React.ReactNode> = {
@@ -1015,6 +1015,28 @@ export const Calendar: React.FC = () => {
                 } catch (instagramError: any) {
                     console.error('Failed to publish to Instagram:', instagramError);
                     showToast(`Failed to publish to Instagram: ${instagramError.message || 'Please check your connection'}.`, 'error');
+                }
+            }
+            
+            // Publish to Facebook if selected
+            const hasFacebook = platformsToPost.includes('Facebook');
+            if (hasFacebook) {
+                try {
+                    const fbMediaType = post.mediaType === 'video' ? 'video' : post.mediaType === 'image' ? 'image' : undefined;
+                    const fbMediaUrls = mediaUrls && mediaUrls.length > 0 ? mediaUrls : (mediaUrl ? [mediaUrl] : undefined);
+                    const result = await publishFacebookPost(
+                        post.content,
+                        mediaUrl,
+                        fbMediaType,
+                        undefined,
+                        fbMediaUrls
+                    );
+                    if (result.status === 'published') {
+                        console.log('Published to Facebook:', result.postId);
+                    }
+                } catch (facebookError: any) {
+                    console.error('Failed to publish to Facebook:', facebookError);
+                    showToast(`Failed to publish to Facebook: ${facebookError.message || 'Please check your connection'}.`, 'error');
                 }
             }
             

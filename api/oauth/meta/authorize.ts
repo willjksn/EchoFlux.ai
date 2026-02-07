@@ -48,6 +48,7 @@ export default async function handler(
     "email",
     "pages_show_list", // Required to list user's Pages
     "pages_read_engagement", // For analytics
+    "pages_manage_posts", // Required to publish to Facebook Pages
     "instagram_basic", // Access Instagram account info
     "instagram_content_publish", // Post to Instagram
     "instagram_manage_comments", // Manage comments

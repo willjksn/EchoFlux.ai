@@ -358,6 +358,61 @@ export async function publishInstagramPost(
 }
 
 /**
+ * Publish content to Facebook Page
+ * @param caption - Post caption/message
+ * @param mediaUrl - Optional public HTTPS URL to image or video
+ * @param mediaType - Optional 'image' | 'video'
+ * @param scheduledPublishTime - Optional ISO 8601 timestamp for scheduled posts
+ * @param mediaUrls - Optional array of media URLs (for multi-image posts)
+ */
+export async function publishFacebookPost(
+  caption: string,
+  mediaUrl?: string,
+  mediaType?: 'image' | 'video',
+  scheduledPublishTime?: string,
+  mediaUrls?: string[]
+): Promise<{ postId: string; status: 'scheduled' | 'published' }> {
+  const token = auth.currentUser
+    ? await auth.currentUser.getIdToken(true)
+    : null;
+
+  if (!token) {
+    throw new Error('User must be logged in to publish posts');
+  }
+
+  try {
+    const response = await fetch('/api/platforms/facebook/publish', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        caption,
+        mediaUrl,
+        mediaUrls,
+        mediaType,
+        scheduledPublishTime,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.details || error.error || 'Failed to publish to Facebook');
+    }
+
+    const result = await response.json();
+    return {
+      postId: result.postId,
+      status: result.status,
+    };
+  } catch (error: any) {
+    console.error('Failed to publish Facebook post:', error);
+    throw error;
+  }
+}
+
+/**
  * Publish a tweet to X (Twitter)
  * @param text - Tweet text (max 10,000 characters)
  * @param mediaUrl - Optional public HTTPS URL to image or video (single, for backward compatibility)

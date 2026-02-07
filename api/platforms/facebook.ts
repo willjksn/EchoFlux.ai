@@ -4,7 +4,10 @@
 interface FacebookAccount {
   accessToken: string;
   expiresAt?: string;
-  accountId: string; // Facebook Page ID
+  accountId: string; // Facebook Page ID (legacy)
+  pageId?: string; // Preferred Facebook Page ID
+  pageAccessToken?: string; // Preferred Page access token
+  accountName?: string;
   accountUsername?: string;
   connected: boolean;
 }
@@ -79,13 +82,17 @@ export async function fetchFacebookMessages(
   since?: string
 ): Promise<FacebookMessage[]> {
   try {
-    const accessToken = await refreshFacebookToken(account);
+    const accessToken = await refreshFacebookToken({
+      ...account,
+      accessToken: account.pageAccessToken || account.accessToken,
+    });
     if (!accessToken) {
       throw new Error("No valid access token");
     }
+    const pageId = account.pageId || account.accountId;
 
     // Facebook Graph API: Get conversations
-    const url = new URL(`https://graph.facebook.com/v18.0/${account.accountId}/conversations`);
+    const url = new URL(`https://graph.facebook.com/v18.0/${pageId}/conversations`);
     url.searchParams.set("access_token", accessToken);
     url.searchParams.set("fields", "id,participants,messages{id,from,message,created_time}");
     url.searchParams.set("limit", "100");
@@ -124,7 +131,7 @@ export async function fetchFacebookMessages(
         if (conversation.messages && conversation.messages.data) {
           for (const msg of conversation.messages.data) {
             // Filter out messages sent by the page
-            if (msg.from?.id !== account.accountId) {
+            if (msg.from?.id !== pageId) {
               messages.push({
                 id: msg.id,
                 from: {
@@ -156,13 +163,17 @@ export async function fetchFacebookComments(
   since?: string
 ): Promise<FacebookComment[]> {
   try {
-    const accessToken = await refreshFacebookToken(account);
+    const accessToken = await refreshFacebookToken({
+      ...account,
+      accessToken: account.pageAccessToken || account.accessToken,
+    });
     if (!accessToken) {
       throw new Error("No valid access token");
     }
+    const pageId = account.pageId || account.accountId;
 
     // Get page's posts
-    const postsUrl = new URL(`https://graph.facebook.com/v18.0/${account.accountId}/posts`);
+    const postsUrl = new URL(`https://graph.facebook.com/v18.0/${pageId}/posts`);
     postsUrl.searchParams.set("access_token", accessToken);
     postsUrl.searchParams.set("fields", "id,created_time");
     postsUrl.searchParams.set("limit", "25"); // Get recent 25 posts

@@ -47,7 +47,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { scheduleMultiplePosts, analyzeOptimalPostingTimes } from '../src/services/smartSchedulingService';
 import { getAnalytics } from '../src/services/geminiService';
 import { MediaItemState } from '../types';
-import { publishInstagramPost, publishTweet, publishPinterestPin } from '../src/services/socialMediaService';
+import { publishFacebookPost, publishInstagramPost, publishTweet, publishPinterestPin } from '../src/services/socialMediaService';
 import { PinterestBoardSelectionModal } from './PinterestBoardSelectionModal';
 import { hasCalendarAccess } from '../src/utils/planAccess';
 
@@ -1336,6 +1336,28 @@ const CaptionGenerator: React.FC = () => {
         }
       }
 
+      // Publish to Facebook if selected
+      const hasFacebook = platformsToPost.includes('Facebook');
+      if (hasFacebook) {
+        try {
+          const fbMediaType = item.type === 'video' ? 'video' : item.type === 'image' ? 'image' : undefined;
+          const fbMediaUrls = mediaUrls && mediaUrls.length > 0 ? mediaUrls : (mediaUrl ? [mediaUrl] : undefined);
+          const result = await publishFacebookPost(
+            item.captionText,
+            mediaUrl,
+            fbMediaType,
+            undefined,
+            fbMediaUrls
+          );
+          if (result.status === 'published') {
+            console.log('Published to Facebook:', result.postId);
+          }
+        } catch (facebookError: any) {
+          console.error('Failed to publish to Facebook:', facebookError);
+          showToast(`Failed to publish to Facebook: ${facebookError.message || 'Please check your connection'}. Other platforms published successfully.`, 'error');
+        }
+      }
+
       // Publish to X (Twitter) if selected
       const hasX = platformsToPost.includes('X');
       if (hasX) {
@@ -1622,6 +1644,28 @@ const CaptionGenerator: React.FC = () => {
         }
       }
 
+      // Schedule to Facebook if selected
+      const hasFacebook = platformsToPost.includes('Facebook');
+      if (hasFacebook) {
+        try {
+          const fbMediaType = item.type === 'video' ? 'video' : item.type === 'image' ? 'image' : undefined;
+          const fbMediaUrls = mediaUrls && mediaUrls.length > 0 ? mediaUrls : (mediaUrl ? [mediaUrl] : undefined);
+          const result = await publishFacebookPost(
+            item.captionText,
+            mediaUrl,
+            fbMediaType,
+            item.scheduledDate,
+            fbMediaUrls
+          );
+          if (result.status === 'scheduled') {
+            console.log('Scheduled to Facebook:', result.postId);
+          }
+        } catch (facebookError: any) {
+          console.error('Failed to schedule to Facebook:', facebookError);
+          showToast(`Failed to schedule to Facebook: ${facebookError.message || 'Please check your connection'}. Other platforms scheduled successfully.`, 'error');
+        }
+      }
+
       // Note: Calendar events are derived from Posts collection
       // The scheduled post will automatically appear in the calendar
       // No need to create separate calendar events (prevents duplicates)
@@ -1814,6 +1858,25 @@ const CaptionGenerator: React.FC = () => {
               console.error(`Failed to schedule post ${i + 1} to Instagram:`, instagramError);
               // Continue with other platforms
             }
+          }
+        }
+
+        // Publish or schedule to Facebook if selected
+        const hasFacebook = platformsToPost.includes('Facebook');
+        if (hasFacebook) {
+          const fbMediaType = item.type === 'video' ? 'video' : item.type === 'image' ? 'image' : undefined;
+          const itemMediaUrls = (item as any).mediaUrls || (mediaUrl ? [mediaUrl] : undefined);
+          try {
+            const result = await publishFacebookPost(
+              item.captionText,
+              mediaUrl,
+              fbMediaType,
+              publishNow ? undefined : scheduledDate,
+              itemMediaUrls
+            );
+            console.log(`${publishNow ? 'Published' : 'Scheduled'} post ${i + 1} to Facebook:`, result.postId);
+          } catch (facebookError: any) {
+            console.error(`Failed to ${publishNow ? 'publish' : 'schedule'} post ${i + 1} to Facebook:`, facebookError);
           }
         }
 

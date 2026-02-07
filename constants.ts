@@ -2,7 +2,7 @@ import { Message, AnalyticsData, TeamMember, Client, Notification, TourStep, Use
 
 // Global feature flag: run EchoFlux as an AI Content Studio
 // with planning and generation only, no live social posting.
-export const OFFLINE_MODE = true;
+export const OFFLINE_MODE = false;
 
 /** Platforms shown on the Connections page. Add others as they are approved. */
 export const CONNECTION_VISIBLE_PLATFORMS = ['Instagram', 'X', 'Facebook'] as const;

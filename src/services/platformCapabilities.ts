@@ -54,6 +54,8 @@ export const PLATFORM_CAPABILITIES: Record<Platform, PlatformCapabilities> = {
   },
   Facebook: {
     publishing: true,
+    reels_publishing: false,
+    stories_publishing: false,
     inbox: true,
     comments: true,
     dm_auto_reply: "limited",

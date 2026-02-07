@@ -152,7 +152,16 @@ export default async function handler(
       }
     }
 
-    // Step 6: Authenticate user and save to Firestore
+    // Step 6: Determine primary Page for Facebook publishing
+    const primaryPage = connectedAccounts.length > 0
+      ? {
+          id: connectedAccounts[0].pageId,
+          name: connectedAccounts[0].pageName,
+          access_token: connectedAccounts[0].pageToken,
+        }
+      : pages[0];
+
+    // Step 7: Authenticate user and save to Firestore
     const verifyAuth = await getVerifyAuth();
     const user = await verifyAuth(req);
 
@@ -163,7 +172,7 @@ export default async function handler(
 
     const db = await getAdminDb();
 
-    // Save Facebook account to subcollection (matching X/Instagram structure)
+    // Save Facebook Page account to subcollection (required for publishing)
     const facebookAccountRef = db
       .collection("users")
       .doc(user.uid)
@@ -173,10 +182,14 @@ export default async function handler(
     await facebookAccountRef.set({
       platform: "Facebook",
       connected: true,
-      accessToken: longLivedToken,
+      accessToken: primaryPage?.access_token || longLivedToken, // Prefer Page access token
+      userAccessToken: longLivedToken,
       expiresAt: tokenExpiry.toISOString(),
-      accountId: facebookUserId,
-      accountName: userInfo.name || "",
+      accountId: primaryPage?.id || facebookUserId, // Use Page ID when available
+      accountName: primaryPage?.name || userInfo.name || "",
+      pageId: primaryPage?.id || null,
+      pageName: primaryPage?.name || null,
+      pageAccessToken: primaryPage?.access_token || null,
       lastSyncedAt: new Date().toISOString(),
     }, { merge: true });
 
