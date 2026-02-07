@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { SunIcon, MoonIcon, BellIcon, MenuIcon, LogoutIcon, ChatIcon, BriefcaseIcon, WarningIcon } from './icons/UIIcons';
 import { Client, Notification } from '../types';
 import { useAppContext } from './AppContext';
-import { OFFLINE_MODE } from '../constants';
+import { OFFLINE_MODE, INBOX_ENABLED } from '../constants';
 import { ReportProblemModal } from './ReportProblemModal';
 import { ShareReviewModal } from './ShareReviewModal';
 
@@ -35,7 +35,7 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
   // In offline/studio mode we don't support inbox/DM/comment notifications yet.
   // Keep the bell usable by showing only usage/system alerts (messageId starts with 'usage-').
   const visibleNotifications = useMemo(() => {
-    if (!OFFLINE_MODE) return notifications;
+    if (!OFFLINE_MODE && INBOX_ENABLED) return notifications;
     return notifications.filter(n =>
       n.messageId?.startsWith('usage-') || n.messageId?.startsWith('announcement-')
     );
@@ -103,8 +103,8 @@ export const Header: React.FC<HeaderProps> = ({ pageTitle }) => {
       return;
     }
     
-    // In offline/studio mode, suppress DM/comment navigation (feature not available)
-    if (OFFLINE_MODE) {
+    // In offline/studio mode or when inbox is disabled, suppress DM/comment navigation
+    if (OFFLINE_MODE || !INBOX_ENABLED) {
       setNotifications(prevNotifications => 
         prevNotifications.map(n => 
           n.id === notification.id ? { ...n, read: true } : n

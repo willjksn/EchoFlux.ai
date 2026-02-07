@@ -2,6 +2,7 @@ import React from 'react';
 import { Page } from '../types';
 import { DashboardIcon, AnalyticsIcon, SettingsIcon, LogoIcon, ComposeIcon, TrendingIcon, TeamIcon, RocketIcon, BriefcaseIcon, AdminIcon, CalendarIcon, KanbanIcon, GlobeIcon, TargetIcon, SparklesIcon, ImageIcon, ChatIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
+import { INBOX_ENABLED } from '../constants';
 
 interface NavItemProps {
   page: Page;
@@ -101,8 +102,7 @@ export const Sidebar: React.FC = () => {
           case 'approvals':
               return ['Elite', 'Agency'].includes(user.plan);
           case 'inbox':
-              // Hide Inbox for all users (feature disabled)
-              return false;
+              return INBOX_ENABLED;
           case 'team':
           case 'clients':
               // Hide team/clients for now (creator focus); admins handled above
