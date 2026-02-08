@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Settings as AppSettings, Platform, CustomVoice, SocialAccount } from '../types';
-import { OFFLINE_MODE, CONNECTION_VISIBLE_PLATFORMS } from '../constants';
+import { OFFLINE_MODE, CONNECTION_VISIBLE_PLATFORMS, INBOX_ENABLED, ANALYTICS_ENABLED } from '../constants';
 import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
 import { useAppContext } from './AppContext';
 import { UpgradePrompt } from './UpgradePrompt';
@@ -131,7 +131,7 @@ const AccountConnection: React.FC<{
                                         {!isFullySupported(platform, 'publishing') && ' ⚠️'}
                                     </span>
                                 )}
-                                {hasCapability(platform, 'inbox') && (
+                                {INBOX_ENABLED && hasCapability(platform, 'inbox') && (
                                     <span 
                                         className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 cursor-help"
                                         title={isFullySupported(platform, 'inbox') 
@@ -142,7 +142,7 @@ const AccountConnection: React.FC<{
                                         {!isFullySupported(platform, 'inbox') && ' ⚠️'}
                                     </span>
                                 )}
-                                {hasCapability(platform, 'analytics') && platform !== 'X' && (
+                                {ANALYTICS_ENABLED && hasCapability(platform, 'analytics') && platform !== 'X' && (
                                     <span 
                                         className="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 cursor-help"
                                         title={isFullySupported(platform, 'analytics') 

@@ -7,6 +7,9 @@ export const OFFLINE_MODE = false;
 // Inbox/DM/comments are currently disabled in the UI.
 export const INBOX_ENABLED = false;
 
+// Analytics UI is currently disabled in the app.
+export const ANALYTICS_ENABLED = false;
+
 /** Platforms shown on the Connections page. Add others as they are approved. */
 export const CONNECTION_VISIBLE_PLATFORMS = ['Instagram', 'X', 'Facebook'] as const;
 
