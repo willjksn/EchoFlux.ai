@@ -11,7 +11,6 @@ import { AdminFeedbackPanel } from './AdminFeedbackPanel';
 import { AdminFeedbackFormBuilder } from './AdminFeedbackFormBuilder';
 import { InviteCodeManager } from './InviteCodeManager';
 import { WaitlistManager } from './WaitlistManager';
-import { AdGenerator } from './AdGenerator';
 import { TeamIcon, DollarSignIcon, UserPlusIcon, ArrowUpCircleIcon, ImageIcon, VideoIcon, LockIcon, TrendingIcon, TrashIcon } from './icons/UIIcons';
 import { db, auth } from '../firebaseConfig';
 import { collection, query, orderBy, onSnapshot, setDoc, doc, getDoc, deleteField, getDocs } from 'firebase/firestore';
@@ -160,7 +159,7 @@ export const AdminDashboard: React.FC = () => {
     const [isLoadingModelStats, setIsLoadingModelStats] = useState(true);
     const [modelStatsDays, setModelStatsDays] = useState<number>(30);
     const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'tools'>('overview');
-    const [toolsTab, setToolsTab] = useState<'toolsHome' | 'referralRewards' | 'announcements' | 'invites' | 'waitlist' | 'email' | 'feedback' | 'feedbackForms' | 'reviews' | 'adGenerator'>('toolsHome');
+    const [toolsTab, setToolsTab] = useState<'toolsHome' | 'referralRewards' | 'announcements' | 'invites' | 'waitlist' | 'email' | 'feedback' | 'feedbackForms' | 'reviews'>('toolsHome');
     const [userStorageMap, setUserStorageMap] = useState<Record<string, number>>({});
     const [currentPage, setCurrentPage] = useState<number>(1);
     const usersPerPage = 20;
@@ -708,16 +707,6 @@ export const AdminDashboard: React.FC = () => {
                         >
                             Reviews
                         </button>
-                        <button
-                            onClick={() => setToolsTab('adGenerator')}
-                            className={`px-4 py-2 rounded-md transition-colors ${
-                                toolsTab === 'adGenerator'
-                                    ? 'bg-primary-600 text-white'
-                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                            }`}
-                        >
-                            AI Ad Generator
-                        </button>
                     </div>
 
                     {toolsTab === 'toolsHome' && (
@@ -735,7 +724,6 @@ export const AdminDashboard: React.FC = () => {
                     {toolsTab === 'feedback' && <AdminFeedbackPanel />}
                     {toolsTab === 'feedbackForms' && <AdminFeedbackFormBuilder />}
                     {toolsTab === 'reviews' && <AdminReviewsPanel />}
-                    {toolsTab === 'adGenerator' && <AdGenerator />}
                 </div>
             )}
             {activeTab === 'overview' && (
@@ -929,38 +917,6 @@ export const AdminDashboard: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* Ad Generation Costs by Model */}
-                            <div>
-                                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Ad Generation Costs by Model</h4>
-                                <div className="space-y-3">
-                                    <div>
-                                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Image Ads</p>
-                                        {(modelUsageStats.adImageCostsByModel && Object.keys(modelUsageStats.adImageCostsByModel).length > 0) ? (
-                                            Object.entries(modelUsageStats.adImageCostsByModel).map(([model, cost]) => (
-                                                <div key={`img-${model}`} className="flex justify-between text-xs mb-1">
-                                                    <span className="text-gray-600 dark:text-gray-400 font-mono">{model}</span>
-                                                    <span className="text-gray-900 dark:text-white font-semibold">${(Number(cost) || 0).toFixed(4)}</span>
-                                                </div>
-                                            ))
-                                        ) : (
-                                            <p className="text-xs text-gray-500 dark:text-gray-400">No ad image costs yet.</p>
-                                        )}
-                                    </div>
-                                    <div>
-                                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Video Ads</p>
-                                        {(modelUsageStats.adVideoCostsByModel && Object.keys(modelUsageStats.adVideoCostsByModel).length > 0) ? (
-                                            Object.entries(modelUsageStats.adVideoCostsByModel).map(([model, cost]) => (
-                                                <div key={`vid-${model}`} className="flex justify-between text-xs mb-1">
-                                                    <span className="text-gray-600 dark:text-gray-400 font-mono">{model}</span>
-                                                    <span className="text-gray-900 dark:text-white font-semibold">${(Number(cost) || 0).toFixed(4)}</span>
-                                                </div>
-                                            ))
-                                        ) : (
-                                            <p className="text-xs text-gray-500 dark:text-gray-400">No ad video costs yet.</p>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
                         </div>
 
                         {/* Cost Tier Breakdown */}
