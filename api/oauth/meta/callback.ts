@@ -161,21 +161,38 @@ export default async function handler(
         }
       : pages[0];
 
-    // Step 7: Authenticate user and save to Firestore
-    const verifyAuth = await getVerifyAuth();
-    const user = await verifyAuth(req);
+    const db = await getAdminDb();
 
-    if (!user) {
+    // Step 7: Resolve user from OAuth state or auth header
+    let userId: string | undefined;
+    const stateKey = Array.isArray(state) ? state[0] : state;
+    if (stateKey) {
+      try {
+        const stateDoc = await db.collection("oauth_states").doc(stateKey).get();
+        if (stateDoc.exists) {
+          userId = stateDoc.data()?.uid;
+          await db.collection("oauth_states").doc(stateKey).delete();
+        }
+      } catch (stateError) {
+        console.error("Failed to resolve OAuth state:", stateError);
+      }
+    }
+
+    if (!userId) {
+      const verifyAuth = await getVerifyAuth();
+      const user = await verifyAuth(req);
+      userId = user?.uid;
+    }
+
+    if (!userId) {
       res.redirect(302, `/?error=not_authenticated`);
       return;
     }
 
-    const db = await getAdminDb();
-
     // Save Facebook Page account to subcollection (required for publishing)
     const facebookAccountRef = db
       .collection("users")
-      .doc(user.uid)
+      .doc(userId)
       .collection("social_accounts")
       .doc("facebook");
 
@@ -198,7 +215,7 @@ export default async function handler(
       const firstAccount = connectedAccounts[0];
       const instagramAccountRef = db
         .collection("users")
-        .doc(user.uid)
+        .doc(userId)
         .collection("social_accounts")
         .doc("instagram");
 

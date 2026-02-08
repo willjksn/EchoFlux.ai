@@ -31,9 +31,38 @@ export async function connectSocialAccount(platform: Platform): Promise<void> {
     const authorizeMethod = authorizePath === 'meta' ? 'GET' : 'POST';
     const authorizeUrl = `/api/oauth/${authorizePath}/authorize`;
 
-    // Meta (Facebook/Instagram) uses a direct browser redirect
+    // Meta (Facebook/Instagram) requires authenticated request to bind state to user
     if (authorizePath === 'meta') {
-      window.location.href = authorizeUrl;
+      const response = await fetch(authorizeUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        let errorMessage = 'Failed to initiate Meta OAuth flow';
+        try {
+          const error = await response.json();
+          errorMessage = error.error || error.details || errorMessage;
+        } catch {
+          try {
+            const text = await response.text();
+            errorMessage = text || errorMessage;
+          } catch {
+            // Use default
+          }
+        }
+        throw new Error(errorMessage);
+      }
+
+      const { authUrl } = await response.json();
+      if (!authUrl || typeof authUrl !== 'string') {
+        throw new Error('Invalid authorization URL received from server');
+      }
+
+      window.location.href = authUrl;
       return;
     }
 

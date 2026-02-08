@@ -1,5 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import crypto from "crypto";
+import { getVerifyAuth } from "../../_errorHandler.js";
+import { getAdminDb } from "../../_firebaseAdmin.js";
 
 /**
  * Start Meta OAuth flow (Facebook + Instagram)
@@ -9,11 +11,6 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ): Promise<void> {
-  if (req.method !== "GET") {
-    res.status(405).json({ error: "Method not allowed" });
-    return;
-  }
-
   const appId = process.env.META_APP_ID;
   const appSecret = process.env.META_APP_SECRET;
 
@@ -34,7 +31,57 @@ export default async function handler(
     return;
   }
 
-  // Generate CSRF state token
+  // Require auth for app-initiated OAuth
+  if (req.method === "POST") {
+    const verifyAuth = await getVerifyAuth();
+    const user = await verifyAuth(req);
+    if (!user?.uid) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    // Generate CSRF state token and persist user mapping
+    const state = crypto.randomBytes(32).toString("hex");
+    const db = await getAdminDb();
+    await db.collection("oauth_states").doc(state).set({
+      uid: user.uid,
+      createdAt: new Date().toISOString(),
+      provider: "meta",
+    });
+
+    const redirectUri = encodeURIComponent(
+      "https://echoflux.ai/api/oauth/meta/callback"
+    );
+    
+    const scopes = [
+      "public_profile",
+      "email",
+      "pages_show_list", // Required to list user's Pages
+      "pages_read_engagement", // For analytics
+      "pages_manage_posts", // Required to publish to Facebook Pages
+      "instagram_basic", // Access Instagram account info
+      "instagram_content_publish", // Post to Instagram
+      "instagram_manage_comments", // Manage comments
+      "instagram_manage_insights", // Read analytics
+    ].join(",");
+
+    const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?` +
+      `client_id=${appId}` +
+      `&redirect_uri=${redirectUri}` +
+      `&state=${state}` +
+      `&response_type=code` +
+      `&scope=${encodeURIComponent(scopes)}`;
+
+    res.status(200).json({ authUrl });
+    return;
+  }
+
+  if (req.method !== "GET") {
+    res.status(405).json({ error: "Method not allowed" });
+    return;
+  }
+
+  // Generate CSRF state token for legacy GET flow (no user binding)
   const state = crypto.randomBytes(32).toString("hex");
   
   // Build OAuth URL
