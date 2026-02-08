@@ -930,6 +930,9 @@ export const Settings: React.FC = () => {
                                 </div>
                                 <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
                                     <p className="text-sm text-amber-900 dark:text-amber-200">
+                                        <strong>Facebook requirements:</strong> You must have a Facebook account and be an admin of a Facebook Page to connect and post.
+                                    </p>
+                                    <p className="text-sm text-amber-900 dark:text-amber-200 mt-2">
                                         <strong>Instagram requirements:</strong> You must have a Facebook account, be an admin of a Facebook Page, and have a Business/Creator Instagram account linked to that Page.
                                     </p>
                                 </div>
