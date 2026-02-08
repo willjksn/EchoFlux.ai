@@ -928,6 +928,11 @@ export const Settings: React.FC = () => {
                                         <strong>Note:</strong> You'll be redirected to authorize each platform.
                                     </p>
                                 </div>
+                                <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                                    <p className="text-sm text-amber-900 dark:text-amber-200">
+                                        <strong>Instagram requirements:</strong> You must have a Facebook account, be an admin of a Facebook Page, and have a Business/Creator Instagram account linked to that Page.
+                                    </p>
+                                </div>
                                 {user?.role === 'Admin' && (
                                     <div className="mt-3 flex items-center justify-end">
                                         <button
