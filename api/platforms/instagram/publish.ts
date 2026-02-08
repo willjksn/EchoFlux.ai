@@ -15,6 +15,91 @@ interface PublishRequest {
   scheduledPublishTime?: string; // ISO 8601 timestamp for scheduled posts
 }
 
+interface TokenDebugResult {
+  isValid: boolean;
+  appId?: string;
+  userId?: string;
+  expiresAt?: string;
+}
+
+async function debugAccessToken(accessToken: string): Promise<TokenDebugResult> {
+  const appId = process.env.META_APP_ID;
+  const appSecret = process.env.META_APP_SECRET;
+  if (!appId || !appSecret) {
+    // If app credentials are missing, skip validation to avoid blocking publish.
+    return { isValid: true };
+  }
+
+  const appAccessToken = `${appId}|${appSecret}`;
+  const url = new URL('https://graph.facebook.com/v19.0/debug_token');
+  url.searchParams.set('input_token', accessToken);
+  url.searchParams.set('access_token', appAccessToken);
+
+  const response = await fetch(url.toString(), { method: 'GET' });
+  if (!response.ok) {
+    return { isValid: false };
+  }
+
+  const data = await response.json();
+  const debugData = data?.data;
+  return {
+    isValid: Boolean(debugData?.is_valid),
+    appId: debugData?.app_id,
+    userId: debugData?.user_id,
+    expiresAt: debugData?.expires_at
+      ? new Date(debugData.expires_at * 1000).toISOString()
+      : undefined,
+  };
+}
+
+async function refreshInstagramAccessToken(
+  userId: string,
+  db: any
+): Promise<string | null> {
+  const facebookAccountRef = db
+    .collection('users')
+    .doc(userId)
+    .collection('social_accounts')
+    .doc('facebook');
+
+  const facebookAccountDoc = await facebookAccountRef.get();
+  if (!facebookAccountDoc.exists) return null;
+
+  const facebookAccount = facebookAccountDoc.data();
+  if (!facebookAccount?.connected) return null;
+
+  // Prefer existing page access token if present
+  if (facebookAccount.pageAccessToken) {
+    return facebookAccount.pageAccessToken;
+  }
+
+  // If we have a user access token + pageId, fetch a fresh page token
+  if (facebookAccount.userAccessToken && facebookAccount.pageId) {
+    const pageTokenUrl = new URL(`https://graph.facebook.com/v19.0/${facebookAccount.pageId}`);
+    pageTokenUrl.searchParams.set('fields', 'access_token');
+    pageTokenUrl.searchParams.set('access_token', facebookAccount.userAccessToken);
+
+    const pageTokenResponse = await fetch(pageTokenUrl.toString(), { method: 'GET' });
+    if (!pageTokenResponse.ok) return null;
+    const pageTokenData = await pageTokenResponse.json();
+    const pageAccessToken = pageTokenData?.access_token;
+    if (!pageAccessToken) return null;
+
+    await facebookAccountRef.set(
+      {
+        pageAccessToken,
+        accessToken: pageAccessToken,
+        lastSyncedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+
+    return pageAccessToken;
+  }
+
+  return null;
+}
+
 /**
  * Step 1: Create media container(s)
  * For carousel posts (multiple images), creates multiple containers and returns the first container ID
@@ -339,11 +424,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    let accessToken = socialAccount.accessToken;
+    let tokenValid = true;
+    const tokenDebug = await debugAccessToken(accessToken);
+    tokenValid = tokenDebug.isValid;
+    if (!tokenValid) {
+      const refreshedToken = await refreshInstagramAccessToken(authUser.uid, db);
+      if (refreshedToken) {
+        const refreshedDebug = await debugAccessToken(refreshedToken);
+        if (refreshedDebug.isValid) {
+          accessToken = refreshedToken;
+          tokenValid = true;
+          await socialAccountRef.set(
+            {
+              accessToken: refreshedToken,
+              expiresAt: refreshedDebug.expiresAt || socialAccount.expiresAt || null,
+              lastSyncedAt: new Date().toISOString(),
+            },
+            { merge: true }
+          );
+        }
+      }
+    }
+
+    if (!accessToken || !tokenValid) {
+      return res.status(401).json({
+        error: 'Instagram token invalid',
+        details: 'Please reconnect your Instagram account',
+      });
+    }
+
     // Publish content
     const additionalUrls = urlsToUse.length > 1 ? urlsToUse.slice(1) : undefined;
     const result = await publishInstagramContent(
       socialAccount.accountId,
-      socialAccount.accessToken,
+      accessToken,
       urlsToUse[0],
       caption,
       mediaType,
