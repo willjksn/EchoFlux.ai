@@ -114,7 +114,7 @@ async function createMediaContainer(
   scheduledPublishTime?: string,
   additionalUrls?: string[] // For carousel posts
 ): Promise<string | string[]> {
-  const url = `https://graph.instagram.com/v19.0/${accountId}/media`;
+  const url = `https://graph.facebook.com/v19.0/${accountId}/media`;
   
   // For carousel posts (multiple images), create containers for each image
   if (additionalUrls && additionalUrls.length > 0 && mediaType === 'IMAGE') {
@@ -259,7 +259,7 @@ async function publishMediaContainer(
   accessToken: string,
   containerId: string
 ): Promise<string> {
-  const url = `https://graph.instagram.com/v19.0/${accountId}/media_publish`;
+  const url = `https://graph.facebook.com/v19.0/${accountId}/media_publish`;
   
   const params = new URLSearchParams({
     access_token: accessToken,
