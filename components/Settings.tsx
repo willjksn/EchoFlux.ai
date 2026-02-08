@@ -218,6 +218,7 @@ export const Settings: React.FC = () => {
     }, [activeTab]);
     const [connectingPlatform, setConnectingPlatform] = useState<Platform | null>(null);
     const [showInstagramSetupModal, setShowInstagramSetupModal] = useState(false);
+    const [showFacebookSetupModal, setShowFacebookSetupModal] = useState(false);
     const [showCancelModal, setShowCancelModal] = useState(false);
     const [isCancelling, setIsCancelling] = useState(false);
     const [storageUsage, setStorageUsage] = useState<{ used: number; total: number }>({ used: 0, total: 100 });
@@ -393,6 +394,11 @@ export const Settings: React.FC = () => {
             setShowInstagramSetupModal(true);
             return;
         }
+        // Show Facebook setup modal if Facebook is not connected
+        if (platform === 'Facebook' && !safeSocialAccounts?.Facebook?.connected) {
+            setShowFacebookSetupModal(true);
+            return;
+        }
         
         setConnectingPlatform(platform);
         try {
@@ -429,6 +435,20 @@ export const Settings: React.FC = () => {
         } catch (error: any) {
             console.error('Failed to connect Instagram:', error);
             showToast('Failed to connect Instagram. Please try again.', 'error');
+            setConnectingPlatform(null);
+        }
+    };
+
+    const handleProceedWithFacebookConnect = async () => {
+        setShowFacebookSetupModal(false);
+
+        setConnectingPlatform('Facebook');
+        try {
+            await connectSocialAccount('Facebook');
+            // OAuth flow will redirect
+        } catch (error: any) {
+            console.error('Failed to connect Facebook:', error);
+            showToast('Failed to connect Facebook. Please try again.', 'error');
             setConnectingPlatform(null);
         }
     };
@@ -928,14 +948,6 @@ export const Settings: React.FC = () => {
                                         <strong>Note:</strong> You'll be redirected to authorize each platform.
                                     </p>
                                 </div>
-                                <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
-                                    <p className="text-sm text-amber-900 dark:text-amber-200">
-                                        <strong>Facebook requirements:</strong> You must have a Facebook account and be an admin of a Facebook Page to connect and post.
-                                    </p>
-                                    <p className="text-sm text-amber-900 dark:text-amber-200 mt-2">
-                                        <strong>Instagram requirements:</strong> You must have a Facebook account, be an admin of a Facebook Page, and have a Business/Creator Instagram account linked to that Page.
-                                    </p>
-                                </div>
                                 {user?.role === 'Admin' && (
                                     <div className="mt-3 flex items-center justify-end">
                                         <button
@@ -1388,6 +1400,62 @@ Return only the rewritten personality description.
                                 </button>
                                 <button
                                     onClick={handleProceedWithInstagramConnect}
+                                    className="flex-1 px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
+                                >
+                                    Proceed to Connect
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Facebook Setup Modal */}
+            {showFacebookSetupModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                                📘 Facebook Page Setup Required
+                            </h3>
+                            <button
+                                onClick={() => setShowFacebookSetupModal(false)}
+                                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                            >
+                                <XMarkIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200 mb-2">
+                                    To connect Facebook, you need:
+                                </p>
+                                <ol className="text-sm text-amber-800 dark:text-amber-300 list-decimal list-inside space-y-1 ml-2">
+                                    <li>A Facebook account</li>
+                                    <li>A Facebook Page where you are an Admin</li>
+                                </ol>
+                            </div>
+                            
+                            <div>
+                                <p className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                                    How to set up:
+                                </p>
+                                <ol className="text-sm text-gray-700 dark:text-gray-300 list-decimal list-inside space-y-2 ml-2">
+                                    <li>Create a Facebook Page (if needed)</li>
+                                    <li>Make sure your Facebook account is an Admin of the Page</li>
+                                    <li>Then come back here and click "Proceed" below</li>
+                                </ol>
+                            </div>
+                            
+                            <div className="flex gap-3 pt-4">
+                                <button
+                                    onClick={() => setShowFacebookSetupModal(false)}
+                                    className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleProceedWithFacebookConnect}
                                     className="flex-1 px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
                                 >
                                     Proceed to Connect
