@@ -99,6 +99,7 @@ const AccountConnection: React.FC<{
 }> = ({ platform, account, isConnecting, onConnect, onDisconnect, onEnableMediaUploads, comingSoon }) => {
     const isConnected = account?.connected || false;
     const accountUsername = account?.accountUsername;
+    const accountDisplayName = account?.accountName;
     // Check if OAuth 1.0a is connected (for X media uploads)
     const hasOAuth1 = platform === 'X' && account && (account as any).oauthToken && (account as any).oauthTokenSecret;
 
@@ -114,9 +115,11 @@ const AccountConnection: React.FC<{
                                 <CheckCircleIcon className="w-4 h-4 text-green-500 dark:text-green-400" />
                             )}
                         </div>
-                        {accountUsername && (
+                        {accountUsername ? (
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">@{accountUsername}</p>
-                        )}
+                        ) : accountDisplayName ? (
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{accountDisplayName}</p>
+                        ) : null}
                         {/* Show available features for this platform */}
                         {isConnected && (
                             <div className="mt-1.5 flex flex-wrap gap-1">
