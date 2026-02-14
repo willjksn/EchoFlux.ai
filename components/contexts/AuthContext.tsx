@@ -62,13 +62,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     useEffect(() => {
         const unsub = onAuthStateChanged(auth, async (fbUser) => {
             setIsAuthLoading(true);
+            try {
+                if (fbUser) {
+                    const ref = doc(db, 'users', fbUser.uid);
+                    const snap = await getDoc(ref);
 
-            if (fbUser) {
-                const ref = doc(db, 'users', fbUser.uid);
-                const snap = await getDoc(ref);
-
-                if (snap.exists()) {
-                    const loaded = snap.data() as User;
+                    if (snap.exists()) {
+                        const loaded = snap.data() as User;
 
                     // Default everyone to Creator
                     if (loaded.userType !== 'Creator') {
@@ -146,73 +146,81 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         console.warn('Subscription/invite expiry check failed:', e);
                     }
 
-                    setUserState(mergedUser);
+                        setUserState(mergedUser);
 
-                } else {
-                    // NEW user document - check if there's a pending signup
-                    // If there is, don't create the document yet - wait for plan selection
-                    const pendingSignup = typeof window !== 'undefined' ? localStorage.getItem('pendingSignup') : null;
+                    } else {
+                        // NEW user document - check if there's a pending signup
+                        // If there is, don't create the document yet - wait for plan selection
+                        const pendingSignup = typeof window !== 'undefined' ? localStorage.getItem('pendingSignup') : null;
                     
-                    if (pendingSignup) {
-                        // User has pending signup - don't create document yet
-                        // The plan selection flow will create it after plan is selected
-                        // Set user state to null so the app knows to show plan selector
-                        setUserState(null);
-                        setIsAuthLoading(false);
-                        return;
-                    }
-                    
-                    // No pending signup - this might be a Google sign-in for an existing user
-                    // or a direct sign-in. Create the user document.
-                    // Since Free plan is removed, we'll set plan to null and prompt for plan selection
-                    // This ensures users must select a plan (Pro/Elite) before using the app
-                    const defaultPlan: Plan | null = null;
-                    
-                    const newUser: User = {
-                        id: fbUser.uid,
-                        name: fbUser.displayName || "New User",
-                        email: fbUser.email || "",
-                        avatar: fbUser.photoURL || `https://picsum.photos/seed/${fbUser.uid}/100/100`,
-                        bio: "Welcome to EchoFlux.ai!",
-                        plan: defaultPlan,
-                        role: "User",
-                        userType: 'Creator', // All users are Creators now
-                        signupDate: new Date().toISOString(),
-                        hasCompletedOnboarding: false,
-                        notifications: {
-                            newMessages: true,
-                            weeklySummary: false,
-                            trendAlerts: false,
-                        },
-                        monthlyCaptionGenerationsUsed: 0,
-                        monthlyImageGenerationsUsed: 0,
-                        monthlyVideoGenerationsUsed: 0,
-                        monthlyRepliesUsed: 0,
-                        storageUsed: 0,
-                        storageLimit: 100,
-                        mediaLibrary: [],
-                        settings: defaultSettings,
-                        socialStats: generateMockSocialStats(),
-                    };
-
-                    // Remove undefined values before saving to Firestore
-                    const cleanUser = removeUndefined(newUser);
-                    await setDoc(ref, cleanUser);
-                    
-                    // Clear pendingPlan from localStorage after use
-                    try {
-                        if (pendingPlan) {
-                            localStorage.removeItem('pendingPlan');
+                        if (pendingSignup) {
+                            // User has pending signup - don't create document yet
+                            // The plan selection flow will create it after plan is selected
+                            // Set user state to null so the app knows to show plan selector
+                            setUserState(null);
+                            return;
                         }
-                    } catch {}
                     
-                    setUserState(newUser);
-                }
-            } else {
-                setUserState(null);
-            }
+                        // No pending signup - this might be a Google sign-in for an existing user
+                        // or a direct sign-in. Create the user document.
+                        // Firestore rules require new users to start on Free.
+                        const defaultPlan: Plan = 'Free';
+                    
+                        const newUser: User = {
+                            id: fbUser.uid,
+                            name: fbUser.displayName || "New User",
+                            email: fbUser.email || "",
+                            avatar: fbUser.photoURL || `https://picsum.photos/seed/${fbUser.uid}/100/100`,
+                            bio: "Welcome to EchoFlux.ai!",
+                            plan: defaultPlan,
+                            role: "User",
+                            userType: 'Creator', // All users are Creators now
+                            signupDate: new Date().toISOString(),
+                            hasCompletedOnboarding: false,
+                            notifications: {
+                                newMessages: true,
+                                weeklySummary: false,
+                                trendAlerts: false,
+                            },
+                            monthlyCaptionGenerationsUsed: 0,
+                            monthlyImageGenerationsUsed: 0,
+                            monthlyVideoGenerationsUsed: 0,
+                            monthlyRepliesUsed: 0,
+                            storageUsed: 0,
+                            storageLimit: 100,
+                            mediaLibrary: [],
+                            settings: defaultSettings,
+                            socialStats: generateMockSocialStats(),
+                        };
 
-            setIsAuthLoading(false);
+                        // Remove undefined values before saving to Firestore
+                        const cleanUser = removeUndefined(newUser);
+                        await setDoc(ref, cleanUser);
+                    
+                        // Clear pendingPlan from localStorage after use
+                        try {
+                            if (pendingPlan) {
+                                localStorage.removeItem('pendingPlan');
+                            }
+                        } catch {}
+                    
+                        setUserState(newUser);
+                    }
+                } else {
+                    setUserState(null);
+                }
+
+            } catch (err: any) {
+                console.error("Auth bootstrap failed:", err);
+                if (err?.code === "permission-denied" || String(err?.message || "").includes("Missing or insufficient permissions")) {
+                    console.error(
+                        "Firestore permission denied during auth bootstrap. Verify Firebase env vars (VITE_FIREBASE_PROJECT_ID/authDomain/apiKey) all point to the same project and that Firestore rules are published."
+                    );
+                }
+                setUserState(null);
+            } finally {
+                setIsAuthLoading(false);
+            }
         });
 
         return () => unsub();
