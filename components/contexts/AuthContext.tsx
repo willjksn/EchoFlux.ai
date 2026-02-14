@@ -13,23 +13,6 @@ interface AuthContextType {
     handleLogout: () => void;
 }
 
-// inside the "else" where userDocSnap does NOT exist
-const pendingPlan = (typeof window !== 'undefined'
-  ? (localStorage.getItem('pendingPlan') as Plan | null)
-  : null);
-
-const newUser: User = {
-  // ...
-  plan: pendingPlan || 'Free',
-  // ...
-};
-
-// after successful setDoc:
-try {
-  localStorage.removeItem('pendingPlan');
-} catch {}
-
-
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Utility — NEVER allow undefined to be written to Firestore
@@ -162,9 +145,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         }
                     
                         // No pending signup - this might be a Google sign-in for an existing user
-                        // or a direct sign-in. Create the user document.
-                        // Firestore rules require new users to start on Free.
-                        const defaultPlan: Plan = 'Free';
+                        // or a direct sign-in. Create the user document in unprovisioned state.
+                        // Plan selection / checkout flow will assign Pro or Elite.
+                        const defaultPlan: Plan | null = null;
                     
                         const newUser: User = {
                             id: fbUser.uid,
@@ -199,9 +182,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     
                         // Clear pendingPlan from localStorage after use
                         try {
-                            if (pendingPlan) {
-                                localStorage.removeItem('pendingPlan');
-                            }
+                            localStorage.removeItem('pendingPlan');
                         } catch {}
                     
                         setUserState(newUser);

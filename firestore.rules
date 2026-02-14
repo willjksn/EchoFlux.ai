@@ -69,11 +69,14 @@ service cloud.firestore {
     }
 
     function isSafeUserCreate() {
-      // New users must start as normal users on Free plan.
-      // Allow optional pending payment markers (used for signup flow),
-      // but do NOT allow any Stripe IDs or elevated role/plan.
+      // New users must start as normal users in an unprovisioned state.
+      // Plan is set server-side after checkout/invite processing.
+      // Do NOT allow any Stripe IDs or elevated role/plan on client create.
       return request.resource.data.role == 'User'
-        && request.resource.data.plan == 'Free'
+        && (
+          !request.resource.data.keys().hasAny(['plan']) ||
+          request.resource.data.plan == null
+        )
         && !(request.resource.data.keys().hasAny([
           'stripeCustomerId',
           'stripeSubscriptionId',

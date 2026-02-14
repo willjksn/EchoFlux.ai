@@ -533,7 +533,7 @@ const AppContent: React.FC = () => {
                 }
             })();
             
-            if (!user.plan && !hasActiveCheckoutResume) {
+            if ((!user.plan || user.plan === 'Free') && !hasActiveCheckoutResume) {
                 setOnboardingStep('plan-selector');
                 return;
             }
