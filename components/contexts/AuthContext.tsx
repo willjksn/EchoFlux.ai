@@ -273,20 +273,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     path.startsWith('/inbox') ||
                     path.startsWith('/analytics') ||
                     path.startsWith('/settings') ||
+                    path.startsWith('/write-captions') ||
                     path.startsWith('/compose') ||
+                    path.startsWith('/my-schedule') ||
                     path.startsWith('/calendar') ||
                     path.startsWith('/drafts') ||
                     path.startsWith('/approvals') ||
                     path.startsWith('/team') ||
+                    path.startsWith('/find-trends') ||
                     path.startsWith('/opportunities') ||
                     path.startsWith('/profile') ||
                     path.startsWith('/clients') ||
                     path.startsWith('/admin') ||
                     path.startsWith('/automation') ||
+                    path.startsWith('/bio-link-page') ||
+                    path.startsWith('/bio') ||
+                    path.startsWith('/plan-my-week') ||
                     path.startsWith('/strategy') ||
                     path.startsWith('/ads') ||
+                    path.startsWith('/my-vault') ||
                     path.startsWith('/mediaLibrary') ||
                     path.startsWith('/autopilot') ||
+                    path.startsWith('/email-center') ||
+                    path.startsWith('/emailCenter') ||
+                    path.startsWith('/premium-content-studio') ||
                     path.startsWith('/premiumcontentstudio') ||
                     path.startsWith('/onlyfansStudio');
                 if (isAuthenticatedRoute) {

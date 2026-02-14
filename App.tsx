@@ -184,7 +184,7 @@ const AppContent: React.FC = () => {
     const pathname = window.location.pathname;
     
     // Exclude known app routes and API routes to avoid conflicts
-    const knownRoutes = ['/', '/dashboard', '/inbox', '/analytics', '/settings', '/compose', '/calendar', '/drafts', '/approvals', '/team', '/opportunities', '/profile', '/about', '/contact', '/pricing', '/clients', '/faq', '/terms', '/privacy', '/dataDeletion', '/admin', '/automation', '/bio', '/strategy', '/ads', '/mediaLibrary', '/autopilot', '/premiumcontentstudio', '/onlyfansStudio', '/reset-password'];
+    const knownRoutes = ['/', '/dashboard', '/inbox', '/analytics', '/settings', '/write-captions', '/compose', '/my-schedule', '/calendar', '/drafts', '/approvals', '/team', '/find-trends', '/opportunities', '/profile', '/about', '/contact', '/pricing', '/clients', '/faq', '/terms', '/privacy', '/dataDeletion', '/admin', '/automation', '/bio-link-page', '/bio', '/plan-my-week', '/strategy', '/ads', '/my-vault', '/mediaLibrary', '/autopilot', '/premium-content-studio', '/premiumcontentstudio', '/onlyfansStudio', '/email-center', '/emailCenter', '/reset-password'];
     
     // Check if it's a direct username path (not a known route) or legacy /u/ or /link/ path
     // Also exclude paths that start with /api or contain dots (likely static files)
@@ -262,20 +262,30 @@ const AppContent: React.FC = () => {
             path === '/inbox' ||
             path === '/analytics' ||
             path === '/settings' ||
+            path === '/write-captions' ||
             path === '/compose' ||
+            path === '/my-schedule' ||
             path === '/calendar' ||
             path === '/drafts' ||
             path === '/approvals' ||
             path === '/team' ||
+            path === '/find-trends' ||
             path === '/opportunities' ||
             path === '/profile' ||
             path === '/clients' ||
             path === '/admin' ||
             path === '/automation' ||
+            path === '/bio-link-page' ||
+            path === '/bio' ||
+            path === '/plan-my-week' ||
             path === '/strategy' ||
             path === '/ads' ||
+            path === '/my-vault' ||
             path === '/mediaLibrary' ||
             path === '/autopilot' ||
+            path === '/email-center' ||
+            path === '/emailCenter' ||
+            path === '/premium-content-studio' ||
             path === '/premiumcontentstudio' ||
             path === '/onlyfansStudio';
 

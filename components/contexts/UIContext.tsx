@@ -110,11 +110,11 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         inbox: '/inbox',
         analytics: '/analytics',
         settings: '/settings',
-        compose: '/compose',
-        calendar: '/calendar',
+        compose: '/write-captions',
+        calendar: '/my-schedule',
         approvals: '/drafts',
         team: '/team',
-        opportunities: '/opportunities',
+        opportunities: '/find-trends',
         profile: '/profile',
         about: '/about',
         contact: '/contact',
@@ -126,12 +126,13 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         dataDeletion: '/dataDeletion',
         admin: '/admin',
         automation: '/automation',
-        bio: '/bio',
-        strategy: '/strategy',
+        bio: '/bio-link-page',
+        strategy: '/plan-my-week',
         ads: '/ads',
-        mediaLibrary: '/mediaLibrary',
+        mediaLibrary: '/my-vault',
         autopilot: '/autopilot',
-        onlyfansStudio: '/premiumcontentstudio',
+        onlyfansStudio: '/premium-content-studio',
+        emailCenter: '/email-center',
     };
 
     const pathToPage: Record<string, Page> = Object.entries(pageToPath).reduce((acc, [page, path]) => {
@@ -143,6 +144,22 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     pathToPage['/onlyfansStudio'] = 'onlyfansStudio';
     // Legacy approvals route
     pathToPage['/approvals'] = 'approvals';
+    // Legacy trends route
+    pathToPage['/opportunities'] = 'opportunities';
+    // Legacy compose route
+    pathToPage['/compose'] = 'compose';
+    // Legacy strategy route
+    pathToPage['/strategy'] = 'strategy';
+    // Legacy schedule route
+    pathToPage['/calendar'] = 'calendar';
+    // Legacy media library route
+    pathToPage['/mediaLibrary'] = 'mediaLibrary';
+    // Legacy bio builder route
+    pathToPage['/bio'] = 'bio';
+    // Legacy studio route
+    pathToPage['/premiumcontentstudio'] = 'onlyfansStudio';
+    // Legacy email center route
+    pathToPage['/emailCenter'] = 'emailCenter';
 
     const isRoutableAppPath = (path: string) => {
         const p = normalizePath(path);

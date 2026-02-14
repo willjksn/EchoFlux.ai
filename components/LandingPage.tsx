@@ -432,8 +432,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                             <ul className="mt-4 space-y-4">
                             <li><button onClick={() => setLegalModal('about')} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-left">About Us</button></li>
                             <li><button onClick={() => setLegalModal('contact')} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white text-left">Contact Us</button></li>
-                            <li><a href="#" onClick={(e) => { e.preventDefault(); setLegalModal('terms'); }} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Terms</a></li>
-                            <li><a href="#" onClick={(e) => { e.preventDefault(); setLegalModal('privacy'); }} className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Privacy</a></li>
+                            <li><a href="/terms-of-service.html" className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Terms</a></li>
+                            <li><a href="/privacy-policy.html" className="text-base text-gray-500 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Privacy</a></li>
                             </ul>
                         </div>
                     </div>
@@ -442,8 +442,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
             <div className="mt-12 border-t border-gray-200 dark:border-gray-700 pt-8 md:flex md:items-center md:justify-between">
                 <p className="text-base text-gray-400 md:order-1">&copy; 2025 EchoFlux.ai. All rights reserved.</p>
                 <div className="mt-8 md:mt-0 md:order-2 flex space-x-6">
-                    <a href="#" onClick={(e) => { e.preventDefault(); setLegalModal('terms'); }} className="text-base text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">Terms</a>
-                    <a href="#" onClick={(e) => { e.preventDefault(); setLegalModal('privacy'); }} className="text-base text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">Privacy</a>
+                    <a href="/terms-of-service.html" className="text-base text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">Terms</a>
+                    <a href="/privacy-policy.html" className="text-base text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">Privacy</a>
                 </div>
             </div>
         </div>
@@ -494,3 +494,5 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
     </div>
   );
 };
+
+export default LandingPage;
