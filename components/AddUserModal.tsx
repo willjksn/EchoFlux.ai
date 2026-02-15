@@ -64,7 +64,8 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({ onClose, onSuccess }
             const data = await res.json().catch(() => ({}));
 
             if (!res.ok) {
-                setError(data?.error || data?.details || 'Failed to create user');
+                const errMsg = data?.error || data?.message || data?.details || 'Failed to create user';
+                setError(typeof errMsg === 'string' ? errMsg : 'Failed to create user');
                 setIsLoading(false);
                 return;
             }

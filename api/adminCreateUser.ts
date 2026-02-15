@@ -183,10 +183,18 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
       res.status(400).json({ error: "Password is too weak (minimum 6 characters)" });
       return;
     }
+    // Firebase Admin config errors (e.g. missing env var)
+    if (error?.message?.includes("FIREBASE_SERVICE_ACCOUNT") || error?.message?.includes("Firebase Admin")) {
+      res.status(503).json({
+        error: "Server configuration error: Firebase Admin SDK not configured. Add FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 to Vercel environment variables.",
+      });
+      return;
+    }
     console.error("adminCreateUser error:", error);
     res.status(500).json({
       error: "Failed to create user",
-      details: process.env.NODE_ENV === "development" ? error?.message : undefined,
+      code: error?.code || undefined,
+      message: error?.message || String(error),
     });
     return;
   }
