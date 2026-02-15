@@ -1,18 +1,23 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { User } from '../types';
 import { GrantReferralRewardModal } from './GrantReferralRewardModal';
-import { db } from '../firebaseConfig';
+import { db, auth } from '../firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
 
 interface UserManagementModalProps {
     user: User;
     onClose: () => void;
     onSave: (updatedUser: User) => void;
+    showToast?: (message: string, type: 'success' | 'error' | 'info') => void;
 }
 
-export const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose, onSave }) => {
+export const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose, onSave, showToast }) => {
     const [editedUser, setEditedUser] = useState<User>(user);
     const [showGrantRewardModal, setShowGrantRewardModal] = useState(false);
+    const [newPassword, setNewPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+    const [isSendingReset, setIsSendingReset] = useState(false);
 
     useEffect(() => {
         setEditedUser(user);
@@ -71,6 +76,64 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, 
         setEditedUser(prev => ({ ...prev, plan: newPlan }));
     };
 
+    const handleUpdatePassword = async () => {
+        const trimmed = newPassword.trim();
+        if (!trimmed || trimmed.length < 6) {
+            showToast?.('Password must be at least 6 characters', 'error');
+            return;
+        }
+        setIsUpdatingPassword(true);
+        try {
+            const token = await auth.currentUser?.getIdToken(true);
+            if (!token) {
+                showToast?.('You must be signed in to update passwords', 'error');
+                return;
+            }
+            const res = await fetch('/api/adminUpdateUserPassword', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ userId: user.id, newPassword: trimmed }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data?.success) {
+                showToast?.(data?.error || 'Failed to update password', 'error');
+                return;
+            }
+            setNewPassword('');
+            showToast?.('Password updated successfully', 'success');
+        } catch (err: any) {
+            showToast?.(err?.message || 'Failed to update password', 'error');
+        } finally {
+            setIsUpdatingPassword(false);
+        }
+    };
+
+    const handleSendPasswordReset = async () => {
+        setIsSendingReset(true);
+        try {
+            const token = await auth.currentUser?.getIdToken(true);
+            if (!token) {
+                showToast?.('You must be signed in', 'error');
+                return;
+            }
+            const res = await fetch('/api/adminSendPasswordReset', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ userId: user.id }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data?.success) {
+                showToast?.(data?.error || 'Failed to send password reset email', 'error');
+                return;
+            }
+            showToast?.(data?.emailSent ? 'Password reset email sent' : 'Request sent (check email config)', 'success');
+        } catch (err: any) {
+            showToast?.(err?.message || 'Failed to send password reset email', 'error');
+        } finally {
+            setIsSendingReset(false);
+        }
+    };
+
     const handleSave = async () => {
         try {
             await onSave(editedUser);
@@ -97,20 +160,58 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, 
 
                     <div className="mt-6 space-y-4">
                         <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Change Password</label>
+                            <div className="mt-1 flex gap-2">
+                                <div className="flex-1 relative">
+                                    <input
+                                        type={showPassword ? 'text' : 'password'}
+                                        value={newPassword}
+                                        onChange={e => setNewPassword(e.target.value)}
+                                        placeholder="New password (min 6 characters)"
+                                        className="w-full pl-3 pr-20 py-2 text-base border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:text-white dark:placeholder-gray-400"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-primary-600 dark:text-primary-400 hover:underline"
+                                    >
+                                        {showPassword ? 'Hide' : 'Show'}
+                                    </button>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleUpdatePassword}
+                                    disabled={isUpdatingPassword || newPassword.length < 6}
+                                    className="px-4 py-2 bg-gray-600 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-md transition-colors"
+                                >
+                                    {isUpdatingPassword ? 'Updating...' : 'Set Password'}
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <button
+                                type="button"
+                                onClick={handleSendPasswordReset}
+                                disabled={isSendingReset}
+                                className="w-full px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-md transition-colors font-medium"
+                            >
+                                {isSendingReset ? 'Sending...' : 'Send Password Reset Email'}
+                            </button>
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                Sends an email to {user.email} with a link to set a new password.
+                            </p>
+                        </div>
+                        <div>
                             <label htmlFor="plan" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Subscription Plan</label>
                             <select 
                                 id="plan" 
-                                value={editedUser.plan || 'Free'} 
+                                value={editedUser.plan === 'Pro' || editedUser.plan === 'Elite' ? editedUser.plan : 'Pro'} 
                                 onChange={handlePlanChange} 
                                 disabled={false}
                                 className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:text-white"
                             >
-                                <option value="Free">Free</option>
                                 <option value="Pro">Pro</option>
                                 <option value="Elite">Elite</option>
-                                <option value="Agency">Agency</option>
-                                <option value="Starter">Starter</option>
-                                <option value="Growth">Growth</option>
                             </select>
                         </div>
                         <p className="text-xs text-gray-500 dark:text-gray-400">

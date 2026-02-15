@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, Activity } from '../types';
 import { UserManagementModal } from './UserManagementModal';
+import { AddUserModal } from './AddUserModal';
 import { ReferralRewardsConfig } from './ReferralRewardsConfig';
 import { GrantReferralRewardModal } from './GrantReferralRewardModal';
 import { AdminAnnouncementsPanel } from './AdminAnnouncementsPanel';
@@ -163,6 +164,7 @@ export const AdminDashboard: React.FC = () => {
     const [userStorageMap, setUserStorageMap] = useState<Record<string, number>>({});
     const [currentPage, setCurrentPage] = useState<number>(1);
     const usersPerPage = 20;
+    const [showAddUserModal, setShowAddUserModal] = useState(false);
     
     // Reset to page 1 when search term changes
     useEffect(() => {
@@ -433,8 +435,8 @@ export const AdminDashboard: React.FC = () => {
     
     const handleSaveUser = async (updatedUser: User) => {
         try {
-            // Ensure plan is valid
-            const validPlans: User['plan'][] = ['Free', 'Pro', 'Elite', 'Agency', 'Starter', 'Growth'];
+            // Ensure plan is valid (only Pro and Elite in use)
+            const validPlans: User['plan'][] = ['Pro', 'Elite'];
             if (!validPlans.includes(updatedUser.plan)) {
                 console.error('Invalid plan:', updatedUser.plan);
                 return;
@@ -573,6 +575,7 @@ export const AdminDashboard: React.FC = () => {
                     user={editingUser}
                     onClose={() => setEditingUser(null)}
                     onSave={handleSaveUser}
+                    showToast={showToast}
                 />
             )}
             {grantingRewardToUser && (
@@ -583,6 +586,12 @@ export const AdminDashboard: React.FC = () => {
                         setGrantingRewardToUser(null);
                         // Optionally refresh user data
                     }}
+                />
+            )}
+            {showAddUserModal && (
+                <AddUserModal
+                    onClose={() => setShowAddUserModal(false)}
+                    onSuccess={() => showToast('User created successfully', 'success')}
                 />
             )}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
@@ -1140,13 +1149,22 @@ export const AdminDashboard: React.FC = () => {
             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white">User Management</h3>
-                    <input 
-                        type="text"
-                        placeholder="Search by name or email..."
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
-                        className="w-full sm:w-64 p-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-primary-500 focus:border-primary-500 dark:text-white dark:placeholder-gray-400"
-                    />
+                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                        <button
+                            onClick={() => setShowAddUserModal(true)}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors font-medium"
+                        >
+                            <UserPlusIcon />
+                            Add User
+                        </button>
+                        <input 
+                            type="text"
+                            placeholder="Search by name or email..."
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                            className="w-full sm:w-64 p-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-primary-500 focus:border-primary-500 dark:text-white dark:placeholder-gray-400"
+                        />
+                    </div>
                 </div>
                 <div className="overflow-x-auto">
                      {isLoading ? (
