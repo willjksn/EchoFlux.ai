@@ -5,7 +5,7 @@ import { sendEmail } from "./_mailer.js";
 
 const PLATFORMS = ["Instagram", "TikTok", "X", "Threads", "YouTube", "LinkedIn", "Facebook", "Pinterest"] as const;
 const VALID_PLANS = ["Pro", "Elite"] as const;
-const DEFAULT_PASSWORD = "Password1";
+const DEFAULT_PASSWORD = "Password1!";
 
 function getStorageLimitMB(plan: string): number {
   if (plan === "Free") return 100;
@@ -102,6 +102,10 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   }
 
   const password = (typeof passwordParam === "string" && passwordParam.length >= 6) ? passwordParam : DEFAULT_PASSWORD;
+  if (!/[^A-Za-z0-9]/.test(password)) {
+    res.status(400).json({ error: "Password must include at least one special character (example: !@#$%)" });
+    return;
+  }
   const selectedPlan = (plan && VALID_PLANS.includes(plan as any)) ? plan : "Pro";
 
   try {
@@ -180,7 +184,11 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
       return;
     }
     if (error?.code === "auth/weak-password") {
-      res.status(400).json({ error: "Password is too weak (minimum 6 characters)" });
+      res.status(400).json({ error: "Password is too weak (minimum 6 characters and include a symbol)" });
+      return;
+    }
+    if (String(error?.message || "").includes("PASSWORD_DOES_NOT_MEET_REQUIREMENTS")) {
+      res.status(400).json({ error: "Password does not meet Firebase policy (must include a non-alphanumeric character)." });
       return;
     }
     // Firebase Admin config errors (e.g. missing env var)

@@ -37,6 +37,11 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({ onClose, onSuccess }
             setIsLoading(false);
             return;
         }
+        if (password && !/[^A-Za-z0-9]/.test(password)) {
+            setError('Custom password must include at least one special character (example: !@#$%)');
+            setIsLoading(false);
+            return;
+        }
 
         try {
             const token = await auth.currentUser?.getIdToken(true);
@@ -91,7 +96,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({ onClose, onSuccess }
                 <div className="p-6">
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white">Add New User</h3>
                     <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        Leave password blank to use default "Password1". Welcome email includes login credentials.
+                        Leave password blank to use default "Password1!". Welcome email includes login credentials.
                     </p>
 
                     <form onSubmit={handleSubmit} className="mt-6 space-y-4">
@@ -127,7 +132,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({ onClose, onSuccess }
                                     type={showPassword ? 'text' : 'password'}
                                     value={password}
                                     onChange={e => setPassword(e.target.value)}
-                                    placeholder="Leave blank for Password1"
+                                    placeholder="Leave blank for Password1!"
                                     autoComplete="new-password"
                                     className="block w-full pl-3 pr-16 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:text-white dark:placeholder-gray-400"
                                     disabled={isLoading}

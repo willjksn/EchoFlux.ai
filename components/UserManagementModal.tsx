@@ -82,6 +82,10 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, 
             showToast?.('Password must be at least 6 characters', 'error');
             return;
         }
+        if (!/[^A-Za-z0-9]/.test(trimmed)) {
+            showToast?.('Password must include at least one special character', 'error');
+            return;
+        }
         setIsUpdatingPassword(true);
         try {
             const token = await auth.currentUser?.getIdToken(true);
@@ -167,7 +171,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, 
                                         type={showPassword ? 'text' : 'password'}
                                         value={newPassword}
                                         onChange={e => setNewPassword(e.target.value)}
-                                        placeholder="New password (min 6 characters)"
+                                        placeholder="New password (min 6 chars + symbol)"
                                         className="w-full pl-3 pr-20 py-2 text-base border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:text-white dark:placeholder-gray-400"
                                     />
                                     <button
@@ -181,7 +185,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, 
                                 <button
                                     type="button"
                                     onClick={handleUpdatePassword}
-                                    disabled={isUpdatingPassword || newPassword.length < 6}
+                                    disabled={isUpdatingPassword || newPassword.length < 6 || !/[^A-Za-z0-9]/.test(newPassword)}
                                     className="px-4 py-2 bg-gray-600 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-md transition-colors"
                                 >
                                     {isUpdatingPassword ? 'Updating...' : 'Set Password'}

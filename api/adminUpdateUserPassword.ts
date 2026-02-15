@@ -41,6 +41,10 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     res.status(400).json({ error: "Password must be at least 6 characters" });
     return;
   }
+  if (!/[^A-Za-z0-9]/.test(newPassword)) {
+    res.status(400).json({ error: "Password must include at least one special character (example: !@#$%)" });
+    return;
+  }
 
   try {
     const adminApp = getAdminApp();
@@ -59,7 +63,11 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
       return;
     }
     if (error?.code === "auth/weak-password") {
-      res.status(400).json({ error: "Password is too weak (minimum 6 characters)" });
+      res.status(400).json({ error: "Password is too weak (minimum 6 characters and include a symbol)" });
+      return;
+    }
+    if (String(error?.message || "").includes("PASSWORD_DOES_NOT_MEET_REQUIREMENTS")) {
+      res.status(400).json({ error: "Password does not meet Firebase policy (must include a non-alphanumeric character)." });
       return;
     }
     console.error("adminUpdateUserPassword error:", error);
