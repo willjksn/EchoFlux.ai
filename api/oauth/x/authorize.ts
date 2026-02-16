@@ -99,6 +99,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       state: state,
       code_challenge: codeChallenge,
       code_challenge_method: 'S256', // SHA256 method for PKCE
+      prompt: 'consent',
     });
     
     // Add scope separately to ensure proper encoding (spaces as %20)

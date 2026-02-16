@@ -97,6 +97,7 @@ export async function refreshXTokenForAccount(
         Authorization: `Basic ${credentials}`,
       },
       body: new URLSearchParams({
+        client_id: clientId,
         refresh_token: refreshToken,
         grant_type: "refresh_token",
       }),

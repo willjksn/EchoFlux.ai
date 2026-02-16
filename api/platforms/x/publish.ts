@@ -91,6 +91,7 @@ async function refreshXToken(
             'Authorization': `Basic ${credentials}`,
           },
           body: new URLSearchParams({
+            client_id: clientId,
             refresh_token: account.refreshToken,
             grant_type: 'refresh_token',
           }),

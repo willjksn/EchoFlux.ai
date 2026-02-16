@@ -132,11 +132,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .collection('social_accounts')
       .doc('x');
 
+    // Preserve existing refresh token if X does not return a new one.
+    // This prevents accidental token loss that would force users to reconnect
+    // every time the short-lived access token expires.
+    const existingSnap = await socialAccountRef.get();
+    const existingData = existingSnap.exists ? (existingSnap.data() as any) : null;
+    const refreshTokenToStore = refresh_token || existingData?.refreshToken;
+
     await socialAccountRef.set({
       platform: 'X',
       connected: true,
       accessToken: access_token,
-      refreshToken: refresh_token, // Store refresh token for token renewal
+      refreshToken: refreshTokenToStore, // Preserve prior token if none returned
       expiresAt: expiresAt,
       accountId: accountId,
       accountUsername: accountUsername,
