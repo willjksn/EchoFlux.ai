@@ -954,21 +954,16 @@ export const Calendar: React.FC = () => {
         }
     };
 
-    // Handle publish post (Admin only - auto-publish to social platforms)
+    // Handle publish post (auto-publish to social platforms)
     const handlePublishPost = async () => {
         if (!selectedEvent || !selectedEvent.post || !user) return;
         
-        // In offline mode, only admins can publish (for testing); others see disabled message
-        if (OFFLINE_MODE && user.role !== 'Admin') {
+        // In offline mode, publishing is disabled for everyone
+        if (OFFLINE_MODE) {
             showToast(
                 'Scheduling to social platforms is disabled in this version. You can still use the calendar and campaigns to plan content, then post manually.',
                 'error'
             );
-            return;
-        }
-        // Admin-only access for auto-publishing (testing phase)
-        if (user.role !== 'Admin') {
-            showToast('Auto-publishing is currently in testing. Available to admins only.', 'info');
             return;
         }
         
@@ -1296,19 +1291,19 @@ export const Calendar: React.FC = () => {
                                             </button>
                                             {(selectedEvent.post?.status === 'Draft' || selectedEvent.post?.status === 'Scheduled') && (
                                                 <>
-                                                    {/* Admin-only: Auto-publish to social platforms */}
-                                                    {user?.role === 'Admin' && selectedEvent.post?.status === 'Scheduled' && (
+                                                    {/* Auto-publish to social platforms */}
+                                                    {selectedEvent.post?.status === 'Scheduled' && (
                                                         <button
                                                             onClick={handlePublishPost}
                                                             disabled={isPublishing}
                                                             className="px-4 py-2 text-sm font-medium text-white bg-green-600 dark:bg-green-700 border border-green-600 dark:border-green-700 rounded-lg hover:bg-green-700 dark:hover:bg-green-800 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                            title="Auto-publish to social platforms (Admin only - Testing)"
+                                                            title="Auto-publish to social platforms"
                                                         >
                                                             <SendIcon className="w-4 h-4" />
                                                             {isPublishing ? 'Publishing...' : 'Publish Now'}
                                                         </button>
                                                     )}
-                                                    {/* Mark as Posted (manual) - for non-admins or when auto-publish isn't available */}
+                                                    {/* Mark as Posted (manual fallback) */}
                                                     <button
                                                         onClick={async () => {
                                                             if (!selectedEvent.post || !user) return;

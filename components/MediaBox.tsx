@@ -960,7 +960,7 @@ ${contextLines || 'None'}
             } ${!favoriteHashtags ? 'opacity-50 cursor-not-allowed' : ''}`}
             title={!favoriteHashtags ? 'Add favorite hashtags in Settings to enable' : undefined}
           >
-            <HashtagIcon className="w-3.5 h-3.5" />
+            <span className="w-3.5 h-3.5 inline-flex"><HashtagIcon /></span>
             Hashtags
           </button>
         </div>
@@ -1600,9 +1600,9 @@ ${contextLines || 'None'}
         </button>
       )}
 
-      {/* Action Buttons - Compact row: Draft, Schedule, Publish (admin) */}
+      {/* Action Buttons - Compact row: Draft, Schedule, Publish */}
       <div className="flex flex-col gap-2">
-        <div className={`grid gap-1.5 ${user?.role === 'Admin' && user?.plan !== 'Caption' ? 'grid-cols-3' : 'grid-cols-2'}`}>
+        <div className={`grid gap-1.5 ${user?.plan !== 'Caption' ? 'grid-cols-3' : 'grid-cols-2'}`}>
           <button
             onClick={() => {
               if (user?.plan === 'Free') {
@@ -1649,7 +1649,7 @@ ${contextLines || 'None'}
           >
             <CalendarIcon className="w-2.5 h-2.5 shrink-0" /> Schedule
           </button>
-          {user?.role === 'Admin' && user?.plan !== 'Caption' && (
+          {user?.plan !== 'Caption' && (
             <button
               onClick={() => onPublish(index)}
               disabled={platformsToPost.length === 0}
