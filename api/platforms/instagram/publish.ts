@@ -22,6 +22,51 @@ interface TokenDebugResult {
   expiresAt?: string;
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function getContainerStatus(
+  containerId: string,
+  accessToken: string
+): Promise<{ status?: string; status_code?: string }> {
+  const url = new URL(`https://graph.facebook.com/v19.0/${containerId}`);
+  url.searchParams.set('fields', 'status,status_code');
+  url.searchParams.set('access_token', accessToken);
+
+  const response = await fetch(url.toString(), { method: 'GET' });
+  if (!response.ok) return {};
+  const data = await response.json().catch(() => ({}));
+  return {
+    status: data?.status,
+    status_code: data?.status_code,
+  };
+}
+
+async function waitForContainerReady(
+  containerId: string,
+  accessToken: string,
+  timeoutMs: number,
+  pollMs = 3000
+): Promise<void> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    const status = await getContainerStatus(containerId, accessToken);
+    const code = (status.status_code || status.status || '').toUpperCase();
+
+    if (!code || code === 'FINISHED' || code === 'PUBLISHED') {
+      return;
+    }
+    if (code === 'ERROR' || code === 'EXPIRED') {
+      throw new Error(`Instagram media container failed with status: ${code}`);
+    }
+
+    await sleep(pollMs);
+  }
+
+  throw new Error('Instagram media is still processing. Please try again in a moment.');
+}
+
 async function debugAccessToken(accessToken: string): Promise<TokenDebugResult> {
   const appId = process.env.META_APP_ID;
   const appSecret = process.env.META_APP_SECRET;
@@ -332,7 +377,29 @@ export async function publishInstagramContent(
   }
 
   // Step 2: Publish immediately
-  const mediaId = await publishMediaContainer(accountId, accessToken, containerId);
+  // Instagram can return 9007 ("Media ID is not available") if the container
+  // is still processing. Wait for readiness, then retry publish.
+  const processingTimeoutMs = mediaType === 'IMAGE' ? 30000 : 120000;
+  await waitForContainerReady(containerId, accessToken, processingTimeoutMs);
+
+  let mediaId: string | null = null;
+  let lastError: any = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      mediaId = await publishMediaContainer(accountId, accessToken, containerId);
+      break;
+    } catch (err: any) {
+      lastError = err;
+      const msg = String(err?.message || '');
+      const notReady = msg.includes('9007') || msg.toLowerCase().includes('media id is not available');
+      if (!notReady || attempt === 3) break;
+      await sleep(2500);
+      await waitForContainerReady(containerId, accessToken, processingTimeoutMs);
+    }
+  }
+  if (!mediaId) {
+    throw lastError || new Error('Failed to publish media');
+  }
 
   return {
     containerId,

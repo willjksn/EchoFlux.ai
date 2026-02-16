@@ -1253,6 +1253,8 @@ const CaptionGenerator: React.FC = () => {
       
       // Ensure published posts have a scheduledDate so Calendar can create events from them
       const postScheduledDate = item.scheduledDate || publishDate;
+      const successfulPlatforms: Platform[] = [];
+      const failedPlatforms: Array<{ platform: Platform; reason: string }> = [];
 
       if (user) {
         // If editing a draft, check if post exists and delete draft calendar events
@@ -1287,23 +1289,8 @@ const CaptionGenerator: React.FC = () => {
           }
         }
 
-        const newPost: Post = {
-          id: postId,
-          content: item.captionText,
-          mediaUrl: mediaUrl, // Primary image (for backward compatibility)
-          mediaUrls: mediaUrls, // Multiple images array
-          mediaType: item.type,
-          platforms: platformsToPost,
-          status: 'Published',
-          author: { name: user.name, avatar: user.avatar },
-          comments: [],
-          scheduledDate: publishDate,
-          clientId: selectedClient?.id,
-          timestamp: new Date().toISOString(),
-        } as Post & { timestamp: string };
-
-        const safePost = JSON.parse(JSON.stringify(newPost));
-        await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
+        // Persisting the post happens after publish attempts so
+        // we can save only successful platforms and avoid false positives.
       }
 
       // Publish to Instagram if selected
@@ -1328,11 +1315,14 @@ const CaptionGenerator: React.FC = () => {
 
           if (result.status === 'published') {
             console.log('Published to Instagram:', result.mediaId);
+            successfulPlatforms.push('Instagram');
           }
         } catch (instagramError: any) {
           console.error('Failed to publish to Instagram:', instagramError);
-          // Continue with other platforms even if Instagram fails
-          showToast(`Failed to publish to Instagram: ${instagramError.message || 'Please check your connection'}. Other platforms published successfully.`, 'error');
+          failedPlatforms.push({
+            platform: 'Instagram',
+            reason: instagramError?.message || 'Please check your connection',
+          });
         }
       }
 
@@ -1351,10 +1341,14 @@ const CaptionGenerator: React.FC = () => {
           );
           if (result.status === 'published') {
             console.log('Published to Facebook:', result.postId);
+            successfulPlatforms.push('Facebook');
           }
         } catch (facebookError: any) {
           console.error('Failed to publish to Facebook:', facebookError);
-          showToast(`Failed to publish to Facebook: ${facebookError.message || 'Please check your connection'}. Other platforms published successfully.`, 'error');
+          failedPlatforms.push({
+            platform: 'Facebook',
+            reason: facebookError?.message || 'Please check your connection',
+          });
         }
       }
 
@@ -1379,6 +1373,7 @@ const CaptionGenerator: React.FC = () => {
           );
 
           console.log('Published to X:', result.tweetId);
+          successfulPlatforms.push('X');
           if (result.mediaSkipped) {
             const fallbackMsg = result.mediaError
               ? `Published to X (text only – media upload failed: ${result.mediaError})`
@@ -1387,8 +1382,10 @@ const CaptionGenerator: React.FC = () => {
           }
         } catch (xError: any) {
           console.error('Failed to publish to X:', xError);
-          // Continue with other platforms even if X fails
-          showToast(`Failed to publish to X: ${xError.message || 'Please check your connection'}. Other platforms published successfully.`, 'error');
+          failedPlatforms.push({
+            platform: 'X',
+            reason: xError?.message || 'Please check your connection',
+          });
         }
       }
 
@@ -1403,10 +1400,13 @@ const CaptionGenerator: React.FC = () => {
         if (selectedPinterestBoardId) {
           try {
             await publishPinterestPin(mediaUrl, title, description, selectedPinterestBoardId);
-            showToast(`Successfully published to Pinterest!`, 'success');
+            successfulPlatforms.push('Pinterest');
           } catch (pinterestError: any) {
             console.error('Failed to publish to Pinterest:', pinterestError);
-            showToast(`Failed to publish to Pinterest: ${pinterestError.message || 'Please check your connection'}. Other platforms published successfully.`, 'error');
+            failedPlatforms.push({
+              platform: 'Pinterest',
+              reason: pinterestError?.message || 'Please check your connection',
+            });
           }
         } else {
           // Show board selection modal
@@ -1416,7 +1416,39 @@ const CaptionGenerator: React.FC = () => {
         }
       } else if (hasPinterest && item.type !== 'image') {
         // Pinterest only supports images for now
-        showToast('Pinterest only supports image pins. Video pins are not yet supported.', 'error');
+        failedPlatforms.push({
+          platform: 'Pinterest',
+          reason: 'Pinterest only supports image pins. Video pins are not yet supported.',
+        });
+      }
+
+      // If all selected platforms failed, keep the item visible and show one consolidated error.
+      if (successfulPlatforms.length === 0) {
+        const failureSummary = failedPlatforms
+          .map(f => `${f.platform}: ${f.reason}`)
+          .join(' | ');
+        showToast(`Failed to publish. ${failureSummary || 'Please check your platform connections and try again.'}`, 'error');
+        return;
+      }
+
+      if (user) {
+        const newPost: Post = {
+          id: postId,
+          content: item.captionText,
+          mediaUrl: mediaUrl, // Primary image (for backward compatibility)
+          mediaUrls: mediaUrls, // Multiple images array
+          mediaType: item.type,
+          platforms: successfulPlatforms,
+          status: 'Published',
+          author: { name: user.name, avatar: user.avatar },
+          comments: [],
+          scheduledDate: postScheduledDate,
+          clientId: selectedClient?.id,
+          timestamp: new Date().toISOString(),
+        } as Post & { timestamp: string };
+
+        const safePost = JSON.parse(JSON.stringify(newPost));
+        await setDoc(doc(db, 'users', user.id, 'posts', postId), safePost);
       }
 
       // Don't create calendar events manually - Calendar component auto-creates from posts
@@ -1450,18 +1482,12 @@ const CaptionGenerator: React.FC = () => {
         }
       }
 
-      // Build success message - only mention Instagram if it was selected but not connected
-      let successMessage = `Published to ${platformsToPost.join(', ')}!`;
-      
-      // Check if Instagram was selected but not connected
-      if (hasInstagram && platformsToPost.includes('Instagram')) {
-        const instagramConnected = socialAccounts?.Instagram?.connected;
-        if (!instagramConnected) {
-          successMessage += ' (Note: Instagram requires account connection)';
-        }
+      if (failedPlatforms.length > 0) {
+        const failedList = failedPlatforms.map(f => f.platform).join(', ');
+        showToast(`Published to ${successfulPlatforms.join(', ')}. Failed: ${failedList}.`, 'info');
+      } else {
+        showToast(`Published to ${successfulPlatforms.join(', ')}!`, 'success');
       }
-      
-      showToast(successMessage, 'success');
     } catch (e) {
       console.error(e);
       showToast('Failed to publish post.', 'error');
