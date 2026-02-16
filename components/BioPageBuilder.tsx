@@ -461,6 +461,44 @@ export const BioPageBuilder: React.FC = () => {
         setBioPage({ ...bioPage, socialLinks: (bioPage.socialLinks || []).filter(l => l.id !== id) });
     };
 
+    const handleEditLink = (link: BioLink) => {
+        setEditingLinkId(link.id);
+        setEditLinkTitle(link.title || '');
+        setEditLinkUrl(link.url || '');
+    };
+
+    const handleSaveEditLink = () => {
+        if (!editingLinkId) return;
+
+        const title = editLinkTitle.trim();
+        const url = editLinkUrl.trim();
+        if (!title || !url) {
+            showToast('Link title and URL are required', 'error');
+            return;
+        }
+
+        if (bioPage.customLinks) {
+            setBioPage({
+                ...bioPage,
+                customLinks: bioPage.customLinks.map((l: BioLink) =>
+                    l.id === editingLinkId ? { ...l, title, url } : l
+                ),
+            });
+        } else {
+            setBioPage({
+                ...bioPage,
+                links: (bioPage.links || []).map((l: BioLink) =>
+                    l.id === editingLinkId ? { ...l, title, url } : l
+                ),
+            });
+        }
+
+        setEditingLinkId(null);
+        setEditLinkTitle('');
+        setEditLinkUrl('');
+        showToast('Link updated', 'success');
+    };
+
     const autoPopulateSocialLinks = () => {
         if (!socialAccounts) return;
         
