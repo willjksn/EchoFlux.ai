@@ -76,7 +76,7 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                     {isElitePlan && (
                         <div className="mt-6 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
                             <p className="text-sm text-purple-800 dark:text-purple-200">
-                                <strong>Elite Plan Includes:</strong> Advanced Plan My Week options, 5 plans/month, Enhanced trend research (40 searches/month), 1,500 caption ideas/month, Unlimited links, My Schedule, 10GB storage, Premium Content Studio
+                                <strong>Elite Plan Includes:</strong> Advanced Plan My Week options, 5 plans/month, Enhanced trend research (40 searches/month), 1,500 caption ideas/month, Unlimited links, My Schedule, 10GB storage
                             </p>
                         </div>
                     )}

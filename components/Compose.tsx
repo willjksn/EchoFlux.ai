@@ -467,16 +467,10 @@ const CaptionGenerator: React.FC = () => {
       { value: 'friendly', label: 'Friendly' },
       { value: 'witty', label: 'Witty' },
       { value: 'inspirational', label: 'Inspirational' },
-      { value: 'professional', label: 'Professional' },
-      // Sexy tones: Hide for Business Starter/Growth, show for Agency and all Creators
-      ...(showAdvancedOptions
-        ? [
-            { value: 'sexy-bold', label: 'Sexy / Bold' },
-            { value: 'sexy-explicit', label: 'Sexy / Explicit' }
-          ]
-        : [])
+      { value: 'professional', label: 'Professional' }
+      // Sexy/Explicit tones hidden for now
     ],
-    [showAdvancedOptions]
+    []
   );
 
   useEffect(() => {

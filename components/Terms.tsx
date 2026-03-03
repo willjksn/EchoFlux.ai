@@ -29,8 +29,7 @@ export const Terms: React.FC = () => {
                             Your parent or guardian agrees to be bound by these Terms on your behalf.
                         </li>
                         <li>
-                            <strong>Adult Content Features:</strong> Certain features, including OnlyFans Studio and explicit content generation 
-                            tools, are restricted to users who are <strong>18 years of age or older</strong>. By accessing these features, 
+                            <strong>Adult Content Features:</strong> Certain features, including explicit content generation tools, are restricted to users who are <strong>18 years of age or older</strong>. By accessing these features, 
                             you represent and warrant that you are at least 18 years old and are legally permitted to access adult content 
                             in your jurisdiction.
                         </li>

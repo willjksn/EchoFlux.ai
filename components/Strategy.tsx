@@ -1462,15 +1462,6 @@ export const Strategy: React.FC = () => {
                             <option>Edgy & Bold</option>
                             <option>Educational</option>
                             <option>Inspirational</option>
-                            {(platformFocus === 'OnlyFans' || platformFocus === 'Fanvue') && (
-                                <option value="Explicit/Adult Content">Explicit/Adult Content 🌶️</option>
-                            )}
-                            {showAdvancedOptions && (
-                                <>
-                                    <option>Sexy / Bold</option>
-                                    <option>Sexy / Explicit</option>
-                                </>
-                            )}
                         </select>
                     </div>
                     <div>
@@ -2669,15 +2660,6 @@ Return only the rewritten context description.
                                     <option>Edgy & Bold</option>
                                     <option>Educational</option>
                                     <option>Inspirational</option>
-                                    {(platformFocus === 'OnlyFans' || platformFocus === 'Fanvue') && (
-                                        <option value="Explicit/Adult Content">Explicit/Adult Content 🌶️</option>
-                                    )}
-                                    {showAdvancedOptions && (
-                                        <>
-                                            <option>Sexy / Bold</option>
-                                            <option>Sexy / Explicit</option>
-                                        </>
-                                    )}
                                 </select>
                             </div>
                             <div>

@@ -7,7 +7,7 @@ const faqData = [
     },
     {
         question: "What platforms can I plan content for?",
-        answer: "EchoFlux.ai supports content planning for all major social platforms including Instagram, TikTok, Twitter/X, Facebook, LinkedIn, Pinterest, and YouTube. You can also use our OnlyFans Studio for premium content creators. Plan your content once and adapt it for any platform."
+        answer: "EchoFlux.ai supports content planning for all major social platforms including Instagram, TikTok, Twitter/X, Facebook, LinkedIn, Pinterest, and YouTube. Plan your content once and adapt it for any platform."
     },
     {
         question: "What is AI Content Generation?",

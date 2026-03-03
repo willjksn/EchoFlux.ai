@@ -102,15 +102,10 @@ export const Automation: React.FC = () => {
       { value: 'friendly', label: 'Friendly' },
       { value: 'witty', label: 'Witty' },
       { value: 'inspirational', label: 'Inspirational' },
-      { value: 'professional', label: 'Professional' },
-      ...(showAdvancedOptions
-        ? [
-            { value: 'sexy-bold', label: 'Sexy / Bold' },
-            { value: 'sexy-explicit', label: 'Sexy / Explicit' }
-          ]
-        : [])
+      { value: 'professional', label: 'Professional' }
+      // Sexy/Explicit tones hidden for now
     ],
-    [showAdvancedOptions]
+    []
   );
 
   const filteredEmojis = useMemo(() => {

@@ -42,8 +42,7 @@ const creatorPlans = [
             'Bio Link Page (unlimited links)',
             'My Vault',
             'My Schedule',
-            '10 GB storage',
-            'OnlyFans Studio (included)'
+            '10 GB storage'
         ],
         isRecommended: true
     },

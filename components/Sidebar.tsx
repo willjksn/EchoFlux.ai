@@ -108,8 +108,8 @@ export const Sidebar: React.FC = () => {
               // Hide team/clients for now (creator focus); admins handled above
               return false;
           case 'onlyfansStudio':
-              // Premium Content Studio: allow OnlyFansStudio/Elite/Agency plans and Admin override
-              return ['OnlyFansStudio', 'Elite', 'Agency'].includes(user.plan) || user.role === 'Admin';
+              // Premium Content Studio hidden for now
+              return false;
           case 'emailCenter':
               // Email Center is exposed for Admin users
               return user.role === 'Admin';

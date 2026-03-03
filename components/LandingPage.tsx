@@ -323,19 +323,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         <Feature icon={<ImageIcon />} title="My Vault">
                            Upload and organize images and videos in your personal media library. Reuse assets across your content and keep everything in one place.
                         </Feature>
-                        <Feature icon={<SparklesIcon />} title="Premium Content Studio - Content Ideas (Elite)">
-                           Plan drops, write captions, and map the week in creator language. Built for OnlyFans, Fansly, Fanvue & more.
-                        </Feature>
-                        <Feature icon={<ChatIcon />} title="Premium Content Studio - DM Sessions (Elite)">
-                           Scripts & Roleplay plus DM session planning. Fan notes track VIPs, regulars, and whales.
-                        </Feature>
                         <Feature icon={<GlobeIcon />} title="Bio Link Page">
                            Build a beautiful, creator-branded bio page with links and subscriber capture to convert visitors into paying fans.
                         </Feature>
                         <Feature icon={<ChatIcon />} title="Creator Assistant & Ideas">
                            Ask questions, generate new content angles, and brainstorm revenue-driving content ideas with a creator-focused AI assistant inside the app.
                         </Feature>
-                        <Feature icon={<AnalyticsIcon />} title="Premium Content Studio - Post Packs & Wins (Elite)">
+                        <Feature icon={<AnalyticsIcon />} title="What's Working">
                            Copy & Post Packs for manual posting. Promo packs for drops. What’s Working keeps performance notes in one place.
                         </Feature>
                     </dl>
@@ -362,7 +356,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
 
                     <div className="relative">
                         <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight sm:text-3xl">2. Plan Your Content</h3>
-                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Generate multi-week content roadmaps with Strategy, or quick weekly plans with Plan My Week. For monetized creators, plan exclusive content, drops, and subscriber-focused campaigns that drive revenue.</p>
+                        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">Generate multi-week content roadmaps with Strategy, or quick weekly plans with Plan My Week. Plan exclusive content, drops, and subscriber-focused campaigns that drive revenue.</p>
                     </div>
 
                      <div className="mt-10 -mx-4 relative lg:mt-0" aria-hidden="true">
