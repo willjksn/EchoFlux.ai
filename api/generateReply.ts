@@ -93,6 +93,23 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     ? `${settings.tone.formality > 0.5 ? 'formal' : 'casual'}, ${settings.tone.humor > 0.5 ? 'humorous' : 'professional'}`
     : "friendly, on-brand";
   const finalContext = sanitizeForAI(context || settings?.prioritizedKeywords || "none", 1000);
+  
+  // Get emoji level from settings (0-100 scale, default 50)
+  const emojiLevel = settings?.tone?.emojiLevel ?? 50;
+  let emojiInstruction = '';
+  if (emojiLevel === 0) {
+    emojiInstruction = 'Do NOT use any emojis in your reply.';
+  } else if (emojiLevel <= 15) {
+    emojiInstruction = 'Use emojis very sparingly (0-1 emoji only if absolutely natural).';
+  } else if (emojiLevel <= 35) {
+    emojiInstruction = 'Use emojis sparingly (0-1 emoji, only when appropriate).';
+  } else if (emojiLevel <= 65) {
+    emojiInstruction = 'Use emojis moderately (1-2 emojis to add warmth and personality).';
+  } else if (emojiLevel <= 85) {
+    emojiInstruction = 'Use emojis liberally (2-3 emojis to be playful and expressive).';
+  } else {
+    emojiInstruction = 'Use emojis heavily (3+ emojis for an expressive, emoji-rich reply).';
+  }
 
   try {
     // Use model router - replies use cheapest model for cost optimization
@@ -107,6 +124,7 @@ ${sanitizedMessage}
 
 Tone: ${finalTone}
 Context: ${finalContext}
+Emoji usage: ${emojiInstruction}
 
 Write a short reply that feels human, not robotic. Do NOT add greetings if user already greeted. One reply only.
 `;

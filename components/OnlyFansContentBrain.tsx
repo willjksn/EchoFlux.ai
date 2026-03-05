@@ -1015,9 +1015,11 @@ const WeeklyPlanFormatter: React.FC<{ plan: any } & WeeklyPlanActionHandlers> = 
 
 type OnlyFansContentBrainProps = {
     initialTab?: ContentType;
+    /** When true, show only the initial tab content (no tab bar). Used when Premium Studio → New Ideas shows only Content Ideas. */
+    singleTabMode?: boolean;
 };
 
-export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ initialTab }) => {
+export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ initialTab, singleTabMode }) => {
     // All hooks must be called unconditionally at the top
     const context = useAppContext();
     const user = context?.user;
@@ -1027,8 +1029,17 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<ContentType>(initialTab ?? 'captions');
-    const platformOptions: Array<'OnlyFans' | 'Fansly' | 'Fanvue'> = ['OnlyFans', 'Fansly', 'Fanvue'];
-    const [selectedPlatform, setSelectedPlatform] = useState<'OnlyFans' | 'Fansly' | 'Fanvue'>('OnlyFans');
+    const effectiveTab = singleTabMode ? (initialTab ?? 'postIdeas') : activeTab;
+    const platformOptions: Array<'Instagram' | 'Facebook' | 'X' | 'My Page'> = ['Instagram', 'Facebook', 'X', 'My Page'];
+    const platformOptionsDmOnly: Array<'My Page'> = ['My Page'];
+    const [selectedPlatform, setSelectedPlatform] = useState<'Instagram' | 'Facebook' | 'X' | 'My Page'>('Instagram');
+
+    // When showing DM Session only (singleTabMode + messaging), force My Page and no platform selector
+    useEffect(() => {
+        if (singleTabMode && initialTab === 'messaging') {
+            setSelectedPlatform('My Page');
+        }
+    }, [singleTabMode, initialTab]);
     const [isGenerating, setIsGenerating] = useState(false);
     
     // Caption generation state
@@ -4288,10 +4299,10 @@ Output format:
             <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Platform</h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Pick where you’re posting this week.</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Where you’re posting.</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                    {platformOptions.map((platform) => (
+                    {(effectiveTab === 'messaging' ? platformOptionsDmOnly : platformOptions).map((platform) => (
                         <button
                             key={platform}
                             onClick={() => setSelectedPlatform(platform)}
@@ -4311,16 +4322,28 @@ Output format:
 
     return (
         <div className="max-w-5xl mx-auto">
-            {/* Header */}
+            {/* Header: dynamic when singleTabMode by effectiveTab */}
             <div className="mb-6">
                 <div className="flex items-center gap-3 mb-2">
                     <SparklesIcon className="w-8 h-8 text-primary-600 dark:text-primary-400" />
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                        Content Ideas
+                        {singleTabMode && effectiveTab === 'monetizationPlanner'
+                            ? 'Drops & PPV'
+                            : singleTabMode && effectiveTab === 'messaging'
+                            ? 'DM Session'
+                            : singleTabMode && effectiveTab === 'shootConcepts'
+                            ? 'Shoot Ideas'
+                            : 'Content Ideas'}
                     </h1>
                 </div>
                 <p className="text-gray-600 dark:text-gray-400">
-                    Plan drops, write captions, and map the week in creator language.
+                    {singleTabMode && effectiveTab === 'monetizationPlanner'
+                            ? 'Plan drops and PPV strategy with a balanced content mix.'
+                            : singleTabMode && effectiveTab === 'messaging'
+                            ? 'Subscriber messaging toolkit for retention and PPV conversions.'
+                            : singleTabMode && effectiveTab === 'shootConcepts'
+                            ? 'Photoshoot and concept ideas tailored to your niche and audience.'
+                            : "Get fresh post ideas and prompts for where you're posting."}
                 </p>
             </div>
 
@@ -4337,7 +4360,8 @@ Output format:
                 </div>
             )}
 
-            {/* Tabs */}
+            {/* Tabs (hidden when singleTabMode, e.g. Premium Studio → New Ideas) */}
+            {!singleTabMode && (
             <div className="flex gap-2 mb-6 border-b border-gray-200 dark:border-gray-700 overflow-x-auto overflow-y-hidden">
                 <div className="flex gap-2 min-w-max">
                     {tabs.map((tab) => (
@@ -4355,9 +4379,10 @@ Output format:
                     ))}
                 </div>
             </div>
+            )}
 
             {/* Captions Tab */}
-            {activeTab === 'captions' && (
+            {effectiveTab === 'captions' && (
                 <div className="space-y-6">
                     <PlatformTargetingCard />
 
@@ -5416,7 +5441,7 @@ Output format:
                                 <textarea
                                     value={postIdeaPrompt}
                                     onChange={(e) => setPostIdeaPrompt(e.target.value)}
-                                    placeholder="e.g., 'Interactive content to boost engagement' or 'Behind-the-scenes content ideas'"
+                                    placeholder="e.g., 'Interactive content (polls, fan choice, Q&A)' or 'Behind-the-scenes content ideas'"
                                     className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[100px]"
                                 />
                                 {aiHelpField === 'postIdeas' && (
@@ -6345,7 +6370,7 @@ Output format:
             {/* Monetization Planner Tab */}
             {activeTab === 'monetizationPlanner' && (
                 <div className="space-y-6">
-                    <PlatformTargetingCard />
+                    {!singleTabMode && <PlatformTargetingCard />}
 
                     {/* Saved Monetization Plans History */}
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
@@ -6670,16 +6695,15 @@ Output format:
             {/* Messaging Tab */}
             {activeTab === 'messaging' && (
                 <div className="space-y-6">
-                    <PlatformTargetingCard />
+                    {!singleTabMode && <PlatformTargetingCard />}
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
                                 Subscriber Messaging Toolkit
                             </h2>
-                            <span className="text-xs text-gray-500 dark:text-gray-400">copy/paste templates</span>
                         </div>
                         <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-                            Generate short message sequences that improve retention and PPV conversions (manual sending).
+                            Generate short message sequences that improve retention and PPV conversions.
                         </p>
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

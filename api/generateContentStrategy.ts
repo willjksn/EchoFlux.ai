@@ -59,7 +59,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return;
   }
 
-  const { niche, audience, goal, duration, tone, platformFocus, analyticsData, emojiEnabled, emojiIntensity, contextDescription, usePersonality, useFavoriteHashtags, creatorPersonality, favoriteHashtags } = req.body || {};
+  const { niche, audience, goal, duration, tone, platformFocus, analyticsData, emojiEnabled, emojiIntensity, contextDescription, usePersonality, useFavoriteHashtags, creatorPersonality, favoriteHashtags, toneSettings } = req.body || {};
+  
+  // Build tone style guidance from settings
+  const toneStyleGuidance = toneSettings ? `
+WRITING STYLE PREFERENCES (apply to all content ideas):
+${toneSettings.formality !== undefined ? `- Formality (${toneSettings.formality}/100): ${toneSettings.formality < 30 ? 'Very casual, use slang and informal language' : toneSettings.formality < 50 ? 'Casual and conversational' : toneSettings.formality < 70 ? 'Balanced tone' : 'Professional and polished'}` : ''}
+${toneSettings.humor !== undefined ? `- Humor (${toneSettings.humor}/100): ${toneSettings.humor < 30 ? 'Serious, minimal humor' : toneSettings.humor < 50 ? 'Light occasional humor' : toneSettings.humor < 70 ? 'Witty and playful' : 'Very funny, comedic tone'}` : ''}
+${toneSettings.empathy !== undefined ? `- Warmth (${toneSettings.empathy}/100): ${toneSettings.empathy < 30 ? 'Direct and straightforward' : toneSettings.empathy < 50 ? 'Friendly but not overly warm' : toneSettings.empathy < 70 ? 'Warm and understanding' : 'Very supportive'}` : ''}
+${toneSettings.profanity !== undefined && toneSettings.profanity > 0 ? `- Profanity (${toneSettings.profanity}/100): ${toneSettings.profanity < 30 ? 'Very mild swearing OK' : toneSettings.profanity < 50 ? 'Moderate casual swearing' : 'Frequent swearing acceptable'}` : '- Keep language clean, no swearing'}
+${toneSettings.emojiLevel !== undefined ? `- Emoji usage (${toneSettings.emojiLevel}/100): ${toneSettings.emojiLevel < 20 ? 'No emojis' : toneSettings.emojiLevel < 40 ? 'Minimal emojis' : toneSettings.emojiLevel < 60 ? 'Moderate emojis' : 'Heavy emoji usage'}` : ''}
+` : '';
 
   if (!niche || !audience || !goal) {
     res.status(400).json({ error: "Missing required fields: niche, audience, and goal are required" });
@@ -284,6 +294,7 @@ Strategy Parameters:
 - Target Audience: ${audience}
 - Niche: ${niche}
 - Duration: ${durationWeeks} week${durationWeeks === 1 ? '' : 's'}${durationWeeks === 1 ? ' (ONE WEEK ONLY - generate content for 7 days, not multiple weeks)' : ''}
+${toneStyleGuidance}
 ${safeContextDescription ? `\nADDITIONAL CONTEXT & REQUIREMENTS:\n${safeContextDescription}\n\nUse this additional context to tailor the strategy according to the user's specific requirements, preferences, and desired approach.\n` : ''}
 ${usePersonality && safeCreatorPersonality ? `\nCREATOR PERSONALITY & BRAND VOICE:\n${safeCreatorPersonality}\n\nCRITICAL - PERSONALITY INTEGRATION:
 - The above personality description contains ALL information about this creator: brand voice, style, values, physical attributes, personality traits, preferences, and what makes them unique

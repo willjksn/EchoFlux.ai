@@ -14,14 +14,15 @@ import { publishFacebookPost, publishInstagramPost, publishTweet } from '../src/
 import { OFFLINE_MODE } from '../constants';
 
 const platformIcons: Record<Platform, React.ReactNode> = {
-  Instagram: <InstagramIcon />,
-  TikTok: <TikTokIcon />,
-  X: <XIcon />,
-  Threads: <ThreadsIcon />,
-  YouTube: <YouTubeIcon />,
-  LinkedIn: <LinkedInIcon />,
-  Facebook: <FacebookIcon />,
-  Pinterest: <PinterestIcon />,
+    Instagram: <InstagramIcon />,
+    TikTok: <TikTokIcon />,
+    X: <XIcon />,
+    Threads: <ThreadsIcon />,
+    YouTube: <YouTubeIcon />,
+    LinkedIn: <LinkedInIcon />,
+    Facebook: <FacebookIcon />,
+    Pinterest: <PinterestIcon />,
+    'My Page': undefined
 };
 
 const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -1670,6 +1671,8 @@ export const Calendar: React.FC = () => {
                          <div className="flex items-center gap-1.5 sm:gap-2"><span className="w-3 h-3 rounded-full bg-blue-500 dark:bg-blue-400 shadow-sm"></span> <span className="text-gray-700 dark:text-gray-300 font-medium">Scheduled</span></div>
                          <div className="flex items-center gap-1.5 sm:gap-2"><span className="w-3 h-3 rounded-full bg-gray-400 dark:bg-gray-500 shadow-sm"></span> <span className="text-gray-700 dark:text-gray-300 font-medium">Draft</span></div>
                          <div className="flex items-center gap-1.5 sm:gap-2"><span className="w-3 h-3 rounded-full bg-orange-500 dark:bg-orange-400 shadow-sm"></span> <span className="text-gray-700 dark:text-gray-300 font-medium">Reminder</span></div>
+                         <div className="flex items-center gap-1.5 sm:gap-2"><span className="w-3 h-3 rounded-full bg-red-500 dark:bg-red-400 shadow-sm"></span> <span className="text-gray-700 dark:text-gray-300 font-medium">Scheduled fan meeting</span></div>
+                         <div className="flex items-center gap-1.5 sm:gap-2"><span className="w-3 h-3 rounded-full bg-purple-500 dark:bg-purple-400 shadow-sm"></span> <span className="text-gray-700 dark:text-gray-300 font-medium">Scheduled treat</span></div>
                     </div>
                     <button 
                         onClick={() => setIsCreatingReminder(true)}
@@ -1677,6 +1680,12 @@ export const Calendar: React.FC = () => {
                     >
                          <PlusIcon className="w-5 h-5" />
                          Add Reminder
+                    </button>
+                    <button 
+                        className="px-5 py-2.5 bg-purple-600 dark:bg-purple-500 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 text-sm font-semibold flex items-center gap-2 shadow-md transition-all"
+                    >
+                         <PlusIcon className="w-5 h-5" />
+                         Schedule treat
                     </button>
                     <button 
                         onClick={() => {

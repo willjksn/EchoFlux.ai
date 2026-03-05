@@ -55,7 +55,7 @@ import {
   MOCK_TEAM_MEMBERS,
   MOCK_POSTS,
 } from "../../constants";
-import { OFFLINE_MODE, INBOX_ENABLED } from "../../constants";
+import { OFFLINE_MODE } from "../../constants";
 
 import { categorizeMessage } from "../../src/services/geminiService";
 import { checkAllUsageLimits } from "../../src/utils/usageNotifications";
@@ -145,12 +145,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [clients, setClients] = useState<Client[]>(MOCK_CLIENTS);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(MOCK_TEAM_MEMBERS);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-  // In offline/studio mode, we don't have live inbox/DM/comment events yet.
-  // Seed notifications as empty so users don't get routed into hidden flows.
-  const [notifications, setNotifications] = useState<Notification[]>(() => {
-    if (OFFLINE_MODE || !INBOX_ENABLED) return [];
-    return MOCK_NOTIFICATIONS;
-  });
+  // Social inbox removed; no live DM/comment events. Notifications are usage/announcement only.
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -185,6 +181,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     LinkedIn: null,
     Facebook: null,
     Pinterest: null,
+    'My Page': null,
   });
 
   /*--------------------------------------------------------------------
@@ -417,6 +414,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           YouTube: null,
           LinkedIn: null,
           Facebook: null,
+          Pinterest: null,
+          'My Page': null,
         });
         setLastUserId(null);
       }
@@ -456,6 +455,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             YouTube: null,
             LinkedIn: null,
             Facebook: null,
+            Pinterest: null,
+            'My Page': null,
           };
           items.forEach((item) => {
             if (item.platform) {
@@ -718,7 +719,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const categorizeAllMessages = async () => {
     if (!user) return;
 
-    showToast("Categorizing inbox...", "success");
+    showToast("Categorizing messages...", "success");
 
     let updated = 0;
 

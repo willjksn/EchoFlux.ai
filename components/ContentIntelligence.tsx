@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from './AppContext';
 import { hasCalendarAccess } from '../src/utils/planAccess';
-import { SparklesIcon, RefreshIcon, XMarkIcon, ClockIcon, CopyIcon, TrashIcon, UploadIcon, DownloadIcon, ImageIcon } from './icons/UIIcons';
+import { SparklesIcon, RefreshIcon, XMarkIcon, ClockIcon, CopyIcon, TrashIcon, UploadIcon, DownloadIcon, ImageIcon, HeartIcon } from './icons/UIIcons';
 import { auth, storage, db } from '../firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc, query, getDocs, deleteDoc, doc, orderBy, Timestamp, setDoc, getDocs as getDocsQuery } from 'firebase/firestore';
@@ -841,6 +841,7 @@ export const ContentIntelligence: React.FC = () => {
         LinkedIn: <LinkedInIcon />,
         Facebook: <FacebookIcon />,
         Pinterest: <PinterestIcon />,
+        'My Page': <HeartIcon />,
     };
 
     // Safety check - ensure platforms is always an array

@@ -27,6 +27,7 @@ import {
   CalendarIcon,
   DownloadIcon,
   RefreshIcon,
+  HeartIcon,
 } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 import { CustomVoice, Platform, VideoScene, CalendarEvent } from '../types';
@@ -38,6 +39,7 @@ import {
   YouTubeIcon,
   LinkedInIcon,
   FacebookIcon,
+  PinterestIcon,
 } from './icons/PlatformIcons';
 import { UpgradePrompt } from './UpgradePrompt';
 import { MobilePreviewModal } from './MobilePreviewModal';
@@ -150,6 +152,8 @@ const platformIcons: Record<Platform, React.ReactNode> = {
   YouTube: <YouTubeIcon />,
   LinkedIn: <LinkedInIcon />,
   Facebook: <FacebookIcon />,
+  Pinterest: <PinterestIcon />,
+  'My Page': <HeartIcon />,
 };
 
 export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
@@ -212,6 +216,8 @@ export const VideoGenerator: React.FC<VideoGeneratorProps> = ({
     YouTube: false,
     LinkedIn: false,
     Facebook: false,
+    Pinterest: false,
+    'My Page': false,
   });
 
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);

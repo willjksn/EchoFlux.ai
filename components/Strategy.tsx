@@ -12,7 +12,7 @@ import { doc, setDoc, getDoc, collection, getDocs, query, orderBy, deleteDoc } f
 import { OFFLINE_MODE } from '../constants';
 import { hasCalendarAccess } from '../src/utils/planAccess';
 
-export const Strategy: React.FC = () => {
+export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSimple }) => {
     const { 
         showToast, 
         setActivePage, 
@@ -450,19 +450,27 @@ export const Strategy: React.FC = () => {
             }
 
             const result = await generateContentStrategy(
-                niche, 
-                audience, 
-                goal, 
-                duration, 
-                tone, 
-                platformFocus, 
-                null, 
+                niche,
+                audience,
+                goal,
+                duration,
+                tone,
+                platformFocus,
+                null,
                 undefined,
                 useContextDescription ? contextDescription : undefined,
                 usePersonality && settings.creatorPersonality ? true : false,
                 useFavoriteHashtags && settings.favoriteHashtags ? true : false,
                 usePersonality ? settings.creatorPersonality || null : null,
-                useFavoriteHashtags ? settings.favoriteHashtags || null : null
+                useFavoriteHashtags ? settings.favoriteHashtags || null : null,
+                settings.tone ? {
+                    formality: settings.tone.formality,
+                    humor: settings.tone.humor,
+                    empathy: settings.tone.empathy,
+                    spiciness: settings.tone.spiciness,
+                    profanity: settings.tone.profanity,
+                    emojiLevel: settings.tone.emojiLevel,
+                } : null
             );
             if (result && result.weeks) {
                 // Initialize status for all content items
@@ -1257,6 +1265,18 @@ export const Strategy: React.FC = () => {
 
     return (
         <div className="p-4 sm:p-6 bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 min-h-full overflow-x-hidden">
+            {/* Back to What to Post when opened from Advanced planner */}
+            {onBackToSimple && (
+                <div className="mb-4">
+                    <button
+                        type="button"
+                        onClick={onBackToSimple}
+                        className="text-sm text-primary-600 dark:text-primary-400 hover:underline font-medium"
+                    >
+                        ← Back to What to Post
+                    </button>
+                </div>
+            )}
             {/* Modern Header */}
             <div className="mb-8">
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-4">
@@ -1474,15 +1494,10 @@ export const Strategy: React.FC = () => {
                             className="w-full p-3.5 border-2 rounded-xl bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:text-white transition-all"
                         >
                             <option>Mixed / All</option>
-                            <option value="Instagram">Instagram Focus</option>
-                            <option value="TikTok">TikTok Focus</option>
-                            <option value="X">X (Twitter) Focus</option>
-                            <option value="Threads">Threads Focus</option>
-                            <option value="YouTube">YouTube Focus</option>
-                            <option value="LinkedIn">LinkedIn Focus</option>
-                            <option value="Facebook">Facebook Focus</option>
-                            <option value="Pinterest">Pinterest Focus</option>
-                            {/* OnlyFans removed - use OnlyFans Studio for OnlyFans content */}
+                            <option value="Instagram">Instagram</option>
+                            <option value="Facebook">Facebook</option>
+                            <option value="X">X (Twitter)</option>
+                            <option value="MyPage">My Page (Fan Hub)</option>
                         </select>
                     </div>
 
@@ -2672,14 +2687,10 @@ Return only the rewritten context description.
                                     className="w-full p-3 border-2 rounded-xl bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white"
                                 >
                                     <option>Mixed / All</option>
-                                    <option value="Instagram">Instagram Focus</option>
-                                    <option value="TikTok">TikTok Focus</option>
-                                    <option value="X">X (Twitter) Focus</option>
-                                    <option value="Threads">Threads Focus</option>
-                                    <option value="YouTube">YouTube Focus</option>
-                                    <option value="LinkedIn">LinkedIn Focus</option>
-                                    <option value="Facebook">Facebook Focus</option>
-                                    <option value="Pinterest">Pinterest Focus</option>
+                                    <option value="Instagram">Instagram</option>
+                                    <option value="Facebook">Facebook</option>
+                                    <option value="X">X (Twitter)</option>
+                                    <option value="MyPage">My Page (Fan Hub)</option>
                                 </select>
                             </div>
                         </div>

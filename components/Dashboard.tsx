@@ -6,7 +6,9 @@ import { DashboardIcon, FlagIcon, SearchIcon, StarIcon, CalendarIcon, SparklesIc
 import { useAppContext } from './AppContext';
 import { updateUserSocialStats } from '../src/services/socialStatsService';
 import { auth, db } from '../firebaseConfig';
+import { collection, query, orderBy, limit as firestoreLimit, getDocs, where, Timestamp } from 'firebase/firestore';
 import { ContentGapAnalysis } from './ContentGapAnalysis';
+import { LiveVideoChatManager } from './LiveVideoChatManager';
 import { FeedbackSurveyModal, type FeedbackMilestone } from './FeedbackSurveyModal';
 import { CustomFeedbackFormModal } from './CustomFeedbackFormModal';
 import { isInviteOnlyMode } from '../src/utils/inviteOnly';
@@ -21,6 +23,7 @@ const platformFilterIcons: { [key in Platform]: React.ReactNode } = {
   LinkedIn: <LinkedInIcon />,
   Facebook: <FacebookIcon />,
   Pinterest: <PinterestIcon />,
+  'My Page': <HeartIcon />,
 };
 
 // ... (Keep helper components FilterButton, QuickAction, UpcomingEventCard unchanged) ...
@@ -55,7 +58,7 @@ const UpcomingEventCard: React.FC<{ event: CalendarEvent; onClick: () => void }>
 };
 
 export const Dashboard: React.FC = () => {
-  const { messages, selectedClient, user, dashboardNavState, clearDashboardNavState, settings, setSettings, setActivePage, calendarEvents, posts, setComposeContext, updateMessage, deleteMessage, categorizeAllMessages, openCRM, ensureCRMProfile, setUser, socialAccounts, showToast } = useAppContext();
+  const { messages, selectedClient, user, dashboardNavState, clearDashboardNavState, settings, setSettings, setActivePage, calendarEvents, posts, setComposeContext, updateMessage, deleteMessage, categorizeAllMessages, openCRM, ensureCRMProfile, setUser, socialAccounts, showToast, openPaymentModal } = useAppContext();
   const [comparisonView, setComparisonView] = useState<'WoW' | 'MoM'>('WoW');
   const [isUpdatingStats, setIsUpdatingStats] = useState(false);
   const [isPlanningWeek, setIsPlanningWeek] = useState(false);
@@ -72,6 +75,141 @@ export const Dashboard: React.FC = () => {
       notes?: string;
     }>
   >([]);
+
+  // Fan Hub Dashboard State
+  const [fanHubStats, setFanHubStats] = useState<{
+    newMembers: number;
+    totalMembers: number;
+    recentActivity: Array<{ id: string; type: 'signup' | 'tip' | 'unlock' | 'purchase'; userName: string; amount?: number; timestamp: Date }>;
+    topPosts: Array<{ id: string; caption: string; likes: number; comments: number; mediaUrl?: string }>;
+    weeklyRevenue: number;
+    monthlyRevenue: number;
+  }>({
+    newMembers: 0,
+    totalMembers: 0,
+    recentActivity: [],
+    topPosts: [],
+    weeklyRevenue: 0,
+    monthlyRevenue: 0,
+  });
+  const [loadingFanHub, setLoadingFanHub] = useState(false);
+
+  // Fetch Fan Hub data for dashboard
+  useEffect(() => {
+    const fetchFanHubData = async () => {
+      if (!user?.id) return;
+      setLoadingFanHub(true);
+      
+      try {
+        const now = new Date();
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+        // Fetch recent subscribers/members
+        const subscribersRef = collection(db, 'creators', user.id, 'subscribers');
+        const recentSubsQuery = query(
+          subscribersRef,
+          orderBy('createdAt', 'desc'),
+          firestoreLimit(10)
+        );
+        const subscribersSnap = await getDocs(recentSubsQuery);
+        const subscribers = subscribersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        const newMembersThisWeek = subscribers.filter((sub: any) => {
+          const createdAt = sub.createdAt?.toDate?.() || new Date(sub.createdAt);
+          return createdAt >= weekAgo;
+        }).length;
+
+        // Fetch orders for revenue and activity
+        const ordersRef = collection(db, 'creators', user.id, 'orders');
+        const recentOrdersQuery = query(
+          ordersRef,
+          orderBy('createdAt', 'desc'),
+          firestoreLimit(50)
+        );
+        const ordersSnap = await getDocs(recentOrdersQuery);
+        const orders = ordersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // Calculate revenue
+        let weeklyRev = 0;
+        let monthlyRev = 0;
+        const recentActivity: typeof fanHubStats.recentActivity = [];
+
+        orders.forEach((order: any) => {
+          const orderDate = order.createdAt?.toDate?.() || new Date(order.createdAt);
+          const amount = order.amount || 0;
+          
+          if (orderDate >= weekAgo) weeklyRev += amount;
+          if (orderDate >= monthAgo) monthlyRev += amount;
+          
+          // Build activity feed
+          if (recentActivity.length < 5) {
+            let activityType: 'tip' | 'unlock' | 'purchase' = 'purchase';
+            if (order.type === 'tip') activityType = 'tip';
+            else if (order.type === 'unlock') activityType = 'unlock';
+            
+            recentActivity.push({
+              id: order.id,
+              type: activityType,
+              userName: order.fanEmail || order.customerEmail || 'Anonymous',
+              amount: amount / 100,
+              timestamp: orderDate,
+            });
+          }
+        });
+
+        // Add recent signups to activity
+        subscribers.slice(0, 3).forEach((sub: any) => {
+          const createdAt = sub.createdAt?.toDate?.() || new Date(sub.createdAt);
+          if (recentActivity.length < 5) {
+            recentActivity.push({
+              id: sub.id,
+              type: 'signup',
+              userName: sub.email || 'New Member',
+              timestamp: createdAt,
+            });
+          }
+        });
+
+        // Sort activity by timestamp
+        recentActivity.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+        // Fetch top posts this week
+        const postsRef = collection(db, 'creators', user.id, 'fanPosts');
+        const topPostsQuery = query(
+          postsRef,
+          orderBy('likesCount', 'desc'),
+          firestoreLimit(3)
+        );
+        const postsSnap = await getDocs(topPostsQuery);
+        const topPosts = postsSnap.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            caption: data.caption || '',
+            likes: data.likesCount || 0,
+            comments: data.commentsCount || 0,
+            mediaUrl: data.mediaUrls?.[0] || undefined,
+          };
+        });
+
+        setFanHubStats({
+          newMembers: newMembersThisWeek,
+          totalMembers: subscribersSnap.size,
+          recentActivity: recentActivity.slice(0, 5),
+          topPosts,
+          weeklyRevenue: weeklyRev / 100,
+          monthlyRevenue: monthlyRev / 100,
+        });
+      } catch (err) {
+        console.error('Error fetching fan hub data:', err);
+      } finally {
+        setLoadingFanHub(false);
+      }
+    };
+
+    fetchFanHubData();
+  }, [user?.id]);
 
   // Load and filter weekly suggestions from localStorage on mount
   useEffect(() => {
@@ -114,6 +252,12 @@ export const Dashboard: React.FC = () => {
   const [generatedIdeas, setGeneratedIdeas] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<'trending' | 'engagement' | 'niche' | null>(null);
   const [showIdeasModal, setShowIdeasModal] = useState(false);
+
+  // Dashboard mode: Social (default) / Monetized (Premium Studio only; Pro sees upgrade when selecting Monetized)
+  const [dashboardMode, setDashboardMode] = useState<'social' | 'monetized'>('social');
+  const hasMonetizedAccess = user?.plan === 'Elite' || user?.plan === 'Agency' || user?.plan === 'OnlyFansStudio';
+  const isPro = user?.plan === 'Pro';
+  const hasFanHubAccess = ['Pro', 'Elite', 'Agency'].includes(user?.plan ?? '');
 
   // Admin-only daily dashboard flag & lightweight metrics
   const isAdmin = user?.role === 'Admin';
@@ -1152,21 +1296,27 @@ export const Dashboard: React.FC = () => {
             </div>
           )}
 
-          {/* Studio Mode Banner */}
-          <div className="bg-gradient-to-r from-primary-600 to-purple-600 dark:from-primary-600 dark:to-purple-700 p-4 rounded-xl shadow-lg text-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-bold">AI Content Studio mode</h2>
-              <p className="text-sm text-primary-100/90">
-                Plan campaigns, generate content packs, and organize everything on your calendar. Post to social sites manually (account‑safe).
-              </p>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-primary-100/80">
-              <SparklesIcon className="w-4 h-4" />
-              <span>Best flow: Find Trends → Plan My Week → Write Captions → Schedule</span>
+          {/* Welcome Banner */}
+          <div className="bg-gradient-to-r from-primary-600 to-purple-600 dark:from-primary-600 dark:to-purple-700 p-5 rounded-xl shadow-lg text-white">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-bold mb-1">Welcome back{user?.name ? `, ${user.name.split(' ')[0]}` : ''}!</h2>
+                <p className="text-sm text-primary-100/90">
+                  Create content for social media and manage your fan page all in one place.
+                </p>
+              </div>
+              <button
+                onClick={() => setActivePage('compose')}
+                className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+              >
+                <SparklesIcon className="w-4 h-4" />
+                Create Post
+              </button>
             </div>
           </div>
 
-          {/* Planning Highlights */}
+          {/* Planning Highlights - Hidden to reduce dashboard clutter */}
+          {false && (
           <div className="bg-gradient-to-r from-primary-500 to-primary-600 dark:from-primary-600 dark:to-primary-700 p-6 rounded-xl shadow-lg text-white">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-2xl font-bold">Today’s Planning Snapshot</h2>
@@ -1191,178 +1341,296 @@ export const Dashboard: React.FC = () => {
               </div>
             </div>
           </div>
-
-          {/* Quick Actions - Enhanced */}
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Quick Actions</h3>
-             <div className="flex flex-wrap justify-center gap-4">
-                  {(!isBusiness || user?.plan === 'Agency') && (
-                    <QuickAction
-                      label="Find Trends"
-                      icon={<TrendingIcon className="w-6 h-6" />}
-                      color="bg-gradient-to-br from-pink-500 to-rose-500"
-                      onClick={() => setActivePage('opportunities')}
-                    />
-                  )}
-                  {user?.plan !== 'Free' && (
-                    <>
-                      <QuickAction
-                        label={isBusiness ? 'Marketing Plan' : 'Plan My Week'}
-                        icon={<TargetIcon className="w-6 h-6" />}
-                        color="bg-gradient-to-br from-blue-500 to-cyan-500"
-                        onClick={() => setActivePage('strategy')}
-                      />
-                      <QuickAction
-                        label="Write Captions"
-                        icon={<SparklesIcon className="w-6 h-6" />}
-                        color="bg-gradient-to-br from-purple-500 to-indigo-600"
-                        onClick={() => setActivePage('compose')}
-                      />
-                      <QuickAction
-                        label="View Schedule"
-                        icon={<CalendarIcon className="w-6 h-6" />}
-                        color="bg-gradient-to-br from-orange-400 to-red-500"
-                        onClick={() => setActivePage('calendar')}
-                      />
-                    </>
-                  )}
-             </div>
-          </div>
-
-          {/* Content Gap Analysis Widget */}
-          {user?.plan !== 'Free' && (
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">Insights</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    See what's missing in your mix
-                  </p>
-                </div>
-              </div>
-              <ContentGapAnalysis />
-            </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Upcoming Schedule */}
-              <div className={`bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 ${user?.plan === 'Free' ? 'opacity-50' : ''}`}>
-                   <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Upcoming Schedule</h3>
-                        {user?.plan === 'Free' ? (
-                          <span className="text-sm text-gray-400 dark:text-gray-500 cursor-not-allowed">View Schedule</span>
-                        ) : (
-                          <button onClick={() => setActivePage('calendar')} className="text-sm text-primary-600 hover:underline">View Schedule</button>
-                        )}
-                   </div>
-                   <div className="space-y-3">
-                        {upcomingEvents.length > 0 ? (
-                            upcomingEvents.map(event => <UpcomingEventCard key={event.id} event={event} onClick={() => handleEventClick(event)} />)
-                        ) : (
-                            <div className="text-center py-8 bg-gray-50 dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
-                                <p className="text-gray-500 text-sm">No upcoming planned content.</p>
-                                {user?.plan === 'Free' ? (
-                                    <span className="mt-2 text-gray-400 dark:text-gray-500 text-sm cursor-not-allowed">Start a weekly plan</span>
-                                ) : (
-                                    <button onClick={() => setActivePage('strategy')} className="mt-2 text-primary-600 text-sm font-medium">Start a weekly plan</button>
-                                )}
-                            </div>
-                        )}
-                   </div>
+          {/* Quick Actions - Matching Sidebar */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <QuickAction
+              label="Create Post"
+              icon={<SparklesIcon className="w-5 h-5" />}
+              color="bg-gradient-to-br from-purple-500 to-indigo-600"
+              onClick={() => setActivePage('compose')}
+            />
+            <QuickAction
+              label="Calendar"
+              icon={<CalendarIcon className="w-5 h-5" />}
+              color="bg-gradient-to-br from-orange-400 to-red-500"
+              onClick={() => setActivePage('calendar')}
+            />
+            <QuickAction
+              label="Premium Studio"
+              icon={<StarIcon className="w-5 h-5" />}
+              color="bg-gradient-to-br from-pink-500 to-rose-500"
+              onClick={() => setActivePage('onlyfansStudio')}
+            />
+            <QuickAction
+              label="Fan Hub"
+              icon={<HeartIcon className="w-5 h-5" />}
+              color="bg-gradient-to-br from-primary-500 to-purple-600"
+              onClick={() => setActivePage('fanHub')}
+            />
+            <QuickAction
+              label="Settings"
+              icon={<UserIcon className="w-5 h-5" />}
+              color="bg-gradient-to-br from-gray-500 to-gray-700"
+              onClick={() => setActivePage('settings')}
+            />
+          </div>
+
+          {/* Fan Hub Overview */}
+          <div className="bg-gradient-to-br from-primary-500 to-purple-600 dark:from-primary-600 dark:to-purple-700 p-6 rounded-xl shadow-lg text-white">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <HeartIcon className="w-6 h-6" />
+                <h3 className="text-xl font-bold">Fan Hub Overview</h3>
               </div>
-              
-              {/* Weekly Plan Suggestions */}
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                <p className="text-sm opacity-90 mb-1">Total Members</p>
+                <p className="text-3xl font-bold">{loadingFanHub ? '–' : fanHubStats.totalMembers}</p>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                <p className="text-sm opacity-90 mb-1">New This Week</p>
+                <p className="text-3xl font-bold">{loadingFanHub ? '–' : `+${fanHubStats.newMembers}`}</p>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                <p className="text-sm opacity-90 mb-1">Weekly Revenue</p>
+                <p className="text-3xl font-bold">{loadingFanHub ? '–' : `$${fanHubStats.weeklyRevenue.toFixed(0)}`}</p>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                <p className="text-sm opacity-90 mb-1">Monthly Revenue</p>
+                <p className="text-3xl font-bold">{loadingFanHub ? '–' : `$${fanHubStats.monthlyRevenue.toFixed(0)}`}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Live Video Chat Requests (compact widget) */}
+          {user?.id && (
+            <LiveVideoChatManager creatorId={user.id} compact />
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Recent Fan Activity */}
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Recent Activity</h3>
+                <button onClick={() => setActivePage('fanHub')} className="text-sm text-primary-600 hover:underline">View All</button>
+              </div>
+              <div className="space-y-3">
+                {loadingFanHub ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Loading...</p>
+                ) : fanHubStats.recentActivity.length > 0 ? (
+                  fanHubStats.recentActivity.map((activity) => (
+                    <div key={activity.id} className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white ${
+                        activity.type === 'signup' ? 'bg-green-500' :
+                        activity.type === 'tip' ? 'bg-yellow-500' :
+                        activity.type === 'unlock' ? 'bg-purple-500' : 'bg-pink-500'
+                      }`}>
+                        {activity.type === 'signup' && <UserIcon className="w-4 h-4" />}
+                        {activity.type === 'tip' && <DollarSignIcon className="w-4 h-4" />}
+                        {activity.type === 'unlock' && <StarIcon className="w-4 h-4" />}
+                        {activity.type === 'purchase' && <HeartIcon className="w-4 h-4" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          {activity.type === 'signup' ? 'New member joined' :
+                           activity.type === 'tip' ? `Tip received` :
+                           activity.type === 'unlock' ? 'Content unlocked' : 'Store purchase'}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                          {activity.userName.includes('@') ? activity.userName.split('@')[0] : activity.userName}
+                          {activity.amount ? ` • $${activity.amount.toFixed(2)}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-6 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-dashed border-gray-300 dark:border-gray-600">
+                    <HeartIcon className="w-8 h-8 mx-auto text-gray-400 mb-2" />
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">No recent activity</p>
+                    <button onClick={() => setActivePage('fanHub')} className="mt-2 text-primary-600 text-sm font-medium">
+                      Set up your Fan Page
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Top Content This Week */}
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Top Content</h3>
+                <button onClick={() => setActivePage('fanHub')} className="text-sm text-primary-600 hover:underline">View Posts</button>
+              </div>
+              <div className="space-y-3">
+                {loadingFanHub ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Loading...</p>
+                ) : fanHubStats.topPosts.length > 0 ? (
+                  fanHubStats.topPosts.map((post, idx) => (
+                    <div key={post.id} className="flex items-start gap-3 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                      <div className="w-8 h-8 bg-primary-100 dark:bg-primary-900/30 rounded-lg flex items-center justify-center text-primary-600 dark:text-primary-400 font-bold text-sm">
+                        #{idx + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-900 dark:text-white line-clamp-2">
+                          {post.caption || 'No caption'}
+                        </p>
+                        <div className="flex items-center gap-3 mt-1">
+                          <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                            <HeartIcon className="w-3 h-3" /> {post.likes}
+                          </span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                            <ChatIcon className="w-3 h-3" /> {post.comments}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-6 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-dashed border-gray-300 dark:border-gray-600">
+                    <SparklesIcon className="w-8 h-8 mx-auto text-gray-400 mb-2" />
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">No posts yet</p>
+                    <button onClick={() => setActivePage('fanHub')} className="mt-2 text-primary-600 text-sm font-medium">
+                      Create your first post
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Upcoming Schedule */}
+            <div className={`bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 ${user?.plan === 'Free' ? 'opacity-50' : ''}`}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Upcoming Schedule</h3>
+                {user?.plan === 'Free' ? (
+                  <span className="text-sm text-gray-400 dark:text-gray-500 cursor-not-allowed">View</span>
+                ) : (
+                  <button onClick={() => setActivePage('calendar')} className="text-sm text-primary-600 hover:underline">View All</button>
+                )}
+              </div>
+              <div className="space-y-3">
+                {upcomingEvents.length > 0 ? (
+                  upcomingEvents.slice(0, 3).map(event => <UpcomingEventCard key={event.id} event={event} onClick={() => handleEventClick(event)} />)
+                ) : (
+                  <div className="text-center py-6 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-dashed border-gray-300 dark:border-gray-600">
+                    <CalendarIcon className="w-8 h-8 mx-auto text-gray-400 mb-2" />
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">No upcoming content</p>
+                    {user?.plan !== 'Free' && (
+                      <button onClick={() => setActivePage('strategy')} className="mt-2 text-primary-600 text-sm font-medium">
+                        Plan your week
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Content Planning Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Content Gap Analysis */}
+            {user?.plan !== 'Free' && (
               <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                   <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Weekly Plan</h3>
-                        {user?.plan === 'Free' && weeklyPlanUsage && weeklyPlanUsage.remaining <= 0 ? (
-                          <span className="text-sm text-gray-400 dark:text-gray-500 cursor-not-allowed">Limit Reached</span>
-                        ) : (
-                          <button
-                            onClick={handlePlanMyWeek}
-                            disabled={isPlanningWeek || (user?.plan === 'Free' && !!weeklyPlanUsage && weeklyPlanUsage.remaining <= 0)}
-                            className="text-sm text-primary-600 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {isPlanningWeek ? 'Planning…' : 'Regenerate'}
-                          </button>
-                        )}
-                   </div>
-                   {user?.plan === 'Free' && weeklyPlanUsage && (
-                     <div className="mb-3 text-xs text-gray-500 dark:text-gray-400">
-                       {weeklyPlanUsage.remaining > 0 
-                         ? `${weeklyPlanUsage.remaining} weekly plan${weeklyPlanUsage.remaining === 1 ? '' : 's'} remaining this month`
-                         : 'Monthly limit reached. Upgrade to Pro or Elite for more weekly plans.'}
-                     </div>
-                   )}
-                   <div className="space-y-3">
-                        {isPlanningWeek && (
-                          <p className="text-sm text-gray-500 dark:text-gray-400">Building your weekly plan…</p>
-                        )}
-                        {!isPlanningWeek && weeklySuggestions.length === 0 && (
-                          <div className="text-center py-8 bg-gray-50 dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
-                              <p className="text-gray-500 text-sm">Let the assistant suggest a content pack for the next 7 days.</p>
-                              {user?.plan === 'Free' && weeklyPlanUsage && weeklyPlanUsage.remaining <= 0 ? (
-                                <button
-                                  onClick={() => setActivePage('pricing')}
-                                  className="mt-2 inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700"
-                                >
-                                  Upgrade for More Weekly Plans
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={handlePlanMyWeek}
-                                  disabled={isPlanningWeek || (user?.plan === 'Free' && !!weeklyPlanUsage && weeklyPlanUsage.remaining <= 0)}
-                                  className="mt-2 inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  Plan my week
-                                </button>
-                              )}
-                          </div>
-                        )}
-                        {!isPlanningWeek && weeklySuggestions.length > 0 && (
-                          <div className="space-y-3">
-                            {weeklySuggestions.map((s, idx) => (
-                              <div
-                                key={`${s.date}-${idx}`}
-                                className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700"
-                              >
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-                                    {s.dayLabel} · {s.date}
-                                  </span>
-                                  {s.suggestedTimeWindow && (
-                                    <span className="text-xs text-primary-600 dark:text-primary-400">
-                                      {s.suggestedTimeWindow}
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                                  {s.theme}
-                                </p>
-                                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                                  {s.postIdea}
-                                </p>
-                                {s.captionOutline && (
-                                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                    {s.captionOutline}
-                                  </p>
-                                )}
-                                {Array.isArray(s.recommendedPlatforms) && s.recommendedPlatforms.length > 0 && (
-                                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-                                    Platforms: {s.recommendedPlatforms.join(', ')}
-                                  </p>
-                                )}
-                                {s.notes && (
-                                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1 italic">
-                                    {s.notes}
-                                  </p>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                   </div>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">Content Mix</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                      See what's missing in your content strategy
+                    </p>
+                  </div>
+                </div>
+                <ContentGapAnalysis />
               </div>
+            )}
+              
+            {/* Weekly Plan Suggestions */}
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">AI Weekly Plan</h3>
+                {user?.plan === 'Free' && weeklyPlanUsage && weeklyPlanUsage.remaining <= 0 ? (
+                  <span className="text-sm text-gray-400 dark:text-gray-500 cursor-not-allowed">Limit Reached</span>
+                ) : (
+                  <button
+                    onClick={handlePlanMyWeek}
+                    disabled={isPlanningWeek || (user?.plan === 'Free' && !!weeklyPlanUsage && weeklyPlanUsage.remaining <= 0)}
+                    className="text-sm text-primary-600 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isPlanningWeek ? 'Planning…' : 'Regenerate'}
+                  </button>
+                )}
+              </div>
+              {user?.plan === 'Free' && weeklyPlanUsage && (
+                <div className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+                  {weeklyPlanUsage.remaining > 0 
+                    ? `${weeklyPlanUsage.remaining} weekly plan${weeklyPlanUsage.remaining === 1 ? '' : 's'} remaining this month`
+                    : 'Monthly limit reached. Upgrade to Pro or Elite for more weekly plans.'}
+                </div>
+              )}
+              <div className="space-y-3">
+                {isPlanningWeek && (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Building your weekly plan…</p>
+                )}
+                {!isPlanningWeek && weeklySuggestions.length === 0 && (
+                  <div className="text-center py-6 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-dashed border-gray-300 dark:border-gray-600">
+                    <TargetIcon className="w-8 h-8 mx-auto text-gray-400 mb-2" />
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">Get AI-generated content ideas for the next 7 days</p>
+                    {user?.plan === 'Free' && weeklyPlanUsage && weeklyPlanUsage.remaining <= 0 ? (
+                      <button
+                        onClick={() => setActivePage('pricing')}
+                        className="mt-2 inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700"
+                      >
+                        Upgrade for More
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handlePlanMyWeek}
+                        disabled={isPlanningWeek || (user?.plan === 'Free' && !!weeklyPlanUsage && weeklyPlanUsage.remaining <= 0)}
+                        className="mt-2 inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Plan my week
+                      </button>
+                    )}
+                  </div>
+                )}
+                {!isPlanningWeek && weeklySuggestions.length > 0 && (
+                  <div className="space-y-3 max-h-64 overflow-y-auto">
+                    {weeklySuggestions.slice(0, 4).map((s, idx) => (
+                      <div
+                        key={`${s.date}-${idx}`}
+                        className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                            {s.dayLabel} · {s.date}
+                          </span>
+                          {s.suggestedTimeWindow && (
+                            <span className="text-xs text-primary-600 dark:text-primary-400">
+                              {s.suggestedTimeWindow}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                          {s.theme}
+                        </p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">
+                          {s.postIdea}
+                        </p>
+                      </div>
+                    ))}
+                    {weeklySuggestions.length > 4 && (
+                      <button
+                        onClick={() => setActivePage('strategy')}
+                        className="w-full text-center text-sm text-primary-600 hover:underline py-2"
+                      >
+                        View all {weeklySuggestions.length} suggestions
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Enhanced Metrics Section - hidden in AI Content Studio mode */}
@@ -2410,8 +2678,8 @@ export const Dashboard: React.FC = () => {
               <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white">Fan Engagement Hub</h3>
-                  {!OFFLINE_MODE && (
-                    <button onClick={() => setActivePage('inbox')} className="text-sm text-primary-600 hover:underline">View Inbox</button>
+                  {hasFanHubAccess && (
+                    <button onClick={() => setActivePage('fanHub')} className="text-sm text-primary-600 hover:underline">Fan Hub Messages</button>
                   )}
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -2448,8 +2716,8 @@ export const Dashboard: React.FC = () => {
               <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white">Customer Engagement Hub</h3>
-                  {!OFFLINE_MODE && (
-                    <button onClick={() => setActivePage('inbox')} className="text-sm text-primary-600 hover:underline">View Inbox</button>
+                  {hasFanHubAccess && (
+                    <button onClick={() => setActivePage('fanHub')} className="text-sm text-primary-600 hover:underline">Fan Hub Messages</button>
                   )}
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -2738,7 +3006,8 @@ export const Dashboard: React.FC = () => {
               YouTube: 0,
               LinkedIn: 0,
               Facebook: 0,
-              Pinterest: 0
+              Pinterest: 0,
+              'My Page': 0
             };
             
             leadsThisMonth.forEach(lead => {
@@ -2776,14 +3045,11 @@ export const Dashboard: React.FC = () => {
                     </div>
                   </div>
                   <button
-                    onClick={() => {
-                      setFilters(prev => ({ ...prev, category: 'Lead' }));
-                      if (!OFFLINE_MODE) setActivePage('inbox');
-                    }}
-                    className={`text-sm font-medium ${OFFLINE_MODE ? 'text-gray-400 dark:text-gray-500 cursor-not-allowed' : 'text-primary-600 dark:text-primary-400 hover:underline'}`}
-                    disabled={OFFLINE_MODE}
+                    onClick={() => setFilters(prev => ({ ...prev, category: 'Lead' }))}
+                    className="text-sm font-medium text-gray-500 dark:text-gray-400 cursor-default"
+                    disabled
                   >
-                    {OFFLINE_MODE ? 'Leads inbox (coming soon)' : 'View All Leads →'}
+                    Leads (social inbox removed)
                   </button>
                 </div>
                 
@@ -3403,328 +3669,247 @@ export const Dashboard: React.FC = () => {
     <div id="tour-step-1-dashboard" className="space-y-6 max-w-7xl mx-auto w-full">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Admin Daily Dashboard</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Growth-focused view without user posts or scheduled content.</p>
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Echoflux Command Center</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Real-time business metrics and platform health</p>
         </div>
-        <span className="text-xs px-3 py-1 rounded-full bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-200">
-          Admin view
-        </span>
+        <button
+          onClick={() => setActivePage('admin')}
+          className="px-4 py-2 text-sm font-medium bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+        >
+          Full Admin Panel →
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-          <span className="text-xs text-gray-600 dark:text-gray-400">Signups (24h)</span>
-          <span className="text-sm font-semibold text-gray-900 dark:text-white">
-            {isLoadingAdminSignupCounts ? '—' : adminSignupCounts.last24h.toLocaleString()}
-          </span>
+      {/* Revenue Overview Banner */}
+      <div className="bg-gradient-to-r from-gray-900 to-gray-800 dark:from-gray-800 dark:to-gray-700 p-6 rounded-xl shadow-lg text-white">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div>
+            <p className="text-sm opacity-70 mb-1">Total Users</p>
+            <p className="text-3xl font-bold">{userEngagementData?.conversionFunnel?.total?.toLocaleString() ?? '—'}</p>
+            <p className="text-xs opacity-60 mt-1">
+              +{isLoadingAdminSignupCounts ? '—' : adminSignupCounts.last7d} this week
+            </p>
+          </div>
+          <div>
+            <p className="text-sm opacity-70 mb-1">Subscription MRR</p>
+            <p className="text-3xl font-bold text-blue-300">
+              ${userEngagementData ? ((userEngagementData.conversionFunnel.pro * 29) + (userEngagementData.conversionFunnel.elite * 79)).toLocaleString() : '—'}
+            </p>
+            <p className="text-xs opacity-60 mt-1">Pro + Elite plans</p>
+          </div>
+          <div>
+            <p className="text-sm opacity-70 mb-1">Fan Hub Commission</p>
+            <p className="text-3xl font-bold text-green-300">$0.00</p>
+            <p className="text-xs opacity-60 mt-1">10% of creator earnings</p>
+          </div>
+          <div className="border-l border-white/20 pl-6">
+            <p className="text-sm opacity-70 mb-1">Total Revenue</p>
+            <p className="text-3xl font-bold text-primary-300">
+              ${userEngagementData ? ((userEngagementData.conversionFunnel.pro * 29) + (userEngagementData.conversionFunnel.elite * 79)).toLocaleString() : '—'}
+            </p>
+            <p className="text-xs opacity-60 mt-1">Monthly</p>
+          </div>
         </div>
-        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-          <span className="text-xs text-gray-600 dark:text-gray-400">Signups (7d)</span>
-          <span className="text-sm font-semibold text-gray-900 dark:text-white">
-            {isLoadingAdminSignupCounts ? '—' : adminSignupCounts.last7d.toLocaleString()}
-          </span>
+      </div>
+
+      {/* Quick Stats Row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+        <div className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+          <p className="text-xs text-gray-500 dark:text-gray-400">Signups (24h)</p>
+          <p className="text-xl font-bold text-gray-900 dark:text-white">
+            {isLoadingAdminSignupCounts ? '—' : adminSignupCounts.last24h}
+          </p>
         </div>
-        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-          <span className="text-xs text-gray-600 dark:text-gray-400">Failed payments (24h)</span>
+        <div className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+          <p className="text-xs text-gray-500 dark:text-gray-400">Signups (7d)</p>
+          <p className="text-xl font-bold text-gray-900 dark:text-white">
+            {isLoadingAdminSignupCounts ? '—' : adminSignupCounts.last7d}
+          </p>
+        </div>
+        <div className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+          <p className="text-xs text-gray-500 dark:text-gray-400">Pro Users</p>
+          <p className="text-xl font-bold text-primary-600 dark:text-primary-400">
+            {userEngagementData?.conversionFunnel?.pro ?? '—'}
+          </p>
+        </div>
+        <div className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+          <p className="text-xs text-gray-500 dark:text-gray-400">Elite Users</p>
+          <p className="text-xl font-bold text-purple-600 dark:text-purple-400">
+            {userEngagementData?.conversionFunnel?.elite ?? '—'}
+          </p>
+        </div>
+        <div className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+          <p className="text-xs text-gray-500 dark:text-gray-400">Conversion Rate</p>
+          <p className="text-xl font-bold text-green-600 dark:text-green-400">
+            {userEngagementData && userEngagementData.conversionFunnel.total > 0 
+              ? `${((userEngagementData.conversionFunnel.pro + userEngagementData.conversionFunnel.elite) / userEngagementData.conversionFunnel.total * 100).toFixed(1)}%`
+              : '—'}
+          </p>
+        </div>
+        <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-700">
+          <p className="text-xs text-red-600 dark:text-red-400">Failed Payments</p>
           <button
             onClick={() => setBillingModal({ type: 'failed', items: adminBilling.failed })}
-            className="text-sm font-semibold text-primary-600 dark:text-primary-300 hover:underline"
+            className="text-xl font-bold text-red-700 dark:text-red-300 hover:underline"
           >
             {isLoadingAdminBilling ? '…' : adminBilling.failed.length}
           </button>
         </div>
       </div>
 
-      {/* OnlyFans admin metrics intentionally hidden to keep the admin daily dashboard focused. */}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Signups (24h)</p>
-            <UserIcon className="w-5 h-5 text-primary-500" />
-          </div>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">
-            {isLoadingAdminSignupCounts ? '—' : adminSignupCounts.last24h.toLocaleString()}
-          </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            {adminSignupError ? adminSignupError : `Last 7d: ${adminSignupCounts.last7d.toLocaleString()}`}
-          </p>
-        </div>
-
-        <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Feature Adoption</p>
-            <TrendingIcon className="w-5 h-5 text-primary-500" />
-          </div>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">
-            {isLoadingUserEngagement ? '—' : userEngagementData ? `${userEngagementData.featureAdoption.anyFeature}` : '—'}
-          </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            {isLoadingUserEngagement ? 'Loading...' : userEngagementData 
-              ? `${userEngagementData.conversionFunnel.total > 0 ? (userEngagementData.featureAdoption.anyFeature / userEngagementData.conversionFunnel.total * 100).toFixed(1) : 0}% of users activated`
-              : 'No data'}
-          </p>
-        </div>
-
-        <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Feedback & inbox</p>
-            <ChatIcon className="w-5 h-5 text-primary-500" />
-          </div>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">{pendingFeedbackForms.length}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Open messages: {messages.filter(m => !m.isArchived).length}
-          </p>
-        </div>
-
-        <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-200">System signals</p>
-            <DashboardIcon className="w-5 h-5 text-primary-500" />
-          </div>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">
-            {messages.filter(m => m.isFlagged && !m.isArchived).length}
-          </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Flagged/priority messages</p>
-        </div>
-      </div>
-
+      {/* Main Content Grid */}
+      {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* User Health & Engagement */}
         <div className="lg:col-span-2 p-5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">User Engagement & Health</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Track user behavior, conversion, and feature adoption.</p>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white">User Health & Engagement</h3>
+          </div>
+          
+          {isLoadingUserEngagement ? (
+            <div className="text-center py-8">
+              <svg className="animate-spin h-6 w-6 text-primary-600 mx-auto mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
             </div>
-            <button
-              onClick={() => setActivePage('admin')}
-              className="text-sm text-primary-600 dark:text-primary-300 font-semibold hover:underline"
-            >
-              View Details →
-            </button>
-          </div>
-          <div className="space-y-4">
-            {isLoadingUserEngagement ? (
-              <div className="text-center py-8">
-                <svg className="animate-spin h-6 w-6 text-primary-600 mx-auto mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Loading engagement metrics…</p>
+          ) : userEngagementData ? (
+            <div className="space-y-5">
+              {/* Health Indicators */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-700">
+                  <p className="text-xs text-green-700 dark:text-green-300 mb-1">Paying Users</p>
+                  <p className="text-2xl font-bold text-green-900 dark:text-green-100">
+                    {userEngagementData.conversionFunnel.pro + userEngagementData.conversionFunnel.elite}
+                  </p>
+                  <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                    {userEngagementData.conversionFunnel.total > 0 
+                      ? `${((userEngagementData.conversionFunnel.pro + userEngagementData.conversionFunnel.elite) / userEngagementData.conversionFunnel.total * 100).toFixed(1)}% conversion`
+                      : '—'}
+                  </p>
+                </div>
+                <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-700">
+                  <p className="text-xs text-red-700 dark:text-red-300 mb-1">Churn Risk</p>
+                  <p className="text-2xl font-bold text-red-900 dark:text-red-100">
+                    {userEngagementData.churnRisk}
+                  </p>
+                  <p className="text-xs text-red-600 dark:text-red-400 mt-1">Inactive 30d+</p>
+                </div>
               </div>
-            ) : userEngagementData ? (
-              <>
-                {/* Conversion Funnel */}
-                <div>
-                  <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Conversion Funnel</h4>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600 dark:text-gray-400">Pro</span>
-                      <div className="flex items-center gap-3">
-                        <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                          <div 
-                            className="bg-primary-500 h-2 rounded-full" 
-                            style={{ width: `${userEngagementData.conversionFunnel.total > 0 ? (userEngagementData.conversionFunnel.pro / userEngagementData.conversionFunnel.total * 100) : 0}%` }}
-                          ></div>
-                        </div>
-                        <span className="text-sm font-semibold text-gray-900 dark:text-white w-12 text-right">
-                          {userEngagementData.conversionFunnel.pro}
-                        </span>
+
+              {/* Plan Breakdown */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Plan Breakdown</h4>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Pro ($19/mo)</span>
+                    <div className="flex items-center gap-3">
+                      <div className="w-24 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div 
+                          className="bg-primary-500 h-2 rounded-full" 
+                          style={{ width: `${userEngagementData.conversionFunnel.total > 0 ? (userEngagementData.conversionFunnel.pro / userEngagementData.conversionFunnel.total * 100) : 0}%` }}
+                        ></div>
                       </div>
+                      <span className="text-sm font-semibold text-gray-900 dark:text-white w-8 text-right">
+                        {userEngagementData.conversionFunnel.pro}
+                      </span>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600 dark:text-gray-400">Elite</span>
-                      <div className="flex items-center gap-3">
-                        <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                          <div 
-                            className="bg-purple-500 h-2 rounded-full" 
-                            style={{ width: `${userEngagementData.conversionFunnel.total > 0 ? (userEngagementData.conversionFunnel.elite / userEngagementData.conversionFunnel.total * 100) : 0}%` }}
-                          ></div>
-                        </div>
-                        <span className="text-sm font-semibold text-gray-900 dark:text-white w-12 text-right">
-                          {userEngagementData.conversionFunnel.elite}
-                        </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Elite ($39/mo)</span>
+                    <div className="flex items-center gap-3">
+                      <div className="w-24 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div 
+                          className="bg-purple-500 h-2 rounded-full" 
+                          style={{ width: `${userEngagementData.conversionFunnel.total > 0 ? (userEngagementData.conversionFunnel.elite / userEngagementData.conversionFunnel.total * 100) : 0}%` }}
+                        ></div>
                       </div>
-                    </div>
-                    <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Total Users</span>
-                        <span className="text-sm font-bold text-gray-900 dark:text-white">
-                          {userEngagementData.conversionFunnel.total}
-                        </span>
-                      </div>
-                      {userEngagementData.conversionFunnel.total > 0 && (
-                        <div className="flex items-center justify-between mt-1">
-                          <span className="text-xs text-gray-500 dark:text-gray-400">Conversion Rate</span>
-                          <span className="text-xs font-semibold text-primary-600 dark:text-primary-400">
-                            {((userEngagementData.conversionFunnel.pro + userEngagementData.conversionFunnel.elite) / userEngagementData.conversionFunnel.total * 100).toFixed(1)}%
-                          </span>
-                        </div>
-                      )}
+                      <span className="text-sm font-semibold text-gray-900 dark:text-white w-8 text-right">
+                        {userEngagementData.conversionFunnel.elite}
+                      </span>
                     </div>
                   </div>
                 </div>
+              </div>
 
-                {/* Feature Adoption */}
-                <div>
-                  <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Feature Adoption</h4>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">AI Captions</p>
-                      <p className="text-lg font-bold text-gray-900 dark:text-white">
-                        {userEngagementData.featureAdoption.captions}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        {userEngagementData.conversionFunnel.total > 0 
-                          ? `${(userEngagementData.featureAdoption.captions / userEngagementData.conversionFunnel.total * 100).toFixed(1)}% of users`
-                          : '—'}
-                      </p>
-                    </div>
-                    <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Ad Image Gen</p>
-                      <p className="text-lg font-bold text-gray-900 dark:text-white">
-                        {userEngagementData.featureAdoption.adImages}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Total generated</p>
-                    </div>
-                    <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Ad Video Gen</p>
-                      <p className="text-lg font-bold text-gray-900 dark:text-white">
-                        {userEngagementData.featureAdoption.adVideos}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Total generated</p>
-                    </div>
-                    <div className="p-3 bg-primary-50 dark:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-700">
-                      <p className="text-xs text-primary-700 dark:text-primary-300 mb-1">Any Feature</p>
-                      <p className="text-lg font-bold text-primary-900 dark:text-primary-100">
-                        {userEngagementData.featureAdoption.anyFeature}
-                      </p>
-                      <p className="text-xs text-primary-600 dark:text-primary-400 mt-1">
-                        {userEngagementData.conversionFunnel.total > 0 
-                          ? `${(userEngagementData.featureAdoption.anyFeature / userEngagementData.conversionFunnel.total * 100).toFixed(1)}% activated`
-                          : '—'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Churn Risk & Most Active */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-700">
-                    <p className="text-xs text-red-700 dark:text-red-300 mb-1">Churn Risk</p>
-                    <p className="text-2xl font-bold text-red-900 dark:text-red-100">
-                      {userEngagementData.churnRisk}
-                    </p>
-                    <p className="text-xs text-red-600 dark:text-red-400 mt-1">
-                      Inactive users (30d+)
-                    </p>
-                  </div>
-                  <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-700">
-                    <p className="text-xs text-green-700 dark:text-green-300 mb-1">Most Active</p>
-                    <p className="text-2xl font-bold text-green-900 dark:text-green-100">
-                      {userEngagementData.mostActiveUsers.length}
-                    </p>
-                    <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                      Top users by usage
-                    </p>
-                  </div>
-                </div>
-
-                {/* Most Active Users List */}
-                {userEngagementData.mostActiveUsers.length > 0 && (
+              {/* Revenue Potential */}
+              <div className="p-4 bg-gradient-to-r from-primary-50 to-purple-50 dark:from-primary-900/20 dark:to-purple-900/20 rounded-lg border border-primary-200 dark:border-primary-700">
+                <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Top Active Users</h4>
-                    <div className="space-y-2">
-                      {userEngagementData.mostActiveUsers.map((activeUser, idx) => (
-                        <div key={activeUser.id} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-gray-400 dark:text-gray-500 w-4">#{idx + 1}</span>
-                            <div>
-                              <p className="text-sm font-medium text-gray-900 dark:text-white">{activeUser.name}</p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400">{activeUser.plan} Plan</p>
-                            </div>
-                          </div>
-                          <span className="text-sm font-semibold text-primary-600 dark:text-primary-400">
-                            {activeUser.totalUsage.toLocaleString()} uses
-                          </span>
-                        </div>
-                      ))}
-                    </div>
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Monthly Subscription Revenue</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {userEngagementData.conversionFunnel.pro} Pro × $19 + {userEngagementData.conversionFunnel.elite} Elite × $39
+                    </p>
                   </div>
-                )}
-              </>
-            ) : (
-              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                <p className="text-sm">No engagement data available</p>
+                  <p className="text-2xl font-bold text-primary-600 dark:text-primary-400">
+                    ${((userEngagementData.conversionFunnel.pro * 19) + (userEngagementData.conversionFunnel.elite * 39)).toLocaleString()}
+                  </p>
+                </div>
               </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">No data available</div>
+          )}
         </div>
 
+        {/* Operations Panel */}
         <div className="p-5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-5">
           <div>
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Ops signals (today)</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Daily snapshot</p>
-              </div>
-              <CheckCircleIcon className="w-5 h-5 text-primary-500" />
-            </div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm text-gray-800 dark:text-gray-200">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600 dark:text-gray-400">New signups</span>
-                <span className="font-semibold">{isLoadingAdminSignupCounts ? '—' : adminSignupCounts.last24h}</span>
-              </div>
-              <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3">Operations</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                 <span className="text-gray-600 dark:text-gray-400">Open messages</span>
-                <span className="font-semibold">{messages.filter(m => !m.isArchived).length}</span>
+                <span className="font-semibold text-gray-900 dark:text-white">{messages.filter(m => !m.isArchived).length}</span>
               </div>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                 <span className="text-gray-600 dark:text-gray-400">Pending feedback</span>
-                <span className="font-semibold">{pendingFeedbackForms.length}</span>
+                <span className="font-semibold text-gray-900 dark:text-white">{pendingFeedbackForms.length}</span>
               </div>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                 <span className="text-gray-600 dark:text-gray-400">Flagged messages</span>
-                <span className="font-semibold">{messages.filter(m => m.isFlagged && !m.isArchived).length}</span>
+                <span className="font-semibold text-gray-900 dark:text-white">{messages.filter(m => m.isFlagged && !m.isArchived).length}</span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600 dark:text-gray-400">Invites (available)</span>
-                <span className="font-semibold">
-                  {adminInviteStats?.available ?? (adminInviteStats ? 0 : '—')}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600 dark:text-gray-400">Feedback total</span>
-                <span className="font-semibold">
-                  {adminFeedbackStats?.total ?? (adminFeedbackStats ? 0 : '—')}
+              <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <span className="text-gray-600 dark:text-gray-400">Invites available</span>
+                <span className="font-semibold text-gray-900 dark:text-white">
+                  {adminInviteStats?.available ?? '—'}
                 </span>
               </div>
             </div>
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Billing guardrails</h3>
-              {adminBillingError && <span className="text-xs text-red-500 dark:text-red-400">{adminBillingError}</span>}
-            </div>
-            <div className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600 dark:text-gray-400">Failed payments (24h)</span>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Billing</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <span className="text-gray-600 dark:text-gray-400">Failed payments</span>
                 <button
                   onClick={() => setBillingModal({ type: 'failed', items: adminBilling.failed })}
-                  className="font-semibold text-primary-600 dark:text-primary-300 hover:underline"
+                  className="font-semibold text-red-600 dark:text-red-400 hover:underline"
                 >
                   {isLoadingAdminBilling ? '…' : adminBilling.failed.length}
                 </button>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600 dark:text-gray-400">Renewals (next 7d)</span>
+              <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <span className="text-gray-600 dark:text-gray-400">Renewals (7d)</span>
                 <button
                   onClick={() => setBillingModal({ type: 'renewals', items: adminBilling.renewals })}
-                  className="font-semibold text-primary-600 dark:text-primary-300 hover:underline"
+                  className="font-semibold text-primary-600 dark:text-primary-400 hover:underline"
                 >
                   {isLoadingAdminBilling ? '…' : adminBilling.renewals.length}
                 </button>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Feedback</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <span className="text-gray-600 dark:text-gray-400">Total received</span>
+                <span className="font-semibold text-gray-900 dark:text-white">
+                  {adminFeedbackStats?.total ?? '—'}
+                </span>
               </div>
             </div>
           </div>
@@ -3845,10 +4030,121 @@ export const Dashboard: React.FC = () => {
     return renderAdminDashboardView();
   }
 
+  const handleMonetizedClick = () => {
+    setDashboardMode('monetized');
+  };
+
+  const navigateToStudioTab = (tab: string) => {
+    setActivePage('onlyfansStudio');
+    if (typeof window !== 'undefined') {
+      window.history.pushState({}, '', `/studio?tab=${encodeURIComponent(tab)}`);
+    }
+  };
+
+  // Monetized mode: Pro without access sees upgrade screen; Elite/Agency/OnlyFansStudio see deep-link cards
+  const showMonetizedUpgrade = dashboardMode === 'monetized' && !hasMonetizedAccess && isPro;
+  const showMonetizedCards = dashboardMode === 'monetized' && hasMonetizedAccess;
+
+  const MONETIZED_BULLETS = [
+    'Drops & PPV',
+    'DM Session',
+    'Funnel Teasers',
+    'Persona',
+    'Prompts',
+    'Money Calendar',
+    'Advanced analytics',
+  ];
+
   return (
     <div id="tour-step-1-dashboard" className="space-y-6 max-w-7xl mx-auto w-full">
-      {renderCommandCenter()}
+      {/* Dashboard Mode Toggle: Social / Monetized (Pro sees upgrade when selecting Monetized) */}
+      {!isAdmin && (hasMonetizedAccess || isPro) && (
+        <div className="flex items-center gap-2 p-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 w-fit">
+          <button
+            type="button"
+            onClick={() => setDashboardMode('social')}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${dashboardMode === 'social' ? 'bg-primary-600 text-white' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+          >
+            Social
+          </button>
+          <button
+            type="button"
+            onClick={handleMonetizedClick}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${dashboardMode === 'monetized' ? 'bg-primary-600 text-white' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+          >
+            Monetized
+          </button>
+        </div>
+      )}
+
+      {/* Monetized mode: Pro without access → upgrade screen */}
+      {showMonetizedUpgrade && (
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-8 max-w-xl">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Unlock Premium Studio (Elite)</h2>
+          <ul className="mt-4 space-y-2">
+            {MONETIZED_BULLETS.map((item) => (
+              <li key={item} className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                <span className="text-primary-500">•</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => openPaymentModal?.({ name: 'Elite', price: 79, cycle: 'monthly' })}
+              className="px-5 py-2.5 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 transition-colors"
+            >
+              Upgrade to Elite
+            </button>
+            <button
+              type="button"
+              onClick={() => setDashboardMode('social')}
+              className="px-5 py-2.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            >
+              Not now
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Monetized mode: Premium Studio access → deep-link cards */}
+      {showMonetizedCards && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <button type="button" onClick={() => navigateToStudioTab('drops')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
+            <SparklesIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
+            <span className="font-semibold text-gray-900 dark:text-white">Drops & PPV</span>
+            <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Plan and price drops</span>
+          </button>
+          <button type="button" onClick={() => navigateToStudioTab('dmSession')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
+            <ChatIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
+            <span className="font-semibold text-gray-900 dark:text-white">DM Session</span>
+            <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Retention & PPV sequences</span>
+          </button>
+          <button type="button" onClick={() => navigateToStudioTab('teasers')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
+            <RocketIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
+            <span className="font-semibold text-gray-900 dark:text-white">Funnel Teasers</span>
+            <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">IG/X/TikTok teasers + CTAs</span>
+          </button>
+          <button type="button" onClick={() => navigateToStudioTab('fans')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
+            <UserIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
+            <span className="font-semibold text-gray-900 dark:text-white">Fans</span>
+            <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Top fans & notes</span>
+          </button>
+          <button type="button" onClick={() => navigateToStudioTab('analytics')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
+            <TrendingIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
+            <span className="font-semibold text-gray-900 dark:text-white">Analytics</span>
+            <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">What&apos;s working</span>
+          </button>
+          <button type="button" onClick={() => navigateToStudioTab('payouts')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
+            <DollarSignIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
+            <span className="font-semibold text-gray-900 dark:text-white">Payouts</span>
+            <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Connect & manage payouts</span>
+          </button>
+        </div>
+      )}
+
+      {dashboardMode === 'social' && renderCommandCenter()}
     </div>
   );
 };
-

@@ -4,6 +4,7 @@ import { CopyIcon, SparklesIcon, SettingsIcon, XMarkIcon, CheckCircleIcon, Refre
 import { OnlyFansContentBrain } from './OnlyFansContentBrain';
 import { ContentGapAnalysis } from './ContentGapAnalysis';
 import { OnlyFansRoleplay } from './OnlyFansRoleplay';
+import { OnlyFansRoleplayIdeas } from './OnlyFansRoleplayIdeas';
 import { OnlyFansStudioSettings } from './OnlyFansStudioSettings';
 import { OnlyFansExportHub } from './OnlyFansExportHub';
 import { OnlyFansCalendar } from './OnlyFansCalendar';
@@ -11,7 +12,18 @@ import { OnlyFansMediaVault } from './OnlyFansMediaVault';
 import { OnlyFansGuides } from './OnlyFansGuides';
 import { OnlyFansAnalytics } from './OnlyFansAnalytics';
 import { OnlyFansFans } from './OnlyFansFans';
+import { FanHubAnalytics } from './FanHubAnalytics';
+import { FanHubMyPage } from './FanHubMyPage';
+import { FanHubPosts } from './FanHubPosts';
+import { TreatsStore } from './TreatsStore';
+import { FanHubMessages } from './FanHubMessages';
+import { FanHubPayouts } from './FanHubPayouts';
+import { FanHubPurchases } from './FanHubPurchases';
+import { FanHubUsers } from './FanHubUsers';
+import { OnlyFansSextingSession } from './OnlyFansSextingSession';
+import { LiveVideoChatManager } from './LiveVideoChatManager';
 import { ErrorBoundary } from './ErrorBoundary';
+import { usePremiumStudioTab } from './PremiumStudioLayout';
 import { auth, db } from '../firebaseConfig';
 import { addDoc, collection, getDocs, limit, orderBy, query, Timestamp, doc, getDoc, where, onSnapshot } from 'firebase/firestore';
 import { UserIcon } from './icons/UIIcons';
@@ -24,14 +36,14 @@ type TeaserPack = {
     ctas?: string[];
 };
 
-export const OnlyFansStudio: React.FC = () => {
+export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode = 'studio' }) => {
     const { user, setActivePage, showToast } = useAppContext();
     const [activeView, setActiveView] = useState<ActiveView>('dashboard');
     const [contentBrainInitialTab, setContentBrainInitialTab] = useState<'captions' | 'weeklyPlan' | 'trends'>('captions');
     const [showTeaserPackModal, setShowTeaserPackModal] = useState(false);
     const [teaserPromotionType, setTeaserPromotionType] = useState<'PPV' | 'New set' | 'Promo' | 'General tease'>('PPV');
     const [teaserConcept, setTeaserConcept] = useState('');
-    const [teaserTone, setTeaserTone] = useState<'Teasing' | 'Flirty' | 'Explicit'>('Teasing');
+    const [teaserTone, setTeaserTone] = useState<'Soft' | 'Teasing' | 'Flirty' | 'Bold'>('Teasing');
     const [isGeneratingTeaserPack, setIsGeneratingTeaserPack] = useState(false);
     const [teaserPack, setTeaserPack] = useState<TeaserPack | null>(null);
     const [teaserError, setTeaserError] = useState<string | null>(null);
@@ -62,6 +74,8 @@ export const OnlyFansStudio: React.FC = () => {
     const [vipFansNeedingAttention, setVipFansNeedingAttention] = useState<any[]>([]);
     const [upcomingSessions, setUpcomingSessions] = useState<any[]>([]);
     const [isLoadingFanData, setIsLoadingFanData] = useState(false);
+
+    const premiumTab = usePremiumStudioTab();
 
     // Check if user has access (OnlyFansStudio, Elite, or Agency plan)
     const hasAccess = user?.plan === 'OnlyFansStudio' || user?.plan === 'Elite' || user?.plan === 'Agency';
@@ -115,6 +129,14 @@ export const OnlyFansStudio: React.FC = () => {
         loadRecentTeaserPacks();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [showTeaserPackModal, user?.id]);
+
+    // Load recent teaser packs when Teasers studio tab is shown (full-page view)
+    const isTeasersTab = mode === 'studio' && premiumTab?.tab === 'teasers';
+    useEffect(() => {
+        if (!isTeasersTab || !user?.id) return;
+        loadRecentTeaserPacks();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isTeasersTab, user?.id]);
 
     useEffect(() => {
         const loadCreatorPersonality = async () => {
@@ -754,6 +776,219 @@ export const OnlyFansStudio: React.FC = () => {
         );
     }
 
+    // Fan Hub: only these tabs when mode === 'fanHub' (Stormij theme wrapper for feed/treats styling)
+    if (mode === 'fanHub' && premiumTab) {
+        const wrap = (content: React.ReactNode) => (
+            <div className="stormij-theme" style={{ minHeight: "100%", color: "var(--text)", fontFamily: "var(--sans)" }}>
+                {content}
+            </div>
+        );
+        if (premiumTab.tab === 'myPage') return wrap(<FanHubMyPage />);
+        if (premiumTab.tab === 'posts') return wrap(<FanHubPosts />);
+        if (premiumTab.tab === 'treats') return wrap(<TreatsStore />);
+        if (premiumTab.tab === 'messages') return wrap(<FanHubMessages />);
+        if (premiumTab.tab === 'payouts') return wrap(<FanHubPayouts />);
+        if (premiumTab.tab === 'fans') return wrap(
+            <div className="max-w-7xl mx-auto">
+                <ErrorBoundary>
+                    <OnlyFansFans />
+                </ErrorBoundary>
+            </div>
+        );
+        if (premiumTab.tab === 'analytics') return wrap(
+            <div className="max-w-7xl mx-auto">
+                <ErrorBoundary>
+                    <FanHubAnalytics />
+                </ErrorBoundary>
+            </div>
+        );
+        if (premiumTab.tab === 'purchases') return wrap(<FanHubPurchases />);
+        if (premiumTab.tab === 'sessions') return wrap(
+            <div className="max-w-7xl mx-auto">
+                <ErrorBoundary>
+                    <OnlyFansSextingSession />
+                </ErrorBoundary>
+            </div>
+        );
+        if (premiumTab.tab === 'videoChats') return wrap(
+            <div className="max-w-7xl mx-auto">
+                <ErrorBoundary>
+                    <LiveVideoChatManager creatorId={user?.id || ''} />
+                </ErrorBoundary>
+            </div>
+        );
+        if (premiumTab.tab === 'users') return wrap(
+            <div className="max-w-7xl mx-auto">
+                <ErrorBoundary>
+                    <FanHubUsers />
+                </ErrorBoundary>
+            </div>
+        );
+        return wrap(
+            <div className="py-8 text-center" style={{ color: "var(--text-muted)" }}>
+                <p>Coming soon: {premiumTab.tab}</p>
+            </div>
+        );
+    }
+
+    // Premium Studio: only these tabs when mode === 'studio'
+    if (mode === 'studio' && premiumTab) {
+        const studioTab = premiumTab.tab;
+        // Ideas: Content Ideas only (no dashboard)
+        if (studioTab === 'ideas') {
+            return (
+                <div className="max-w-7xl mx-auto">
+                    <ErrorBoundary>
+                        <OnlyFansContentBrain key="ideas" initialTab="postIdeas" singleTabMode />
+                    </ErrorBoundary>
+                </div>
+            );
+        }
+        // Drops & PPV: monetization planner only
+        if (studioTab === 'drops') {
+            return (
+                <div className="max-w-7xl mx-auto">
+                    <ErrorBoundary>
+                        <OnlyFansContentBrain key="drops" initialTab="monetizationPlanner" singleTabMode />
+                    </ErrorBoundary>
+                </div>
+            );
+        }
+        // Shoot Ideas: shoot concepts only
+        if (studioTab === 'shootIdeas') {
+            return (
+                <div className="max-w-7xl mx-auto">
+                    <ErrorBoundary>
+                        <OnlyFansContentBrain key="shootIdeas" initialTab="shootConcepts" singleTabMode />
+                    </ErrorBoundary>
+                </div>
+            );
+        }
+        // DM Session: messaging toolkit only
+        if (studioTab === 'dmSession') {
+            return (
+                <div className="max-w-7xl mx-auto">
+                    <ErrorBoundary>
+                        <OnlyFansContentBrain key="dmSession" initialTab="messaging" singleTabMode />
+                    </ErrorBoundary>
+                </div>
+            );
+        }
+        // Persona Builder: OnlyFansRoleplayIdeas persona tab only
+        if (studioTab === 'persona') {
+            return (
+                <div className="max-w-7xl mx-auto">
+                    <ErrorBoundary>
+                        <OnlyFansRoleplayIdeas initialTab="persona" singleTabMode />
+                    </ErrorBoundary>
+                </div>
+            );
+        }
+        // Teasers: full-page teaser pack (same content as modal)
+        if (studioTab === 'teasers') {
+            return (
+                <div className="max-w-7xl mx-auto p-6">
+                    <div className="max-w-3xl mx-auto">
+                        <div className="mb-6">
+                            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Teasers</h1>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Generate IG/X/TikTok teasers and CTAs to drive subscribers (manual posting).</p>
+                        </div>
+                        <div className="space-y-4">
+                            <div className="bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-sm font-semibold text-gray-900 dark:text-white">Recent teaser packs</p>
+                                    <button onClick={loadRecentTeaserPacks} className="text-xs font-semibold text-primary-600 dark:text-primary-300 hover:underline">Refresh</button>
+                                </div>
+                                <div className="mt-3 space-y-2">
+                                    {isLoadingSavedTeaserPacks ? <p className="text-sm text-gray-500 dark:text-gray-400">Loading…</p> : savedTeaserPacks.length === 0 ? <p className="text-sm text-gray-500 dark:text-gray-400">No saved teaser packs yet.</p> : savedTeaserPacks.map((item) => {
+                                        const d: any = item.data || {};
+                                        const pack: TeaserPack | null = d.pack || null;
+                                        const created = item.createdAt?.toDate ? item.createdAt.toDate().toLocaleDateString() : '';
+                                        const label = `${d.promotionType || 'Teaser'} · ${d.tone || ''}`.trim();
+                                        return (
+                                            <div key={item.id} className="flex items-start justify-between gap-3 p-3 rounded-md border border-gray-200 dark:border-gray-700 bg-white/70 dark:bg-gray-800/40">
+                                                <div className="min-w-0">
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">{created || 'Saved'}</p>
+                                                    <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{d.concept || 'Teaser pack'}</p>
+                                                    <p className="text-xs text-gray-600 dark:text-gray-400">{label}</p>
+                                                </div>
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    <button onClick={() => { setTeaserPromotionType((d.promotionType as any) || 'PPV'); setTeaserTone((d.tone === 'Explicit' ? 'Bold' : (d.tone as any)) || 'Teasing'); setTeaserConcept(typeof d.concept === 'string' ? d.concept : d.concept == null ? '' : String(d.concept)); setTeaserPack(pack); setTeaserError(null); showToast?.('Loaded saved teaser pack.', 'success'); }} className="text-xs font-semibold text-primary-600 dark:text-primary-300 hover:underline">Load</button>
+                                                    {pack && <button onClick={() => copyToClipboard(buildTeaserPackText(pack))} className="text-xs font-semibold text-primary-600 dark:text-primary-300 hover:underline flex items-center gap-1"><CopyIcon className="w-3.5 h-3.5" /> Copy</button>}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Promoting</label>
+                                    <select value={teaserPromotionType} onChange={(e) => setTeaserPromotionType(e.target.value as any)} className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                                        <option value="PPV">PPV</option>
+                                        <option value="New set">New set</option>
+                                        <option value="Promo">Promo</option>
+                                        <option value="General tease">General tease</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Tone</label>
+                                    <select value={teaserTone} onChange={(e) => setTeaserTone(e.target.value as any)} className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                                        <option value="Soft">Soft</option>
+                                        <option value="Teasing">Teasing</option>
+                                        <option value="Flirty">Flirty</option>
+                                        <option value="Bold">Bold</option>
+                                    </select>
+                                </div>
+                                <div className="md:col-span-1">
+                                    <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Concept (one line)</label>
+                                    <input value={teaserConcept} onChange={(e) => setTeaserConcept(e.target.value)} placeholder="e.g., gym mirror tease → full set inside" className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+                                </div>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                <button onClick={() => setUseCreatorPersonalityTeaserPack(prev => !prev)} disabled={!creatorPersonality} className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2 ${useCreatorPersonalityTeaserPack ? 'bg-primary-600 text-white hover:bg-primary-700' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'} ${!creatorPersonality ? 'opacity-50 cursor-not-allowed' : ''}`} title={!creatorPersonality ? 'Add a creator personality in Settings → AI Training to enable' : undefined}>
+                                    <SparklesIcon className="w-4 h-4" /> Personality
+                                </button>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                                <button onClick={handleGenerateTeaserPack} disabled={isGeneratingTeaserPack} className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-60">{isGeneratingTeaserPack ? 'Generating…' : 'Generate pack'}</button>
+                                {teaserPack && (
+                                    <div className="flex items-center gap-2">
+                                        <button onClick={() => copyToClipboard(buildTeaserPackText(teaserPack))} className="px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center gap-2"><CopyIcon className="w-4 h-4" /> Copy all</button>
+                                        <button onClick={handleSaveTeaserPack} className="px-3 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Save</button>
+                                    </div>
+                                )}
+                            </div>
+                            {teaserError && <div className="text-sm text-red-600 dark:text-red-400">{teaserError}</div>}
+                            {teaserPack && (
+                                <div className="space-y-3">
+                                    <div className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40">
+                                        <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 mb-2">Instagram</p>
+                                        <pre className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200 font-sans">{buildTeaserPackText({ instagram: teaserPack.instagram, ctas: teaserPack.ctas })}</pre>
+                                    </div>
+                                    <div className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40">
+                                        <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 mb-2">X</p>
+                                        <pre className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200 font-sans">{buildTeaserPackText({ x: teaserPack.x })}</pre>
+                                    </div>
+                                    <div className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40">
+                                        <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 mb-2">TikTok</p>
+                                        <pre className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200 font-sans">{buildTeaserPackText({ tiktok: teaserPack.tiktok })}</pre>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+        // Any other studio tab: coming soon
+        return (
+            <div className="py-8 text-center text-gray-500 dark:text-gray-400">
+                <p>Coming soon: {studioTab}</p>
+            </div>
+        );
+    }
+
     // If a specific view is active, show that view
     if (activeView === 'contentBrain') {
         return (
@@ -984,7 +1219,7 @@ export const OnlyFansStudio: React.FC = () => {
                                                         <button
                                                             onClick={() => {
                                                                 setTeaserPromotionType((d.promotionType as any) || 'PPV');
-                                                                setTeaserTone((d.tone as any) || 'Teasing');
+                                                                setTeaserTone((d.tone === 'Explicit' ? 'Bold' : (d.tone as any)) || 'Teasing');
                                                                 setTeaserConcept(typeof d.concept === 'string' ? d.concept : d.concept == null ? '' : String(d.concept));
                                                                 setTeaserPack(pack);
                                                                 setTeaserError(null);
@@ -1032,9 +1267,10 @@ export const OnlyFansStudio: React.FC = () => {
                                         onChange={(e) => setTeaserTone(e.target.value as any)}
                                         className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     >
+                                        <option value="Soft">Soft</option>
                                         <option value="Teasing">Teasing</option>
                                         <option value="Flirty">Flirty</option>
-                                        <option value="Explicit">Explicit</option>
+                                        <option value="Bold">Bold</option>
                                     </select>
                                 </div>
                                 <div className="md:col-span-1">

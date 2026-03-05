@@ -69,6 +69,15 @@ const localPlatformIcons: Partial<Record<Platform, React.ReactNode>> = {
   Facebook: <FacebookIcon />,
 };
 
+/** Platforms shown in "Plan for platform" selector: Instagram, X, Facebook, and My Page only */
+const PLAN_PLATFORM_KEYS: (Platform | 'My Page')[] = ['Instagram', 'X', 'Facebook', 'My Page'];
+const planPlatformIcons: Record<string, React.ReactNode> = {
+  Instagram: <InstagramIcon />,
+  X: <XIcon />,
+  Facebook: <FacebookIcon />,
+  'My Page': <HeartIcon className="w-5 h-5" />,
+};
+
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -709,20 +718,8 @@ ${contextLines || 'None'}
         ? 'border-primary-500 dark:border-primary-500' 
         : 'border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-700'
     }`}>
-      {/* Header with Checkbox and Remove button */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={() => onToggleSelect(index)}
-            className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 dark:focus:ring-primary-400 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
-            style={{ display: 'none' }}
-          />
-          <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-            Post {index + 1}
-          </span>
-        </div>
+      {/* Header with Remove button */}
+      <div className="flex items-center justify-end mb-3">
         <button
           onClick={() => onRemove(index)}
           className="p-1.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
@@ -978,16 +975,33 @@ ${contextLines || 'None'}
       {/* Platform Selection - Single Select - Moved below Goal & Tone */}
       <div className="mb-3">
         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-          Plan for platform (select one)
+          Select platform (select one)
         </label>
         <div className="flex flex-wrap gap-1.5">
-          {(Object.keys(platformIcons) as Platform[]).map(platform => {
-            const isSelected = mediaItem.selectedPlatforms?.[platform] === true;
+          {PLAN_PLATFORM_KEYS.map(platformOrMyPage => {
+            const isSelected = mediaItem.selectedPlatforms?.[platformOrMyPage as Platform] === true;
             return (
               <button
-                key={platform}
+                key={platformOrMyPage}
                 onClick={() => {
-                  // Single select: only this platform is selected, all others are false
+                  if (platformOrMyPage === 'My Page') {
+                    onUpdate(index, {
+                      selectedPlatforms: {
+                        Instagram: false,
+                        TikTok: false,
+                        X: false,
+                        Threads: false,
+                        YouTube: false,
+                        LinkedIn: false,
+                        Facebook: false,
+                        Pinterest: false,
+                        'My Page': true,
+                      },
+                      instagramPostType: undefined,
+                    });
+                    return;
+                  }
+                  const platform = platformOrMyPage as Platform;
                   const updates: Partial<MediaItemState> = {
                     selectedPlatforms: {
                       Instagram: false,
@@ -998,14 +1012,13 @@ ${contextLines || 'None'}
                       LinkedIn: false,
                       Facebook: false,
                       Pinterest: false,
+                      'My Page': false,
                       [platform]: true,
                     },
                   };
-                  // Reset Instagram post type if switching away from Instagram
                   if (mediaItem.selectedPlatforms?.Instagram && platform !== 'Instagram') {
                     updates.instagramPostType = undefined;
                   }
-                  // Auto-set Instagram post type based on media type when Instagram is selected
                   if (platform === 'Instagram' && !mediaItem.instagramPostType) {
                     updates.instagramPostType = mediaItem.type === 'video' ? 'Reel' : 'Post';
                   }
@@ -1017,8 +1030,8 @@ ${contextLines || 'None'}
                     : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
                 }`}
               >
-                <span className="w-3 h-3 flex items-center justify-center flex-shrink-0">{platformIcons[platform]}</span>
-                <span className="hidden sm:inline">{platform}</span>
+                <span className="w-3 h-3 flex items-center justify-center flex-shrink-0">{planPlatformIcons[platformOrMyPage]}</span>
+                <span className="hidden sm:inline">{platformOrMyPage}</span>
               </button>
             );
           })}

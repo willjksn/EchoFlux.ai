@@ -1,10 +1,10 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Settings as AppSettings, Platform, CustomVoice, SocialAccount } from '../types';
-import { OFFLINE_MODE, CONNECTION_VISIBLE_PLATFORMS, INBOX_ENABLED, ANALYTICS_ENABLED } from '../constants';
+import { OFFLINE_MODE, CONNECTION_VISIBLE_PLATFORMS, ANALYTICS_ENABLED, VIDEO_MINUTE_PACKS } from '../constants';
 import { InstagramIcon, TikTokIcon, ThreadsIcon, XIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
 import { useAppContext } from './AppContext';
 import { UpgradePrompt } from './UpgradePrompt';
-import { UploadIcon, TrashIcon, SettingsIcon, LinkIcon, SparklesIcon, CreditCardIcon, CheckCircleIcon, XMarkIcon, ClockIcon, VoiceIcon } from './icons/UIIcons';
+import { UploadIcon, TrashIcon, SettingsIcon, LinkIcon, SparklesIcon, CreditCardIcon, CheckCircleIcon, XMarkIcon, ClockIcon, VoiceIcon, HeartIcon } from './icons/UIIcons';
 import { db, storage, auth } from '../firebaseConfig';
 // @ts-ignore
 import { ref, uploadBytes, getDownloadURL, deleteObject, listAll, getMetadata } from 'firebase/storage';
@@ -84,6 +84,7 @@ const platformIcons: Record<Platform, React.ReactNode> = {
   LinkedIn: <LinkedInIcon />,
   Facebook: <FacebookIcon />,
   Pinterest: <PinterestIcon />,
+  'My Page': <HeartIcon />,
 };
 
 const COMING_SOON_PLATFORMS: Platform[] = [];
@@ -132,17 +133,6 @@ const AccountConnection: React.FC<{
                                     >
                                         Posting
                                         {!isFullySupported(platform, 'publishing') && ' ⚠️'}
-                                    </span>
-                                )}
-                                {INBOX_ENABLED && hasCapability(platform, 'inbox') && (
-                                    <span 
-                                        className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 cursor-help"
-                                        title={isFullySupported(platform, 'inbox') 
-                                            ? 'Inbox: Fully supported' 
-                                            : `Inbox: ${getCapabilityDescription(getCapability(platform, 'inbox') || false)}`}
-                                    >
-                                        Inbox
-                                        {!isFullySupported(platform, 'inbox') && ' ⚠️'}
                                     </span>
                                 )}
                                 {ANALYTICS_ENABLED && hasCapability(platform, 'analytics') && platform !== 'X' && (
@@ -224,6 +214,16 @@ export const Settings: React.FC = () => {
     const [showFacebookSetupModal, setShowFacebookSetupModal] = useState(false);
     const [showCancelModal, setShowCancelModal] = useState(false);
     const [isCancelling, setIsCancelling] = useState(false);
+    
+    // Video minutes state
+    const [videoQuota, setVideoQuota] = useState<{
+        monthlyMinutesLimit: number;
+        minutesUsedThisMonth: number;
+        bonusMinutes: number;
+        totalMinutesAllTime: number;
+    } | null>(null);
+    const [isLoadingVideoQuota, setIsLoadingVideoQuota] = useState(false);
+    const [isPurchasingMinutes, setIsPurchasingMinutes] = useState<string | null>(null);
     const [storageUsage, setStorageUsage] = useState<{ used: number; total: number }>({ used: 0, total: 100 });
     const [isLoadingStorage, setIsLoadingStorage] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -772,6 +772,61 @@ export const Settings: React.FC = () => {
         calculateStorageUsage();
     }, [user?.id, user?.plan]);
 
+    // Fetch video quota for billing tab
+    useEffect(() => {
+        if (activeTab !== 'billing' || !user?.id) return;
+        
+        const fetchVideoQuota = async () => {
+            setIsLoadingVideoQuota(true);
+            try {
+                const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+                const res = await fetch(`/api/videoUsageStats?creatorId=${user.id}`, {
+                    headers: token ? { Authorization: `Bearer ${token}` } : {},
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setVideoQuota(data.quota);
+                }
+            } catch (error) {
+                console.error('Error fetching video quota:', error);
+            } finally {
+                setIsLoadingVideoQuota(false);
+            }
+        };
+        
+        fetchVideoQuota();
+    }, [activeTab, user?.id]);
+
+    const handlePurchaseVideoMinutes = async (packId: string) => {
+        if (!user?.id) return;
+        setIsPurchasingMinutes(packId);
+        try {
+            const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+            const res = await fetch('/api/purchaseVideoMinutes', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({ packId }),
+            });
+            
+            if (!res.ok) {
+                const error = await res.json();
+                throw new Error(error.error || 'Failed to create checkout');
+            }
+            
+            const { url } = await res.json();
+            if (url) {
+                window.location.href = url;
+            }
+        } catch (error: any) {
+            showToast(error.message || 'Failed to purchase video minutes', 'error');
+        } finally {
+            setIsPurchasingMinutes(null);
+        }
+    };
+
     const handleSwitchToBusiness = async () => {
         if(user && user.userType === 'Creator') {
             try {
@@ -1076,6 +1131,13 @@ export const Settings: React.FC = () => {
                             <ToneSlider label="Formality" value={settings.tone.formality} onChange={(val) => updateToneSetting('formality', val)} description="Low for casual & slang, high for formal & professional."/>
                             <ToneSlider label="Humor" value={settings.tone.humor} onChange={(val) => updateToneSetting('humor', val)} description="Low for serious, high for witty & funny replies."/>
                             <ToneSlider label="Empathy" value={settings.tone.empathy} onChange={(val) => updateToneSetting('empathy', val)} description="Low for direct, high for supportive & understanding."/>
+                            <ToneSlider label="Emoji Usage 😊" value={settings.tone.emojiLevel ?? 50} onChange={(val) => updateToneSetting('emojiLevel', val)} description="Low for no emojis, high for emoji-heavy captions & chat replies."/>
+                            <ToneSlider 
+                                label="Profanity 🤬" 
+                                value={settings.tone.profanity ?? 0} 
+                                onChange={(val) => updateToneSetting('profanity', val)} 
+                                description="Low for clean language, high for casual swearing in captions & chat."
+                            />
                             
                             {user && (user.plan === 'Free' || user.plan === 'Caption' || user.plan === 'Pro' || user.plan === 'Elite' || user.plan === 'Agency' || user.role === 'Admin' || !user.plan) && (
                                 <>
@@ -1084,7 +1146,7 @@ export const Settings: React.FC = () => {
                                         label="Spiciness 🌶️" 
                                         value={settings.tone.spiciness || 0} 
                                         onChange={(val) => updateToneSetting('spiciness', val)} 
-                                        description="Control the level of bold/explicit language."
+                                        description="Control the level of bold or edgy language."
                                     />
                                 </>
                             )}
@@ -1124,6 +1186,7 @@ Tone: ${settings.tone?.formality !== undefined ? `Formality ${settings.tone.form
 Humor: ${settings.tone?.humor !== undefined ? `Humor ${settings.tone.humor}` : 'Not set'}
 Empathy: ${settings.tone?.empathy !== undefined ? `Empathy ${settings.tone.empathy}` : 'Not set'}
 Spiciness: ${settings.tone?.spiciness !== undefined ? `Spiciness ${settings.tone.spiciness}` : 'Not set'}
+Emoji Usage: ${settings.tone?.emojiLevel !== undefined ? `Emoji Level ${settings.tone.emojiLevel}` : '50 (default)'}
 
 OUTPUT:
 Return only the rewritten personality description.
@@ -1299,6 +1362,111 @@ Return only the rewritten personality description.
                                          ></div>
                                      </div>
                                  )}
+                             </div>
+                         </div>
+                     </SettingsSection>
+
+                     {/* Video Chat Minutes */}
+                     <SettingsSection title="Video Chat Minutes">
+                         <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                             Video chat minutes are used for live 1-on-1 video calls with your fans. Your plan includes a monthly allocation that resets each month, plus any bonus minutes you purchase.
+                         </p>
+                         
+                         {isLoadingVideoQuota ? (
+                             <div className="flex items-center justify-center py-4">
+                                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600"></div>
+                             </div>
+                         ) : videoQuota ? (
+                             <div className="space-y-4">
+                                 {/* Current quota display */}
+                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                     <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                         <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Monthly Limit</p>
+                                         <p className="text-lg font-bold text-gray-900 dark:text-white">
+                                             {videoQuota.monthlyMinutesLimit === -1 ? 'Unlimited' : `${videoQuota.monthlyMinutesLimit} min`}
+                                         </p>
+                                     </div>
+                                     <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                         <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Used This Month</p>
+                                         <p className="text-lg font-bold text-gray-900 dark:text-white">{videoQuota.minutesUsedThisMonth} min</p>
+                                     </div>
+                                     <div className="p-3 bg-cyan-50 dark:bg-cyan-900/20 rounded-lg border border-cyan-200 dark:border-cyan-800">
+                                         <p className="text-xs text-cyan-700 dark:text-cyan-300 mb-1">Bonus Minutes</p>
+                                         <p className="text-lg font-bold text-cyan-800 dark:text-cyan-200">{videoQuota.bonusMinutes} min</p>
+                                     </div>
+                                     <div className="p-3 bg-primary-50 dark:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800">
+                                         <p className="text-xs text-primary-700 dark:text-primary-300 mb-1">Available</p>
+                                         <p className="text-lg font-bold text-primary-800 dark:text-primary-200">
+                                             {videoQuota.monthlyMinutesLimit === -1 
+                                                 ? 'Unlimited' 
+                                                 : `${Math.max(0, videoQuota.monthlyMinutesLimit - videoQuota.minutesUsedThisMonth + videoQuota.bonusMinutes)} min`}
+                                         </p>
+                                     </div>
+                                 </div>
+
+                                 {/* Usage progress bar */}
+                                 {videoQuota.monthlyMinutesLimit !== -1 && videoQuota.monthlyMinutesLimit > 0 && (
+                                     <div>
+                                         <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                             <span>Monthly usage</span>
+                                             <span>{Math.round((videoQuota.minutesUsedThisMonth / videoQuota.monthlyMinutesLimit) * 100)}%</span>
+                                         </div>
+                                         <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                             <div 
+                                                 className={`h-2 rounded-full transition-all ${
+                                                     (videoQuota.minutesUsedThisMonth / videoQuota.monthlyMinutesLimit) > 0.9 ? 'bg-red-500' :
+                                                     (videoQuota.minutesUsedThisMonth / videoQuota.monthlyMinutesLimit) > 0.7 ? 'bg-yellow-500' : 'bg-primary-600'
+                                                 }`}
+                                                 style={{ width: `${Math.min((videoQuota.minutesUsedThisMonth / videoQuota.monthlyMinutesLimit) * 100, 100)}%` }}
+                                             ></div>
+                                         </div>
+                                     </div>
+                                 )}
+
+                                 {/* Plan-based limits info */}
+                                 {videoQuota.monthlyMinutesLimit === 0 && (
+                                     <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                                         <p className="text-sm text-amber-800 dark:text-amber-200">
+                                             <strong>Video chat not included in your plan.</strong> Upgrade to Pro (100 min/mo) or Elite (250 min/mo) for included minutes, or purchase add-on packs below.
+                                         </p>
+                                     </div>
+                                 )}
+                             </div>
+                         ) : (
+                             <p className="text-sm text-gray-500 dark:text-gray-400">Unable to load video quota.</p>
+                         )}
+
+                         {/* Purchase minute packs */}
+                         <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                             <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Buy Video Minutes</h4>
+                             <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                                 Purchase additional minutes that never expire. Bonus minutes are used after your monthly allocation.
+                             </p>
+                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                 {VIDEO_MINUTE_PACKS.map((pack) => (
+                                     <button
+                                         key={pack.id}
+                                         onClick={() => handlePurchaseVideoMinutes(pack.id)}
+                                         disabled={!!isPurchasingMinutes}
+                                         className={`p-4 rounded-lg border-2 transition-all text-left ${
+                                             isPurchasingMinutes === pack.id
+                                                 ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                                                 : 'border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-700 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                                         } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                     >
+                                         <p className="text-lg font-bold text-gray-900 dark:text-white">{pack.minutes} min</p>
+                                         <p className="text-sm text-primary-600 dark:text-primary-400 font-semibold">${(pack.priceCents / 100).toFixed(2)}</p>
+                                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                             ${((pack.priceCents / 100) / pack.minutes * 10).toFixed(2)}/10 min
+                                         </p>
+                                         {isPurchasingMinutes === pack.id && (
+                                             <div className="flex items-center gap-1 mt-2 text-xs text-primary-600">
+                                                 <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary-600"></div>
+                                                 <span>Loading...</span>
+                                             </div>
+                                         )}
+                                     </button>
+                                 ))}
                              </div>
                          </div>
                      </SettingsSection>

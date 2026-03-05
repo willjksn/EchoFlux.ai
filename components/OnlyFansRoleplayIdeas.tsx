@@ -15,9 +15,12 @@ interface RoleplayScenario {
     endingCTA: string;
 }
 
-export const OnlyFansRoleplayIdeas: React.FC = () => {
+export type RoleplayIdeasTab = 'roleplay' | 'persona' | 'interactive' | 'ratings' | 'sexting';
+
+export const OnlyFansRoleplayIdeas: React.FC<{ initialTab?: RoleplayIdeasTab; singleTabMode?: boolean }> = ({ initialTab, singleTabMode }) => {
     const { showToast } = useAppContext();
-    const [activeTab, setActiveTab] = useState<'roleplay' | 'persona' | 'interactive' | 'ratings' | 'sexting'>('roleplay');
+    const [activeTab, setActiveTab] = useState<RoleplayIdeasTab>(initialTab ?? 'roleplay');
+    const effectiveTab = singleTabMode ? (initialTab ?? 'roleplay') : activeTab;
     const [isGenerating, setIsGenerating] = useState(false);
 
     // Roleplay Scenario state
@@ -435,7 +438,7 @@ Format as a numbered list (1-12) with complete prompt text. Make them creative, 
         showToast('Copied to clipboard!', 'success');
     };
 
-    const tabs: { id: typeof activeTab; label: string }[] = [
+    const tabs: { id: RoleplayIdeasTab; label: string }[] = [
         { id: 'roleplay', label: 'Roleplay Scripts' },
         { id: 'sexting', label: 'Chat/Sexting Session' },
         { id: 'persona', label: 'Persona Builder' },
@@ -445,28 +448,39 @@ Format as a numbered list (1-12) with complete prompt text. Make them creative, 
 
     return (
         <div className="max-w-5xl mx-auto">
-            {/* Header */}
+            {/* Header: dynamic when singleTabMode (e.g. Persona Builder, Interactive Prompts) */}
             <div className="mb-6">
                 <div className="flex items-center gap-3 mb-2">
                     <SparklesIcon className="w-8 h-8 text-primary-600 dark:text-primary-400" />
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                        Scripts & Roleplay
+                        {singleTabMode && initialTab === 'persona'
+                            ? 'Persona Builder'
+                            : singleTabMode && initialTab === 'interactive'
+                            ? 'Interactive Prompts'
+                            : 'Scripts & Roleplay'}
                     </h1>
                 </div>
                 <p className="text-gray-600 dark:text-gray-400">
-                    Pick a vibe and get scripts, prompts, and scenes ready to use.
+                    {singleTabMode && initialTab === 'persona'
+                        ? 'Create and refine character personas for your content and messaging.'
+                        : singleTabMode && initialTab === 'interactive'
+                        ? 'Generate interactive post prompts to boost engagement.'
+                        : 'Pick a vibe and get scripts, prompts, and scenes ready to use.'}
                 </p>
             </div>
 
-            {/* Important Notice */}
+            {/* Important Notice (hidden when singleTabMode) */}
+            {!singleTabMode && (
             <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-6">
                 <p className="text-sm text-yellow-800 dark:text-yellow-200">
                     <strong>Note:</strong> These tools generate creative ideas and scripts for content creation. 
                     They do not send messages automatically. You remain in control of all interactions.
                 </p>
             </div>
+            )}
 
-            {/* Tabs */}
+            {/* Tabs (hidden when singleTabMode) */}
+            {!singleTabMode && (
             <div className="flex flex-nowrap gap-2 mb-6 border-b border-gray-200 dark:border-gray-700 overflow-x-auto pb-1">
                 {tabs.map((tab) => (
                     <button
@@ -482,9 +496,10 @@ Format as a numbered list (1-12) with complete prompt text. Make them creative, 
                     </button>
                 ))}
             </div>
+            )}
 
             {/* Roleplay Scenarios Tab */}
-            {activeTab === 'roleplay' && (
+            {effectiveTab === 'roleplay' && (
                 <div className="space-y-6">
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
@@ -681,7 +696,7 @@ Format as a numbered list (1-12) with complete prompt text. Make them creative, 
             )}
 
             {/* Persona Builder Tab */}
-            {activeTab === 'persona' && (
+            {effectiveTab === 'persona' && (
                 <div className="space-y-6">
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
@@ -746,7 +761,7 @@ Format as a numbered list (1-12) with complete prompt text. Make them creative, 
             )}
 
             {/* Interactive Posts Tab */}
-            {activeTab === 'interactive' && (
+            {effectiveTab === 'interactive' && (
                 <div className="space-y-6">
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
@@ -814,14 +829,14 @@ Format as a numbered list (1-12) with complete prompt text. Make them creative, 
             )}
 
             {/* Sexting Session Tab */}
-            {activeTab === 'sexting' && (
+            {effectiveTab === 'sexting' && (
                 <div className="space-y-6">
                     <OnlyFansSextingSession />
                 </div>
             )}
 
             {/* Body Ratings Tab */}
-            {activeTab === 'ratings' && (
+            {effectiveTab === 'ratings' && (
                 <div className="space-y-6">
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">

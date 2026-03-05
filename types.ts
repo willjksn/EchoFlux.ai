@@ -12,7 +12,7 @@ declare global {
   }
 }
 
-export type Platform = 'Instagram' | 'TikTok' | 'X' | 'Threads' | 'YouTube' | 'LinkedIn' | 'Facebook' | 'Pinterest';
+export type Platform = 'Instagram' | 'TikTok' | 'X' | 'Threads' | 'YouTube' | 'LinkedIn' | 'Facebook' | 'Pinterest' | 'My Page';
 
 export type MessageType = 'DM' | 'Comment';
 // Business categories: Lead, Support, Opportunity, General
@@ -54,7 +54,7 @@ export interface AnalyticsData {
   }[];
 }
 
-export type Page = 'dashboard' | 'analytics' | 'settings' | 'compose' | 'calendar' | 'team' | 'opportunities' | 'profile' | 'about' | 'contact' | 'pricing' | 'clients' | 'faq' | 'terms' | 'privacy' | 'dataDeletion' | 'admin' | 'automation' | 'approvals' | 'bio' | 'strategy' | 'autopilot' | 'ads' | 'mediaLibrary' | 'inbox' | 'onlyfansStudio' | 'emailCenter';
+export type Page = 'dashboard' | 'analytics' | 'settings' | 'compose' | 'calendar' | 'team' | 'opportunities' | 'profile' | 'about' | 'contact' | 'pricing' | 'clients' | 'faq' | 'terms' | 'privacy' | 'dataDeletion' | 'admin' | 'automation' | 'approvals' | 'bio' | 'strategy' | 'autopilot' | 'ads' | 'mediaLibrary' | 'onlyfansStudio' | 'emailCenter' | 'premiumStudioUpgrade' | 'fanHub';
 
 export interface Settings {
     autoReply: boolean;
@@ -66,6 +66,8 @@ export interface Settings {
       humor: number;
       empathy: number;
       spiciness?: number;
+      emojiLevel?: number;
+      profanity?: number;
     };
     voiceMode: boolean;
     prioritizedKeywords: string;
@@ -193,6 +195,270 @@ export interface BioPageConfig {
     emailCapture?: EmailCaptureConfig;
 }
 
+/** Button style for storefront theme */
+export type StorefrontButtonStyle = 'solid' | 'outline' | 'pill';
+
+/** Monetization settings (non-explicit, IG-like) */
+export interface CreatorMonetization {
+    monthlyPrice?: number;       // cents or display value; platform interprets
+    currency?: 'usd';
+    lockedDefaultPrice?: number; // cents
+    tipsEnabled?: boolean;
+    chatEnabled?: boolean;
+    videoEnabled?: boolean;      // Live video chat enabled
+    freeAccessEnabled?: boolean; // Allow fans to join for free (no subscription required)
+}
+
+/** Social link configuration for a single platform */
+export interface SocialLinkConfig {
+    url: string;
+    show: boolean;
+}
+
+/** All social links for a creator's storefront */
+export interface StorefrontSocialLinks {
+    instagram?: SocialLinkConfig;
+    facebook?: SocialLinkConfig;
+    x?: SocialLinkConfig;
+    tiktok?: SocialLinkConfig;
+    youtube?: SocialLinkConfig;
+}
+
+/** Landing page content sections (editable by creator) */
+export interface StorefrontLandingContent {
+    perksTitle?: string;        // "Why This Exists" section title
+    perksText?: string;         // Main text for perks section
+    perksList?: string[];       // Bullet points list
+    previewTitle?: string;      // "What You Get" section title
+    previewText?: string;       // Main text for preview section
+    previewList?: string[];     // Features list
+    energyTitle?: string;       // "The Energy" testimonial section title
+    energyLines?: string[];     // Array of energy/vibe lines
+    boundaryTitle?: string;     // "The Boundary" FAQ section title
+    boundaryText?: string;      // Boundary/rules text
+}
+
+/** Legal pages configuration */
+export interface StorefrontLegal {
+    termsText?: string;
+    termsLastUpdated?: string;  // ISO date string
+    privacyText?: string;
+    privacyLastUpdated?: string; // ISO date string
+}
+
+/** Text styling for storefront customization */
+export interface TextStyle {
+    fontSize?: 'xs' | 'sm' | 'base' | 'lg' | 'xl' | '2xl' | '3xl';
+    color?: string; // hex color
+    fontFamily?: string; // font family name
+}
+
+/** Fan Hub My Page / storefront settings persisted at creators/{creatorId} */
+export interface CreatorStorefrontSettings {
+    handle: string; // unique, lowercase, 3-20 chars, alphanumeric + underscore; URL /{handle}
+    displayName?: string;
+    bio?: string;
+    avatar?: string; // image URL - shown on feed posts (profile pic)
+    logo?: string;   // image URL - shown in header (like Stormij XO logo)
+
+    // Hero Section
+    heroImage?: string;         // Main hero image URL (portrait, 4:5 aspect ratio)
+    heroTagline?: string;       // Short tagline under display name
+    heroPromise?: string;       // "Your access to..." promise text
+    
+    // Text Styling (font size & color per field)
+    textStyles?: {
+        displayName?: TextStyle;
+        bio?: TextStyle;
+        heroTagline?: TextStyle;
+        heroPromise?: TextStyle;
+        perksTitle?: TextStyle;
+        perksText?: TextStyle;
+        previewTitle?: TextStyle;
+        previewText?: TextStyle;
+        energyTitle?: TextStyle;
+        boundaryTitle?: TextStyle;
+        boundaryText?: TextStyle;
+    };
+    
+    // Social Links
+    socialLinks?: StorefrontSocialLinks;
+    
+    // Landing Page Content
+    landingContent?: StorefrontLandingContent;
+    
+    // Legal
+    legal?: StorefrontLegal;
+    
+    theme?: {
+        primary: string;
+        background: string;
+        text?: string;   // hex, default from background contrast
+        textMuted?: string; // hex, muted/secondary text color
+        border?: string;    // hex, border color for cards/sections
+        accentHover?: string; // hex, hover state for accent/primary
+        buttonStyle?: StorefrontButtonStyle; // 'solid' | 'outline' | 'pill'
+    };
+    sections?: {
+        feed: boolean;
+        treats: boolean;
+        tip: boolean;
+        messages: boolean;
+        about?: boolean;
+    };
+    /** Order of section keys for tab bar (e.g. ['feed','treats','messages','about']) */
+    sectionsOrder?: string[];
+    spicyMode?: boolean; // 18+ gate + policy text on storefront
+    rules?: {
+        boundariesText?: string; // About/Boundaries block (markdown or plain)
+    };
+    monetization?: CreatorMonetization;
+    onboardingStatus?: string;
+    updatedAt?: string;  // ISO
+}
+
+/** Treats store product type (creator-defined treat types in Fan Hub) */
+export type TreatProductType =
+    | 'tip'
+    | 'unlock_media'
+    | 'bundle'
+    | 'chat_session'
+    | 'voice_note_30s'
+    | 'voice_note_60s'
+    | 'private_video_reply'
+    | 'birthday_message'
+    | 'overthinking_response'
+    | 'random_checkin'
+    | 'live_chat_5m'
+    | 'live_chat_15m'
+    | 'live_chat_30m'
+    | 'live_chat_45m'
+    | 'live_chat_60m'
+    | 'live_chat_1h'
+    | 'live_video_5m'
+    | 'live_video_10m'
+    | 'live_video_15m'
+    | 'live_video_30m'
+    | 'live_video_45m'
+    | 'live_video_60m'
+    | 'custom';
+
+/** Single product in the treats store (Firestore: products/{productId}) */
+export interface TreatProduct {
+    id: string;
+    creatorId: string;
+    type: TreatProductType;
+    title: string;
+    description?: string;
+    /** Price in cents (e.g. 499 = $4.99) */
+    priceCents: number;
+    /** For unlock_media: media URL or storage path */
+    mediaUrl?: string;
+    /** Card thumbnail/preview image URL */
+    imageUrl?: string;
+    archived: boolean;
+    /** When false, product is hidden from storefront (creator toggle) */
+    visible: boolean;
+    sortOrder?: number;
+    /** For live_video types: duration in minutes */
+    durationMinutes?: number;
+    /** Quantity limit (sold out when soldCount >= quantityLimit) */
+    quantityLimit?: number;
+    /** Number sold */
+    soldCount?: number;
+    createdAt: Date | string;  // ISO or Date
+    updatedAt: Date | string;  // ISO or Date
+}
+
+/** Live Video Chat Session Status */
+export type LiveVideoChatStatus = 
+    | 'pending'      // Fan requested, waiting for creator
+    | 'accepted'     // Creator accepted, room ready
+    | 'active'       // Both parties in call
+    | 'completed'    // Session ended normally
+    | 'declined'     // Creator declined
+    | 'expired'      // Request timed out
+    | 'cancelled';   // Fan cancelled
+
+/** Live Video Chat Session (Firestore: creators/{creatorId}/liveVideoChats/{sessionId}) */
+export interface LiveVideoChatSession {
+    id: string;
+    creatorId: string;
+    fanId: string;
+    fanEmail?: string;
+    fanDisplayName?: string;
+    /** Product ID that was purchased */
+    productId: string;
+    /** Duration purchased in minutes */
+    durationMinutes: number;
+    /** Actual minutes used */
+    minutesUsed: number;
+    /** Amount paid in cents */
+    amountPaidCents: number;
+    /** Creator earnings after commission */
+    creatorEarningsCents: number;
+    status: LiveVideoChatStatus;
+    /** Daily.co room URL */
+    roomUrl?: string;
+    /** Daily.co room name */
+    roomName?: string;
+    /** Optional note from fan when requesting */
+    fanNote?: string;
+    requestedAt: string;  // ISO
+    acceptedAt?: string;  // ISO
+    startedAt?: string;   // ISO
+    endedAt?: string;     // ISO
+    /** Scheduled for later (ISO timestamp) */
+    scheduledFor?: string;
+}
+
+/** Fan entitlement per creator: subscription + unlocked product ids (Firestore: creatorEntitlements/{creatorId}/grants/{fanId}) */
+export interface FanEntitlementGrant {
+    subscription: boolean;
+    unlockedProductIds: string[];
+    updatedAt: string;  // ISO
+}
+
+/** Fan–creator DM thread (Firestore: fanDmThreads/{threadId}); threadId = [creatorId, fanId].sort().join('_') */
+export interface FanDmThread {
+    id: string;
+    creatorId: string;
+    fanId: string;
+    lastMessageAt: string;  // ISO
+    lastMessagePreview?: string;
+    createdAt: string;
+    updatedAt: string;
+    /** For list display: other party display name/avatar (set by API) */
+    otherPartyDisplayName?: string;
+    otherPartyAvatar?: string;
+}
+
+/** Single message in a fan–creator thread (Firestore: fanDmThreads/{threadId}/messages/{messageId}) */
+export interface FanDmMessage {
+    id: string;
+    threadId: string;
+    senderId: string;   // creatorId or fanId
+    content: string;
+    createdAt: string;  // ISO
+    reported?: boolean;
+    reportId?: string;
+}
+
+/** Report for admin review (Firestore: reports/{reportId}) */
+export interface FanDmReport {
+    id: string;
+    creatorId: string;
+    fanId: string;
+    threadId: string;
+    messageId: string;
+    reporterId: string;  // who reported (creator or fan)
+    reason: string;
+    status: 'pending' | 'reviewed' | 'dismissed';
+    createdAt: string;
+    reviewedAt?: string;
+    reviewedBy?: string;
+}
+
 export type Plan = 'Free' | 'Caption' | 'Pro' | 'Elite' | 'Agency' | 'Growth' | 'Starter' | 'OnlyFansStudio';
 
 export interface Client {
@@ -241,12 +507,13 @@ export interface MediaLibraryItem {
   userId: string;
   url: string;
   name: string;
-  type: 'image' | 'video';
+  type: 'image' | 'video' | 'audio';
   mimeType: string;
   size?: number;
   uploadedAt: string;
   usedInPosts?: string[]; // Array of post IDs where this media was used
   tags?: string[];
+  duration?: number; // Duration in seconds for audio/video
   folderId?: string; // Folder ID - defaults to 'general' if not set
 }
 
@@ -663,6 +930,39 @@ export interface StrategyPlan {
             targetMetric?: number;
         }>;
     };
+}
+
+/** Single idea from "What to Post" / generateDailyPostIdeas */
+export interface DailyPostIdea {
+    id: string;
+    format: string;
+    title: string;
+    hook: string;
+    shotList: string[];
+    captionStarter?: string;
+    cta?: string;
+    hashtags: string[];
+    whyThisWorks?: string;
+}
+
+/** Settings used when generating daily ideas */
+export interface WhatToPostSettings {
+    platform: string;
+    goal: string;
+    effort: number;
+    format: string;
+    tone: string;
+    useTrends?: boolean;
+    spicyMode?: boolean;
+}
+
+/** Saved idea in Firestore (users/{uid}/savedIdeas) */
+export interface SavedIdea {
+    id: string;
+    creatorId: string;
+    createdAt: string;
+    settings: WhatToPostSettings;
+    idea: DailyPostIdea;
 }
 
 export interface VideoScene {

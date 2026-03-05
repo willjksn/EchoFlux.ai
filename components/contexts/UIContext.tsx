@@ -107,12 +107,11 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     // Keep this list aligned with App.tsx `knownRoutes` to avoid bio-page collisions.
     const pageToPath: Partial<Record<Page, string>> = {
         dashboard: '/dashboard',
-        inbox: '/inbox',
         analytics: '/analytics',
         settings: '/settings',
-        compose: '/write-captions',
+        compose: '/compose',
         calendar: '/my-schedule',
-        approvals: '/drafts',
+        approvals: '/compose/drafts',
         team: '/team',
         opportunities: '/find-trends',
         profile: '/profile',
@@ -131,8 +130,10 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         ads: '/ads',
         mediaLibrary: '/my-vault',
         autopilot: '/autopilot',
-        onlyfansStudio: '/premium-content-studio',
+        onlyfansStudio: '/studio',
         emailCenter: '/email-center',
+        premiumStudioUpgrade: '/premium-studio-upgrade',
+        fanHub: '/fan',
     };
 
     const pathToPage: Record<string, Page> = Object.entries(pageToPath).reduce((acc, [page, path]) => {
@@ -146,24 +147,35 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     pathToPage['/approvals'] = 'approvals';
     // Legacy trends route
     pathToPage['/opportunities'] = 'opportunities';
-    // Legacy compose route
     pathToPage['/compose'] = 'compose';
+    pathToPage['/compose/drafts'] = 'compose';
+    pathToPage['/drafts'] = 'compose';
+    pathToPage['/write-captions'] = 'compose';
     // Legacy strategy route
     pathToPage['/strategy'] = 'strategy';
     // Legacy schedule route
     pathToPage['/calendar'] = 'calendar';
     // Legacy media library route
     pathToPage['/mediaLibrary'] = 'mediaLibrary';
-    // Legacy bio builder route
-    pathToPage['/bio'] = 'bio';
+    pathToPage['/bio'] = 'fanHub';
+    pathToPage['/bio-link-page'] = 'fanHub';
     // Legacy studio route
     pathToPage['/premiumcontentstudio'] = 'onlyfansStudio';
-    // Legacy email center route
     pathToPage['/emailCenter'] = 'emailCenter';
+    pathToPage['/premium-studio-upgrade'] = 'premiumStudioUpgrade';
+    pathToPage['/studio'] = 'onlyfansStudio';
+    pathToPage['/fan'] = 'fanHub';
+    // Legacy
+    pathToPage['/premium-content-studio'] = 'onlyfansStudio';
+    pathToPage['/fan-hub'] = 'fanHub';
 
     const isRoutableAppPath = (path: string) => {
         const p = normalizePath(path);
-        return p === '/' || !!pathToPage[p];
+        if (p === '/') return true;
+        if (pathToPage[p]) return true;
+        // Compose sub-routes
+        if (p === '/compose/drafts') return true;
+        return false;
     };
 
     // Wrapper so all navigation goes through a single place.
@@ -185,6 +197,22 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         const fromUrl = pathToPage[currentPath];
         if (fromUrl) {
             setActivePageState(fromUrl);
+            // Legacy bio routes: redirect to Premium Studio My Page tab
+            if (currentPath === '/bio' || currentPath === '/bio-link-page') {
+                const target = '/studio?tab=myPage';
+                if (typeof window !== 'undefined' && window.history.replaceState) {
+                    window.history.replaceState({}, '', target);
+                }
+            }
+            // Fan Hub route: keep /fan and default tab myPage if missing
+            if (currentPath === '/fan' || currentPath === '/fan-hub') {
+                const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+                if (!params.get('tab')) params.set('tab', 'myPage');
+                const target = `${currentPath === '/fan-hub' ? '/fan' : currentPath}?${params.toString()}`;
+                if (typeof window !== 'undefined' && window.history.replaceState) {
+                    window.history.replaceState({}, '', target);
+                }
+            }
             return;
         }
 
@@ -212,11 +240,24 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
             localStorage.setItem(LAST_ACTIVE_PAGE_KEY, activePageState);
         } catch {}
 
-        const targetPath = pageToPath[activePageState];
+        const targetPath = activePageState === 'bio'
+            ? '/studio?tab=myPage'
+            : activePageState === 'fanHub'
+            ? '/fan?tab=myPage'
+            : pageToPath[activePageState];
         if (!targetPath) return;
 
-        if (normalizePath(window.location.pathname) !== normalizePath(targetPath)) {
-            window.history.pushState({}, '', targetPath);
+        // Compose owns /compose and /compose/drafts; don't overwrite when already on a compose subpath
+        if (activePageState === 'compose' && (currentPath === '/compose' || currentPath === '/compose/drafts')) return;
+
+        const targetPathNormalized = normalizePath(targetPath);
+        // When already on Fan Hub (/fan), don't overwrite URL so tab changes from the layout are preserved
+        if (activePageState === 'fanHub' && currentPath === '/fan') return;
+        if (activePageState === 'bio' && currentPath === '/studio') return;
+
+        const pathToPush = activePageState === 'bio' ? '/studio?tab=myPage' : activePageState === 'fanHub' ? '/fan?tab=myPage' : targetPath;
+        if (currentPath !== targetPathNormalized) {
+            window.history.pushState({}, '', pathToPush);
         }
     }, [activePageState, user?.id]);
 

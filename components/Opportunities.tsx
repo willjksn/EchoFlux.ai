@@ -2,8 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { findTrends, generateCaptions, generateContentStrategy } from "../src/services/geminiService"
 import { Opportunity, Platform, HashtagSet } from '../types';
-import { SparklesIcon, TrendingIcon, HashtagIcon, TrashIcon, XMarkIcon, RocketIcon, TargetIcon, DownloadIcon } from './icons/UIIcons';
-import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon } from './icons/PlatformIcons';
+import { SparklesIcon, TrendingIcon, HashtagIcon, TrashIcon, XMarkIcon, RocketIcon, TargetIcon, DownloadIcon, HeartIcon } from './icons/UIIcons';
+import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
 import { useAppContext } from './AppContext';
 import { UpgradePrompt } from './UpgradePrompt';
 import { BrandSuggestions } from './BrandSuggestions';
@@ -18,6 +18,8 @@ const platformIcons: { [key in Platform]: React.ReactNode } = {
   YouTube: <YouTubeIcon />,
   LinkedIn: <LinkedInIcon />,
   Facebook: <FacebookIcon />,
+  Pinterest: <PinterestIcon />,
+  'My Page': <HeartIcon />,
 };
 
 export const Opportunities: React.FC = () => {

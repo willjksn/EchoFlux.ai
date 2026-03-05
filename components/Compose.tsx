@@ -20,6 +20,7 @@ import {
   DownloadIcon,
   XMarkIcon,
   CopyIcon,
+  HeartIcon,
 } from './icons/UIIcons';
 import {
   InstagramIcon,
@@ -50,6 +51,7 @@ import { MediaItemState } from '../types';
 import { publishFacebookPost, publishInstagramPost, publishTweet, publishPinterestPin } from '../src/services/socialMediaService';
 import { PinterestBoardSelectionModal } from './PinterestBoardSelectionModal';
 import { hasCalendarAccess } from '../src/utils/planAccess';
+import { Approvals } from './Approvals';
 
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -78,6 +80,7 @@ const platformIcons: Record<Platform, React.ReactNode> = {
   LinkedIn: <LinkedInIcon />,
   Facebook: <FacebookIcon />,
   Pinterest: <PinterestIcon />,
+  'My Page': <HeartIcon className="w-5 h-5" />,
 };
 
 const emptyPlatforms: Record<Platform, boolean> = {
@@ -89,6 +92,7 @@ const emptyPlatforms: Record<Platform, boolean> = {
   LinkedIn: false,
   Facebook: false,
   Pinterest: false,
+  'My Page': false,
 };
 
 const SpeechRecognition =
@@ -467,7 +471,9 @@ const CaptionGenerator: React.FC = () => {
       { value: 'friendly', label: 'Friendly' },
       { value: 'witty', label: 'Witty' },
       { value: 'inspirational', label: 'Inspirational' },
-      { value: 'professional', label: 'Professional' }
+      { value: 'professional', label: 'Professional' },
+      { value: 'flirty', label: 'Flirty' },
+      { value: 'bold', label: 'Bold' }
       // Sexy/Explicit tones hidden for now
     ],
     []
@@ -2247,6 +2253,7 @@ const CaptionGenerator: React.FC = () => {
         LinkedIn: false,
         Facebook: false,
         Pinterest: false,
+        'My Page': false,
       };
 
       topPlatforms.forEach((platform: Platform) => {
@@ -2537,6 +2544,14 @@ const CaptionGenerator: React.FC = () => {
             useFavoriteHashtags: useFavoriteHashtags && settings.favoriteHashtags ? true : false,
             creatorPersonality: usePersonality ? settings.creatorPersonality || null : null,
             favoriteHashtags: useFavoriteHashtags ? settings.favoriteHashtags || null : null,
+            emojiIntensity: settings.tone?.emojiLevel ?? 50,
+            toneSettings: settings.tone ? {
+              formality: settings.tone.formality,
+              humor: settings.tone.humor,
+              empathy: settings.tone.empathy,
+              spiciness: settings.tone.spiciness,
+              profanity: settings.tone.profanity,
+            } : null,
           });
 
           let generatedResults: CaptionResult[] = [];
@@ -3283,6 +3298,14 @@ const CaptionGenerator: React.FC = () => {
         useFavoriteHashtags: useFavoriteHashtags && settings.favoriteHashtags ? true : false,
         creatorPersonality: usePersonality ? settings.creatorPersonality || null : null,
         favoriteHashtags: useFavoriteHashtags ? settings.favoriteHashtags || null : null,
+        emojiIntensity: settings.tone?.emojiLevel ?? 50,
+        toneSettings: settings.tone ? {
+          formality: settings.tone.formality,
+          humor: settings.tone.humor,
+          empathy: settings.tone.empathy,
+          spiciness: settings.tone.spiciness,
+          profanity: settings.tone.profanity,
+        } : null,
       });
 
       let generatedResults: CaptionResult[] = [];
@@ -3775,12 +3798,12 @@ const CaptionGenerator: React.FC = () => {
               </div>
               {user?.plan === 'Free' && (
                 <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
-                  💡 <strong>Tip:</strong> Upgrade to Pro ($29/mo) for 500 captions/month, calendar, Plan My Week, and more—or try the 7-day free trial.
+                  💡 <strong>Tip:</strong> Upgrade to Pro ($19/mo) for 500 captions/month, calendar, Plan My Week, and more—or try the 7-day free trial.
                 </p>
               )}
               {user?.plan === 'Caption' && (
                 <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
-                  💡 <strong>Tip:</strong> Upgrade to Pro ($29/mo) for 500 captions/month and unlock publishing, scheduling, and more features!
+                  💡 <strong>Tip:</strong> Upgrade to Pro ($19/mo) for 500 captions/month and unlock publishing, scheduling, and more features!
                 </p>
               )}
             </div>
@@ -4129,15 +4152,6 @@ const CaptionGenerator: React.FC = () => {
                   onToggleHashtags={() => setUseFavoriteHashtags(prev => !prev)}
                 />
               ))}
-              {/* Add Image/Video button - Outside the image box */}
-              <button
-                onClick={handleAddMediaBox}
-                className="mt-4 h-24 w-full flex items-center justify-center gap-2 text-primary-600 dark:text-primary-400 bg-white dark:bg-gray-800 border-2 border-dashed border-primary-300 dark:border-primary-700 rounded-xl hover:bg-primary-50 dark:hover:bg-primary-900/30 transition-colors shadow-sm"
-                title="Add Image/Video"
-              >
-                <PlusIcon className="w-6 h-6" />
-                <span className="text-sm font-medium whitespace-nowrap">image/video</span>
-              </button>
             </div>
           </div>
         ) : (
@@ -4177,15 +4191,6 @@ const CaptionGenerator: React.FC = () => {
                 onToggleHashtags={() => setUseFavoriteHashtags(prev => !prev)}
               />
             ))}
-            {/* Add Image/Video button - Outside the image boxes */}
-            <button
-              onClick={handleAddMediaBox}
-              className="h-24 w-full flex flex-col items-center justify-center gap-2 text-primary-600 dark:text-primary-400 bg-white dark:bg-gray-800 border-2 border-dashed border-primary-300 dark:border-primary-700 rounded-xl hover:bg-primary-50 dark:hover:bg-primary-900/30 transition-colors shadow-sm"
-              title="Add Image/Video"
-            >
-              <PlusIcon className="w-6 h-6" />
-              <span className="text-xs font-medium whitespace-nowrap">image/video</span>
-            </button>
           </div>
         )}
       </div>
@@ -4474,6 +4479,17 @@ const CaptionGenerator: React.FC = () => {
 
 type ComposeTab = 'captions' | 'image' | 'video';
 
+const COMPOSE_PAGE_PATH = '/compose';
+const COMPOSE_DRAFTS_PATH = '/compose/drafts';
+
+function getComposeMainTabFromPath(): 'create' | 'drafts' {
+  if (typeof window === 'undefined') return 'create';
+  const p = window.location.pathname || '';
+  const path = p.replace(/\/+$/, '');
+  if (path === '/compose/drafts' || path === '/drafts') return 'drafts';
+  return 'create';
+}
+
 const tabs: { id: ComposeTab; label: string; icon: React.ReactNode }[] = [
   { id: 'captions', label: 'Captions', icon: <CaptionIcon /> },
 ];
@@ -4490,6 +4506,30 @@ export const Compose: React.FC = () => {
   } = useAppContext();
   const [activeTab, setActiveTab] = useState<ComposeTab>('captions');
   const [initialPrompt, setInitialPrompt] = useState<string | undefined>(undefined);
+  
+  // Top-level tab: Create | Drafts (synced with /compose and /compose/drafts)
+  const [mainTab, setMainTabState] = useState<'create' | 'drafts'>(getComposeMainTabFromPath);
+
+  const setMainTab = (tab: 'create' | 'drafts') => {
+    setMainTabState(tab);
+    const path = tab === 'drafts' ? COMPOSE_DRAFTS_PATH : COMPOSE_PAGE_PATH;
+    window.history.pushState({}, '', path);
+  };
+
+  // Sync main tab from pathname on mount and on popstate
+  useEffect(() => {
+    const onPopState = () => setMainTabState(getComposeMainTabFromPath());
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  useEffect(() => {
+    const tab = getComposeMainTabFromPath();
+    setMainTabState(tab);
+    if (typeof window !== 'undefined' && window.location.pathname === '/drafts') {
+      window.history.replaceState({}, '', COMPOSE_DRAFTS_PATH);
+    }
+  }, []);
   
   // Predict and Repurpose modals (for history viewing)
   const [predictResult, setPredictResult] = useState<any>(null);
@@ -4629,6 +4669,35 @@ export const Compose: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto">
+      <div className="flex border-b border-gray-200 dark:border-gray-700 mb-6">
+        <button
+          type="button"
+          onClick={() => setMainTab('create')}
+          className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+            mainTab === 'create'
+              ? 'border-primary-600 text-primary-600 dark:text-primary-400'
+              : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+          }`}
+        >
+          Create
+        </button>
+        <button
+          type="button"
+          onClick={() => setMainTab('drafts')}
+          className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+            mainTab === 'drafts'
+              ? 'border-primary-600 text-primary-600 dark:text-primary-400'
+              : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+          }`}
+        >
+          Drafts
+        </button>
+      </div>
+
+      {mainTab === 'drafts' ? (
+        <Approvals />
+      ) : (
+      <>
       <div className="flex justify-center border-b border-gray-200 dark:border-gray-700 mb-8">
         {tabs.map(tab => (
           <button
@@ -4645,11 +4714,11 @@ export const Compose: React.FC = () => {
         ))}
       </div>
       {renderTabContent()}
+      </>
+      )}
     </div>
   );
 };
-
-// Predict Modal Component (shared with MediaBox and CaptionGenerator)
 const PredictModal: React.FC<{ result: any; onClose: () => void; onCopy: (text: string) => void }> = ({ result, onClose, onCopy }) => {
   const ideas = result.ideas || result.postIdeas || result.nextPostIdeas;
   const weeklyMix = Array.isArray(result.weeklyMix) ? result.weeklyMix : [];

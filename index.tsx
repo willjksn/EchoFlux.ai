@@ -2,6 +2,8 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
+import './styles/stormij-fanhub.css';
+import './styles/fan-landing-feed.css';
 import { initSentry } from './src/sentry';
 import { initEnvValidation } from './src/utils/envValidation';
 

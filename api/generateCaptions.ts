@@ -241,6 +241,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     useFavoriteHashtags,
     creatorPersonality,
     favoriteHashtags,
+    toneSettings, // Full tone settings from user preferences
   }: {
     mediaUrl?: string;
     mediaUrls?: string[];
@@ -255,6 +256,13 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     useFavoriteHashtags?: boolean;
     creatorPersonality?: string;
     favoriteHashtags?: string;
+    toneSettings?: {
+      formality?: number;
+      humor?: number;
+      empathy?: number;
+      spiciness?: number;
+      profanity?: number;
+    };
   } = req.body || {};
   
   // Sanitize text inputs
@@ -588,6 +596,14 @@ CRITICAL: Ensure all captions respect the character limits and hashtag counts sp
 
 EMOJI GUIDELINES (ALL SOCIAL PLATFORMS):
 ${getEmojiInstructions({ enabled: emojiEnabled !== false, intensity: emojiIntensity ?? 5 })}${emojiEnabled !== false ? ` Choose emojis that match the tone (examples: ${getEmojiExamplesForTone(tone)}). Emojis should enhance the caption naturally.` : ''}
+` : ''}
+${toneSettings ? `
+🎨 WRITING STYLE PREFERENCES (Apply to ALL generated content):
+${toneSettings.formality !== undefined ? `- Formality Level (${toneSettings.formality}/100): ${toneSettings.formality < 30 ? 'Very casual, use slang and informal language' : toneSettings.formality < 50 ? 'Casual and conversational' : toneSettings.formality < 70 ? 'Balanced, slightly professional' : 'Professional and polished language'}` : ''}
+${toneSettings.humor !== undefined ? `- Humor Level (${toneSettings.humor}/100): ${toneSettings.humor < 30 ? 'Keep it serious, minimal humor' : toneSettings.humor < 50 ? 'Light occasional humor' : toneSettings.humor < 70 ? 'Witty and playful throughout' : 'Very funny, comedic tone with jokes'}` : ''}
+${toneSettings.empathy !== undefined ? `- Empathy Level (${toneSettings.empathy}/100): ${toneSettings.empathy < 30 ? 'Direct and straightforward' : toneSettings.empathy < 50 ? 'Friendly but not overly warm' : toneSettings.empathy < 70 ? 'Warm and understanding' : 'Very supportive, emotionally connected'}` : ''}
+${toneSettings.profanity !== undefined && toneSettings.profanity > 0 ? `- Profanity Level (${toneSettings.profanity}/100): ${toneSettings.profanity < 30 ? 'Very mild (damn, hell)' : toneSettings.profanity < 50 ? 'Moderate casual swearing' : toneSettings.profanity < 70 ? 'Frequent casual swearing' : 'Heavy profanity is acceptable'}` : '- Profanity: Keep language clean, no swearing'}
+${toneSettings.spiciness !== undefined && toneSettings.spiciness > 0 ? `- Boldness/Spiciness (${toneSettings.spiciness}/100): ${toneSettings.spiciness < 30 ? 'Slightly suggestive' : toneSettings.spiciness < 50 ? 'Flirty and teasing' : toneSettings.spiciness < 70 ? 'Bold and provocative' : 'Very bold, edgy, and provocative'}` : ''}
 ` : ''}
 
 CRITICAL - PERSPECTIVE REQUIREMENT (MUST FOLLOW):

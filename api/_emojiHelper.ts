@@ -3,25 +3,30 @@
 
 export interface EmojiSettings {
   enabled: boolean;
-  intensity: number; // 0-10 scale
+  intensity: number; // 0-100 scale (from settings slider)
 }
 
 /**
  * Get emoji usage instructions for AI prompts based on settings
+ * Intensity is on a 0-100 scale from the settings slider
  */
 export function getEmojiInstructions(settings: EmojiSettings | null | undefined): string {
   if (!settings || !settings.enabled || settings.intensity === 0) {
     return 'Do NOT use any emojis in the generated content.';
   }
 
-  const intensity = settings.intensity ?? 5;
+  const intensity = settings.intensity ?? 50;
   
-  if (intensity <= 3) {
+  if (intensity <= 15) {
+    return 'Use emojis very sparingly (only 0-1 emoji per caption, only when absolutely natural). Prefer minimal to no emojis.';
+  } else if (intensity <= 35) {
     return 'Use emojis sparingly (0-1 per message/item, only when very appropriate and natural). Choose emojis that enhance the message without being distracting.';
-  } else if (intensity <= 7) {
-    return 'Use emojis moderately (1-2 per message/item when appropriate for the tone). Choose emojis that match the content tone and enhance engagement naturally.';
+  } else if (intensity <= 65) {
+    return 'Use emojis moderately (1-3 per message/item when appropriate for the tone). Choose emojis that match the content tone and enhance engagement naturally.';
+  } else if (intensity <= 85) {
+    return 'Use emojis liberally (2-4 per message/item to make content playful and engaging). Choose emojis that match the tone and add personality to the content.';
   } else {
-    return 'Use emojis liberally (2-3 per message/item to make content playful and engaging). Choose emojis that match the tone and add personality to the content.';
+    return 'Use emojis heavily (3-6+ per message/item for a very expressive, emoji-rich style). Make the content playful and expressive with frequent emoji usage throughout.';
   }
 }
 

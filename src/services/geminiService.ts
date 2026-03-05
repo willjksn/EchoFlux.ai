@@ -122,8 +122,16 @@ export async function generateCaptions(opts: {
   useFavoriteHashtags?: boolean; // Whether to use favorite hashtags in generation
   creatorPersonality?: string | null; // Creator personality description
   favoriteHashtags?: string | null; // Favorite hashtags
+  emojiIntensity?: number | null; // Emoji level from settings (0-100)
+  toneSettings?: { // Full tone settings from user preferences
+    formality?: number;
+    humor?: number;
+    empathy?: number;
+    spiciness?: number;
+    profanity?: number;
+  } | null;
 }) {
-  const { mediaUrl, mediaUrls, mediaData, goal, tone, promptText, platforms, usePersonality, useFavoriteHashtags, creatorPersonality, favoriteHashtags } = opts;
+  const { mediaUrl, mediaUrls, mediaData, goal, tone, promptText, platforms, usePersonality, useFavoriteHashtags, creatorPersonality, favoriteHashtags, emojiIntensity, toneSettings } = opts;
 
   return await callFunction("generateCaptions", {
     mediaUrl: mediaUrl || null,
@@ -137,6 +145,9 @@ export async function generateCaptions(opts: {
     useFavoriteHashtags: useFavoriteHashtags || false,
     creatorPersonality: creatorPersonality || null,
     favoriteHashtags: favoriteHashtags || null,
+    emojiEnabled: emojiIntensity !== 0,
+    emojiIntensity: emojiIntensity ?? 50, // Default to 50 if not set
+    toneSettings: toneSettings || null, // Pass full tone settings
   });
 }
 
@@ -448,7 +459,15 @@ export async function generateContentStrategy(
   usePersonality?: boolean,
   useFavoriteHashtags?: boolean,
   creatorPersonality?: string | null,
-  favoriteHashtags?: string | null
+  favoriteHashtags?: string | null,
+  toneSettings?: { // Full tone settings from user preferences
+    formality?: number;
+    humor?: number;
+    empathy?: number;
+    spiciness?: number;
+    profanity?: number;
+    emojiLevel?: number;
+  } | null
 ): Promise<any> {
   // Strategy generation can take longer due to niche research and multiple API calls
   // Use 120 seconds (2 minutes) timeout instead of default 30 seconds
@@ -466,6 +485,7 @@ export async function generateContentStrategy(
     useFavoriteHashtags: useFavoriteHashtags || false,
     creatorPersonality: creatorPersonality || null,
     favoriteHashtags: favoriteHashtags || null,
+    toneSettings: toneSettings || null,
   }, 120000); // 120 second timeout
   // Return the plan directly (API now returns { plan: StrategyPlan })
   return res.plan || res;

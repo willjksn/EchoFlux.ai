@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from './AppContext';
 import { ApprovalStatus, Post, Platform } from '../types';
-import { CheckCircleIcon, MobileIcon, SendIcon, TrashIcon, EditIcon, ChatIcon, UserIcon, XMarkIcon, SparklesIcon, ClipboardCheckIcon, CalendarIcon } from './icons/UIIcons';
+import { CheckCircleIcon, MobileIcon, SendIcon, TrashIcon, EditIcon, ChatIcon, UserIcon, XMarkIcon, SparklesIcon, ClipboardCheckIcon, CalendarIcon, HeartIcon } from './icons/UIIcons';
 import { InstagramIcon, TikTokIcon, XIcon, ThreadsIcon, YouTubeIcon, LinkedInIcon, FacebookIcon, PinterestIcon } from './icons/PlatformIcons';
 import { MobilePreviewModal } from './MobilePreviewModal';
 import { UpgradePrompt } from './UpgradePrompt';
@@ -25,6 +25,7 @@ const platformIcons: Record<Platform, React.ReactElement<{ className?: string }>
   LinkedIn: <LinkedInIcon />,
   Facebook: <FacebookIcon />,
   Pinterest: <PinterestIcon />,
+  'My Page': <HeartIcon />,
 };
 
 const statusColors: Record<ApprovalStatus, string> = {
@@ -528,27 +529,6 @@ ${p.content}
                                 Manual
                             </button>
                         </div>
-                    )}
-                    {hasAnyPosts && (
-                        <button 
-                            onClick={() => {
-                                const pack = filteredPosts
-                                  .map((p, idx) => {
-                                      const date = p.scheduledDate
-                                        ? new Date(p.scheduledDate).toLocaleString()
-                                        : 'No planned date';
-                                      const platforms = p.platforms.join(', ');
-                                      return `#${idx + 1} [${platforms}] – ${date}\n${p.content}\n`;
-                                  })
-                                  .join('\n-------------------------\n\n');
-                                navigator.clipboard.writeText(pack).catch(() => {});
-                                showToast('Copied current workflow captions to clipboard.', 'success');
-                            }} 
-                            className="px-5 py-2.5 bg-gradient-to-r from-primary-600 to-primary-500 text-white rounded-lg hover:from-primary-700 hover:to-primary-600 text-sm font-semibold flex items-center gap-2 shadow-md transition-all"
-                        >
-                            <ClipboardCheckIcon className="w-4 h-4" />
-                            Copy all captions
-                        </button>
                     )}
                     {/* Create Post button - Hidden in offline creator mode */}
                     {false && (

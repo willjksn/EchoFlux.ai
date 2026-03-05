@@ -183,6 +183,18 @@ service cloud.firestore {
     }
 
     /** -------------------------------------------------------
+     *  CREATORS COLLECTION (Fan Hub storefront / My Page)
+     *  -------------------------------------------------------
+     *  - Creator can read their own doc (creatorId == auth.uid) for My Page builder
+     *  - Writes go through API (updateCreatorStorefront) via Admin SDK
+     *  - Public storefront reads are done via getBioPage API (by handle)
+     *  ------------------------------------------------------- */
+    match /creators/{creatorId} {
+      allow read: if isAuthenticated() && request.auth.uid == creatorId;
+      allow write: if false;
+    }
+
+    /** -------------------------------------------------------
      *  DEFAULT DENY RULE
      *  ------------------------------------------------------- 
      *  Deny all other collections to prevent unauthorized access

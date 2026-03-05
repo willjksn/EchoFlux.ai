@@ -3,7 +3,7 @@ import { auth } from "../firebaseConfig";
 import { useAppContext } from "./AppContext";
 
 type SearchDepth = "basic" | "advanced";
-type PresetPlatform = "instagram" | "tiktok" | "x" | "onlyfans";
+type PresetPlatform = "instagram" | "tiktok" | "x";
 
 type TavilyResult = {
   title: string;
@@ -40,11 +40,6 @@ const PRESETS: Preset[] = [
   { id: "x_thread_templates", platform: "x", label: "Thread templates" },
   { id: "x_engagement_patterns_working_now", platform: "x", label: "Engagement patterns that still work" },
   { id: "x_policy_changes", platform: "x", label: "Policy changes" },
-  // OnlyFans
-  { id: "onlyfans_monetization_best_practices", platform: "onlyfans", label: "Monetization best practices" },
-  { id: "onlyfans_ppv_promo_copy_patterns", platform: "onlyfans", label: "PPV promo copy patterns" },
-  { id: "onlyfans_retention_messaging", platform: "onlyfans", label: "Retention messaging" },
-  { id: "onlyfans_policy_updates", platform: "onlyfans", label: "Policy updates" },
 ];
 
 export const AdminToolsPanel: React.FC = () => {
@@ -54,7 +49,6 @@ export const AdminToolsPanel: React.FC = () => {
   const [searchDepth, setSearchDepth] = useState<SearchDepth>("basic");
   const [bypassCache, setBypassCache] = useState<boolean>(false);
   const [isSearching, setIsSearching] = useState<boolean>(false);
-  const [isRefreshingAdultTrends, setIsRefreshingAdultTrends] = useState<boolean>(false);
   const [response, setResponse] = useState<TavilyResponse | null>(null);
   const [selectedPresetId, setSelectedPresetId] = useState<string>(PRESETS[0]?.id || "");
   const [usageStats, setUsageStats] = useState<any>(null);
@@ -190,31 +184,6 @@ export const AdminToolsPanel: React.FC = () => {
     }
   };
 
-  const runAdultTrendsNow = async () => {
-    setIsRefreshingAdultTrends(true);
-    try {
-      const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
-      const res = await fetch("/api/adminRunAdultTrendsJob", {
-        method: "POST",
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
-      const data = (await res.json()) as any;
-
-      if (!res.ok || !data?.success) {
-        throw new Error(data?.error || data?.note || "Adult trends refresh failed");
-      }
-
-      showToast("Adult trends refreshed", "success");
-    } catch (err: any) {
-      console.error("Adult trends refresh failed:", err);
-      showToast(err?.message || "Adult trends refresh failed", "error");
-    } finally {
-      setIsRefreshingAdultTrends(false);
-    }
-  };
-
   return (
     <div className="space-y-6">
       <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
@@ -234,15 +203,6 @@ export const AdminToolsPanel: React.FC = () => {
               title="Fetch and store weekly trends immediately"
             >
               Run Weekly Trends Now
-            </button>
-            <button
-              type="button"
-              onClick={runAdultTrendsNow}
-              disabled={isRefreshingAdultTrends}
-              className="px-4 py-2 rounded-md bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-200 hover:bg-pink-200 dark:hover:bg-pink-900/50 disabled:opacity-50"
-              title="Refresh adult-only trends for Premium Content Studio"
-            >
-              {isRefreshingAdultTrends ? "Refreshing Adult Trends..." : "Refresh Adult Trends"}
             </button>
           </div>
         </div>
@@ -354,13 +314,6 @@ export const AdminToolsPanel: React.FC = () => {
                     </option>
                   ))}
                 </optgroup>
-                <optgroup label="OnlyFans">
-                  {PRESETS.filter((p) => p.platform === "onlyfans").map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.label}
-                    </option>
-                  ))}
-                </optgroup>
               </select>
             </label>
 
@@ -383,86 +336,103 @@ export const AdminToolsPanel: React.FC = () => {
           )}
         </div>
 
-        <div className="mt-5 grid grid-cols-1 gap-3">
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
-            Query
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder='e.g. "OnlyFans policy updates 2025 content restrictions"'
-              className="mt-1 w-full px-3 py-2 rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100"
-            />
-          </label>
+        {/* Web Search Tool */}
+        <div className="mt-6 p-4 rounded-lg border-2 border-primary-200 dark:border-primary-700 bg-primary-50 dark:bg-primary-900/20">
+          <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+            <svg className="w-5 h-5 text-primary-600 dark:text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            Web Search (Tavily)
+          </h4>
+          <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+            Search the web for any topic - research competitors, find trends, verify information, or explore anything you need.
+          </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
-              Max results
+          <div className="mt-4">
+            <div className="flex gap-2">
               <input
-                type="number"
-                min={1}
-                max={10}
-                value={maxResults}
-                onChange={(e) => setMaxResults(Number(e.target.value))}
-                className="mt-1 w-full px-3 py-2 rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && !isSearching && runSearch()}
+                placeholder="Search anything... e.g. social media marketing trends 2026"
+                className="flex-1 px-4 py-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-base focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
-            </label>
-
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-200">
-              Search depth
-              <select
-                value={searchDepth}
-                onChange={(e) => setSearchDepth(e.target.value as SearchDepth)}
-                className="mt-1 w-full px-3 py-2 rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100"
+              <button
+                type="button"
+                onClick={runSearch}
+                disabled={isSearching || !query.trim()}
+                className="px-6 py-3 rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
               >
-                <option value="basic">Basic</option>
-                <option value="advanced">Advanced</option>
-              </select>
-            </label>
+                {isSearching ? "Searching..." : "Search"}
+              </button>
+            </div>
 
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-200 flex items-center gap-2 mt-6">
-              <input
-                type="checkbox"
-                checked={bypassCache}
-                onChange={(e) => setBypassCache(e.target.checked)}
-              />
-              Bypass cache
-            </label>
-          </div>
+            <div className="flex flex-wrap items-center gap-4 mt-3">
+              <label className="text-sm text-gray-600 dark:text-gray-300 flex items-center gap-2">
+                Results:
+                <select
+                  value={maxResults}
+                  onChange={(e) => setMaxResults(Number(e.target.value))}
+                  className="px-2 py-1 rounded bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm"
+                >
+                  <option value={3}>3</option>
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                </select>
+              </label>
 
-          <div className="flex gap-2 mt-2">
-            <button
-              type="button"
-              onClick={runSearch}
-              disabled={isSearching}
-              className="px-4 py-2 rounded-md bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50"
-            >
-              {isSearching ? "Running..." : "Run Tavily Search"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setResponse(null)}
-              disabled={isSearching}
-              className="px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50"
-            >
-              Clear
-            </button>
+              <label className="text-sm text-gray-600 dark:text-gray-300 flex items-center gap-2">
+                Depth:
+                <select
+                  value={searchDepth}
+                  onChange={(e) => setSearchDepth(e.target.value as SearchDepth)}
+                  className="px-2 py-1 rounded bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm"
+                >
+                  <option value="basic">Basic</option>
+                  <option value="advanced">Advanced</option>
+                </select>
+              </label>
+
+              <label className="text-sm text-gray-600 dark:text-gray-300 flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={bypassCache}
+                  onChange={(e) => setBypassCache(e.target.checked)}
+                  className="rounded"
+                />
+                Bypass cache
+              </label>
+
+              {response && (
+                <button
+                  type="button"
+                  onClick={() => setResponse(null)}
+                  className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                >
+                  Clear results
+                </button>
+              )}
+            </div>
           </div>
 
           {response?.note && (
-            <div className="mt-3 text-sm text-gray-700 dark:text-gray-200">
+            <div className="mt-4 text-sm text-gray-700 dark:text-gray-200">
               <span className="font-semibold">Note:</span> {response.note}
             </div>
           )}
 
           {hasResults && (
             <div className="mt-4 space-y-3">
+              <div className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                {response!.results.length} result{response!.results.length !== 1 ? 's' : ''} found
+              </div>
               {response!.results.map((r, idx) => (
-                <div key={`${r.link}-${idx}`} className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+                <div key={`${r.link}-${idx}`} className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
                   <a
                     href={r.link}
                     target="_blank"
                     rel="noreferrer"
-                    className="font-semibold text-primary-700 dark:text-primary-300 hover:underline"
+                    className="font-semibold text-primary-600 dark:text-primary-400 hover:underline text-base"
                   >
                     {r.title || r.link}
                   </a>

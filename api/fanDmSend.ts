@@ -1,0 +1,124 @@
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { getAdminDb } from "./_firebaseAdmin.js";
+import { verifyAuth } from "./verifyAuth.js";
+import { enforceRateLimit } from "./_rateLimit.js";
+import {
+  FAN_DM_THREADS,
+  FAN_DM_MESSAGES,
+  getThreadId,
+  isFanBlocked,
+} from "./_fanDmHelpers.js";
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  const decoded = await verifyAuth(req);
+  if (!decoded?.uid) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const uid = decoded.uid;
+  const ok = await enforceRateLimit({
+    req,
+    res,
+    keyPrefix: "fanDmSend",
+    limit: 30,
+    windowMs: 60 * 1000,
+    identifier: uid,
+  });
+  if (!ok) return;
+
+  const body = (req.body || {}) as Record<string, unknown>;
+  const creatorId = body.creatorId as string;
+  const fanId = body.fanId as string;
+  const threadIdParam = body.threadId as string | undefined;
+  const content = typeof body.content === "string" ? body.content.trim() : "";
+  if (!content) {
+    return res.status(400).json({ error: "content is required" });
+  }
+
+  let creatorIdFinal: string;
+  let fanIdFinal: string;
+  let threadId: string;
+
+  if (threadIdParam) {
+    threadId = threadIdParam;
+    const db = getAdminDb();
+    if (!db) return res.status(500).json({ error: "Database unavailable" });
+    const threadSnap = await db.collection(FAN_DM_THREADS).doc(threadId).get();
+    if (!threadSnap.exists) {
+      return res.status(404).json({ error: "Thread not found" });
+    }
+    const t = threadSnap.data() as { creatorId: string; fanId: string };
+    creatorIdFinal = t.creatorId;
+    fanIdFinal = t.fanId;
+    if (uid !== t.creatorId && uid !== t.fanId) {
+      return res.status(403).json({ error: "Not a participant" });
+    }
+  } else if (creatorId && fanId) {
+    creatorIdFinal = creatorId;
+    fanIdFinal = fanId;
+    threadId = getThreadId(creatorId, fanId);
+    if (uid !== creatorId && uid !== fanId) {
+      return res.status(403).json({ error: "Not a participant" });
+    }
+  } else {
+    return res.status(400).json({ error: "threadId or (creatorId and fanId) is required" });
+  }
+
+  try {
+    const db = getAdminDb();
+    if (!db) return res.status(500).json({ error: "Database unavailable" });
+
+    // Ban check: if fan is sending to creator, ensure fan is not blocked
+    if (uid === fanIdFinal && (await isFanBlocked(db, creatorIdFinal, fanIdFinal))) {
+      return res.status(403).json({ error: "You cannot message this creator" });
+    }
+
+    const now = new Date().toISOString();
+    const threadRef = db.collection(FAN_DM_THREADS).doc(threadId);
+    const threadSnap = await threadRef.get();
+
+    if (!threadSnap.exists) {
+      await threadRef.set({
+        creatorId: creatorIdFinal,
+        fanId: fanIdFinal,
+        lastMessageAt: now,
+        lastMessagePreview: content.slice(0, 100),
+        createdAt: now,
+        updatedAt: now,
+      });
+    } else {
+      await threadRef.update({
+        lastMessageAt: now,
+        lastMessagePreview: content.slice(0, 100),
+        updatedAt: now,
+      });
+    }
+
+    const msgRef = threadRef.collection(FAN_DM_MESSAGES).doc();
+    await msgRef.set({
+      senderId: uid,
+      content,
+      createdAt: now,
+    });
+
+    return res.status(201).json({
+      message: {
+        id: msgRef.id,
+        threadId,
+        senderId: uid,
+        content,
+        createdAt: now,
+      },
+    });
+  } catch (e: unknown) {
+    console.error("fanDmSend error:", e);
+    return res.status(500).json({
+      error: "Failed to send message",
+      details: process.env.NODE_ENV === "development" ? (e as Error)?.message : undefined,
+    });
+  }
+}

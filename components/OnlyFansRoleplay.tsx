@@ -20,9 +20,10 @@ type RoleplayType =
     | 'Celebrity / Fan'
     | 'Custom';
 
-export const OnlyFansRoleplay: React.FC = () => {
+export const OnlyFansRoleplay: React.FC<{ initialTab?: RoleplayTab; singleTabMode?: boolean }> = ({ initialTab, singleTabMode }) => {
     const { user, showToast } = useAppContext();
-    const [activeTab, setActiveTab] = useState<RoleplayTab>('scenarios');
+    const [activeTab, setActiveTab] = useState<RoleplayTab>(initialTab ?? 'scenarios');
+    const effectiveTab = singleTabMode ? (initialTab ?? 'scenarios') : activeTab;
     const [isGeneratingScenario, setIsGeneratingScenario] = useState(false);
     const [isGeneratingPersona, setIsGeneratingPersona] = useState(false);
     const [isGeneratingRatings, setIsGeneratingRatings] = useState(false);
@@ -1623,7 +1624,8 @@ Format as a numbered list with detailed post concepts including captions and eng
 
     return (
         <div className="max-w-5xl mx-auto">
-            {/* Header */}
+            {/* Header: hidden when single-tab Chat Session (OnlyFansSextingSession has its own) */}
+            {!(singleTabMode && initialTab === 'sexting') && (
             <div className="mb-6">
                 <div className="flex items-center gap-3 mb-2">
                     <SparklesIcon className="w-8 h-8 text-primary-600 dark:text-primary-400" />
@@ -1635,15 +1637,19 @@ Format as a numbered list with detailed post concepts including captions and eng
                     Pick a vibe and get scripts, prompts, and scenes ready to use.
                 </p>
             </div>
+            )}
 
-            {/* Important Notice */}
+            {/* Important Notice (hidden when single-tab Chat Session) */}
+            {!(singleTabMode && initialTab === 'sexting') && (
             <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4 mb-6">
                 <p className="text-sm text-purple-800 dark:text-purple-200">
                     <strong>Note:</strong> These tools generate scripts, prompts, and ideas for content creation. Messages and interactions must be sent manually through your OnlyFans, Fansly, or Fanvue accounts.
                 </p>
             </div>
+            )}
 
-            {/* Tabs */}
+            {/* Tabs (hidden when singleTabMode) */}
+            {!singleTabMode && (
             <div className="flex flex-nowrap gap-2 mb-6 border-b border-gray-200 dark:border-gray-700 overflow-x-auto pb-1">
                 {tabs.map((tab) => (
                     <button
@@ -1659,16 +1665,17 @@ Format as a numbered list with detailed post concepts including captions and eng
                     </button>
                 ))}
             </div>
+            )}
 
             {/* Chat/Sexting Session Tab */}
-            {activeTab === 'sexting' && (
+            {effectiveTab === 'sexting' && (
                 <div className="space-y-6">
                     <OnlyFansSextingSession />
                 </div>
             )}
 
             {/* Roleplay Scripts Tab */}
-            {activeTab === 'scenarios' && (
+            {effectiveTab === 'scenarios' && (
                 <div className="space-y-6">
                     {/* Saved Items Section */}
                     {savedScenarios.length > 0 && (
@@ -2092,7 +2099,7 @@ Return only the rewritten context.
             )}
 
             {/* Persona Builder Tab */}
-            {activeTab === 'persona' && (
+            {effectiveTab === 'persona' && (
                 <div className="space-y-6">
                     {/* Saved Personas Section */}
                     {savedPersonas.length > 0 && (
@@ -2317,7 +2324,7 @@ Return only the rewritten persona description.
             )}
 
             {/* Body Ratings Tab */}
-            {activeTab === 'ratings' && (
+            {effectiveTab === 'ratings' && (
                 <div className="space-y-6">
                     {/* Saved Ratings Section */}
                     {savedRatings.length > 0 && (
@@ -2762,7 +2769,7 @@ Return only the rewritten request.
             )}
 
             {/* Interactive Posts Tab */}
-            {activeTab === 'interactive' && (
+            {effectiveTab === 'interactive' && (
                 <div className="space-y-6">
                     {/* Saved Interactive Posts Section */}
                     {savedInteractive.length > 0 && (

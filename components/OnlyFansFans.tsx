@@ -19,9 +19,9 @@ interface Fan {
     id: string;
     name: string;
     preferences: {
-        preferredTone?: 'soft' | 'dominant' | 'playful' | 'dirty' | 'Very Explicit';
+        preferredTone?: 'soft' | 'dominant' | 'playful' | 'dirty' | 'Bold';
         favoriteSessionType?: string;
-        communicationStyle?: 'casual' | 'formal' | 'flirty' | 'direct' | 'like Explicit';
+        communicationStyle?: 'casual' | 'formal' | 'flirty' | 'direct' | 'like Bold';
         totalSessions?: number;
         spendingLevel?: number;
         subscriptionTier?: 'Free' | 'Paid';
@@ -659,7 +659,7 @@ export const OnlyFansFans: React.FC = () => {
                     <div className="flex items-center gap-3">
                         <SparklesIcon className="w-8 h-8 text-primary-600 dark:text-primary-400" />
                         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                            Fan Management
+                            Fans
                         </h1>
                     </div>
                     <button
@@ -876,17 +876,17 @@ export const OnlyFansFans: React.FC = () => {
                                                 <div className="mt-2 flex flex-wrap gap-1">
                                                     {prefs.favoriteSessionType && (
                                                         <span className="text-xs bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-1.5 py-0.5 rounded">
-                                                            ⭐ {prefs.favoriteSessionType.split(' ')[0]}
+                                                            ⭐ {prefs.favoriteSessionType === 'Explicit' ? 'Bold' : prefs.favoriteSessionType.split(' ')[0]}
                                                         </span>
                                                     )}
                                                     {prefs.preferredTone && (
                                                         <span className="text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded">
-                                                            🎭 {prefs.preferredTone}
+                                                            🎭 {prefs.preferredTone === 'Very Explicit' ? 'Bold' : prefs.preferredTone}
                                                         </span>
                                                     )}
                                                     {prefs.communicationStyle && (
                                                         <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded">
-                                                            💬 {prefs.communicationStyle}
+                                                            💬 {prefs.communicationStyle === 'like Explicit' ? 'Like Bold' : prefs.communicationStyle}
                                                         </span>
                                                     )}
                                                 </div>
@@ -1429,7 +1429,7 @@ export const OnlyFansFans: React.FC = () => {
                                         Preferred Tone
                                     </label>
                                     <select
-                                        value={newFanPreferredTone}
+                                        value={newFanPreferredTone === 'Very Explicit' ? 'Bold' : newFanPreferredTone}
                                         onChange={(e) => setNewFanPreferredTone(e.target.value)}
                                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     >
@@ -1438,7 +1438,7 @@ export const OnlyFansFans: React.FC = () => {
                                         <option value="dominant">Dominant</option>
                                         <option value="playful">Playful</option>
                                         <option value="dirty">Dirty</option>
-                                        <option value="Very Explicit">Very Explicit</option>
+                                        <option value="Bold">Bold</option>
                                     </select>
                                 </div>
 
@@ -1447,7 +1447,7 @@ export const OnlyFansFans: React.FC = () => {
                                         Favorite Session Type
                                     </label>
                                     <select
-                                        value={newFanFavoriteSessionType}
+                                        value={newFanFavoriteSessionType === 'Explicit' ? 'Bold' : newFanFavoriteSessionType}
                                         onChange={(e) => setNewFanFavoriteSessionType(e.target.value)}
                                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     >
@@ -1456,7 +1456,7 @@ export const OnlyFansFans: React.FC = () => {
                                         <option value="GFE-style interaction">GFE-style interaction</option>
                                         <option value="Tease & anticipation">Tease & anticipation</option>
                                         <option value="Roleplay">Roleplay</option>
-                                        <option value="Explicit">Explicit</option>
+                                        <option value="Bold">Bold</option>
                                         <option value="Check-in / reconnect">Check-in / reconnect</option>
                                         <option value="High-engagement paid chat">High-engagement paid chat</option>
                                     </select>
@@ -1467,7 +1467,7 @@ export const OnlyFansFans: React.FC = () => {
                                         Communication Style
                                     </label>
                                     <select
-                                        value={newFanCommunicationStyle}
+                                        value={newFanCommunicationStyle === 'like Explicit' ? 'like Bold' : newFanCommunicationStyle}
                                         onChange={(e) => setNewFanCommunicationStyle(e.target.value)}
                                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     >
@@ -1476,7 +1476,7 @@ export const OnlyFansFans: React.FC = () => {
                                         <option value="formal">Formal & Polite</option>
                                         <option value="flirty">Flirty & Playful</option>
                                         <option value="direct">Direct & To-the-point</option>
-                                        <option value="like Explicit">Like Explicit</option>
+                                        <option value="like Bold">Like Bold</option>
                                     </select>
                                 </div>
 
@@ -1490,7 +1490,7 @@ export const OnlyFansFans: React.FC = () => {
                                     {[
                                         { key: 'noFacePhotos', label: 'No face photos' },
                                         { key: 'noRealName', label: 'No real name usage' },
-                                        { key: 'explicitContentOnly', label: 'Explicit content only' },
+                                        { key: 'explicitContentOnly', label: 'Bold content only' },
                                         { key: 'noCustomRequests', label: 'No custom content requests' },
                                         { key: 'timeBoundaryOnly', label: 'Time-bound sessions only' },
                                     ].map(({ key, label }) => (
@@ -1806,7 +1806,7 @@ export const OnlyFansFans: React.FC = () => {
                                         Preferred Tone
                                     </label>
                                     <select
-                                        value={newFanPreferredTone}
+                                        value={newFanPreferredTone === 'Very Explicit' ? 'Bold' : newFanPreferredTone}
                                         onChange={(e) => setNewFanPreferredTone(e.target.value)}
                                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     >
@@ -1815,7 +1815,7 @@ export const OnlyFansFans: React.FC = () => {
                                         <option value="dominant">Dominant</option>
                                         <option value="playful">Playful</option>
                                         <option value="dirty">Dirty</option>
-                                        <option value="Very Explicit">Very Explicit</option>
+                                        <option value="Bold">Bold</option>
                                     </select>
                                 </div>
 
@@ -1824,7 +1824,7 @@ export const OnlyFansFans: React.FC = () => {
                                         Favorite Session Type
                                     </label>
                                     <select
-                                        value={newFanFavoriteSessionType}
+                                        value={newFanFavoriteSessionType === 'Explicit' ? 'Bold' : newFanFavoriteSessionType}
                                         onChange={(e) => setNewFanFavoriteSessionType(e.target.value)}
                                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     >
@@ -1833,7 +1833,7 @@ export const OnlyFansFans: React.FC = () => {
                                         <option value="GFE-style interaction">GFE-style interaction</option>
                                         <option value="Tease & anticipation">Tease & anticipation</option>
                                         <option value="Roleplay">Roleplay</option>
-                                        <option value="Explicit">Explicit</option>
+                                        <option value="Bold">Bold</option>
                                         <option value="Check-in / reconnect">Check-in / reconnect</option>
                                         <option value="High-engagement paid chat">High-engagement paid chat</option>
                                     </select>
@@ -1844,7 +1844,7 @@ export const OnlyFansFans: React.FC = () => {
                                         Communication Style
                                     </label>
                                     <select
-                                        value={newFanCommunicationStyle}
+                                        value={newFanCommunicationStyle === 'like Explicit' ? 'like Bold' : newFanCommunicationStyle}
                                         onChange={(e) => setNewFanCommunicationStyle(e.target.value)}
                                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     >
@@ -1853,7 +1853,7 @@ export const OnlyFansFans: React.FC = () => {
                                         <option value="formal">Formal & Polite</option>
                                         <option value="flirty">Flirty & Playful</option>
                                         <option value="direct">Direct & To-the-point</option>
-                                        <option value="like Explicit">Like Explicit</option>
+                                        <option value="like Bold">Like Bold</option>
                                     </select>
                                 </div>
 
@@ -1867,7 +1867,7 @@ export const OnlyFansFans: React.FC = () => {
                                     {[
                                         { key: 'noFacePhotos', label: 'No face photos' },
                                         { key: 'noRealName', label: 'No real name usage' },
-                                        { key: 'explicitContentOnly', label: 'Explicit content only' },
+                                        { key: 'explicitContentOnly', label: 'Bold content only' },
                                         { key: 'noCustomRequests', label: 'No custom content requests' },
                                         { key: 'timeBoundaryOnly', label: 'Time-bound sessions only' },
                                     ].map(({ key, label }) => (

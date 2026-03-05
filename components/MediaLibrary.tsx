@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { MediaLibraryItem, MediaFolder } from '../types';
 import { useAppContext } from './AppContext';
-import { UploadIcon, TrashIcon, ImageIcon, VideoIcon, CheckCircleIcon, PlusIcon, XMarkIcon, FolderIcon } from './icons/UIIcons';
+import { UploadIcon, TrashIcon, ImageIcon, VideoIcon, CheckCircleIcon, PlusIcon, XMarkIcon, FolderIcon, MicrophoneIcon } from './icons/UIIcons';
 import { db, storage } from '../firebaseConfig';
 import { collection, setDoc, doc, getDocs, deleteDoc, query, orderBy, updateDoc, writeBatch, where } from 'firebase/firestore';
 // @ts-ignore
@@ -19,7 +19,7 @@ export const MediaLibrary: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [filterType, setFilterType] = useState<'all' | 'image' | 'video'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'image' | 'video' | 'audio'>('all');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -27,6 +27,13 @@ export const MediaLibrary: React.FC = () => {
   const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [editingFolder, setEditingFolder] = useState<{ id: string; name: string } | null>(null);
+  
+  // Voice recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingCountdown, setRecordingCountdown] = useState<number | null>(null);
+  const [isSavingVoice, setIsSavingVoice] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   // Load folders
   useEffect(() => {
@@ -151,9 +158,13 @@ export const MediaLibrary: React.FC = () => {
     Array.from(files).forEach((file) => {
       const uploadPromise = (async () => {
         try {
-          const fileType = file.type.startsWith('image') ? 'image' : 'video';
+          let fileType: 'image' | 'video' | 'audio' = 'image';
+          if (file.type.startsWith('video')) {
+            fileType = 'video';
+          } else if (file.type.startsWith('audio')) {
+            fileType = 'audio';
+          }
           const timestamp = Date.now();
-          const ext = file.type.split('/')[1] || (fileType === 'image' ? 'jpg' : 'mp4');
           const storagePath = `users/${user.id}/media_library/${timestamp}_${file.name}`;
           const storageRef = ref(storage, storagePath);
 
@@ -170,8 +181,8 @@ export const MediaLibrary: React.FC = () => {
             size: file.size,
             uploadedAt: new Date().toISOString(),
             usedInPosts: [],
-            tags: [],
-            folderId: selectedFolderId, // Upload to currently selected folder
+            tags: fileType === 'audio' ? ['voice-note'] : [],
+            folderId: selectedFolderId,
           };
 
           // Save to Firestore
@@ -424,6 +435,126 @@ export const MediaLibrary: React.FC = () => {
     }
   };
 
+  // Voice recording functions
+  const [isRequestingMic, setIsRequestingMic] = useState(false);
+  
+  const startRecording = async () => {
+    try {
+      // Check if microphone permission is already granted
+      const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+      
+      if (permissionStatus.state === 'denied') {
+        showToast('Microphone access was denied. Please enable it in your browser settings.', 'error');
+        return;
+      }
+      
+      // Show requesting state if permission hasn't been granted yet
+      if (permissionStatus.state === 'prompt') {
+        setIsRequestingMic(true);
+        showToast('Please allow microphone access to record voice notes', 'info');
+      }
+      
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      setIsRequestingMic(false);
+      
+      // Countdown
+      setRecordingCountdown(3);
+      await new Promise((r) => setTimeout(r, 1000));
+      setRecordingCountdown(2);
+      await new Promise((r) => setTimeout(r, 1000));
+      setRecordingCountdown(1);
+      await new Promise((r) => setTimeout(r, 1000));
+      setRecordingCountdown(null);
+      
+      // Start recording
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+      
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+      
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        
+        if (!user?.id) {
+          showToast('Please sign in to save recordings', 'error');
+          setIsRecording(false);
+          return;
+        }
+        
+        setIsSavingVoice(true);
+        
+        try {
+          // Upload to Firebase Storage
+          const timestamp = Date.now();
+          const fileName = `voice_${timestamp}.webm`;
+          const storagePath = `users/${user.id}/media_library/${fileName}`;
+          const storageRef = ref(storage, storagePath);
+          
+          await uploadBytes(storageRef, audioBlob, { contentType: 'audio/webm' });
+          const mediaUrl = await getDownloadURL(storageRef);
+          
+          // Save to vault (media_library collection)
+          const mediaItem: MediaLibraryItem = {
+            id: timestamp.toString(),
+            userId: user.id,
+            url: mediaUrl,
+            name: fileName,
+            type: 'audio',
+            mimeType: 'audio/webm',
+            size: audioBlob.size,
+            uploadedAt: new Date().toISOString(),
+            usedInPosts: [],
+            tags: ['voice-recording'],
+            folderId: selectedFolderId,
+          };
+          
+          await setDoc(doc(db, 'users', user.id, 'media_library', mediaItem.id), mediaItem);
+          
+          setMediaItems(prev => [mediaItem, ...prev]);
+          showToast('Voice note saved to vault', 'success');
+        } catch (error) {
+          console.error('Failed to save voice recording:', error);
+          showToast('Failed to save voice recording', 'error');
+        } finally {
+          setIsSavingVoice(false);
+          setIsRecording(false);
+        }
+      };
+      
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (error: unknown) {
+      console.error('Failed to start recording:', error);
+      setIsRequestingMic(false);
+      setRecordingCountdown(null);
+      
+      // Provide specific error messages
+      if (error instanceof Error) {
+        if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+          showToast('Microphone access denied. Please allow microphone access in your browser settings.', 'error');
+        } else if (error.name === 'NotFoundError') {
+          showToast('No microphone found. Please connect a microphone and try again.', 'error');
+        } else {
+          showToast('Could not access microphone. Please check your settings.', 'error');
+        }
+      } else {
+        showToast('Could not access microphone', 'error');
+      }
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+  };
+
   // Get filtered items based on selected folder and type filter
   const getFilteredItems = () => {
     let filtered = mediaItems.filter(item => 
@@ -469,22 +600,58 @@ export const MediaLibrary: React.FC = () => {
                   My Vault
                 </h1>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  Upload and manage images and videos that you can reuse across your posts.
+                  Upload and manage images, videos, and voice notes that you can reuse across your posts.
                 </p>
               </div>
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading}
-                className="px-4 py-2 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 flex items-center gap-2 disabled:opacity-50"
-              >
-                <UploadIcon className="w-4 h-4" />
-                {isUploading ? 'Uploading...' : 'Upload Media'}
-              </button>
+              <div className="flex items-center gap-2">
+                {/* Voice Recording Button */}
+                {isSavingVoice ? (
+                  <div className="px-4 py-2 text-sm bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300 rounded-md flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
+                    Saving...
+                  </div>
+                ) : isRequestingMic ? (
+                  <div className="px-4 py-2 text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-md flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    Allow microphone...
+                  </div>
+                ) : recordingCountdown !== null ? (
+                  <div className="px-4 py-2 text-sm bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-md flex items-center gap-2">
+                    Starting in {recordingCountdown}...
+                  </div>
+                ) : isRecording ? (
+                  <button
+                    onClick={stopRecording}
+                    className="px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center gap-2 animate-pulse"
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <rect x="6" y="6" width="12" height="12" rx="2" />
+                    </svg>
+                    Stop Recording
+                  </button>
+                ) : (
+                  <button
+                    onClick={startRecording}
+                    className="px-4 py-2 text-sm bg-pink-600 text-white rounded-md hover:bg-pink-700 flex items-center gap-2"
+                  >
+                    <MicrophoneIcon className="w-4 h-4" />
+                    Record Voice
+                  </button>
+                )}
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading}
+                  className="px-4 py-2 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 flex items-center gap-2 disabled:opacity-50"
+                >
+                  <UploadIcon className="w-4 h-4" />
+                  {isUploading ? 'Uploading...' : 'Upload Media'}
+                </button>
+              </div>
               <input
                 ref={fileInputRef}
                 type="file"
                 multiple
-                accept="image/*,video/*"
+                accept="image/*,video/*,audio/*"
                 onChange={(e) => handleFileSelect(e.target.files)}
                 className="hidden"
               />
@@ -595,6 +762,17 @@ export const MediaLibrary: React.FC = () => {
                       >
                         Videos
                       </button>
+                      <button
+                        onClick={() => setFilterType('audio')}
+                        className={`px-3 py-1 rounded-md text-sm flex items-center gap-1.5 ${
+                          filterType === 'audio'
+                            ? 'bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300'
+                            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        <MicrophoneIcon className="w-4 h-4" />
+                        Voice notes
+                      </button>
                     </div>
                     {selectedItems.size > 0 && (
                       <>
@@ -683,7 +861,18 @@ export const MediaLibrary: React.FC = () => {
                     } ${viewMode === 'grid' ? 'aspect-square' : 'flex items-center gap-4'}`}
                     onClick={() => setViewingItem(item)}
                   >
-                    {item.type === 'video' ? (
+                    {item.type === 'audio' ? (
+                      <div className={`${viewMode === 'grid' ? 'w-full h-full' : 'w-24 h-24'} bg-pink-100 dark:bg-pink-900/30 flex flex-col items-center justify-center p-3`}>
+                        <MicrophoneIcon className="w-8 h-8 text-pink-500 dark:text-pink-400 mb-2" />
+                        <audio
+                          src={item.url}
+                          controls
+                          className="w-full max-w-[140px]"
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ height: '32px' }}
+                        />
+                      </div>
+                    ) : item.type === 'video' ? (
                       <video
                         src={item.url}
                         className={`${viewMode === 'grid' ? 'w-full h-full' : 'w-24 h-24'} object-contain bg-gray-100 dark:bg-gray-700`}
@@ -692,7 +881,6 @@ export const MediaLibrary: React.FC = () => {
                         playsInline
                         muted
                         onLoadedMetadata={(e) => {
-                          // Set currentTime to show a preview frame (1 second or 10% of duration, whichever is smaller)
                           const video = e.currentTarget;
                           if (video.duration && video.duration > 0) {
                             const previewTime = Math.min(1, video.duration * 0.1);
@@ -772,7 +960,9 @@ export const MediaLibrary: React.FC = () => {
 
                     {/* Type indicator */}
                     <div className="absolute top-2 right-2">
-                      {item.type === 'video' ? (
+                      {item.type === 'audio' ? (
+                        <MicrophoneIcon className="w-4 h-4 text-white bg-pink-500/80 rounded p-1" />
+                      ) : item.type === 'video' ? (
                         <VideoIcon className="w-4 h-4 text-white bg-black/50 rounded p-1" />
                       ) : (
                         <ImageIcon className="w-4 h-4 text-white bg-black/50 rounded p-1" />
@@ -851,7 +1041,17 @@ export const MediaLibrary: React.FC = () => {
             >
               <XMarkIcon className="w-6 h-6" />
             </button>
-            {viewingItem.type === 'video' ? (
+            {viewingItem.type === 'audio' ? (
+              <div className="bg-gradient-to-br from-pink-100 to-pink-200 dark:from-pink-900/40 dark:to-pink-800/40 rounded-lg p-8 flex flex-col items-center justify-center">
+                <MicrophoneIcon className="w-20 h-20 text-pink-500 dark:text-pink-400 mb-6" />
+                <audio
+                  src={viewingItem.url}
+                  controls
+                  autoPlay
+                  className="w-full max-w-md"
+                />
+              </div>
+            ) : viewingItem.type === 'video' ? (
               <video
                 src={viewingItem.url}
                 controls

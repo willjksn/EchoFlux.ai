@@ -16,6 +16,7 @@ const platformIcons: { [key in Message['platform']]: React.ReactElement<{ classN
   LinkedIn: <LinkedInIcon />,
   Facebook: <FacebookIcon />,
   Pinterest: <PinterestIcon />,
+  'My Page': <HeartIcon />,
 };
 
 const categoryIcons: Record<string, React.ReactNode> = {

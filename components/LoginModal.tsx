@@ -33,7 +33,7 @@ const Terms: React.FC = () => (
     <ul className="list-disc pl-6 space-y-1 mt-2">
       <li><strong>Instagram/Facebook:</strong> Full features available for Business Accounts</li>
       <li><strong>X (Twitter):</strong> Requires paid API tier for most features</li>
-      <li><strong>TikTok:</strong> Posting only - inbox/DM features not supported</li>
+      <li><strong>TikTok:</strong> Posting only. EchoFlux does not support social platform DMs; fan messages are in Fan Hub.</li>
       <li><strong>YouTube:</strong> Publishing & analytics - no DM automation</li>
       <li><strong>LinkedIn:</strong> Post publishing - no messaging automation</li>
       <li><strong>Threads:</strong> Publishing only - limited features</li>
