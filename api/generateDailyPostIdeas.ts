@@ -17,6 +17,8 @@ export interface DailyPostIdeaPayload {
   cta?: string;
   hashtags: string[];
   whyThisWorks?: string;
+  trendBased?: boolean;
+  trendContext?: string;
 }
 
 export interface GenerateDailyPostIdeasBody {
@@ -26,6 +28,7 @@ export interface GenerateDailyPostIdeasBody {
   format?: string;
   tone?: string;
   useTrends?: boolean;
+  includeTrendContext?: boolean;
   spicyMode?: boolean;
   /** When set, regenerate only this idea (swap one card); otherwise generate 3 new ideas. */
   swapId?: string;
@@ -168,7 +171,9 @@ OUTPUT STRICT JSON ONLY (no markdown, no code fence):
       "captionStarter": "Optional 1-2 sentence caption start",
       "cta": "Optional call-to-action line",${platform === "fan_hub" ? "" : `
       "hashtags": ["#tag1", "#tag2", "..."],`}
-      "whyThisWorks": "One sentence on why this fits the goal/platform"
+      "whyThisWorks": "One sentence on why this fits the goal/platform",
+      "trendBased": true/false,
+      "trendContext": "Brief 5-10 word description of the trend this capitalizes on (only if trendBased is true)"
     }
   ]
 }

@@ -5,6 +5,147 @@ import { auth, db } from '../firebaseConfig';
 import { doc, setDoc } from 'firebase/firestore';
 import { SparklesIcon, RefreshIcon, SettingsIcon, XMarkIcon, CalendarIcon } from './icons/UIIcons';
 
+type PlatformOption = 'instagram' | 'facebook' | 'x' | 'mypage';
+
+// Visual placeholder card component for post ideas
+const PostIdeaCard: React.FC<{
+  idea: DailyPostIdea;
+  platform: PlatformOption;
+  onUse: () => void;
+  onSwap: () => void;
+  swapping: boolean;
+}> = ({ idea, platform, onUse, onSwap, swapping }) => {
+  // Format-specific styling
+  const formatStyles: Record<string, { aspect: string; icon: string; label: string; gradient: string }> = {
+    reel: { 
+      aspect: 'aspect-[9/16]', 
+      icon: '▶️', 
+      label: 'REEL',
+      gradient: 'from-purple-500 via-pink-500 to-orange-400'
+    },
+    carousel: { 
+      aspect: 'aspect-square', 
+      icon: '◀ ▶', 
+      label: 'CAROUSEL',
+      gradient: 'from-blue-500 to-purple-500'
+    },
+    photo: { 
+      aspect: 'aspect-square', 
+      icon: '📷', 
+      label: 'PHOTO',
+      gradient: 'from-cyan-500 to-blue-500'
+    },
+    story: { 
+      aspect: 'aspect-[9/16]', 
+      icon: '○', 
+      label: 'STORY',
+      gradient: 'from-orange-400 via-pink-500 to-purple-500'
+    },
+    post: { 
+      aspect: 'aspect-square', 
+      icon: '📝', 
+      label: 'POST',
+      gradient: 'from-blue-600 to-blue-400'
+    },
+  };
+
+  const platformColors: Record<PlatformOption, string> = {
+    instagram: 'from-purple-600 via-pink-500 to-orange-400',
+    facebook: 'from-blue-600 to-blue-400',
+    x: 'from-gray-900 to-gray-700',
+    mypage: 'from-pink-500 to-purple-500',
+  };
+
+  const format = idea.format?.toLowerCase() || 'post';
+  const style = formatStyles[format] || formatStyles.post;
+  const isTrending = idea.trendBased || idea.trendContext;
+
+  return (
+    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+      {/* Visual Preview */}
+      <div className={`relative ${format === 'reel' || format === 'story' ? 'h-48' : 'h-40'} bg-gradient-to-br ${style.gradient} flex items-center justify-center overflow-hidden`}>
+        {/* Format indicator */}
+        <div className="absolute top-2 left-2 flex items-center gap-1.5">
+          <span className="px-2 py-1 bg-black/30 backdrop-blur-sm rounded-md text-white text-xs font-bold">
+            {style.label}
+          </span>
+          {isTrending && (
+            <span className="px-2 py-1 bg-orange-500/90 backdrop-blur-sm rounded-md text-white text-xs font-bold flex items-center gap-1">
+              🔥 Trending
+            </span>
+          )}
+        </div>
+        
+        {/* Platform badge */}
+        <div className="absolute top-2 right-2">
+          <span className="px-2 py-1 bg-white/20 backdrop-blur-sm rounded-md text-white text-xs font-medium">
+            {platform === 'instagram' ? '📸 IG' : platform === 'facebook' ? '📘 FB' : platform === 'x' ? '𝕏' : '💖 My Page'}
+          </span>
+        </div>
+
+        {/* Hook preview on the card */}
+        <div className="px-4 text-center">
+          <p className="text-white font-bold text-lg leading-snug drop-shadow-lg line-clamp-3">
+            "{idea.hook?.slice(0, 60)}{idea.hook && idea.hook.length > 60 ? '...' : ''}"
+          </p>
+        </div>
+
+        {/* Format icon */}
+        <div className="absolute bottom-2 right-2 text-white/60 text-xl">
+          {style.icon}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="p-4">
+        <h3 className="font-semibold text-gray-900 dark:text-white line-clamp-2 text-sm">{idea.title}</h3>
+        
+        {idea.shotList?.length > 0 && (
+          <div className="mt-2">
+            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">What to show</p>
+            <ul className="mt-1 space-y-0.5 text-xs text-gray-600 dark:text-gray-300">
+              {idea.shotList.slice(0, 2).map((shot, i) => (
+                <li key={i} className="flex gap-1.5">
+                  <span className="text-primary-500">•</span>
+                  <span className="line-clamp-1">{shot}</span>
+                </li>
+              ))}
+              {idea.shotList.length > 2 && (
+                <li className="text-gray-400 dark:text-gray-500 text-xs">+{idea.shotList.length - 2} more</li>
+              )}
+            </ul>
+          </div>
+        )}
+
+        {/* Trend context if available */}
+        {idea.trendContext && (
+          <p className="mt-2 text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 px-2 py-1 rounded">
+            📈 {idea.trendContext}
+          </p>
+        )}
+
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            onClick={onUse}
+            className="flex-1 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700"
+          >
+            Use this
+          </button>
+          <button
+            type="button"
+            onClick={onSwap}
+            disabled={swapping}
+            className="py-2 px-3 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+          >
+            {swapping ? <RefreshIcon className="w-4 h-4 animate-spin inline" /> : '↻'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const GOAL_OPTIONS = [
   { id: 'reach', label: 'Reach' },
   { id: 'engagement', label: 'Engagement' },
@@ -19,8 +160,6 @@ const FORMAT_OPTIONS = [
   { id: 'story', label: 'Story' },
 ];
 
-type PlatformOption = 'instagram' | 'facebook' | 'x' | 'mypage';
-
 const PLATFORM_OPTIONS: { id: PlatformOption; label: string; icon: string }[] = [
   { id: 'instagram', label: 'Instagram', icon: '📸' },
   { id: 'facebook', label: 'Facebook', icon: '📘' },
@@ -34,7 +173,7 @@ const DEFAULT_SETTINGS: WhatToPostSettings = {
   effort: 15,
   format: 'auto',
   tone: 'relatable',
-  useTrends: false,
+  useTrends: true, // Always use trends now - integrated into idea generation
   spicyMode: false,
 };
 
@@ -102,7 +241,8 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
             effort: s.effort,
             format: platformToUse === 'instagram' ? s.format : 'auto',
             tone: s.tone,
-            useTrends: s.useTrends ?? false,
+            useTrends: true, // Always use trends - integrated into idea generation
+            includeTrendContext: true, // Include trend context in response for display
             spicyMode: s.spicyMode ?? false,
             swapId: opts.swapId,
             existingIdeas: opts.existingIdeas,
@@ -363,16 +503,12 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
                 </div>
               )}
 
-              {/* Use Trends */}
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="useTrends"
-                  checked={draftSettings.useTrends ?? false}
-                  onChange={(e) => setDraftSettings((p) => ({ ...p, useTrends: e.target.checked }))}
-                  className="rounded border-gray-300 dark:border-gray-600"
-                />
-                <label htmlFor="useTrends" className="text-sm text-gray-700 dark:text-gray-300">Use trends</label>
+              {/* Trends info - now always included */}
+              <div className="p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                <p className="text-sm text-orange-700 dark:text-orange-300 flex items-center gap-2">
+                  <span>🔥</span>
+                  <span><strong>Trends included</strong> — Ideas are automatically based on what's trending in your niche.</span>
+                </p>
               </div>
             </div>
             <div className="mt-6 flex justify-end">
@@ -446,14 +582,15 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
       {/* Initial State - Before generating */}
       {!hasGenerated && !loading && (
         <div className="text-center py-16">
-          <div className="w-20 h-20 bg-primary-100 dark:bg-primary-900/40 rounded-full flex items-center justify-center mx-auto mb-6">
-            <SparklesIcon className="w-10 h-10 text-primary-600 dark:text-primary-400" />
+          <div className="w-20 h-20 bg-gradient-to-br from-orange-400 to-pink-500 rounded-full flex items-center justify-center mx-auto mb-6">
+            <span className="text-3xl">🔥</span>
           </div>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Ready to generate ideas?</h2>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Trend-powered post ideas</h2>
           <p className="text-gray-500 dark:text-gray-400 mb-6 max-w-md mx-auto">
-            {selectedPlatform === 'instagram' && 'Get instant Instagram post ideas for Reels, Carousels, Photos, and Stories.'}
-            {selectedPlatform === 'facebook' && 'Get instant Facebook post ideas tailored for engagement.'}
-            {selectedPlatform === 'mypage' && 'Get ideas based on what your fans love—analyzed from your engagement data.'}
+            {selectedPlatform === 'instagram' && 'Get trend-based Instagram ideas with visual previews for Reels, Carousels, Photos, and Stories.'}
+            {selectedPlatform === 'facebook' && 'Get trending Facebook post ideas tailored for maximum engagement.'}
+            {selectedPlatform === 'x' && 'Get trending X post ideas optimized for reach and engagement.'}
+            {selectedPlatform === 'mypage' && 'Get ideas based on trends + what your fans love—analyzed from your engagement data.'}
           </p>
           <div className="flex justify-center gap-3 mb-4">
             {PLATFORM_OPTIONS.map((p) => (
@@ -503,59 +640,30 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
 
       {ideas.length > 0 && (
         <>
-          {/* Platform indicator */}
-          <div className="mb-4 flex items-center gap-2">
-            <span className="text-sm text-gray-500 dark:text-gray-400">Showing ideas for:</span>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 text-sm font-medium">
-              {PLATFORM_OPTIONS.find(p => p.id === selectedPlatform)?.icon}
-              {PLATFORM_OPTIONS.find(p => p.id === selectedPlatform)?.label}
+          {/* Platform indicator with trend badge */}
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-500 dark:text-gray-400">Showing ideas for:</span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 text-sm font-medium">
+                {PLATFORM_OPTIONS.find(p => p.id === selectedPlatform)?.icon}
+                {PLATFORM_OPTIONS.find(p => p.id === selectedPlatform)?.label}
+              </span>
+            </div>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 text-xs font-medium">
+              🔥 Trend-powered ideas
             </span>
           </div>
           
-          <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid gap-5 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {ideas.map((idea, index) => (
-              <div
+              <PostIdeaCard
                 key={idea.id}
-                className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden shadow-sm"
-              >
-                <div className="p-4">
-                  <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 capitalize">
-                    {idea.format}
-                  </span>
-                  <h3 className="mt-2 font-semibold text-gray-900 dark:text-white line-clamp-2">{idea.title}</h3>
-                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-300 line-clamp-2">{idea.hook}</p>
-                  {idea.shotList?.length > 0 && (
-                    <div className="mt-3">
-                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">What to show</p>
-                      <ul className="mt-1 space-y-0.5 text-sm text-gray-700 dark:text-gray-300">
-                        {idea.shotList.slice(0, 3).map((shot, i) => (
-                          <li key={i} className="flex gap-1.5">
-                            <span className="text-primary-500">•</span>
-                            <span className="line-clamp-1">{shot}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setUseThisIdea(idea)}
-                      className="flex-1 min-w-[80px] py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700"
-                    >
-                      Use this
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSwap(idea, index)}
-                      disabled={swapIndex === index}
-                      className="py-2 px-3 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
-                    >
-                      {swapIndex === index ? <RefreshIcon className="w-4 h-4 animate-spin inline" /> : 'Swap'}
-                    </button>
-                  </div>
-                </div>
-              </div>
+                idea={idea}
+                platform={selectedPlatform}
+                onUse={() => setUseThisIdea(idea)}
+                onSwap={() => handleSwap(idea, index)}
+                swapping={swapIndex === index}
+              />
             ))}
           </div>
         </>

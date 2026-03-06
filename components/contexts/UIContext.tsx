@@ -113,7 +113,7 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         calendar: '/my-schedule',
         approvals: '/compose/drafts',
         team: '/team',
-        opportunities: '/find-trends',
+        opportunities: '/plan-my-week', // Redirected: Trends now integrated into What to Post
         profile: '/profile',
         about: '/about',
         contact: '/contact',
@@ -145,8 +145,9 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     pathToPage['/onlyfansStudio'] = 'onlyfansStudio';
     // Legacy approvals route
     pathToPage['/approvals'] = 'approvals';
-    // Legacy trends route
-    pathToPage['/opportunities'] = 'opportunities';
+    // Legacy trends route - redirect to strategy (What to Post)
+    pathToPage['/opportunities'] = 'strategy';
+    pathToPage['/find-trends'] = 'strategy';
     pathToPage['/compose'] = 'compose';
     pathToPage['/compose/drafts'] = 'compose';
     pathToPage['/drafts'] = 'compose';

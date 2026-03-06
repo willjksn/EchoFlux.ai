@@ -81,7 +81,7 @@ export const KNOWN_APP_ROUTES: readonly string[] = [
 ] as const;
 
 /** Premium Studio tab IDs only (for /studio?tab=...) */
-export const STUDIO_TAB_IDS = ['ideas', 'drops', 'shootIdeas', 'dmSession', 'persona', 'teasers'] as const;
+export const STUDIO_TAB_IDS = ['ideas', 'drops', 'dmSession', 'persona', 'teasers'] as const;
 export type StudioTabId = (typeof STUDIO_TAB_IDS)[number];
 
 /** Fan Hub tab IDs only (for /fan?tab=...) */
@@ -92,7 +92,6 @@ export type FanHubTabId = (typeof FAN_HUB_TAB_IDS)[number];
 export const STUDIO_TAB_LABELS: Record<StudioTabId, string> = {
   ideas: 'New Ideas',
   drops: 'Drops & PPV',
-  shootIdeas: 'Shoot Ideas',
   dmSession: 'DM Session',
   persona: 'Persona Builder',
   teasers: 'Teasers',

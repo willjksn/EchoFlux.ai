@@ -606,8 +606,8 @@ export const MediaLibrary: React.FC = () => {
               <div className="flex items-center gap-2">
                 {/* Voice Recording Button */}
                 {isSavingVoice ? (
-                  <div className="px-4 py-2 text-sm bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300 rounded-md flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
+                  <div className="px-4 py-2 text-sm bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-md flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
                     Saving...
                   </div>
                 ) : isRequestingMic ? (
@@ -632,7 +632,7 @@ export const MediaLibrary: React.FC = () => {
                 ) : (
                   <button
                     onClick={startRecording}
-                    className="px-4 py-2 text-sm bg-pink-600 text-white rounded-md hover:bg-pink-700 flex items-center gap-2"
+                    className="px-4 py-2 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 flex items-center gap-2"
                   >
                     <MicrophoneIcon className="w-4 h-4" />
                     Record Voice
@@ -766,7 +766,7 @@ export const MediaLibrary: React.FC = () => {
                         onClick={() => setFilterType('audio')}
                         className={`px-3 py-1 rounded-md text-sm flex items-center gap-1.5 ${
                           filterType === 'audio'
-                            ? 'bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300'
+                            ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
                             : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                         }`}
                       >
@@ -862,8 +862,8 @@ export const MediaLibrary: React.FC = () => {
                     onClick={() => setViewingItem(item)}
                   >
                     {item.type === 'audio' ? (
-                      <div className={`${viewMode === 'grid' ? 'w-full h-full' : 'w-24 h-24'} bg-pink-100 dark:bg-pink-900/30 flex flex-col items-center justify-center p-3`}>
-                        <MicrophoneIcon className="w-8 h-8 text-pink-500 dark:text-pink-400 mb-2" />
+                      <div className={`${viewMode === 'grid' ? 'w-full h-full' : 'w-24 h-24'} bg-primary-100 dark:bg-primary-900/30 flex flex-col items-center justify-center p-3`}>
+                        <MicrophoneIcon className="w-8 h-8 text-primary-500 dark:text-primary-400 mb-2" />
                         <audio
                           src={item.url}
                           controls
@@ -961,7 +961,7 @@ export const MediaLibrary: React.FC = () => {
                     {/* Type indicator */}
                     <div className="absolute top-2 right-2">
                       {item.type === 'audio' ? (
-                        <MicrophoneIcon className="w-4 h-4 text-white bg-pink-500/80 rounded p-1" />
+                        <MicrophoneIcon className="w-4 h-4 text-white bg-primary-500/80 rounded p-1" />
                       ) : item.type === 'video' ? (
                         <VideoIcon className="w-4 h-4 text-white bg-black/50 rounded p-1" />
                       ) : (
@@ -1042,8 +1042,8 @@ export const MediaLibrary: React.FC = () => {
               <XMarkIcon className="w-6 h-6" />
             </button>
             {viewingItem.type === 'audio' ? (
-              <div className="bg-gradient-to-br from-pink-100 to-pink-200 dark:from-pink-900/40 dark:to-pink-800/40 rounded-lg p-8 flex flex-col items-center justify-center">
-                <MicrophoneIcon className="w-20 h-20 text-pink-500 dark:text-pink-400 mb-6" />
+              <div className="bg-gradient-to-br from-primary-100 to-primary-200 dark:from-primary-900/40 dark:to-primary-800/40 rounded-lg p-8 flex flex-col items-center justify-center">
+                <MicrophoneIcon className="w-20 h-20 text-primary-500 dark:text-primary-400 mb-6" />
                 <audio
                   src={viewingItem.url}
                   controls

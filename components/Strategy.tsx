@@ -78,6 +78,9 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
     const skipAutoloadRef = useRef(false);
     const canUseCalendar = hasCalendarAccess(user);
     
+    // View mode for roadmap display: 'cards' (visual placeholders) or 'list' (detailed list)
+    const [roadmapViewMode, setRoadmapViewMode] = useState<'cards' | 'list'>('cards');
+    
     // Usage stats
     const [usageStats, setUsageStats] = useState<{
         strategy: { count: number; limit: number; remaining: number; month: string };
@@ -1892,6 +1895,40 @@ Return only the rewritten context description.
 
                     </div>
 
+                    {/* View mode toggle */}
+                    <div className="flex items-center justify-between mb-4 bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm border border-gray-200 dark:border-gray-700">
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">View:</span>
+                            <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                                <button
+                                    onClick={() => setRoadmapViewMode('cards')}
+                                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                                        roadmapViewMode === 'cards'
+                                            ? 'bg-primary-600 text-white shadow-sm'
+                                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                                    }`}
+                                >
+                                    📱 Visual Cards
+                                </button>
+                                <button
+                                    onClick={() => setRoadmapViewMode('list')}
+                                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                                        roadmapViewMode === 'list'
+                                            ? 'bg-primary-600 text-white shadow-sm'
+                                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                                    }`}
+                                >
+                                    📋 Detailed List
+                                </button>
+                            </div>
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {roadmapViewMode === 'cards' 
+                                ? 'Visual previews with ready-to-use captions' 
+                                : 'Full details with media upload options'}
+                        </p>
+                    </div>
+
                     {plan.weeks.map((week, weekIndex) => {
                         const weekProgress = selectedStrategy?.linkedPostIds 
                             ? Math.round((week.content.filter((_, idx) => selectedStrategy.linkedPostIds?.includes(`week-${weekIndex}-day-${idx}`)).length / week.content.length) * 100)
@@ -1927,6 +1964,160 @@ Return only the rewritten context description.
                                     {week.content.length} Total
                                 </span>
                             </div>
+                            
+                            {/* Visual Cards View */}
+                            {roadmapViewMode === 'cards' && (
+                                <div className="p-4">
+                                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                                        {week.content.map((day, dayIndex) => {
+                                            const formatStyles: Record<string, { gradient: string; icon: string }> = {
+                                                'Reel': { gradient: 'from-purple-500 via-pink-500 to-orange-400', icon: '▶️' },
+                                                'Post': { gradient: 'from-blue-500 to-cyan-400', icon: '📷' },
+                                                'Story': { gradient: 'from-orange-400 via-pink-500 to-purple-500', icon: '○' },
+                                            };
+                                            const style = formatStyles[day.format] || formatStyles['Post'];
+                                            const isUsed = Boolean(day.linkedPostId) || day.status === 'scheduled' || day.status === 'posted';
+                                            
+                                            // Calculate scheduled date
+                                            const today = new Date();
+                                            const scheduledDate = new Date(today);
+                                            scheduledDate.setDate(today.getDate() + (weekIndex * 7) + day.dayOffset);
+                                            
+                                            return (
+                                                <div 
+                                                    key={dayIndex} 
+                                                    className={`rounded-xl border overflow-hidden hover:shadow-lg transition-all ${
+                                                        isUsed 
+                                                            ? 'border-green-300 dark:border-green-700 bg-green-50/50 dark:bg-green-900/10' 
+                                                            : 'border-gray-200 dark:border-gray-700'
+                                                    }`}
+                                                >
+                                                    {/* Visual Preview Header */}
+                                                    <div className={`relative h-32 bg-gradient-to-br ${style.gradient} flex items-center justify-center p-3`}>
+                                                        {/* Day & Format badges */}
+                                                        <div className="absolute top-2 left-2 flex items-center gap-1.5">
+                                                            <span className="px-2 py-1 bg-black/30 backdrop-blur-sm rounded-md text-white text-xs font-bold">
+                                                                Day {day.dayOffset + 1}
+                                                            </span>
+                                                            <span className="px-2 py-1 bg-white/20 backdrop-blur-sm rounded-md text-white text-xs font-bold">
+                                                                {day.format}
+                                                            </span>
+                                                        </div>
+                                                        
+                                                        {/* Status badge */}
+                                                        {isUsed && (
+                                                            <div className="absolute top-2 right-2">
+                                                                <span className="px-2 py-1 bg-green-500/90 backdrop-blur-sm rounded-md text-white text-xs font-bold">
+                                                                    ✓ {day.status || 'Created'}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                        
+                                                        {/* Topic preview */}
+                                                        <p className="text-white font-bold text-sm leading-snug drop-shadow-lg line-clamp-3 text-center px-2">
+                                                            {day.topic}
+                                                        </p>
+                                                        
+                                                        {/* Format icon */}
+                                                        <div className="absolute bottom-2 right-2 text-white/60 text-lg">
+                                                            {style.icon}
+                                                        </div>
+                                                        
+                                                        {/* Date */}
+                                                        <div className="absolute bottom-2 left-2">
+                                                            <span className="px-2 py-1 bg-black/30 backdrop-blur-sm rounded-md text-white text-xs">
+                                                                {scheduledDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    {/* Caption Preview */}
+                                                    <div className="p-3 bg-white dark:bg-gray-800">
+                                                        <div className="mb-2">
+                                                            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">Caption</p>
+                                                            <p className="text-xs text-gray-700 dark:text-gray-300 line-clamp-4 whitespace-pre-wrap">
+                                                                {day.caption || day.topic}
+                                                            </p>
+                                                        </div>
+                                                        
+                                                        {/* Action buttons */}
+                                                        <div className="flex gap-2 mt-3">
+                                                            <button
+                                                                onClick={() => {
+                                                                    navigator.clipboard.writeText(day.caption || day.topic);
+                                                                    showToast('Caption copied!', 'success');
+                                                                }}
+                                                                className="flex-1 py-1.5 text-xs font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 rounded-md hover:bg-primary-100 dark:hover:bg-primary-900/40 flex items-center justify-center gap-1"
+                                                                title="Copy caption to clipboard"
+                                                            >
+                                                                <CopyIcon className="w-3 h-3" /> Copy
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    // Send to Compose with pre-filled caption
+                                                                    const draft = {
+                                                                        id: `strategy_${selectedStrategy?.id || 'temp'}_${weekIndex}_${dayIndex}_${Date.now()}`,
+                                                                        content: day.caption || day.topic,
+                                                                        platforms: [day.platform || 'Instagram'],
+                                                                        postGoal: goal === 'Lead Generation' ? 'leads' : goal === 'Sales Conversion' ? 'sales' : 'engagement',
+                                                                        postTone: tone || 'friendly',
+                                                                    };
+                                                                    localStorage.setItem('draftPostToEdit', JSON.stringify(draft));
+                                                                    setActivePage('compose');
+                                                                    showToast('Opened in Compose!', 'success');
+                                                                }}
+                                                                className="flex-1 py-1.5 text-xs font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 flex items-center justify-center gap-1"
+                                                                title="Edit in Compose"
+                                                            >
+                                                                ✏️ Compose
+                                                            </button>
+                                                        </div>
+                                                        
+                                                        {/* Repurpose button */}
+                                                        <button
+                                                            onClick={() => {
+                                                                // Send to Compose with repurpose flag
+                                                                const repurposeData = {
+                                                                    content: day.caption || day.topic,
+                                                                    originalPlatform: day.platform || 'Instagram',
+                                                                    action: 'repurpose',
+                                                                };
+                                                                localStorage.setItem('repurposeFromStrategy', JSON.stringify(repurposeData));
+                                                                setActivePage('compose');
+                                                                showToast('Opening Repurpose in Compose...', 'success');
+                                                            }}
+                                                            className="w-full mt-2 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 rounded-md hover:bg-indigo-100 dark:hover:bg-indigo-900/40 flex items-center justify-center gap-1"
+                                                            title="Repurpose this caption for other platforms"
+                                                        >
+                                                            🔄 Repurpose for Other Platforms
+                                                        </button>
+                                                        
+                                                        {/* Quick view toggle to see suggestions */}
+                                                        {((day.imageIdeas && day.imageIdeas.length > 0) || (day.videoIdeas && day.videoIdeas.length > 0)) && (
+                                                            <details className="mt-2">
+                                                                <summary className="text-xs text-gray-500 dark:text-gray-400 cursor-pointer hover:text-primary-600">
+                                                                    💡 View content suggestions
+                                                                </summary>
+                                                                <div className="mt-2 p-2 bg-gray-50 dark:bg-gray-700/50 rounded text-xs space-y-1">
+                                                                    {day.imageIdeas?.slice(0, 2).map((idea, i) => (
+                                                                        <p key={`img-${i}`} className="text-gray-600 dark:text-gray-300">📸 {idea}</p>
+                                                                    ))}
+                                                                    {day.videoIdeas?.slice(0, 1).map((idea, i) => (
+                                                                        <p key={`vid-${i}`} className="text-gray-600 dark:text-gray-300">🎥 {idea}</p>
+                                                                    ))}
+                                                                </div>
+                                                            </details>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {/* Detailed List View (existing) */}
+                            {roadmapViewMode === 'list' && (
                             <div className="divide-y divide-gray-100 dark:divide-gray-700">
                                 {week.content.map((day, dayIndex) => {
                                     const itemKey = `${weekIndex}-${dayIndex}`;
@@ -2494,6 +2685,7 @@ Return only the rewritten context description.
                                     );
                                 })}
                             </div>
+                            )}
                         </div>
                         );
                     })}

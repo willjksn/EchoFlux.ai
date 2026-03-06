@@ -7,7 +7,7 @@ import { FanHubFeed, type FeedPost } from "./FanHubFeed";
 import { EmojiButton } from "./EmojiPicker";
 
 type CaptionStyle = "static" | "scroll-up" | "scroll-across" | "dissolve";
-type AiTone = "" | "flirty" | "casual" | "motivational" | "premium";
+type AiTone = "" | "flirty" | "casual" | "motivational" | "premium" | "playful" | "mysterious" | "confident" | "custom";
 
 interface MediaItem {
   url: string;
@@ -30,6 +30,10 @@ const AI_TONES: { id: AiTone; label: string }[] = [
   { id: "casual", label: "Casual" },
   { id: "motivational", label: "Motivational" },
   { id: "premium", label: "Premium" },
+  { id: "playful", label: "Playful" },
+  { id: "mysterious", label: "Mysterious" },
+  { id: "confident", label: "Confident" },
+  { id: "custom", label: "Custom..." },
 ];
 
 // Icons
@@ -158,6 +162,7 @@ export const FanHubPosts: React.FC = () => {
   // Caption
   const [caption, setCaption] = useState("");
   const [aiTone, setAiTone] = useState<AiTone>("");
+  const [customTone, setCustomTone] = useState("");
   const [usePersonality, setUsePersonality] = useState(true);
   const [generating, setGenerating] = useState(false);
   
@@ -457,13 +462,16 @@ export const FanHubPosts: React.FC = () => {
       const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
       if (!token) throw new Error("Not authenticated");
       
+      // Use custom tone text if "custom" is selected, otherwise use the preset
+      const effectiveTone = aiTone === "custom" && customTone.trim() ? customTone.trim() : (aiTone || "flirty");
+      
       const res = await fetch("/api/generateCaption", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           prompt: mode === "suggest" ? caption : "Write an engaging caption for this fan page post",
           platform: "fanpage",
-          tone: aiTone || "flirty",
+          tone: effectiveTone,
           usePersonality,
           mode,
         }),
@@ -481,7 +489,7 @@ export const FanHubPosts: React.FC = () => {
     } finally {
       setGenerating(false);
     }
-  }, [media.length, caption, aiTone, usePersonality, showToast]);
+  }, [media.length, caption, aiTone, customTone, usePersonality, showToast]);
 
   // Poll handlers
   const addPollOption = () => {
@@ -670,6 +678,7 @@ export const FanHubPosts: React.FC = () => {
     setMedia([]);
     setCaption("");
     setAiTone("");
+    setCustomTone("");
     setLockEnabled(false);
     setLockPrice("");
     setPollEnabled(false);
@@ -914,6 +923,15 @@ export const FanHubPosts: React.FC = () => {
                       <option key={tone.id} value={tone.id}>{tone.label}</option>
                     ))}
                   </select>
+                  {aiTone === "custom" && (
+                    <input
+                      type="text"
+                      value={customTone}
+                      onChange={(e) => setCustomTone(e.target.value)}
+                      placeholder="e.g., sassy, dreamy..."
+                      className="px-2 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 w-32"
+                    />
+                  )}
                   <label className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
                     <input
                       type="checkbox"

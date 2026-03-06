@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppContext } from './AppContext';
-import { LogoIcon, DashboardIcon, TrendingIcon, TargetIcon, ComposeIcon, CalendarIcon, ImageIcon, SparklesIcon, HeartIcon, SettingsIcon } from './icons/UIIcons';
+import { LogoIcon, DashboardIcon, TargetIcon, ComposeIcon, CalendarIcon, ImageIcon, SparklesIcon, HeartIcon, SettingsIcon } from './icons/UIIcons';
 
 interface CreatorOnboardingModalProps {
     onComplete: () => void;
@@ -298,12 +298,6 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                             description="Store and organize your media. Tag content for easy reuse."
                         />
                         <FeatureCard 
-                            icon={<TrendingIcon />}
-                            title="Trends"
-                            description="Discover trending topics in your niche. Create content that resonates."
-                            color="emerald"
-                        />
-                        <FeatureCard 
                             icon={<CalendarIcon />}
                             title="Calendar"
                             description="Plan and visualize your content schedule. See your posting plan at a glance."
@@ -385,16 +379,12 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                     
                     <div className="space-y-3">
                         <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                            <h4 className="font-semibold text-purple-900 dark:text-purple-200 text-sm">New Ideas</h4>
-                            <p className="text-xs text-purple-700 dark:text-purple-300 mt-1">Generate fresh content ideas tailored to your niche and audience.</p>
+                            <h4 className="font-semibold text-purple-900 dark:text-purple-200 text-sm">🔥 New Ideas</h4>
+                            <p className="text-xs text-purple-700 dark:text-purple-300 mt-1">Trend-powered content ideas with visual previews for every format.</p>
                         </div>
                         <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
                             <h4 className="font-semibold text-purple-900 dark:text-purple-200 text-sm">Drops & PPV</h4>
                             <p className="text-xs text-purple-700 dark:text-purple-300 mt-1">Plan and organize your content drops and pay-per-view releases.</p>
-                        </div>
-                        <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                            <h4 className="font-semibold text-purple-900 dark:text-purple-200 text-sm">Shoot Ideas</h4>
-                            <p className="text-xs text-purple-700 dark:text-purple-300 mt-1">Get AI-powered shoot concepts and creative direction.</p>
                         </div>
                         <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
                             <h4 className="font-semibold text-purple-900 dark:text-purple-200 text-sm">DM Session</h4>

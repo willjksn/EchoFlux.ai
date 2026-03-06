@@ -43,7 +43,8 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
     const [showTeaserPackModal, setShowTeaserPackModal] = useState(false);
     const [teaserPromotionType, setTeaserPromotionType] = useState<'PPV' | 'New set' | 'Promo' | 'General tease'>('PPV');
     const [teaserConcept, setTeaserConcept] = useState('');
-    const [teaserTone, setTeaserTone] = useState<'Soft' | 'Teasing' | 'Flirty' | 'Bold'>('Teasing');
+    const [teaserTone, setTeaserTone] = useState<'Soft' | 'Teasing' | 'Flirty' | 'Bold' | 'Playful' | 'Mysterious' | 'Sultry' | 'Confident' | 'Innocent' | 'Custom'>('Teasing');
+    const [customTeaserTone, setCustomTeaserTone] = useState('');
     const [isGeneratingTeaserPack, setIsGeneratingTeaserPack] = useState(false);
     const [teaserPack, setTeaserPack] = useState<TeaserPack | null>(null);
     const [teaserError, setTeaserError] = useState<string | null>(null);
@@ -673,6 +674,7 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
             const creatorContext = useCreatorPersonalityTeaserPack && creatorPersonality
                 ? creatorPersonality
                 : '';
+            const effectiveTone = teaserTone === 'Custom' && customTeaserTone.trim() ? customTeaserTone.trim() : teaserTone;
             const resp = await fetch('/api/generateTeaserPack', {
                 method: 'POST',
                 headers: {
@@ -682,7 +684,7 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
                 body: JSON.stringify({
                     promotionType: teaserPromotionType,
                     concept: conceptValue,
-                    tone: teaserTone,
+                    tone: effectiveTone,
                     creatorPersonality: creatorContext,
                     aiPersonality: aiPersonality || '',
                     aiTone: aiTone || '',
@@ -699,7 +701,7 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
             // Usage tracking (best-effort)
             try {
                 const { logUsageEvent } = await import('../src/services/usageEvents');
-                await logUsageEvent(user.id, 'of_generate_teaser_pack', { promotionType: teaserPromotionType, tone: teaserTone });
+                await logUsageEvent(user.id, 'of_generate_teaser_pack', { promotionType: teaserPromotionType, tone: effectiveTone });
             } catch {
                 // ignore
             }
@@ -854,16 +856,6 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
                 </div>
             );
         }
-        // Shoot Ideas: shoot concepts only
-        if (studioTab === 'shootIdeas') {
-            return (
-                <div className="max-w-7xl mx-auto">
-                    <ErrorBoundary>
-                        <OnlyFansContentBrain key="shootIdeas" initialTab="shootConcepts" singleTabMode />
-                    </ErrorBoundary>
-                </div>
-            );
-        }
         // DM Session: messaging toolkit only
         if (studioTab === 'dmSession') {
             return (
@@ -938,8 +930,20 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
                                         <option value="Teasing">Teasing</option>
                                         <option value="Flirty">Flirty</option>
                                         <option value="Bold">Bold</option>
+                                        <option value="Playful">Playful</option>
+                                        <option value="Mysterious">Mysterious</option>
+                                        <option value="Sultry">Sultry</option>
+                                        <option value="Confident">Confident</option>
+                                        <option value="Innocent">Innocent</option>
+                                        <option value="Custom">Custom...</option>
                                     </select>
                                 </div>
+                                {teaserTone === 'Custom' && (
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Custom Tone</label>
+                                        <input value={customTeaserTone} onChange={(e) => setCustomTeaserTone(e.target.value)} placeholder="e.g., sassy, dreamy, naughty..." className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+                                    </div>
+                                )}
                                 <div className="md:col-span-1">
                                     <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Concept (one line)</label>
                                     <input value={teaserConcept} onChange={(e) => setTeaserConcept(e.target.value)} placeholder="e.g., gym mirror tease → full set inside" className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
@@ -1271,8 +1275,25 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
                                         <option value="Teasing">Teasing</option>
                                         <option value="Flirty">Flirty</option>
                                         <option value="Bold">Bold</option>
+                                        <option value="Playful">Playful</option>
+                                        <option value="Mysterious">Mysterious</option>
+                                        <option value="Sultry">Sultry</option>
+                                        <option value="Confident">Confident</option>
+                                        <option value="Innocent">Innocent</option>
+                                        <option value="Custom">Custom...</option>
                                     </select>
                                 </div>
+                                {teaserTone === 'Custom' && (
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Custom Tone</label>
+                                        <input
+                                            value={customTeaserTone}
+                                            onChange={(e) => setCustomTeaserTone(e.target.value)}
+                                            placeholder="e.g., sassy, dreamy, naughty..."
+                                            className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                        />
+                                    </div>
+                                )}
                                 <div className="md:col-span-1">
                                     <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Concept (one line)</label>
                                     <input

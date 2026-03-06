@@ -951,6 +951,8 @@ export interface DailyPostIdea {
     cta?: string;
     hashtags: string[];
     whyThisWorks?: string;
+    trendBased?: boolean;
+    trendContext?: string;
 }
 
 /** Settings used when generating daily ideas */

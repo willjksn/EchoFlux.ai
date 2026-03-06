@@ -4251,18 +4251,21 @@ Output format:
     }, [showMediaVaultModal]);
 
     const allTabs: { id: ContentType; label: string }[] = [
-        { id: 'trends', label: 'Find Trends' },
-        { id: 'weeklyPlan', label: 'Plan My Week' },
-        { id: 'captions', label: 'Captions' },
-        { id: 'postIdeas', label: 'Content Ideas' },
-        { id: 'shootConcepts', label: 'Shoot Ideas' },
+        { id: 'postIdeas', label: 'New Ideas' },
         { id: 'monetizationPlanner', label: 'Drops & PPV' },
-        { id: 'messaging', label: 'DM Sessions' },
+        { id: 'messaging', label: 'DM Session' },
+        { id: 'captions', label: 'Teasers' },
         { id: 'mediaCaptions', label: 'Image/Video Captions' }, // Hidden but kept for stability
-        { id: 'guides', label: 'Playbooks' },
+        { id: 'guides', label: 'Playbooks' }, // Hidden but kept for stability
+        { id: 'trends', label: 'Find Trends' }, // Hidden - now integrated into New Ideas
+        { id: 'weeklyPlan', label: 'Plan My Week' }, // Hidden but kept for stability
+        { id: 'shootConcepts', label: 'Shoot Ideas' }, // Hidden - merged with New Ideas
     ];
-    // Filter out mediaCaptions and guides tabs (history is now in captions tab)
-    const tabs = allTabs.filter(tab => tab.id !== 'mediaCaptions' && tab.id !== 'guides') as { id: ContentType; label: string }[];
+    // Filter tabs to show only: New Ideas, Drops & PPV, DM Session, Teasers
+    // Note: Persona Builder is handled separately via OnlyFansRoleplayIdeas component
+    const tabs = allTabs.filter(tab => 
+        ['postIdeas', 'monetizationPlanner', 'messaging', 'captions'].includes(tab.id)
+    ) as { id: ContentType; label: string }[];
 
     // Show loading state
     if (isLoading) {
@@ -5418,16 +5421,22 @@ Output format:
                     </div>
 
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                                Generate Post Ideas
-                            </h2>
-                            {savedPostIdeas.length > 0 && (
-                                <span className="text-sm text-gray-500 dark:text-gray-400">
-                                    {savedPostIdeas.length} saved
-                                </span>
-                            )}
-                        </div>
+                            <div className="flex items-center justify-between mb-4">
+                                <div>
+                                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                                        Generate New Ideas
+                                    </h2>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1.5 mt-1">
+                                        <span className="text-orange-500">🔥</span>
+                                        Powered by current trends in your niche
+                                    </p>
+                                </div>
+                                {savedPostIdeas.length > 0 && (
+                                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                                        {savedPostIdeas.length} saved
+                                    </span>
+                                )}
+                            </div>
                         
                         <div className="space-y-4">
                             <div className="relative">
@@ -5543,27 +5552,70 @@ Output format:
                         </div>
                     </div>
 
-                    {/* Generated Post Ideas */}
+                    {/* Generated Post Ideas - Visual Cards */}
                     {Array.isArray(generatedPostIdeas) && generatedPostIdeas.length > 0 && (
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                                Post Ideas
-                            </h3>
-                            <div className="space-y-3">
-                                {generatedPostIdeas.map((idea, index) => (
-                                    <div
-                                        key={index}
-                                        className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
-                                    >
-                                        <p className="text-gray-900 dark:text-white">{idea}</p>
-                                        <button
-                                            onClick={() => copyToClipboard(idea)}
-                                            className="mt-2 text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                    New Ideas
+                                </h3>
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 text-xs font-medium">
+                                    🔥 Trend-powered
+                                </span>
+                            </div>
+                            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                {generatedPostIdeas.map((idea, index) => {
+                                    const formats = ['Reel', 'Carousel', 'Photo', 'Story'];
+                                    const format = formats[index % formats.length];
+                                    const formatStyles: Record<string, { gradient: string; icon: string; aspect: string }> = {
+                                        'Reel': { gradient: 'from-purple-500 via-pink-500 to-orange-400', icon: '▶️', aspect: 'h-32' },
+                                        'Carousel': { gradient: 'from-blue-500 to-purple-500', icon: '◀ ▶', aspect: 'h-28' },
+                                        'Photo': { gradient: 'from-cyan-500 to-blue-500', icon: '📷', aspect: 'h-28' },
+                                        'Story': { gradient: 'from-orange-400 via-pink-500 to-purple-500', icon: '○', aspect: 'h-32' },
+                                    };
+                                    const style = formatStyles[format];
+                                    const isTrending = index < 2;
+                                    
+                                    return (
+                                        <div
+                                            key={index}
+                                            className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-md transition-shadow"
                                         >
-                                            Copy
-                                        </button>
-                                    </div>
-                                ))}
+                                            {/* Visual Preview Header */}
+                                            <div className={`relative ${style.aspect} bg-gradient-to-br ${style.gradient} flex items-center justify-center p-4`}>
+                                                {/* Format badge */}
+                                                <div className="absolute top-2 left-2 flex items-center gap-1.5">
+                                                    <span className="px-2 py-1 bg-black/30 backdrop-blur-sm rounded-md text-white text-xs font-bold">
+                                                        {format.toUpperCase()}
+                                                    </span>
+                                                    {isTrending && (
+                                                        <span className="px-2 py-1 bg-orange-500/90 backdrop-blur-sm rounded-md text-white text-xs font-bold">
+                                                            🔥 Trending
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {/* Hook preview */}
+                                                <p className="text-white font-bold text-sm leading-snug drop-shadow-lg line-clamp-3 text-center">
+                                                    "{idea.length > 80 ? idea.slice(0, 80) + '...' : idea}"
+                                                </p>
+                                                {/* Format icon */}
+                                                <div className="absolute bottom-2 right-2 text-white/60 text-lg">
+                                                    {style.icon}
+                                                </div>
+                                            </div>
+                                            {/* Content */}
+                                            <div className="p-3 bg-gray-50 dark:bg-gray-700/50">
+                                                <p className="text-xs text-gray-600 dark:text-gray-300 line-clamp-2 mb-2">{idea}</p>
+                                                <button
+                                                    onClick={() => copyToClipboard(idea)}
+                                                    className="w-full py-1.5 text-xs font-medium text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded"
+                                                >
+                                                    Copy Idea
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     )}

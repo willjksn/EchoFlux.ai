@@ -1,6 +1,6 @@
 import React from 'react';
 import { Page } from '../types';
-import { DashboardIcon, AnalyticsIcon, SettingsIcon, LogoIcon, ComposeIcon, TrendingIcon, TeamIcon, RocketIcon, BriefcaseIcon, AdminIcon, CalendarIcon, KanbanIcon, GlobeIcon, TargetIcon, SparklesIcon, ImageIcon, HeartIcon } from './icons/UIIcons';
+import { DashboardIcon, SettingsIcon, LogoIcon, ComposeIcon, AdminIcon, CalendarIcon, TargetIcon, SparklesIcon, ImageIcon, HeartIcon } from './icons/UIIcons';
 import { useAppContext } from './AppContext';
 
 interface NavItemProps {
@@ -51,7 +51,6 @@ export const Sidebar: React.FC = () => {
   const allNavItems: (Omit<NavItemProps, 'page' | 'label'> & { page: Page | 'admin', label: string })[] = [
     // MAIN
     { page: 'dashboard', icon: <DashboardIcon />, label: 'Dashboard' },
-    { page: 'opportunities', icon: <TrendingIcon />, label: 'Trends', tourId: 'tour-step-opportunities-nav' },
     { page: 'strategy', icon: <TargetIcon />, label: 'What to Post' },
     { page: 'compose', icon: <ComposeIcon />, label: 'Create Post', tourId: 'tour-step-3-compose-nav' },
     { page: 'calendar', icon: <CalendarIcon />, label: 'Calendar' },
@@ -74,9 +73,6 @@ export const Sidebar: React.FC = () => {
               return true;
           case 'admin':
               return user.role === 'Admin';
-          case 'opportunities':
-              if (user.userType === 'Business' && user.plan !== 'Agency') return false;
-              return ['Pro', 'Elite', 'Agency'].includes(user.plan);
           case 'calendar':
               return user.plan !== 'Free' && ['Pro', 'Elite', 'Agency'].includes(user.plan);
           case 'onlyfansStudio':

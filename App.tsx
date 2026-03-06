@@ -127,7 +127,14 @@ const MainContent: React.FC = () => {
             case 'compose': return <Compose />;
             case 'calendar': return <Calendar />;
             case 'team': return <Team />;
-            case 'opportunities': return <Opportunities />;
+            case 'opportunities': {
+                // Trends/Opportunities page has been integrated into What to Post
+                // Redirect to strategy page (What to Post)
+                if (typeof window !== 'undefined') {
+                    context.setActivePage('strategy');
+                }
+                return <WhatToPost onOpenAdvanced={() => setStrategyViewMode('advanced')} />;
+            }
             case 'profile': return <Profile />;
             case 'about': return <About />;
             case 'contact': return <Contact />;

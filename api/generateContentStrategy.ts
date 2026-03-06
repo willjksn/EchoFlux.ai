@@ -304,7 +304,7 @@ ${explicitnessContext ? `\nEXPLICITNESS LEVEL: ${explicitnessLevel}/10\n${explic
       nicheResearch = 'Niche research unavailable. Using general best practices.';
     }
 
-    // Build JSON schema description (always include description/angle/cta so UI has consistent fields)
+    // Build JSON schema description (always include description/angle/cta/caption so UI has consistent fields)
     const contentItemSchema = `{
           "dayOffset": 0,
           "topic": "Specific content topic/idea (e.g., 'Behind the scenes of our process')",
@@ -313,6 +313,7 @@ ${explicitnessContext ? `\nEXPLICITNESS LEVEL: ${explicitnessLevel}/10\n${explic
           "description": "Detailed description of the content idea with specific angles and execution details",
           "angle": "What makes this post compelling and unique - detailed angle description",
           "cta": "Specific call-to-action tailored to the content and goal",
+          "caption": "Ready-to-use social media caption for this content (2-4 sentences with hook, body, CTA, and hashtags if appropriate)",
           "imageIdeas": ["Idea 1 for images", "Idea 2 for images", "Idea 3 for images"],
           "videoIdeas": ["Idea 1 for videos", "Idea 2 for videos"]
         }`;
@@ -434,6 +435,13 @@ ${durationWeeks === 1 ? '⚠️ CRITICAL: Generate EXACTLY 1 WEEK (7 days) of co
    * description: Detailed description with specific angles and execution details (2-3 sentences minimum)
    * angle: What makes this post compelling and unique - detailed explanation
    * cta: Specific call-to-action tailored to the content and goal
+   * caption: A READY-TO-USE caption for this content (this is critical - the creator will use this caption directly):
+     - Start with an attention-grabbing hook (question, bold statement, or intriguing opener)
+     - Include 2-3 sentences of engaging body content
+     - End with the CTA
+     - Include 3-5 relevant hashtags at the end (unless for OnlyFans/Fan Hub where hashtags aren't used)
+     - Match the specified tone: ${tone}
+     - Make it feel authentic and conversational, not generic
 ${durationWeeks === 1 ? '- Provide comprehensive, detailed content across all 7 days with variety' : ''}
 - Distribute content across platforms: ${platforms.join(', ')}
  - DO NOT just provide topic names - provide FULL detailed descriptions for each content item
@@ -547,6 +555,7 @@ IMPORTANT: When generating imageIdeas and videoIdeas:
               description: day.description || day.details || '', 
               angle: day.angle || day.hook || '', 
               cta: day.cta || day.callToAction || '', 
+              caption: day.caption || '', // Pre-generated caption
               format: day.format || (day.postType === 'Reel' ? 'Reel' : day.postType === 'Story' ? 'Story' : 'Post'),
               platform: day.platform || (Array.isArray(day.platforms) ? day.platforms[0] : platforms[0] || 'Instagram'),
               imageIdeas: day.imageIdeas || [],
@@ -574,10 +583,14 @@ IMPORTANT: When generating imageIdeas and videoIdeas:
           const topic = ensureMin(item.topic, "Content idea");
           const format = safeString(item.format) || "Post";
           const platform = safeString(item.platform) || (platforms[0] || "Instagram");
+          const itemCta = ensureMin(item.cta, defaultCta, 6);
 
           const descriptionFallback = `Create a ${format} about "${topic}" for ${audience}. Include specific talking points, how to present it, and what to show/do on-screen.`;
           const angleFallback = `Hook with a bold claim or question about "${topic}", then deliver 2-3 concrete insights tailored to ${audience}.`;
           const ctaFallback = defaultCta;
+          
+          // Generate a fallback caption if not provided
+          const captionFallback = `${item.angle || angleFallback}\n\n${item.description || descriptionFallback}\n\n${itemCta}${!isOnlyFansPlatform && !isMyPagePlatform ? `\n\n#${niche.replace(/\s+/g, '')} #${goal.replace(/\s+/g, '')} #contentcreator` : ''}`;
 
           const imageIdeas = Array.isArray(item.imageIdeas) ? item.imageIdeas.filter((x: any) => safeString(x).length > 0) : [];
           const videoIdeas = Array.isArray(item.videoIdeas) ? item.videoIdeas.filter((x: any) => safeString(x).length > 0) : [];
@@ -589,7 +602,8 @@ IMPORTANT: When generating imageIdeas and videoIdeas:
             platform,
             description: ensureMin(item.description, descriptionFallback, 20),
             angle: ensureMin(item.angle, angleFallback, 12),
-            cta: ensureMin(item.cta, ctaFallback, 6),
+            cta: itemCta,
+            caption: ensureMin(item.caption, captionFallback, 20),
             imageIdeas: imageIdeas.length > 0 ? imageIdeas : [
               `On-brand visual concept for "${topic}" (clean composition, clear focal point, text overlay with hook)`,
               `Behind-the-scenes style image supporting "${topic}" (authentic, candid, process-oriented)`,

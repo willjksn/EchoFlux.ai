@@ -455,12 +455,15 @@ const CaptionGenerator: React.FC = () => {
   
   const goalOptions = useMemo(
     () => [
-      { value: 'engagement', label: 'Increase Engagement' },
-      { value: 'sales', label: 'Drive Sales' },
-      { value: 'awareness', label: 'Build Awareness' },
+      { value: 'engagement', label: 'Engagement' },
+      { value: 'sales', label: 'Sales' },
+      { value: 'awareness', label: 'Awareness' },
+      { value: 'educate', label: 'Educate' },
+      { value: 'entertain', label: 'Entertain' },
+      { value: 'community', label: 'Community' },
       // Followers option: Hide for Business Starter/Growth, show for Agency and all Creators
       ...(showAdvancedOptions
-        ? [{ value: 'followers', label: 'Increase Followers/Fans' }]
+        ? [{ value: 'followers', label: 'Followers' }]
         : [])
     ],
     [showAdvancedOptions]
@@ -472,9 +475,11 @@ const CaptionGenerator: React.FC = () => {
       { value: 'witty', label: 'Witty' },
       { value: 'inspirational', label: 'Inspirational' },
       { value: 'professional', label: 'Professional' },
+      { value: 'casual', label: 'Casual' },
+      { value: 'playful', label: 'Playful' },
+      { value: 'bold', label: 'Bold' },
+      { value: 'authentic', label: 'Authentic' },
       { value: 'flirty', label: 'Flirty' },
-      { value: 'bold', label: 'Bold' }
-      // Sexy/Explicit tones hidden for now
     ],
     []
   );
@@ -774,6 +779,52 @@ const CaptionGenerator: React.FC = () => {
       draftLoadedRef.current = false;
     }
   }, [activePage]);
+
+  // Handle repurpose from Strategy planner
+  useEffect(() => {
+    if (activePage !== 'compose' || !user) return;
+    
+    const repurposeData = localStorage.getItem('repurposeFromStrategy');
+    if (!repurposeData) return;
+    
+    try {
+      const data = JSON.parse(repurposeData);
+      localStorage.removeItem('repurposeFromStrategy');
+      
+      if (data.action === 'repurpose' && data.content) {
+        // Create a media item with the caption pre-filled for repurposing
+        const platformKey = (data.originalPlatform || 'Instagram') as Platform;
+        const mediaItem: MediaItemState = {
+          id: `strategy-repurpose-${Date.now()}`,
+          previewUrl: '',
+          data: '',
+          mimeType: 'image/jpeg',
+          type: 'image',
+          results: [],
+          captionText: data.content,
+          postGoal: 'engagement',
+          postTone: 'friendly',
+          selectedPlatforms: {
+            ...emptyPlatforms,
+            [platformKey]: true,
+          },
+        };
+        
+        setComposeState(prev => ({
+          ...prev,
+          mediaItems: [mediaItem],
+        }));
+        
+        draftLoadedRef.current = true;
+        
+        // Show instruction toast
+        showToast('Caption loaded! Click "Repurpose" button below your post to adapt it for other platforms.', 'info');
+      }
+    } catch (error) {
+      console.error('Failed to load repurpose data:', error);
+      localStorage.removeItem('repurposeFromStrategy');
+    }
+  }, [activePage, user, showToast, setComposeState]);
 
   // Load mediaItems from Firestore on mount
   // But only if there's no draft to load (draft loading takes priority)
