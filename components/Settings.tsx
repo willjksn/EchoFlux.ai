@@ -1125,9 +1125,6 @@ export const Settings: React.FC = () => {
                 {activeTab === 'ai-training' && (
                     <>
                         <SettingsSection title="AI Personality & Tone">
-                            <ToggleSwitch label="High Quality Generations" enabled={settings.highQuality} onChange={(val) => updateSetting('highQuality', val)} />
-                            <p className="text-sm text-gray-500 dark:text-gray-400">Use a more advanced AI model for creative tasks like strategy generation. May be slower and is only available on premium plans.</p>
-                            <hr className="border-gray-200 dark:border-gray-700" />
                             <ToneSlider label="Formality" value={settings.tone.formality} onChange={(val) => updateToneSetting('formality', val)} description="Low for casual & slang, high for formal & professional."/>
                             <ToneSlider label="Humor" value={settings.tone.humor} onChange={(val) => updateToneSetting('humor', val)} description="Low for serious, high for witty & funny replies."/>
                             <ToneSlider label="Empathy" value={settings.tone.empathy} onChange={(val) => updateToneSetting('empathy', val)} description="Low for direct, high for supportive & understanding."/>
@@ -1162,7 +1159,7 @@ export const Settings: React.FC = () => {
                                         <textarea
                                             value={settings.creatorPersonality || ''}
                                             onChange={(e) => updateSetting('creatorPersonality', e.target.value)}
-                                            placeholder="Tell the AI about yourself, your brand voice, content style, values, and what makes you unique. This will help AI generate captions that match your personality."
+                                            placeholder="Tell the AI about yourself, your brand voice, content style, values, and what makes you unique. This personality is used across all AI features: captions, chat bot responses, post ideas, roleplay scenarios, and text-only AI prompts."
                                             className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[100px]"
                                             rows={4}
                                         />

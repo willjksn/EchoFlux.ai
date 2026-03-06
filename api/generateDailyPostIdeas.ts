@@ -31,13 +31,19 @@ export interface GenerateDailyPostIdeasBody {
   swapId?: string;
   /** Optional seed for deterministic swap (e.g. existing idea id). */
   seed?: string;
+  /** When true and platform is Instagram, generate one idea per format (Reel, Carousel, Photo, Story). */
+  generateAllFormats?: boolean;
+  /** When true and platform is fan_hub/mypage, analyze engagement data to generate ideas. */
+  analyzeMyPageEngagement?: boolean;
 }
 
 const CONTENT_POLICY = `
-CONTENT POLICY (non-explicit, IG-like):
-- Lingerie, bikini, implied nudity are allowed.
-- Nipples/genitals must not be discernible; no explicit sex acts; no sexting-services framing.
-- Keep ideas suitable for broad social (Instagram, TikTok, etc.) unless user context clearly indicates otherwise.
+CONTENT POLICY (social media optimized):
+- Generate ideas suitable for Instagram, Facebook, X (Twitter), and creator fan pages.
+- Content can be edgy, bold, spicy, or use mild profanity - but NOT explicit adult content.
+- Avoid OnlyFans-specific language (PPV, tips for explicit content, sexting services).
+- Focus on engagement, personality, lifestyle, behind-the-scenes, and creator brand building.
+- Ideas should drive followers, comments, and genuine connection - not explicit adult transactions.
 `;
 
 function buildPrompt(opts: {
@@ -59,6 +65,15 @@ function buildPrompt(opts: {
     spiciness?: number;
     profanity?: number;
     emojiLevel?: number;
+  };
+  generateAllFormats?: boolean;
+  analyzeMyPageEngagement?: boolean;
+  fanHubAnalytics?: {
+    topPostTypes?: string[];
+    avgLikes?: number;
+    avgComments?: number;
+    topEngagementTimes?: string[];
+    recentTips?: number;
   };
 }): string {
   const {
@@ -94,7 +109,9 @@ function buildPrompt(opts: {
 
   const formatGuidance =
     format === "auto"
-      ? "Generate a mix: e.g. 2 reels + 1 carousel, or 1 reel + 1 photo + 1 story, varied and scannable."
+      ? (opts as any).generateAllFormats
+        ? "Generate exactly 4 ideas, ONE for each format: 1 Reel, 1 Carousel, 1 Photo, 1 Story. Each must be clearly suited to its format."
+        : "Generate a mix: e.g. 2 reels + 1 carousel, or 1 reel + 1 photo + 1 story, varied and scannable."
       : `Prefer format: ${format}. All ideas should be clearly ${format}-friendly.`;
 
   // Build tone style guidance from settings
@@ -107,7 +124,21 @@ ${toneSettings.profanity !== undefined && toneSettings.profanity > 0 ? `- Profan
 ${toneSettings.emojiLevel !== undefined ? `- Emoji usage (${toneSettings.emojiLevel}/100): ${toneSettings.emojiLevel < 20 ? 'No emojis' : toneSettings.emojiLevel < 40 ? 'Minimal emojis (1-2)' : toneSettings.emojiLevel < 60 ? 'Moderate emojis' : 'Heavy emoji usage'}` : ''}
 ` : '';
 
-  return `You are a content strategist for social creators. Generate ${swapOnly ? "ONE" : "exactly 3"} post ideas for today.
+  const ideaCount = swapOnly ? "ONE" : opts.generateAllFormats ? "exactly 4 (one per format: Reel, Carousel, Photo, Story)" : "exactly 3";
+  
+  // Fan Hub / My Page specific guidance
+  const fanHubGuidance = opts.platform === "fan_hub" && opts.fanHubAnalytics ? `
+FAN HUB ANALYTICS CONTEXT:
+- Your top performing post types: ${opts.fanHubAnalytics.topPostTypes?.join(", ") || "varied content"}
+- Average likes per post: ${opts.fanHubAnalytics.avgLikes || "N/A"}
+- Average comments per post: ${opts.fanHubAnalytics.avgComments || "N/A"}
+- Best engagement times: ${opts.fanHubAnalytics.topEngagementTimes?.join(", ") || "varies"}
+- Recent tip activity: ${opts.fanHubAnalytics.recentTips || 0} tips this week
+
+Generate ideas that mirror your top-performing content patterns. Focus on what drives engagement, tips, and subscriber retention.
+` : "";
+
+  return `You are a content strategist for social creators. Generate ${ideaCount} post ideas for today.
 
 PLATFORM: ${platform}
 GOAL: ${goal}. ${goalGuidance}
@@ -121,6 +152,7 @@ ${CONTENT_POLICY}
 ${creatorContext ? `CREATOR CONTEXT (use to tailor ideas):\n${creatorContext}\n` : "No creator profile provided; use broad, relatable angles."}
 
 ${useTrends && trendContext ? `TRENDS / CONTEXT (use where relevant):\n${trendContext}\n` : ""}
+${fanHubGuidance}
 
 ${existingIdeasForContext?.length ? `EXISTING IDEAS (avoid duplicating; generate one different idea for swap):\n${existingIdeasForContext.map((i) => `${i.title}: ${i.hook}`).join("\n")}\n` : ""}
 
@@ -134,14 +166,14 @@ OUTPUT STRICT JSON ONLY (no markdown, no code fence):
       "hook": "One sentence that grabs attention (first line of caption)",
       "shotList": ["Shot/scene 1", "Shot 2", "Shot 3", "..."],
       "captionStarter": "Optional 1-2 sentence caption start",
-      "cta": "Optional call-to-action line",
-      "hashtags": ["#tag1", "#tag2", "..."],
+      "cta": "Optional call-to-action line",${platform === "fan_hub" ? "" : `
+      "hashtags": ["#tag1", "#tag2", "..."],`}
       "whyThisWorks": "One sentence on why this fits the goal/platform"
     }
   ]
 }
 
-Rules: shotList must have 3-5 items. id must be unique. If generating one (swap), return one idea in ideas array.`;
+Rules: shotList must have 3-5 items. id must be unique.${platform === "fan_hub" ? " DO NOT include hashtags for My Page/Fan Hub content." : ""} If generating one (swap), return one idea in ideas array.`;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
@@ -185,6 +217,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     spicyMode = false,
     swapId,
     seed,
+    generateAllFormats = false,
+    analyzeMyPageEngagement = false,
   } = (req.body || {}) as GenerateDailyPostIdeasBody;
 
   // Map balanced_followers_engagement to goal with engagement bias
@@ -228,6 +262,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   }
 
   try {
+    // For My Page / Fan Hub, fetch analytics data
+    let fanHubAnalytics = undefined;
+    if (platform === "fan_hub" && analyzeMyPageEngagement) {
+      try {
+        const postsSnap = await db.collection("creators").doc(authUser.uid).collection("fanPosts")
+          .orderBy("createdAt", "desc").limit(20).get();
+        
+        let totalLikes = 0;
+        let totalComments = 0;
+        const postTypes: Record<string, number> = {};
+        
+        postsSnap.forEach((doc) => {
+          const data = doc.data();
+          totalLikes += data.likes || 0;
+          totalComments += data.commentsCount || 0;
+          const type = data.mediaType || "text";
+          postTypes[type] = (postTypes[type] || 0) + 1;
+        });
+        
+        const postCount = postsSnap.size || 1;
+        const topTypes = Object.entries(postTypes)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([t]) => t);
+        
+        // Get recent tips count
+        const weekAgo = new Date();
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        const tipsSnap = await db.collection("purchases")
+          .where("creatorId", "==", authUser.uid)
+          .where("type", "==", "tip")
+          .where("createdAt", ">=", weekAgo.toISOString())
+          .get();
+        
+        fanHubAnalytics = {
+          topPostTypes: topTypes,
+          avgLikes: Math.round(totalLikes / postCount),
+          avgComments: Math.round(totalComments / postCount),
+          topEngagementTimes: ["evenings", "weekends"],
+          recentTips: tipsSnap.size,
+        };
+      } catch (e) {
+        console.warn("Failed to fetch fan hub analytics:", e);
+      }
+    }
+
     const model = await getModelForTask("strategy", authUser.uid);
     const prompt = buildPrompt({
       platform,
@@ -242,6 +322,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       swapOnly,
       existingIdeasForContext: existingIdeas,
       toneSettings: userToneSettings,
+      generateAllFormats: Boolean(generateAllFormats),
+      analyzeMyPageEngagement: Boolean(analyzeMyPageEngagement),
+      fanHubAnalytics,
     });
 
     const result = await model.generateContent({

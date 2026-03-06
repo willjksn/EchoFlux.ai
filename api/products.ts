@@ -48,12 +48,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!includeArchived || !isCreator) {
         query = query.where("archived", "==", false) as FirebaseFirestore.Query;
       }
-      const snap = await query.orderBy("sortOrder").orderBy("createdAt", "desc").limit(500).get();
+      // Simple query - sort client-side to avoid complex composite index requirements
+      const snap = await query.limit(500).get();
 
       let products = snap.docs.map((doc) => toProduct(doc));
       if (!isCreator) {
         products = products.filter((p) => p.visible);
       }
+      // Sort client-side: by sortOrder (ascending), then createdAt (descending)
+      products.sort((a, b) => {
+        const orderDiff = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+        if (orderDiff !== 0) return orderDiff;
+        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return bTime - aTime; // descending
+      });
       return res.status(200).json({ products });
     } catch (e: unknown) {
       console.error("products list error:", e);

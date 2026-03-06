@@ -1144,9 +1144,10 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
     const [generatedMonetizationPlan, setGeneratedMonetizationPlan] = useState<any>(null);
 
     // Subscriber messaging toolkit
-    const [messageType, setMessageType] = useState<'Welcome sequence' | 'Renewal reminder' | 'PPV follow-up' | 'Win-back'>(`Welcome sequence`);
+    const [messageType, setMessageType] = useState<'Welcome sequence' | 'Renewal reminder' | 'PPV follow-up' | 'Win-back' | 'New drop' | 'New treats in store' | 'Custom'>(`Welcome sequence`);
+    const [customMessageSubject, setCustomMessageSubject] = useState('');
     const [messageContext, setMessageContext] = useState('');
-    const [messageTone, setMessageTone] = useState<'Warm' | 'Flirty' | 'Direct' | 'Explicit'>(`Warm`);
+    const [messageTone, setMessageTone] = useState<'Warm' | 'Flirty' | 'Direct' | 'Bold'>(`Warm`);
     const [generatedMessages, setGeneratedMessages] = useState<string>('');
     const [selectedFanId, setSelectedFanId] = useState<string | null>(null);
     const [useCreatorPersonalityMessaging, setUseCreatorPersonalityMessaging] = useState(false);
@@ -2967,10 +2968,12 @@ NATURAL PERSONALIZATION GUIDELINES:
                 personalityContext += `\n\nCREATOR PERSONALITY:\n${creatorPersonality}`;
             }
 
+            const effectiveMessageType = messageType === 'Custom' ? customMessageSubject || 'Custom message' : messageType;
+            
             const prompt = `
 Create a subscriber messaging toolkit for a ${selectedPlatform} creator.
 
-Type: ${messageType}
+Type: ${effectiveMessageType}
 Tone: ${messageTone}
 Context: ${messageContext || 'None provided'}
 ${personalityContext ? personalityContext : ''}
@@ -3009,6 +3012,9 @@ Output format:
 - If Renewal reminder: 3 messages (soft → direct)
 - If PPV follow-up: 3 messages (soft nudge → last call)
 - If Win-back: 3 messages (friendly → offer → last check-in)
+- If New drop: 3 messages (teaser → announcement → reminder)
+- If New treats in store: 3 messages (announcement → highlight → limited time)
+- If Custom/other: 3 messages tailored to the specific subject (intro → details → call-to-action)
 `.trim();
 
             // Load emoji settings
@@ -3044,7 +3050,7 @@ Output format:
             // Usage tracking (best-effort)
             try {
                 const { logUsageEvent } = await import('../src/services/usageEvents');
-                await logUsageEvent(user.id, 'of_generate_subscriber_messages', { messageType, tone: messageTone });
+                await logUsageEvent(user.id, 'of_generate_subscriber_messages', { messageType: effectiveMessageType, tone: messageTone });
             } catch {
                 // ignore
             }
@@ -6718,8 +6724,23 @@ Output format:
                                     <option value="Renewal reminder">Renewal reminder</option>
                                     <option value="PPV follow-up">PPV follow-up</option>
                                     <option value="Win-back">Win-back</option>
+                                    <option value="New drop">New drop</option>
+                                    <option value="New treats in store">New treats in store</option>
+                                    <option value="Custom">Custom...</option>
                                 </select>
                             </div>
+                            {messageType === 'Custom' && (
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Custom subject</label>
+                                    <input
+                                        type="text"
+                                        value={customMessageSubject}
+                                        onChange={(e) => setCustomMessageSubject(e.target.value)}
+                                        placeholder="e.g., Flash sale, Birthday special, New content theme..."
+                                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    />
+                                </div>
+                            )}
                             <div>
                                 <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Tone</label>
                                 <select
@@ -6730,7 +6751,7 @@ Output format:
                                     <option value="Warm">Warm</option>
                                     <option value="Flirty">Flirty</option>
                                     <option value="Direct">Direct</option>
-                                    <option value="Explicit">Explicit</option>
+                                    <option value="Bold">Bold</option>
                                 </select>
                             </div>
                             <div className="md:col-span-3 relative">

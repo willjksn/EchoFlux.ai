@@ -18,7 +18,7 @@ export const FanHubMyPage: React.FC = () => {
   }
 
   return (
-    <div className="stormij-theme">
+    <div>
       <MyPageBuilder />
     </div>
   );

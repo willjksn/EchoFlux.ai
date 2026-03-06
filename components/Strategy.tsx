@@ -198,6 +198,12 @@ export const Strategy: React.FC<{ onBackToSimple?: () => void }> = ({ onBackToSi
                 setPlatformFocus(data.opportunity.platform);
             }
 
+            // Set context description if provided
+            if (data.contextDescription) {
+                setContextDescription(data.contextDescription);
+                setUseContextDescription(true);
+            }
+
             // Do NOT auto-generate; give user a chance to set goal/tone/duration.
             setOpportunityContext({
                 title: data.opportunity?.title,

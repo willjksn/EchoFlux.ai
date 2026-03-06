@@ -322,7 +322,7 @@ export const FanHubAnalytics: React.FC = () => {
     change?: number | null;
     subtitle?: string;
     accentColor?: string;
-  }> = ({ title, value, icon, change, subtitle, accentColor = "pink" }) => (
+  }> = ({ title, value, icon, change, subtitle, accentColor = "indigo" }) => (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-5 border border-gray-100 dark:border-gray-700">
       <div className="flex items-center justify-between mb-3">
         <span className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</span>
@@ -355,7 +355,7 @@ export const FanHubAnalytics: React.FC = () => {
     return (
       <div className="p-8 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-pink-500 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-500 mx-auto mb-4"></div>
           <p className="text-gray-500 dark:text-gray-400">Loading analytics...</p>
         </div>
       </div>
@@ -363,7 +363,7 @@ export const FanHubAnalytics: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6 stormij-theme">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -405,14 +405,14 @@ export const FanHubAnalytics: React.FC = () => {
             value={formatCents(revenue.totalRevenueCents)}
             icon={<DollarIcon />}
             change={getChangePercentage(revenue.totalRevenueCents, previousRevenue?.totalRevenueCents)}
-            accentColor="pink"
+            accentColor="indigo"
           />
           <StatCard
             title="Tips"
             value={formatCents(revenue.tipsCents)}
             icon={<HeartIcon />}
             change={getChangePercentage(revenue.tipsCents, previousRevenue?.tipsCents)}
-            accentColor="pink"
+            accentColor="indigo"
           />
           <StatCard
             title="Content Unlocks"
@@ -512,7 +512,7 @@ export const FanHubAnalytics: React.FC = () => {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold text-pink-600 dark:text-pink-400">{formatCents(fan.totalSpentCents)}</p>
+                    <p className="font-semibold text-indigo-600 dark:text-indigo-400">{formatCents(fan.totalSpentCents)}</p>
                     {fan.lastActiveAt && (
                       <p className="text-xs text-gray-500 dark:text-gray-400">
                         {fan.lastActiveAt.toLocaleDateString()}
@@ -543,7 +543,7 @@ export const FanHubAnalytics: React.FC = () => {
                 <div key={tx.id} className="p-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
                   <div className="flex items-center gap-3">
                     <div className={`p-2 rounded-lg ${
-                      tx.type === "tip" ? "bg-pink-100 text-pink-600 dark:bg-pink-900/30 dark:text-pink-400" :
+                      tx.type === "tip" ? "bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400" :
                       tx.type === "unlock" ? "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400" :
                       tx.type === "subscription" ? "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400" :
                       "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
@@ -579,7 +579,7 @@ export const FanHubAnalytics: React.FC = () => {
       </div>
 
       {/* Insights Section */}
-      <div className="bg-gradient-to-r from-pink-50 to-purple-50 dark:from-pink-900/20 dark:to-purple-900/20 rounded-xl p-6 border border-pink-100 dark:border-pink-800/50">
+      <div className="bg-gradient-to-r from-indigo-50 to-violet-50 dark:from-indigo-900/20 dark:to-violet-900/20 rounded-xl p-6 border border-indigo-100 dark:border-indigo-800/50">
         <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Quick Insights</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
           <div className="bg-white/80 dark:bg-gray-800/80 rounded-lg p-4">

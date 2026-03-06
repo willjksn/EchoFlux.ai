@@ -18,14 +18,14 @@ const DEFAULT_SECTIONS: NonNullable<CreatorStorefrontSettings["sections"]> = {
 };
 const DEFAULT_SECTIONS_ORDER = ["feed", "treats", "tip", "messages", "about"];
 
-// Stormij pink theme as default
+// Neutral default theme - creators should customize
 const DEFAULT_THEME: NonNullable<CreatorStorefrontSettings["theme"]> = {
-  primary: "#d4558b",
-  background: "#fff2f8",
-  text: "#2f1a24",
-  textMuted: "#7c5b68",
-  border: "#f3dbe5",
-  accentHover: "#bc3f74",
+  primary: "#6366f1",
+  background: "#fafafa",
+  text: "#1f2937",
+  textMuted: "#6b7280",
+  border: "#e5e7eb",
+  accentHover: "#4f46e5",
   buttonStyle: "solid",
 };
 
@@ -48,8 +48,8 @@ const DEFAULT_SOCIAL_LINKS: StorefrontSocialLinks = {
 };
 
 const DEFAULT_LANDING_CONTENT: StorefrontLandingContent = {
-  perksTitle: "Why This Exists",
-  perksText: "This is a space just for us — no algorithm, no noise, just me and the people who really want to be here.",
+  perksTitle: "Why Join",
+  perksText: "A space for exclusive content and real connection with my community.",
   perksList: [
     "Exclusive behind-the-scenes content",
     "Direct messages and personal connection",
@@ -57,20 +57,20 @@ const DEFAULT_LANDING_CONTENT: StorefrontLandingContent = {
     "Special treats and surprises",
   ],
   previewTitle: "What You Get",
-  previewText: "As a member, you get access to content I can only share here — the real, unfiltered moments.",
+  previewText: "As a member, you get access to content I can only share here.",
   previewList: [
     "Daily posts and updates",
     "Exclusive photos and videos",
     "Personal messages",
     "Live sessions and Q&As",
   ],
-  energyTitle: "The Energy",
+  energyTitle: "The Vibe",
   energyLines: [
-    "Playful and honest.",
-    "Real connection, not performance.",
-    "A safe space for both of us.",
+    "Authentic and real.",
+    "Genuine connection.",
+    "A supportive community.",
   ],
-  boundaryTitle: "The Boundary",
+  boundaryTitle: "Community Guidelines",
   boundaryText: "This is a supportive space. Respect is everything. No negativity, no demands — just genuine connection.",
 };
 
@@ -619,13 +619,53 @@ export const MyPageBuilder: React.FC = () => {
   };
 
   // Helper to update social links
-  const updateSocialLink = (platform: keyof StorefrontSocialLinks, field: "url" | "show", value: string | boolean) => {
+  const updateSocialLink = (platform: keyof Omit<StorefrontSocialLinks, "custom">, field: "url" | "show", value: string | boolean) => {
     const current = draft.socialLinks ?? { ...DEFAULT_SOCIAL_LINKS };
     const platformData = current[platform] ?? { url: "", show: true };
     updateDraft({
       socialLinks: {
         ...current,
         [platform]: { ...platformData, [field]: value },
+      },
+    });
+  };
+
+  // Helper to add a custom social link
+  const addCustomSocialLink = () => {
+    const current = draft.socialLinks ?? { ...DEFAULT_SOCIAL_LINKS };
+    const customLinks = current.custom ?? [];
+    updateDraft({
+      socialLinks: {
+        ...current,
+        custom: [...customLinks, { name: "", url: "", show: true }],
+      },
+    });
+  };
+
+  // Helper to update a custom social link
+  const updateCustomSocialLink = (index: number, field: "name" | "url" | "show", value: string | boolean) => {
+    const current = draft.socialLinks ?? { ...DEFAULT_SOCIAL_LINKS };
+    const customLinks = [...(current.custom ?? [])];
+    if (customLinks[index]) {
+      customLinks[index] = { ...customLinks[index], [field]: value };
+      updateDraft({
+        socialLinks: {
+          ...current,
+          custom: customLinks,
+        },
+      });
+    }
+  };
+
+  // Helper to remove a custom social link
+  const removeCustomSocialLink = (index: number) => {
+    const current = draft.socialLinks ?? { ...DEFAULT_SOCIAL_LINKS };
+    const customLinks = [...(current.custom ?? [])];
+    customLinks.splice(index, 1);
+    updateDraft({
+      socialLinks: {
+        ...current,
+        custom: customLinks,
       },
     });
   };
@@ -886,6 +926,62 @@ export const MyPageBuilder: React.FC = () => {
                   </button>
                 </div>
               ))}
+
+              {/* Custom Social Links */}
+              {(draft.socialLinks?.custom ?? []).map((link, index) => (
+                <div key={`custom-${index}`} className="flex items-center gap-2">
+                  <span className="text-gray-500 dark:text-gray-400 w-6">
+                    <GlobeIcon className="w-5 h-5" />
+                  </span>
+                  <input
+                    type="text"
+                    value={link.name}
+                    onChange={(e) => updateCustomSocialLink(index, "name", e.target.value)}
+                    placeholder="Platform name"
+                    className="w-24 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+                  <input
+                    type="url"
+                    value={link.url}
+                    onChange={(e) => updateCustomSocialLink(index, "url", e.target.value)}
+                    placeholder="https://..."
+                    className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => updateCustomSocialLink(index, "show", !link.show)}
+                    className={`px-2 py-1 text-xs rounded ${
+                      link.show
+                        ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                        : "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+                    }`}
+                  >
+                    {link.show ? "Show" : "Hide"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeCustomSocialLink(index)}
+                    className="p-1.5 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                    title="Remove"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+
+              {/* Add Custom Social Link Button */}
+              <button
+                type="button"
+                onClick={addCustomSocialLink}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Add Other Social Site
+              </button>
             </div>
           </CollapsibleSection>
 

@@ -87,7 +87,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   creatorId,
   displayName,
   avatar,
-  primary = "#d4558b",
+  primary = "#6366f1",
 }) => {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);

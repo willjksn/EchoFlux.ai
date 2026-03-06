@@ -11,17 +11,21 @@ const GOAL_OPTIONS = [
   { id: 'balanced_followers_engagement', label: 'Followers' },
   { id: 'sales_subs', label: 'Sales/Subs' },
 ];
-const EFFORT_OPTIONS = [
-  { id: 5, label: '5 min' },
-  { id: 15, label: '15 min' },
-  { id: 30, label: '30+' },
-];
+
 const FORMAT_OPTIONS = [
-  { id: 'auto', label: 'Auto' },
   { id: 'reel', label: 'Reel' },
   { id: 'carousel', label: 'Carousel' },
   { id: 'photo', label: 'Photo' },
   { id: 'story', label: 'Story' },
+];
+
+type PlatformOption = 'instagram' | 'facebook' | 'x' | 'mypage';
+
+const PLATFORM_OPTIONS: { id: PlatformOption; label: string; icon: string }[] = [
+  { id: 'instagram', label: 'Instagram', icon: '📸' },
+  { id: 'facebook', label: 'Facebook', icon: '📘' },
+  { id: 'x', label: 'X', icon: '𝕏' },
+  { id: 'mypage', label: 'My Page', icon: '💖' },
 ];
 
 const DEFAULT_SETTINGS: WhatToPostSettings = {
@@ -41,7 +45,7 @@ interface WhatToPostProps {
 export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
   const { user, showToast, setActivePage, addCalendarEvent } = useAppContext();
   const [ideas, setIdeas] = useState<DailyPostIdea[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [regeneratingAll, setRegeneratingAll] = useState(false);
   const [swapIndex, setSwapIndex] = useState<number | null>(null);
   const [settings, setSettings] = useState<WhatToPostSettings>(DEFAULT_SETTINGS);
@@ -49,6 +53,8 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
   const [draftSettings, setDraftSettings] = useState<WhatToPostSettings>(DEFAULT_SETTINGS);
   const [useThisIdea, setUseThisIdea] = useState<DailyPostIdea | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [selectedPlatform, setSelectedPlatform] = useState<PlatformOption>('instagram');
+  const [hasGenerated, setHasGenerated] = useState(false);
 
   // Check if user has access to advanced planner (Elite, Agency, or Admin)
   const hasAdvancedAccess = user?.plan === 'Elite' || user?.plan === 'Agency' || user?.role === 'Admin';
@@ -64,19 +70,26 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
   const [scheduleTime, setScheduleTime] = useState('12:00');
 
   useEffect(() => {
-    if (drawerOpen) setDraftSettings(settings);
-  }, [drawerOpen]);
+    if (drawerOpen) {
+      setDraftSettings(settings);
+    }
+  }, [drawerOpen, settings]);
 
   const fetchIdeas = useCallback(
     async (opts: {
       swapId?: string;
       existingIdeas?: DailyPostIdea[];
       overrides?: Partial<WhatToPostSettings>;
+      platform?: PlatformOption;
     } = {}) => {
       if (!user?.id) return;
+      const platformToUse = opts.platform || selectedPlatform;
       const s = { ...settings, ...opts.overrides };
       const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+      
       try {
+        // For My Page, we would analyze fan hub analytics
+        // For Instagram/Facebook, use Gemini
         const res = await fetch('/api/generateDailyPostIdeas', {
           method: 'POST',
           headers: {
@@ -84,15 +97,19 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({
-            platform: s.platform,
+            platform: platformToUse === 'mypage' ? 'fan_hub' : platformToUse === 'x' ? 'twitter' : platformToUse,
             goal: s.goal,
             effort: s.effort,
-            format: s.format,
+            format: platformToUse === 'instagram' ? s.format : 'auto',
             tone: s.tone,
             useTrends: s.useTrends ?? false,
             spicyMode: s.spicyMode ?? false,
             swapId: opts.swapId,
             existingIdeas: opts.existingIdeas,
+            // For Instagram, generate one idea per format when format is 'auto'
+            generateAllFormats: platformToUse === 'instagram' && s.format === 'auto',
+            // For My Page, include analytics context
+            analyzeMyPageEngagement: platformToUse === 'mypage',
           }),
         });
         const data = await res.json();
@@ -112,7 +129,8 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
             return;
           }
         }
-        setIdeas(newIdeas.length >= 3 ? newIdeas : newIdeas);
+        setIdeas(newIdeas);
+        setHasGenerated(true);
         if (data.settings && typeof data.settings === 'object') {
           setSettings((prev) => ({ ...prev, ...data.settings }));
           setDraftSettings((prev) => ({ ...prev, ...data.settings }));
@@ -126,25 +144,21 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
         setRegeneratingAll(false);
       }
     },
-    [user?.id, settings, showToast]
+    [user?.id, settings, selectedPlatform, showToast]
   );
 
-  useEffect(() => {
-    if (!user?.id) return;
-    setLoading(true);
-    fetchIdeas();
-  }, [user?.id]);
+  // Don't auto-generate on page load - wait for user to click Generate Ideas
+  // useEffect removed
 
-  const handleNewIdeas = () => {
+  const handleGenerateIdeas = () => {
+    setLoading(true);
     setRegeneratingAll(true);
-    fetchIdeas();
+    fetchIdeas({ platform: selectedPlatform });
   };
 
   const handleApplyQuickSettings = () => {
     setSettings(draftSettings);
     setDrawerOpen(false);
-    setRegeneratingAll(true);
-    fetchIdeas({ overrides: draftSettings });
   };
 
   const handleSwap = (idea: DailyPostIdea, index: number) => {
@@ -163,10 +177,16 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
 
   const handleWriteCaption = (idea: DailyPostIdea) => {
     const content = buildCaptionFromIdea(idea);
+    const platformMap: Record<PlatformOption, Platform> = {
+      instagram: 'Instagram',
+      facebook: 'Facebook',
+      x: 'X',
+      mypage: 'Instagram', // Default for Fan Hub posts
+    };
     const draft = {
       id: `draft_${idea.id}_${Date.now()}`,
       content,
-      platforms: [settings.platform === 'instagram' ? 'Instagram' : (settings.platform as Platform)],
+      platforms: [platformMap[selectedPlatform]],
       postGoal: settings.goal === 'engagement' ? 'engagement' : settings.goal === 'reach' ? 'brand_awareness' : 'engagement',
       postTone: settings.tone || 'friendly',
       mediaUrl: undefined,
@@ -194,7 +214,7 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
       title: idea.title,
       date: dateStr,
       type: idea.format === 'reel' ? 'Reel' : idea.format === 'carousel' ? 'Post' : 'Post',
-      platform: (settings.platform === 'instagram' ? 'Instagram' : settings.platform) as Platform,
+      platform: (selectedPlatform === 'instagram' ? 'Instagram' : selectedPlatform === 'facebook' ? 'Facebook' : selectedPlatform === 'x' ? 'X' : 'Instagram') as Platform,
       status: 'Draft',
     };
     addCalendarEvent(event).then(() => {
@@ -235,15 +255,6 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={handleNewIdeas}
-            disabled={loading || regeneratingAll}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 disabled:opacity-50"
-          >
-            {regeneratingAll ? <RefreshIcon className="w-4 h-4 animate-spin" /> : <SparklesIcon className="w-4 h-4" />}
-            New ideas
-          </button>
-          <button
-            type="button"
             onClick={() => setDrawerOpen(true)}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600"
           >
@@ -261,6 +272,7 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
         </div>
       </div>
 
+      {/* Quick Settings Drawer */}
       {drawerOpen && (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40" onClick={() => setDrawerOpen(false)}>
           <div
@@ -274,6 +286,29 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
               </button>
             </div>
             <div className="space-y-4">
+              {/* Platform Selector */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Platform</label>
+                <div className="flex gap-2">
+                  {PLATFORM_OPTIONS.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setSelectedPlatform(p.id)}
+                      className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                        selectedPlatform === p.id
+                          ? 'bg-primary-600 text-white shadow-md'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      <span>{p.icon}</span>
+                      <span>{p.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Goal */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Goal</label>
                 <div className="flex flex-wrap gap-2">
@@ -289,36 +324,46 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
                   ))}
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Effort</label>
-                <div className="flex flex-wrap gap-2">
-                  {EFFORT_OPTIONS.map((e) => (
+
+              {/* Preferred Format - Only show for Instagram/X */}
+              {(selectedPlatform === 'instagram' || selectedPlatform === 'x') && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Preferred format</label>
+                  <div className="flex flex-wrap gap-2">
                     <button
-                      key={e.id}
                       type="button"
-                      onClick={() => setDraftSettings((p) => ({ ...p, effort: e.id }))}
-                      className={`px-3 py-1.5 rounded-md text-sm ${draftSettings.effort === e.id ? 'bg-primary-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}
+                      onClick={() => setDraftSettings((p) => ({ ...p, format: 'auto' }))}
+                      className={`px-3 py-1.5 rounded-md text-sm ${draftSettings.format === 'auto' ? 'bg-primary-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}
                     >
-                      {e.label}
+                      All formats
                     </button>
-                  ))}
+                    {FORMAT_OPTIONS.map((f) => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => setDraftSettings((p) => ({ ...p, format: f.id }))}
+                        className={`px-3 py-1.5 rounded-md text-sm ${draftSettings.format === f.id ? 'bg-primary-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    "All formats" generates one idea for each: Reel, Carousel, Photo, Story
+                  </p>
                 </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Preferred format</label>
-                <div className="flex flex-wrap gap-2">
-                  {FORMAT_OPTIONS.map((f) => (
-                    <button
-                      key={f.id}
-                      type="button"
-                      onClick={() => setDraftSettings((p) => ({ ...p, format: f.id }))}
-                      className={`px-3 py-1.5 rounded-md text-sm ${draftSettings.format === f.id ? 'bg-primary-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}
-                    >
-                      {f.label}
-                    </button>
-                  ))}
+              )}
+
+              {/* My Page Analytics Info */}
+              {selectedPlatform === 'mypage' && (
+                <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                  <p className="text-sm text-indigo-700 dark:text-indigo-300">
+                    <strong>My Page ideas</strong> are generated by analyzing your Fan Hub analytics—likes, comments, tips, and engagement patterns—to suggest content that resonates with your fans.
+                  </p>
                 </div>
-              </div>
+              )}
+
+              {/* Use Trends */}
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -343,6 +388,7 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
         </div>
       )}
 
+      {/* Use This Idea Modal */}
       {useThisIdea && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setUseThisIdea(null)}>
           <div
@@ -397,65 +443,122 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
         </div>
       )}
 
-      {loading && ideas.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-gray-500 dark:text-gray-400">
-          <RefreshIcon className="w-10 h-10 animate-spin mb-4" />
-          <p>Generating ideas…</p>
-        </div>
-      ) : ideas.length === 0 ? (
-        <div className="text-center py-16 text-gray-500 dark:text-gray-400">
-          <p>No ideas yet. Click &quot;New ideas&quot; to generate.</p>
-          <button type="button" onClick={handleNewIdeas} className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700">
-            New ideas
+      {/* Initial State - Before generating */}
+      {!hasGenerated && !loading && (
+        <div className="text-center py-16">
+          <div className="w-20 h-20 bg-primary-100 dark:bg-primary-900/40 rounded-full flex items-center justify-center mx-auto mb-6">
+            <SparklesIcon className="w-10 h-10 text-primary-600 dark:text-primary-400" />
+          </div>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Ready to generate ideas?</h2>
+          <p className="text-gray-500 dark:text-gray-400 mb-6 max-w-md mx-auto">
+            {selectedPlatform === 'instagram' && 'Get instant Instagram post ideas for Reels, Carousels, Photos, and Stories.'}
+            {selectedPlatform === 'facebook' && 'Get instant Facebook post ideas tailored for engagement.'}
+            {selectedPlatform === 'mypage' && 'Get ideas based on what your fans love—analyzed from your engagement data.'}
+          </p>
+          <div className="flex justify-center gap-3 mb-4">
+            {PLATFORM_OPTIONS.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setSelectedPlatform(p.id)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  selectedPlatform === p.id
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
+              >
+                <span>{p.icon}</span>
+                <span>{p.label}</span>
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={handleGenerateIdeas}
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-primary-600 text-white font-medium hover:bg-primary-700"
+          >
+            <SparklesIcon className="w-5 h-5" />
+            Generate Ideas
           </button>
         </div>
-      ) : (
-        <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-3">
-          {ideas.map((idea, index) => (
-            <div
-              key={idea.id}
-              className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden shadow-sm"
-            >
-              <div className="p-4">
-                <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 capitalize">
-                  {idea.format}
-                </span>
-                <h3 className="mt-2 font-semibold text-gray-900 dark:text-white line-clamp-2">{idea.title}</h3>
-                <p className="mt-1 text-sm text-gray-600 dark:text-gray-300 line-clamp-2">{idea.hook}</p>
-                {idea.shotList?.length > 0 && (
-                  <div className="mt-3">
-                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">What to show</p>
-                    <ul className="mt-1 space-y-0.5 text-sm text-gray-700 dark:text-gray-300">
-                      {idea.shotList.slice(0, 5).map((shot, i) => (
-                        <li key={i} className="flex gap-1.5">
-                          <span className="text-primary-500">•</span>
-                          <span>{shot}</span>
-                        </li>
-                      ))}
-                    </ul>
+      )}
+
+      {/* Loading State */}
+      {loading && ideas.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-16 text-gray-500 dark:text-gray-400">
+          <RefreshIcon className="w-10 h-10 animate-spin mb-4" />
+          <p>Generating ideas for {PLATFORM_OPTIONS.find(p => p.id === selectedPlatform)?.label}…</p>
+        </div>
+      )}
+
+      {/* Ideas Grid */}
+      {hasGenerated && !loading && ideas.length === 0 && (
+        <div className="text-center py-16 text-gray-500 dark:text-gray-400">
+          <p>No ideas generated. Try again.</p>
+          <button type="button" onClick={handleGenerateIdeas} className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700">
+            Generate Ideas
+          </button>
+        </div>
+      )}
+
+      {ideas.length > 0 && (
+        <>
+          {/* Platform indicator */}
+          <div className="mb-4 flex items-center gap-2">
+            <span className="text-sm text-gray-500 dark:text-gray-400">Showing ideas for:</span>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 text-sm font-medium">
+              {PLATFORM_OPTIONS.find(p => p.id === selectedPlatform)?.icon}
+              {PLATFORM_OPTIONS.find(p => p.id === selectedPlatform)?.label}
+            </span>
+          </div>
+          
+          <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {ideas.map((idea, index) => (
+              <div
+                key={idea.id}
+                className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden shadow-sm"
+              >
+                <div className="p-4">
+                  <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 capitalize">
+                    {idea.format}
+                  </span>
+                  <h3 className="mt-2 font-semibold text-gray-900 dark:text-white line-clamp-2">{idea.title}</h3>
+                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-300 line-clamp-2">{idea.hook}</p>
+                  {idea.shotList?.length > 0 && (
+                    <div className="mt-3">
+                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">What to show</p>
+                      <ul className="mt-1 space-y-0.5 text-sm text-gray-700 dark:text-gray-300">
+                        {idea.shotList.slice(0, 3).map((shot, i) => (
+                          <li key={i} className="flex gap-1.5">
+                            <span className="text-primary-500">•</span>
+                            <span className="line-clamp-1">{shot}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setUseThisIdea(idea)}
+                      className="flex-1 min-w-[80px] py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700"
+                    >
+                      Use this
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSwap(idea, index)}
+                      disabled={swapIndex === index}
+                      className="py-2 px-3 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                    >
+                      {swapIndex === index ? <RefreshIcon className="w-4 h-4 animate-spin inline" /> : 'Swap'}
+                    </button>
                   </div>
-                )}
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setUseThisIdea(idea)}
-                    className="flex-1 min-w-[100px] py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700"
-                  >
-                    Use this
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSwap(idea, index)}
-                    disabled={swapIndex === index}
-                    className="py-2 px-3 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
-                  >
-                    {swapIndex === index ? <RefreshIcon className="w-4 h-4 animate-spin inline" /> : 'Swap'}
-                  </button>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </>
       )}
 
       {/* Upgrade Modal for Advanced Planner */}

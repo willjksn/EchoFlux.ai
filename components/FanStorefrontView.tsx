@@ -508,9 +508,9 @@ export const FanStorefrontView: React.FC = () => {
     }
   };
 
-  /* Stormij landing defaults (same as stormijxo.com) */
-  const stormijBg = "#fff2f8";
-  const stormijPrimary = "#d4558b";
+  /* Neutral theme defaults - creators should customize */
+  const defaultBg = "#fafafa";
+  const defaultPrimary = "#6366f1";
 
   if (loading) {
     return (
@@ -536,9 +536,9 @@ export const FanStorefrontView: React.FC = () => {
 
   const { theme, displayName, avatar, bio } = creator;
   
-  // Member view uses light pink background like Stormij
-  const bg = theme?.background || stormijBg;
-  const primary = theme?.primary || stormijPrimary;
+  // Member view background - uses creator theme or neutral default
+  const bg = theme?.background || defaultBg;
+  const primary = theme?.primary || defaultPrimary;
 
   // Render legal pages (Terms/Privacy) if subpage is set
   if (legalSubpage) {
@@ -663,13 +663,18 @@ export const FanStorefrontView: React.FC = () => {
 
   return (
     <div
-      className="min-h-screen"
-      style={{ backgroundColor: bg }}
+      className="min-h-screen stormij-theme"
+      style={{ 
+        backgroundColor: bg,
+        "--fan-primary": primary,
+        "--fan-bg": bg,
+        "--fan-text": theme?.text || "#1f2937",
+      } as React.CSSProperties}
     >
       {/* Member Header */}
       <header
         className="storefront-member-header"
-        style={{ backgroundColor: "rgba(212, 85, 139, 0.08)" }}
+        style={{ backgroundColor: `${primary}14` }}
       >
         <div className="storefront-header-left">
           {avatar && (

@@ -1462,7 +1462,14 @@ export const Calendar: React.FC = () => {
                                         <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Select one platform for this post</p>
                                         <div className="flex flex-wrap gap-2">
                                             {(Object.keys(platformIcons) as Platform[])
-                                                .filter((platform): platform is Platform => platform !== 'OnlyFans' as any)
+                                                .filter((platform): platform is Platform => 
+                                                    platform !== 'OnlyFans' as any && 
+                                                    platform !== 'TikTok' && 
+                                                    platform !== 'Threads' && 
+                                                    platform !== 'YouTube' && 
+                                                    platform !== 'LinkedIn' && 
+                                                    platform !== 'Pinterest'
+                                                )
                                                 .map((platform) => {
                                                     // Check if this platform is in the original post
                                                     const originalPlatforms = selectedEvent.post?.platforms || [selectedEvent.event.platform];
@@ -1536,8 +1543,6 @@ export const Calendar: React.FC = () => {
                                                 <option value="witty">Witty</option>
                                                 <option value="inspirational">Inspirational</option>
                                                 <option value="professional">Professional</option>
-                                                <option value="sexy-bold">Sexy / Bold</option>
-                                                <option value="sexy-explicit">Sexy / Explicit</option>
                                             </select>
                                         </div>
 

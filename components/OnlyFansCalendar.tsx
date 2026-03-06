@@ -1175,8 +1175,6 @@ export const OnlyFansCalendar: React.FC<OnlyFansCalendarProps> = ({ onNavigateTo
                                                 <option value="witty">Witty</option>
                                                 <option value="inspirational">Inspirational</option>
                                                 <option value="professional">Professional</option>
-                                                <option value="sexy-bold">Sexy / Bold</option>
-                                                <option value="sexy-explicit">Sexy / Explicit</option>
                                             </select>
                                         </div>
 

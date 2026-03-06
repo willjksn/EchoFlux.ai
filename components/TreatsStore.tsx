@@ -363,126 +363,8 @@ export const TreatsStore: React.FC = () => {
 
   const visibleProducts = useMemo(() => products.filter((p) => !p.archived && p.visible), [products]);
 
-  // Demo treats for preview when no real products exist
-  const demoTreats: TreatProduct[] = useMemo(() => [
-    {
-      id: "demo-1",
-      creatorId: creatorId || "",
-      type: "voice_note_30s",
-      title: "30-Second Voice Note",
-      description: "I'll say your name. Keep it short. Keep it personal.",
-      priceCents: 1500,
-      visible: true,
-      archived: false,
-      quantityLimit: 10,
-      soldCount: 3,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    },
-    {
-      id: "demo-2",
-      creatorId: creatorId || "",
-      type: "voice_note_60s",
-      title: "60-Second Voice Note",
-      description: "More direct. Slightly longer. Still chill.",
-      priceCents: 2500,
-      visible: true,
-      archived: false,
-      quantityLimit: 8,
-      soldCount: 8,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    },
-    {
-      id: "demo-3",
-      creatorId: creatorId || "",
-      type: "private_video_reply",
-      title: "Private Video Reply",
-      description: "Ask me something. I'll respond privately.",
-      priceCents: 4500,
-      visible: true,
-      archived: false,
-      quantityLimit: 12,
-      soldCount: 5,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    },
-    {
-      id: "demo-4",
-      creatorId: creatorId || "",
-      type: "live_video_5m",
-      title: "5-Min Video Call",
-      description: "Quick face-to-face time. Say hi, ask a question, or just vibe.",
-      priceCents: 4999,
-      visible: true,
-      archived: false,
-      durationMinutes: 5,
-      quantityLimit: 10,
-      soldCount: 2,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    },
-    {
-      id: "demo-5",
-      creatorId: creatorId || "",
-      type: "live_video_10m",
-      title: "10-Min Video Call",
-      description: "More time to chat. Perfect for a real conversation.",
-      priceCents: 7999,
-      visible: true,
-      archived: false,
-      durationMinutes: 10,
-      quantityLimit: 8,
-      soldCount: 3,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    },
-    {
-      id: "demo-6",
-      creatorId: creatorId || "",
-      type: "live_video_15m",
-      title: "15-Min Video Call",
-      description: "The full experience. Let's really connect.",
-      priceCents: 9999,
-      visible: true,
-      archived: false,
-      durationMinutes: 15,
-      quantityLimit: 5,
-      soldCount: 1,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    },
-    {
-      id: "demo-7",
-      creatorId: creatorId || "",
-      type: "birthday_message",
-      title: "Birthday Message",
-      description: "Custom video. Don't make it weird.",
-      priceCents: 5000,
-      visible: true,
-      archived: false,
-      quantityLimit: 6,
-      soldCount: 2,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    },
-    {
-      id: "demo-8",
-      creatorId: creatorId || "",
-      type: "custom",
-      title: "Random Check-In",
-      description: "A short message from me when you least expect it.",
-      priceCents: 2000,
-      visible: true,
-      archived: false,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    },
-  ], [creatorId]);
-
-  // Use demo treats if no real products exist
-  const displayTreats = visibleProducts.length > 0 ? visibleProducts : demoTreats;
-  const isShowingDemo = visibleProducts.length === 0;
+  // Use actual products only - no demo data
+  const displayTreats = visibleProducts;
 
   if (!creatorId) {
     return (
@@ -583,13 +465,10 @@ export const TreatsStore: React.FC = () => {
 
           {loading ? (
             <p className="treats-loading">Loading…</p>
+          ) : displayTreats.length === 0 ? (
+            <p className="treats-empty">No treats available yet. Add some in Manage!</p>
           ) : (
             <>
-              {isShowingDemo && (
-                <div className="treats-demo-banner">
-                  <span>Preview Mode</span> — These are sample treats. Add your own in Manage.
-                </div>
-              )}
               <div className="treats-grid treats-grid-fan">
                 {displayTreats.map((p) => {
                   const soldOut = typeof p.quantityLimit === "number" && p.quantityLimit > 0 && (p.soldCount ?? 0) >= p.quantityLimit;
@@ -601,9 +480,9 @@ export const TreatsStore: React.FC = () => {
                     <button
                       key={p.id}
                       type="button"
-                      className={`treat-card treat-card-fan${soldOut ? " sold-out" : ""}${isShowingDemo ? " demo" : ""}${isVideoCall ? " treat-card-video" : ""}${getTreatImage(p) ? " has-image" : ""}`}
-                      disabled={soldOut || purchaseLoading !== null || isShowingDemo}
-                      onClick={() => !isShowingDemo && handlePurchase(p.id)}
+                      className={`treat-card treat-card-fan${soldOut ? " sold-out" : ""}${isVideoCall ? " treat-card-video" : ""}${getTreatImage(p) ? " has-image" : ""}`}
+                      disabled={soldOut || purchaseLoading !== null}
+                      onClick={() => handlePurchase(p.id)}
                     >
                       {getTreatImage(p) && (
                         <div className="treat-card-image">
@@ -663,97 +542,89 @@ export const TreatsStore: React.FC = () => {
 
           {loading ? (
             <p className="treats-loading">Loading…</p>
+          ) : displayedProducts.length === 0 ? (
+            <p className="treats-empty">No treats yet. Create one above!</p>
           ) : (
-            <>
-              {displayedProducts.length === 0 && (
-                <div className="treats-demo-banner">
-                  <span>Preview Mode</span> — These are sample treats. Add your own above.
-                </div>
-              )}
-              <div className="treats-manage-list">
-                {(displayedProducts.length > 0 ? displayedProducts : demoTreats).map((p) => {
-                  const isDemo = displayedProducts.length === 0;
-                  const isEditing = editing?.id === p.id;
-                  const qtyLeft = typeof p.quantityLimit === "number" ? p.quantityLimit - (p.soldCount || 0) : null;
+            <div className="treats-manage-list">
+              {displayedProducts.map((p) => {
+                const isEditing = editing?.id === p.id;
+                const qtyLeft = typeof p.quantityLimit === "number" ? p.quantityLimit - (p.soldCount || 0) : null;
 
-                  return (
-                    <div
-                      key={p.id}
-                      className={`treat-manage-card${p.archived ? " archived" : ""}${isDemo ? " demo" : ""}${isEditing ? " editing" : ""}`}
-                    >
-                      {isEditing ? (
-                        <InlineEditForm
-                          product={p}
-                          onSave={(payload) =>
-                            handleUpdate(p.id, {
-                              type: payload.type,
-                              title: payload.title,
-                              description: payload.description,
-                              priceCents: payload.priceCents,
-                              mediaUrl: payload.mediaUrl,
-                              imageUrl: payload.imageUrl,
-                              visible: payload.visible,
-                              quantityLimit: payload.quantityLimit,
-                            })
-                          }
-                          onCancel={() => setEditing(null)}
-                          saving={saving}
-                        />
-                      ) : (
-                        <>
-                          {getTreatImage(p) && (
-                            <div className="treat-manage-card-image">
-                              <img src={getTreatImage(p)!} alt={p.title} />
-                            </div>
-                          )}
-                          <div className="treat-manage-card-content">
-                            <h3 className="treat-manage-card-title">{p.title}</h3>
-                            <div className="treat-manage-card-meta">
-                              <span className="treat-manage-card-price">{formatPrice(p.priceCents)}</span>
-                              {qtyLeft !== null && (
-                                <>
-                                  <span className="treat-manage-card-sep">·</span>
-                                  <span className="treat-manage-card-qty">{qtyLeft} left</span>
-                                </>
-                              )}
-                            </div>
-                            {p.description && <p className="treat-manage-card-desc">{p.description}</p>}
+                return (
+                  <div
+                    key={p.id}
+                    className={`treat-manage-card${p.archived ? " archived" : ""}${isEditing ? " editing" : ""}`}
+                  >
+                    {isEditing ? (
+                      <InlineEditForm
+                        product={p}
+                        onSave={(payload) =>
+                          handleUpdate(p.id, {
+                            type: payload.type,
+                            title: payload.title,
+                            description: payload.description,
+                            priceCents: payload.priceCents,
+                            mediaUrl: payload.mediaUrl,
+                            imageUrl: payload.imageUrl,
+                            visible: payload.visible,
+                            quantityLimit: payload.quantityLimit,
+                          })
+                        }
+                        onCancel={() => setEditing(null)}
+                        saving={saving}
+                      />
+                    ) : (
+                      <>
+                        {getTreatImage(p) && (
+                          <div className="treat-manage-card-image">
+                            <img src={getTreatImage(p)!} alt={p.title} />
                           </div>
-                          <div className="treat-manage-card-actions">
-                            <button
-                              type="button"
-                              className="treat-manage-btn"
-                              disabled={isDemo}
-                              onClick={() => !isDemo && handleUpdate(p.id, { visible: !p.visible })}
-                            >
-                              {p.visible ? "Hide" : "Show"}
-                            </button>
-                            <button
-                              type="button"
-                              className="treat-manage-btn"
-                              onClick={() => {
-                                setShowForm(false);
-                                setEditing(p);
-                              }}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              className="treat-manage-btn danger"
-                              disabled={isDemo}
-                              onClick={() => !isDemo && handleDelete(p.id)}
-                            >
-                              Delete
-                            </button>
+                        )}
+                        <div className="treat-manage-card-content">
+                          <h3 className="treat-manage-card-title">{p.title}</h3>
+                          <div className="treat-manage-card-meta">
+                            <span className="treat-manage-card-price">{formatPrice(p.priceCents)}</span>
+                            {qtyLeft !== null && (
+                              <>
+                                <span className="treat-manage-card-sep">·</span>
+                                <span className="treat-manage-card-qty">{qtyLeft} left</span>
+                              </>
+                            )}
                           </div>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </>
+                          {p.description && <p className="treat-manage-card-desc">{p.description}</p>}
+                        </div>
+                        <div className="treat-manage-card-actions">
+                          <button
+                            type="button"
+                            className="treat-manage-btn"
+                            onClick={() => handleUpdate(p.id, { visible: !p.visible })}
+                          >
+                            {p.visible ? "Hide" : "Show"}
+                          </button>
+                          <button
+                            type="button"
+                            className="treat-manage-btn"
+                            onClick={() => {
+                              setShowForm(false);
+                              setEditing(p);
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="treat-manage-btn danger"
+                            onClick={() => handleDelete(p.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           )}
         </>
       )}
@@ -952,7 +823,25 @@ const ProductForm: React.FC<{
                 step="0.01"
                 min="0"
                 value={priceCents !== "" ? (Number(priceCents) / 100).toFixed(2) : ""}
-                onChange={(e) => setPriceCents(String(Math.round((parseFloat(e.target.value || "0") || 0) * 100)))}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === "") {
+                    setPriceCents("");
+                  } else {
+                    const dollars = parseFloat(val) || 0;
+                    setPriceCents(String(Math.round(dollars * 100)));
+                  }
+                }}
+                onKeyDown={(e) => {
+                  // Allow arrow keys to increment/decrement
+                  if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+                    e.preventDefault();
+                    const currentVal = priceCents !== "" ? Number(priceCents) / 100 : 0;
+                    const step = 0.01;
+                    const newVal = e.key === "ArrowUp" ? currentVal + step : Math.max(0, currentVal - step);
+                    setPriceCents(String(Math.round(newVal * 100)));
+                  }
+                }}
                 placeholder="0.00"
               />
             </div>

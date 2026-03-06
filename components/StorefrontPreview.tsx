@@ -29,10 +29,10 @@ export interface StorefrontPreviewProps {
   className?: string;
 }
 
-// Stormij XO theme defaults
-const DEFAULT_PRIMARY = "#d4558b";
-const DEFAULT_BG = "#fff2f8";
-const DEFAULT_TEXT = "#2f1a24";
+// Neutral theme defaults - creators should customize
+const DEFAULT_PRIMARY = "#6366f1";
+const DEFAULT_BG = "#fafafa";
+const DEFAULT_TEXT = "#1f2937";
 
 const SECTION_KEYS = ["home", "treats", "tip", "messages"] as const;
 
@@ -47,10 +47,10 @@ const SECTION_LABELS: Record<string, string> = {
   about: "About",
 };
 
-// Default landing content (Stormij XO style)
+// Neutral default landing content - creators should customize
 const DEFAULT_LANDING_CONTENT: StorefrontLandingContent = {
-  perksTitle: "Why This Exists",
-  perksText: "This is a space just for us — no algorithm, no noise, just me and the people who really want to be here.",
+  perksTitle: "Why Join",
+  perksText: "A space for exclusive content and real connection with my community.",
   perksList: [
     "Exclusive behind-the-scenes content",
     "Direct messages and personal connection",
@@ -58,20 +58,20 @@ const DEFAULT_LANDING_CONTENT: StorefrontLandingContent = {
     "Special treats and surprises",
   ],
   previewTitle: "What You Get",
-  previewText: "As a member, you get access to content I can only share here — the real, unfiltered moments.",
+  previewText: "As a member, you get access to content I can only share here.",
   previewList: [
     "Daily posts and updates",
     "Exclusive photos and videos",
     "Personal messages",
     "Live sessions and Q&As",
   ],
-  energyTitle: "The Energy",
+  energyTitle: "The Vibe",
   energyLines: [
-    "Playful and honest.",
-    "Real connection, not performance.",
-    "A safe space for both of us.",
+    "Authentic and real.",
+    "Genuine connection.",
+    "A supportive community.",
   ],
-  boundaryTitle: "The Boundary",
+  boundaryTitle: "Community Guidelines",
   boundaryText: "This is a supportive space. Respect is everything. No negativity, no demands — just genuine connection.",
 };
 
@@ -106,10 +106,19 @@ const FacebookIcon = () => (
   </svg>
 );
 
+// Globe icon for custom social links
+const GlobeIcon = () => (
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <circle cx="12" cy="12" r="10" />
+    <line x1="2" y1="12" x2="22" y2="12" />
+    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+  </svg>
+);
+
 // Get visible social links
 function getVisibleSocialLinks(socialLinks?: StorefrontSocialLinks) {
   if (!socialLinks) return [];
-  const links: { key: string; url: string; icon: React.ReactNode }[] = [];
+  const links: { key: string; url: string; icon: React.ReactNode; name?: string }[] = [];
   
   if (socialLinks.instagram?.show && socialLinks.instagram.url) {
     links.push({ key: "instagram", url: socialLinks.instagram.url, icon: <InstagramIcon /> });
@@ -125,6 +134,20 @@ function getVisibleSocialLinks(socialLinks?: StorefrontSocialLinks) {
   }
   if (socialLinks.facebook?.show && socialLinks.facebook.url) {
     links.push({ key: "facebook", url: socialLinks.facebook.url, icon: <FacebookIcon /> });
+  }
+  
+  // Add custom social links
+  if (socialLinks.custom && Array.isArray(socialLinks.custom)) {
+    socialLinks.custom.forEach((custom, index) => {
+      if (custom.show && custom.url) {
+        links.push({ 
+          key: `custom-${index}`, 
+          url: custom.url, 
+          icon: <GlobeIcon />,
+          name: custom.name || "Link"
+        });
+      }
+    });
   }
   
   return links;
@@ -188,7 +211,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
               ) : avatar ? (
                 <img src={avatar} alt="" className="w-7 h-7 rounded-full object-cover" />
               ) : null}
-              {!logo && <span className="text-xs font-medium" style={{ color: textColor }}>My Inner Circle</span>}
+              {!logo && <span className="text-xs font-medium" style={{ color: textColor }}>{displayName || "My Page"}</span>}
             </div>
             <div className="flex gap-3">
               <button type="button" className="text-xs hover:underline" style={{ color: primary }}>Sign up</button>
@@ -255,8 +278,8 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
             <section 
               className="rounded-2xl p-4 transition-all hover:translate-y-[-2px]" 
               style={{ 
-                background: `linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 245, 250, 0.86) 52%, rgba(250, 241, 252, 0.82) 100%)`, 
-                border: `1px solid #f3dbe5`,
+                background: `linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, ${primary}06 52%, ${primary}08 100%)`, 
+                border: `1px solid ${primary}18`,
                 boxShadow: `0 14px 42px ${primary}18`
               }}
             >
@@ -278,8 +301,8 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
             <section 
               className="rounded-2xl p-4 transition-all hover:translate-y-[-2px]" 
               style={{ 
-                background: `linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 245, 250, 0.86) 52%, rgba(250, 241, 252, 0.82) 100%)`, 
-                border: `1px solid #f3dbe5`,
+                background: `linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, ${primary}06 52%, ${primary}08 100%)`, 
+                border: `1px solid ${primary}18`,
                 boxShadow: `0 14px 42px ${primary}18`
               }}
             >
@@ -291,8 +314,8 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
             <section 
               className="rounded-2xl p-4 transition-all hover:translate-y-[-2px]" 
               style={{ 
-                background: `linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 245, 250, 0.86) 52%, rgba(250, 241, 252, 0.82) 100%)`, 
-                border: `1px solid #f3dbe5`,
+                background: `linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, ${primary}06 52%, ${primary}08 100%)`, 
+                border: `1px solid ${primary}18`,
                 boxShadow: `0 14px 42px ${primary}18`
               }}
             >
@@ -308,8 +331,8 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
             <section 
               className="rounded-2xl p-4 transition-all hover:translate-y-[-2px]" 
               style={{ 
-                background: `linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 245, 250, 0.86) 52%, rgba(250, 241, 252, 0.82) 100%)`, 
-                border: `1px solid #f3dbe5`,
+                background: `linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, ${primary}06 52%, ${primary}08 100%)`, 
+                border: `1px solid ${primary}18`,
                 boxShadow: `0 14px 42px ${primary}18`
               }}
             >
@@ -422,7 +445,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
           <header 
             className="flex items-center justify-between px-4 py-3"
             style={{ 
-              background: "linear-gradient(135deg, rgba(255, 246, 251, 0.98) 0%, rgba(255, 252, 254, 0.98) 50%, rgba(250, 241, 252, 0.98) 100%)",
+              background: `linear-gradient(135deg, ${primary}08 0%, rgba(255, 255, 255, 0.98) 50%, ${primary}06 100%)`,
               boxShadow: `0 6px 24px ${primary}15`,
               borderBottom: `1px solid ${primary}20`,
             }}
@@ -435,7 +458,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                   {displayName?.charAt(0) || "?"}
                 </div>
               )}
-              <span className="text-sm font-semibold" style={{ color: textColor }}>{displayName || "Inner Circle"}</span>
+              <span className="text-sm font-semibold" style={{ color: textColor }}>{displayName || "My Page"}</span>
             </div>
             <nav className="flex items-center gap-1">
               {memberTabs.map((key) => (
@@ -484,7 +507,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                 <article 
                   className="rounded-2xl overflow-hidden"
                   style={{ 
-                    background: "linear-gradient(160deg, rgba(255, 255, 255, 1) 0%, rgba(255, 244, 249, 0.95) 100%)",
+                    background: `linear-gradient(160deg, rgba(255, 255, 255, 1) 0%, ${primary}08 100%)`,
                     border: `1px solid ${primary}15`,
                     boxShadow: `0 4px 16px ${primary}10, 0 1px 3px rgba(0,0,0,0.04)`,
                   }}
@@ -620,7 +643,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
             {activeTab === "treats" && (
               <div 
                 style={{ 
-                  background: "linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 245, 250, 0.86) 52%, rgba(250, 241, 252, 0.82) 100%)",
+                  background: `linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, ${primary}06 52%, ${primary}08 100%)`,
                   padding: "1.5rem 1rem",
                   borderRadius: "16px",
                 }}
@@ -717,7 +740,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
               <div 
                 className="rounded-2xl overflow-hidden"
                 style={{ 
-                  background: "linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 245, 250, 0.86) 52%, rgba(250, 241, 252, 0.82) 100%)",
+                  background: `linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, ${primary}06 52%, ${primary}08 100%)`,
                   border: `1px solid ${primary}15`,
                   boxShadow: `0 14px 42px ${primary}12`,
                 }}
@@ -727,7 +750,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                   className="text-center relative overflow-hidden"
                   style={{ 
                     padding: "2.5rem 1.5rem",
-                    background: `linear-gradient(135deg, ${primary}15 0%, ${primary}20 50%, rgba(168, 85, 247, 0.12) 100%)`,
+                    background: `linear-gradient(135deg, ${primary}15 0%, ${primary}20 50%, ${primary}12 100%)`,
                   }}
                 >
                   <h2 

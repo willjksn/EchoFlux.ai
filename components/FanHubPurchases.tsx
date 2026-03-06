@@ -45,86 +45,8 @@ function formatAmount(cents: number): string {
   return "$" + (cents / 100).toFixed(2);
 }
 
-// Demo purchases for preview
-const DEMO_PURCHASES: Purchase[] = [
-  {
-    id: "demo-1",
-    email: "sarah.m@gmail.com",
-    fanName: "Sarah M.",
-    productName: "15 min Video Call",
-    treatType: "live_video_15m",
-    amountCents: 7999,
-    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-    scheduleStatus: "pending",
-    scheduledDate: null,
-    scheduledTime: null,
-    isDemo: true,
-  },
-  {
-    id: "demo-2",
-    email: "mike.johnson@yahoo.com",
-    fanName: "Mike J.",
-    productName: "30 min Chat Session",
-    treatType: "live_chat_30m",
-    amountCents: 4999,
-    createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000), // 5 hours ago
-    scheduleStatus: "pending",
-    scheduledDate: null,
-    scheduledTime: null,
-    isDemo: true,
-  },
-  {
-    id: "demo-3",
-    email: "jenny.b@outlook.com",
-    fanName: "Jenny B.",
-    productName: "30 min Video Call",
-    treatType: "live_video_30m",
-    amountCents: 14999,
-    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
-    scheduleStatus: "scheduled",
-    scheduledDate: (() => {
-      const d = new Date();
-      d.setDate(d.getDate() + 2);
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    })(),
-    scheduledTime: "14:00",
-    isDemo: true,
-  },
-  {
-    id: "demo-4",
-    email: "alex.t@gmail.com",
-    fanName: "Alex T.",
-    productName: "15 min Chat Session",
-    treatType: "live_chat_15m",
-    amountCents: 2999,
-    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
-    scheduleStatus: "scheduled",
-    scheduledDate: (() => {
-      const d = new Date();
-      d.setDate(d.getDate() + 5);
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    })(),
-    scheduledTime: "10:00",
-    isDemo: true,
-  },
-  {
-    id: "demo-5",
-    email: "chris.w@proton.me",
-    fanName: "Chris W.",
-    productName: "60 min Video Call",
-    treatType: "live_video_60m",
-    amountCents: 24999,
-    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // 3 days ago
-    scheduleStatus: "completed",
-    scheduledDate: (() => {
-      const d = new Date();
-      d.setDate(d.getDate() - 1);
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    })(),
-    scheduledTime: "16:30",
-    isDemo: true,
-  },
-];
+// Empty - no demo data for new creators
+const DEMO_PURCHASES: Purchase[] = [];
 
 /**
  * Fan Hub → Purchases: treat purchases with scheduling to calendar.
@@ -164,7 +86,7 @@ export const FanHubPurchases: React.FC = () => {
             scheduledTime: o.scheduledTime || null,
             isDemo: false,
           }));
-          setPurchases([...realPurchases, ...DEMO_PURCHASES]);
+          setPurchases(realPurchases);
         }
       }
     } catch {
@@ -291,7 +213,10 @@ export const FanHubPurchases: React.FC = () => {
   };
 
   const filteredPurchases = purchases.filter((p) => {
-    if (filterStatus === "all") return true;
+    if (filterStatus === "all") {
+      // By default, hide scheduled items - they appear on calendar now
+      return p.scheduleStatus === "pending";
+    }
     return p.scheduleStatus === filterStatus;
   });
 

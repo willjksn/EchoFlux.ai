@@ -4,6 +4,19 @@ import React, { useState, useEffect } from "react";
 import { auth } from "../firebaseConfig";
 import type { StorefrontSocialLinks, StorefrontLandingContent, StorefrontLegal, TextStyle } from "../types";
 
+// Sun/Moon icons for theme toggle
+const SunIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+  </svg>
+);
+
+const MoonIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+  </svg>
+);
+
 // Font size mapping for text styles
 const FONT_SIZE_MAP: Record<NonNullable<TextStyle['fontSize']>, string> = {
   'xs': '0.75rem',
@@ -26,10 +39,10 @@ function getTextStyleCSS(style?: TextStyle, defaults?: { fontSize?: string; colo
 
 const TIP_PRESET_AMOUNTS = [3, 5, 10, 20];
 
-// Default landing content (Stormij XO style)
+// Neutral default landing content - creators should customize
 const DEFAULT_LANDING_CONTENT: StorefrontLandingContent = {
-  perksTitle: "Why This Exists",
-  perksText: "This is a space just for us — no algorithm, no noise, just me and the people who really want to be here.",
+  perksTitle: "Why Join",
+  perksText: "A space for exclusive content and real connection with my community.",
   perksList: [
     "Exclusive behind-the-scenes content",
     "Direct messages and personal connection",
@@ -37,20 +50,20 @@ const DEFAULT_LANDING_CONTENT: StorefrontLandingContent = {
     "Special treats and surprises",
   ],
   previewTitle: "What You Get",
-  previewText: "As a member, you get access to content I can only share here — the real, unfiltered moments.",
+  previewText: "As a member, you get access to content I can only share here.",
   previewList: [
     "Daily posts and updates",
     "Exclusive photos and videos",
     "Personal messages",
     "Live sessions and Q&As",
   ],
-  energyTitle: "The Energy",
+  energyTitle: "The Vibe",
   energyLines: [
-    "Playful and honest.",
-    "Real connection, not performance.",
-    "A safe space for both of us.",
+    "Authentic and real.",
+    "Genuine connection.",
+    "A supportive community.",
   ],
-  boundaryTitle: "The Boundary",
+  boundaryTitle: "Community Guidelines",
   boundaryText: "This is a supportive space. Respect is everything. No negativity, no demands — just genuine connection.",
 };
 
@@ -86,9 +99,18 @@ const FacebookIcon = () => (
 );
 
 // Get visible social links
+// Globe icon for custom social links
+const GlobeIcon = () => (
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <circle cx="12" cy="12" r="10" />
+    <line x1="2" y1="12" x2="22" y2="12" />
+    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+  </svg>
+);
+
 function getVisibleSocialLinks(socialLinks?: StorefrontSocialLinks) {
   if (!socialLinks) return [];
-  const links: { key: string; url: string; icon: React.ReactNode }[] = [];
+  const links: { key: string; url: string; icon: React.ReactNode; name?: string }[] = [];
   
   if (socialLinks.instagram?.show && socialLinks.instagram.url) {
     links.push({ key: "instagram", url: socialLinks.instagram.url, icon: <InstagramIcon /> });
@@ -104,6 +126,20 @@ function getVisibleSocialLinks(socialLinks?: StorefrontSocialLinks) {
   }
   if (socialLinks.facebook?.show && socialLinks.facebook.url) {
     links.push({ key: "facebook", url: socialLinks.facebook.url, icon: <FacebookIcon /> });
+  }
+  
+  // Add custom social links
+  if (socialLinks.custom && Array.isArray(socialLinks.custom)) {
+    socialLinks.custom.forEach((custom, index) => {
+      if (custom.show && custom.url) {
+        links.push({ 
+          key: `custom-${index}`, 
+          url: custom.url, 
+          icon: <GlobeIcon />,
+          name: custom.name || "Link"
+        });
+      }
+    });
   }
   
   return links;
@@ -176,9 +212,9 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
     textStyles,
   } = creator;
   
-  const primary = theme?.primary || "#d4558b";
-  const background = theme?.background || "#fff2f8";
-  const textColor = theme?.text || "#2f1a24";
+  const primary = theme?.primary || "#6366f1";
+  const background = theme?.background || "#fafafa";
+  const textColor = theme?.text || "#1f2937";
   const ts = textStyles ?? {};
   
   const landingContent = { ...DEFAULT_LANDING_CONTENT, ...creatorLandingContent };
@@ -191,6 +227,25 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
   const [tipError, setTipError] = useState("");
   const [tipHandle, setTipHandle] = useState("");
   const [tipCustomAmount, setTipCustomAmount] = useState("");
+  
+  // Dark mode state - persisted in localStorage per creator page
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(`fan-dark-mode-${creator.creatorId}`);
+      if (stored !== null) return stored === 'true';
+      // Default to system preference
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return false;
+  });
+  
+  const toggleDarkMode = () => {
+    setIsDarkMode(prev => {
+      const newValue = !prev;
+      localStorage.setItem(`fan-dark-mode-${creator.creatorId}`, String(newValue));
+      return newValue;
+    });
+  };
 
   useEffect(() => {
     const resetTipUi = () => {
@@ -245,25 +300,34 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
     startTip(Math.round(val * 100));
   };
 
-  // CSS variables for theme
+  // CSS variables for theme - adjust for dark mode
+  const darkBg = "#0f0f0f";
+  const darkText = "#f5f5f5";
+  const darkSectionBg = "rgba(30, 30, 30, 0.95)";
+  
+  const effectiveBg = isDarkMode ? darkBg : background;
+  const effectiveText = isDarkMode ? darkText : textColor;
+  
   const themeVars = {
     "--fan-primary": primary,
-    "--fan-bg": background,
-    "--fan-text": textColor,
+    "--fan-bg": effectiveBg,
+    "--fan-text": effectiveText,
     "--fan-accent": primary,
   } as React.CSSProperties;
 
   return (
     <div 
-      className="fan-landing-page" 
+      className={`fan-landing-page ${isDarkMode ? 'fan-dark-mode' : ''}`}
       style={{ 
         ...themeVars,
-        background: `linear-gradient(135deg, ${background} 0%, #fff 50%, ${background} 100%)`,
-        color: textColor,
+        background: isDarkMode 
+          ? `linear-gradient(135deg, ${darkBg} 0%, #1a1a1a 50%, ${darkBg} 100%)`
+          : `linear-gradient(135deg, ${background} 0%, #fff 50%, ${background} 100%)`,
+        color: effectiveText,
       }}
     >
       {/* Header */}
-      <header className="fan-landing-header" style={{ borderColor: `${primary}20` }}>
+      <header className="fan-landing-header" style={{ borderColor: `${primary}20`, backgroundColor: isDarkMode ? 'rgba(20, 20, 20, 0.95)' : undefined }}>
         <a href="/" className="fan-landing-logo">
           {logo ? (
             <img src={logo} alt={displayName || ""} className="fan-landing-logo-img fan-landing-logo-custom" />
@@ -274,9 +338,19 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
               {displayName?.charAt(0) || "?"}
             </span>
           )}
-          {!logo && <span className="fan-landing-logo-label" style={{ color: textColor }}>My Inner Circle</span>}
+          {!logo && <span className="fan-landing-logo-label" style={{ color: effectiveText }}>{displayName || "My Page"}</span>}
         </a>
         <nav className="fan-landing-nav">
+          {/* Dark mode toggle */}
+          <button 
+            type="button" 
+            onClick={toggleDarkMode}
+            className="fan-landing-theme-toggle"
+            style={{ color: effectiveText }}
+            aria-label={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {isDarkMode ? <SunIcon /> : <MoonIcon />}
+          </button>
           {!isLoggedIn && (
             <>
               <button type="button" className="fan-landing-nav-link" onClick={onLogin} style={{ color: primary }}>
@@ -339,14 +413,19 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
         <div className="fan-landing-divider" style={{ background: `linear-gradient(90deg, transparent, ${primary}40, transparent)` }} aria-hidden="true" />
 
         {/* Why This Exists */}
-        <section className="fan-landing-section fan-landing-perks" style={{ background: `linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 245, 250, 0.86) 52%, rgba(250, 241, 252, 0.82) 100%)`, border: `1px solid #f3dbe5` }}>
+        <section className="fan-landing-section fan-landing-perks" style={{ 
+          background: isDarkMode 
+            ? `linear-gradient(140deg, rgba(30, 30, 30, 0.94) 0%, rgba(25, 25, 30, 0.86) 52%, rgba(20, 20, 25, 0.82) 100%)`
+            : `linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, ${primary}08 52%, ${primary}0a 100%)`, 
+          border: isDarkMode ? `1px solid rgba(255,255,255,0.1)` : `1px solid ${primary}18` 
+        }}>
           <h2 className="fan-landing-section-title" style={getTextStyleCSS(ts.perksTitle, { color: primary })}>{landingContent.perksTitle}</h2>
-          <div className="fan-landing-copy" style={getTextStyleCSS(ts.perksText, { color: `${textColor}cc` })}>
+          <div className="fan-landing-copy" style={getTextStyleCSS(ts.perksText, { color: isDarkMode ? 'rgba(255,255,255,0.8)' : `${textColor}cc` })}>
             <p>{landingContent.perksText}</p>
             {bio && <p style={getTextStyleCSS(ts.bio)}>{bio}</p>}
           </div>
           {landingContent.perksList && landingContent.perksList.length > 0 && (
-            <ul className="fan-landing-perks-list" style={{ color: `${textColor}99` }}>
+            <ul className="fan-landing-perks-list" style={{ color: isDarkMode ? 'rgba(255,255,255,0.6)' : `${textColor}99` }}>
               {landingContent.perksList.map((item, i) => (
                 <li key={i}>
                   <span style={{ color: primary }}>✓</span> {item}
@@ -357,11 +436,16 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
         </section>
 
         {/* What You Get */}
-        <section className="fan-landing-section fan-landing-preview" id="preview-section" style={{ background: `linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 245, 250, 0.86) 52%, rgba(250, 241, 252, 0.82) 100%)`, border: `1px solid #f3dbe5` }}>
+        <section className="fan-landing-section fan-landing-preview" id="preview-section" style={{ 
+          background: isDarkMode 
+            ? `linear-gradient(140deg, rgba(30, 30, 30, 0.94) 0%, rgba(25, 25, 30, 0.86) 52%, rgba(20, 20, 25, 0.82) 100%)`
+            : `linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, ${primary}08 52%, ${primary}0a 100%)`, 
+          border: isDarkMode ? `1px solid rgba(255,255,255,0.1)` : `1px solid ${primary}18` 
+        }}>
           <h2 className="fan-landing-section-title" style={getTextStyleCSS(ts.previewTitle, { color: primary })}>{landingContent.previewTitle}</h2>
-          <p className="fan-landing-preview-sub" style={getTextStyleCSS(ts.previewText, { color: `${textColor}cc` })}>{landingContent.previewText}</p>
+          <p className="fan-landing-preview-sub" style={getTextStyleCSS(ts.previewText, { color: isDarkMode ? 'rgba(255,255,255,0.8)' : `${textColor}cc` })}>{landingContent.previewText}</p>
           {landingContent.previewList && landingContent.previewList.length > 0 && (
-            <ul className="fan-landing-perks-list" style={{ color: `${textColor}99` }}>
+            <ul className="fan-landing-perks-list" style={{ color: isDarkMode ? 'rgba(255,255,255,0.6)' : `${textColor}99` }}>
               {landingContent.previewList.map((item, i) => (
                 <li key={i}>
                   <span style={{ color: primary }}>✓</span> {item}
@@ -372,19 +456,29 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
         </section>
 
         {/* The Energy */}
-        <section className="fan-landing-section fan-landing-testimonial" style={{ background: `linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 245, 250, 0.86) 52%, rgba(250, 241, 252, 0.82) 100%)`, border: `1px solid #f3dbe5` }}>
+        <section className="fan-landing-section fan-landing-testimonial" style={{ 
+          background: isDarkMode 
+            ? `linear-gradient(140deg, rgba(30, 30, 30, 0.94) 0%, rgba(25, 25, 30, 0.86) 52%, rgba(20, 20, 25, 0.82) 100%)`
+            : `linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, ${primary}08 52%, ${primary}0a 100%)`, 
+          border: isDarkMode ? `1px solid rgba(255,255,255,0.1)` : `1px solid ${primary}18` 
+        }}>
           <h2 className="fan-landing-section-title" style={getTextStyleCSS(ts.energyTitle, { color: primary })}>{landingContent.energyTitle}</h2>
           <div className="fan-landing-energy-copy">
             {(landingContent.energyLines ?? []).map((line, i) => (
-              <p key={i} className="fan-landing-energy-line" style={{ color: `${textColor}cc` }}>{line}</p>
+              <p key={i} className="fan-landing-energy-line" style={{ color: isDarkMode ? 'rgba(255,255,255,0.8)' : `${textColor}cc` }}>{line}</p>
             ))}
           </div>
         </section>
 
         {/* The Boundary */}
-        <section className="fan-landing-section fan-landing-faq" style={{ background: `linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 245, 250, 0.86) 52%, rgba(250, 241, 252, 0.82) 100%)`, border: `1px solid #f3dbe5` }}>
+        <section className="fan-landing-section fan-landing-faq" style={{ 
+          background: isDarkMode 
+            ? `linear-gradient(140deg, rgba(30, 30, 30, 0.94) 0%, rgba(25, 25, 30, 0.86) 52%, rgba(20, 20, 25, 0.82) 100%)`
+            : `linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, ${primary}08 52%, ${primary}0a 100%)`, 
+          border: isDarkMode ? `1px solid rgba(255,255,255,0.1)` : `1px solid ${primary}18` 
+        }}>
           <h2 className="fan-landing-section-title" style={getTextStyleCSS(ts.boundaryTitle, { color: primary })}>{landingContent.boundaryTitle}</h2>
-          <div className="fan-landing-copy fan-landing-boundary-copy" style={getTextStyleCSS(ts.boundaryText, { color: `${textColor}cc` })}>
+          <div className="fan-landing-copy fan-landing-boundary-copy" style={getTextStyleCSS(ts.boundaryText, { color: isDarkMode ? 'rgba(255,255,255,0.8)' : `${textColor}cc` })}>
             <p>{boundariesText}</p>
           </div>
         </section>
@@ -392,14 +486,19 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
         {/* Pricing */}
         <section className="fan-landing-section fan-landing-pricing" id="pricing">
           <div className="fan-landing-tiers">
-            <article className="fan-landing-tier-card" style={{ background: `linear-gradient(135deg, ${primary}15 0%, ${primary}05 100%)`, border: `1px solid ${primary}30` }}>
-              <h3 style={{ color: textColor }}>{isFreeAccess ? "Free membership" : "Monthly membership"}</h3>
+            <article className="fan-landing-tier-card" style={{ 
+              background: isDarkMode 
+                ? `linear-gradient(135deg, ${primary}25 0%, rgba(30,30,30,0.9) 100%)`
+                : `linear-gradient(135deg, ${primary}15 0%, ${primary}05 100%)`, 
+              border: `1px solid ${primary}30` 
+            }}>
+              <h3 style={{ color: effectiveText }}>{isFreeAccess ? "Free membership" : "Monthly membership"}</h3>
               <p className="fan-landing-price">
                 <span className="fan-landing-amount" style={{ color: primary }}>
                   {isFreeAccess ? "Free" : `$${monthlyPrice}`}
                 </span>
               </p>
-              <ul style={{ color: `${textColor}99` }}>
+              <ul style={{ color: isDarkMode ? 'rgba(255,255,255,0.6)' : `${textColor}99` }}>
                 <li>✓ Exclusive content</li>
                 {isFreeAccess ? (
                   <li>✓ Join instantly</li>
@@ -421,7 +520,7 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
                     : (isFreeAccess ? "Sign up to Join Free" : "Sign up to Subscribe")
                 }
               </button>
-              <p className="fan-landing-trust-line" style={{ color: `${textColor}66` }}>
+              <p className="fan-landing-trust-line" style={{ color: isDarkMode ? 'rgba(255,255,255,0.4)' : `${textColor}66` }}>
                 {isFreeAccess ? "🎉 No payment required" : "🔒 Secure payment · Cancel anytime"}
               </p>
             </article>
@@ -430,8 +529,8 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
           {/* Tip Section */}
           {(monetization?.tipsEnabled !== false) && (
             <div className="fan-landing-tip-section" style={{ borderTopColor: `${primary}20` }}>
-              <p className="fan-landing-tip-heading" style={{ color: textColor }}>Want to show love?</p>
-              <p className="fan-landing-tip-sub" style={{ color: `${textColor}99` }}>One-time tip — no subscription</p>
+              <p className="fan-landing-tip-heading" style={{ color: effectiveText }}>Want to show love?</p>
+              <p className="fan-landing-tip-sub" style={{ color: isDarkMode ? 'rgba(255,255,255,0.6)' : `${textColor}99` }}>One-time tip — no subscription</p>
               <div className="fan-landing-tip-meta">
                 <input
                   type="text"
@@ -460,11 +559,11 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
                 ))}
               </div>
               <div className="fan-landing-tip-custom">
-                <label htmlFor="tip-custom-amount" className="fan-landing-tip-custom-label" style={{ color: `${textColor}99` }}>
+                <label htmlFor="tip-custom-amount" className="fan-landing-tip-custom-label" style={{ color: isDarkMode ? 'rgba(255,255,255,0.6)' : `${textColor}99` }}>
                   Or enter an amount (USD)
                 </label>
                 <div className="fan-landing-tip-custom-row">
-                  <span className="fan-landing-tip-prefix" style={{ color: `${textColor}66`, marginRight: '0.35rem', fontWeight: 700 }} aria-hidden>$</span>
+                  <span className="fan-landing-tip-prefix" style={{ color: isDarkMode ? 'rgba(255,255,255,0.4)' : `${textColor}66`, marginRight: '0.35rem', fontWeight: 700 }} aria-hidden>$</span>
                   <input
                     type="number"
                     id="tip-custom-amount"
@@ -484,7 +583,7 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
                       }
                     }}
                     disabled={tipLoading}
-                    style={{ color: textColor, borderColor: `${primary}20` }}
+                    style={{ color: effectiveText, borderColor: `${primary}20`, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : undefined }}
                   />
                   <button
                     type="button"
@@ -507,18 +606,23 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
         </section>
 
         {/* Final CTA */}
-        <section className="fan-landing-section fan-landing-cta-panel" style={{ background: `linear-gradient(135deg, ${primary}15 0%, ${primary}05 100%)`, border: `1px solid ${primary}30` }}>
-          <p className="fan-landing-preview-sub" style={{ color: textColor }}>Join the Inner Circle</p>
+        <section className="fan-landing-section fan-landing-cta-panel" style={{ 
+          background: isDarkMode 
+            ? `linear-gradient(135deg, ${primary}25 0%, rgba(30,30,30,0.9) 100%)`
+            : `linear-gradient(135deg, ${primary}15 0%, ${primary}05 100%)`, 
+          border: `1px solid ${primary}30` 
+        }}>
+          <p className="fan-landing-preview-sub" style={{ color: effectiveText }}>Join {displayName || "My Page"}</p>
           <p className="fan-landing-hero-promise" style={{ color: primary }}>${monthlyPrice}/month</p>
-          <p className="fan-landing-preview-sub" style={{ color: `${textColor}99` }}>Keep it small.</p>
+          <p className="fan-landing-preview-sub" style={{ color: isDarkMode ? 'rgba(255,255,255,0.6)' : `${textColor}99` }}>Exclusive access.</p>
           <a href="#pricing" className="fan-landing-cta-btn" style={{ background: `linear-gradient(135deg, ${primary} 0%, ${primary}dd 100%)` }}>
-            Join the Inner Circle
+            Join Now
           </a>
         </section>
       </main>
 
       {/* Footer */}
-      <footer className="fan-landing-footer" style={{ borderColor: `${primary}20` }}>
+      <footer className="fan-landing-footer" style={{ borderColor: `${primary}20`, backgroundColor: isDarkMode ? 'rgba(20, 20, 20, 0.95)' : undefined }}>
         {/* Social Links in Footer */}
         {visibleSocialLinks.length > 0 && (
           <div className="fan-landing-footer-social">

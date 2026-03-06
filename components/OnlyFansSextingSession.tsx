@@ -30,7 +30,7 @@ interface SextingContextMessage {
 }
 
 const ROLEPLAY_TYPES = ['GFE', 'Dominant', 'Teacher', 'Boss', 'Fitness', 'Soft', 'Nurse', 'Celebrity'] as const;
-const TONES = ['Soft', 'Teasing', 'Playful', 'Explicit'] as const;
+const TONES = ['Soft', 'Teasing', 'Playful', 'Bold'] as const;
 
 function normalizeChatText(input: string): string {
   const trimmed = (input || '').trim();

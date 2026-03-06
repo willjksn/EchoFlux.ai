@@ -67,6 +67,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (e: unknown) {
     console.error("stripeConnectOnboard error:", e);
     const msg = e instanceof Error ? e.message : "Onboarding failed";
+    
+    // Check for Connect not enabled error
+    if (msg.includes("signed up for Connect") || msg.includes("Connect")) {
+      return res.status(503).json({ 
+        error: "Stripe Connect not enabled", 
+        message: "The platform needs to enable Stripe Connect. Please contact support.",
+        setupRequired: true
+      });
+    }
+    
     return res.status(500).json({ error: "Onboarding failed", message: msg });
   }
 }

@@ -81,14 +81,14 @@ function getInitials(name: string): string {
 
 function getAvatarColor(name: string): string {
   const colors = [
-    "bg-pink-500",
-    "bg-purple-500",
-    "bg-blue-500",
-    "bg-green-500",
-    "bg-yellow-500",
-    "bg-red-500",
     "bg-indigo-500",
+    "bg-blue-500",
     "bg-teal-500",
+    "bg-green-500",
+    "bg-amber-500",
+    "bg-orange-500",
+    "bg-cyan-500",
+    "bg-violet-500",
   ];
   const index = name.charCodeAt(0) % colors.length;
   return colors[index];
@@ -123,65 +123,9 @@ export const FanHubUsers: React.FC = () => {
   const [grantVideoMinutes, setGrantVideoMinutes] = useState(0);
   const [isGrantingMinutes, setIsGrantingMinutes] = useState(false);
 
-  // Demo placeholder users
-  const DEMO_USERS: FanUser[] = [
-    {
-      id: "demo-admin-1",
-      name: "stormij.xo",
-      email: "stormij.xo@gmail.com",
-      role: "admin",
-      plan: null,
-      signupDate: new Date("2026-02-25"),
-      remainingAccess: "Active",
-      monthlySpendCents: 0,
-      storePurchasesCents: 0,
-      tipsCents: 0,
-      unlocksCents: 0,
-      lastActiveAt: new Date(),
-    },
-    {
-      id: "demo-admin-2",
-      name: "will_jackson",
-      email: "will_jackson@icloud.com",
-      role: "admin",
-      plan: null,
-      signupDate: new Date("2026-02-25"),
-      remainingAccess: "Active",
-      monthlySpendCents: 0,
-      storePurchasesCents: 0,
-      tipsCents: 0,
-      unlocksCents: 0,
-      lastActiveAt: new Date(),
-    },
-    {
-      id: "demo-member-1",
-      name: "kris",
-      email: "kris704@hotmail.com",
-      role: "member",
-      plan: "Active",
-      signupDate: new Date("2026-02-27"),
-      remainingAccess: "Active",
-      monthlySpendCents: 4999,
-      storePurchasesCents: 2999,
-      tipsCents: 1000,
-      unlocksCents: 1000,
-      lastActiveAt: new Date(),
-    },
-    {
-      id: "demo-member-2",
-      name: "ddclare",
-      email: "ddclare@gmail.com",
-      role: "member",
-      plan: "Active",
-      signupDate: new Date("2026-02-25"),
-      remainingAccess: "Active",
-      monthlySpendCents: 7500,
-      storePurchasesCents: 5000,
-      tipsCents: 1500,
-      unlocksCents: 1000,
-      lastActiveAt: new Date(),
-    },
-  ];
+  // Empty placeholder - users will be loaded from database
+  // Demo users are not shown to new creators
+  const DEMO_USERS: FanUser[] = [];
 
   const loadUsers = useCallback(async () => {
     if (!user?.id) return;
@@ -624,7 +568,7 @@ export const FanHubUsers: React.FC = () => {
   }
 
   const UserRow: React.FC<{ fanUser: FanUser; showActions?: boolean }> = ({ fanUser, showActions = true }) => (
-    <tr className="hover:bg-pink-50/50 dark:hover:bg-pink-900/10 transition-colors">
+    <tr className="hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-colors">
       <td className="px-4 py-3">
         <div className="flex items-center gap-3">
           <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold ${getAvatarColor(fanUser.name)}`}>
@@ -634,7 +578,7 @@ export const FanHubUsers: React.FC = () => {
             <div className="flex items-center gap-2">
               <span className="font-medium text-gray-900 dark:text-white">{fanUser.name}</span>
               {fanUser.role === "admin" && (
-                <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400 rounded">
+                <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 rounded">
                   ADMIN
                 </span>
               )}
@@ -645,7 +589,7 @@ export const FanHubUsers: React.FC = () => {
       </td>
       <td className="px-4 py-3">
         {fanUser.plan ? (
-          <span className="px-2 py-1 text-xs font-medium bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400 rounded-full">
+          <span className="px-2 py-1 text-xs font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 rounded-full">
             {fanUser.plan}
           </span>
         ) : (
@@ -675,7 +619,7 @@ export const FanHubUsers: React.FC = () => {
           <div className="flex items-center gap-2">
             <button
               onClick={() => handleManageUser(fanUser)}
-              className="text-pink-600 hover:text-pink-700 dark:text-pink-400 dark:hover:text-pink-300 text-sm font-medium"
+              className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium"
             >
               Manage
             </button>
@@ -734,14 +678,14 @@ export const FanHubUsers: React.FC = () => {
   );
 
   return (
-    <div className="space-y-6 stormij-theme">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">User Management</h1>
         <div className="flex items-center gap-3">
           <button
             onClick={() => setShowAddModal(true)}
-            className="px-4 py-2 bg-pink-500 hover:bg-pink-600 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
+            className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
           >
             <PlusIcon />
             Add User
@@ -765,7 +709,7 @@ export const FanHubUsers: React.FC = () => {
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-100 dark:border-gray-700 overflow-hidden">
         {loading ? (
           <div className="p-8 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500 mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mx-auto mb-4"></div>
             <p className="text-gray-500 dark:text-gray-400">Loading users...</p>
           </div>
         ) : (
@@ -804,10 +748,10 @@ export const FanHubUsers: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {/* Monthly Totals Row */}
-                <tr className="bg-pink-50/50 dark:bg-pink-900/10">
+                <tr className="bg-indigo-50/50 dark:bg-indigo-900/10">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-500 to-purple-500 flex items-center justify-center text-white text-xs font-semibold">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-white text-xs font-semibold">
                         Σ
                       </div>
                       <span className="font-semibold text-gray-900 dark:text-white">Monthly Totals</span>
@@ -818,16 +762,16 @@ export const FanHubUsers: React.FC = () => {
                     {getMonthYear(new Date())}
                   </td>
                   <td className="px-4 py-3 text-gray-400">—</td>
-                  <td className="px-4 py-3 text-sm font-semibold text-pink-600 dark:text-pink-400">
+                  <td className="px-4 py-3 text-sm font-semibold text-indigo-600 dark:text-indigo-400">
                     {formatCents(monthlyTotals.spend)}
                   </td>
-                  <td className="px-4 py-3 text-sm font-semibold text-pink-600 dark:text-pink-400">
+                  <td className="px-4 py-3 text-sm font-semibold text-indigo-600 dark:text-indigo-400">
                     {formatCents(monthlyTotals.purchases)}
                   </td>
-                  <td className="px-4 py-3 text-sm font-semibold text-pink-600 dark:text-pink-400">
+                  <td className="px-4 py-3 text-sm font-semibold text-indigo-600 dark:text-indigo-400">
                     {formatCents(monthlyTotals.tips)}
                   </td>
-                  <td className="px-4 py-3 text-sm font-semibold text-pink-600 dark:text-pink-400">
+                  <td className="px-4 py-3 text-sm font-semibold text-indigo-600 dark:text-indigo-400">
                     {formatCents(monthlyTotals.unlocks)}
                   </td>
                   <td className="px-4 py-3 text-gray-400">—</td>
@@ -943,7 +887,7 @@ export const FanHubUsers: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowNewUserPassword(!showNewUserPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-pink-600 dark:text-pink-400 hover:text-pink-700"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700"
                   >
                     {showNewUserPassword ? "Hide" : "Show"}
                   </button>
@@ -996,7 +940,7 @@ export const FanHubUsers: React.FC = () => {
               <button
                 onClick={handleAddUser}
                 disabled={!newUserEmail.trim() || addingUser}
-                className="px-4 py-2 bg-pink-500 hover:bg-pink-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {addingUser ? "Adding..." : "Add User"}
               </button>
@@ -1047,7 +991,7 @@ export const FanHubUsers: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="px-3 py-2 text-sm text-pink-600 dark:text-pink-400 hover:text-pink-700"
+                    className="px-3 py-2 text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700"
                   >
                     {showPassword ? "Hide" : "Show"}
                   </button>
@@ -1063,7 +1007,7 @@ export const FanHubUsers: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleSendPasswordReset}
-                  className="w-full px-4 py-2.5 bg-pink-500 hover:bg-pink-600 text-white rounded-lg text-sm font-medium transition-colors"
+                  className="w-full px-4 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm font-medium transition-colors"
                 >
                   Send password reset email
                 </button>
@@ -1106,7 +1050,7 @@ export const FanHubUsers: React.FC = () => {
                       type="button"
                       onClick={handleGrantTreat}
                       disabled={!grantTreatType}
-                      className="px-4 py-2 bg-pink-500 hover:bg-pink-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Grant
                     </button>
@@ -1167,7 +1111,7 @@ export const FanHubUsers: React.FC = () => {
               </div>
 
               {/* Reward Summary */}
-              <div className="bg-pink-50 dark:bg-pink-900/20 rounded-lg p-4 border border-pink-100 dark:border-pink-800/50">
+              <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-4 border border-indigo-100 dark:border-indigo-800/50">
                 <h5 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Reward summary</h5>
                 {selectedUser.role === "member" ? (
                   <div className="space-y-1 text-sm">
@@ -1219,7 +1163,7 @@ export const FanHubUsers: React.FC = () => {
                   setGrantTreatType("");
                   setGrantTreatCount(1);
                 }}
-                className="flex-1 px-6 py-2.5 bg-pink-500 hover:bg-pink-600 text-white rounded-lg text-sm font-medium transition-colors"
+                className="flex-1 px-6 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm font-medium transition-colors"
               >
                 Save changes
               </button>

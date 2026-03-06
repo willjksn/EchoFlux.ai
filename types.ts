@@ -216,12 +216,20 @@ export interface SocialLinkConfig {
 }
 
 /** All social links for a creator's storefront */
+export interface CustomSocialLink {
+    name: string;
+    url: string;
+    show: boolean;
+    icon?: string;
+}
+
 export interface StorefrontSocialLinks {
     instagram?: SocialLinkConfig;
     facebook?: SocialLinkConfig;
     x?: SocialLinkConfig;
     tiktok?: SocialLinkConfig;
     youtube?: SocialLinkConfig;
+    custom?: CustomSocialLink[];
 }
 
 /** Landing page content sections (editable by creator) */
