@@ -476,8 +476,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       creatorHint: creatorHint || '(none)',
     });
     
-    // Process ideas with images
-    const processedIdeas = await Promise.all(ideas.map(async (idea, index) => {
+    // Process ideas with images - sequential to avoid rate limits
+    const processedIdeas: typeof ideas = [];
+    
+    // Initialize Replicate once if available
+    let replicate: any = null;
+    if (useAIImages) {
+      try {
+        const Replicate = (await import("replicate")).default;
+        replicate = new Replicate({ auth: replicateApiToken });
+      } catch (e) {
+        console.error('[generateDailyPostIdeas] Failed to initialize Replicate:', e);
+      }
+    }
+    
+    for (let index = 0; index < ideas.length; index++) {
+      const idea = ideas[index];
       const baseIdea = {
         ...idea,
         id: idea.id || `idea_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
@@ -485,72 +499,63 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         hashtags: Array.isArray(idea.hashtags) ? idea.hashtags : [],
       };
       
-      // Use Replicate SDXL for ALL images when configured (~$0.002/image)
-      if (useAIImages) {
+      // Use Replicate FLUX Schnell for fast image generation (~$0.003/image, ~1-2 sec)
+      if (replicate) {
         try {
-          const Replicate = (await import("replicate")).default;
-          const replicate = new Replicate({ auth: replicateApiToken });
-          
           const imagePrompt = buildImagePrompt(idea, creatorHint);
           
-          // Build negative prompt based on creator gender to prevent wrong gender
-          let negativePrompt = "text, words, letters, watermark, logo, low quality, blurry, distorted, ugly, amateur, cartoon, anime, illustration";
-          if (creatorGender === 'Female') {
-            negativePrompt += ", man, male, masculine, beard, muscular man";
-          } else if (creatorGender === 'Male') {
-            negativePrompt += ", woman, female, feminine, breasts, curves";
-          }
-          
-          // Using FLUX Dev (standard) - works reliably, $0.025/image
-          console.log('[generateDailyPostIdeas] v5 - Generating image with FLUX Dev, prompt:', imagePrompt);
+          // Using FLUX Schnell - fastest model, ~1-2 seconds, $0.003/image
+          console.log(`[generateDailyPostIdeas] v6 - Generating image ${index + 1}/${ideas.length} with FLUX Schnell`);
+          console.log(`[generateDailyPostIdeas] v6 - Prompt: ${imagePrompt}`);
           
           const output = await replicate.run(
-            "black-forest-labs/flux-dev",
+            "black-forest-labs/flux-schnell",
             {
               input: {
                 prompt: imagePrompt,
                 go_fast: true,
-                guidance: 3.5,
                 num_outputs: 1,
                 aspect_ratio: "1:1",
                 output_format: "webp",
                 output_quality: 80,
-                prompt_strength: 0.8,
-                num_inference_steps: 28,
+                num_inference_steps: 4, // Schnell uses fewer steps
               }
             }
           );
           
-          console.log('[generateDailyPostIdeas] v5 - FLUX Dev output received:', typeof output, Array.isArray(output) ? `array[${output.length}]` : 'not array');
+          console.log('[generateDailyPostIdeas] v6 - FLUX Schnell output:', typeof output, Array.isArray(output) ? `array[${output.length}]` : 'not array');
           
           const imageUrl = Array.isArray(output) ? output[0] : output;
-          if (typeof imageUrl === 'string') {
-            // Track successful Replicate usage
+          if (typeof imageUrl === 'string' && imageUrl.startsWith('http')) {
+            // Track successful Replicate usage (don't await, fire and forget)
             trackReplicateUsage(authUser.uid, 1, true).catch(() => {});
-            return {
+            processedIdeas.push({
               ...baseIdea,
               placeholderImage: imageUrl,
               imageSource: 'ai' as const,
-            };
+            });
+            continue;
+          } else {
+            console.log('[generateDailyPostIdeas] v6 - Invalid output URL:', imageUrl);
           }
         } catch (e: any) {
-          console.error(`[generateDailyPostIdeas] Replicate image generation failed for idea ${baseIdea.id}:`, e?.message || e);
-          // Track failed Replicate usage
+          console.error(`[generateDailyPostIdeas] v6 - Replicate failed for idea ${index + 1}:`, e?.message || e);
+          // Track failed usage (don't await)
           trackReplicateUsage(authUser.uid, 1, false, String(e?.message || e)).catch(() => {});
         }
-      } else {
-        console.log(`[generateDailyPostIdeas] Skipping AI images - Replicate not configured`);
+      } else if (useAIImages) {
+        console.log(`[generateDailyPostIdeas] v6 - Replicate not initialized, using placeholder`);
       }
       
       // Fallback to placeholder image if AI fails or is disabled
-      return {
+      processedIdeas.push({
         ...baseIdea,
         placeholderImage: getPlaceholderImage(index),
         imageSource: 'unsplash' as const,
-      };
-    }));
+      });
+    }
     
-    ideas = processedIdeas;
+    ideas = processedIdeas as DailyPostIdeaPayload[];
 
     if (ideas.length === 0) {
       res.status(200).json({ success: false, error: "No ideas generated", ideas: [] });
