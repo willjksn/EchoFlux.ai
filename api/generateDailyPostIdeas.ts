@@ -1,4 +1,4 @@
-// api/generateDailyPostIdeas.ts - v7
+// api/generateDailyPostIdeas.ts - v8
 // Instant "What to Post" ideas: 3 post ideas with optional regenerateAll or regenerateSingle (swap one card).
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getModelForTask, getModelNameForTask, getCostTierForTask } from "./_modelRouter.js";
@@ -505,60 +505,61 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
           const imagePrompt = buildImagePrompt(idea, creatorHint);
           
           // Using FLUX Schnell - fastest model, ~1-2 seconds, $0.003/image
-          console.log(`[generateDailyPostIdeas] v7 - Generating image ${index + 1}/${ideas.length} with FLUX Schnell`);
-          console.log(`[generateDailyPostIdeas] v7 - Prompt: ${imagePrompt}`);
+          console.log(`[generateDailyPostIdeas] v8 - Generating image ${index + 1}/${ideas.length} with FLUX Schnell`);
+          console.log(`[generateDailyPostIdeas] v8 - Prompt: ${imagePrompt}`);
           
           // Add delay between requests to avoid rate limiting (except for first)
           if (index > 0) {
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await new Promise(resolve => setTimeout(resolve, 3000)); // Increased to 3 seconds
           }
           
-          const output = await replicate.run(
-            "black-forest-labs/flux-schnell",
-            {
-              input: {
-                prompt: imagePrompt,
-                go_fast: true,
-                num_outputs: 1,
-                aspect_ratio: "1:1",
-                output_format: "webp",
-                output_quality: 80,
-                num_inference_steps: 4, // Schnell uses fewer steps
-              }
+          // Use predictions API for more control
+          const prediction = await replicate.predictions.create({
+            model: "black-forest-labs/flux-schnell",
+            input: {
+              prompt: imagePrompt,
+              go_fast: true,
+              num_outputs: 1,
+              aspect_ratio: "1:1",
+              output_format: "webp",
+              output_quality: 80,
+              num_inference_steps: 4,
             }
-          );
+          });
           
-          console.log('[generateDailyPostIdeas] v7 - FLUX Schnell output:', typeof output, Array.isArray(output) ? `array[${output.length}]` : 'not array');
+          console.log(`[generateDailyPostIdeas] v8 - Prediction created: ${prediction.id}, status: ${prediction.status}`);
+          
+          // Wait for prediction to complete (poll every 1 second, max 30 seconds)
+          let completedPrediction = prediction;
+          let attempts = 0;
+          while (completedPrediction.status !== 'succeeded' && completedPrediction.status !== 'failed' && attempts < 30) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            completedPrediction = await replicate.predictions.get(prediction.id);
+            attempts++;
+          }
+          
+          console.log(`[generateDailyPostIdeas] v8 - Final status: ${completedPrediction.status}, output:`, JSON.stringify(completedPrediction.output)?.slice(0, 200));
           
           let imageUrl: string | null = null;
+          const output = completedPrediction.output;
           
           // Handle different output formats from Replicate
           if (Array.isArray(output) && output.length > 0) {
             const firstItem = output[0];
             if (typeof firstItem === 'string' && firstItem.startsWith('http')) {
               imageUrl = firstItem;
-            } else if (firstItem && typeof firstItem === 'object') {
-              // Could be a FileOutput object with url property
-              const fileOutput = firstItem as any;
-              if (fileOutput.url && typeof fileOutput.url === 'string') {
-                imageUrl = fileOutput.url;
-              } else if (fileOutput.href && typeof fileOutput.href === 'string') {
-                imageUrl = fileOutput.href;
-              }
             }
           } else if (typeof output === 'string' && output.startsWith('http')) {
             imageUrl = output;
-          } else if (output && typeof output === 'object') {
-            // Handle single FileOutput object
-            const fileOutput = output as any;
-            if (fileOutput.url && typeof fileOutput.url === 'string') {
-              imageUrl = fileOutput.url;
-            }
           }
           
-          console.log('[generateDailyPostIdeas] v7 - Extracted URL:', imageUrl ? imageUrl.slice(0, 80) + '...' : 'null');
+          // Log error if prediction failed
+          if (completedPrediction.status === 'failed') {
+            console.log(`[generateDailyPostIdeas] v8 - Prediction failed:`, completedPrediction.error);
+          }
           
           if (imageUrl) {
+            console.log(`[generateDailyPostIdeas] v8 - Success! Image URL: ${imageUrl.slice(0, 80)}...`);
             // Track successful Replicate usage (don't await, fire and forget)
             trackReplicateUsage(authUser.uid, 1, true).catch(() => {});
             processedIdeas.push({
@@ -568,15 +569,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             });
             continue;
           } else {
-            console.log('[generateDailyPostIdeas] v7 - Could not extract URL from output:', JSON.stringify(output).slice(0, 200));
+            console.log('[generateDailyPostIdeas] v8 - No valid URL extracted');
           }
         } catch (e: any) {
-          console.error(`[generateDailyPostIdeas] v7 - Replicate failed for idea ${index + 1}:`, e?.message || e);
+          console.error(`[generateDailyPostIdeas] v8 - Replicate failed for idea ${index + 1}:`, e?.message || e);
           // Track failed usage (don't await)
           trackReplicateUsage(authUser.uid, 1, false, String(e?.message || e)).catch(() => {});
         }
       } else if (useAIImages) {
-        console.log(`[generateDailyPostIdeas] v7 - Replicate not initialized, using placeholder`);
+        console.log(`[generateDailyPostIdeas] v8 - Replicate not initialized, using placeholder`);
       }
       
       // Fallback to placeholder image if AI fails or is disabled
