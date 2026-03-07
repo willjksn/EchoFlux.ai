@@ -571,6 +571,13 @@ ${platforms.map(platform => {
     return `- OnlyFans: Do NOT generate hashtags. Optimize for 150–500 characters (soft max ~2000). Add subscriber-focused monetization CTAs (subscribe, tip, PPV unlock, customs) when appropriate.
 - Use natural OnlyFans slang and abbreviations that creators actually use: PPV, DM/DMs, sub/subs, custom/customs, unlock/unlocks, tip/tips, OF (for OnlyFans). Use these naturally, not forced. Write like a real creator would - casual, authentic, human.`;
   }
+  if (platformName === 'my page' || platformName === 'mypage' || platformName.includes('fan hub') || platformName.includes('fanhub')) {
+    return `- My Page (Fan Hub): Do NOT generate hashtags - Fan Hub does not use hashtags. Return "hashtags": [] for every caption.
+- Optimal length: 100-500 characters. Write engaging, personal content for your fan community.
+- Focus on connection, exclusivity, and fan engagement. Use casual, authentic language.
+- Can include light CTAs for tips, treats, or engagement (likes, comments).
+- Emojis are encouraged (2-4) to add personality and warmth.`;
+  }
   if (platformName.includes('instagram')) {
     return `- Instagram: Maximum 2,200 characters for captions. Optimal length: 125-150 characters for engagement. Include 10-30 relevant hashtags for maximum reach. Hashtags should be relevant to content, niche, and trending topics. Use 1–4 creative, relevant emojis (don’t spam) to enhance tone.`;
   } else if (platformName.includes('tiktok')) {
@@ -592,7 +599,7 @@ ${platforms.map(platform => {
   }
 }).join('\n')}
 
-CRITICAL: Ensure all captions respect the character limits and hashtag counts specified for the target platform(s). If OnlyFans is selected, hashtags MUST be empty.
+CRITICAL: Ensure all captions respect the character limits and hashtag counts specified for the target platform(s). If OnlyFans or My Page is selected, hashtags MUST be empty (return "hashtags": []).
 
 EMOJI GUIDELINES (ALL SOCIAL PLATFORMS):
 ${getEmojiInstructions({ enabled: emojiEnabled !== false, intensity: emojiIntensity ?? 5 })}${emojiEnabled !== false ? ` Choose emojis that match the tone (examples: ${getEmojiExamplesForTone(tone)}). Emojis should enhance the caption naturally.` : ''}

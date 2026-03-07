@@ -19,6 +19,8 @@ export interface DailyPostIdeaPayload {
   whyThisWorks?: string;
   trendBased?: boolean;
   trendContext?: string;
+  placeholderImage?: string;
+  imageSource?: 'unsplash' | 'ai';
 }
 
 export interface GenerateDailyPostIdeasBody {
@@ -110,9 +112,22 @@ function buildPrompt(opts: {
       ? "Medium effort: reels, carousels, or short series (15 min–1 hr)."
       : "Higher effort: polished reels, multi-slide carousels, or planned series.";
 
+  // Platform-specific format guidance
+  const platformFormatGuidance = platform === "fan_hub"
+    ? "For My Page/Fan Hub: Generate ideas using formats: 'photo', 'video', 'text', or 'poll'. These are NOT Instagram formats - avoid 'reel', 'carousel', 'story'. Focus on feed posts that engage your fan community."
+    : platform === "twitter"
+    ? "For X/Twitter: Generate ideas using formats: 'tweet', 'thread', 'poll', or 'video'. Focus on concise, punchy content."
+    : platform === "facebook"
+    ? "For Facebook: Generate ideas using formats: 'photo', 'video', 'post', or 'live'. Focus on shareable, community-building content."
+    : "";
+
   const formatGuidance =
     format === "auto"
-      ? (opts as any).generateAllFormats
+      ? platform === "fan_hub"
+        ? "Generate 3 varied ideas using My Page formats: photo posts, video posts, text updates, or polls. NO Instagram-specific formats."
+        : platform === "twitter"
+        ? "Generate 3 varied X/Twitter ideas: tweets, threads, polls, or short videos."
+        : (opts as any).generateAllFormats
         ? "Generate exactly 4 ideas, ONE for each format: 1 Reel, 1 Carousel, 1 Photo, 1 Story. Each must be clearly suited to its format."
         : "Generate a mix: e.g. 2 reels + 1 carousel, or 1 reel + 1 photo + 1 story, varied and scannable."
       : `Prefer format: ${format}. All ideas should be clearly ${format}-friendly.`;
@@ -147,6 +162,7 @@ PLATFORM: ${platform}
 GOAL: ${goal}. ${goalGuidance}
 EFFORT (minutes): ${effort}. ${effortGuidance}
 PREFERRED FORMAT: ${format}. ${formatGuidance}
+${platformFormatGuidance}
 TONE: ${tone}. Keep hooks and copy in this voice.
 ${spicyMode ? "Creator allows slightly bolder/sexier framing (still non-explicit per policy)." : "Keep content family-friendly and broadly safe."}
 ${toneStyleGuidance}
@@ -164,7 +180,7 @@ OUTPUT STRICT JSON ONLY (no markdown, no code fence):
   "ideas": [
     {
       "id": "idea_<short_unique_id>",
-      "format": "reel" | "carousel" | "photo" | "story" | "mixed",
+      "format": "${platform === "fan_hub" ? "photo | video | text | poll" : platform === "twitter" ? "tweet | thread | poll | video" : "reel | carousel | photo | story | mixed"}",
       "title": "Short punchy title (3-6 words)",
       "hook": "One sentence that grabs attention (first line of caption)",
       "shotList": ["Shot/scene 1", "Shot 2", "Shot 3", "..."],
@@ -350,12 +366,226 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     }
 
     let ideas = Array.isArray(parsed?.ideas) ? parsed.ideas : [];
-    ideas = ideas.map((i) => ({
-      ...i,
-      id: i.id || `idea_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-      shotList: Array.isArray(i.shotList) ? i.shotList : [],
-      hashtags: Array.isArray(i.hashtags) ? i.hashtags : [],
+    
+    // Keyword mapping for Unsplash - returns null if no good match found
+    const getUnsplashSearchTerm = (title: string): { term: string; confidence: 'high' | 'medium' | 'low' } => {
+      const keywords = title.toLowerCase();
+      
+      // High confidence mappings - LIFESTYLE/CREATOR CONTENT (check first for priority)
+      if (keywords.includes('swimsuit') || keywords.includes('swimwear') || keywords.includes('pool') || keywords.includes('swimming')) 
+        return { term: 'swimsuit,pool,summer', confidence: 'high' };
+      if (keywords.includes('bikini') || keywords.includes('beach bod') || keywords.includes('tan') || keywords.includes('sunbath')) 
+        return { term: 'bikini,beach,summer', confidence: 'high' };
+      if (keywords.includes('lingerie') || keywords.includes('boudoir') || keywords.includes('intimate')) 
+        return { term: 'boudoir,feminine,elegant', confidence: 'high' };
+      if (keywords.includes('legs') || keywords.includes('long legs') || keywords.includes('leggy')) 
+        return { term: 'legs,fashion,model', confidence: 'high' };
+      if (keywords.includes('feet') || keywords.includes('toes') || keywords.includes('pedicure') || keywords.includes('foot')) 
+        return { term: 'feet,pedicure,spa', confidence: 'high' };
+      if (keywords.includes('butt') || keywords.includes('booty') || keywords.includes('curves') || keywords.includes('curvy')) 
+        return { term: 'fitness,curves,body-positive', confidence: 'high' };
+      if (keywords.includes('breast') || keywords.includes('cleavage') || keywords.includes('chest')) 
+        return { term: 'fashion,feminine,elegant', confidence: 'high' };
+      if (keywords.includes('nail') || keywords.includes('manicure') || keywords.includes('polish') || keywords.includes('fingernail')) 
+        return { term: 'nails,manicure,beauty', confidence: 'high' };
+      if (keywords.includes('lips') || keywords.includes('lipstick') || keywords.includes('pout') || keywords.includes('kiss')) 
+        return { term: 'lips,lipstick,beauty', confidence: 'high' };
+      if (keywords.includes('eyes') || keywords.includes('eye') || keywords.includes('lashes') || keywords.includes('eyeliner') || keywords.includes('eyeshadow')) 
+        return { term: 'eyes,makeup,beauty', confidence: 'high' };
+      if (keywords.includes('miniskirt') || keywords.includes('mini skirt') || keywords.includes('short skirt')) 
+        return { term: 'miniskirt,fashion,style', confidence: 'high' };
+      if (keywords.includes('dress') || keywords.includes('gown') || keywords.includes('cocktail')) 
+        return { term: 'dress,fashion,elegant', confidence: 'high' };
+      if (keywords.includes('heels') || keywords.includes('high heels') || keywords.includes('stiletto') || keywords.includes('pumps')) 
+        return { term: 'heels,shoes,fashion', confidence: 'high' };
+      if (keywords.includes('lingerie') || keywords.includes('lace') || keywords.includes('silk') || keywords.includes('satin')) 
+        return { term: 'lace,silk,feminine', confidence: 'high' };
+      if (keywords.includes('selfie') || keywords.includes('mirror') || keywords.includes('self portrait')) 
+        return { term: 'selfie,portrait,woman', confidence: 'high' };
+      if (keywords.includes('body') || keywords.includes('figure') || keywords.includes('physique') || keywords.includes('body check')) 
+        return { term: 'fitness,body,wellness', confidence: 'high' };
+      if (keywords.includes('hair') || keywords.includes('hairstyle') || keywords.includes('blonde') || keywords.includes('brunette') || keywords.includes('redhead')) 
+        return { term: 'hair,hairstyle,beauty', confidence: 'high' };
+      if (keywords.includes('smile') || keywords.includes('happy') || keywords.includes('laugh') || keywords.includes('joy')) 
+        return { term: 'smile,happy,portrait', confidence: 'high' };
+      if (keywords.includes('bed') || keywords.includes('bedroom') || keywords.includes('lazy') || keywords.includes('cozy')) 
+        return { term: 'bedroom,cozy,lifestyle', confidence: 'high' };
+      if (keywords.includes('bath') || keywords.includes('bubble') || keywords.includes('tub') || keywords.includes('shower')) 
+        return { term: 'bath,spa,relaxation', confidence: 'high' };
+      if (keywords.includes('gym') || keywords.includes('workout') || keywords.includes('sweat') || keywords.includes('exercise')) 
+        return { term: 'gym,workout,fitness', confidence: 'high' };
+      if (keywords.includes('yoga') || keywords.includes('stretch') || keywords.includes('flexible') || keywords.includes('pose')) 
+        return { term: 'yoga,fitness,flexibility', confidence: 'high' };
+      if (keywords.includes('sexy') || keywords.includes('hot') || keywords.includes('sultry') || keywords.includes('seductive')) 
+        return { term: 'fashion,glamour,portrait', confidence: 'high' };
+      if (keywords.includes('cute') || keywords.includes('adorable') || keywords.includes('sweet') || keywords.includes('innocent')) 
+        return { term: 'cute,portrait,natural', confidence: 'high' };
+      if (keywords.includes('glam') || keywords.includes('glamour') || keywords.includes('glamorous') || keywords.includes('stunning')) 
+        return { term: 'glamour,fashion,elegant', confidence: 'high' };
+      if (keywords.includes('tan line') || keywords.includes('suntan') || keywords.includes('bronzed')) 
+        return { term: 'summer,tan,beach', confidence: 'high' };
+      if (keywords.includes('jewelry') || keywords.includes('necklace') || keywords.includes('earring') || keywords.includes('bracelet')) 
+        return { term: 'jewelry,fashion,accessories', confidence: 'high' };
+      if (keywords.includes('tattoo') || keywords.includes('ink') || keywords.includes('tattooed')) 
+        return { term: 'tattoo,alternative,style', confidence: 'high' };
+      if (keywords.includes('piercing') || keywords.includes('belly button') || keywords.includes('navel')) 
+        return { term: 'piercing,alternative,style', confidence: 'high' };
+
+      // High confidence mappings - GENERAL CONTENT
+      if (keywords.includes('gaming') || keywords.includes('gamer') || keywords.includes('controller') || keywords.includes('esport')) 
+        return { term: 'gaming,esports,controller', confidence: 'high' };
+      if (keywords.includes('food') || keywords.includes('cook') || keywords.includes('recipe') || keywords.includes('meal') || keywords.includes('dish')) 
+        return { term: 'food,cooking,meal', confidence: 'high' };
+      if (keywords.includes('fitness') || keywords.includes('workout') || keywords.includes('gym') || keywords.includes('exercise') || keywords.includes('training')) 
+        return { term: 'fitness,gym,workout', confidence: 'high' };
+      if (keywords.includes('travel') || keywords.includes('vacation') || keywords.includes('trip') || keywords.includes('destination')) 
+        return { term: 'travel,adventure,destination', confidence: 'high' };
+      if (keywords.includes('music') || keywords.includes('song') || keywords.includes('concert') || keywords.includes('guitar') || keywords.includes('piano')) 
+        return { term: 'music,concert,musician', confidence: 'high' };
+      if (keywords.includes('makeup') || keywords.includes('skincare') || keywords.includes('beauty routine') || keywords.includes('cosmetic')) 
+        return { term: 'makeup,beauty,skincare', confidence: 'high' };
+      if (keywords.includes('fashion') || keywords.includes('outfit') || keywords.includes('ootd') || keywords.includes('wardrobe') || keywords.includes('clothing')) 
+        return { term: 'fashion,outfit,style', confidence: 'high' };
+      if (keywords.includes('dog') || keywords.includes('cat') || keywords.includes('puppy') || keywords.includes('kitten') || keywords.includes('pet')) 
+        return { term: 'pets,dog,cat', confidence: 'high' };
+      if (keywords.includes('coffee') || keywords.includes('cafe') || keywords.includes('latte') || keywords.includes('espresso')) 
+        return { term: 'coffee,cafe,latte', confidence: 'high' };
+      if (keywords.includes('sunset') || keywords.includes('sunrise') || keywords.includes('golden hour')) 
+        return { term: 'sunset,golden-hour', confidence: 'high' };
+      if (keywords.includes('meditation') || keywords.includes('mindful') || keywords.includes('zen')) 
+        return { term: 'meditation,wellness,peaceful', confidence: 'high' };
+      if (keywords.includes('tech') || keywords.includes('gadget') || keywords.includes('laptop') || keywords.includes('phone') || keywords.includes('setup')) 
+        return { term: 'technology,gadgets,laptop', confidence: 'high' };
+      if (keywords.includes('nature') || keywords.includes('outdoor') || keywords.includes('hike') || keywords.includes('mountain') || keywords.includes('forest')) 
+        return { term: 'nature,hiking,mountains', confidence: 'high' };
+      if (keywords.includes('book') || keywords.includes('reading') || keywords.includes('library')) 
+        return { term: 'books,reading,library', confidence: 'high' };
+      if (keywords.includes('plant') || keywords.includes('garden') || keywords.includes('flower') || keywords.includes('succulent')) 
+        return { term: 'plants,garden,flowers', confidence: 'high' };
+      if (keywords.includes('car') || keywords.includes('drive') || keywords.includes('road trip') || keywords.includes('vehicle')) 
+        return { term: 'car,driving,road', confidence: 'high' };
+      if (keywords.includes('beach') || keywords.includes('ocean') || keywords.includes('surf') || keywords.includes('sand')) 
+        return { term: 'beach,ocean,surf', confidence: 'high' };
+      if (keywords.includes('art') || keywords.includes('paint') || keywords.includes('draw') || keywords.includes('creative') || keywords.includes('canvas')) 
+        return { term: 'art,painting,creative', confidence: 'high' };
+      if (keywords.includes('party') || keywords.includes('celebration') || keywords.includes('birthday') || keywords.includes('festival')) 
+        return { term: 'party,celebration,festival', confidence: 'high' };
+      if (keywords.includes('work') || keywords.includes('office') || keywords.includes('desk') || keywords.includes('productivity')) 
+        return { term: 'office,workspace,productivity', confidence: 'high' };
+      if (keywords.includes('sport') || keywords.includes('basketball') || keywords.includes('football') || keywords.includes('soccer') || keywords.includes('tennis')) 
+        return { term: 'sports,athletic,competition', confidence: 'high' };
+      if (keywords.includes('wine') || keywords.includes('champagne') || keywords.includes('cocktail') || keywords.includes('drink')) 
+        return { term: 'wine,cocktails,celebration', confidence: 'high' };
+      if (keywords.includes('date') || keywords.includes('romantic') || keywords.includes('love') || keywords.includes('couple')) 
+        return { term: 'romantic,couple,date', confidence: 'high' };
+      if (keywords.includes('night out') || keywords.includes('club') || keywords.includes('dancing') || keywords.includes('nightlife')) 
+        return { term: 'nightlife,club,dancing', confidence: 'high' };
+      
+      // Medium confidence - broader categories
+      if (keywords.includes('morning') || keywords.includes('routine') || keywords.includes('wake')) 
+        return { term: 'morning,routine,lifestyle', confidence: 'medium' };
+      if (keywords.includes('night') || keywords.includes('evening') || keywords.includes('late')) 
+        return { term: 'night,evening,city-lights', confidence: 'medium' };
+      if (keywords.includes('behind') || keywords.includes('scene') || keywords.includes('process') || keywords.includes('making')) 
+        return { term: 'behind-the-scenes,creative-process', confidence: 'medium' };
+      if (keywords.includes('tip') || keywords.includes('advice') || keywords.includes('hack') || keywords.includes('secret')) 
+        return { term: 'lightbulb,ideas,inspiration', confidence: 'medium' };
+      if (keywords.includes('story') || keywords.includes('share') || keywords.includes('personal')) 
+        return { term: 'storytelling,journal,personal', confidence: 'medium' };
+      if (keywords.includes('lifestyle') || keywords.includes('life') || keywords.includes('vibe')) 
+        return { term: 'lifestyle,aesthetic,woman', confidence: 'medium' };
+      if (keywords.includes('self') || keywords.includes('care') || keywords.includes('relax') || keywords.includes('treat')) 
+        return { term: 'selfcare,relaxation,spa', confidence: 'medium' };
+      if (keywords.includes('friend') || keywords.includes('hangout') || keywords.includes('social') || keywords.includes('group')) 
+        return { term: 'friends,social,hangout', confidence: 'medium' };
+      if (keywords.includes('home') || keywords.includes('interior') || keywords.includes('decor') || keywords.includes('room')) 
+        return { term: 'interior,home,decor', confidence: 'medium' };
+      if (keywords.includes('shop') || keywords.includes('haul') || keywords.includes('unbox') || keywords.includes('buy')) 
+        return { term: 'shopping,unboxing,haul', confidence: 'medium' };
+      if (keywords.includes('model') || keywords.includes('photoshoot') || keywords.includes('pose') || keywords.includes('posing')) 
+        return { term: 'model,photoshoot,portrait', confidence: 'medium' };
+      if (keywords.includes('confidence') || keywords.includes('empower') || keywords.includes('fierce') || keywords.includes('boss')) 
+        return { term: 'confident,woman,empowerment', confidence: 'medium' };
+      
+      // Low confidence - generic fallback (will trigger AI if enabled)
+      return { term: 'woman,aesthetic,lifestyle', confidence: 'low' };
+    };
+    
+    // Generate Unsplash URL
+    const getUnsplashUrl = (searchTerm: string, index: number): string => {
+      const seed = Date.now() + index * 1000;
+      return `https://source.unsplash.com/featured/600x600/?${encodeURIComponent(searchTerm)}&sig=${seed}`;
+    };
+    
+    // Check if Replicate is configured for AI fallback (enabled by default if token exists)
+    const replicateApiToken = process.env.REPLICATE_API_TOKEN;
+    const enableAIFallback = replicateApiToken && process.env.DISABLE_AI_IMAGE_FALLBACK !== "true";
+    
+    // Process ideas with images
+    const processedIdeas = await Promise.all(ideas.map(async (idea, index) => {
+      const baseIdea = {
+        ...idea,
+        id: idea.id || `idea_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+        shotList: Array.isArray(idea.shotList) ? idea.shotList : [],
+        hashtags: Array.isArray(idea.hashtags) ? idea.hashtags : [],
+      };
+      
+      const { term, confidence } = getUnsplashSearchTerm(idea.title || '');
+      
+      // Use Unsplash for high/medium confidence matches
+      if (confidence === 'high' || confidence === 'medium' || !enableAIFallback) {
+        return {
+          ...baseIdea,
+          placeholderImage: getUnsplashUrl(term, index),
+          imageSource: 'unsplash',
+        };
+      }
+      
+      // Low confidence + AI fallback enabled = generate with Replicate SDXL (~$0.002/image)
+      try {
+        const Replicate = (await import("replicate")).default;
+        const replicate = new Replicate({ auth: replicateApiToken });
+        
+        // Create a specific, relevant prompt based on the idea
+        const imagePrompt = `A visually appealing, Instagram-worthy photo representing: "${idea.title}". ${idea.shotList?.[0] || ''}. Style: modern, aesthetic, bright lighting, social media content, high quality, professional photography, no text or words in the image.`;
+        
+        const output = await replicate.run(
+          "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
+          {
+            input: {
+              prompt: imagePrompt,
+              negative_prompt: "text, words, letters, watermark, logo, low quality, blurry, distorted, ugly, amateur",
+              width: 1024,
+              height: 1024,
+              num_outputs: 1,
+              scheduler: "K_EULER",
+              num_inference_steps: 25, // Faster, still good quality
+              guidance_scale: 7.5,
+            }
+          }
+        );
+        
+        const imageUrl = Array.isArray(output) ? output[0] : output;
+        if (typeof imageUrl === 'string') {
+          return {
+            ...baseIdea,
+            placeholderImage: imageUrl,
+            imageSource: 'ai',
+          };
+        }
+      } catch (e) {
+        console.warn(`AI image fallback failed for idea ${baseIdea.id}, using Unsplash:`, e);
+      }
+      
+      // Final fallback to Unsplash
+      return {
+        ...baseIdea,
+        placeholderImage: getUnsplashUrl(term, index),
+        imageSource: 'unsplash',
+      };
     }));
+    
+    ideas = processedIdeas;
 
     if (ideas.length === 0) {
       res.status(200).json({ success: false, error: "No ideas generated", ideas: [] });

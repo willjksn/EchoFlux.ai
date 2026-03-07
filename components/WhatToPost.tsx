@@ -15,98 +15,114 @@ const PostIdeaCard: React.FC<{
   onSwap: () => void;
   swapping: boolean;
 }> = ({ idea, platform, onUse, onSwap, swapping }) => {
-  // Format-specific styling
-  const formatStyles: Record<string, { aspect: string; icon: string; label: string; gradient: string }> = {
-    reel: { 
-      aspect: 'aspect-[9/16]', 
-      icon: '▶️', 
-      label: 'REEL',
-      gradient: 'from-purple-500 via-pink-500 to-orange-400'
-    },
-    carousel: { 
-      aspect: 'aspect-square', 
-      icon: '◀ ▶', 
-      label: 'CAROUSEL',
-      gradient: 'from-blue-500 to-purple-500'
-    },
-    photo: { 
-      aspect: 'aspect-square', 
-      icon: '📷', 
-      label: 'PHOTO',
-      gradient: 'from-cyan-500 to-blue-500'
-    },
-    story: { 
-      aspect: 'aspect-[9/16]', 
-      icon: '○', 
-      label: 'STORY',
-      gradient: 'from-orange-400 via-pink-500 to-purple-500'
-    },
-    post: { 
-      aspect: 'aspect-square', 
-      icon: '📝', 
-      label: 'POST',
-      gradient: 'from-blue-600 to-blue-400'
-    },
-  };
-
-  const platformColors: Record<PlatformOption, string> = {
-    instagram: 'from-purple-600 via-pink-500 to-orange-400',
-    facebook: 'from-blue-600 to-blue-400',
-    x: 'from-gray-900 to-gray-700',
-    mypage: 'from-pink-500 to-purple-500',
+  // Format-specific styling for different platforms
+  const formatStyles: Record<string, { icon: string; label: string; gradient: string }> = {
+    // Instagram formats
+    reel: { icon: '▶️', label: 'REEL', gradient: 'from-purple-500 via-pink-500 to-orange-400' },
+    carousel: { icon: '◀ ▶', label: 'CAROUSEL', gradient: 'from-blue-500 to-purple-500' },
+    story: { icon: '○', label: 'STORY', gradient: 'from-orange-400 via-pink-500 to-purple-500' },
+    // My Page / Fan Hub formats
+    photo: { icon: '📷', label: 'PHOTO', gradient: 'from-pink-500 via-purple-500 to-indigo-500' },
+    video: { icon: '🎬', label: 'VIDEO', gradient: 'from-purple-600 via-pink-500 to-red-500' },
+    text: { icon: '✍️', label: 'TEXT', gradient: 'from-indigo-500 via-purple-500 to-pink-500' },
+    poll: { icon: '📊', label: 'POLL', gradient: 'from-teal-500 via-cyan-500 to-blue-500' },
+    // X/Twitter formats
+    tweet: { icon: '💬', label: 'TWEET', gradient: 'from-gray-800 via-gray-700 to-gray-600' },
+    thread: { icon: '🧵', label: 'THREAD', gradient: 'from-blue-600 via-blue-500 to-cyan-500' },
+    // Facebook formats
+    post: { icon: '📝', label: 'POST', gradient: 'from-blue-600 to-blue-400' },
+    live: { icon: '🔴', label: 'LIVE', gradient: 'from-red-500 via-pink-500 to-orange-500' },
+    // Fallback
+    mixed: { icon: '🎨', label: 'POST', gradient: 'from-blue-600 to-blue-400' },
   };
 
   const format = idea.format?.toLowerCase() || 'post';
   const style = formatStyles[format] || formatStyles.post;
   const isTrending = idea.trendBased || idea.trendContext;
+  const hasAIImage = !!idea.placeholderImage;
+
+  // Fallback emoji visual when no AI image is available
+  const getVisualContent = () => {
+    const keywords = idea.title?.toLowerCase() || '';
+    if (keywords.includes('gaming') || keywords.includes('game') || keywords.includes('setup')) return '🎮';
+    if (keywords.includes('food') || keywords.includes('cook') || keywords.includes('recipe')) return '🍳';
+    if (keywords.includes('fitness') || keywords.includes('workout') || keywords.includes('gym')) return '💪';
+    if (keywords.includes('travel') || keywords.includes('adventure')) return '✈️';
+    if (keywords.includes('music') || keywords.includes('song')) return '🎵';
+    if (keywords.includes('beauty') || keywords.includes('makeup') || keywords.includes('skin')) return '💄';
+    if (keywords.includes('fashion') || keywords.includes('outfit') || keywords.includes('style')) return '👗';
+    if (keywords.includes('pet') || keywords.includes('dog') || keywords.includes('cat')) return '🐾';
+    if (keywords.includes('morning') || keywords.includes('routine') || keywords.includes('day')) return '☀️';
+    if (keywords.includes('night') || keywords.includes('evening')) return '🌙';
+    return '✨';
+  };
 
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-      {/* Visual Preview */}
-      <div className={`relative ${format === 'reel' || format === 'story' ? 'h-48' : 'h-40'} bg-gradient-to-br ${style.gradient} flex items-center justify-center overflow-hidden`}>
+    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col">
+      {/* Visual Preview - AI generated image or fallback gradient */}
+      <div className="relative h-44 overflow-hidden">
+        {hasAIImage ? (
+          /* AI-generated placeholder image */
+          <img 
+            src={idea.placeholderImage} 
+            alt={idea.title}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          /* Fallback gradient with emoji */
+          <div className={`w-full h-full bg-gradient-to-br ${style.gradient} flex items-center justify-center`}>
+            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 opacity-20 text-6xl pointer-events-none select-none">
+              {getVisualContent()}
+            </div>
+          </div>
+        )}
+        
+        {/* Overlay for text readability */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+        
         {/* Format indicator */}
-        <div className="absolute top-2 left-2 flex items-center gap-1.5">
-          <span className="px-2 py-1 bg-black/30 backdrop-blur-sm rounded-md text-white text-xs font-bold">
+        <div className="absolute top-2 left-2 flex items-center gap-1.5 flex-wrap">
+          <span className="px-2 py-1 bg-black/40 backdrop-blur-sm rounded-md text-white text-xs font-bold">
             {style.label}
           </span>
           {isTrending && (
             <span className="px-2 py-1 bg-orange-500/90 backdrop-blur-sm rounded-md text-white text-xs font-bold flex items-center gap-1">
-              🔥 Trending
+              🔥 Trend
             </span>
           )}
         </div>
         
         {/* Platform badge */}
         <div className="absolute top-2 right-2">
-          <span className="px-2 py-1 bg-white/20 backdrop-blur-sm rounded-md text-white text-xs font-medium">
-            {platform === 'instagram' ? '📸 IG' : platform === 'facebook' ? '📘 FB' : platform === 'x' ? '𝕏' : '💖 My Page'}
+          <span className="px-2 py-1 bg-black/40 backdrop-blur-sm rounded-md text-white text-xs font-medium">
+            {platform === 'instagram' ? '📸' : platform === 'facebook' ? '📘' : platform === 'x' ? '𝕏' : '💖'}
           </span>
         </div>
 
         {/* Hook preview on the card */}
-        <div className="px-4 text-center">
-          <p className="text-white font-bold text-lg leading-snug drop-shadow-lg line-clamp-3">
-            "{idea.hook?.slice(0, 60)}{idea.hook && idea.hook.length > 60 ? '...' : ''}"
+        <div className="absolute bottom-2 left-2 right-2">
+          <p className="text-white font-bold text-sm leading-snug drop-shadow-lg line-clamp-2">
+            "{idea.hook?.slice(0, 55)}{idea.hook && idea.hook.length > 55 ? '...' : ''}"
           </p>
         </div>
 
         {/* Format icon */}
-        <div className="absolute bottom-2 right-2 text-white/60 text-xl">
+        <div className="absolute bottom-2 right-2 text-white/70 text-base">
           {style.icon}
         </div>
       </div>
 
       {/* Content */}
-      <div className="p-4">
-        <h3 className="font-semibold text-gray-900 dark:text-white line-clamp-2 text-sm">{idea.title}</h3>
+      <div className="p-3 flex-1 flex flex-col">
+        <h3 className="font-semibold text-gray-900 dark:text-white line-clamp-2 text-sm leading-tight">{idea.title}</h3>
         
         {idea.shotList?.length > 0 && (
-          <div className="mt-2">
+          <div className="mt-2 flex-1">
             <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">What to show</p>
             <ul className="mt-1 space-y-0.5 text-xs text-gray-600 dark:text-gray-300">
               {idea.shotList.slice(0, 2).map((shot, i) => (
                 <li key={i} className="flex gap-1.5">
-                  <span className="text-primary-500">•</span>
+                  <span className="text-primary-500 flex-shrink-0">•</span>
                   <span className="line-clamp-1">{shot}</span>
                 </li>
               ))}
@@ -119,7 +135,7 @@ const PostIdeaCard: React.FC<{
 
         {/* Trend context if available */}
         {idea.trendContext && (
-          <p className="mt-2 text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 px-2 py-1 rounded">
+          <p className="mt-2 text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 px-2 py-1 rounded line-clamp-1">
             📈 {idea.trendContext}
           </p>
         )}
@@ -349,16 +365,39 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
       return;
     }
     const dateStr = `${scheduleDate}T${scheduleTime}:00.000Z`;
+    
+    // Map format to calendar type
+    const formatToType: Record<string, string> = {
+      reel: 'Reel',
+      carousel: 'Post',
+      photo: 'Post',
+      story: 'Story',
+      video: 'Post',
+      text: 'Post',
+      poll: 'Post',
+      tweet: 'Post',
+      thread: 'Post',
+    };
+    
+    // Map platform to Platform type
+    const platformToName: Record<PlatformOption, Platform> = {
+      instagram: 'Instagram',
+      facebook: 'Facebook',
+      x: 'X',
+      mypage: 'Instagram', // Calendar doesn't have My Page yet, default to Instagram
+    };
+    
     const event: CalendarEvent = {
       id: `cal_${idea.id}_${Date.now()}`,
-      title: idea.title,
+      title: `📌 ${idea.title}`,
       date: dateStr,
-      type: idea.format === 'reel' ? 'Reel' : idea.format === 'carousel' ? 'Post' : 'Post',
-      platform: (selectedPlatform === 'instagram' ? 'Instagram' : selectedPlatform === 'facebook' ? 'Facebook' : selectedPlatform === 'x' ? 'X' : 'Instagram') as Platform,
+      type: formatToType[idea.format?.toLowerCase() || 'post'] || 'Post',
+      platform: platformToName[selectedPlatform],
       status: 'Draft',
+      description: `POST IDEA:\n${idea.hook}\n\nWHAT TO SHOW:\n${idea.shotList?.join('\n• ') || ''}\n\n${idea.captionStarter || ''}`,
     };
     addCalendarEvent(event).then(() => {
-      showToast('Added to calendar.', 'success');
+      showToast('Added to calendar as a draft reminder.', 'success');
       setUseThisIdea(null);
       setScheduleDate('');
       setScheduleTime('12:00');
@@ -531,50 +570,90 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
             className="w-full max-w-md rounded-xl bg-white dark:bg-gray-800 shadow-xl p-6 border border-gray-200 dark:border-gray-700"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Use this idea</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Use this idea</h3>
+              <button type="button" onClick={() => setUseThisIdea(null)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
+                <XMarkIcon className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            
+            {/* Idea preview */}
+            <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+              <p className="font-medium text-gray-900 dark:text-white text-sm">{useThisIdea.title}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">{useThisIdea.hook}</p>
+            </div>
+            
             <div className="space-y-3">
+              {/* Primary action: Write caption */}
               <button
                 type="button"
                 onClick={() => handleWriteCaption(useThisIdea)}
-                className="w-full py-2.5 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700"
+                className="w-full py-3 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 flex items-center justify-center gap-2"
               >
-                Write caption
+                <span>✏️</span>
+                Write Caption & Create Post
               </button>
-              <div className="flex gap-2 items-end">
-                <div className="flex-1 grid grid-cols-2 gap-2">
-                  <input
-                    type="date"
-                    value={scheduleDate}
-                    onChange={(e) => setScheduleDate(e.target.value)}
-                    className="rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm px-3 py-2"
-                  />
-                  <input
-                    type="time"
-                    value={scheduleTime}
-                    onChange={(e) => setScheduleTime(e.target.value)}
-                    className="rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm px-3 py-2"
-                  />
+              
+              {/* Schedule to calendar */}
+              <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Schedule to Calendar (as a reminder to create this post)</p>
+                <div className="flex gap-2 items-end">
+                  <div className="flex-1 grid grid-cols-2 gap-2">
+                    <input
+                      type="date"
+                      value={scheduleDate}
+                      onChange={(e) => setScheduleDate(e.target.value)}
+                      className="rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm px-3 py-2"
+                    />
+                    <input
+                      type="time"
+                      value={scheduleTime}
+                      onChange={(e) => setScheduleTime(e.target.value)}
+                      className="rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm px-3 py-2"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleSchedule(useThisIdea)}
+                    className="inline-flex items-center gap-1 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700"
+                  >
+                    <CalendarIcon className="w-4 h-4" />
+                    Add
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleSchedule(useThisIdea)}
-                  className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700"
-                >
-                  <CalendarIcon className="w-4 h-4" />
-                  Schedule
-                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => handleSaveToIdeaBank(useThisIdea)}
-                className="w-full py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700"
-              >
-                Save to Idea Bank
-              </button>
+              
+              {/* Save to Idea Bank - Only show for Elite/Agency users */}
+              {hasAdvancedAccess && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleSaveToIdeaBank(useThisIdea)}
+                      className="flex-1 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center justify-center gap-2"
+                    >
+                      <span>💾</span>
+                      Save to Idea Bank
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActivePage('strategy');
+                        if (window.history?.pushState) window.history.pushState({}, '', '/plan-my-week?tab=savedIdeas');
+                        setUseThisIdea(null);
+                      }}
+                      className="py-2.5 px-3 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700"
+                      title="View Idea Bank"
+                    >
+                      📚
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                    Idea Bank saves ideas for later. Access it from Advanced Planner → Saved Ideas.
+                  </p>
+                </>
+              )}
             </div>
-            <button type="button" onClick={() => setUseThisIdea(null)} className="mt-4 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
-              Cancel
-            </button>
           </div>
         </div>
       )}
@@ -640,21 +719,46 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
 
       {ideas.length > 0 && (
         <>
-          {/* Platform indicator with trend badge */}
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500 dark:text-gray-400">Showing ideas for:</span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 text-sm font-medium">
-                {PLATFORM_OPTIONS.find(p => p.id === selectedPlatform)?.icon}
-                {PLATFORM_OPTIONS.find(p => p.id === selectedPlatform)?.label}
-              </span>
+          {/* Header with back button, platform indicator, and regenerate */}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              {/* Back/Start Over button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIdeas([]);
+                  setHasGenerated(false);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                ← Back
+              </button>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500 dark:text-gray-400 hidden sm:inline">Showing ideas for:</span>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 text-sm font-medium">
+                  {PLATFORM_OPTIONS.find(p => p.id === selectedPlatform)?.icon}
+                  {PLATFORM_OPTIONS.find(p => p.id === selectedPlatform)?.label}
+                </span>
+              </div>
             </div>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 text-xs font-medium">
-              🔥 Trend-powered ideas
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 text-xs font-medium">
+                🔥 Trend-powered
+              </span>
+              <button
+                type="button"
+                onClick={handleGenerateIdeas}
+                disabled={regeneratingAll}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 disabled:opacity-50"
+              >
+                {regeneratingAll ? <RefreshIcon className="w-4 h-4 animate-spin" /> : <RefreshIcon className="w-4 h-4" />}
+                <span className="hidden sm:inline">Regenerate</span>
+              </button>
+            </div>
           </div>
           
-          <div className="grid gap-5 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {/* Ideas Grid - fixed layout */}
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             {ideas.map((idea, index) => (
               <PostIdeaCard
                 key={idea.id}

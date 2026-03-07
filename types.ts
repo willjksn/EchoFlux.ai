@@ -852,11 +852,12 @@ export interface ComposeState {
 export interface CalendarEvent {
     id: string;
     title: string;
-    date: string; 
+    date: string;
     type: 'Post' | 'Story' | 'Reel' | 'Email';
     platform: Platform;
     status: 'Scheduled' | 'Draft' | 'Published' | 'In Review';
     thumbnail?: string;
+    description?: string;
 }
 
 export interface CRMNote {
@@ -953,6 +954,8 @@ export interface DailyPostIdea {
     whyThisWorks?: string;
     trendBased?: boolean;
     trendContext?: string;
+    placeholderImage?: string;
+    imageSource?: 'unsplash' | 'ai';
 }
 
 /** Settings used when generating daily ideas */

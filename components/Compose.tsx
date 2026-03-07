@@ -3374,16 +3374,18 @@ const CaptionGenerator: React.FC = () => {
         ];
       }
 
-      const firstCaptionText =
-        generatedResults.length > 0
-          ? generatedResults[0].caption +
-            '\n\n' +
-            (generatedResults[0].hashtags || []).join(' ')
-          : '';
+      // Build caption text - only add hashtags if present (My Page/Fan Hub won't have them)
+      let firstCaptionText = '';
+      if (generatedResults.length > 0) {
+        const caption = generatedResults[0].caption || '';
+        const hashtags = (generatedResults[0].hashtags || []).join(' ').trim();
+        firstCaptionText = hashtags ? `${caption}\n\n${hashtags}` : caption;
+      }
 
+      // Only set captionText - don't populate results (AI Suggestions panel)
+      // AI Suggestions should only show when user explicitly asks for AI help
       setComposeState(prev => ({
         ...prev,
-        results: generatedResults,
         captionText: firstCaptionText
       }));
 
@@ -4353,45 +4355,48 @@ const CaptionGenerator: React.FC = () => {
                 className="group relative p-4 rounded-lg transition-colors bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700"
               >
                 <div
-                  onClick={() =>
+                  onClick={() => {
+                    const hashtags = (result.hashtags || []).join(' ').trim();
+                    const captionText = hashtags ? `${result.caption}\n\n${hashtags}` : result.caption;
                     setComposeState(prev => ({
                       ...prev,
-                      captionText:
-                        result.caption +
-                        '\n\n' +
-                        (result.hashtags || []).join(' ')
-                    }))
-                  }
+                      captionText
+                    }));
+                  }}
                   className="cursor-pointer"
                 >
                   <p className="text-gray-800 dark:text-gray-200">
                     {result.caption}
                   </p>
-                  <p className="text-primary-600 dark:text-primary-400 mt-2 text-sm">
-                    {(result.hashtags || []).join(' ')}
-                  </p>
+                  {(result.hashtags || []).length > 0 && (
+                    <p className="text-primary-600 dark:text-primary-400 mt-2 text-sm">
+                      {result.hashtags.join(' ')}
+                    </p>
+                  )}
                   <button
                     onClick={e => {
                       e.stopPropagation();
-                      const fullText = `${result.caption}\n\n${(result.hashtags || []).join(' ')}`;
+                      const hashtags = (result.hashtags || []).join(' ').trim();
+                      const fullText = hashtags ? `${result.caption}\n\n${hashtags}` : result.caption;
                       navigator.clipboard.writeText(fullText);
                       showToast('Caption copied to clipboard!', 'success');
                     }}
                     className="mt-3 flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 bg-primary-50 dark:bg-primary-900/30 rounded-md hover:bg-primary-100 dark:hover:bg-primary-900/50"
                   >
-                    <CopyIcon className="w-4 h-4" /> Copy Caption & Hashtags
+                    <CopyIcon className="w-4 h-4" /> {(result.hashtags || []).length > 0 ? 'Copy Caption & Hashtags' : 'Copy Caption'}
                   </button>
                 </div>
                 <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={e => {
                       e.stopPropagation();
-                      const fullText = `${result.caption}\n\n${(result.hashtags || []).join(' ')}`;
+                      const hashtags = (result.hashtags || []).join(' ').trim();
+                      const fullText = hashtags ? `${result.caption}\n\n${hashtags}` : result.caption;
                       navigator.clipboard.writeText(fullText);
                       showToast('Caption copied to clipboard!', 'success');
                     }}
                     className="p-2 bg-white dark:bg-gray-600 rounded-full shadow text-primary-600 dark:text-primary-300"
-                    title="Copy caption and hashtags"
+                    title={result.hashtags?.length ? "Copy caption and hashtags" : "Copy caption"}
                   >
                     <CopyIcon className="w-4 h-4" />
                   </button>

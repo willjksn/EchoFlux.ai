@@ -397,7 +397,11 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
   };
 
   const firstCaptionTextFromResults = (results: CaptionResult[]) => {
-    return results.length > 0 ? results[0].caption + '\n\n' + (results[0].hashtags || []).join(' ') : '';
+    if (results.length === 0) return '';
+    const caption = results[0].caption || '';
+    const hashtags = (results[0].hashtags || []).join(' ').trim();
+    // Only add hashtags section if there are hashtags (My Page/Fan Hub won't have them)
+    return hashtags ? `${caption}\n\n${hashtags}` : caption;
   };
 
   const resolveMediaUrl = async (base64Data: string | null, mimeType: string, mediaUrl?: string) => {
@@ -470,10 +474,11 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
         return;
       }
       
-      const { results: generatedResults, firstCaptionText } = await generateCaptionsForSingleUrl(finalMediaUrl, selectedPlatform);
+      const { firstCaptionText } = await generateCaptionsForSingleUrl(finalMediaUrl, selectedPlatform);
 
+      // Only set captionText - don't populate results (AI Suggestions panel)
+      // AI Suggestions should only show when user explicitly asks for AI help
       onUpdate(index, {
-        results: generatedResults,
         captionText: firstCaptionText,
       });
 
@@ -548,8 +553,10 @@ export const MediaBox: React.FC<MediaBoxProps> = ({
 
       const generatedResults = normalizeCaptionResults(res);
       const firstCaptionText = firstCaptionTextFromResults(generatedResults);
+      
+      // Only set captionText - don't populate results (AI Suggestions panel)
+      // AI Suggestions should only show when user explicitly asks for AI help
       onUpdate(index, {
-        results: generatedResults,
         captionText: firstCaptionText,
       });
 

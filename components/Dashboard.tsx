@@ -1611,7 +1611,7 @@ export const Dashboard: React.FC = () => {
           )}
           
           
-          {/* Recent Activity */}
+          {/* Recent Activity and AI Insights Row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
             {/* Recent Activity */}
             {(() => {
@@ -1692,6 +1692,164 @@ export const Dashboard: React.FC = () => {
                 </div>
               );
             })()}
+            
+            {/* AI Insights & Recommendations Panel */}
+            {user.plan !== 'Free' && (() => {
+              // Generate actionable recommendations based on user data
+              const recommendations: Array<{ type: 'success' | 'info' | 'warning' | 'tip'; title: string; description: string; action?: () => void; actionLabel?: string }> = [];
+              const effectivePlan = (user?.plan ?? 'Free') as Plan;
+              
+              // Check posting frequency based on the most relevant timestamp.
+              const getPostActivityDate = (p: any) => {
+                const ts = p?.publishedAt || p?.updatedAt || p?.scheduledDate || p?.createdAt;
+                const d = ts ? new Date(ts) : new Date(0);
+                return isNaN(d.getTime()) ? new Date(0) : d;
+              };
+              const weekAgo = new Date();
+              weekAgo.setDate(weekAgo.getDate() - 7);
+              const postsThisWeek = posts.filter((p: any) => {
+                if (p?.status !== 'Published') return false;
+                return getPostActivityDate(p) > weekAgo;
+              }).length;
+              
+              if (postsThisWeek < 3) {
+                recommendations.push({
+                  type: 'tip',
+                  title: 'Increase Posting Frequency',
+                  description: `You've posted ${postsThisWeek} times this week. Consistent posting improves engagement.`,
+                  action: () => setActivePage('compose'),
+                  actionLabel: 'Create Post'
+                });
+              }
+              
+              // Check upcoming schedule
+              const upcomingCount = effectiveCalendarEvents.filter(e => {
+                if (!e?.date) return false;
+                if ((e as any).type === 'Reminder' || (e as any).reminderType) return false;
+                if (e.status !== 'Scheduled' && e.status !== 'Published' && e.status !== 'Draft') return false;
+                const eventDate = new Date(e.date);
+                return !isNaN(eventDate.getTime()) && eventDate > new Date();
+              }).length;
+              
+              if (upcomingCount === 0) {
+                recommendations.push({
+                  type: 'warning',
+                  title: 'No Upcoming Posts',
+                  description: 'Schedule content ahead of time to maintain consistent presence.',
+                  action: () => setActivePage('compose'),
+                  actionLabel: 'Schedule Post'
+                });
+              }
+
+              // Check drafts
+              const draftsCount = posts.filter(p => p.status === 'Draft').length;
+              if (draftsCount > 0) {
+                recommendations.push({
+                  type: 'info',
+                  title: 'Drafts Ready to Polish',
+                  description: `You have ${draftsCount} draft${draftsCount === 1 ? '' : 's'} to review before scheduling.`,
+                  action: () => setActivePage('approvals'),
+                  actionLabel: 'Review drafts'
+                });
+              }
+              
+              // AI Content tip
+              if (effectivePlan !== 'Free') {
+                recommendations.push({
+                  type: 'tip',
+                  title: 'Try AI Content Generation',
+                  description: 'Upload images or videos and let AI generate captions tailored to your content and platforms.',
+                  action: () => setActivePage('compose'),
+                  actionLabel: 'Generate Captions'
+                });
+              }
+              
+              // Success recommendation if posting consistently
+              if (postsThisWeek >= 5 && upcomingCount >= 3) {
+                recommendations.push({
+                  type: 'success',
+                  title: 'Great Consistency! 🎉',
+                  description: `You've posted ${postsThisWeek} times this week and have ${upcomingCount} posts scheduled. Keep it up!`
+                });
+              }
+              
+              // Default recommendation if no others
+              if (recommendations.length === 0) {
+                recommendations.push({
+                  type: 'tip',
+                  title: 'Explore Analytics',
+                  description: 'Check your analytics to see what content performs best and optimize your strategy.',
+                  action: () => setActivePage('analytics'),
+                  actionLabel: 'View Analytics'
+                });
+              }
+              
+              const displayRecommendations = recommendations.slice(0, 4);
+              
+              const getIcon = (type: string) => {
+                switch(type) {
+                  case 'success': return <CheckCircleIcon className="w-4 h-4" />;
+                  case 'warning': return <FlagIcon className="w-4 h-4" />;
+                  case 'info': return <SparklesIcon className="w-4 h-4" />;
+                  default: return <SparklesIcon className="w-4 h-4" />;
+                }
+              };
+              
+              const getGradientClasses = (type: string) => {
+                switch(type) {
+                  case 'success': return 'from-emerald-50 to-green-50 dark:from-emerald-900/30 dark:to-green-900/20 border-emerald-200 dark:border-emerald-700/50';
+                  case 'warning': return 'from-amber-50 to-yellow-50 dark:from-amber-900/30 dark:to-yellow-900/20 border-amber-200 dark:border-amber-700/50';
+                  case 'info': return 'from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/20 border-blue-200 dark:border-blue-700/50';
+                  default: return 'from-purple-50 to-indigo-50 dark:from-purple-900/30 dark:to-indigo-900/20 border-purple-200 dark:border-purple-700/50';
+                }
+              };
+              
+              const getTextColor = (type: string) => {
+                switch(type) {
+                  case 'success': return 'text-emerald-700 dark:text-emerald-300';
+                  case 'warning': return 'text-amber-700 dark:text-amber-300';
+                  case 'info': return 'text-blue-700 dark:text-blue-300';
+                  default: return 'text-purple-700 dark:text-purple-300';
+                }
+              };
+              
+              return displayRecommendations.length > 0 ? (
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="p-1.5 bg-gradient-to-br from-primary-500 to-primary-600 rounded-lg">
+                      <SparklesIcon className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-900 dark:text-white">AI Insights</h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Smart Recommendations</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {displayRecommendations.map((rec, idx) => (
+                      <div key={idx} className={`p-2.5 rounded-lg border bg-gradient-to-r ${getGradientClasses(rec.type)}`}>
+                        <div className="flex items-start gap-2">
+                          <div className={`flex-shrink-0 mt-0.5 ${getTextColor(rec.type)}`}>
+                            {getIcon(rec.type)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={`font-semibold text-xs mb-0.5 ${getTextColor(rec.type)}`}>{rec.title}</p>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">{rec.description}</p>
+                            {rec.action && rec.actionLabel && (
+                              <button
+                                onClick={rec.action}
+                                className={`text-xs font-semibold ${getTextColor(rec.type)} hover:opacity-80 transition-opacity flex items-center gap-1 mt-1`}
+                              >
+                                {rec.actionLabel} →
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null;
+            })()}
           </div>
           
           {/* Additional Business Widgets - Separate Row */}
@@ -1762,176 +1920,6 @@ export const Dashboard: React.FC = () => {
                 );
               })()}
             </div>
-          )}
-          
-          {/* AI Insights Row */}
-          {user.plan !== 'Free' && (
-          <div className="grid grid-cols-1 gap-6">
-            
-            {/* AI Insights & Recommendations Panel - Redesigned */}
-            {(() => {
-              // Generate actionable recommendations based on user data
-              const recommendations: Array<{ type: 'success' | 'info' | 'warning' | 'tip'; title: string; description: string; action?: () => void; actionLabel?: string }> = [];
-              const effectivePlan = (user?.plan ?? 'Free') as Plan;
-              
-              // Check posting frequency based on the most relevant timestamp.
-              // createdAt doesn't change when you publish, so prefer publishedAt.
-              const getPostActivityDate = (p: any) => {
-                const ts =
-                  p?.publishedAt ||
-                  p?.updatedAt ||
-                  p?.scheduledDate ||
-                  p?.createdAt;
-                const d = ts ? new Date(ts) : new Date(0);
-                return isNaN(d.getTime()) ? new Date(0) : d;
-              };
-              const weekAgo = new Date();
-              weekAgo.setDate(weekAgo.getDate() - 7);
-              const postsThisWeek = posts.filter((p: any) => {
-                if (p?.status !== 'Published') return false;
-                return getPostActivityDate(p) > weekAgo;
-              }).length;
-              
-              if (postsThisWeek < 3) {
-                recommendations.push({
-                  type: 'tip',
-                  title: 'Increase Posting Frequency',
-                  description: `You've posted ${postsThisWeek} times this week. Consistent posting improves engagement.`,
-                  action: () => setActivePage('compose'),
-                  actionLabel: 'Create Post'
-                });
-              }
-              
-              // Check upcoming schedule
-              const upcomingCount = effectiveCalendarEvents.filter(e => {
-                if (!e?.date) return false;
-                if ((e as any).type === 'Reminder' || (e as any).reminderType) return false;
-                if (e.status !== 'Scheduled' && e.status !== 'Published' && e.status !== 'Draft') return false;
-                const eventDate = new Date(e.date);
-                return !isNaN(eventDate.getTime()) && eventDate > new Date();
-              }).length;
-              
-              if (upcomingCount === 0) {
-                recommendations.push({
-                  type: 'warning',
-                  title: 'No Upcoming Posts',
-                  description: 'Schedule content ahead of time to maintain consistent presence.',
-                  action: () => setActivePage('compose'),
-                  actionLabel: 'Schedule Post'
-                });
-              }
-
-              // In offline/studio mode we don't have an Inbox. Replace message nudges with draft/workflow nudges.
-              const draftsCount = posts.filter(p => p.status === 'Draft').length;
-              if (draftsCount > 0) {
-                recommendations.push({
-                  type: 'info',
-                  title: 'Drafts Ready to Polish',
-                  description: `You have ${draftsCount} draft${draftsCount === 1 ? '' : 's'} to review before scheduling.`,
-                  action: () => setActivePage('approvals'),
-                  actionLabel: 'Review drafts'
-                });
-              }
-              
-              // Automation page is not part of the current tester-ready workflow; route users to Compose instead.
-              if (effectivePlan !== 'Free') {
-                recommendations.push({
-                  type: 'tip',
-                  title: 'Try AI Content Generation',
-                  description: 'Upload images or videos and let AI generate captions tailored to your content and platforms.',
-                  action: () => setActivePage('compose'),
-                  actionLabel: 'Generate Captions'
-                });
-              }
-              
-              // Success recommendation if posting consistently
-              if (postsThisWeek >= 5 && upcomingCount >= 3) {
-                recommendations.push({
-                  type: 'success',
-                  title: 'Great Consistency! 🎉',
-                  description: `You've posted ${postsThisWeek} times this week and have ${upcomingCount} posts scheduled. Keep it up!`
-                });
-              }
-              
-              // Default recommendation if no others
-              if (recommendations.length === 0) {
-                recommendations.push({
-                  type: 'tip',
-                  title: 'Explore Analytics',
-                  description: 'Check your analytics to see what content performs best and optimize your strategy.',
-                  action: () => setActivePage('analytics'),
-                  actionLabel: 'View Analytics'
-                });
-              }
-              
-              // Limit to 5 recommendations for taller box
-              const displayRecommendations = recommendations.slice(0, 5);
-              
-              const getIcon = (type: string) => {
-                switch(type) {
-                  case 'success': return <CheckCircleIcon className="w-5 h-5" />;
-                  case 'warning': return <FlagIcon className="w-5 h-5" />;
-                  case 'info': return <SparklesIcon className="w-5 h-5" />;
-                  default: return <SparklesIcon className="w-5 h-5" />;
-                }
-              };
-              
-              const getGradientClasses = (type: string) => {
-                switch(type) {
-                  case 'success': return 'from-emerald-50 to-green-50 dark:from-emerald-900/30 dark:to-green-900/20 border-emerald-200 dark:border-emerald-700/50';
-                  case 'warning': return 'from-amber-50 to-yellow-50 dark:from-amber-900/30 dark:to-yellow-900/20 border-amber-200 dark:border-amber-700/50';
-                  case 'info': return 'from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/20 border-blue-200 dark:border-blue-700/50';
-                  default: return 'from-purple-50 to-indigo-50 dark:from-purple-900/30 dark:to-indigo-900/20 border-purple-200 dark:border-purple-700/50';
-                }
-              };
-              
-              const getTextColor = (type: string) => {
-                switch(type) {
-                  case 'success': return 'text-emerald-700 dark:text-emerald-300';
-                  case 'warning': return 'text-amber-700 dark:text-amber-300';
-                  case 'info': return 'text-blue-700 dark:text-blue-300';
-                  default: return 'text-purple-700 dark:text-purple-300';
-                }
-              };
-              
-              return displayRecommendations.length > 0 ? (
-                <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 p-5 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-600">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="p-2 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl">
-                      <SparklesIcon className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-bold text-gray-900 dark:text-white">AI Insights</h3>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Smart Recommendations</p>
-                    </div>
-                  </div>
-                  <div className="space-y-2.5 max-h-[500px] overflow-y-auto custom-scrollbar">
-                    {displayRecommendations.map((rec, idx) => (
-                      <div key={idx} className={`p-3.5 rounded-xl border bg-gradient-to-r ${getGradientClasses(rec.type)} backdrop-blur-sm hover:shadow-md transition-all`}>
-                        <div className="flex items-start gap-2.5">
-                          <div className={`flex-shrink-0 mt-0.5 ${getTextColor(rec.type)}`}>
-                            {getIcon(rec.type)}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className={`font-semibold text-xs mb-1 ${getTextColor(rec.type)}`}>{rec.title}</p>
-                            <p className="text-xs text-gray-600 dark:text-gray-400 mb-2 leading-relaxed">{rec.description}</p>
-                            {rec.action && rec.actionLabel && (
-                              <button
-                                onClick={rec.action}
-                                className={`text-xs font-semibold ${getTextColor(rec.type)} hover:opacity-80 transition-opacity flex items-center gap-1`}
-                              >
-                                {rec.actionLabel} →
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null;
-            })()}
-          </div>
           )}
           
           {/* Fan Engagement Hub - Creator & Agency Only */}
@@ -3313,18 +3301,16 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  // Monetized mode: Pro without access sees upgrade screen; Elite/Agency/OnlyFansStudio see deep-link cards
-  const showMonetizedUpgrade = dashboardMode === 'monetized' && !hasMonetizedAccess && isPro;
-  const showMonetizedCards = dashboardMode === 'monetized' && hasMonetizedAccess;
+  // Monetized mode: Pro sees Fan Hub cards; Elite/Agency/OnlyFansStudio see all cards including Premium Studio features
+  const showMonetizedCards = dashboardMode === 'monetized' && (hasMonetizedAccess || hasFanHubAccess);
+  const hasPremiumStudioFeatures = hasMonetizedAccess; // Drops & PPV, Funnel Teasers are Elite+ only
 
-  const MONETIZED_BULLETS = [
+  const ELITE_ONLY_BULLETS = [
     'Drops & PPV',
-    'DM Session',
     'Funnel Teasers',
     'Persona',
     'Prompts',
     'Money Calendar',
-    'Advanced analytics',
   ];
 
   return (
@@ -3349,70 +3335,73 @@ export const Dashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Monetized mode: Pro without access → upgrade screen */}
-      {showMonetizedUpgrade && (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-8 max-w-xl">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Unlock Premium Studio (Elite)</h2>
-          <ul className="mt-4 space-y-2">
-            {MONETIZED_BULLETS.map((item) => (
-              <li key={item} className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
-                <span className="text-primary-500">•</span>
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-6 flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() => openPaymentModal?.({ name: 'Elite', price: 79, cycle: 'monthly' })}
-              className="px-5 py-2.5 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 transition-colors"
-            >
-              Upgrade to Elite
+      {/* Monetized mode: Show cards based on plan access */}
+      {showMonetizedCards && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Elite+ only: Drops & PPV */}
+            {hasPremiumStudioFeatures && (
+              <button type="button" onClick={() => navigateToStudioTab('drops')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
+                <SparklesIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
+                <span className="font-semibold text-gray-900 dark:text-white">Drops & PPV</span>
+                <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Plan and price drops</span>
+              </button>
+            )}
+            {/* Pro+ : DM Session */}
+            <button type="button" onClick={() => setActivePage('fanHub')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
+              <ChatIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
+              <span className="font-semibold text-gray-900 dark:text-white">DM Session</span>
+              <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Fan messages & engagement</span>
             </button>
-            <button
-              type="button"
-              onClick={() => setDashboardMode('social')}
-              className="px-5 py-2.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-            >
-              Not now
+            {/* Elite+ only: Funnel Teasers */}
+            {hasPremiumStudioFeatures && (
+              <button type="button" onClick={() => navigateToStudioTab('teasers')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
+                <RocketIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
+                <span className="font-semibold text-gray-900 dark:text-white">Funnel Teasers</span>
+                <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">IG/X/TikTok teasers + CTAs</span>
+              </button>
+            )}
+            {/* Pro+ : Fans */}
+            <button type="button" onClick={() => setActivePage('fanHub')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
+              <UserIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
+              <span className="font-semibold text-gray-900 dark:text-white">Fans</span>
+              <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Top fans & notes</span>
+            </button>
+            {/* Pro+ : Analytics */}
+            <button type="button" onClick={() => setActivePage('fanHub')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
+              <TrendingIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
+              <span className="font-semibold text-gray-900 dark:text-white">Analytics</span>
+              <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">What&apos;s working</span>
+            </button>
+            {/* Pro+ : Payouts */}
+            <button type="button" onClick={() => setActivePage('fanHub')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
+              <DollarSignIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
+              <span className="font-semibold text-gray-900 dark:text-white">Payouts</span>
+              <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Connect & manage payouts</span>
             </button>
           </div>
-        </div>
-      )}
-
-      {/* Monetized mode: Premium Studio access → deep-link cards */}
-      {showMonetizedCards && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <button type="button" onClick={() => navigateToStudioTab('drops')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
-            <SparklesIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
-            <span className="font-semibold text-gray-900 dark:text-white">Drops & PPV</span>
-            <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Plan and price drops</span>
-          </button>
-          <button type="button" onClick={() => navigateToStudioTab('dmSession')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
-            <ChatIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
-            <span className="font-semibold text-gray-900 dark:text-white">DM Session</span>
-            <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Retention & PPV sequences</span>
-          </button>
-          <button type="button" onClick={() => navigateToStudioTab('teasers')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
-            <RocketIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
-            <span className="font-semibold text-gray-900 dark:text-white">Funnel Teasers</span>
-            <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">IG/X/TikTok teasers + CTAs</span>
-          </button>
-          <button type="button" onClick={() => navigateToStudioTab('fans')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
-            <UserIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
-            <span className="font-semibold text-gray-900 dark:text-white">Fans</span>
-            <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Top fans & notes</span>
-          </button>
-          <button type="button" onClick={() => navigateToStudioTab('analytics')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
-            <TrendingIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
-            <span className="font-semibold text-gray-900 dark:text-white">Analytics</span>
-            <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">What&apos;s working</span>
-          </button>
-          <button type="button" onClick={() => navigateToStudioTab('payouts')} className="flex flex-col items-start p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all text-left">
-            <DollarSignIcon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-2" />
-            <span className="font-semibold text-gray-900 dark:text-white">Payouts</span>
-            <span className="text-sm text-gray-500 dark:text-gray-400 mt-1">Connect & manage payouts</span>
-          </button>
+          
+          {/* Pro users: Show upgrade prompt for Elite features */}
+          {!hasPremiumStudioFeatures && (
+            <div className="bg-gradient-to-r from-primary-50 to-indigo-50 dark:from-primary-900/20 dark:to-indigo-900/20 rounded-xl border border-primary-200 dark:border-primary-700 p-4">
+              <div className="flex items-start gap-3">
+                <SparklesIcon className="w-6 h-6 text-primary-600 dark:text-primary-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Unlock Premium Studio</h3>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                    Upgrade to Elite for {ELITE_ONLY_BULLETS.join(', ')}, and more.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => openPaymentModal?.({ name: 'Elite', price: 79, cycle: 'monthly' })}
+                    className="mt-2 px-3 py-1.5 bg-primary-600 text-white text-xs font-semibold rounded-lg hover:bg-primary-700 transition-colors"
+                  >
+                    Upgrade to Elite
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
