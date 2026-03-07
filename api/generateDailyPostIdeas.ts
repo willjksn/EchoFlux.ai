@@ -407,38 +407,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       return `https://picsum.photos/seed/${seed}/600/600`;
     };
     
-    // Build creator-aware image prompt
+    // Build image prompt focused on scene/setting (avoids content filter issues)
     const buildImagePrompt = (idea: any): string => {
-      // Determine subject based on creator gender
-      let subject = "a person";
-      let style = "lifestyle, aesthetic";
-      
-      if (creatorGender === 'Female') {
-        subject = "a beautiful woman, feminine";
-        style = "glamorous, sensual but tasteful, Instagram model aesthetic";
-      } else if (creatorGender === 'Male') {
-        subject = "a handsome man, masculine";
-        style = "confident, attractive, Instagram model aesthetic";
-      } else if (creatorGender === 'Couple') {
-        subject = "an attractive couple";
-        style = "romantic, intimate, couple goals aesthetic";
-      } else if (creatorGender === 'Non-binary') {
-        subject = "an attractive androgynous person";
-        style = "modern, aesthetic, fashionable";
-      }
-      
-      // Add audience context
-      let audienceStyle = "";
-      if (targetAudienceGender === 'Male' && creatorGender === 'Female') {
-        audienceStyle = ", appealing to male viewers, flirty, confident feminine energy";
-      } else if (targetAudienceGender === 'Female' && creatorGender === 'Male') {
-        audienceStyle = ", appealing to female viewers, charming, confident masculine energy";
-      }
-      
       // Extract visual cues from the idea
-      const visualCues = idea.shotList?.[0] || idea.title || "";
+      const visualCues = idea.shotList?.[0] || idea.title || "lifestyle photo";
+      const title = idea.title || "";
       
-      return `${subject} in a social media content photo: ${visualCues}. Style: ${style}${audienceStyle}, modern, high quality, professional photography, bright natural lighting, Instagram-worthy, no text or watermarks in image.`;
+      // Build a scene-focused prompt that describes the setting/mood rather than the person
+      // This avoids content filters while still being relevant to the content idea
+      let sceneDescription = visualCues;
+      
+      // Add context from the title if it helps describe the scene
+      if (title.toLowerCase().includes('beach') || title.toLowerCase().includes('pool') || title.toLowerCase().includes('sun')) {
+        sceneDescription += ", sunny outdoor setting, golden hour lighting";
+      } else if (title.toLowerCase().includes('bedroom') || title.toLowerCase().includes('cozy') || title.toLowerCase().includes('morning')) {
+        sceneDescription += ", cozy indoor setting, soft natural lighting";
+      } else if (title.toLowerCase().includes('gym') || title.toLowerCase().includes('fitness') || title.toLowerCase().includes('workout')) {
+        sceneDescription += ", fitness/gym setting, energetic mood";
+      } else if (title.toLowerCase().includes('behind') || title.toLowerCase().includes('bts')) {
+        sceneDescription += ", behind-the-scenes setting, candid photography style";
+      }
+      
+      return `Social media content photo: ${sceneDescription}. Style: aesthetic, modern, high quality photography, Instagram-worthy, professional lighting, no text or watermarks.`;
     };
     
     // Check if Replicate is configured
