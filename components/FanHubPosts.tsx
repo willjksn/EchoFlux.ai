@@ -206,7 +206,7 @@ export const FanHubPosts: React.FC = () => {
   const [scheduleTime, setScheduleTime] = useState("");
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const creatorId = user?.uid;
+  const creatorId = user?.uid || user?.id;
   
   // Get minimum date (today) for date picker
   const getMinDate = () => {
@@ -267,10 +267,15 @@ export const FanHubPosts: React.FC = () => {
     }
   }, [showVault, loadVault]);
 
-  // File upload handler
+  // File upload handler - uploads to vault immediately for persistence
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
+    
+    if (!user?.id) {
+      showToast?.("Please sign in to upload files", "error");
+      return;
+    }
     
     setUploading(true);
     setUploadProgress(0);
@@ -282,15 +287,52 @@ export const FanHubPosts: React.FC = () => {
       const isAudio = file.type.startsWith("audio/");
       const type = isVideo ? "video" : isAudio ? "audio" : "image";
       
-      newMedia.push({
-        url: URL.createObjectURL(file),
-        file,
-        type,
-      });
-      setUploadProgress(Math.round(((i + 1) / files.length) * 100));
+      try {
+        // Upload to Firebase Storage (vault)
+        const timestamp = Date.now();
+        const fileName = `${timestamp}_${file.name}`;
+        const storagePath = `users/${user.id}/media_library/${fileName}`;
+        const storageRef = ref(storage, storagePath);
+        
+        await uploadBytes(storageRef, file, { contentType: file.type });
+        const mediaUrl = await getDownloadURL(storageRef);
+        
+        // Save to vault (media_library collection)
+        const mediaItem = {
+          id: timestamp.toString(),
+          userId: user.id,
+          url: mediaUrl,
+          name: file.name,
+          type: type as "image" | "video" | "audio",
+          mimeType: file.type,
+          size: file.size,
+          uploadedAt: new Date().toISOString(),
+          usedInPosts: [],
+          tags: ["fan-hub-upload"],
+          folderId: "general",
+          storagePath,
+        };
+        
+        await setDoc(doc(db, "users", user.id, "media_library", mediaItem.id), mediaItem);
+        
+        newMedia.push({
+          url: mediaUrl,
+          type,
+          fromVault: true, // Mark as from vault since it's now saved
+        });
+        
+        setUploadProgress(Math.round(((i + 1) / files.length) * 100));
+      } catch (error) {
+        console.error("Failed to upload file:", error);
+        showToast?.(`Failed to upload ${file.name}`, "error");
+      }
     }
     
-    setMedia((prev) => [...prev, ...newMedia]);
+    if (newMedia.length > 0) {
+      setMedia((prev) => [...prev, ...newMedia]);
+      showToast?.(`${newMedia.length} file(s) uploaded to vault`, "success");
+    }
+    
     setUploading(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -455,8 +497,14 @@ export const FanHubPosts: React.FC = () => {
 
   // AI Caption generation
   const generateCaption = useCallback(async (mode: "generate" | "suggest") => {
+    // For generate mode, require media. For suggest mode, allow with existing caption.
     if (mode === "generate" && media.length === 0) {
       showToast?.("Add media first to generate a caption", "error");
+      return;
+    }
+    
+    if (mode === "suggest" && !caption.trim()) {
+      showToast?.("Add some text first to get AI suggestions", "error");
       return;
     }
     
@@ -468,15 +516,33 @@ export const FanHubPosts: React.FC = () => {
       // Use custom tone text if "custom" is selected, otherwise use the preset
       const effectiveTone = aiTone === "custom" && customTone.trim() ? customTone.trim() : (aiTone || "flirty");
       
+      // Build prompt based on mode and spiciness
+      const spicyLevel = contentSpiciness;
+      const spicyGuidance = spicyLevel <= 3 
+        ? "Keep it clean and wholesome, appropriate for all audiences."
+        : spicyLevel <= 6 
+        ? "Be flirty and teasing, suggestive but tasteful."
+        : spicyLevel <= 8 
+        ? "Be bold and provocative, push boundaries with spicy content."
+        : "Be very explicit and adult-oriented, no holding back.";
+      
+      const promptText = mode === "suggest" 
+        ? `Improve and expand on this caption, make it more engaging: "${caption}". ${spicyGuidance}`
+        : `Write an engaging, unique caption for this fan page post. ${spicyGuidance} Be creative and different each time - never repeat the same caption twice.`;
+      
       const res = await fetch("/api/generateCaptions", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          promptText: mode === "suggest" ? caption : "Write an engaging caption for this fan page post",
+          promptText,
           platforms: ["my page"],
           tone: effectiveTone,
           usePersonality,
-          toneSettings: { spiciness: contentSpiciness * 10 },
+          toneSettings: { 
+            spiciness: spicyLevel * 10,
+            // Add randomness seed to ensure unique results
+            randomSeed: Date.now(),
+          },
         }),
       });
       
@@ -486,7 +552,9 @@ export const FanHubPosts: React.FC = () => {
       // API returns array of captions
       const generatedCaption = Array.isArray(data) && data[0]?.caption ? data[0].caption : data.caption;
       if (generatedCaption) {
-        setCaption(mode === "suggest" ? caption + " " + generatedCaption : generatedCaption);
+        // Always replace the caption, don't append
+        setCaption(generatedCaption);
+        showToast?.("Caption generated!", "success");
       }
     } catch (error) {
       console.error("Caption generation error:", error);
@@ -913,11 +981,16 @@ export const FanHubPosts: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => generateCaption("suggest")}
-                    disabled={generating}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition"
+                    disabled={generating || !caption.trim()}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                      caption.trim() 
+                        ? "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600" 
+                        : "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-50"
+                    }`}
+                    title={!caption.trim() ? "Add some text first to get AI suggestions" : "Improve your caption with AI"}
                   >
                     <SparklesIcon />
-                    AI Suggest
+                    {generating ? "..." : "AI Suggest"}
                   </button>
                   <select
                     value={aiTone}

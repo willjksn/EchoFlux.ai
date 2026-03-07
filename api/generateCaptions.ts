@@ -262,6 +262,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
       empathy?: number;
       spiciness?: number;
       profanity?: number;
+      randomSeed?: number;
     };
   } = req.body || {};
   
@@ -272,7 +273,9 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   const sanitizedCreatorPersonality = creatorPersonality ? sanitizeForAI(creatorPersonality, 1000) : undefined;
   const sanitizedFavoriteHashtags = favoriteHashtags ? sanitizeForAI(favoriteHashtags, 500) : undefined;
 
-  const canCache = !mediaData && !mediaUrl && (!mediaUrls || mediaUrls.length === 0);
+  // Disable caching when randomSeed is provided (for unique results each time)
+  const hasRandomSeed = toneSettings?.randomSeed !== undefined;
+  const canCache = !hasRandomSeed && !mediaData && !mediaUrl && (!mediaUrls || mediaUrls.length === 0);
   const cacheKey = canCache
     ? buildCacheKey({
         userId: authUser.uid,
@@ -283,6 +286,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
         platforms,
         emojiEnabled,
         emojiIntensity,
+        spiciness: toneSettings?.spiciness,
       })
     : null;
   if (cacheKey) {
