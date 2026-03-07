@@ -31,6 +31,7 @@ interface SextingContextMessage {
 
 const ROLEPLAY_TYPES = ['GFE', 'Dominant', 'Teacher', 'Boss', 'Fitness', 'Soft', 'Nurse', 'Celebrity'] as const;
 const TONES = ['Soft', 'Teasing', 'Playful', 'Bold'] as const;
+const SPICINESS_LABELS = ['Mild', 'Mild', 'Mild', 'Medium', 'Medium', 'Medium', 'Spicy', 'Spicy', 'Extra Spicy', 'Extra Spicy'] as const;
 
 function normalizeChatText(input: string): string {
   const trimmed = (input || '').trim();
@@ -326,6 +327,7 @@ export const OnlyFansSextingSession: React.FC = () => {
   const [roleplayType, setRoleplayType] = useState<string>('GFE');
   const [customChatTypeValue, setCustomChatTypeValue] = useState('');
   const [tone, setTone] = useState<string>('Teasing');
+  const [contentSpiciness, setContentSpiciness] = useState(3);
   const [durationPreset, setDurationPreset] = useState<DurationPreset>('30');
   const [sessionDurationMinutes, setSessionDurationMinutes] = useState(30);
   const [customDurationMinutes, setCustomDurationMinutes] = useState(20);
@@ -524,6 +526,7 @@ export const OnlyFansSextingSession: React.FC = () => {
           creatorPersona: useCreatorPersonality ? creatorPersonality : undefined,
           tone: toneParam,
           numSuggestions: 6,
+          spiciness: contentSpiciness,
         }),
       });
 
@@ -536,7 +539,7 @@ export const OnlyFansSextingSession: React.FC = () => {
     } finally {
       setSuggestionsLoading(false);
     }
-  }, [sessionStarted, recentMessages, tone, selectedFan, useCreatorPersonality, creatorPersonality, getToken]);
+  }, [sessionStarted, recentMessages, tone, selectedFan, useCreatorPersonality, creatorPersonality, contentSpiciness, getToken]);
 
   // Chatbot auto-reply
   useEffect(() => {
@@ -565,6 +568,7 @@ export const OnlyFansSextingSession: React.FC = () => {
             creatorPersona: useCreatorPersonality ? creatorPersonality : undefined,
             tone: toneParam,
             numSuggestions: 1,
+            spiciness: contentSpiciness,
           }),
         }).then((r) => r.json());
       })
@@ -581,7 +585,7 @@ export const OnlyFansSextingSession: React.FC = () => {
       })
       .catch(() => {})
       .finally(() => setChatBotReplying(false));
-  }, [chatBotEnabled, sessionStarted, sessionPaused, recentMessages, tone, selectedFan, useCreatorPersonality, creatorPersonality, getToken, adminUid, chatBotReplying]);
+  }, [chatBotEnabled, sessionStarted, sessionPaused, recentMessages, tone, selectedFan, useCreatorPersonality, creatorPersonality, contentSpiciness, getToken, adminUid, chatBotReplying]);
 
   // Active Session View
   if (sessionStarted) {
@@ -864,6 +868,28 @@ export const OnlyFansSextingSession: React.FC = () => {
               {t}
             </button>
           ))}
+        </div>
+
+        {/* Content Spiciness Slider */}
+        <div className="chat-session-spiciness-wrap" style={{ marginTop: '1rem', padding: '0.75rem', background: 'rgba(236, 72, 153, 0.1)', borderRadius: '0.5rem', border: '1px solid rgba(236, 72, 153, 0.3)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+            <span style={{ fontSize: '0.875rem', fontWeight: 500, color: 'rgb(190, 24, 93)', display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+              <span>🌶️</span>
+              Content Spiciness: {SPICINESS_LABELS[contentSpiciness - 1]}
+            </span>
+            <span style={{ fontSize: '0.75rem', color: 'rgb(219, 39, 119)' }}>{contentSpiciness}/10</span>
+          </div>
+          <input
+            type="range"
+            min={1}
+            max={10}
+            value={contentSpiciness}
+            onChange={(e) => setContentSpiciness(Number(e.target.value))}
+            style={{ width: '100%', height: '0.5rem', borderRadius: '0.25rem', cursor: 'pointer', accentColor: 'rgb(236, 72, 153)' }}
+          />
+          <p style={{ fontSize: '0.75rem', color: 'rgb(219, 39, 119)', marginTop: '0.25rem' }}>
+            Adjust how bold the AI chat responses are
+          </p>
         </div>
 
         {/* Start Button */}

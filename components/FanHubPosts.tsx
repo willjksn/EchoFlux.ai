@@ -194,6 +194,9 @@ export const FanHubPosts: React.FC = () => {
   const [hideLikes, setHideLikes] = useState(false);
   const [showTipButton, setShowTipButton] = useState(true);
   
+  // Content Spiciness (1-10)
+  const [contentSpiciness, setContentSpiciness] = useState(3);
+  
   // Publishing
   const [publishing, setPublishing] = useState(false);
   
@@ -474,6 +477,7 @@ export const FanHubPosts: React.FC = () => {
           tone: effectiveTone,
           usePersonality,
           mode,
+          spiciness: contentSpiciness,
         }),
       });
       
@@ -489,7 +493,7 @@ export const FanHubPosts: React.FC = () => {
     } finally {
       setGenerating(false);
     }
-  }, [media.length, caption, aiTone, customTone, usePersonality, showToast]);
+  }, [media.length, caption, aiTone, customTone, usePersonality, contentSpiciness, showToast]);
 
   // Poll handlers
   const addPollOption = () => {
@@ -941,6 +945,28 @@ export const FanHubPosts: React.FC = () => {
                     />
                     Use Personality
                   </label>
+                </div>
+                
+                {/* Content Spiciness Slider */}
+                <div className="mt-4 p-3 bg-pink-50 dark:bg-pink-900/20 rounded-lg border border-pink-200 dark:border-pink-800">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-pink-700 dark:text-pink-300 flex items-center gap-1.5">
+                      <span>🌶️</span>
+                      Content Spiciness: {contentSpiciness <= 3 ? 'Mild' : contentSpiciness <= 6 ? 'Medium' : contentSpiciness <= 8 ? 'Spicy' : 'Extra Spicy'}
+                    </span>
+                    <span className="text-xs text-pink-600 dark:text-pink-400">{contentSpiciness}/10</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={1}
+                    max={10}
+                    value={contentSpiciness}
+                    onChange={(e) => setContentSpiciness(Number(e.target.value))}
+                    className="w-full h-2 bg-pink-200 dark:bg-pink-800 rounded-lg appearance-none cursor-pointer accent-pink-500"
+                  />
+                  <p className="text-xs text-pink-600 dark:text-pink-400 mt-1">
+                    Adjust how bold the AI-generated captions are
+                  </p>
                 </div>
               </div>
 
