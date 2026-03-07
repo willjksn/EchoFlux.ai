@@ -43,8 +43,10 @@ const PostIdeaCard: React.FC<{
   const style = formatStyles[format] || formatStyles.post;
   const isTrending = idea.trendBased || idea.trendContext;
   
-  // Check if we have a valid image URL (Picsum or AI-generated)
-  const hasValidImage = idea.placeholderImage && !imageError;
+  // Only show AI-generated realistic images on PHOTO format cards
+  // Other formats (reel, carousel, story, video, etc.) should show stylized gradient + emoji
+  const isPhotoFormat = format === 'photo';
+  const hasValidImage = isPhotoFormat && idea.placeholderImage && !imageError;
 
   // Get emoji based on content keywords
   const getVisualEmoji = () => {

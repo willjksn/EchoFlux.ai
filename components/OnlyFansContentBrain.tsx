@@ -4929,7 +4929,7 @@ Output format:
                             {/* Generate Captions Button - Always Visible */}
                             <div className="flex gap-2">
                                 <button
-                                    onClick={handleGenerateCaptions}
+                                    onClick={() => handleGenerateCaptions()}
                                     disabled={isGenerating}
                                     className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                 >
@@ -5640,30 +5640,38 @@ Output format:
                                     const formats = platformFormats[selectedPlatform] || platformFormats['Instagram'];
                                     const format = formats[index % formats.length];
                                     const formatStyles: Record<string, { gradient: string; icon: string; aspect: string }> = {
-                                        'Reel': { gradient: 'from-purple-500 via-pink-500 to-orange-400', icon: '▶️', aspect: 'h-32' },
-                                        'Carousel': { gradient: 'from-blue-500 to-purple-500', icon: '◀ ▶', aspect: 'h-28' },
-                                        'Photo': { gradient: 'from-pink-500 via-purple-500 to-indigo-500', icon: '📷', aspect: 'h-28' },
-                                        'Story': { gradient: 'from-orange-400 via-pink-500 to-purple-500', icon: '○', aspect: 'h-32' },
-                                        'Video': { gradient: 'from-purple-600 via-pink-500 to-red-500', icon: '🎬', aspect: 'h-32' },
-                                        'Text': { gradient: 'from-indigo-500 via-purple-500 to-pink-500', icon: '✍️', aspect: 'h-24' },
-                                        'Poll': { gradient: 'from-teal-500 via-cyan-500 to-blue-500', icon: '📊', aspect: 'h-24' },
-                                        'Tweet': { gradient: 'from-gray-800 via-gray-700 to-gray-600', icon: '💬', aspect: 'h-24' },
-                                        'Thread': { gradient: 'from-blue-600 via-blue-500 to-cyan-500', icon: '🧵', aspect: 'h-28' },
-                                        'Post': { gradient: 'from-blue-600 to-blue-400', icon: '📝', aspect: 'h-28' },
-                                        'Live': { gradient: 'from-red-500 via-pink-500 to-orange-500', icon: '🔴', aspect: 'h-32' },
+                                        'Reel': { gradient: 'from-purple-500 via-pink-500 to-orange-400', icon: '▶️', aspect: 'h-36' },
+                                        'Carousel': { gradient: 'from-blue-500 to-purple-500', icon: '◀ ▶', aspect: 'h-36' },
+                                        'Photo': { gradient: 'from-pink-500 via-purple-500 to-indigo-500', icon: '📷', aspect: 'h-36' },
+                                        'Story': { gradient: 'from-orange-400 via-pink-500 to-purple-500', icon: '○', aspect: 'h-36' },
+                                        'Video': { gradient: 'from-purple-600 via-pink-500 to-red-500', icon: '🎬', aspect: 'h-36' },
+                                        'Text': { gradient: 'from-indigo-500 via-purple-500 to-pink-500', icon: '✍️', aspect: 'h-36' },
+                                        'Poll': { gradient: 'from-teal-500 via-cyan-500 to-blue-500', icon: '📊', aspect: 'h-36' },
+                                        'Tweet': { gradient: 'from-gray-800 via-gray-700 to-gray-600', icon: '💬', aspect: 'h-36' },
+                                        'Thread': { gradient: 'from-blue-600 via-blue-500 to-cyan-500', icon: '🧵', aspect: 'h-36' },
+                                        'Post': { gradient: 'from-blue-600 to-blue-400', icon: '📝', aspect: 'h-36' },
+                                        'Live': { gradient: 'from-red-500 via-pink-500 to-orange-500', icon: '🔴', aspect: 'h-36' },
                                     };
                                     const style = formatStyles[format] || formatStyles['Photo'];
                                     const isTrending = index < 2;
+                                    
+                                    // Function to use this idea - navigates to Fan Hub Posts with caption pre-filled
+                                    const handleUseIdea = () => {
+                                        // Store caption in localStorage for Fan Hub Posts to pick up
+                                        localStorage.setItem('fanHubPendingCaption', idea);
+                                        // Navigate to Fan Hub Posts tab
+                                        window.location.href = '/fan?tab=posts';
+                                    };
                                     
                                     return (
                                         <div
                                             key={index}
                                             className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-md transition-shadow"
                                         >
-                                            {/* Visual Preview Header */}
-                                            <div className={`relative ${style.aspect} bg-gradient-to-br ${style.gradient} flex items-center justify-center p-4`}>
-                                                {/* Format badge */}
-                                                <div className="absolute top-2 left-2 flex items-center gap-1.5">
+                                            {/* Visual Preview Header - taller with better padding */}
+                                            <div className={`relative ${style.aspect} bg-gradient-to-br ${style.gradient} flex flex-col justify-between p-3`}>
+                                                {/* Format badge row */}
+                                                <div className="flex items-center gap-1.5">
                                                     <span className="px-2 py-1 bg-black/30 backdrop-blur-sm rounded-md text-white text-xs font-bold">
                                                         {format.toUpperCase()}
                                                     </span>
@@ -5673,23 +5681,25 @@ Output format:
                                                         </span>
                                                     )}
                                                 </div>
-                                                {/* Hook preview */}
-                                                <p className="text-white font-bold text-sm leading-snug drop-shadow-lg line-clamp-3 text-center">
-                                                    "{idea.length > 80 ? idea.slice(0, 80) + '...' : idea}"
-                                                </p>
+                                                {/* Hook preview - centered with better text handling */}
+                                                <div className="flex-1 flex items-center justify-center px-2 py-2">
+                                                    <p className="text-white font-semibold text-sm leading-snug drop-shadow-lg text-center" style={{ wordBreak: 'break-word' }}>
+                                                        "{idea.length > 100 ? idea.slice(0, 100) + '...' : idea}"
+                                                    </p>
+                                                </div>
                                                 {/* Format icon */}
-                                                <div className="absolute bottom-2 right-2 text-white/60 text-lg">
+                                                <div className="text-white/60 text-lg text-right">
                                                     {style.icon}
                                                 </div>
                                             </div>
-                                            {/* Content */}
+                                            {/* Content - full text visible */}
                                             <div className="p-3 bg-gray-50 dark:bg-gray-700/50">
-                                                <p className="text-xs text-gray-600 dark:text-gray-300 line-clamp-2 mb-2">{idea}</p>
+                                                <p className="text-xs text-gray-600 dark:text-gray-300 mb-3 line-clamp-3">{idea}</p>
                                                 <button
-                                                    onClick={() => copyToClipboard(idea)}
-                                                    className="w-full py-1.5 text-xs font-medium text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded"
+                                                    onClick={handleUseIdea}
+                                                    className="w-full py-2 text-xs font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors"
                                                 >
-                                                    Copy Idea
+                                                    Use in Post →
                                                 </button>
                                             </div>
                                         </div>

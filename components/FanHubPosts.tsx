@@ -267,6 +267,17 @@ export const FanHubPosts: React.FC = () => {
     }
   }, [showVault, loadVault]);
 
+  // Check for pending caption from Premium Studio (New Ideas)
+  useEffect(() => {
+    const pendingCaption = localStorage.getItem('fanHubPendingCaption');
+    if (pendingCaption) {
+      setCaption(pendingCaption);
+      setShowComposer(true);
+      localStorage.removeItem('fanHubPendingCaption');
+      showToast?.('Caption loaded from New Ideas!', 'success');
+    }
+  }, [showToast]);
+
   // File upload handler - uploads to vault immediately for persistence
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);

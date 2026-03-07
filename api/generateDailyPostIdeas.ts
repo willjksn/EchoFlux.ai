@@ -426,11 +426,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     let ideas = Array.isArray(parsed?.ideas) ? parsed.ideas : [];
     
-    // Generate placeholder image URL using Picsum (fallback only)
-    const getPlaceholderImage = (index: number): string => {
-      const seed = Date.now() + index * 137;
-      return `https://picsum.photos/seed/${seed}/600/600`;
-    };
+    // Note: We no longer use placeholder images for non-photo formats
+    // The frontend now displays gradient + emoji for reels, carousels, stories, etc.
     
     // Build image prompt that matches the content idea
     const buildImagePrompt = (idea: any, hint?: string): string => {
@@ -495,8 +492,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       }
     }
     
+    // Track if we've already generated an AI image (only one per request to save cost)
+    let aiImageGenerated = false;
+
     for (let index = 0; index < ideas.length; index++) {
       const idea = ideas[index];
+      const ideaFormat = idea.format?.toLowerCase() || '';
       const baseIdea = {
         ...idea,
         id: idea.id || `idea_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
@@ -504,9 +505,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         hashtags: Array.isArray(idea.hashtags) ? idea.hashtags : [],
       };
       
-      // Only generate ONE AI image - for the first idea only (saves cost & time)
-      // Other ideas get placeholder images
-      if (replicate && index === 0) {
+      // Only generate AI image for PHOTO format cards (first one only)
+      // Reels, carousels, stories, videos etc. should use stylized placeholders, not realistic photos
+      const isPhotoFormat = ideaFormat === 'photo';
+      const shouldGenerateAI = replicate && isPhotoFormat && !aiImageGenerated;
+      
+      if (shouldGenerateAI) {
         try {
           const imagePrompt = buildImagePrompt(idea, creatorHint);
           
@@ -561,9 +565,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
           }
           
           if (imageUrl) {
-            console.log(`[generateDailyPostIdeas] v12 - Success! Image URL: ${imageUrl.slice(0, 80)}...`);
+            console.log(`[generateDailyPostIdeas] v13 - Success! AI image for PHOTO card: ${imageUrl.slice(0, 80)}...`);
             // Track successful Replicate usage (don't await, fire and forget)
             trackReplicateUsage(authUser.uid, 1, true).catch(() => {});
+            aiImageGenerated = true;
             processedIdeas.push({
               ...baseIdea,
               placeholderImage: imageUrl,
@@ -571,20 +576,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             });
             continue;
           } else {
-            console.log('[generateDailyPostIdeas] v12 - No valid URL extracted');
+            console.log('[generateDailyPostIdeas] v13 - No valid URL extracted');
           }
         } catch (e: any) {
-          console.error(`[generateDailyPostIdeas] v12 - Replicate failed:`, e?.message || e);
+          console.error(`[generateDailyPostIdeas] v13 - Replicate failed:`, e?.message || e);
           // Track failed usage (don't await)
           trackReplicateUsage(authUser.uid, 1, false, String(e?.message || e)).catch(() => {});
         }
       }
       
-      // Fallback to placeholder image if AI fails or is disabled
+      // Non-photo formats or AI fallback: no placeholder image (use gradient + emoji instead)
+      // This prevents random/unrelated realistic images on reel, carousel, story, video cards
       processedIdeas.push({
         ...baseIdea,
-        placeholderImage: getPlaceholderImage(index),
-        imageSource: 'unsplash' as const,
+        placeholderImage: undefined, // Let frontend use gradient + emoji
+        imageSource: undefined,
       });
     }
     
