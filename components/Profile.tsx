@@ -600,21 +600,6 @@ export const Profile: React.FC = () => {
                     </div>
                  )}
 
-                {canEdit && user.userType === 'Creator' && (
-                    <div className="mt-4 pt-4 border-t dark:border-gray-700">
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
-                            Creator profile settings (gender, audience targeting) are now in <button 
-                                onClick={() => {
-                                    localStorage.setItem('settingsActiveTab', 'general');
-                                    window.location.href = '/settings';
-                                }}
-                                className="text-primary-600 dark:text-primary-400 hover:underline font-medium"
-                            >
-                                Settings → General → Creator Profile
-                            </button>
-                        </p>
-                    </div>
-                 )}
                  {/* ------------------------- */}
 
                  {canEdit && (
