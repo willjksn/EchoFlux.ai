@@ -477,25 +477,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             negativePrompt += ", woman, female, feminine, breasts, curves";
           }
           
-          console.log('[generateDailyPostIdeas] Generating image with FLUX Dev, prompt:', imagePrompt.slice(0, 100) + '...');
+          console.log('[generateDailyPostIdeas] Generating image with Whiskii Gen, prompt:', imagePrompt.slice(0, 100) + '...');
           
-          // Using FLUX Dev - $0.025/image, better quality and prompt adherence than Schnell
+          // Using Whiskii Gen (NSFW-Uncensored SDXL) - no content filters, follows prompts accurately
+          // This is needed because FLUX models refuse to generate bikini/lingerie content
           const output = await replicate.run(
-            "black-forest-labs/flux-dev",
+            "alicewuv/whiskii-gen",
             {
               input: {
                 prompt: imagePrompt,
-                aspect_ratio: "1:1",
+                negative_prompt: negativePrompt,
+                width: 1024,
+                height: 1024,
                 num_outputs: 1,
-                output_format: "webp",
-                output_quality: 90,
-                guidance: 3.5,
-                num_inference_steps: 28,
+                scheduler: "K_EULER",
+                num_inference_steps: 30,
+                guidance_scale: 7,
               }
             }
           );
           
-          console.log('[generateDailyPostIdeas] FLUX Dev output:', typeof output, Array.isArray(output) ? output.length : 'not array');
+          console.log('[generateDailyPostIdeas] Whiskii Gen output:', typeof output, Array.isArray(output) ? output.length : 'not array');
           
           const imageUrl = Array.isArray(output) ? output[0] : output;
           if (typeof imageUrl === 'string') {
