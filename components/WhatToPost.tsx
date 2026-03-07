@@ -584,6 +584,32 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
                 </div>
               )}
 
+              {/* Spicy Mode Toggle */}
+              <div className="flex items-center justify-between p-3 bg-pink-50 dark:bg-pink-900/20 rounded-lg border border-pink-200 dark:border-pink-800">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-pink-700 dark:text-pink-300 flex items-center gap-2">
+                    <span>🌶️</span>
+                    <span>Bold/Spicy Mode</span>
+                  </p>
+                  <p className="text-xs text-pink-600 dark:text-pink-400 mt-0.5">
+                    Enable for bolder content ideas (bikini, lingerie, flirty, etc.)
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDraftSettings((p) => ({ ...p, spicyMode: !p.spicyMode }))}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    draftSettings.spicyMode ? 'bg-pink-600' : 'bg-gray-300 dark:bg-gray-600'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      draftSettings.spicyMode ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
               {/* Trends info - now always included */}
               <div className="p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
                 <p className="text-sm text-orange-700 dark:text-orange-300 flex items-center gap-2">
