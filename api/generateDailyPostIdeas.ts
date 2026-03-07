@@ -445,6 +445,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     const replicateApiToken = process.env.REPLICATE_API_TOKEN;
     const useAIImages = replicateApiToken && process.env.DISABLE_AI_IMAGES !== "true";
     
+    console.log('[generateDailyPostIdeas] Image generation config:', {
+      hasReplicateToken: !!replicateApiToken,
+      useAIImages,
+      creatorGender,
+      targetAudienceGender,
+    });
+    
     // Process ideas with images
     const processedIdeas = await Promise.all(ideas.map(async (idea, index) => {
       const baseIdea = {
@@ -496,11 +503,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
               imageSource: 'ai' as const,
             };
           }
-        } catch (e) {
-          console.warn(`AI image generation failed for idea ${baseIdea.id}:`, e);
+        } catch (e: any) {
+          console.error(`[generateDailyPostIdeas] Replicate image generation failed for idea ${baseIdea.id}:`, e?.message || e);
           // Track failed Replicate usage
-          trackReplicateUsage(authUser.uid, 1, false, String(e)).catch(() => {});
+          trackReplicateUsage(authUser.uid, 1, false, String(e?.message || e)).catch(() => {});
         }
+      } else {
+        console.log(`[generateDailyPostIdeas] Skipping AI images - Replicate not configured`);
       }
       
       // Fallback to placeholder image if AI fails or is disabled

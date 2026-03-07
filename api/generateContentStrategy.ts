@@ -46,6 +46,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   const userData = userDoc.data();
   const userPlan = userData?.plan || 'Free';
   const userRole = userData?.role;
+  
+  // Get creator profile for gender-aware content generation
+  const creatorGender = userData?.creatorGender || "";
+  const targetAudienceGender = userData?.targetAudienceGender || "";
 
   // Check strategy generation limit
   const usageCheck = await canGenerateStrategy(authUser.uid, userPlan, userRole);
@@ -244,6 +248,36 @@ Use this analytics data to inform your strategy:
           : 'SUGGESTIVE - Use suggestive language with adult themes, intimate moments, and romantic/sexual undertones. Focus on connection and intimate experiences.')
       : '';
 
+    // Build creator profile guidance for gender-appropriate content
+    const creatorProfileGuidance = (creatorGender || targetAudienceGender) ? `
+CREATOR PROFILE (CRITICAL - FOLLOW STRICTLY):
+${creatorGender ? `- The creator is: ${creatorGender}` : ''}
+${targetAudienceGender ? `- Target audience: ${targetAudienceGender === 'Male' ? 'Men' : targetAudienceGender === 'Female' ? 'Women' : targetAudienceGender === 'Both' ? 'Both men and women' : 'All audiences'}` : ''}
+
+MANDATORY CONTENT RULES BASED ON CREATOR PROFILE:
+${creatorGender === 'Female' && targetAudienceGender === 'Male' ? `- ALL content ideas must feature the FEMALE creator appealing to MALE audience
+- Ideas should showcase HER (the creator): bikini photos, lingerie looks, selfies, body shots, intimate content
+- NEVER suggest photos of men, mankinis, men in bikinis, or content featuring men
+- Focus on feminine aesthetics, curves, confidence, seduction, flirtation aimed at male viewers
+- Use "she/her" when referring to the creator, never "he/him"` : ''}
+${creatorGender === 'Male' && targetAudienceGender === 'Female' ? `- ALL content ideas must feature the MALE creator appealing to FEMALE audience
+- Ideas should showcase HIM (the creator): shirtless photos, gym content, suits, confidence poses
+- NEVER suggest photos of women or content featuring women as the subject
+- Focus on masculine aesthetics, physique, charm, romance aimed at female viewers
+- Use "he/him" when referring to the creator, never "she/her"` : ''}
+${creatorGender === 'Female' && targetAudienceGender === 'Female' ? `- ALL content ideas must feature the FEMALE creator appealing to FEMALE audience
+- Ideas should showcase HER: confidence, beauty, lifestyle, behind-the-scenes, relatability
+- Focus on aesthetics that appeal to women viewers` : ''}
+${creatorGender === 'Male' && targetAudienceGender === 'Male' ? `- ALL content ideas must feature the MALE creator appealing to MALE audience
+- Ideas should showcase HIM: physique, fitness, lifestyle, confidence
+- Focus on aesthetics that appeal to male viewers` : ''}
+${creatorGender === 'Couple' ? `- ALL content ideas must feature BOTH partners together
+- Ideas should showcase the couple: couple content, duo shots, relationship moments
+- Appeal to the specified target audience with couple-focused content` : ''}
+${creatorGender === 'Non-binary' ? `- ALL content ideas should be gender-neutral or match the creator's presentation
+- Focus on the creator's unique aesthetic and style` : ''}
+` : '';
+
     // Build explicit content context for AI
     const explicitContentContext = isExplicitContent || isOnlyFansPlatform ? `
 CRITICAL CONTEXT - ONLYFANS ADULT/EXPLICIT CONTENT PLATFORM:
@@ -330,6 +364,8 @@ ${explicitnessContext ? `\nEXPLICITNESS LEVEL: ${explicitnessLevel}/10\n${explic
 
     const prompt = `
 You are an elite content strategist specializing in ${niche} for ${audience}. Your expertise is creating data-driven strategies that achieve specific business goals.
+
+${creatorProfileGuidance}
 
 ${explicitContentContext}
 
