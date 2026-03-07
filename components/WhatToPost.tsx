@@ -758,7 +758,7 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
           </div>
           
           {/* Optional hint input */}
-          <div className="max-w-md mx-auto mb-6">
+          <div className="max-w-md mx-auto mb-4">
             <input
               type="text"
               value={creatorHint}
@@ -769,6 +769,27 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
             <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5">
               E.g., "beach photos", "workout motivation", "cooking video" — or leave blank for AI to surprise you
             </p>
+          </div>
+          
+          {/* Spicy Mode Toggle - visible on initial screen */}
+          <div className="flex items-center justify-center gap-3 mb-6">
+            <button
+              type="button"
+              onClick={() => setSettings((p) => ({ ...p, spicyMode: !p.spicyMode }))}
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                settings.spicyMode
+                  ? 'bg-pink-600 text-white'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
+            >
+              <span>🌶️</span>
+              <span>{settings.spicyMode ? 'Spicy Mode ON' : 'Spicy Mode'}</span>
+            </button>
+            {settings.spicyMode && (
+              <span className="text-xs text-pink-600 dark:text-pink-400">
+                Bolder content enabled
+              </span>
+            )}
           </div>
           
           <button
