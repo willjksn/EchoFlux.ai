@@ -6,6 +6,7 @@ import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 import { parseJSON } from "./_geminiShared.js";
 import { enforceRateLimit } from "./_rateLimit.js";
+import { trackReplicateUsage } from "./trackModelUsage.js";
 
 export interface DailyPostIdeaPayload {
   id: string;
@@ -487,6 +488,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
           
           const imageUrl = Array.isArray(output) ? output[0] : output;
           if (typeof imageUrl === 'string') {
+            // Track successful Replicate usage
+            trackReplicateUsage(authUser.uid, 1, true).catch(() => {});
             return {
               ...baseIdea,
               placeholderImage: imageUrl,
@@ -495,6 +498,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
           }
         } catch (e) {
           console.warn(`AI image generation failed for idea ${baseIdea.id}:`, e);
+          // Track failed Replicate usage
+          trackReplicateUsage(authUser.uid, 1, false, String(e)).catch(() => {});
         }
       }
       

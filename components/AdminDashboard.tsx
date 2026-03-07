@@ -34,6 +34,7 @@ const DEFAULT_MODEL_USAGE_STATS: ModelUsageStats = {
         'gemini-2.0-flash': 354,
         'gemini-2.0-flash-lite': 267,
         'tavily-web-search': 15,
+        'replicate-sdxl': 0,
     },
     requestsByTask: {
         caption: 267,
@@ -1306,14 +1307,33 @@ export const AdminDashboard: React.FC = () => {
                                         const percentage = modelUsageStats.totalRequests > 0 
                                             ? (countNum / modelUsageStats.totalRequests * 100).toFixed(1) 
                                             : '0';
+                                        // Estimate cost for Replicate SDXL (~$0.002 per image)
+                                        const isReplicate = model === 'replicate-sdxl';
+                                        const estimatedCost = isReplicate ? countNum * 0.002 : null;
                                         return (
                                             <div key={model}>
                                                 <div className="flex justify-between text-xs mb-1">
-                                                    <span className="text-gray-600 dark:text-gray-400 font-mono">{model}</span>
-                                                    <span className="text-gray-900 dark:text-white font-semibold">{countNum} ({percentage}%)</span>
+                                                    <span className="text-gray-600 dark:text-gray-400 font-mono flex items-center gap-1">
+                                                        {isReplicate && (
+                                                            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                                                <circle cx="8.5" cy="8.5" r="1.5" />
+                                                                <polyline points="21 15 16 10 5 21" />
+                                                            </svg>
+                                                        )}
+                                                        {model}
+                                                    </span>
+                                                    <span className="text-gray-900 dark:text-white font-semibold">
+                                                        {countNum} ({percentage}%)
+                                                        {estimatedCost !== null && (
+                                                            <span className="text-orange-600 dark:text-orange-400 ml-2">
+                                                                ~${estimatedCost.toFixed(2)}
+                                                            </span>
+                                                        )}
+                                                    </span>
                                                 </div>
                                                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                                                    <div className="bg-primary-600 h-2 rounded-full" style={{ width: `${percentage}%` }}></div>
+                                                    <div className={`h-2 rounded-full ${isReplicate ? 'bg-orange-500' : 'bg-primary-600'}`} style={{ width: `${percentage}%` }}></div>
                                                 </div>
                                             </div>
                                         );
