@@ -428,28 +428,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       return `https://picsum.photos/seed/${seed}/600/600`;
     };
     
-    // Build image prompt focused on scene/setting (avoids content filter issues)
-    const buildImagePrompt = (idea: any): string => {
-      // Extract visual cues from the idea
-      const visualCues = idea.shotList?.[0] || idea.title || "lifestyle photo";
+    // Build image prompt that matches the content idea
+    const buildImagePrompt = (idea: any, hint?: string): string => {
       const title = idea.title || "";
+      const shotList = idea.shotList || [];
       
-      // Build a scene-focused prompt that describes the setting/mood rather than the person
-      // This avoids content filters while still being relevant to the content idea
-      let sceneDescription = visualCues;
+      // Start with creator hint if provided - this is the most relevant context
+      let mainSubject = hint ? hint.trim() : "";
       
-      // Add context from the title if it helps describe the scene
-      if (title.toLowerCase().includes('beach') || title.toLowerCase().includes('pool') || title.toLowerCase().includes('sun')) {
-        sceneDescription += ", sunny outdoor setting, golden hour lighting";
-      } else if (title.toLowerCase().includes('bedroom') || title.toLowerCase().includes('cozy') || title.toLowerCase().includes('morning')) {
-        sceneDescription += ", cozy indoor setting, soft natural lighting";
-      } else if (title.toLowerCase().includes('gym') || title.toLowerCase().includes('fitness') || title.toLowerCase().includes('workout')) {
-        sceneDescription += ", fitness/gym setting, energetic mood";
-      } else if (title.toLowerCase().includes('behind') || title.toLowerCase().includes('bts')) {
-        sceneDescription += ", behind-the-scenes setting, candid photography style";
+      // Fallback to extracting subject from title/shotList if no hint
+      if (!mainSubject) {
+        // Extract the core concept from title or first shot
+        const titleLower = title.toLowerCase();
+        if (titleLower.includes('beach')) mainSubject = "beach scene, ocean, sand, tropical setting";
+        else if (titleLower.includes('pool')) mainSubject = "poolside scene, water, summer vibes";
+        else if (titleLower.includes('bikini')) mainSubject = "beach/pool aesthetic, summer fashion";
+        else if (titleLower.includes('lingerie') || titleLower.includes('bedroom')) mainSubject = "cozy bedroom aesthetic, soft lighting, intimate setting";
+        else if (titleLower.includes('gym') || titleLower.includes('fitness') || titleLower.includes('workout')) mainSubject = "gym environment, fitness equipment, energetic atmosphere";
+        else if (titleLower.includes('morning') || titleLower.includes('routine')) mainSubject = "morning light, cozy home interior";
+        else if (titleLower.includes('cooking') || titleLower.includes('food') || titleLower.includes('kitchen')) mainSubject = "kitchen scene, cooking, delicious food";
+        else if (titleLower.includes('selfie') || titleLower.includes('mirror')) mainSubject = "mirror selfie aesthetic, ring light, bedroom or bathroom";
+        else if (titleLower.includes('travel') || titleLower.includes('vacation')) mainSubject = "travel destination, scenic landscape";
+        else if (titleLower.includes('outfit') || titleLower.includes('fashion') || titleLower.includes('style')) mainSubject = "fashion photoshoot, stylish outfit";
+        else if (shotList.length > 0) mainSubject = shotList[0];
+        else mainSubject = title;
       }
       
-      return `Social media content photo: ${sceneDescription}. Style: aesthetic, modern, high quality photography, Instagram-worthy, professional lighting, no text or watermarks.`;
+      // Build a descriptive prompt that will generate relevant imagery
+      const subjectPerson = creatorGender === 'Female' 
+        ? "beautiful woman, feminine, attractive" 
+        : creatorGender === 'Male' 
+        ? "handsome man, masculine, attractive"
+        : "attractive person";
+      
+      return `Professional social media photo of ${subjectPerson} - ${mainSubject}. Style: high quality photography, Instagram aesthetic, professional lighting, lifestyle content, no text or watermarks, photorealistic.`;
     };
     
     // Check if Replicate is configured
@@ -461,6 +473,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       useAIImages,
       creatorGender,
       targetAudienceGender,
+      creatorHint: creatorHint || '(none)',
     });
     
     // Process ideas with images
@@ -478,7 +491,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
           const Replicate = (await import("replicate")).default;
           const replicate = new Replicate({ auth: replicateApiToken });
           
-          const imagePrompt = buildImagePrompt(idea);
+          const imagePrompt = buildImagePrompt(idea, creatorHint);
           
           // Build negative prompt based on creator gender to prevent wrong gender
           let negativePrompt = "text, words, letters, watermark, logo, low quality, blurry, distorted, ugly, amateur, cartoon, anime, illustration";
@@ -489,7 +502,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
           }
           
           // Using FLUX Dev (standard) - works reliably, $0.025/image
-          console.log('[generateDailyPostIdeas] v3 - Generating image with FLUX Dev, prompt:', imagePrompt.slice(0, 100) + '...');
+          console.log('[generateDailyPostIdeas] v5 - Generating image with FLUX Dev, prompt:', imagePrompt);
           
           const output = await replicate.run(
             "black-forest-labs/flux-dev",
@@ -508,7 +521,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             }
           );
           
-          console.log('[generateDailyPostIdeas] v3 - FLUX Dev output received:', typeof output, Array.isArray(output) ? `array[${output.length}]` : 'not array');
+          console.log('[generateDailyPostIdeas] v5 - FLUX Dev output received:', typeof output, Array.isArray(output) ? `array[${output.length}]` : 'not array');
           
           const imageUrl = Array.isArray(output) ? output[0] : output;
           if (typeof imageUrl === 'string') {
