@@ -1,4 +1,4 @@
-// api/generateDailyPostIdeas.ts
+// api/generateDailyPostIdeas.ts - v6
 // Instant "What to Post" ideas: 3 post ideas with optional regenerateAll or regenerateSingle (swap one card).
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getModelForTask, getModelNameForTask, getCostTierForTask } from "./_modelRouter.js";
