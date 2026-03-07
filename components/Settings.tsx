@@ -228,6 +228,11 @@ export const Settings: React.FC = () => {
     const [isLoadingStorage, setIsLoadingStorage] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const voiceFileInputRef = useRef<HTMLInputElement>(null);
+    
+    // Creator Profile state
+    const [creatorGender, setCreatorGender] = useState('');
+    const [targetAudienceGender, setTargetAudienceGender] = useState('');
+    const [isSavingCreatorProfile, setIsSavingCreatorProfile] = useState(false);
 
     // Safe default for socialAccounts if undefined
     const safeSocialAccounts: Record<Platform, SocialAccount | null> = socialAccounts || {
@@ -259,6 +264,47 @@ export const Settings: React.FC = () => {
         };
         run();
     }, [activeTab, user?.id, safeSocialAccounts?.X?.connected]);
+    
+    // Load creator profile settings from Firestore
+    useEffect(() => {
+        const loadCreatorProfile = async () => {
+            if (!user?.id) return;
+            try {
+                const { getDoc } = await import('firebase/firestore');
+                const userDoc = await getDoc(doc(db, 'users', user.id));
+                if (userDoc.exists()) {
+                    const data = userDoc.data();
+                    setCreatorGender(data.creatorGender || '');
+                    setTargetAudienceGender(data.targetAudienceGender || '');
+                }
+            } catch (error) {
+                console.error('Error loading creator profile:', error);
+            }
+        };
+        loadCreatorProfile();
+    }, [user?.id]);
+    
+    // Save creator profile to Firestore
+    const handleSaveCreatorProfile = async () => {
+        if (!user?.id) {
+            showToast('Please log in to save your profile.', 'error');
+            return;
+        }
+        setIsSavingCreatorProfile(true);
+        try {
+            await setDoc(doc(db, 'users', user.id), {
+                creatorGender,
+                targetAudienceGender,
+                updatedAt: new Date().toISOString(),
+            }, { merge: true });
+            showToast('Creator profile saved!', 'success');
+        } catch (error: any) {
+            console.error('Error saving creator profile:', error);
+            showToast(error?.message || 'Failed to save profile.', 'error');
+        } finally {
+            setIsSavingCreatorProfile(false);
+        }
+    };
     
     const isPremiumFeatureUnlocked = ['Elite', 'Agency'].includes(user?.plan || 'Free') || user?.role === 'Admin';
 
@@ -1048,39 +1094,61 @@ export const Settings: React.FC = () => {
                                 </>
                             )}
                         </SettingsSection>
-                        {(user.plan !== 'Free' || user.plan === 'Caption') && (
-                        <SettingsSection title="Goals & Milestones">
-                            <div className="space-y-4">
+                        <SettingsSection title="Creator Profile">
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                                Help the AI generate content that matches you and appeals to your audience.
+                            </p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        Monthly Posts Goal
+                                        I am a...
                                     </label>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        value={user.goals?.monthlyPostsGoal || ''}
-                                        onChange={(e) => {
-                                            const value = e.target.value ? parseInt(e.target.value, 10) : undefined;
-                                            if (user) {
-                                                setUser({
-                                                    ...user,
-                                                    goals: {
-                                                        ...user.goals,
-                                                        monthlyPostsGoal: value,
-                                                    }
-                                                });
-                                            }
-                                        }}
-                                        placeholder="Set your monthly content goal..."
-                                        className="w-full p-3 border rounded-lg bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:text-white"
-                                    />
+                                    <select
+                                        value={creatorGender}
+                                        onChange={(e) => setCreatorGender(e.target.value)}
+                                        className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                                    >
+                                        <option value="">Select...</option>
+                                        <option value="Female">Female Creator</option>
+                                        <option value="Male">Male Creator</option>
+                                        <option value="Non-binary">Non-binary Creator</option>
+                                        <option value="Couple">Couple</option>
+                                        <option value="Other">Other</option>
+                                    </select>
                                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                        Set how many pieces of content you want to create per month.
+                                        Used to generate appropriate content ideas and visuals.
+                                    </p>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        My audience is...
+                                    </label>
+                                    <select
+                                        value={targetAudienceGender}
+                                        onChange={(e) => setTargetAudienceGender(e.target.value)}
+                                        className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                                    >
+                                        <option value="">Select...</option>
+                                        <option value="Male">Mostly Men</option>
+                                        <option value="Female">Mostly Women</option>
+                                        <option value="Both">Both / Mixed</option>
+                                        <option value="All">All Audiences</option>
+                                    </select>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        Who your content is primarily for.
                                     </p>
                                 </div>
                             </div>
+                            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                <button
+                                    onClick={handleSaveCreatorProfile}
+                                    disabled={isSavingCreatorProfile}
+                                    className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 transition-colors text-sm font-medium"
+                                >
+                                    {isSavingCreatorProfile ? 'Saving...' : 'Save Creator Profile'}
+                                </button>
+                            </div>
                         </SettingsSection>
-                        )}
                         {/* Account Type section hidden in AI Content Studio mode */}
                         {false && (
                           <SettingsSection title="Account Type">
