@@ -1,4 +1,4 @@
-// api/generateDailyPostIdeas.ts - v6
+// api/generateDailyPostIdeas.ts - v7
 // Instant "What to Post" ideas: 3 post ideas with optional regenerateAll or regenerateSingle (swap one card).
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getModelForTask, getModelNameForTask, getCostTierForTask } from "./_modelRouter.js";
@@ -505,8 +505,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
           const imagePrompt = buildImagePrompt(idea, creatorHint);
           
           // Using FLUX Schnell - fastest model, ~1-2 seconds, $0.003/image
-          console.log(`[generateDailyPostIdeas] v6 - Generating image ${index + 1}/${ideas.length} with FLUX Schnell`);
-          console.log(`[generateDailyPostIdeas] v6 - Prompt: ${imagePrompt}`);
+          console.log(`[generateDailyPostIdeas] v7 - Generating image ${index + 1}/${ideas.length} with FLUX Schnell`);
+          console.log(`[generateDailyPostIdeas] v7 - Prompt: ${imagePrompt}`);
+          
+          // Add delay between requests to avoid rate limiting (except for first)
+          if (index > 0) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
           
           const output = await replicate.run(
             "black-forest-labs/flux-schnell",
@@ -523,10 +528,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             }
           );
           
-          console.log('[generateDailyPostIdeas] v6 - FLUX Schnell output:', typeof output, Array.isArray(output) ? `array[${output.length}]` : 'not array');
+          console.log('[generateDailyPostIdeas] v7 - FLUX Schnell output:', typeof output, Array.isArray(output) ? `array[${output.length}]` : 'not array');
           
-          const imageUrl = Array.isArray(output) ? output[0] : output;
-          if (typeof imageUrl === 'string' && imageUrl.startsWith('http')) {
+          let imageUrl: string | null = null;
+          
+          // Handle different output formats from Replicate
+          if (Array.isArray(output) && output.length > 0) {
+            const firstItem = output[0];
+            if (typeof firstItem === 'string' && firstItem.startsWith('http')) {
+              imageUrl = firstItem;
+            } else if (firstItem && typeof firstItem === 'object') {
+              // Could be a FileOutput object with url property
+              const fileOutput = firstItem as any;
+              if (fileOutput.url && typeof fileOutput.url === 'string') {
+                imageUrl = fileOutput.url;
+              } else if (fileOutput.href && typeof fileOutput.href === 'string') {
+                imageUrl = fileOutput.href;
+              }
+            }
+          } else if (typeof output === 'string' && output.startsWith('http')) {
+            imageUrl = output;
+          } else if (output && typeof output === 'object') {
+            // Handle single FileOutput object
+            const fileOutput = output as any;
+            if (fileOutput.url && typeof fileOutput.url === 'string') {
+              imageUrl = fileOutput.url;
+            }
+          }
+          
+          console.log('[generateDailyPostIdeas] v7 - Extracted URL:', imageUrl ? imageUrl.slice(0, 80) + '...' : 'null');
+          
+          if (imageUrl) {
             // Track successful Replicate usage (don't await, fire and forget)
             trackReplicateUsage(authUser.uid, 1, true).catch(() => {});
             processedIdeas.push({
@@ -536,15 +568,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             });
             continue;
           } else {
-            console.log('[generateDailyPostIdeas] v6 - Invalid output URL:', imageUrl);
+            console.log('[generateDailyPostIdeas] v7 - Could not extract URL from output:', JSON.stringify(output).slice(0, 200));
           }
         } catch (e: any) {
-          console.error(`[generateDailyPostIdeas] v6 - Replicate failed for idea ${index + 1}:`, e?.message || e);
+          console.error(`[generateDailyPostIdeas] v7 - Replicate failed for idea ${index + 1}:`, e?.message || e);
           // Track failed usage (don't await)
           trackReplicateUsage(authUser.uid, 1, false, String(e?.message || e)).catch(() => {});
         }
       } else if (useAIImages) {
-        console.log(`[generateDailyPostIdeas] v6 - Replicate not initialized, using placeholder`);
+        console.log(`[generateDailyPostIdeas] v7 - Replicate not initialized, using placeholder`);
       }
       
       // Fallback to placeholder image if AI fails or is disabled
