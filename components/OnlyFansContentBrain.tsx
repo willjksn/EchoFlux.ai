@@ -5348,15 +5348,15 @@ Output format:
                 <div className="space-y-6">
                     <PlatformTargetingCard />
 
-                    {/* Explicitness Quick Toggle */}
+                    {/* Content Spiciness Quick Toggle */}
                     <div className="flex items-center justify-between p-4 bg-pink-50 dark:bg-pink-900/20 rounded-lg border border-pink-200 dark:border-pink-800">
                         <div className="flex-1">
                             <p className="text-sm font-medium text-pink-700 dark:text-pink-300 flex items-center gap-2">
                                 <span>🌶️</span>
-                                <span>Content Explicitness: {explicitnessLevelSetting <= 3 ? 'Mild' : explicitnessLevelSetting <= 6 ? 'Moderate' : explicitnessLevelSetting <= 8 ? 'Spicy' : 'Explicit'}</span>
+                                <span>Content Spiciness: {explicitnessLevelSetting <= 3 ? 'Mild' : explicitnessLevelSetting <= 6 ? 'Medium' : explicitnessLevelSetting <= 8 ? 'Spicy' : 'Extra Spicy'}</span>
                             </p>
                             <p className="text-xs text-pink-600 dark:text-pink-400 mt-0.5">
-                                Adjust how bold/explicit the AI suggestions are
+                                Adjust how bold the AI suggestions are
                             </p>
                         </div>
                         <div className="flex items-center gap-3">
@@ -6464,15 +6464,15 @@ Output format:
                 <div className="space-y-6">
                     {!singleTabMode && <PlatformTargetingCard />}
 
-                    {/* Explicitness Quick Toggle for Monetization */}
+                    {/* Content Spiciness Quick Toggle for Monetization */}
                     <div className="flex items-center justify-between p-4 bg-pink-50 dark:bg-pink-900/20 rounded-lg border border-pink-200 dark:border-pink-800">
                         <div className="flex-1">
                             <p className="text-sm font-medium text-pink-700 dark:text-pink-300 flex items-center gap-2">
                                 <span>🌶️</span>
-                                <span>Drop Style: {explicitnessLevelSetting <= 3 ? 'Mild' : explicitnessLevelSetting <= 6 ? 'Teasing' : explicitnessLevelSetting <= 8 ? 'Spicy' : 'Explicit'}</span>
+                                <span>Content Spiciness: {explicitnessLevelSetting <= 3 ? 'Mild' : explicitnessLevelSetting <= 6 ? 'Medium' : explicitnessLevelSetting <= 8 ? 'Spicy' : 'Extra Spicy'}</span>
                             </p>
                             <p className="text-xs text-pink-600 dark:text-pink-400 mt-0.5">
-                                Adjust how bold/explicit drop ideas are
+                                Adjust how bold drop ideas are
                             </p>
                         </div>
                         <div className="flex items-center gap-3">
@@ -6822,15 +6822,15 @@ Output format:
                 <div className="space-y-6">
                     {!singleTabMode && <PlatformTargetingCard />}
                     
-                    {/* Explicitness Quick Toggle for Messaging */}
+                    {/* Content Spiciness Quick Toggle for Messaging */}
                     <div className="flex items-center justify-between p-4 bg-pink-50 dark:bg-pink-900/20 rounded-lg border border-pink-200 dark:border-pink-800">
                         <div className="flex-1">
                             <p className="text-sm font-medium text-pink-700 dark:text-pink-300 flex items-center gap-2">
                                 <span>🌶️</span>
-                                <span>Message Tone: {explicitnessLevelSetting <= 3 ? 'Mild' : explicitnessLevelSetting <= 6 ? 'Flirty' : explicitnessLevelSetting <= 8 ? 'Spicy' : 'Explicit'}</span>
+                                <span>Content Spiciness: {explicitnessLevelSetting <= 3 ? 'Mild' : explicitnessLevelSetting <= 6 ? 'Medium' : explicitnessLevelSetting <= 8 ? 'Spicy' : 'Extra Spicy'}</span>
                             </p>
                             <p className="text-xs text-pink-600 dark:text-pink-400 mt-0.5">
-                                Adjust how bold/explicit message suggestions are
+                                Adjust how bold message suggestions are
                             </p>
                         </div>
                         <div className="flex items-center gap-3">
