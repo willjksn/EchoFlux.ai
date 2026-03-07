@@ -477,25 +477,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             negativePrompt += ", woman, female, feminine, breasts, curves";
           }
           
-          // MODEL: aisha-ai-official/flux.1dev-uncensored-fluxedup-nsfw-v3 (~$0.012/image)
-          console.log('[generateDailyPostIdeas] v2 - Generating image with FLUX Uncensored NSFW, prompt:', imagePrompt.slice(0, 100) + '...');
+          // Using FLUX Dev (standard) - works reliably, $0.025/image
+          console.log('[generateDailyPostIdeas] v3 - Generating image with FLUX Dev, prompt:', imagePrompt.slice(0, 100) + '...');
           
           const output = await replicate.run(
-            "aisha-ai-official/flux.1dev-uncensored-fluxedup-nsfw-v3",
+            "black-forest-labs/flux-dev",
             {
               input: {
                 prompt: imagePrompt,
-                width: 1024,
-                height: 1024,
-                steps: 20,
-                cfg_scale: 5,
-                scheduler: "default",
-                seed: -1,
+                go_fast: true,
+                guidance: 3.5,
+                num_outputs: 1,
+                aspect_ratio: "1:1",
+                output_format: "webp",
+                output_quality: 80,
+                prompt_strength: 0.8,
+                num_inference_steps: 28,
               }
             }
           );
           
-          console.log('[generateDailyPostIdeas] v2 - FLUX Uncensored output received:', typeof output, Array.isArray(output) ? `array[${output.length}]` : 'not array');
+          console.log('[generateDailyPostIdeas] v3 - FLUX Dev output received:', typeof output, Array.isArray(output) ? `array[${output.length}]` : 'not array');
           
           const imageUrl = Array.isArray(output) ? output[0] : output;
           if (typeof imageUrl === 'string') {
