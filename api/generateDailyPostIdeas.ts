@@ -477,26 +477,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             negativePrompt += ", woman, female, feminine, breasts, curves";
           }
           
-          console.log('[generateDailyPostIdeas] Generating image with SDXL, prompt:', imagePrompt.slice(0, 100) + '...');
+          console.log('[generateDailyPostIdeas] Generating image with FLUX Uncensored, prompt:', imagePrompt.slice(0, 100) + '...');
           
-          // Using standard SDXL - reliable and follows prompts well
+          // Using FLUX Dev Uncensored - no content filters, follows prompts accurately (~$0.012/image)
           const output = await replicate.run(
-            "stability-ai/sdxl:7762fd07cf82c948538e41f63f77d685e02b063e37e496e96eefd46c929f9bdc",
+            "aisha-ai-official/flux.1dev-uncensored-fluxedup-nsfw-v3",
             {
               input: {
                 prompt: imagePrompt,
-                negative_prompt: negativePrompt,
-                width: 1024,
-                height: 1024,
+                aspect_ratio: "1:1",
                 num_outputs: 1,
-                scheduler: "K_EULER",
-                num_inference_steps: 25,
-                guidance_scale: 7.5,
+                output_format: "webp",
+                output_quality: 90,
+                num_inference_steps: 28,
+                guidance_scale: 3.5,
               }
             }
           );
           
-          console.log('[generateDailyPostIdeas] SDXL output:', typeof output, Array.isArray(output) ? output.length : 'not array');
+          console.log('[generateDailyPostIdeas] FLUX Uncensored output:', typeof output, Array.isArray(output) ? output.length : 'not array');
           
           const imageUrl = Array.isArray(output) ? output[0] : output;
           if (typeof imageUrl === 'string') {
