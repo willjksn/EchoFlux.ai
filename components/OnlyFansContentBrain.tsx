@@ -5348,6 +5348,40 @@ Output format:
                 <div className="space-y-6">
                     <PlatformTargetingCard />
 
+                    {/* Explicitness Quick Toggle */}
+                    <div className="flex items-center justify-between p-4 bg-pink-50 dark:bg-pink-900/20 rounded-lg border border-pink-200 dark:border-pink-800">
+                        <div className="flex-1">
+                            <p className="text-sm font-medium text-pink-700 dark:text-pink-300 flex items-center gap-2">
+                                <span>🌶️</span>
+                                <span>Content Explicitness: {explicitnessLevelSetting <= 3 ? 'Mild' : explicitnessLevelSetting <= 6 ? 'Moderate' : explicitnessLevelSetting <= 8 ? 'Spicy' : 'Explicit'}</span>
+                            </p>
+                            <p className="text-xs text-pink-600 dark:text-pink-400 mt-0.5">
+                                Adjust how bold/explicit the AI suggestions are
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <input
+                                type="range"
+                                min="1"
+                                max="10"
+                                value={explicitnessLevelSetting}
+                                onChange={async (e) => {
+                                    const newVal = Number(e.target.value);
+                                    setExplicitnessLevelSetting(newVal);
+                                    // Save to user profile
+                                    if (user?.id) {
+                                        try {
+                                            const userRef = doc(db, 'users', user.id);
+                                            await setDoc(userRef, { explicitnessLevel: newVal }, { merge: true });
+                                        } catch { /* ignore */ }
+                                    }
+                                }}
+                                className="w-24 h-2 bg-pink-200 rounded-lg appearance-none cursor-pointer dark:bg-pink-800"
+                            />
+                            <span className="text-sm font-bold text-pink-700 dark:text-pink-300 w-6 text-center">{explicitnessLevelSetting}</span>
+                        </div>
+                    </div>
+
                     {/* Saved Post Ideas History */}
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
                         <div className="flex items-center justify-between mb-3">
@@ -6430,6 +6464,39 @@ Output format:
                 <div className="space-y-6">
                     {!singleTabMode && <PlatformTargetingCard />}
 
+                    {/* Explicitness Quick Toggle for Monetization */}
+                    <div className="flex items-center justify-between p-4 bg-pink-50 dark:bg-pink-900/20 rounded-lg border border-pink-200 dark:border-pink-800">
+                        <div className="flex-1">
+                            <p className="text-sm font-medium text-pink-700 dark:text-pink-300 flex items-center gap-2">
+                                <span>🌶️</span>
+                                <span>Drop Style: {explicitnessLevelSetting <= 3 ? 'Mild' : explicitnessLevelSetting <= 6 ? 'Teasing' : explicitnessLevelSetting <= 8 ? 'Spicy' : 'Explicit'}</span>
+                            </p>
+                            <p className="text-xs text-pink-600 dark:text-pink-400 mt-0.5">
+                                Adjust how bold/explicit drop ideas are
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <input
+                                type="range"
+                                min="1"
+                                max="10"
+                                value={explicitnessLevelSetting}
+                                onChange={async (e) => {
+                                    const newVal = Number(e.target.value);
+                                    setExplicitnessLevelSetting(newVal);
+                                    if (user?.id) {
+                                        try {
+                                            const userRef = doc(db, 'users', user.id);
+                                            await setDoc(userRef, { explicitnessLevel: newVal }, { merge: true });
+                                        } catch { /* ignore */ }
+                                    }
+                                }}
+                                className="w-24 h-2 bg-pink-200 rounded-lg appearance-none cursor-pointer dark:bg-pink-800"
+                            />
+                            <span className="text-sm font-bold text-pink-700 dark:text-pink-300 w-6 text-center">{explicitnessLevelSetting}</span>
+                        </div>
+                    </div>
+
                     {/* Saved Monetization Plans History */}
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
                         <div className="flex items-center justify-between mb-3">
@@ -6754,6 +6821,40 @@ Output format:
             {activeTab === 'messaging' && (
                 <div className="space-y-6">
                     {!singleTabMode && <PlatformTargetingCard />}
+                    
+                    {/* Explicitness Quick Toggle for Messaging */}
+                    <div className="flex items-center justify-between p-4 bg-pink-50 dark:bg-pink-900/20 rounded-lg border border-pink-200 dark:border-pink-800">
+                        <div className="flex-1">
+                            <p className="text-sm font-medium text-pink-700 dark:text-pink-300 flex items-center gap-2">
+                                <span>🌶️</span>
+                                <span>Message Tone: {explicitnessLevelSetting <= 3 ? 'Mild' : explicitnessLevelSetting <= 6 ? 'Flirty' : explicitnessLevelSetting <= 8 ? 'Spicy' : 'Explicit'}</span>
+                            </p>
+                            <p className="text-xs text-pink-600 dark:text-pink-400 mt-0.5">
+                                Adjust how bold/explicit message suggestions are
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <input
+                                type="range"
+                                min="1"
+                                max="10"
+                                value={explicitnessLevelSetting}
+                                onChange={async (e) => {
+                                    const newVal = Number(e.target.value);
+                                    setExplicitnessLevelSetting(newVal);
+                                    if (user?.id) {
+                                        try {
+                                            const userRef = doc(db, 'users', user.id);
+                                            await setDoc(userRef, { explicitnessLevel: newVal }, { merge: true });
+                                        } catch { /* ignore */ }
+                                    }
+                                }}
+                                className="w-24 h-2 bg-pink-200 rounded-lg appearance-none cursor-pointer dark:bg-pink-800"
+                            />
+                            <span className="text-sm font-bold text-pink-700 dark:text-pink-300 w-6 text-center">{explicitnessLevelSetting}</span>
+                        </div>
+                    </div>
+
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
