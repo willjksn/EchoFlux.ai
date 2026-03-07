@@ -41,6 +41,8 @@ export interface GenerateDailyPostIdeasBody {
   generateAllFormats?: boolean;
   /** When true and platform is fan_hub/mypage, analyze engagement data to generate ideas. */
   analyzeMyPageEngagement?: boolean;
+  /** Optional hint from creator to guide idea generation (e.g. "beach photos", "workout motivation"). */
+  creatorHint?: string;
 }
 
 const CONTENT_POLICY = `
@@ -83,6 +85,7 @@ function buildPrompt(opts: {
   };
   creatorGender?: string;
   targetAudienceGender?: string;
+  creatorHint?: string;
 }): string {
   const {
     platform,
@@ -210,6 +213,11 @@ ${CONTENT_POLICY}
 
 ${creatorContext ? `CREATOR CONTEXT (use to tailor ideas):\n${creatorContext}\n` : "No creator profile provided; use broad, relatable angles."}
 ${creatorProfileGuidance}
+${opts.creatorHint ? `
+CREATOR'S IDEA DIRECTION (IMPORTANT - incorporate this):
+The creator wants ideas related to: "${opts.creatorHint}"
+Generate ideas that incorporate this theme/direction while still being unique and fresh.
+` : ""}
 ${useTrends && trendContext ? `TRENDS / CONTEXT (use where relevant):\n${trendContext}\n` : ""}
 ${fanHubGuidance}
 
@@ -283,6 +291,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     seed,
     generateAllFormats = false,
     analyzeMyPageEngagement = false,
+    creatorHint = "",
   } = (req.body || {}) as GenerateDailyPostIdeasBody;
 
   // Map balanced_followers_engagement to goal with engagement bias
@@ -391,6 +400,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       fanHubAnalytics,
       creatorGender,
       targetAudienceGender,
+      creatorHint,
     });
 
     const result = await model.generateContent({

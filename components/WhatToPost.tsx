@@ -221,6 +221,7 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<PlatformOption>('instagram');
   const [hasGenerated, setHasGenerated] = useState(false);
+  const [creatorHint, setCreatorHint] = useState('');
 
   // Check if user has access to advanced planner (Elite, Agency, or Admin)
   const hasAdvancedAccess = user?.plan === 'Elite' || user?.plan === 'Agency' || user?.role === 'Admin';
@@ -247,6 +248,7 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
       existingIdeas?: DailyPostIdea[];
       overrides?: Partial<WhatToPostSettings>;
       platform?: PlatformOption;
+      hint?: string;
     } = {}) => {
       if (!user?.id) return;
       const platformToUse = opts.platform || selectedPlatform;
@@ -277,6 +279,8 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
             generateAllFormats: platformToUse === 'instagram' && s.format === 'auto',
             // For My Page, include analytics context
             analyzeMyPageEngagement: platformToUse === 'mypage',
+            // Optional creator hint for guiding idea generation
+            creatorHint: opts.hint || '',
           }),
         });
         const data = await res.json();
@@ -320,7 +324,7 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
   const handleGenerateIdeas = () => {
     setLoading(true);
     setRegeneratingAll(true);
-    fetchIdeas({ platform: selectedPlatform });
+    fetchIdeas({ platform: selectedPlatform, hint: creatorHint });
   };
 
   const handleApplyQuickSettings = () => {
@@ -682,7 +686,7 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
             {selectedPlatform === 'x' && 'Get trending X post ideas optimized for reach and engagement.'}
             {selectedPlatform === 'mypage' && 'Get ideas based on trends + what your fans love—analyzed from your engagement data.'}
           </p>
-          <div className="flex justify-center gap-3 mb-4">
+          <div className="flex justify-center gap-3 mb-6">
             {PLATFORM_OPTIONS.map((p) => (
               <button
                 key={p.id}
@@ -699,6 +703,21 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
               </button>
             ))}
           </div>
+          
+          {/* Optional hint input */}
+          <div className="max-w-md mx-auto mb-6">
+            <input
+              type="text"
+              value={creatorHint}
+              onChange={(e) => setCreatorHint(e.target.value)}
+              placeholder="Have an idea in mind? (optional)"
+              className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            />
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5">
+              E.g., "beach photos", "workout motivation", "cooking video" — or leave blank for AI to surprise you
+            </p>
+          </div>
+          
           <button
             type="button"
             onClick={handleGenerateIdeas}
