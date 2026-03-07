@@ -210,7 +210,14 @@ interface WhatToPostProps {
 
 export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
   const { user, showToast, setActivePage, addCalendarEvent } = useAppContext();
-  const [ideas, setIdeas] = useState<DailyPostIdea[]>([]);
+  
+  // Load persisted ideas from localStorage on mount
+  const [ideas, setIdeas] = useState<DailyPostIdea[]>(() => {
+    try {
+      const saved = localStorage.getItem('whatToPostIdeas');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
   const [loading, setLoading] = useState(false);
   const [regeneratingAll, setRegeneratingAll] = useState(false);
   const [swapIndex, setSwapIndex] = useState<number | null>(null);
@@ -219,8 +226,18 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
   const [draftSettings, setDraftSettings] = useState<WhatToPostSettings>(DEFAULT_SETTINGS);
   const [useThisIdea, setUseThisIdea] = useState<DailyPostIdea | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [selectedPlatform, setSelectedPlatform] = useState<PlatformOption>('instagram');
-  const [hasGenerated, setHasGenerated] = useState(false);
+  const [selectedPlatform, setSelectedPlatform] = useState<PlatformOption>(() => {
+    try {
+      const saved = localStorage.getItem('whatToPostPlatform');
+      return (saved as PlatformOption) || 'instagram';
+    } catch { return 'instagram'; }
+  });
+  const [hasGenerated, setHasGenerated] = useState(() => {
+    try {
+      const saved = localStorage.getItem('whatToPostIdeas');
+      return saved ? JSON.parse(saved).length > 0 : false;
+    } catch { return false; }
+  });
   const [creatorHint, setCreatorHint] = useState('');
 
   // Check if user has access to advanced planner (Elite, Agency, or Admin)
@@ -241,6 +258,16 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
       setDraftSettings(settings);
     }
   }, [drawerOpen, settings]);
+
+  // Persist ideas to localStorage whenever they change
+  useEffect(() => {
+    if (ideas.length > 0) {
+      try {
+        localStorage.setItem('whatToPostIdeas', JSON.stringify(ideas));
+        localStorage.setItem('whatToPostPlatform', selectedPlatform);
+      } catch { /* ignore storage errors */ }
+    }
+  }, [ideas, selectedPlatform]);
 
   const fetchIdeas = useCallback(
     async (opts: {
@@ -758,10 +785,13 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
                 onClick={() => {
                   setIdeas([]);
                   setHasGenerated(false);
+                  try {
+                    localStorage.removeItem('whatToPostIdeas');
+                  } catch { /* ignore */ }
                 }}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700"
               >
-                ← Back
+                ✕ Clear
               </button>
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-500 dark:text-gray-400 hidden sm:inline">Showing ideas for:</span>

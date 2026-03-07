@@ -45,13 +45,21 @@ export interface GenerateDailyPostIdeasBody {
   creatorHint?: string;
 }
 
-const CONTENT_POLICY = `
-CONTENT POLICY (social media optimized):
-- Generate ideas suitable for Instagram, Facebook, X (Twitter), and creator fan pages.
-- Content can be edgy, bold, spicy, or use mild profanity - but NOT explicit adult content.
-- Avoid OnlyFans-specific language (PPV, tips for explicit content, sexting services).
-- Focus on engagement, personality, lifestyle, behind-the-scenes, and creator brand building.
-- Ideas should drive followers, comments, and genuine connection - not explicit adult transactions.
+const CONTENT_POLICY_SAFE = `
+CONTENT POLICY (SAFE MODE - Default):
+- Generate ideas suitable for mainstream social media (Instagram, Facebook, X).
+- Keep content TASTEFUL and APPROPRIATE - no suggestive, racy, or provocative ideas.
+- Focus on: lifestyle, personality, relatable moments, behind-the-scenes, hobbies, humor, Q&A, day-in-life.
+- NO bikini, lingerie, suggestive poses, body-focused, or flirtatious content unless explicitly requested.
+- Ideas should be something you'd comfortably show family members.
+`;
+
+const CONTENT_POLICY_SPICY = `
+CONTENT POLICY (BOLD/SPICY MODE - User requested):
+- Creator has enabled BOLD content mode - more daring ideas are allowed.
+- Can include: bikini/swimwear content, lingerie teases, body-confident poses, flirty captions, suggestive themes.
+- Still avoid: explicit nudity, adult services language, OnlyFans-specific terms (PPV, sexting).
+- Focus on confident, alluring content that pushes boundaries tastefully.
 `;
 
 function buildPrompt(opts: {
@@ -120,7 +128,11 @@ function buildPrompt(opts: {
 
   // Platform-specific format guidance
   const platformFormatGuidance = platform === "fan_hub"
-    ? "For My Page/Fan Hub: Generate ideas using formats: 'photo', 'video', 'text', or 'poll'. These are NOT Instagram formats - avoid 'reel', 'carousel', 'story'. Focus on feed posts that engage your fan community."
+    ? `CRITICAL FOR MY PAGE/FAN HUB:
+- ONLY use these formats: 'photo', 'video', 'text', 'poll'
+- NEVER use: 'reel', 'carousel', 'story' - these DO NOT exist on My Page
+- My Page is a simple feed, not Instagram. No swipe content, no stories.
+- Focus on single photo posts, video posts, text updates, or polls.`
     : platform === "twitter"
     ? "For X/Twitter: Generate ideas using formats: 'tweet', 'thread', 'poll', or 'video'. Focus on concise, punchy content."
     : platform === "facebook"
@@ -150,30 +162,20 @@ ${toneSettings.emojiLevel !== undefined ? `- Emoji usage (${toneSettings.emojiLe
 
   const ideaCount = swapOnly ? "ONE" : opts.generateAllFormats ? "exactly 4 (one per format: Reel, Carousel, Photo, Story)" : "exactly 3";
   
-  // Creator profile guidance for gender-appropriate content
+  // Creator profile guidance - conservative by default, only racy when spicyMode enabled
   const creatorProfileGuidance = (opts.creatorGender || opts.targetAudienceGender) ? `
-CREATOR PROFILE (CRITICAL - follow strictly):
+CREATOR PROFILE:
 ${opts.creatorGender ? `- The creator is: ${opts.creatorGender}` : ''}
 ${opts.targetAudienceGender ? `- Target audience: ${opts.targetAudienceGender === 'Male' ? 'Men' : opts.targetAudienceGender === 'Female' ? 'Women' : opts.targetAudienceGender === 'Both' ? 'Both men and women' : 'All audiences'}` : ''}
 
-IMPORTANT RULES:
-${opts.creatorGender === 'Female' && opts.targetAudienceGender === 'Male' ? `- Generate content ideas featuring the FEMALE creator appealing to MALE audience
-- Ideas should show HER (the creator): bikini photos, lingerie looks, selfies, body shots, behind-the-scenes of her content
-- Do NOT suggest photos of men or content featuring men
-- Focus on feminine aesthetics, curves, confidence, seduction, flirtation aimed at male viewers` : ''}
-${opts.creatorGender === 'Male' && opts.targetAudienceGender === 'Female' ? `- Generate content ideas featuring the MALE creator appealing to FEMALE audience
-- Ideas should show HIM (the creator): shirtless photos, gym content, suits, confidence poses
-- Do NOT suggest photos of women or content featuring women
-- Focus on masculine aesthetics, physique, charm, romance aimed at female viewers` : ''}
-${opts.creatorGender === 'Female' && opts.targetAudienceGender === 'Female' ? `- Generate content ideas featuring the FEMALE creator appealing to FEMALE audience
-- Ideas should show HER: confidence, beauty, lifestyle, behind-the-scenes, relatability
-- Focus on aesthetics that appeal to women viewers` : ''}
-${opts.creatorGender === 'Male' && opts.targetAudienceGender === 'Male' ? `- Generate content ideas featuring the MALE creator appealing to MALE audience
-- Ideas should show HIM: physique, fitness, lifestyle, confidence
-- Focus on aesthetics that appeal to male viewers` : ''}
-${opts.creatorGender === 'Couple' ? `- Generate content ideas featuring BOTH partners
-- Ideas should show the couple together: couple content, duo shots, relationship moments
-- Appeal to the specified target audience` : ''}
+${spicyMode ? `BOLD MODE ENABLED - more daring content allowed:
+${opts.creatorGender === 'Female' ? `- Can include: bikini/swimwear, lingerie teases, body-confident poses, flirty selfies
+- Focus on confidence, allure, feminine appeal` : ''}
+${opts.creatorGender === 'Male' ? `- Can include: shirtless photos, gym content, confident poses, romantic vibes
+- Focus on physique, charm, masculine appeal` : ''}` : `SAFE MODE (default) - keep it tasteful:
+- Focus on: personality, lifestyle, humor, relatable moments, hobbies, Q&A, day-in-life
+- NO suggestive content, bikini/lingerie, or body-focused ideas
+- Ideas should appeal to the target audience through personality, not provocative content`}
 ` : '';
   
   // Fan Hub / My Page specific guidance
@@ -207,11 +209,13 @@ EFFORT (minutes): ${effort}. ${effortGuidance}
 PREFERRED FORMAT: ${format}. ${formatGuidance}
 ${platformFormatGuidance}
 TONE: ${tone}. Keep hooks and copy in this voice.
-${spicyMode ? "Creator allows slightly bolder/sexier framing (still non-explicit per policy)." : "Keep content family-friendly and broadly safe."}
 ${toneStyleGuidance}
-${CONTENT_POLICY}
+${spicyMode ? CONTENT_POLICY_SPICY : CONTENT_POLICY_SAFE}
 
-${creatorContext ? `CREATOR CONTEXT (use to tailor ideas):\n${creatorContext}\n` : "No creator profile provided; use broad, relatable angles."}
+${creatorContext ? `CREATOR PERSONALITY & NICHE (IMPORTANT - reflect this in ALL ideas):
+${creatorContext}
+Generate ideas that match this personality - the tone, style, and content should feel authentic to who this creator is.
+` : "No creator profile provided; use broad, relatable angles."}
 ${creatorProfileGuidance}
 ${opts.creatorHint ? `
 CREATOR'S IDEA DIRECTION (IMPORTANT - incorporate this):
