@@ -74,10 +74,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const replicate = new Replicate({ auth: replicateApiToken });
       
-      // Use NSFW-capable models from Replicate
-      // Option 1: Whiskii Gen (NSFW-Uncensored Stable Diffusion XL) - "alicewuv/whiskii-gen"
-      // Option 2: FluxedUp NSFW v3 (Flux model) - "aisha-ai-official/flux.1dev-uncensored-fluxedup-nsfw-v3"
-      const model = "alicewuv/whiskii-gen"; // NSFW-Uncensored Stable Diffusion XL
+      // Use NSFW-capable models from Replicate (~$0.012/image)
+      const model = "aisha-ai-official/flux.1dev-uncensored-fluxedup-nsfw-v3";
       
       // Enhance prompt for NSFW content
       let enhancedPrompt = sanitizedPrompt;
