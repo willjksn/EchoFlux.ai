@@ -1,4 +1,4 @@
-// api/generateDailyPostIdeas.ts - v8
+// api/generateDailyPostIdeas.ts - v9
 // Instant "What to Post" ideas: 3 post ideas with optional regenerateAll or regenerateSingle (swap one card).
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getModelForTask, getModelNameForTask, getCostTierForTask } from "./_modelRouter.js";
@@ -484,7 +484,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     if (useAIImages) {
       try {
         const Replicate = (await import("replicate")).default;
-        replicate = new Replicate({ auth: replicateApiToken });
+        // Use useFileOutput: false to get URLs directly instead of FileOutput/ReadableStream objects
+        replicate = new Replicate({ auth: replicateApiToken, useFileOutput: false });
       } catch (e) {
         console.error('[generateDailyPostIdeas] Failed to initialize Replicate:', e);
       }
@@ -505,8 +506,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
           const imagePrompt = buildImagePrompt(idea, creatorHint);
           
           // Using FLUX Schnell - fastest model, ~1-2 seconds, $0.003/image
-          console.log(`[generateDailyPostIdeas] v8 - Generating image ${index + 1}/${ideas.length} with FLUX Schnell`);
-          console.log(`[generateDailyPostIdeas] v8 - Prompt: ${imagePrompt}`);
+          console.log(`[generateDailyPostIdeas] v9 - Generating image ${index + 1}/${ideas.length} with FLUX Schnell`);
+          console.log(`[generateDailyPostIdeas] v9 - Prompt: ${imagePrompt}`);
           
           // Add delay between requests to avoid rate limiting (except for first)
           if (index > 0) {
@@ -527,7 +528,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             }
           });
           
-          console.log(`[generateDailyPostIdeas] v8 - Prediction created: ${prediction.id}, status: ${prediction.status}`);
+          console.log(`[generateDailyPostIdeas] v9 - Prediction created: ${prediction.id}, status: ${prediction.status}`);
           
           // Wait for prediction to complete (poll every 1 second, max 30 seconds)
           let completedPrediction = prediction;
@@ -538,7 +539,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             attempts++;
           }
           
-          console.log(`[generateDailyPostIdeas] v8 - Final status: ${completedPrediction.status}, output:`, JSON.stringify(completedPrediction.output)?.slice(0, 200));
+          console.log(`[generateDailyPostIdeas] v9 - Final status: ${completedPrediction.status}, output:`, JSON.stringify(completedPrediction.output)?.slice(0, 300));
           
           let imageUrl: string | null = null;
           const output = completedPrediction.output;
@@ -555,11 +556,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
           
           // Log error if prediction failed
           if (completedPrediction.status === 'failed') {
-            console.log(`[generateDailyPostIdeas] v8 - Prediction failed:`, completedPrediction.error);
+            console.log(`[generateDailyPostIdeas] v9 - Prediction failed:`, completedPrediction.error);
           }
           
           if (imageUrl) {
-            console.log(`[generateDailyPostIdeas] v8 - Success! Image URL: ${imageUrl.slice(0, 80)}...`);
+            console.log(`[generateDailyPostIdeas] v9 - Success! Image URL: ${imageUrl.slice(0, 80)}...`);
             // Track successful Replicate usage (don't await, fire and forget)
             trackReplicateUsage(authUser.uid, 1, true).catch(() => {});
             processedIdeas.push({
@@ -569,15 +570,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             });
             continue;
           } else {
-            console.log('[generateDailyPostIdeas] v8 - No valid URL extracted');
+            console.log('[generateDailyPostIdeas] v9 - No valid URL extracted');
           }
         } catch (e: any) {
-          console.error(`[generateDailyPostIdeas] v8 - Replicate failed for idea ${index + 1}:`, e?.message || e);
+          console.error(`[generateDailyPostIdeas] v9 - Replicate failed for idea ${index + 1}:`, e?.message || e);
           // Track failed usage (don't await)
           trackReplicateUsage(authUser.uid, 1, false, String(e?.message || e)).catch(() => {});
         }
       } else if (useAIImages) {
-        console.log(`[generateDailyPostIdeas] v8 - Replicate not initialized, using placeholder`);
+        console.log(`[generateDailyPostIdeas] v9 - Replicate not initialized, using placeholder`);
       }
       
       // Fallback to placeholder image if AI fails or is disabled
