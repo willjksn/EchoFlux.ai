@@ -1,4 +1,4 @@
-// api/generateDailyPostIdeas.ts - v11
+// api/generateDailyPostIdeas.ts - v12
 // Instant "What to Post" ideas: 3 post ideas with optional regenerateAll or regenerateSingle (swap one card).
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getModelForTask, getModelNameForTask, getCostTierForTask } from "./_modelRouter.js";
@@ -506,28 +506,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         try {
           const imagePrompt = buildImagePrompt(idea, creatorHint);
           
-          // Using SDXL for better quality (less distortion than FLUX Schnell)
-          console.log(`[generateDailyPostIdeas] v11 - Generating ONE image with SDXL for better quality`);
-          console.log(`[generateDailyPostIdeas] v11 - Prompt: ${imagePrompt}`);
+          // Using FLUX Dev for better quality (less distortion, better anatomy)
+          console.log(`[generateDailyPostIdeas] v12 - Generating ONE image with FLUX Dev for quality`);
+          console.log(`[generateDailyPostIdeas] v12 - Prompt: ${imagePrompt}`);
           
-          // Use predictions API for more control
+          // Use predictions API for more control - FLUX Dev has better anatomy/quality
           const prediction = await replicate.predictions.create({
-            model: "stability-ai/sdxl",
+            model: "black-forest-labs/flux-dev",
             input: {
-              prompt: imagePrompt,
-              negative_prompt: "deformed, distorted, disfigured, poorly drawn, bad anatomy, wrong anatomy, extra limb, missing limb, floating limbs, mutated hands and fingers, disconnected limbs, mutation, mutated, ugly, disgusting, blurry, amputation, text, watermark, logo",
-              width: 1024,
-              height: 1024,
+              prompt: imagePrompt + " Professional photography, sharp focus, natural skin texture, correct anatomy, realistic proportions.",
+              go_fast: true,
+              guidance: 3.5,
               num_outputs: 1,
-              scheduler: "K_EULER",
-              num_inference_steps: 30,
-              guidance_scale: 7.5,
-              refine: "expert_ensemble_refiner",
-              high_noise_frac: 0.8,
+              aspect_ratio: "1:1",
+              output_format: "webp",
+              output_quality: 90,
+              num_inference_steps: 28,
             }
           });
           
-          console.log(`[generateDailyPostIdeas] v11 - Prediction created: ${prediction.id}, status: ${prediction.status}`);
+          console.log(`[generateDailyPostIdeas] v12 - Prediction created: ${prediction.id}, status: ${prediction.status}`);
           
           // Wait for prediction to complete (poll every 2 seconds, max 60 seconds for SDXL)
           let completedPrediction = prediction;
@@ -538,7 +536,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             attempts++;
           }
           
-          console.log(`[generateDailyPostIdeas] v11 - Final status: ${completedPrediction.status}, output:`, JSON.stringify(completedPrediction.output)?.slice(0, 300));
+          console.log(`[generateDailyPostIdeas] v12 - Final status: ${completedPrediction.status}, output:`, JSON.stringify(completedPrediction.output)?.slice(0, 300));
           
           let imageUrl: string | null = null;
           const output = completedPrediction.output;
@@ -555,11 +553,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
           
           // Log error if prediction failed
           if (completedPrediction.status === 'failed') {
-            console.log(`[generateDailyPostIdeas] v11 - Prediction failed:`, completedPrediction.error);
+            console.log(`[generateDailyPostIdeas] v12 - Prediction failed:`, completedPrediction.error);
           }
           
           if (imageUrl) {
-            console.log(`[generateDailyPostIdeas] v11 - Success! Image URL: ${imageUrl.slice(0, 80)}...`);
+            console.log(`[generateDailyPostIdeas] v12 - Success! Image URL: ${imageUrl.slice(0, 80)}...`);
             // Track successful Replicate usage (don't await, fire and forget)
             trackReplicateUsage(authUser.uid, 1, true).catch(() => {});
             processedIdeas.push({
@@ -569,10 +567,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             });
             continue;
           } else {
-            console.log('[generateDailyPostIdeas] v11 - No valid URL extracted');
+            console.log('[generateDailyPostIdeas] v12 - No valid URL extracted');
           }
         } catch (e: any) {
-          console.error(`[generateDailyPostIdeas] v11 - Replicate failed:`, e?.message || e);
+          console.error(`[generateDailyPostIdeas] v12 - Replicate failed:`, e?.message || e);
           // Track failed usage (don't await)
           trackReplicateUsage(authUser.uid, 1, false, String(e?.message || e)).catch(() => {});
         }
