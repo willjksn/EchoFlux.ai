@@ -1104,10 +1104,23 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
     const [mediaCaptionPrompt, setMediaCaptionPrompt] = useState('');
     const [generatedMediaCaptions, setGeneratedMediaCaptions] = useState<{caption: string; hashtags: string[]}[]>([]);
     
-    // Post ideas state
+    // Post ideas state - persist in localStorage
     const [postIdeaPrompt, setPostIdeaPrompt] = useState('');
-    const [generatedPostIdeas, setGeneratedPostIdeas] = useState<string[]>([]);
+    const [generatedPostIdeas, setGeneratedPostIdeas] = useState<string[]>(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('premiumStudio_postIdeas');
+            return saved ? JSON.parse(saved) : [];
+        }
+        return [];
+    });
     const [useCreatorPersonalityPostIdeas, setUseCreatorPersonalityPostIdeas] = useState(false);
+    
+    // Persist post ideas to localStorage when they change
+    useEffect(() => {
+        if (generatedPostIdeas.length > 0) {
+            localStorage.setItem('premiumStudio_postIdeas', JSON.stringify(generatedPostIdeas));
+        }
+    }, [generatedPostIdeas]);
     
     // Shoot concepts state
     const [shootConceptPrompt, setShootConceptPrompt] = useState('');
@@ -1838,6 +1851,21 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
                 useCreatorPersonalityPostIdeas && creatorPersonality ? `CREATOR PERSONALITY:\n${creatorPersonality}` : null,
             ].filter(Boolean).join('\n');
             
+            // Platform-specific format guidance
+            const isMyPage = selectedPlatform === 'My Page';
+            const formatGuidance = isMyPage 
+                ? `CRITICAL FORMAT RESTRICTION FOR MY PAGE:
+- ONLY use these formats: photo, video, text, poll
+- NEVER suggest: reels, carousels, stories, swipeable content - these DO NOT exist on My Page
+- My Page is a simple feed similar to OnlyFans, NOT Instagram
+- Focus on: single photo posts, video posts, text updates with emojis, or poll questions
+- Each idea should specify if it's a photo, video, text post, or poll`
+                : selectedPlatform === 'X' 
+                ? `For X/Twitter: Use formats like tweets, threads, polls, or short videos. Keep it concise and punchy.`
+                : selectedPlatform === 'Facebook'
+                ? `For Facebook: Use formats like photos, videos, posts, or live streams. Focus on shareable content.`
+                : `For Instagram: You can suggest reels, carousels, photos, or stories. Specify the format for each idea.`;
+
             const response = await fetch('/api/generateText', {
                 method: 'POST',
                 headers: {
@@ -1846,9 +1874,12 @@ export const OnlyFansContentBrain: React.FC<OnlyFansContentBrainProps> = ({ init
                 },
                 body: JSON.stringify({
                     prompt: `Generate 10 creative post ideas tailored for ${selectedPlatform} based on: ${postIdeaPrompt}. 
-                    Each idea should be specific, engaging, and tailored for adult content creators. 
-                    When natural, include a ${selectedPlatform} mention (e.g., "join me on ${selectedPlatform}") but only if it fits. 
-                    Format as a numbered list with brief descriptions.${settingsContext ? `\n\n${settingsContext}` : ''}`,
+                    
+${formatGuidance}
+
+Each idea should be specific, engaging, and tailored for adult content creators. 
+When natural, include a ${selectedPlatform} mention (e.g., "join me on ${selectedPlatform}") but only if it fits. 
+Format as a numbered list with brief descriptions. For each idea, clearly specify the format (${isMyPage ? 'photo/video/text/poll' : 'reel/carousel/photo/story/video'}).${settingsContext ? `\n\n${settingsContext}` : ''}`,
                     context: {
                         goal: 'content-ideas',
                         tone: 'Explicit/Adult Content',
@@ -5599,15 +5630,29 @@ Output format:
                             </div>
                             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                                 {generatedPostIdeas.map((idea, index) => {
-                                    const formats = ['Reel', 'Carousel', 'Photo', 'Story'];
+                                    // Platform-specific formats
+                                    const platformFormats: Record<string, string[]> = {
+                                        'Instagram': ['Reel', 'Carousel', 'Photo', 'Story'],
+                                        'Facebook': ['Photo', 'Video', 'Post', 'Live'],
+                                        'X': ['Tweet', 'Thread', 'Poll', 'Video'],
+                                        'My Page': ['Photo', 'Video', 'Text', 'Poll'],
+                                    };
+                                    const formats = platformFormats[selectedPlatform] || platformFormats['Instagram'];
                                     const format = formats[index % formats.length];
                                     const formatStyles: Record<string, { gradient: string; icon: string; aspect: string }> = {
                                         'Reel': { gradient: 'from-purple-500 via-pink-500 to-orange-400', icon: '▶️', aspect: 'h-32' },
                                         'Carousel': { gradient: 'from-blue-500 to-purple-500', icon: '◀ ▶', aspect: 'h-28' },
-                                        'Photo': { gradient: 'from-cyan-500 to-blue-500', icon: '📷', aspect: 'h-28' },
+                                        'Photo': { gradient: 'from-pink-500 via-purple-500 to-indigo-500', icon: '📷', aspect: 'h-28' },
                                         'Story': { gradient: 'from-orange-400 via-pink-500 to-purple-500', icon: '○', aspect: 'h-32' },
+                                        'Video': { gradient: 'from-purple-600 via-pink-500 to-red-500', icon: '🎬', aspect: 'h-32' },
+                                        'Text': { gradient: 'from-indigo-500 via-purple-500 to-pink-500', icon: '✍️', aspect: 'h-24' },
+                                        'Poll': { gradient: 'from-teal-500 via-cyan-500 to-blue-500', icon: '📊', aspect: 'h-24' },
+                                        'Tweet': { gradient: 'from-gray-800 via-gray-700 to-gray-600', icon: '💬', aspect: 'h-24' },
+                                        'Thread': { gradient: 'from-blue-600 via-blue-500 to-cyan-500', icon: '🧵', aspect: 'h-28' },
+                                        'Post': { gradient: 'from-blue-600 to-blue-400', icon: '📝', aspect: 'h-28' },
+                                        'Live': { gradient: 'from-red-500 via-pink-500 to-orange-500', icon: '🔴', aspect: 'h-32' },
                                     };
-                                    const style = formatStyles[format];
+                                    const style = formatStyles[format] || formatStyles['Photo'];
                                     const isTrending = index < 2;
                                     
                                     return (

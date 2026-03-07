@@ -112,10 +112,21 @@ const PostIdeaCard: React.FC<{
           {idea.title}
         </h3>
         
-        {/* Hook quote */}
-        <p className="text-sm text-gray-600 dark:text-gray-300 italic mb-3 line-clamp-2">
-          "{idea.hook}"
-        </p>
+        {/* Hook quote - expandable */}
+        <div className="mb-3">
+          <p className={`text-sm text-gray-600 dark:text-gray-300 italic ${!expanded ? 'line-clamp-2' : ''}`}>
+            "{idea.hook}"
+          </p>
+          {idea.hook && idea.hook.length > 100 && (
+            <button
+              type="button"
+              onClick={() => setExpanded(!expanded)}
+              className="text-xs text-primary-600 dark:text-primary-400 hover:underline font-medium mt-1"
+            >
+              {expanded ? 'Show less' : 'Read more'}
+            </button>
+          )}
+        </div>
         
         {/* What to show section */}
         {shotList.length > 0 && (
@@ -131,13 +142,13 @@ const PostIdeaCard: React.FC<{
                 </li>
               ))}
             </ul>
-            {hasMoreShots && (
+            {hasMoreShots && !expanded && (
               <button
                 type="button"
-                onClick={() => setExpanded(!expanded)}
+                onClick={() => setExpanded(true)}
                 className="mt-1 text-xs text-primary-600 dark:text-primary-400 hover:underline font-medium"
               >
-                {expanded ? '− Show less' : `+ ${shotList.length - 2} more`}
+                + {shotList.length - 2} more shots
               </button>
             )}
           </div>

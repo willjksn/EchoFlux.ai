@@ -468,24 +468,25 @@ export const FanHubPosts: React.FC = () => {
       // Use custom tone text if "custom" is selected, otherwise use the preset
       const effectiveTone = aiTone === "custom" && customTone.trim() ? customTone.trim() : (aiTone || "flirty");
       
-      const res = await fetch("/api/generateCaption", {
+      const res = await fetch("/api/generateCaptions", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          prompt: mode === "suggest" ? caption : "Write an engaging caption for this fan page post",
-          platform: "fanpage",
+          promptText: mode === "suggest" ? caption : "Write an engaging caption for this fan page post",
+          platforms: ["my page"],
           tone: effectiveTone,
           usePersonality,
-          mode,
-          spiciness: contentSpiciness,
+          toneSettings: { spiciness: contentSpiciness * 10 },
         }),
       });
       
       if (!res.ok) throw new Error("Failed to generate caption");
       
       const data = await res.json();
-      if (data.caption) {
-        setCaption(mode === "suggest" ? caption + " " + data.caption : data.caption);
+      // API returns array of captions
+      const generatedCaption = Array.isArray(data) && data[0]?.caption ? data[0].caption : data.caption;
+      if (generatedCaption) {
+        setCaption(mode === "suggest" ? caption + " " + generatedCaption : generatedCaption);
       }
     } catch (error) {
       console.error("Caption generation error:", error);
