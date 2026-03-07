@@ -477,12 +477,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             negativePrompt += ", woman, female, feminine, breasts, curves";
           }
           
-          console.log('[generateDailyPostIdeas] Generating image with Whiskii Gen, prompt:', imagePrompt.slice(0, 100) + '...');
+          console.log('[generateDailyPostIdeas] Generating image with SDXL, prompt:', imagePrompt.slice(0, 100) + '...');
           
-          // Using Whiskii Gen (NSFW-Uncensored SDXL) - no content filters, follows prompts accurately
-          // This is needed because FLUX models refuse to generate bikini/lingerie content
+          // Using standard SDXL - reliable and follows prompts well
           const output = await replicate.run(
-            "alicewuv/whiskii-gen",
+            "stability-ai/sdxl:7762fd07cf82c948538e41f63f77d685e02b063e37e496e96eefd46c929f9bdc",
             {
               input: {
                 prompt: imagePrompt,
@@ -491,13 +490,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                 height: 1024,
                 num_outputs: 1,
                 scheduler: "K_EULER",
-                num_inference_steps: 30,
-                guidance_scale: 7,
+                num_inference_steps: 25,
+                guidance_scale: 7.5,
               }
             }
           );
           
-          console.log('[generateDailyPostIdeas] Whiskii Gen output:', typeof output, Array.isArray(output) ? output.length : 'not array');
+          console.log('[generateDailyPostIdeas] SDXL output:', typeof output, Array.isArray(output) ? output.length : 'not array');
           
           const imageUrl = Array.isArray(output) ? output[0] : output;
           if (typeof imageUrl === 'string') {
