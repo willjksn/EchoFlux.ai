@@ -1,4 +1,4 @@
-// api/generateDailyPostIdeas.ts - v10
+// api/generateDailyPostIdeas.ts - v11
 // Instant "What to Post" ideas: 3 post ideas with optional regenerateAll or regenerateSingle (swap one card).
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getModelForTask, getModelNameForTask, getCostTierForTask } from "./_modelRouter.js";
@@ -476,7 +476,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       creatorHint: creatorHint || '(none)',
     });
     
-    // Process ideas with images - sequential to avoid rate limits
+    // Process ideas - only generate ONE AI image for the first idea
     const processedIdeas: typeof ideas = [];
     
     // Initialize Replicate once if available
@@ -500,48 +500,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         hashtags: Array.isArray(idea.hashtags) ? idea.hashtags : [],
       };
       
-      // Use Replicate FLUX Schnell for fast image generation (~$0.003/image, ~1-2 sec)
-      if (replicate) {
+      // Only generate ONE AI image - for the first idea only (saves cost & time)
+      // Other ideas get placeholder images
+      if (replicate && index === 0) {
         try {
           const imagePrompt = buildImagePrompt(idea, creatorHint);
           
-          // Using FLUX Schnell - fastest model, ~1-2 seconds, $0.003/image
-          console.log(`[generateDailyPostIdeas] v10 - Generating image ${index + 1}/${ideas.length} with FLUX Schnell`);
-          console.log(`[generateDailyPostIdeas] v10 - Prompt: ${imagePrompt}`);
-          
-          // Add delay between requests to avoid rate limiting (except for first)
-          // Replicate rate limit resets every ~10s for accounts with <$5 credit
-          if (index > 0) {
-            console.log(`[generateDailyPostIdeas] v10 - Waiting 12s before next image to avoid rate limit...`);
-            await new Promise(resolve => setTimeout(resolve, 12000));
-          }
+          // Using SDXL for better quality (less distortion than FLUX Schnell)
+          console.log(`[generateDailyPostIdeas] v11 - Generating ONE image with SDXL for better quality`);
+          console.log(`[generateDailyPostIdeas] v11 - Prompt: ${imagePrompt}`);
           
           // Use predictions API for more control
           const prediction = await replicate.predictions.create({
-            model: "black-forest-labs/flux-schnell",
+            model: "stability-ai/sdxl",
             input: {
               prompt: imagePrompt,
-              go_fast: true,
+              negative_prompt: "deformed, distorted, disfigured, poorly drawn, bad anatomy, wrong anatomy, extra limb, missing limb, floating limbs, mutated hands and fingers, disconnected limbs, mutation, mutated, ugly, disgusting, blurry, amputation, text, watermark, logo",
+              width: 1024,
+              height: 1024,
               num_outputs: 1,
-              aspect_ratio: "1:1",
-              output_format: "webp",
-              output_quality: 80,
-              num_inference_steps: 4,
+              scheduler: "K_EULER",
+              num_inference_steps: 30,
+              guidance_scale: 7.5,
+              refine: "expert_ensemble_refiner",
+              high_noise_frac: 0.8,
             }
           });
           
-          console.log(`[generateDailyPostIdeas] v10 - Prediction created: ${prediction.id}, status: ${prediction.status}`);
+          console.log(`[generateDailyPostIdeas] v11 - Prediction created: ${prediction.id}, status: ${prediction.status}`);
           
-          // Wait for prediction to complete (poll every 1 second, max 30 seconds)
+          // Wait for prediction to complete (poll every 2 seconds, max 60 seconds for SDXL)
           let completedPrediction = prediction;
           let attempts = 0;
           while (completedPrediction.status !== 'succeeded' && completedPrediction.status !== 'failed' && attempts < 30) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 2000));
             completedPrediction = await replicate.predictions.get(prediction.id);
             attempts++;
           }
           
-          console.log(`[generateDailyPostIdeas] v10 - Final status: ${completedPrediction.status}, output:`, JSON.stringify(completedPrediction.output)?.slice(0, 300));
+          console.log(`[generateDailyPostIdeas] v11 - Final status: ${completedPrediction.status}, output:`, JSON.stringify(completedPrediction.output)?.slice(0, 300));
           
           let imageUrl: string | null = null;
           const output = completedPrediction.output;
@@ -558,11 +555,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
           
           // Log error if prediction failed
           if (completedPrediction.status === 'failed') {
-            console.log(`[generateDailyPostIdeas] v10 - Prediction failed:`, completedPrediction.error);
+            console.log(`[generateDailyPostIdeas] v11 - Prediction failed:`, completedPrediction.error);
           }
           
           if (imageUrl) {
-            console.log(`[generateDailyPostIdeas] v10 - Success! Image URL: ${imageUrl.slice(0, 80)}...`);
+            console.log(`[generateDailyPostIdeas] v11 - Success! Image URL: ${imageUrl.slice(0, 80)}...`);
             // Track successful Replicate usage (don't await, fire and forget)
             trackReplicateUsage(authUser.uid, 1, true).catch(() => {});
             processedIdeas.push({
@@ -572,15 +569,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             });
             continue;
           } else {
-            console.log('[generateDailyPostIdeas] v10 - No valid URL extracted');
+            console.log('[generateDailyPostIdeas] v11 - No valid URL extracted');
           }
         } catch (e: any) {
-          console.error(`[generateDailyPostIdeas] v10 - Replicate failed for idea ${index + 1}:`, e?.message || e);
+          console.error(`[generateDailyPostIdeas] v11 - Replicate failed:`, e?.message || e);
           // Track failed usage (don't await)
           trackReplicateUsage(authUser.uid, 1, false, String(e?.message || e)).catch(() => {});
         }
-      } else if (useAIImages) {
-        console.log(`[generateDailyPostIdeas] v10 - Replicate not initialized, using placeholder`);
       }
       
       // Fallback to placeholder image if AI fails or is disabled
