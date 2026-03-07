@@ -185,7 +185,18 @@ FAN HUB ANALYTICS CONTEXT:
 Generate ideas that mirror your top-performing content patterns. Focus on what drives engagement, tips, and subscriber retention.
 ` : "";
 
-  return `You are a content strategist for social creators. Generate ${ideaCount} post ideas for today.
+  // Add randomness seed to ensure unique ideas each time
+  const uniqueSeed = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  
+  return `You are a content strategist for social creators. Generate ${ideaCount} FRESH, UNIQUE post ideas for today.
+
+UNIQUENESS REQUIREMENT (CRITICAL):
+- Session ID: ${uniqueSeed}
+- EVERY idea must be completely NEW and DIFFERENT from anything you've generated before
+- DO NOT repeat common/generic ideas like "behind the scenes", "day in my life", "Q&A" unless given a unique creative spin
+- Be CREATIVE and SPECIFIC - avoid generic templates
+- Each title, hook, and caption must be ORIGINAL and FRESH
+- Think of angles, themes, and concepts that feel NEW and UNEXPECTED
 
 PLATFORM: ${platform}
 GOAL: ${goal}. ${goalGuidance}
@@ -202,7 +213,7 @@ ${creatorProfileGuidance}
 ${useTrends && trendContext ? `TRENDS / CONTEXT (use where relevant):\n${trendContext}\n` : ""}
 ${fanHubGuidance}
 
-${existingIdeasForContext?.length ? `EXISTING IDEAS (avoid duplicating; generate one different idea for swap):\n${existingIdeasForContext.map((i) => `${i.title}: ${i.hook}`).join("\n")}\n` : ""}
+${existingIdeasForContext?.length ? `EXISTING IDEAS (DO NOT DUPLICATE - generate completely different ideas):\n${existingIdeasForContext.map((i) => `${i.title}: ${i.hook}`).join("\n")}\n` : ""}
 
 OUTPUT STRICT JSON ONLY (no markdown, no code fence):
 {
