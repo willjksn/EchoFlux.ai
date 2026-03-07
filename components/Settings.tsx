@@ -232,6 +232,7 @@ export const Settings: React.FC = () => {
     // Creator Profile state
     const [creatorGender, setCreatorGender] = useState('');
     const [targetAudienceGender, setTargetAudienceGender] = useState('');
+    const [contentNiche, setContentNiche] = useState('');
     const [isSavingCreatorProfile, setIsSavingCreatorProfile] = useState(false);
 
     // Safe default for socialAccounts if undefined
@@ -276,6 +277,7 @@ export const Settings: React.FC = () => {
                     const data = userDoc.data();
                     setCreatorGender(data.creatorGender || '');
                     setTargetAudienceGender(data.targetAudienceGender || '');
+                    setContentNiche(data.niche || '');
                 }
             } catch (error) {
                 console.error('Error loading creator profile:', error);
@@ -295,8 +297,13 @@ export const Settings: React.FC = () => {
             await setDoc(doc(db, 'users', user.id), {
                 creatorGender,
                 targetAudienceGender,
+                niche: contentNiche,
                 updatedAt: new Date().toISOString(),
             }, { merge: true });
+            // Update local user state so other components see the change
+            if (setUser && user) {
+                setUser({ ...user, niche: contentNiche });
+            }
             showToast('Creator profile saved!', 'success');
         } catch (error: any) {
             console.error('Error saving creator profile:', error);
@@ -1098,6 +1105,25 @@ export const Settings: React.FC = () => {
                             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                                 Help the AI generate content that matches you and appeals to your audience.
                             </p>
+                            
+                            {/* Content Niche */}
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Content Focus / Niche
+                                </label>
+                                <input
+                                    type="text"
+                                    value={contentNiche}
+                                    onChange={(e) => setContentNiche(e.target.value)}
+                                    placeholder="e.g., Fitness, Lifestyle, Gaming, Fashion, Art"
+                                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                                />
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    Helps AI tailor content ideas and suggestions to your brand.
+                                </p>
+                            </div>
+                            
+                            {/* Creator Type & Target Audience */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

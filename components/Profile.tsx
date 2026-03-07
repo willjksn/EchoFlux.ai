@@ -601,39 +601,18 @@ export const Profile: React.FC = () => {
                  )}
 
                 {canEdit && user.userType === 'Creator' && (
-                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t dark:border-gray-700">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Content Focus / Niche</label>
-                            {isEditing && editableUser ? (
-                                <input
-                                    type="text"
-                                    name="niche"
-                                    value={editableUser.niche || ''}
-                                    onChange={handleInputChange}
-                                    className="w-full p-3 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
-                                    placeholder="e.g., Fitness, Lifestyle, Art, Music"
-                                />
-                            ) : (
-                                <p className="text-gray-900 dark:text-white font-semibold">{user.niche || 'Not set'}</p>
-                            )}
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Helps AI tailor content suggestions</p>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Your Audience</label>
-                            {isEditing && editableUser ? (
-                                <input
-                                    type="text"
-                                    name="audience"
-                                    value={editableUser.audience || ''}
-                                    onChange={handleInputChange}
-                                    className="w-full p-3 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
-                                    placeholder="e.g., Young professionals, fitness enthusiasts"
-                                />
-                            ) : (
-                                <p className="text-gray-900 dark:text-white font-semibold">{user.audience || 'Not set'}</p>
-                            )}
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Who your content is for</p>
-                        </div>
+                    <div className="mt-4 pt-4 border-t dark:border-gray-700">
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                            Creator profile settings (gender, audience targeting) are now in <button 
+                                onClick={() => {
+                                    localStorage.setItem('settingsActiveTab', 'general');
+                                    window.location.href = '/settings';
+                                }}
+                                className="text-primary-600 dark:text-primary-400 hover:underline font-medium"
+                            >
+                                Settings → General → Creator Profile
+                            </button>
+                        </p>
                     </div>
                  )}
                  {/* ------------------------- */}
