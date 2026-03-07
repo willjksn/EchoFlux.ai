@@ -15,6 +15,9 @@ const PostIdeaCard: React.FC<{
   onSwap: () => void;
   swapping: boolean;
 }> = ({ idea, platform, onUse, onSwap, swapping }) => {
+  const [expanded, setExpanded] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  
   // Format-specific styling for different platforms
   const formatStyles: Record<string, { icon: string; label: string; gradient: string }> = {
     // Instagram formats
@@ -39,12 +42,14 @@ const PostIdeaCard: React.FC<{
   const format = idea.format?.toLowerCase() || 'post';
   const style = formatStyles[format] || formatStyles.post;
   const isTrending = idea.trendBased || idea.trendContext;
-  const hasAIImage = !!idea.placeholderImage;
+  
+  // Check if we have a valid image URL (Picsum or AI-generated)
+  const hasValidImage = idea.placeholderImage && !imageError;
 
-  // Fallback emoji visual when no AI image is available
-  const getVisualContent = () => {
+  // Get emoji based on content keywords
+  const getVisualEmoji = () => {
     const keywords = idea.title?.toLowerCase() || '';
-    if (keywords.includes('gaming') || keywords.includes('game') || keywords.includes('setup')) return '🎮';
+    if (keywords.includes('gaming') || keywords.includes('game') || keywords.includes('setup') || keywords.includes('stream')) return '🎮';
     if (keywords.includes('food') || keywords.includes('cook') || keywords.includes('recipe')) return '🍳';
     if (keywords.includes('fitness') || keywords.includes('workout') || keywords.includes('gym')) return '💪';
     if (keywords.includes('travel') || keywords.includes('adventure')) return '✈️';
@@ -54,97 +59,103 @@ const PostIdeaCard: React.FC<{
     if (keywords.includes('pet') || keywords.includes('dog') || keywords.includes('cat')) return '🐾';
     if (keywords.includes('morning') || keywords.includes('routine') || keywords.includes('day')) return '☀️';
     if (keywords.includes('night') || keywords.includes('evening')) return '🌙';
+    if (keywords.includes('fail') || keywords.includes('funny') || keywords.includes('hilarious')) return '😂';
+    if (keywords.includes('poll') || keywords.includes('vote') || keywords.includes('decide')) return '🗳️';
+    if (keywords.includes('rate') || keywords.includes('review')) return '⭐';
+    if (keywords.includes('upgrade') || keywords.includes('new')) return '🆕';
     return '✨';
   };
 
+  const shotList = idea.shotList || [];
+  const visibleShots = expanded ? shotList : shotList.slice(0, 2);
+  const hasMoreShots = shotList.length > 2;
+
   return (
     <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col">
-      {/* Visual Preview - AI generated image or fallback gradient */}
-      <div className="relative h-44 overflow-hidden">
-        {hasAIImage ? (
-          /* AI-generated placeholder image */
+      {/* Visual Header - Gradient with emoji, badges on top */}
+      <div className={`relative h-32 bg-gradient-to-br ${style.gradient} flex items-center justify-center`}>
+        {/* Large emoji in center */}
+        <span className="text-5xl opacity-30 select-none">{getVisualEmoji()}</span>
+        
+        {/* If we have a valid AI image, show it */}
+        {hasValidImage && (
           <img 
             src={idea.placeholderImage} 
-            alt={idea.title}
-            className="w-full h-full object-cover"
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover"
+            onError={() => setImageError(true)}
           />
-        ) : (
-          /* Fallback gradient with emoji */
-          <div className={`w-full h-full bg-gradient-to-br ${style.gradient} flex items-center justify-center`}>
-            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 opacity-20 text-6xl pointer-events-none select-none">
-              {getVisualContent()}
-            </div>
-          </div>
         )}
         
-        {/* Overlay for text readability */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
-        
-        {/* Format indicator */}
-        <div className="absolute top-2 left-2 flex items-center gap-1.5 flex-wrap">
-          <span className="px-2 py-1 bg-black/40 backdrop-blur-sm rounded-md text-white text-xs font-bold">
-            {style.label}
-          </span>
-          {isTrending && (
-            <span className="px-2 py-1 bg-orange-500/90 backdrop-blur-sm rounded-md text-white text-xs font-bold flex items-center gap-1">
-              🔥 Trend
+        {/* Top badges row */}
+        <div className="absolute top-2 left-2 right-2 flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <span className="px-2 py-0.5 bg-white/90 dark:bg-gray-900/90 rounded text-xs font-bold text-gray-800 dark:text-white shadow-sm">
+              {style.label}
             </span>
-          )}
-        </div>
-        
-        {/* Platform badge */}
-        <div className="absolute top-2 right-2">
-          <span className="px-2 py-1 bg-black/40 backdrop-blur-sm rounded-md text-white text-xs font-medium">
+            {isTrending && (
+              <span className="px-2 py-0.5 bg-orange-500 rounded text-xs font-bold text-white shadow-sm">
+                🔥
+              </span>
+            )}
+          </div>
+          <span className="px-2 py-0.5 bg-white/90 dark:bg-gray-900/90 rounded text-xs font-medium text-gray-700 dark:text-gray-300 shadow-sm">
             {platform === 'instagram' ? '📸' : platform === 'facebook' ? '📘' : platform === 'x' ? '𝕏' : '💖'}
           </span>
         </div>
-
-        {/* Hook preview on the card */}
-        <div className="absolute bottom-2 left-2 right-2">
-          <p className="text-white font-bold text-sm leading-snug drop-shadow-lg line-clamp-2">
-            "{idea.hook?.slice(0, 55)}{idea.hook && idea.hook.length > 55 ? '...' : ''}"
-          </p>
-        </div>
-
-        {/* Format icon */}
-        <div className="absolute bottom-2 right-2 text-white/70 text-base">
-          {style.icon}
-        </div>
       </div>
 
-      {/* Content */}
-      <div className="p-3 flex-1 flex flex-col">
-        <h3 className="font-semibold text-gray-900 dark:text-white line-clamp-2 text-sm leading-tight">{idea.title}</h3>
+      {/* Content Section - Clear white background */}
+      <div className="p-4 flex-1 flex flex-col bg-white dark:bg-gray-800">
+        {/* Title */}
+        <h3 className="font-bold text-gray-900 dark:text-white text-base leading-tight mb-2">
+          {idea.title}
+        </h3>
         
-        {idea.shotList?.length > 0 && (
-          <div className="mt-2 flex-1">
-            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">What to show</p>
-            <ul className="mt-1 space-y-0.5 text-xs text-gray-600 dark:text-gray-300">
-              {idea.shotList.slice(0, 2).map((shot, i) => (
-                <li key={i} className="flex gap-1.5">
+        {/* Hook quote */}
+        <p className="text-sm text-gray-600 dark:text-gray-300 italic mb-3 line-clamp-2">
+          "{idea.hook}"
+        </p>
+        
+        {/* What to show section */}
+        {shotList.length > 0 && (
+          <div className="mb-3">
+            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+              What to show
+            </p>
+            <ul className="space-y-1 text-sm text-gray-700 dark:text-gray-300">
+              {visibleShots.map((shot, i) => (
+                <li key={i} className="flex gap-2">
                   <span className="text-primary-500 flex-shrink-0">•</span>
-                  <span className="line-clamp-1">{shot}</span>
+                  <span>{shot}</span>
                 </li>
               ))}
-              {idea.shotList.length > 2 && (
-                <li className="text-gray-400 dark:text-gray-500 text-xs">+{idea.shotList.length - 2} more</li>
-              )}
             </ul>
+            {hasMoreShots && (
+              <button
+                type="button"
+                onClick={() => setExpanded(!expanded)}
+                className="mt-1 text-xs text-primary-600 dark:text-primary-400 hover:underline font-medium"
+              >
+                {expanded ? '− Show less' : `+ ${shotList.length - 2} more`}
+              </button>
+            )}
           </div>
         )}
 
         {/* Trend context if available */}
         {idea.trendContext && (
-          <p className="mt-2 text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 px-2 py-1 rounded line-clamp-1">
+          <p className="text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 px-2 py-1.5 rounded mb-3">
             📈 {idea.trendContext}
           </p>
         )}
 
-        <div className="mt-3 flex gap-2">
+        {/* Action buttons - pushed to bottom */}
+        <div className="mt-auto flex gap-2 pt-2">
           <button
             type="button"
             onClick={onUse}
-            className="flex-1 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700"
+            className="flex-1 py-2.5 rounded-lg bg-primary-600 text-white text-sm font-semibold hover:bg-primary-700 transition-colors"
           >
             Use this
           </button>
@@ -152,7 +163,7 @@ const PostIdeaCard: React.FC<{
             type="button"
             onClick={onSwap}
             disabled={swapping}
-            className="py-2 px-3 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+            className="py-2.5 px-4 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
           >
             {swapping ? <RefreshIcon className="w-4 h-4 animate-spin inline" /> : '↻'}
           </button>

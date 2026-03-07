@@ -511,10 +511,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       return { term: 'woman,aesthetic,lifestyle', confidence: 'low' };
     };
     
-    // Generate Unsplash URL
-    const getUnsplashUrl = (searchTerm: string, index: number): string => {
-      const seed = Date.now() + index * 1000;
-      return `https://source.unsplash.com/featured/600x600/?${encodeURIComponent(searchTerm)}&sig=${seed}`;
+    // Generate placeholder image URL using Picsum (reliable, always works)
+    // Uses seed for consistent images but unique per idea
+    const getPlaceholderImage = (searchTerm: string, index: number): string => {
+      // Create a numeric seed from the search term + index for reproducible but unique images
+      const seed = Math.abs(searchTerm.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) + index * 137 + Date.now() % 10000);
+      // Picsum provides reliable, high-quality stock photos
+      return `https://picsum.photos/seed/${seed}/600/600`;
     };
     
     // Check if Replicate is configured for AI fallback (enabled by default if token exists)
@@ -532,12 +535,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       
       const { term, confidence } = getUnsplashSearchTerm(idea.title || '');
       
-      // Use Unsplash for high/medium confidence matches
+      // Use placeholder image for high/medium confidence matches (fast & reliable)
       if (confidence === 'high' || confidence === 'medium' || !enableAIFallback) {
         return {
           ...baseIdea,
-          placeholderImage: getUnsplashUrl(term, index),
-          imageSource: 'unsplash',
+          placeholderImage: getPlaceholderImage(term, index),
+          imageSource: 'unsplash', // Still tagged as unsplash for tracking purposes
         };
       }
       
@@ -577,10 +580,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         console.warn(`AI image fallback failed for idea ${baseIdea.id}, using Unsplash:`, e);
       }
       
-      // Final fallback to Unsplash
+      // Final fallback to placeholder image
       return {
         ...baseIdea,
-        placeholderImage: getUnsplashUrl(term, index),
+        placeholderImage: getPlaceholderImage(term, index),
         imageSource: 'unsplash',
       };
     }));
