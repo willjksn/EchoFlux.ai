@@ -477,25 +477,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             negativePrompt += ", woman, female, feminine, breasts, curves";
           }
           
-          console.log('[generateDailyPostIdeas] Generating image with prompt:', imagePrompt.slice(0, 100) + '...');
+          console.log('[generateDailyPostIdeas] Generating image with FLUX Schnell, prompt:', imagePrompt.slice(0, 100) + '...');
           
+          // Using FLUX Schnell - cheapest option at $0.003/image ($3/1000 images)
           const output = await replicate.run(
-            "stability-ai/sdxl:7762fd07cf82c948538e41f63f77d685e02b063e37e496e96eefd46c929f9bdc",
+            "black-forest-labs/flux-schnell",
             {
               input: {
-                prompt: imagePrompt,
-                negative_prompt: negativePrompt,
-                width: 1024,
-                height: 1024,
+                prompt: imagePrompt + ". " + negativePrompt.split(', ').map(t => `no ${t}`).slice(0, 5).join(', '),
+                aspect_ratio: "1:1",
                 num_outputs: 1,
-                scheduler: "K_EULER",
-                num_inference_steps: 25,
-                guidance_scale: 7.5,
+                output_format: "webp",
+                output_quality: 80,
               }
             }
           );
           
-          console.log('[generateDailyPostIdeas] Replicate output:', typeof output, Array.isArray(output) ? output.length : 'not array');
+          console.log('[generateDailyPostIdeas] FLUX Schnell output:', typeof output, Array.isArray(output) ? output.length : 'not array');
           
           const imageUrl = Array.isArray(output) ? output[0] : output;
           if (typeof imageUrl === 'string') {

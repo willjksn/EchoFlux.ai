@@ -49,7 +49,8 @@ const MODEL_COSTS: Record<string, { input: number; output: number }> = {
 
 // Fixed costs per run for non-token-based models
 const FIXED_COSTS: Record<string, number> = {
-  'replicate-sdxl': 0.002, // ~$0.002 per image
+  'replicate-sdxl': 0.002, // ~$0.002 per image (legacy)
+  'replicate-flux-schnell': 0.003, // ~$0.003 per image ($3/1000)
   'tavily-web-search': 0.001, // ~$0.001 per search
 };
 
@@ -73,10 +74,10 @@ export async function trackReplicateUsage(userId: string, imageCount: number = 1
     const usageLog = {
       userId,
       taskType: 'image_generation' as TaskType,
-      modelName: 'replicate-sdxl',
+      modelName: 'replicate-flux-schnell',
       costTier: 'low' as const,
       timestamp: new Date().toISOString(),
-      estimatedCost: FIXED_COSTS['replicate-sdxl'] * imageCount,
+      estimatedCost: FIXED_COSTS['replicate-flux-schnell'] * imageCount,
       success,
       error,
       imageCount, // Track number of images generated

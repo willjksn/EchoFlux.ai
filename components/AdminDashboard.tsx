@@ -34,7 +34,7 @@ const DEFAULT_MODEL_USAGE_STATS: ModelUsageStats = {
         'gemini-2.0-flash': 354,
         'gemini-2.0-flash-lite': 267,
         'tavily-web-search': 15,
-        'replicate-sdxl': 0,
+        'replicate-flux-schnell': 0,
     },
     requestsByTask: {
         caption: 267,
@@ -1307,9 +1307,9 @@ export const AdminDashboard: React.FC = () => {
                                         const percentage = modelUsageStats.totalRequests > 0 
                                             ? (countNum / modelUsageStats.totalRequests * 100).toFixed(1) 
                                             : '0';
-                                        // Estimate cost for Replicate SDXL (~$0.002 per image)
-                                        const isReplicate = model === 'replicate-sdxl';
-                                        const estimatedCost = isReplicate ? countNum * 0.002 : null;
+                                        // Estimate cost for Replicate FLUX Schnell (~$0.003 per image)
+                                        const isReplicate = model === 'replicate-flux-schnell' || model === 'replicate-sdxl';
+                                        const estimatedCost = isReplicate ? countNum * 0.003 : null;
                                         return (
                                             <div key={model}>
                                                 <div className="flex justify-between text-xs mb-1">
