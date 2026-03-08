@@ -508,12 +508,7 @@ export const FanHubPosts: React.FC = () => {
 
   // AI Caption generation
   const generateCaption = useCallback(async (mode: "generate" | "suggest") => {
-    // For generate mode, require media. For suggest mode, allow with existing caption.
-    if (mode === "generate" && media.length === 0) {
-      showToast?.("Add media first to generate a caption", "error");
-      return;
-    }
-    
+    // For suggest mode, require existing caption text
     if (mode === "suggest" && !caption.trim()) {
       showToast?.("Add some text first to get AI suggestions", "error");
       return;
@@ -537,9 +532,31 @@ export const FanHubPosts: React.FC = () => {
         ? "Be bold and provocative, push boundaries with spicy content."
         : "Be very explicit and adult-oriented, no holding back.";
       
-      const promptText = mode === "suggest" 
-        ? `Improve and expand on this caption, make it more engaging: "${caption}". ${spicyGuidance}`
-        : `Write an engaging, unique caption for this fan page post. ${spicyGuidance} Be creative and different each time - never repeat the same caption twice.`;
+      // IMPORTANT: If there's any text in the caption box, use it as direction for the AI
+      // Even in "generate" mode, the user's input should guide what gets generated
+      const userInput = caption.trim();
+      let promptText: string;
+      
+      if (mode === "suggest") {
+        // Improve existing caption
+        promptText = `Improve and expand on this caption, make it more engaging: "${userInput}". ${spicyGuidance}`;
+      } else if (userInput) {
+        // Generate mode WITH user input - use their keywords/direction
+        promptText = `Write an engaging caption for a fan page post about: "${userInput}". 
+IMPORTANT: You MUST incorporate the keywords/theme the creator specified ("${userInput}"). 
+If they mentioned specific topics (like body parts, activities, themes), include those directly in the caption.
+${spicyGuidance} 
+Be creative but stay on topic with what they asked for. 
+DO NOT say "link in bio" - this is their own page.
+DO NOT include hashtags.`;
+      } else {
+        // Generate mode without any input - generic caption
+        promptText = `Write an engaging, unique caption for this fan page post. 
+${spicyGuidance} 
+Be creative and different each time.
+DO NOT say "link in bio" - this is their own page.
+DO NOT include hashtags.`;
+      }
       
       const res = await fetch("/api/generateCaptions", {
         method: "POST",
@@ -573,7 +590,7 @@ export const FanHubPosts: React.FC = () => {
     } finally {
       setGenerating(false);
     }
-  }, [media.length, caption, aiTone, customTone, usePersonality, contentSpiciness, showToast]);
+  }, [caption, aiTone, customTone, usePersonality, contentSpiciness, showToast]);
 
   // Poll handlers
   const addPollOption = () => {

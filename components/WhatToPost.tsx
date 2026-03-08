@@ -597,32 +597,6 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
                 </div>
               )}
 
-              {/* Spicy Mode Toggle */}
-              <div className="flex items-center justify-between p-3 bg-pink-50 dark:bg-pink-900/20 rounded-lg border border-pink-200 dark:border-pink-800">
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-pink-700 dark:text-pink-300 flex items-center gap-2">
-                    <span>🌶️</span>
-                    <span>Bold/Spicy Mode</span>
-                  </p>
-                  <p className="text-xs text-pink-600 dark:text-pink-400 mt-0.5">
-                    Enable for bolder content ideas (bikini, lingerie, flirty, etc.)
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setDraftSettings((p) => ({ ...p, spicyMode: !p.spicyMode }))}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    draftSettings.spicyMode ? 'bg-pink-600' : 'bg-gray-300 dark:bg-gray-600'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      draftSettings.spicyMode ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
-
               {/* Trends info - now always included */}
               <div className="p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
                 <p className="text-sm text-orange-700 dark:text-orange-300 flex items-center gap-2">
@@ -782,27 +756,6 @@ export const WhatToPost: React.FC<WhatToPostProps> = ({ onOpenAdvanced }) => {
             <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5">
               E.g., "beach photos", "workout motivation", "cooking video" — or leave blank for AI to surprise you
             </p>
-          </div>
-          
-          {/* Spicy Mode Toggle - visible on initial screen */}
-          <div className="flex items-center justify-center gap-3 mb-6">
-            <button
-              type="button"
-              onClick={() => setSettings((p) => ({ ...p, spicyMode: !p.spicyMode }))}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                settings.spicyMode
-                  ? 'bg-pink-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-              }`}
-            >
-              <span>🌶️</span>
-              <span>{settings.spicyMode ? 'Spicy Mode ON' : 'Spicy Mode'}</span>
-            </button>
-            {settings.spicyMode && (
-              <span className="text-xs text-pink-600 dark:text-pink-400">
-                Bolder content enabled
-              </span>
-            )}
           </div>
           
           <button

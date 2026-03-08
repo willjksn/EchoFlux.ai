@@ -577,10 +577,12 @@ ${platforms.map(platform => {
   }
   if (platformName === 'my page' || platformName === 'mypage' || platformName.includes('fan hub') || platformName.includes('fanhub')) {
     return `- My Page (Fan Hub): Do NOT generate hashtags - Fan Hub does not use hashtags. Return "hashtags": [] for every caption.
+- NEVER say "link in bio" - this IS their own page, there's no external link needed.
 - Optimal length: 100-500 characters. Write engaging, personal content for your fan community.
 - Focus on connection, exclusivity, and fan engagement. Use casual, authentic language.
 - Can include light CTAs for tips, treats, or engagement (likes, comments).
-- Emojis are encouraged (2-4) to add personality and warmth.`;
+- Emojis are encouraged (2-4) to add personality and warmth.
+- If the user provides specific keywords or themes, you MUST incorporate them directly into the caption.`;
   }
   if (platformName.includes('instagram')) {
     return `- Instagram: Maximum 2,200 characters for captions. Optimal length: 125-150 characters for engagement. Include 10-30 relevant hashtags for maximum reach. Hashtags should be relevant to content, niche, and trending topics. Use 1–4 creative, relevant emojis (don’t spam) to enhance tone.`;

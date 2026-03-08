@@ -6,7 +6,6 @@ import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 import { parseJSON } from "./_geminiShared.js";
 import { enforceRateLimit } from "./_rateLimit.js";
-import { trackReplicateUsage } from "./trackModelUsage.js";
 
 export interface DailyPostIdeaPayload {
   id: string;
@@ -218,14 +217,19 @@ Generate ideas that match this personality - the tone, style, and content should
 ` : "No creator profile provided; use broad, relatable angles."}
 ${creatorProfileGuidance}
 ${opts.creatorHint ? `
-CREATOR'S IDEA DIRECTION (IMPORTANT - incorporate this):
-The creator wants ideas related to: "${opts.creatorHint}"
-Generate ideas that incorporate this theme/direction while still being unique and fresh.
+CREATOR'S SPECIFIC REQUEST (MUST INCLUDE THIS):
+The creator specifically requested: "${opts.creatorHint}"
+This is CRITICAL - you MUST incorporate their exact keywords/theme into the ideas.
+If they said "boobs", the ideas should be about that. If they said "beach", make it beach-focused.
+DO NOT ignore or soften their request. The ideas must directly reflect what they asked for.
 ` : ""}
 ${useTrends && trendContext ? `TRENDS / CONTEXT (use where relevant):\n${trendContext}\n` : ""}
 ${fanHubGuidance}
 
 ${existingIdeasForContext?.length ? `EXISTING IDEAS (DO NOT DUPLICATE - generate completely different ideas):\n${existingIdeasForContext.map((i) => `${i.title}: ${i.hook}`).join("\n")}\n` : ""}
+
+BLUEPRINT FORMAT (be SPECIFIC and ACTIONABLE):
+Each idea should be a clear blueprint the creator can follow step-by-step. Not vague suggestions - EXACT instructions.
 
 OUTPUT STRICT JSON ONLY (no markdown, no code fence):
 {
@@ -234,19 +238,25 @@ OUTPUT STRICT JSON ONLY (no markdown, no code fence):
       "id": "idea_<short_unique_id>",
       "format": "${platform === "fan_hub" ? "photo | video | text | poll" : platform === "twitter" ? "tweet | thread | poll | video" : "reel | carousel | photo | story | mixed"}",
       "title": "Short punchy title (3-6 words)",
-      "hook": "One sentence that grabs attention (first line of caption)",
-      "shotList": ["Shot/scene 1", "Shot 2", "Shot 3", "..."],
-      "captionStarter": "Optional 1-2 sentence caption start",
-      "cta": "Optional call-to-action line",${platform === "fan_hub" ? "" : `
+      "hook": "FULL ready-to-use caption (2-4 sentences, engaging, matches the content). This is what they'll actually post.",
+      "shotList": ["SPECIFIC instruction 1: exactly what to show/do", "SPECIFIC instruction 2", "SPECIFIC instruction 3", "..."],
+      "captionStarter": "Alternative caption opening they could use",
+      "cta": "Specific call-to-action for this exact post",${platform === "fan_hub" ? "" : `
       "hashtags": ["#tag1", "#tag2", "..."],`}
-      "whyThisWorks": "One sentence on why this fits the goal/platform",
+      "whyThisWorks": "Why this specific idea will perform well",
       "trendBased": true/false,
-      "trendContext": "Brief 5-10 word description of the trend this capitalizes on (only if trendBased is true)"
+      "trendContext": "Brief 5-10 word description of the trend (only if trendBased is true)"
     }
   ]
 }
 
-Rules: shotList must have 3-5 items. id must be unique.${platform === "fan_hub" ? " DO NOT include hashtags for My Page/Fan Hub content." : ""} If generating one (swap), return one idea in ideas array.`;
+IMPORTANT RULES:
+- shotList must have 3-5 SPECIFIC, ACTIONABLE items (not vague like "nice pose" - say exactly what pose, what angle, what to wear)
+- hook should be a COMPLETE caption ready to copy/paste, not just one sentence
+- Be EXPLICIT about what the content should include${platform === "fan_hub" ? `
+- DO NOT include hashtags for My Page/Fan Hub content
+- NEVER say "link in bio" - this is already their own page, no external links needed` : ""}
+- If generating one (swap), return one idea in ideas array.`;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
@@ -426,172 +436,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     let ideas = Array.isArray(parsed?.ideas) ? parsed.ideas : [];
     
-    // Note: We no longer use placeholder images for non-photo formats
-    // The frontend now displays gradient + emoji for reels, carousels, stories, etc.
-    
-    // Build image prompt that matches the content idea
-    const buildImagePrompt = (idea: any, hint?: string): string => {
-      const title = idea.title || "";
-      const shotList = idea.shotList || [];
-      
-      // Start with creator hint if provided - this is the most relevant context
-      let mainSubject = hint ? hint.trim() : "";
-      
-      // Fallback to extracting subject from title/shotList if no hint
-      if (!mainSubject) {
-        // Extract the core concept from title or first shot
-        const titleLower = title.toLowerCase();
-        if (titleLower.includes('beach')) mainSubject = "beach scene, ocean, sand, tropical setting";
-        else if (titleLower.includes('pool')) mainSubject = "poolside scene, water, summer vibes";
-        else if (titleLower.includes('bikini')) mainSubject = "beach/pool aesthetic, summer fashion";
-        else if (titleLower.includes('lingerie') || titleLower.includes('bedroom')) mainSubject = "cozy bedroom aesthetic, soft lighting, intimate setting";
-        else if (titleLower.includes('gym') || titleLower.includes('fitness') || titleLower.includes('workout')) mainSubject = "gym environment, fitness equipment, energetic atmosphere";
-        else if (titleLower.includes('morning') || titleLower.includes('routine')) mainSubject = "morning light, cozy home interior";
-        else if (titleLower.includes('cooking') || titleLower.includes('food') || titleLower.includes('kitchen')) mainSubject = "kitchen scene, cooking, delicious food";
-        else if (titleLower.includes('selfie') || titleLower.includes('mirror')) mainSubject = "mirror selfie aesthetic, ring light, bedroom or bathroom";
-        else if (titleLower.includes('travel') || titleLower.includes('vacation')) mainSubject = "travel destination, scenic landscape";
-        else if (titleLower.includes('outfit') || titleLower.includes('fashion') || titleLower.includes('style')) mainSubject = "fashion photoshoot, stylish outfit";
-        else if (shotList.length > 0) mainSubject = shotList[0];
-        else mainSubject = title;
-      }
-      
-      // Build a descriptive prompt that will generate relevant imagery
-      const subjectPerson = creatorGender === 'Female' 
-        ? "beautiful woman, feminine, attractive" 
-        : creatorGender === 'Male' 
-        ? "handsome man, masculine, attractive"
-        : "attractive person";
-      
-      return `Professional social media photo of ${subjectPerson} - ${mainSubject}. Style: high quality photography, Instagram aesthetic, professional lighting, lifestyle content, no text or watermarks, photorealistic.`;
-    };
-    
-    // Check if Replicate is configured
-    const replicateApiToken = process.env.REPLICATE_API_TOKEN;
-    const useAIImages = replicateApiToken && process.env.DISABLE_AI_IMAGES !== "true";
-    
-    console.log('[generateDailyPostIdeas] Image generation config:', {
-      hasReplicateToken: !!replicateApiToken,
-      useAIImages,
-      creatorGender,
-      targetAudienceGender,
-      creatorHint: creatorHint || '(none)',
-    });
-    
-    // Process ideas - only generate ONE AI image for the first idea
+    // Process ideas - no AI image generation, frontend uses gradient + emoji
     const processedIdeas: typeof ideas = [];
-    
-    // Initialize Replicate once if available
-    let replicate: any = null;
-    if (useAIImages) {
-      try {
-        const Replicate = (await import("replicate")).default;
-        // Use useFileOutput: false to get URLs directly instead of FileOutput/ReadableStream objects
-        replicate = new Replicate({ auth: replicateApiToken, useFileOutput: false });
-      } catch (e) {
-        console.error('[generateDailyPostIdeas] Failed to initialize Replicate:', e);
-      }
-    }
-    
-    // Track if we've already generated an AI image (only one per request to save cost)
-    let aiImageGenerated = false;
-
     for (let index = 0; index < ideas.length; index++) {
       const idea = ideas[index];
-      const ideaFormat = idea.format?.toLowerCase() || '';
       const baseIdea = {
         ...idea,
         id: idea.id || `idea_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
         shotList: Array.isArray(idea.shotList) ? idea.shotList : [],
         hashtags: Array.isArray(idea.hashtags) ? idea.hashtags : [],
-      };
-      
-      // Only generate AI image for PHOTO format cards (first one only)
-      // Reels, carousels, stories, videos etc. should use stylized placeholders, not realistic photos
-      const isPhotoFormat = ideaFormat === 'photo';
-      const shouldGenerateAI = replicate && isPhotoFormat && !aiImageGenerated;
-      
-      if (shouldGenerateAI) {
-        try {
-          const imagePrompt = buildImagePrompt(idea, creatorHint);
-          
-          // Using FLUX Dev for better quality (less distortion, better anatomy)
-          console.log(`[generateDailyPostIdeas] v12 - Generating ONE image with FLUX Dev for quality`);
-          console.log(`[generateDailyPostIdeas] v12 - Prompt: ${imagePrompt}`);
-          
-          // Use predictions API for more control - FLUX Dev has better anatomy/quality
-          const prediction = await replicate.predictions.create({
-            model: "black-forest-labs/flux-dev",
-            input: {
-              prompt: imagePrompt + " Professional photography, sharp focus, natural skin texture, correct anatomy, realistic proportions.",
-              go_fast: true,
-              guidance: 3.5,
-              num_outputs: 1,
-              aspect_ratio: "1:1",
-              output_format: "webp",
-              output_quality: 90,
-              num_inference_steps: 28,
-            }
-          });
-          
-          console.log(`[generateDailyPostIdeas] v12 - Prediction created: ${prediction.id}, status: ${prediction.status}`);
-          
-          // Wait for prediction to complete (poll every 2 seconds, max 60 seconds for SDXL)
-          let completedPrediction = prediction;
-          let attempts = 0;
-          while (completedPrediction.status !== 'succeeded' && completedPrediction.status !== 'failed' && attempts < 30) {
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            completedPrediction = await replicate.predictions.get(prediction.id);
-            attempts++;
-          }
-          
-          console.log(`[generateDailyPostIdeas] v12 - Final status: ${completedPrediction.status}, output:`, JSON.stringify(completedPrediction.output)?.slice(0, 300));
-          
-          let imageUrl: string | null = null;
-          const output = completedPrediction.output;
-          
-          // Handle different output formats from Replicate
-          if (Array.isArray(output) && output.length > 0) {
-            const firstItem = output[0];
-            if (typeof firstItem === 'string' && firstItem.startsWith('http')) {
-              imageUrl = firstItem;
-            }
-          } else if (typeof output === 'string' && output.startsWith('http')) {
-            imageUrl = output;
-          }
-          
-          // Log error if prediction failed
-          if (completedPrediction.status === 'failed') {
-            console.log(`[generateDailyPostIdeas] v12 - Prediction failed:`, completedPrediction.error);
-          }
-          
-          if (imageUrl) {
-            console.log(`[generateDailyPostIdeas] v13 - Success! AI image for PHOTO card: ${imageUrl.slice(0, 80)}...`);
-            // Track successful Replicate usage (don't await, fire and forget)
-            trackReplicateUsage(authUser.uid, 1, true).catch(() => {});
-            aiImageGenerated = true;
-            processedIdeas.push({
-              ...baseIdea,
-              placeholderImage: imageUrl,
-              imageSource: 'ai' as const,
-            });
-            continue;
-          } else {
-            console.log('[generateDailyPostIdeas] v13 - No valid URL extracted');
-          }
-        } catch (e: any) {
-          console.error(`[generateDailyPostIdeas] v13 - Replicate failed:`, e?.message || e);
-          // Track failed usage (don't await)
-          trackReplicateUsage(authUser.uid, 1, false, String(e?.message || e)).catch(() => {});
-        }
-      }
-      
-      // Non-photo formats or AI fallback: no placeholder image (use gradient + emoji instead)
-      // This prevents random/unrelated realistic images on reel, carousel, story, video cards
-      processedIdeas.push({
-        ...baseIdea,
-        placeholderImage: undefined, // Let frontend use gradient + emoji
+        placeholderImage: undefined, // Frontend will use gradient + emoji
         imageSource: undefined,
-      });
+      };
+      processedIdeas.push(baseIdea);
     }
     
     ideas = processedIdeas as DailyPostIdeaPayload[];
