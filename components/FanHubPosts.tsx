@@ -537,18 +537,38 @@ export const FanHubPosts: React.FC = () => {
       const userInput = caption.trim();
       let promptText: string;
       
-      if (mode === "suggest") {
-        // Improve existing caption
-        promptText = `Improve and expand on this caption, make it more engaging: "${userInput}". ${spicyGuidance}`;
-      } else if (userInput) {
-        // Generate mode WITH user input - use their keywords/direction
-        promptText = `Write an engaging caption for a fan page post about: "${userInput}". 
-IMPORTANT: You MUST incorporate the keywords/theme the creator specified ("${userInput}"). 
-If they mentioned specific topics (like body parts, activities, themes), include those directly in the caption.
-${spicyGuidance} 
-Be creative but stay on topic with what they asked for. 
+      if (mode === "suggest" && userInput) {
+        // AI Suggest mode - user typed keywords/topic, generate a caption ABOUT that topic
+        promptText = `The creator typed: "${userInput}"
+
+Write an engaging caption for their fan page post that is SPECIFICALLY ABOUT "${userInput}".
+
+CRITICAL REQUIREMENTS:
+- The caption MUST be about "${userInput}" - use this exact word/phrase in the caption
+- If they typed a body part (like "boobs", "ass", etc.), the caption should reference that body part directly
+- If they typed a theme (like "beach", "gym", etc.), the caption should be about that theme
+- DO NOT ignore what they typed - it's the main subject of the post
+
+${spicyGuidance}
 DO NOT say "link in bio" - this is their own page.
-DO NOT include hashtags.`;
+DO NOT include hashtags.
+Write 2-4 sentences that are engaging and on-topic.`;
+      } else if (userInput) {
+        // Generate mode WITH user input - same logic
+        promptText = `The creator wants a caption about: "${userInput}"
+
+Write an engaging caption for their fan page post that is SPECIFICALLY ABOUT "${userInput}".
+
+CRITICAL REQUIREMENTS:
+- The caption MUST be about "${userInput}" - use this exact word/phrase in the caption
+- If they typed a body part, the caption should reference that body part directly
+- If they typed a theme, the caption should be about that theme
+- DO NOT ignore what they typed - it's the main subject of the post
+
+${spicyGuidance}
+DO NOT say "link in bio" - this is their own page.
+DO NOT include hashtags.
+Write 2-4 sentences that are engaging and on-topic.`;
       } else {
         // Generate mode without any input - generic caption
         promptText = `Write an engaging, unique caption for this fan page post. 
