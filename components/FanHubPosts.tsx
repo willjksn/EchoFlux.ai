@@ -194,8 +194,8 @@ export const FanHubPosts: React.FC = () => {
   const [hideLikes, setHideLikes] = useState(false);
   const [showTipButton, setShowTipButton] = useState(true);
   
-  // Content Spiciness (1-10)
-  const [contentSpiciness, setContentSpiciness] = useState(3);
+  // Content Spiciness (1-10) - loaded from user settings
+  const [contentSpiciness, setContentSpiciness] = useState(5);
   
   // Publishing
   const [publishing, setPublishing] = useState(false);
@@ -266,6 +266,28 @@ export const FanHubPosts: React.FC = () => {
       loadVault();
     }
   }, [showVault, loadVault]);
+
+  // Load spiciness level from user settings
+  useEffect(() => {
+    const loadSpiciness = async () => {
+      if (!user?.id) return;
+      try {
+        const userDoc = await getDocs(query(collection(db, "users"), limit(1)));
+        const { doc: docRef, getDoc } = await import('firebase/firestore');
+        const userDocRef = docRef(db, 'users', user.id);
+        const userSnapshot = await getDoc(userDocRef);
+        if (userSnapshot.exists()) {
+          const data = userSnapshot.data();
+          if (data.explicitnessLevel !== undefined) {
+            setContentSpiciness(data.explicitnessLevel);
+          }
+        }
+      } catch (error) {
+        // Use default if loading fails
+      }
+    };
+    loadSpiciness();
+  }, [user?.id]);
 
   // Check for pending caption from Premium Studio (New Ideas)
   useEffect(() => {
@@ -1069,27 +1091,6 @@ DO NOT include hashtags.`;
                   </label>
                 </div>
                 
-                {/* Content Spiciness Slider */}
-                <div className="mt-4 p-3 bg-pink-50 dark:bg-pink-900/20 rounded-lg border border-pink-200 dark:border-pink-800">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-pink-700 dark:text-pink-300 flex items-center gap-1.5">
-                      <span>🌶️</span>
-                      Content Spiciness: {contentSpiciness <= 3 ? 'Mild' : contentSpiciness <= 6 ? 'Medium' : contentSpiciness <= 8 ? 'Spicy' : 'Extra Spicy'}
-                    </span>
-                    <span className="text-xs text-pink-600 dark:text-pink-400">{contentSpiciness}/10</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={1}
-                    max={10}
-                    value={contentSpiciness}
-                    onChange={(e) => setContentSpiciness(Number(e.target.value))}
-                    className="w-full h-2 bg-pink-200 dark:bg-pink-800 rounded-lg appearance-none cursor-pointer accent-pink-500"
-                  />
-                  <p className="text-xs text-pink-600 dark:text-pink-400 mt-1">
-                    Adjust how bold the AI-generated captions are
-                  </p>
-                </div>
               </div>
 
               {/* ===== LOCK / PAID CONTENT ===== */}
