@@ -2,9 +2,12 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getVerifyAuth } from "../../_errorHandler.js";
 import { getAdminDb } from "../../_firebaseAdmin.js";
 
+const APP_ORIGIN = "https://echoflux.ai";
+
 /**
  * Handle Meta OAuth callback (Facebook + Instagram)
  * Exchanges code for tokens, gets Pages, finds Instagram accounts, and stores in Firestore
+ * All redirects use absolute URL so the user always lands back on the app.
  */
 export default async function handler(
   req: VercelRequest,
@@ -20,12 +23,12 @@ export default async function handler(
   // Handle errors from Meta
   if (error) {
     console.error("Meta OAuth error:", error, error_reason);
-    res.redirect(302, `/?error=oauth_failed&reason=${encodeURIComponent(error_reason as string)}`);
+    res.redirect(302, `${APP_ORIGIN}/?error=oauth_failed&reason=${encodeURIComponent((error_reason as string) || error as string)}`);
     return;
   }
 
   if (!code) {
-    res.status(400).json({ error: "Missing authorization code" });
+    res.redirect(302, `${APP_ORIGIN}/?error=missing_code&message=No+authorization+code+from+Facebook`);
     return;
   }
 
@@ -36,7 +39,7 @@ export default async function handler(
     const redirectUri = "https://echoflux.ai/api/oauth/meta/callback";
 
     if (!appId || !appSecret) {
-      res.redirect(302, `/?error=oauth_not_configured`);
+      res.redirect(302, `${APP_ORIGIN}/?error=oauth_not_configured`);
       return;
     }
 
@@ -52,7 +55,7 @@ export default async function handler(
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text();
       console.error("Token exchange failed:", errorText);
-      res.redirect(302, `/?error=token_exchange_failed`);
+      res.redirect(302, `${APP_ORIGIN}/?error=token_exchange_failed`);
       return;
     }
 
@@ -67,7 +70,7 @@ export default async function handler(
 
     if (!meResponse.ok) {
       console.error("Failed to verify user token");
-      res.redirect(302, `/?error=token_verification_failed`);
+      res.redirect(302, `${APP_ORIGIN}/?error=token_verification_failed`);
       return;
     }
 
@@ -105,7 +108,7 @@ export default async function handler(
     if (!pagesResponse.ok) {
       const errorText = await pagesResponse.text();
       console.error("Failed to fetch Pages:", errorText);
-      res.redirect(302, `/?error=pages_fetch_failed`);
+      res.redirect(302, `${APP_ORIGIN}/?error=pages_fetch_failed`);
       return;
     }
 
@@ -113,7 +116,7 @@ export default async function handler(
     const pages = pagesData.data || [];
 
     if (pages.length === 0) {
-      res.redirect(302, `/?error=no_pages&message=You must be an admin of at least one Facebook Page to connect.`);
+      res.redirect(302, `${APP_ORIGIN}/?error=no_pages&message=${encodeURIComponent("You must be an admin of at least one Facebook Page to connect.")}`);
       return;
     }
 
@@ -145,7 +148,7 @@ export default async function handler(
     }
 
     if (!userId) {
-      res.redirect(302, `/?error=not_authenticated`);
+      res.redirect(302, `${APP_ORIGIN}/?error=not_authenticated`);
       return;
     }
 
@@ -243,9 +246,9 @@ export default async function handler(
         ? `Connected Facebook and Instagram (${connectedAccounts.length} account${connectedAccounts.length > 1 ? "s" : ""})`
         : "Connected Facebook (no Instagram account found)";
 
-    res.redirect(302, `/?connected=meta&accounts=${connectMode === "facebook" ? 0 : connectedAccounts.length}&message=${encodeURIComponent(successMessage)}`);
+    res.redirect(302, `${APP_ORIGIN}/?connected=meta&accounts=${connectMode === "facebook" ? 0 : connectedAccounts.length}&message=${encodeURIComponent(successMessage)}`);
   } catch (error: any) {
     console.error("OAuth callback error:", error);
-    res.redirect(302, `/?error=connection_failed&message=${encodeURIComponent(error.message)}`);
+    res.redirect(302, `${APP_ORIGIN}/?error=connection_failed&message=${encodeURIComponent(error?.message || "Connection failed")}`);
   }
 }

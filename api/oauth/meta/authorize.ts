@@ -81,14 +81,13 @@ export default async function handler(
 
     const scopes = connect === "facebook" ? scopesFacebookOnly : scopesWithInstagram;
 
-    // auth_type=reauthenticate: forces user to re-enter password or choose account, so they don't accidentally use someone else's session
+    // Note: auth_type=reauthenticate was removed - it can prevent Meta from redirecting back to the app (known Meta bug)
     const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?` +
       `client_id=${appId}` +
       `&redirect_uri=${redirectUri}` +
       `&state=${state}` +
       `&response_type=code` +
-      `&scope=${encodeURIComponent(scopes)}` +
-      `&auth_type=reauthenticate`;
+      `&scope=${encodeURIComponent(scopes)}`;
 
     res.status(200).json({ authUrl });
     return;
@@ -121,8 +120,7 @@ export default async function handler(
     `&redirect_uri=${redirectUri}` +
     `&state=${state}` +
     `&response_type=code` +
-    `&scope=${encodeURIComponent(scopes)}` +
-    `&auth_type=reauthenticate`;
+    `&scope=${encodeURIComponent(scopes)}`;
 
   res.redirect(302, authUrl);
 }
