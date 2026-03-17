@@ -596,15 +596,17 @@ export const Settings: React.FC = () => {
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const oauthSuccess = params.get('oauth_success');
+        const connectedProvider = params.get('connected');
         const oauthError = params.get('error');
         const platform = params.get('platform');
         const errorMessage = params.get('message');
         const errorDetails = params.get('details');
 
-        if (oauthSuccess) {
+        if (oauthSuccess || connectedProvider === 'meta') {
             const oauthType = params.get('type');
             const accountName = params.get('account');
-            const platformName = oauthSuccess.charAt(0).toUpperCase() + oauthSuccess.slice(1);
+            const successPlatform = oauthSuccess || 'facebook';
+            const platformName = successPlatform.charAt(0).toUpperCase() + successPlatform.slice(1);
             const hasXOAuth1 = !!(
                 safeSocialAccounts?.X &&
                 (safeSocialAccounts.X as any).oauthToken &&
@@ -612,7 +614,7 @@ export const Settings: React.FC = () => {
             );
 
             // For X, automatically complete OAuth 1.0a after OAuth 2.0 connects
-            if (oauthSuccess === 'x' && oauthType !== 'oauth1' && !hasXOAuth1) {
+            if (successPlatform === 'x' && oauthType !== 'oauth1' && !hasXOAuth1) {
                 const successMessage = accountName 
                     ? `${platformName} account (${decodeURIComponent(accountName)}) connected. Completing media permissions...`
                     : `${platformName} account connected. Completing media permissions...`;

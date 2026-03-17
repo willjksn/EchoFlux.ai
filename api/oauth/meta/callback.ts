@@ -6,8 +6,7 @@ const APP_ORIGIN = "https://echoflux.ai";
 
 /**
  * Handle Meta OAuth callback (Facebook + Instagram)
- * Exchanges code for tokens, gets Pages, finds Instagram accounts, and stores in Firestore
- * All redirects use absolute URL so the user always lands back on the app.
+ * Exchanges code for tokens, gets Pages, finds Instagram accounts, and stores in Firestore.
  */
 export default async function handler(
   req: VercelRequest,
@@ -20,42 +19,40 @@ export default async function handler(
 
   const { code, state, error, error_reason } = req.query;
 
-  // Handle errors from Meta
   if (error) {
     console.error("Meta OAuth error:", error, error_reason);
-    res.redirect(302, `${APP_ORIGIN}/?error=oauth_failed&reason=${encodeURIComponent((error_reason as string) || error as string)}`);
+    res.redirect(302, `${APP_ORIGIN}/?error=oauth_failed&platform=facebook&reason=${encodeURIComponent((error_reason as string) || String(error))}`);
     return;
   }
 
   if (!code) {
-    res.redirect(302, `${APP_ORIGIN}/?error=missing_code&message=No+authorization+code+from+Facebook`);
+    res.redirect(302, `${APP_ORIGIN}/?error=missing_code&platform=facebook&message=Missing+authorization+code`);
     return;
   }
 
   try {
-    // Step 1: Exchange code for User access token
     const appId = process.env.META_APP_ID;
     const appSecret = process.env.META_APP_SECRET;
     const redirectUri = "https://echoflux.ai/api/oauth/meta/callback";
 
     if (!appId || !appSecret) {
-      res.redirect(302, `${APP_ORIGIN}/?error=oauth_not_configured`);
+      res.redirect(302, `${APP_ORIGIN}/?error=oauth_not_configured&platform=facebook`);
       return;
     }
 
     const tokenResponse = await fetch(
       `https://graph.facebook.com/v19.0/oauth/access_token?` +
-        `client_id=${appId}` +
-        `&client_secret=${appSecret}` +
-        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-        `&code=${code}`,
+      `client_id=${appId}` +
+      `&client_secret=${appSecret}` +
+      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+      `&code=${code}`,
       { method: "GET" }
     );
 
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text();
       console.error("Token exchange failed:", errorText);
-      res.redirect(302, `${APP_ORIGIN}/?error=token_exchange_failed`);
+      res.redirect(302, `${APP_ORIGIN}/?error=token_exchange_failed&platform=facebook`);
       return;
     }
 
@@ -63,81 +60,64 @@ export default async function handler(
     const userAccessToken = tokenData.access_token;
     const expiresIn = tokenData.expires_in || 3600;
 
-    // Step 2: Verify token works - get user info
     const meResponse = await fetch(
       `https://graph.facebook.com/v19.0/me?access_token=${userAccessToken}&fields=id,name,email`
     );
-
     if (!meResponse.ok) {
-      console.error("Failed to verify user token");
-      res.redirect(302, `${APP_ORIGIN}/?error=token_verification_failed`);
+      res.redirect(302, `${APP_ORIGIN}/?error=token_verification_failed&platform=facebook`);
       return;
     }
 
     const userInfo = await meResponse.json();
     const facebookUserId = userInfo.id;
 
-    // Step 3: Exchange for long-lived token (recommended for production)
     const longLivedResponse = await fetch(
       `https://graph.facebook.com/v19.0/oauth/access_token?` +
-        `grant_type=fb_exchange_token` +
-        `&client_id=${appId}` +
-        `&client_secret=${appSecret}` +
-        `&fb_exchange_token=${userAccessToken}`,
+      `grant_type=fb_exchange_token` +
+      `&client_id=${appId}` +
+      `&client_secret=${appSecret}` +
+      `&fb_exchange_token=${userAccessToken}`,
       { method: "GET" }
     );
 
     let longLivedToken = userAccessToken;
     let tokenExpiry = new Date(Date.now() + expiresIn * 1000);
-
     if (longLivedResponse.ok) {
       const longLivedData = await longLivedResponse.json();
       longLivedToken = longLivedData.access_token;
-      tokenExpiry = new Date(
-        Date.now() + (longLivedData.expires_in || 5184000) * 1000
-      );
+      tokenExpiry = new Date(Date.now() + (longLivedData.expires_in || 5184000) * 1000);
     }
 
-    // Step 4: Get user's Pages (required for Instagram)
     const pagesResponse = await fetch(
-      `https://graph.facebook.com/v19.0/me/accounts?` +
-        `fields=id,name,access_token,instagram_business_account` +
-        `&access_token=${longLivedToken}`
+      `https://graph.facebook.com/v19.0/me/accounts?fields=id,name,access_token,instagram_business_account&access_token=${longLivedToken}`
     );
-
     if (!pagesResponse.ok) {
       const errorText = await pagesResponse.text();
       console.error("Failed to fetch Pages:", errorText);
-      res.redirect(302, `${APP_ORIGIN}/?error=pages_fetch_failed`);
+      res.redirect(302, `${APP_ORIGIN}/?error=pages_fetch_failed&platform=facebook`);
       return;
     }
 
     const pagesData = await pagesResponse.json();
     const pages = pagesData.data || [];
-
-    if (pages.length === 0) {
-      res.redirect(302, `${APP_ORIGIN}/?error=no_pages&message=${encodeURIComponent("You must be an admin of at least one Facebook Page to connect.")}`);
+    if (!pages.length) {
+      res.redirect(302, `${APP_ORIGIN}/?error=no_pages&platform=facebook&message=${encodeURIComponent("You must be an admin of at least one Facebook Page to connect.")}`);
       return;
     }
 
-    // Resolve user and connect mode from OAuth state first (so we know whether to fetch Instagram)
     const db = await getAdminDb();
     let userId: string | undefined;
     let connectMode: "facebook" | "instagram" = "instagram";
     const stateKey = Array.isArray(state) ? state[0] : state;
     if (stateKey) {
-      try {
-        const stateDoc = await db.collection("oauth_states").doc(stateKey).get();
-        if (stateDoc.exists) {
-          const data = stateDoc.data();
-          userId = data?.uid;
-          if (data?.connect === "facebook" || data?.connect === "instagram") {
-            connectMode = data.connect;
-          }
-          await db.collection("oauth_states").doc(stateKey).delete();
+      const stateDoc = await db.collection("oauth_states").doc(stateKey).get();
+      if (stateDoc.exists) {
+        const data = stateDoc.data();
+        userId = data?.uid;
+        if (data?.connect === "facebook" || data?.connect === "instagram") {
+          connectMode = data.connect;
         }
-      } catch (stateError) {
-        console.error("Failed to resolve OAuth state:", stateError);
+        await db.collection("oauth_states").doc(stateKey).delete();
       }
     }
 
@@ -146,69 +126,49 @@ export default async function handler(
       const user = await verifyAuth(req);
       userId = user?.uid;
     }
-
     if (!userId) {
-      res.redirect(302, `${APP_ORIGIN}/?error=not_authenticated`);
+      res.redirect(302, `${APP_ORIGIN}/?error=not_authenticated&platform=facebook`);
       return;
     }
 
-    // Step 5: Find Pages with Instagram accounts only when user chose "Connect Instagram"
     const connectedAccounts: Array<{
       pageId: string;
       pageName: string;
       pageToken: string;
       igAccountId: string | null;
       igUsername: string | null;
-      igProfilePicture: string | null;
     }> = [];
 
     if (connectMode === "instagram") {
       for (const page of pages) {
-        if (page.instagram_business_account) {
-          const igAccountId = page.instagram_business_account.id;
-          const igResponse = await fetch(
-            `https://graph.facebook.com/v19.0/${igAccountId}?` +
-              `fields=id,username,profile_picture_url` +
-              `&access_token=${page.access_token}`
-          );
-          if (igResponse.ok) {
-            const igData = await igResponse.json();
-            connectedAccounts.push({
-              pageId: page.id,
-              pageName: page.name,
-              pageToken: page.access_token,
-              igAccountId: igAccountId,
-              igUsername: igData.username || null,
-              igProfilePicture: igData.profile_picture_url || null,
-            });
-          }
-        }
+        if (!page.instagram_business_account) continue;
+        const igAccountId = page.instagram_business_account.id;
+        const igResponse = await fetch(
+          `https://graph.facebook.com/v19.0/${igAccountId}?fields=id,username,profile_picture_url&access_token=${page.access_token}`
+        );
+        if (!igResponse.ok) continue;
+        const igData = await igResponse.json();
+        connectedAccounts.push({
+          pageId: page.id,
+          pageName: page.name,
+          pageToken: page.access_token,
+          igAccountId,
+          igUsername: igData.username || null,
+        });
       }
     }
 
-    // Step 6: Determine primary Page for Facebook publishing
     const primaryPage = connectedAccounts.length > 0
-      ? {
-          id: connectedAccounts[0].pageId,
-          name: connectedAccounts[0].pageName,
-          access_token: connectedAccounts[0].pageToken,
-        }
+      ? { id: connectedAccounts[0].pageId, name: connectedAccounts[0].pageName, access_token: connectedAccounts[0].pageToken }
       : pages[0];
 
-    // Save Facebook Page account to subcollection (required for publishing)
-    const facebookAccountRef = db
-      .collection("users")
-      .doc(userId)
-      .collection("social_accounts")
-      .doc("facebook");
-
-    await facebookAccountRef.set({
+    await db.collection("users").doc(userId).collection("social_accounts").doc("facebook").set({
       platform: "Facebook",
       connected: true,
-      accessToken: primaryPage?.access_token || longLivedToken, // Prefer Page access token
+      accessToken: primaryPage?.access_token || longLivedToken,
       userAccessToken: longLivedToken,
       expiresAt: tokenExpiry.toISOString(),
-      accountId: primaryPage?.id || facebookUserId, // Use Page ID when available
+      accountId: primaryPage?.id || facebookUserId,
       accountName: primaryPage?.name || userInfo.name || "",
       pageId: primaryPage?.id || null,
       pageName: primaryPage?.name || null,
@@ -216,39 +176,33 @@ export default async function handler(
       lastSyncedAt: new Date().toISOString(),
     }, { merge: true });
 
-    // Save Instagram account(s) to subcollection if found
     if (connectedAccounts.length > 0) {
-      const firstAccount = connectedAccounts[0];
-      const instagramAccountRef = db
-        .collection("users")
-        .doc(userId)
-        .collection("social_accounts")
-        .doc("instagram");
-
-      await instagramAccountRef.set({
+      const first = connectedAccounts[0];
+      await db.collection("users").doc(userId).collection("social_accounts").doc("instagram").set({
         platform: "Instagram",
         connected: true,
-        accessToken: firstAccount.pageToken, // Page token works for IG API calls
-        expiresAt: tokenExpiry.toISOString(), // Use same expiry as Facebook token
-        accountId: firstAccount.igAccountId,
-        accountUsername: firstAccount.igUsername || "",
-        accountName: firstAccount.igUsername || "",
-        pageId: firstAccount.pageId,
-        pageName: firstAccount.pageName,
+        accessToken: first.pageToken,
+        expiresAt: tokenExpiry.toISOString(),
+        accountId: first.igAccountId,
+        accountUsername: first.igUsername || "",
+        accountName: first.igUsername || "",
+        pageId: first.pageId,
+        pageName: first.pageName,
         lastSyncedAt: new Date().toISOString(),
       }, { merge: true });
     }
 
-    // Success - redirect to settings or dashboard
-    const successMessage = connectMode === "facebook"
-      ? "Facebook connected"
-      : connectedAccounts.length > 0
-        ? `Connected Facebook and Instagram (${connectedAccounts.length} account${connectedAccounts.length > 1 ? "s" : ""})`
-        : "Connected Facebook (no Instagram account found)";
-
-    res.redirect(302, `${APP_ORIGIN}/?connected=meta&accounts=${connectMode === "facebook" ? 0 : connectedAccounts.length}&message=${encodeURIComponent(successMessage)}`);
+    // Use oauth_success query params so Settings page refresh handler runs.
+    const successPlatform = connectMode === "instagram" && connectedAccounts.length > 0 ? "instagram" : "facebook";
+    const accountLabel = successPlatform === "instagram"
+      ? (connectedAccounts[0]?.igUsername || connectedAccounts[0]?.pageName || "")
+      : (primaryPage?.name || userInfo?.name || "");
+    res.redirect(
+      302,
+      `${APP_ORIGIN}/?oauth_success=${encodeURIComponent(successPlatform)}&platform=${encodeURIComponent(successPlatform)}&account=${encodeURIComponent(accountLabel)}`
+    );
   } catch (error: any) {
     console.error("OAuth callback error:", error);
-    res.redirect(302, `${APP_ORIGIN}/?error=connection_failed&message=${encodeURIComponent(error?.message || "Connection failed")}`);
+    res.redirect(302, `${APP_ORIGIN}/?error=connection_failed&platform=facebook&message=${encodeURIComponent(error?.message || "Connection failed")}`);
   }
 }

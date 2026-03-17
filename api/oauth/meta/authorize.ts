@@ -58,36 +58,47 @@ export default async function handler(
       "https://echoflux.ai/api/oauth/meta/callback"
     );
 
-    // Facebook-only: no Instagram scopes so Meta won't ask "Choose which Instagram accounts to share"
-    const scopesFacebookOnly = [
-      "public_profile",
-      "email",
-      "pages_show_list",
-      "pages_read_engagement",
-      "pages_manage_posts",
-    ].join(",");
+    // Facebook Login for Business: if Login Configuration IDs are set, use config_id (required for Business-type apps so non-admin users can connect)
+    const configIdFacebook = process.env.META_LOGIN_CONFIG_FACEBOOK?.trim();
+    const configIdInstagram = process.env.META_LOGIN_CONFIG_INSTAGRAM?.trim();
+    const configId = connect === "facebook" ? configIdFacebook : (configIdInstagram || configIdFacebook);
 
-    const scopesWithInstagram = [
-      "public_profile",
-      "email",
-      "pages_show_list",
-      "pages_read_engagement",
-      "pages_manage_posts",
-      "instagram_basic",
-      "instagram_content_publish",
-      "instagram_manage_comments",
-      "instagram_manage_insights",
-    ].join(",");
-
-    const scopes = connect === "facebook" ? scopesFacebookOnly : scopesWithInstagram;
-
-    // Note: auth_type=reauthenticate was removed - it can prevent Meta from redirecting back to the app (known Meta bug)
-    const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?` +
-      `client_id=${appId}` +
-      `&redirect_uri=${redirectUri}` +
-      `&state=${state}` +
-      `&response_type=code` +
-      `&scope=${encodeURIComponent(scopes)}`;
+    let authUrl: string;
+    if (configId) {
+      authUrl = `https://www.facebook.com/v19.0/dialog/oauth?` +
+        `client_id=${appId}` +
+        `&redirect_uri=${redirectUri}` +
+        `&state=${state}` +
+        `&response_type=code` +
+        `&config_id=${encodeURIComponent(configId)}` +
+        `&override_default_response_type=true`;
+    } else {
+      const scopesFacebookOnly = [
+        "public_profile",
+        "email",
+        "pages_show_list",
+        "pages_read_engagement",
+        "pages_manage_posts",
+      ].join(",");
+      const scopesWithInstagram = [
+        "public_profile",
+        "email",
+        "pages_show_list",
+        "pages_read_engagement",
+        "pages_manage_posts",
+        "instagram_basic",
+        "instagram_content_publish",
+        "instagram_manage_comments",
+        "instagram_manage_insights",
+      ].join(",");
+      const scopes = connect === "facebook" ? scopesFacebookOnly : scopesWithInstagram;
+      authUrl = `https://www.facebook.com/v19.0/dialog/oauth?` +
+        `client_id=${appId}` +
+        `&redirect_uri=${redirectUri}` +
+        `&state=${state}` +
+        `&response_type=code` +
+        `&scope=${encodeURIComponent(scopes)}`;
+    }
 
     res.status(200).json({ authUrl });
     return;
@@ -98,29 +109,15 @@ export default async function handler(
     return;
   }
 
-  // Legacy GET flow (no user binding) - default to full scopes
+  // Legacy GET flow (no user binding)
   const state = crypto.randomBytes(32).toString("hex");
   const redirectUri = encodeURIComponent(
     "https://echoflux.ai/api/oauth/meta/callback"
   );
-  const scopes = [
-    "public_profile",
-    "email",
-    "pages_show_list",
-    "pages_read_engagement",
-    "pages_manage_posts",
-    "instagram_basic",
-    "instagram_content_publish",
-    "instagram_manage_comments",
-    "instagram_manage_insights",
-  ].join(",");
-
-  const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?` +
-    `client_id=${appId}` +
-    `&redirect_uri=${redirectUri}` +
-    `&state=${state}` +
-    `&response_type=code` +
-    `&scope=${encodeURIComponent(scopes)}`;
+  const configIdLegacy = process.env.META_LOGIN_CONFIG_INSTAGRAM || process.env.META_LOGIN_CONFIG_FACEBOOK;
+  const authUrl = configIdLegacy
+    ? `https://www.facebook.com/v19.0/dialog/oauth?client_id=${appId}&redirect_uri=${redirectUri}&state=${state}&response_type=code&config_id=${encodeURIComponent(configIdLegacy)}&override_default_response_type=true`
+    : `https://www.facebook.com/v19.0/dialog/oauth?client_id=${appId}&redirect_uri=${redirectUri}&state=${state}&response_type=code&scope=${encodeURIComponent("public_profile,email,pages_show_list,pages_read_engagement,pages_manage_posts,instagram_basic,instagram_content_publish,instagram_manage_comments,instagram_manage_insights")}`;
 
   res.redirect(302, authUrl);
 }
