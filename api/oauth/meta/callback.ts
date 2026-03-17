@@ -113,64 +113,24 @@ export default async function handler(
     const pages = pagesData.data || [];
 
     if (pages.length === 0) {
-      res.redirect(302, `/?error=no_pages&message=You must be an admin of at least one Facebook Page to connect Instagram.`);
+      res.redirect(302, `/?error=no_pages&message=You must be an admin of at least one Facebook Page to connect.`);
       return;
     }
 
-    // Step 5: Find Pages with Instagram accounts
-    const connectedAccounts: Array<{
-      pageId: string;
-      pageName: string;
-      pageToken: string;
-      igAccountId: string | null;
-      igUsername: string | null;
-      igProfilePicture: string | null;
-    }> = [];
-
-    for (const page of pages) {
-      if (page.instagram_business_account) {
-        const igAccountId = page.instagram_business_account.id;
-
-        // Get Instagram account details
-        const igResponse = await fetch(
-          `https://graph.facebook.com/v19.0/${igAccountId}?` +
-            `fields=id,username,profile_picture_url` +
-            `&access_token=${page.access_token}`
-        );
-
-        if (igResponse.ok) {
-          const igData = await igResponse.json();
-          connectedAccounts.push({
-            pageId: page.id,
-            pageName: page.name,
-            pageToken: page.access_token,
-            igAccountId: igAccountId,
-            igUsername: igData.username || null,
-            igProfilePicture: igData.profile_picture_url || null,
-          });
-        }
-      }
-    }
-
-    // Step 6: Determine primary Page for Facebook publishing
-    const primaryPage = connectedAccounts.length > 0
-      ? {
-          id: connectedAccounts[0].pageId,
-          name: connectedAccounts[0].pageName,
-          access_token: connectedAccounts[0].pageToken,
-        }
-      : pages[0];
-
+    // Resolve user and connect mode from OAuth state first (so we know whether to fetch Instagram)
     const db = await getAdminDb();
-
-    // Step 7: Resolve user from OAuth state or auth header
     let userId: string | undefined;
+    let connectMode: "facebook" | "instagram" = "instagram";
     const stateKey = Array.isArray(state) ? state[0] : state;
     if (stateKey) {
       try {
         const stateDoc = await db.collection("oauth_states").doc(stateKey).get();
         if (stateDoc.exists) {
-          userId = stateDoc.data()?.uid;
+          const data = stateDoc.data();
+          userId = data?.uid;
+          if (data?.connect === "facebook" || data?.connect === "instagram") {
+            connectMode = data.connect;
+          }
           await db.collection("oauth_states").doc(stateKey).delete();
         }
       } catch (stateError) {
@@ -188,6 +148,49 @@ export default async function handler(
       res.redirect(302, `/?error=not_authenticated`);
       return;
     }
+
+    // Step 5: Find Pages with Instagram accounts only when user chose "Connect Instagram"
+    const connectedAccounts: Array<{
+      pageId: string;
+      pageName: string;
+      pageToken: string;
+      igAccountId: string | null;
+      igUsername: string | null;
+      igProfilePicture: string | null;
+    }> = [];
+
+    if (connectMode === "instagram") {
+      for (const page of pages) {
+        if (page.instagram_business_account) {
+          const igAccountId = page.instagram_business_account.id;
+          const igResponse = await fetch(
+            `https://graph.facebook.com/v19.0/${igAccountId}?` +
+              `fields=id,username,profile_picture_url` +
+              `&access_token=${page.access_token}`
+          );
+          if (igResponse.ok) {
+            const igData = await igResponse.json();
+            connectedAccounts.push({
+              pageId: page.id,
+              pageName: page.name,
+              pageToken: page.access_token,
+              igAccountId: igAccountId,
+              igUsername: igData.username || null,
+              igProfilePicture: igData.profile_picture_url || null,
+            });
+          }
+        }
+      }
+    }
+
+    // Step 6: Determine primary Page for Facebook publishing
+    const primaryPage = connectedAccounts.length > 0
+      ? {
+          id: connectedAccounts[0].pageId,
+          name: connectedAccounts[0].pageName,
+          access_token: connectedAccounts[0].pageToken,
+        }
+      : pages[0];
 
     // Save Facebook Page account to subcollection (required for publishing)
     const facebookAccountRef = db
@@ -234,11 +237,13 @@ export default async function handler(
     }
 
     // Success - redirect to settings or dashboard
-    const successMessage = connectedAccounts.length > 0
-      ? `Connected Facebook and Instagram (${connectedAccounts.length} account${connectedAccounts.length > 1 ? 's' : ''})`
-      : "Connected Facebook (no Instagram account found)";
-    
-    res.redirect(302, `/?connected=meta&accounts=${connectedAccounts.length}&message=${encodeURIComponent(successMessage)}`);
+    const successMessage = connectMode === "facebook"
+      ? "Facebook connected"
+      : connectedAccounts.length > 0
+        ? `Connected Facebook and Instagram (${connectedAccounts.length} account${connectedAccounts.length > 1 ? "s" : ""})`
+        : "Connected Facebook (no Instagram account found)";
+
+    res.redirect(302, `/?connected=meta&accounts=${connectMode === "facebook" ? 0 : connectedAccounts.length}&message=${encodeURIComponent(successMessage)}`);
   } catch (error: any) {
     console.error("OAuth callback error:", error);
     res.redirect(302, `/?error=connection_failed&message=${encodeURIComponent(error.message)}`);

@@ -40,37 +40,55 @@ export default async function handler(
       return;
     }
 
-    // Generate CSRF state token and persist user mapping
+    // connect: 'facebook' = only Facebook Pages (no Instagram). 'instagram' = Facebook + Instagram.
+    const body = (req.body || {}) as { connect?: string };
+    const connect = (body.connect === "facebook" || body.connect === "instagram") ? body.connect : "instagram";
+
+    // Generate CSRF state token and persist user mapping + connect mode
     const state = crypto.randomBytes(32).toString("hex");
     const db = await getAdminDb();
     await db.collection("oauth_states").doc(state).set({
       uid: user.uid,
       createdAt: new Date().toISOString(),
       provider: "meta",
+      connect, // "facebook" | "instagram"
     });
 
     const redirectUri = encodeURIComponent(
       "https://echoflux.ai/api/oauth/meta/callback"
     );
-    
-    const scopes = [
+
+    // Facebook-only: no Instagram scopes so Meta won't ask "Choose which Instagram accounts to share"
+    const scopesFacebookOnly = [
       "public_profile",
       "email",
-      "pages_show_list", // Required to list user's Pages
-      "pages_read_engagement", // For analytics
-      "pages_manage_posts", // Required to publish to Facebook Pages
-      "instagram_basic", // Access Instagram account info
-      "instagram_content_publish", // Post to Instagram
-      "instagram_manage_comments", // Manage comments
-      "instagram_manage_insights", // Read analytics
+      "pages_show_list",
+      "pages_read_engagement",
+      "pages_manage_posts",
     ].join(",");
 
+    const scopesWithInstagram = [
+      "public_profile",
+      "email",
+      "pages_show_list",
+      "pages_read_engagement",
+      "pages_manage_posts",
+      "instagram_basic",
+      "instagram_content_publish",
+      "instagram_manage_comments",
+      "instagram_manage_insights",
+    ].join(",");
+
+    const scopes = connect === "facebook" ? scopesFacebookOnly : scopesWithInstagram;
+
+    // auth_type=reauthenticate: forces user to re-enter password or choose account, so they don't accidentally use someone else's session
     const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?` +
       `client_id=${appId}` +
       `&redirect_uri=${redirectUri}` +
       `&state=${state}` +
       `&response_type=code` +
-      `&scope=${encodeURIComponent(scopes)}`;
+      `&scope=${encodeURIComponent(scopes)}` +
+      `&auth_type=reauthenticate`;
 
     res.status(200).json({ authUrl });
     return;
@@ -81,25 +99,21 @@ export default async function handler(
     return;
   }
 
-  // Generate CSRF state token for legacy GET flow (no user binding)
+  // Legacy GET flow (no user binding) - default to full scopes
   const state = crypto.randomBytes(32).toString("hex");
-  
-  // Build OAuth URL
   const redirectUri = encodeURIComponent(
     "https://echoflux.ai/api/oauth/meta/callback"
   );
-  
-  // Request permissions for both Facebook and Instagram
   const scopes = [
     "public_profile",
     "email",
-    "pages_show_list", // Required to list user's Pages
-    "pages_read_engagement", // For analytics
-    "pages_manage_posts", // Required to publish to Facebook Pages
-    "instagram_basic", // Access Instagram account info
-    "instagram_content_publish", // Post to Instagram
-    "instagram_manage_comments", // Manage comments
-    "instagram_manage_insights", // Read analytics
+    "pages_show_list",
+    "pages_read_engagement",
+    "pages_manage_posts",
+    "instagram_basic",
+    "instagram_content_publish",
+    "instagram_manage_comments",
+    "instagram_manage_insights",
   ].join(",");
 
   const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?` +
@@ -107,8 +121,8 @@ export default async function handler(
     `&redirect_uri=${redirectUri}` +
     `&state=${state}` +
     `&response_type=code` +
-    `&scope=${encodeURIComponent(scopes)}`;
+    `&scope=${encodeURIComponent(scopes)}` +
+    `&auth_type=reauthenticate`;
 
-  // Redirect user to Facebook
   res.redirect(302, authUrl);
 }
