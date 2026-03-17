@@ -27,18 +27,21 @@ export async function connectSocialAccount(platform: Platform): Promise<void> {
     
     // Map platforms to their OAuth endpoints/methods
     const platformKey = platform.toLowerCase();
-    const authorizePath = platformKey === 'facebook' ? 'meta' : platformKey;
-    const authorizeMethod = authorizePath === 'meta' ? 'GET' : 'POST';
+    // Both Facebook and Instagram use Meta OAuth; pass connect type so backend requests only the right scopes
+    const authorizePath = (platformKey === 'facebook' || platformKey === 'instagram') ? 'meta' : platformKey;
+    const authorizeMethod = authorizePath === 'meta' ? 'POST' : 'POST';
     const authorizeUrl = `/api/oauth/${authorizePath}/authorize`;
 
-    // Meta (Facebook/Instagram) requires authenticated request to bind state to user
+    // Meta (Facebook/Instagram): pass connect so backend asks only for Facebook or Facebook+Instagram
     if (authorizePath === 'meta') {
+      const connect = platformKey === 'facebook' ? 'facebook' : 'instagram';
       const response = await fetch(authorizeUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
+        body: JSON.stringify({ connect }),
       });
 
       if (!response.ok) {
