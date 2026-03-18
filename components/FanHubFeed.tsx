@@ -1,7 +1,13 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useAppContext } from "./AppContext";
-import { collection, query, orderBy, limit, getDocs, doc, runTransaction, getDoc, serverTimestamp, updateDoc, deleteDoc } from "firebase/firestore";
+import { collection, query, orderBy, limit, getDocs, doc, runTransaction, getDoc, serverTimestamp, updateDoc, deleteDoc, setDoc, writeBatch, deleteField } from "firebase/firestore";
 import { db } from "../firebaseConfig";
+
+export type FeedVisibilitySettings = {
+  hideLikeCounts: boolean;
+  hideComments: boolean;
+  hideLikes: boolean;
+};
 
 export type FeedPost = {
   id: string;
@@ -26,6 +32,8 @@ export type FeedPost = {
   tipGoal?: { description: string; targetCents: number; raisedCents: number };
   lockedContent?: { enabled: boolean; priceCents: number };
   status?: "published" | "scheduled" | "draft";
+  pinned?: boolean;
+  pinnedAt?: { toDate: () => Date } | string;
   calendarDate?: string;
   calendarTime?: string;
   scheduledAt?: { toDate: () => Date } | Date | null;
@@ -65,6 +73,16 @@ const DotsMenuIcon = () => (
     <circle cx="12" cy="5" r="2" />
     <circle cx="12" cy="12" r="2" />
     <circle cx="12" cy="19" r="2" />
+  </svg>
+);
+
+const PinIcon = () => (
+  <svg className="admin-action-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 17v5" />
+    <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78 9.02a1 1 0 0 0 1.78.91l1.78-9.02a2 2 0 0 1 1.11-1.79z" />
+    <path d="M15 10.76a2 2 0 0 0 1.11 1.79l1.78 9.02a1 1 0 0 1-1.78.91l-1.78-9.02a2 2 0 0 0-1.11-1.79z" />
+    <path d="M5 8h14v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V8z" />
+    <path d="M12 2v4" />
   </svg>
 );
 
@@ -263,6 +281,7 @@ function FeedCard({
   onEditPost,
   onDeletePost,
   onToggleVisibility,
+  onTogglePin,
 }: {
   post: FeedPost;
   creatorName: string;
@@ -276,6 +295,7 @@ function FeedCard({
   onEditPost?: (postId: string) => void;
   onDeletePost?: (postId: string) => void;
   onToggleVisibility?: (postId: string, currentStatus: string) => void;
+  onTogglePin?: (postId: string, currentlyPinned: boolean) => void;
 }) {
   const firstUrl = post.mediaUrls?.[0];
   const hasTipGoal = !!(post.tipGoal && typeof post.tipGoal.targetCents === "number" && post.tipGoal.targetCents > 0);
@@ -452,6 +472,17 @@ function FeedCard({
             </button>
             {adminMenuOpen && (
               <div className="feed-card-admin-menu">
+                <button
+                  type="button"
+                  className="feed-card-admin-menu-item"
+                  onClick={() => {
+                    setAdminMenuOpen(false);
+                    onTogglePin?.(post.id, !!post.pinned);
+                  }}
+                >
+                  <PinIcon />
+                  {post.pinned ? "Unpin from profile" : "Pin to profile"}
+                </button>
                 <button
                   type="button"
                   className="feed-card-admin-menu-item"
@@ -851,12 +882,18 @@ function FeedCard({
 }
 
 export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = false }) => {
-  const { user, setActivePage } = useAppContext();
+  const { user, setActivePage, showToast } = useAppContext();
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [savedPostIds, setSavedPostIds] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<"feed" | "grid">("feed");
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
+  const [feedSettings, setFeedSettings] = useState<FeedVisibilitySettings>({
+    hideLikeCounts: false,
+    hideComments: false,
+    hideLikes: false,
+  });
+  const [feedSettingsSaving, setFeedSettingsSaving] = useState(false);
   const creatorId = user?.id;
   const creatorName = (user as { displayName?: string })?.displayName || "You";
   const creatorAvatar = (user as { photoURL?: string })?.photoURL;
@@ -898,9 +935,15 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
             poll: d.poll as FeedPost["poll"] | undefined,
             tipGoal: d.tipGoal as FeedPost["tipGoal"] | undefined,
             status: status as FeedPost["status"],
+            pinned: !!d.pinned,
+            pinnedAt: d.pinnedAt as FeedPost["pinnedAt"],
           });
         });
-        
+        list.sort((a, b) => {
+          if (a.pinned && !b.pinned) return -1;
+          if (!a.pinned && b.pinned) return 1;
+          return 0;
+        });
         // Use demo posts if no real posts exist
         setPosts(list.length > 0 ? list : DEMO_POSTS);
       } catch (err) {
@@ -924,9 +967,37 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
         const d = snap.exists() ? snap.data() : {};
         const ids = Array.isArray(d.savedPostIds) ? (d.savedPostIds as unknown[]).map((v) => String(v)) : [];
         setSavedPostIds(ids);
+        const fs = (d.fanHubFeedSettings as Partial<FeedVisibilitySettings>) || {};
+        setFeedSettings({
+          hideLikeCounts: !!fs.hideLikeCounts,
+          hideComments: !!fs.hideComments,
+          hideLikes: !!fs.hideLikes,
+        });
       })
       .catch(() => setSavedPostIds([]));
   }, [creatorId]);
+
+  const saveFeedSettings = useCallback(
+    async (next: FeedVisibilitySettings) => {
+      if (!db || !creatorId || feedSettingsSaving) return;
+      const previous = feedSettings;
+      setFeedSettings(next);
+      setFeedSettingsSaving(true);
+      try {
+        const userRef = doc(db, "users", creatorId);
+        await setDoc(userRef, { fanHubFeedSettings: next }, { merge: true });
+        const creatorsRef = doc(db, "creators", creatorId);
+        await setDoc(creatorsRef, { feedSettings: next }, { merge: true });
+      } catch (err) {
+        console.error("Failed to save feed settings", err);
+        setFeedSettings(previous);
+        showToast?.("Failed to save visibility settings", "error");
+      } finally {
+        setFeedSettingsSaving(false);
+      }
+    },
+    [creatorId, feedSettingsSaving, feedSettings, showToast]
+  );
 
   const handleLikeUpdated = useCallback((postId: string, likedBy: string[], likeCount: number) => {
     setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, likedBy, likeCount } : p)));
@@ -986,22 +1057,125 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
     }
   }, [creatorId]);
 
+  const handleTogglePin = useCallback(
+    async (postId: string, currentlyPinned: boolean) => {
+      if (!db || !creatorId) return;
+      const userPostsRef = collection(db, "users", creatorId, "posts");
+      const creatorsPostsRef = collection(db, "creators", creatorId, "posts");
+      const newPinned = !currentlyPinned;
+      setPosts((prev) => {
+        const next = prev.map((p) => {
+          if (p.id === postId) return { ...p, pinned: newPinned };
+          if (newPinned && p.pinned) return { ...p, pinned: false };
+          return p;
+        });
+        next.sort((a, b) => (a.pinned && !b.pinned ? -1 : !a.pinned && b.pinned ? 1 : 0));
+        return next;
+      });
+      try {
+        const batch = writeBatch(db);
+        if (newPinned) {
+          batch.set(doc(userPostsRef, postId), { pinned: true, pinnedAt: serverTimestamp() }, { merge: true });
+          const otherPinned = posts.filter((p) => p.pinned && p.id !== postId);
+          otherPinned.forEach((p) => batch.update(doc(userPostsRef, p.id), { pinned: false, pinnedAt: deleteField() }));
+        } else {
+          batch.update(doc(userPostsRef, postId), { pinned: false, pinnedAt: deleteField() });
+        }
+        await batch.commit();
+        if (newPinned) {
+          await setDoc(doc(creatorsPostsRef, postId), { pinned: true, pinnedAt: serverTimestamp() }, { merge: true });
+        } else {
+          await updateDoc(doc(creatorsPostsRef, postId), { pinned: false, pinnedAt: deleteField() }).catch(() => {});
+        }
+      } catch (err) {
+        console.error("Failed to toggle pin:", err);
+        setPosts((prev) => {
+          const list = prev.map((p) => (p.id === postId ? { ...p, pinned: currentlyPinned } : p));
+          list.sort((a, b) => (a.pinned && !b.pinned ? -1 : !a.pinned && b.pinned ? 1 : 0));
+          return list;
+        });
+        showToast?.("Failed to update pin", "error");
+      }
+    },
+    [creatorId, posts, showToast]
+  );
+
+  const [visibilityOpen, setVisibilityOpen] = useState(false);
+  const visibilityRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!visibilityOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (visibilityRef.current && !visibilityRef.current.contains(e.target as Node)) setVisibilityOpen(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [visibilityOpen]);
+
   return (
     <main className="member-feed-main">
-      <div className="feed-header">
-        <button
-          type="button"
-          className="feed-view-toggle"
-          title={viewMode === "feed" ? "Switch to grid view" : "Switch to feed view"}
-          aria-label={viewMode === "feed" ? "Switch to grid view" : "Switch to feed view"}
-          onClick={() => setViewMode(viewMode === "feed" ? "grid" : "feed")}
-        >
-          <GridIcon />
-        </button>
-        <h1 className="feed-title">Feed</h1>
-        <button type="button" className="feed-saved-link">
-          Saved ({savedPostIds.length})
-        </button>
+      <div className="feed-header-wrap">
+        <div className="feed-header">
+          <button
+            type="button"
+            className="feed-view-toggle"
+            title={viewMode === "feed" ? "Switch to grid view" : "Switch to feed view"}
+            aria-label={viewMode === "feed" ? "Switch to grid view" : "Switch to feed view"}
+            onClick={() => setViewMode(viewMode === "feed" ? "grid" : "feed")}
+          >
+            <GridIcon />
+          </button>
+          <h1 className="feed-title">Feed</h1>
+          <div className="feed-header-right">
+            {isAdminMode && (
+              <div className="feed-header-visibility-dropdown" ref={visibilityRef}>
+                <button
+                  type="button"
+                  className="feed-header-visibility-btn"
+                  onClick={() => setVisibilityOpen((o) => !o)}
+                  aria-expanded={visibilityOpen}
+                  aria-haspopup="true"
+                >
+                  Visibility
+                </button>
+                {visibilityOpen && (
+                  <div className="feed-header-visibility-popover" aria-label="Visibility for fans">
+                    <span className="feed-header-visibility-label">Visibility for fans</span>
+                    <label className="feed-header-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={feedSettings.hideLikeCounts}
+                        disabled={feedSettingsSaving}
+                        onChange={(e) => saveFeedSettings({ ...feedSettings, hideLikeCounts: e.target.checked })}
+                      />
+                      <span>Hide like counts</span>
+                    </label>
+                    <label className="feed-header-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={feedSettings.hideComments}
+                        disabled={feedSettingsSaving}
+                        onChange={(e) => saveFeedSettings({ ...feedSettings, hideComments: e.target.checked })}
+                      />
+                      <span>Hide comments</span>
+                    </label>
+                    <label className="feed-header-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={feedSettings.hideLikes}
+                        disabled={feedSettingsSaving}
+                        onChange={(e) => saveFeedSettings({ ...feedSettings, hideLikes: e.target.checked })}
+                      />
+                      <span>Hide likes</span>
+                    </label>
+                  </div>
+                )}
+              </div>
+            )}
+            <button type="button" className="feed-saved-link">
+              Saved ({savedPostIds.length})
+            </button>
+          </div>
+        </div>
       </div>
 
       {loading && <p className="feed-loading">Loading…</p>}
@@ -1027,6 +1201,7 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
                 onEditPost={handleEditPost}
                 onDeletePost={handleDeletePost}
                 onToggleVisibility={handleToggleVisibility}
+                onTogglePin={handleTogglePin}
               />
             ))}
           </div>

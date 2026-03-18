@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { auth } from "../firebaseConfig";
 import type { TreatProduct, FanDmThread, FanDmMessage, StorefrontSocialLinks, StorefrontLandingContent, StorefrontLegal, CreatorMonetization, TextStyle } from "../types";
 import { FanLandingPage } from "./FanLandingPage";
-import { FanMemberFeed } from "./FanMemberFeed";
+import { FanMemberFeed, FanMemberSaved } from "./FanMemberFeed";
 import { DEFAULT_PRIVACY_POLICY, DEFAULT_TERMS_OF_SERVICE } from "../constants";
 
 export type StorefrontCreator = {
@@ -24,6 +24,7 @@ export type StorefrontCreator = {
   rules?: { boundariesText?: string };
   spicyMode?: boolean;
   monetization?: CreatorMonetization;
+  feedSettings?: { hideLikeCounts?: boolean; hideComments?: boolean; hideLikes?: boolean };
   textStyles?: {
     displayName?: TextStyle;
     bio?: TextStyle;
@@ -215,7 +216,7 @@ export const FanStorefrontView: React.FC = () => {
   const [entitlementLoading, setEntitlementLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"feed" | "treats" | "messages" | "tip">("feed");
+  const [activeTab, setActiveTab] = useState<"feed" | "treats" | "messages" | "tip" | "saved">("feed");
   const [tipSelectedPreset, setTipSelectedPreset] = useState<number | null>(null);
   const [tipCustomAmount, setTipCustomAmount] = useState("");
   const [tipLoading, setTipLoading] = useState(false);
@@ -734,6 +735,17 @@ export const FanStorefrontView: React.FC = () => {
             </svg>
             <span>Messages</span>
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("saved")}
+            className={`storefront-nav-btn ${activeTab === "saved" ? "active" : ""}`}
+            title="Saved posts"
+          >
+            <svg className="storefront-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+            </svg>
+            <span>Saved</span>
+          </button>
         </nav>
       </header>
 
@@ -745,6 +757,18 @@ export const FanStorefrontView: React.FC = () => {
                 displayName={displayName}
                 avatar={avatar}
                 primary={primary}
+                feedSettings={creator.feedSettings}
+                fanId={auth.currentUser?.uid}
+              />
+            )}
+            {activeTab === "saved" && (
+              <FanMemberSaved
+                creatorId={creator.creatorId}
+                displayName={displayName}
+                avatar={avatar}
+                primary={primary}
+                feedSettings={creator.feedSettings}
+                fanId={auth.currentUser?.uid}
               />
             )}
             {activeTab === "treats" && (

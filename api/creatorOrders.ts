@@ -7,11 +7,13 @@ export type CreatorOrder = {
   creatorId: string;
   fanId: string;
   productId: string | null;
-  type: "subscription" | "product";
+  type: string;
   amountCents: number;
   status: string;
   createdAt: string;
   productTitle?: string;
+  fanName?: string | null;
+  fanEmail?: string;
 };
 
 /**
@@ -57,10 +59,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         creatorId: (d.creatorId as string) ?? "",
         fanId: (d.fanId as string) ?? "",
         productId: (d.productId as string) ?? null,
-        type: (d.type as "subscription" | "product") ?? "product",
+        type: (d.type as string) ?? "product",
         amountCents: (d.amountCents as number) ?? 0,
         status: (d.status as string) ?? "paid",
         createdAt: createdAtIso,
+        productTitle: (d.productTitle as string) ?? (d.productId as string) ?? undefined,
+        fanName: (d.fanName as string) ?? (d.tipHandle as string) ?? null,
+        fanEmail: (d.fanEmail as string) ?? (d.fanId as string) ?? undefined,
       };
     });
 

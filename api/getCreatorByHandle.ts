@@ -88,7 +88,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const legal = creatorData?.legal || undefined;
     const monetization = creatorData?.monetization || undefined;
     const textStyles = creatorData?.textStyles || undefined;
-    
+    const feedSettings = (creatorData?.feedSettings as { hideLikeCounts?: boolean; hideComments?: boolean; hideLikes?: boolean } | undefined) || undefined;
+
     const payload = {
       creatorId,
       handle: cleanHandle,
@@ -120,6 +121,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       spicyMode: !!creatorData?.spicyMode,
       rules: rules.boundariesText != null ? { boundariesText: rules.boundariesText } : undefined,
       monetization,
+      feedSettings: feedSettings ? {
+        hideLikeCounts: !!feedSettings.hideLikeCounts,
+        hideComments: !!feedSettings.hideComments,
+        hideLikes: !!feedSettings.hideLikes,
+      } : undefined,
     };
 
     return res.status(200).json(payload);

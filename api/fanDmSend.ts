@@ -80,6 +80,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const now = new Date().toISOString();
     const threadRef = db.collection(FAN_DM_THREADS).doc(threadId);
     const threadSnap = await threadRef.get();
+    const fanHasSentMessage = uid === fanIdFinal;
 
     if (!threadSnap.exists) {
       await threadRef.set({
@@ -87,15 +88,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         fanId: fanIdFinal,
         lastMessageAt: now,
         lastMessagePreview: content.slice(0, 100),
+        fanHasSentMessage,
         createdAt: now,
         updatedAt: now,
       });
     } else {
-      await threadRef.update({
+      const update: Record<string, unknown> = {
         lastMessageAt: now,
         lastMessagePreview: content.slice(0, 100),
         updatedAt: now,
-      });
+      };
+      if (fanHasSentMessage) update.fanHasSentMessage = true;
+      await threadRef.update(update);
     }
 
     const msgRef = threadRef.collection(FAN_DM_MESSAGES).doc();

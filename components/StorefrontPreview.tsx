@@ -503,6 +503,44 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
           <div className="p-4" style={{ maxWidth: "480px", margin: "0 auto" }}>
             {(activeTab === "home" || activeTab === "feed") && (
               <div className="space-y-4">
+                {/* Member feed header: grid icon + Saved (0); no Saved in nav */}
+                <div
+                  className="flex items-center justify-between gap-2 mb-3"
+                  style={{
+                    padding: "0.5rem 0",
+                    borderBottom: "1px solid rgba(156, 163, 175, 0.2)",
+                  }}
+                >
+                  <span
+                    className="inline-flex items-center justify-center rounded-lg border"
+                    style={{
+                      width: "32px",
+                      height: "32px",
+                      borderColor: `${primary}30`,
+                      color: primary,
+                    }}
+                    title="Grid view"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="3" y="3" width="7" height="7" rx="1" />
+                      <rect x="14" y="3" width="7" height="7" rx="1" />
+                      <rect x="3" y="14" width="7" height="7" rx="1" />
+                      <rect x="14" y="14" width="7" height="7" rx="1" />
+                    </svg>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("saved")}
+                    className="rounded-lg border px-3 py-1.5 text-sm font-semibold"
+                    style={{
+                      borderColor: `${primary}40`,
+                      color: primary,
+                      background: "transparent",
+                    }}
+                  >
+                    Saved (0)
+                  </button>
+                </div>
                 {/* Sample Feed Post - matches .feed-card structure */}
                 <article 
                   className="rounded-2xl overflow-hidden"
@@ -602,6 +640,15 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                       <span style={{ fontWeight: 700, color: primary, fontSize: "0.85rem" }}>$</span>
                       <span style={{ fontSize: "0.75rem", fontWeight: 600, color: primary, letterSpacing: "0.02em" }}>SEND TIP</span>
                     </span>
+                    <span
+                      className="inline-flex items-center"
+                      style={{ marginLeft: "auto", color: "#6b7280" }}
+                      title="Save post"
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                      </svg>
+                    </span>
                   </div>
                   
                   {/* Body - matches .feed-card-body */}
@@ -639,7 +686,21 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                 </p>
               </div>
             )}
-            
+
+            {activeTab === "saved" && (
+              <div
+                className="rounded-xl border p-6 text-center"
+                style={{
+                  borderColor: `${primary}20`,
+                  background: `${primary}06`,
+                  color: `${textColor}99`,
+                  fontSize: "0.9rem",
+                }}
+              >
+                <p className="font-medium" style={{ color: textColor }}>Saved</p>
+                <p className="mt-1">Posts you bookmark will appear here.</p>
+              </div>
+            )}
             {activeTab === "treats" && (
               <div 
                 style={{ 

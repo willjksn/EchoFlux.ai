@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { collection, getDocs, orderBy, query, limit, Timestamp } from "firebase/firestore";
+import { collection, getDocs, orderBy, query, limit, Timestamp, doc, getDoc, setDoc } from "firebase/firestore";
 import { db, auth } from "../firebaseConfig";
+
+const SAVED_BY_CREATOR_KEY = "savedPostIdsByCreator";
 
 interface Post {
   id: string;
@@ -12,6 +14,16 @@ interface Post {
   createdAt: Date;
   likesCount: number;
   commentsCount: number;
+  pinned?: boolean;
+  hideComments?: boolean;
+  hideLikes?: boolean;
+  hideLikeCounts?: boolean;
+}
+
+export interface FanFeedVisibilitySettings {
+  hideLikeCounts?: boolean;
+  hideComments?: boolean;
+  hideLikes?: boolean;
 }
 
 interface FanMemberFeedProps {
@@ -19,6 +31,9 @@ interface FanMemberFeedProps {
   displayName: string;
   avatar?: string;
   primary?: string;
+  feedSettings?: FanFeedVisibilitySettings;
+  /** Logged-in fan's uid; when set, bookmarks are persisted and loaded from Firestore */
+  fanId?: string;
 }
 
 const DEMO_POSTS: Post[] = [
@@ -88,12 +103,15 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   displayName,
   avatar,
   primary = "#6366f1",
+  feedSettings,
+  fanId,
 }) => {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
   const [bookmarkedPosts, setBookmarkedPosts] = useState<Set<string>>(new Set());
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
+  const [bookmarkSaving, setBookmarkSaving] = useState(false);
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
@@ -102,20 +120,31 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
       const q = query(postsRef, orderBy("createdAt", "desc"), limit(20));
       const snapshot = await getDocs(q);
 
-      const realPosts: Post[] = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          content: data.content || "",
-          mediaUrl: data.mediaUrl || "",
-          mediaType: data.mediaType,
-          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt),
-          likesCount: data.likesCount || 0,
-          commentsCount: data.commentsCount || 0,
-        };
+      const realPosts: Post[] = [];
+      snapshot.docs.forEach((docSnap) => {
+        const data = docSnap.data();
+        const status = (data.status as string) || "published";
+        if (status === "draft") return;
+        const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date((data.createdAt as string) || Date.now());
+        const mediaUrls = data.mediaUrls as string[] | undefined;
+        const mediaTypes = data.mediaTypes as ("image" | "video")[] | undefined;
+        const comments = (data.comments as { text: string }[]) || [];
+        realPosts.push({
+          id: docSnap.id,
+          content: (data.body as string) || (data.content as string) || "",
+          mediaUrl: mediaUrls?.[0] || (data.mediaUrl as string) || "",
+          mediaType: mediaTypes?.[0] || (data.mediaType as "image" | "video"),
+          createdAt,
+          likesCount: typeof data.likeCount === "number" ? data.likeCount : (data.likesCount as number) || 0,
+          commentsCount: comments.length || (data.commentsCount as number) || 0,
+          pinned: !!(data.pinned as boolean),
+          hideComments: data.hideComments as boolean | undefined,
+          hideLikes: data.hideLikes as boolean | undefined,
+          hideLikeCounts: data.hideLikeCounts as boolean | undefined,
+        });
       });
+      realPosts.sort((a, b) => (a.pinned && !b.pinned ? -1 : !a.pinned && b.pinned ? 1 : 0));
 
-      // Merge with demo posts if no real posts exist
       if (realPosts.length === 0) {
         setPosts(DEMO_POSTS);
       } else {
@@ -132,6 +161,53 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   useEffect(() => {
     fetchPosts();
   }, [fetchPosts]);
+
+  useEffect(() => {
+    if (!fanId || !creatorId || !db) return;
+    getDoc(doc(db, "users", fanId))
+      .then((snap) => {
+        if (!snap.exists()) return;
+        const data = snap.data() as Record<string, unknown>;
+        const byCreator = (data[SAVED_BY_CREATOR_KEY] as Record<string, string[]>) || {};
+        const ids = byCreator[creatorId];
+        setBookmarkedPosts(new Set(Array.isArray(ids) ? ids : []));
+      })
+      .catch(() => {});
+  }, [fanId, creatorId]);
+
+  const toggleBookmark = useCallback(
+    async (postId: string) => {
+      setBookmarkedPosts((prev) => {
+        const next = new Set(prev);
+        if (next.has(postId)) next.delete(postId);
+        else next.add(postId);
+        return next;
+      });
+      if (!fanId || !creatorId || !db) return;
+      setBookmarkSaving(true);
+      try {
+        const userRef = doc(db, "users", fanId);
+        const snap = await getDoc(userRef);
+        const data = (snap.exists() ? snap.data() : {}) as Record<string, unknown>;
+        const byCreator = { ...((data[SAVED_BY_CREATOR_KEY] as Record<string, string[]>) || {}) };
+        const current = byCreator[creatorId] || [];
+        const next = current.includes(postId) ? current.filter((id) => id !== postId) : [...current, postId];
+        byCreator[creatorId] = next;
+        await setDoc(userRef, { [SAVED_BY_CREATOR_KEY]: byCreator }, { merge: true });
+      } catch (err) {
+        console.error("Failed to save bookmark", err);
+        setBookmarkedPosts((prev) => {
+          const next = new Set(prev);
+          if (next.has(postId)) next.delete(postId);
+          else next.add(postId);
+          return next;
+        });
+      } finally {
+        setBookmarkSaving(false);
+      }
+    },
+    [fanId, creatorId]
+  );
 
   const toggleLike = (postId: string) => {
     setLikedPosts((prev) => {
@@ -151,18 +227,6 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
           : p
       )
     );
-  };
-
-  const toggleBookmark = (postId: string) => {
-    setBookmarkedPosts((prev) => {
-      const next = new Set(prev);
-      if (next.has(postId)) {
-        next.delete(postId);
-      } else {
-        next.add(postId);
-      }
-      return next;
-    });
   };
 
   const toggleComments = (postId: string) => {
@@ -237,34 +301,42 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
               )}
 
               <div className="fan-feed-post-actions">
-                <button
-                  type="button"
-                  className={`fan-feed-action-btn ${likedPosts.has(post.id) ? "fan-feed-action-active" : ""}`}
-                  onClick={() => toggleLike(post.id)}
-                  style={likedPosts.has(post.id) ? { color: primary } : undefined}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill={likedPosts.has(post.id) ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
-                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-                  </svg>
-                  <span>{post.likesCount + (likedPosts.has(post.id) ? 1 : 0)}</span>
-                </button>
+                {!(feedSettings?.hideLikes || post.hideLikes) && (
+                  <button
+                    type="button"
+                    className={`fan-feed-action-btn ${likedPosts.has(post.id) ? "fan-feed-action-active" : ""}`}
+                    onClick={() => toggleLike(post.id)}
+                    style={likedPosts.has(post.id) ? { color: primary } : undefined}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill={likedPosts.has(post.id) ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                    </svg>
+                    {!(feedSettings?.hideLikeCounts || post.hideLikeCounts) && (
+                      <span>{post.likesCount + (likedPosts.has(post.id) ? 1 : 0)}</span>
+                    )}
+                  </button>
+                )}
 
-                <button
-                  type="button"
-                  className="fan-feed-action-btn"
-                  onClick={() => toggleComments(post.id)}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-                  </svg>
-                  <span>{post.commentsCount}</span>
-                </button>
+                {!(feedSettings?.hideComments || post.hideComments) && (
+                  <button
+                    type="button"
+                    className="fan-feed-action-btn"
+                    onClick={() => toggleComments(post.id)}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+                    </svg>
+                    <span>{post.commentsCount}</span>
+                  </button>
+                )}
 
                 <button
                   type="button"
                   className={`fan-feed-action-btn ${bookmarkedPosts.has(post.id) ? "fan-feed-action-active" : ""}`}
                   onClick={() => toggleBookmark(post.id)}
+                  disabled={bookmarkSaving}
                   style={bookmarkedPosts.has(post.id) ? { color: primary } : undefined}
+                  title={bookmarkedPosts.has(post.id) ? "Unsave post" : "Save post"}
                 >
                   <svg width="20" height="20" viewBox="0 0 24 24" fill={bookmarkedPosts.has(post.id) ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
                     <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
@@ -282,7 +354,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                 </button>
               </div>
 
-              {expandedComments.has(post.id) && (
+              {!(feedSettings?.hideComments || post.hideComments) && expandedComments.has(post.id) && (
                 <div className="fan-feed-comments">
                   <div className="fan-feed-comment-input-wrap">
                     <input
@@ -303,6 +375,195 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                   </div>
                 </div>
               )}
+            </article>
+          ))
+        )}
+      </div>
+    </div>
+  );
+};
+
+/** Saved posts view for a fan: loads savedPostIdsByCreator[creatorId] and fetches each post */
+interface FanMemberSavedProps {
+  creatorId: string;
+  displayName: string;
+  avatar?: string;
+  primary?: string;
+  feedSettings?: FanFeedVisibilitySettings;
+  fanId: string | undefined;
+}
+
+export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
+  creatorId,
+  displayName,
+  avatar,
+  primary = "#6366f1",
+  feedSettings,
+  fanId,
+}) => {
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [unsavingId, setUnsavingId] = useState<string | null>(null);
+
+  const handleUnsave = useCallback(
+    async (postId: string) => {
+      if (!fanId || !creatorId || !db) return;
+      setUnsavingId(postId);
+      try {
+        const userRef = doc(db, "users", fanId);
+        const snap = await getDoc(userRef);
+        const data = (snap.exists() ? snap.data() : {}) as Record<string, unknown>;
+        const byCreator = { ...((data[SAVED_BY_CREATOR_KEY] as Record<string, string[]>) || {}) };
+        const current = byCreator[creatorId] || [];
+        byCreator[creatorId] = current.filter((id) => id !== postId);
+        await setDoc(userRef, { [SAVED_BY_CREATOR_KEY]: byCreator }, { merge: true });
+        setPosts((prev) => prev.filter((p) => p.id !== postId));
+      } catch (err) {
+        console.error("Failed to unsave", err);
+      } finally {
+        setUnsavingId(null);
+      }
+    },
+    [fanId, creatorId]
+  );
+
+  useEffect(() => {
+    if (!fanId || !creatorId || !db) {
+      setPosts([]);
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    getDoc(doc(db, "users", fanId))
+      .then((snap) => {
+        if (cancelled) return;
+        const data = (snap.exists() ? snap.data() : {}) as Record<string, unknown>;
+        const byCreator = (data[SAVED_BY_CREATOR_KEY] as Record<string, string[]>) || {};
+        const ids = byCreator[creatorId];
+        if (!Array.isArray(ids) || ids.length === 0) {
+          setPosts([]);
+          setLoading(false);
+          return;
+        }
+        return Promise.all(
+          ids.map((postId) => getDoc(doc(db!, "creators", creatorId, "posts", postId)))
+        ).then((docs) => {
+          if (cancelled) return;
+          const list: Post[] = [];
+          docs.forEach((d, i) => {
+            if (!d.exists() || !ids[i]) return;
+            const data = d.data();
+            const status = (data.status as string) || "published";
+            if (status === "draft") return;
+            const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date((data.createdAt as string) || Date.now());
+            const mediaUrls = data.mediaUrls as string[] | undefined;
+            const mediaTypes = data.mediaTypes as ("image" | "video")[] | undefined;
+            const comments = (data.comments as { text: string }[]) || [];
+            list.push({
+              id: ids[i],
+              content: (data.body as string) || (data.content as string) || "",
+              mediaUrl: mediaUrls?.[0] || (data.mediaUrl as string) || "",
+              mediaType: mediaTypes?.[0] || (data.mediaType as "image" | "video"),
+              createdAt,
+              likesCount: typeof data.likeCount === "number" ? data.likeCount : (data.likesCount as number) || 0,
+              commentsCount: comments.length || (data.commentsCount as number) || 0,
+              pinned: !!(data.pinned as boolean),
+              hideComments: data.hideComments as boolean | undefined,
+              hideLikes: data.hideLikes as boolean | undefined,
+              hideLikeCounts: data.hideLikeCounts as boolean | undefined,
+            });
+          });
+          list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+          setPosts(list);
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setPosts([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [fanId, creatorId]);
+
+  if (!fanId) {
+    return (
+      <div className="fan-member-feed">
+        <div className="fan-feed-header">
+          <h2 className="fan-feed-title">Saved</h2>
+          <p className="fan-feed-subtitle">Log in to view your saved posts.</p>
+        </div>
+        <div className="fan-feed-empty">
+          <p>Log in to view your saved posts.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="fan-feed-loading">
+        <div className="fan-feed-spinner" />
+        <p>Loading saved posts...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fan-member-feed">
+      <div className="fan-feed-header">
+        <h2 className="fan-feed-title">Saved</h2>
+        <p className="fan-feed-subtitle">Posts you saved from {displayName}</p>
+      </div>
+      <div className="fan-feed-posts">
+        {posts.length === 0 ? (
+          <div className="fan-feed-empty">
+            <p>No saved posts yet. Save posts from the feed to see them here.</p>
+          </div>
+        ) : (
+          posts.map((post) => (
+            <article key={post.id} className="fan-feed-post">
+              <div className="fan-feed-post-header">
+                <div className="fan-feed-post-avatar">
+                  {avatar ? (
+                    <img src={avatar} alt="" className="fan-feed-avatar-img" />
+                  ) : (
+                    <span className="fan-feed-avatar-placeholder">{displayName?.charAt(0) || "?"}</span>
+                  )}
+                </div>
+                <div className="fan-feed-post-meta">
+                  <span className="fan-feed-post-author">{displayName}</span>
+                  <span className="fan-feed-post-time">{formatTimeAgo(post.createdAt)}</span>
+                </div>
+              </div>
+              <div className="fan-feed-post-content">
+                <p>{post.content}</p>
+              </div>
+              {post.mediaUrl && (
+                <div className="fan-feed-post-media">
+                  {post.mediaType === "video" ? (
+                    <video src={post.mediaUrl} controls className="fan-feed-media-video" />
+                  ) : (
+                    <img src={post.mediaUrl} alt="" className="fan-feed-media-image" />
+                  )}
+                </div>
+              )}
+              <div className="fan-feed-post-actions">
+                <button
+                  type="button"
+                  className="fan-feed-action-btn fan-feed-action-active"
+                  onClick={() => handleUnsave(post.id)}
+                  disabled={unsavingId === post.id}
+                  style={{ color: primary }}
+                  title="Remove from saved"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2">
+                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                  </svg>
+                  <span>{unsavingId === post.id ? "Removing…" : "Saved"}</span>
+                </button>
+              </div>
             </article>
           ))
         )}

@@ -8,6 +8,7 @@ type ThreadDoc = {
   fanId: string;
   lastMessageAt: string;
   lastMessagePreview?: string;
+  fanHasSentMessage?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -40,6 +41,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const threads: Array<ThreadDoc & { id: string; otherPartyDisplayName?: string; otherPartyAvatar?: string }> = [];
     for (const d of snap.docs) {
       const data = d.data() as ThreadDoc;
+      if (as === "creator" && !data.fanHasSentMessage) continue;
       const thread = { id: d.id, ...data };
       const otherId = as === "creator" ? data.fanId : data.creatorId;
       try {

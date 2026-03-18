@@ -189,7 +189,8 @@ export const FanHubPosts: React.FC = () => {
   const [overlayHighlight, setOverlayHighlight] = useState(false);
   const [overlayItalic, setOverlayItalic] = useState(false);
   
-  // Options
+  // Options (per-post visibility for fans)
+  const [hideLikeCounts, setHideLikeCounts] = useState(false);
   const [hideComments, setHideComments] = useState(false);
   const [hideLikes, setHideLikes] = useState(false);
   const [showTipButton, setShowTipButton] = useState(true);
@@ -720,6 +721,7 @@ DO NOT include hashtags.`;
         likedBy: [],
         comments: [],
         status,
+        hideLikeCounts,
         hideComments,
         hideLikes,
         showTipButton,
@@ -837,6 +839,7 @@ DO NOT include hashtags.`;
     setOverlaySize(18);
     setOverlayHighlight(false);
     setOverlayItalic(false);
+    setHideLikeCounts(false);
     setHideComments(false);
     setHideLikes(false);
     setShowTipButton(true);
@@ -1327,7 +1330,7 @@ DO NOT include hashtags.`;
                 </div>
               )}
 
-              {/* ===== DISPLAY OPTIONS ===== */}
+              {/* ===== DISPLAY OPTIONS (per-post; fans see heart but not count when "Hide like counts" is on) ===== */}
               <div className="flex flex-wrap gap-4">
                 <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
                   <input
@@ -1337,6 +1340,15 @@ DO NOT include hashtags.`;
                     className="rounded border-gray-300 text-pink-500 focus:ring-pink-500"
                   />
                   Show Tip Button
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={hideLikeCounts}
+                    onChange={(e) => setHideLikeCounts(e.target.checked)}
+                    className="rounded border-gray-300 text-pink-500 focus:ring-pink-500"
+                  />
+                  Hide like counts
                 </label>
                 <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
                   <input

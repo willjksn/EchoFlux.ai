@@ -77,6 +77,7 @@ async function handleConnectEvent(db: Firestore, _stripe: Stripe, event: Stripe.
     const now = new Date().toISOString();
 
     if (type === 'subscription' && session.subscription) {
+      const amountTotal = session.amount_total ?? 0;
       const subRef = db.collection('creatorSubscribers').doc(creatorId).collection('subscribers').doc(fanId);
       await subRef.set({ status: 'active', stripeSubscriptionId: session.subscription, updatedAt: now }, { merge: true });
       const grantRef = db.collection('creatorEntitlements').doc(creatorId).collection('grants').doc(fanId);
@@ -84,6 +85,28 @@ async function handleConnectEvent(db: Firestore, _stripe: Stripe, event: Stripe.
       const existing = grantSnap.data() as { unlockedProductIds?: string[] } | undefined;
       const unlocked = Array.isArray(existing?.unlockedProductIds) ? existing.unlockedProductIds : [];
       await grantRef.set({ subscription: true, unlockedProductIds: unlocked, updatedAt: now }, { merge: true });
+
+      const orderRef = db.collection('orders').doc();
+      await orderRef.set({
+        creatorId,
+        fanId,
+        productId: null,
+        type: 'subscription',
+        stripeSessionId: session.id,
+        stripeSubscriptionId: session.subscription,
+        amountCents: amountTotal,
+        status: 'paid',
+        fanEmail: session.customer_details?.email || session.metadata?.fanEmail || null,
+        fanName: session.customer_details?.name || session.metadata?.fanName || null,
+        createdAt: now,
+      });
+
+      const statsRef = db.collection('creatorStats').doc(creatorId);
+      const statsSnap = await statsRef.get();
+      const stats = statsSnap.data() as { totalRevenueCents?: number; totalOrders?: number } | undefined;
+      const totalRevenue = (stats?.totalRevenueCents ?? 0) + amountTotal;
+      const totalOrders = (stats?.totalOrders ?? 0) + 1;
+      await statsRef.set({ totalRevenueCents: totalRevenue, totalOrders, updatedAt: now }, { merge: true });
       
       // Also create/update fan record in creators/{creatorId}/fans collection
       const fanEmail = session.customer_details?.email || session.metadata?.fanEmail || null;
@@ -101,7 +124,7 @@ async function handleConnectEvent(db: Firestore, _stripe: Stripe, event: Stripe.
           subscriptionStatus: 'active',
           subscribedAt: now,
           lastPaymentAt: now,
-          totalSpentCents: session.amount_total || 0,
+          totalSpentCents: amountTotal,
           createdAt: now,
           updatedAt: now,
         });
