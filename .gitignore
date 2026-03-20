@@ -40,3 +40,4 @@ engagesuite.zip
 serviceAccount/
 service-account.jsonl
 *.jsonl
+.cursor/

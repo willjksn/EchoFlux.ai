@@ -4,7 +4,7 @@ import { doc, getDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage, auth } from "../firebaseConfig";
 import type { CreatorStorefrontSettings, StorefrontButtonStyle, StorefrontSocialLinks, StorefrontLandingContent, StorefrontLegal, TextStyle } from "../types";
-import { STOREFRONT_CONTENT_POLICY, DEFAULT_PRIVACY_POLICY, DEFAULT_TERMS_OF_SERVICE } from "../constants";
+import { STOREFRONT_CONTENT_POLICY, DEFAULT_PRIVACY_POLICY, DEFAULT_TERMS_OF_SERVICE, FAN_HUB_THEME_PRESETS, HERO_LAYOUT_OPTIONS, HERO_MEDIA_SIZE_OPTIONS } from "../constants";
 import { StorefrontPreview } from "./StorefrontPreview";
 import { UserIcon, ImageIcon, GlobeIcon } from "./icons/UIIcons";
 import { EmojiButton } from "./EmojiPicker";
@@ -87,14 +87,19 @@ function normalizeForCompare(a: Partial<CreatorStorefrontSettings>): string {
     displayName: a.displayName ?? "",
     bio: a.bio ?? "",
     avatar: a.avatar ?? "",
+    avatarObjectPosition: a.avatarObjectPosition ?? "",
     banner: a.banner ?? "",
+    showDisplayNameOnLanding: a.showDisplayNameOnLanding !== false,
     heroImage: a.heroImage ?? "",
+    heroMedia: Array.isArray(a.heroMedia) ? a.heroMedia : [],
     heroTagline: a.heroTagline ?? "",
     heroPromise: a.heroPromise ?? "",
+    heroSubline: a.heroSubline ?? "",
     socialLinks: a.socialLinks ?? DEFAULT_SOCIAL_LINKS,
     landingContent: a.landingContent ?? DEFAULT_LANDING_CONTENT,
     legal: a.legal ?? DEFAULT_LEGAL,
     theme: { ...DEFAULT_THEME, ...a.theme },
+    heroLayout: a.heroLayout ?? "default",
     sections: { ...DEFAULT_SECTIONS, ...a.sections },
     sectionsOrder: a.sectionsOrder ?? DEFAULT_SECTIONS_ORDER,
     spicyMode: a.spicyMode ?? false,
@@ -390,11 +395,33 @@ export const MyPageBuilder: React.FC = () => {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
   const [previewMode, setPreviewMode] = useState<"landing" | "member">("landing");
+  const [previewFramingTool, setPreviewFramingTool] = useState<
+    "off" | "panBg" | "panAvatar" | "focusPhoto"
+  >("off");
+  const [previewFocusPhotoSlot, setPreviewFocusPhotoSlot] = useState(0);
+
+  const heroGridSlotCount = useMemo(
+    () => (draft.heroMedia ?? []).filter((m) => m.size !== "fullBackground").length,
+    [draft.heroMedia]
+  );
+  const heroHasFullBackground = useMemo(
+    () => (draft.heroMedia ?? []).some((m) => m.size === "fullBackground"),
+    [draft.heroMedia]
+  );
 
   const isDirty = useMemo(
     () => normalizeForCompare(draft) !== normalizeForCompare(saved),
     [draft, saved]
   );
+
+  useEffect(() => {
+    const gridCount = (draft.heroMedia ?? []).filter((m) => m.size !== "fullBackground").length;
+    setPreviewFocusPhotoSlot((s) => (gridCount > 0 && s >= gridCount ? 0 : s));
+  }, [draft.heroMedia]);
+
+  useEffect(() => {
+    if (previewMode !== "landing") setPreviewFramingTool("off");
+  }, [previewMode]);
 
   const loadSettings = useCallback(async () => {
     if (!creatorId) return;
@@ -407,14 +434,21 @@ export const MyPageBuilder: React.FC = () => {
         displayName: data.displayName ?? "",
         bio: data.bio ?? "",
         avatar: data.avatar ?? (data as Record<string, unknown>).avatarUrl,
+        avatarObjectPosition: data.avatarObjectPosition,
         banner: data.banner ?? (data as Record<string, unknown>).bannerUrl,
+        showDisplayNameOnLanding: (data as Record<string, unknown>).showDisplayNameOnLanding !== false,
         heroImage: data.heroImage ?? "",
+        heroMedia: Array.isArray(data.heroMedia) && data.heroMedia.length > 0
+          ? data.heroMedia
+          : (data.heroImage ? [{ url: data.heroImage, size: "medium" as const }] : []),
         heroTagline: data.heroTagline ?? "",
         heroPromise: data.heroPromise ?? "",
+        heroSubline: (data as Record<string, unknown>).heroSubline ?? "",
         socialLinks: data.socialLinks ? { ...DEFAULT_SOCIAL_LINKS, ...data.socialLinks } : { ...DEFAULT_SOCIAL_LINKS },
         landingContent: data.landingContent ? { ...DEFAULT_LANDING_CONTENT, ...data.landingContent } : { ...DEFAULT_LANDING_CONTENT },
         legal: data.legal ? { ...DEFAULT_LEGAL, ...data.legal } : { ...DEFAULT_LEGAL },
         theme: data.theme ? { ...DEFAULT_THEME, ...data.theme } : { ...DEFAULT_THEME },
+        heroLayout: data.heroLayout ?? "default",
         sections: data.sections ? { ...DEFAULT_SECTIONS, ...data.sections } : { ...DEFAULT_SECTIONS },
         sectionsOrder: data.sectionsOrder ?? DEFAULT_SECTIONS_ORDER,
         spicyMode: data.spicyMode ?? false,
@@ -485,6 +519,14 @@ export const MyPageBuilder: React.FC = () => {
     setDraft((prev) => ({ ...prev, ...next }));
   }, []);
 
+  /** Update theme without clobbering other theme fields (uses latest state) */
+  const updateTheme = useCallback((patch: Partial<NonNullable<CreatorStorefrontSettings["theme"]>>) => {
+    setDraft((prev) => ({
+      ...prev,
+      theme: { ...DEFAULT_THEME, ...prev.theme, ...patch },
+    }));
+  }, []);
+
   const updateTextStyle = useCallback((field: keyof NonNullable<CreatorStorefrontSettings['textStyles']>, style: TextStyle) => {
     setDraft((prev) => ({
       ...prev,
@@ -511,14 +553,19 @@ export const MyPageBuilder: React.FC = () => {
         displayName: draft.displayName,
         bio: draft.bio,
         avatar: draft.avatar,
+        avatarObjectPosition: draft.avatarObjectPosition,
         logo: draft.logo,
-        heroImage: draft.heroImage,
+        showDisplayNameOnLanding: draft.showDisplayNameOnLanding,
+        heroImage: draft.heroMedia?.[0]?.url ?? draft.heroImage,
+        heroMedia: draft.heroMedia,
         heroTagline: draft.heroTagline,
         heroPromise: draft.heroPromise,
+        heroSubline: draft.heroSubline,
         socialLinks: draft.socialLinks,
         landingContent: draft.landingContent,
         legal: draft.legal,
         theme: draft.theme,
+        heroLayout: draft.heroLayout,
         sections: draft.sections,
         sectionsOrder: draft.sectionsOrder,
         spicyMode: draft.spicyMode,
@@ -618,6 +665,41 @@ export const MyPageBuilder: React.FC = () => {
     }
   };
 
+  const [heroMediaUploading, setHeroMediaUploading] = useState(false);
+  const handleHeroMediaAdd = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !creatorId) return;
+    const current = draft.heroMedia ?? [];
+    if (current.length >= 6) {
+      showToast?.("Maximum 6 hero images.", "info");
+      return;
+    }
+    setHeroMediaUploading(true);
+    try {
+      const path = `users/${creatorId}/storefront_hero/${Date.now()}.${file.type.split("/")[1] || "jpg"}`;
+      const storageRef = ref(storage, path);
+      await uploadBytes(storageRef, file, { contentType: file.type });
+      const url = await getDownloadURL(storageRef);
+      updateDraft({ heroMedia: [...current, { url, size: "medium" }] });
+    } catch (err) {
+      console.error(err);
+      showToast?.("Failed to upload image", "error");
+    } finally {
+      setHeroMediaUploading(false);
+    }
+  };
+  const removeHeroMediaItem = (index: number) => {
+    const current = draft.heroMedia ?? [];
+    updateDraft({ heroMedia: current.filter((_, i) => i !== index) });
+  };
+  const setHeroMediaItemSize = (index: number, size: "small" | "medium" | "large" | "fullBackground") => {
+    const current = [...(draft.heroMedia ?? [])];
+    if (current[index]) {
+      current[index] = { ...current[index], size };
+      updateDraft({ heroMedia: current });
+    }
+  };
   // Helper to update social links
   const updateSocialLink = (platform: keyof Omit<StorefrontSocialLinks, "custom">, field: "url" | "show", value: string | boolean) => {
     const current = draft.socialLinks ?? { ...DEFAULT_SOCIAL_LINKS };
@@ -766,6 +848,16 @@ export const MyPageBuilder: React.FC = () => {
                   />
                   <EmojiButton onSelect={(emoji) => updateDraft({ displayName: (draft.displayName ?? "") + emoji })} />
                 </div>
+                <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={draft.showDisplayNameOnLanding !== false}
+                    onChange={(e) => updateDraft({ showDisplayNameOnLanding: e.target.checked })}
+                    className="rounded border-gray-300 dark:border-gray-600 text-primary-600"
+                  />
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Show display name on landing page</span>
+                </label>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1 ml-6">When off, your name still appears in the header and in the feed.</p>
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1">
@@ -797,7 +889,12 @@ export const MyPageBuilder: React.FC = () => {
                   <p className="text-xs text-gray-400 mb-2">Shown on your posts</p>
                   <label className="flex flex-col items-center justify-center w-20 h-20 rounded-full border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/50 cursor-pointer hover:border-primary-500 overflow-hidden">
                     {draft.avatar ? (
-                      <img src={draft.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                      <img
+                        src={draft.avatar}
+                        alt="Avatar"
+                        className="w-full h-full object-cover"
+                        style={{ objectPosition: draft.avatarObjectPosition ?? "center" }}
+                      />
                     ) : (
                       <UserIcon className="w-8 h-8 text-gray-400" />
                     )}
@@ -807,10 +904,11 @@ export const MyPageBuilder: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Header Logo</label>
-                  <p className="text-xs text-gray-400 mb-2">Shown in page header</p>
-                  <label className="flex flex-col items-center justify-center w-full h-20 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/50 cursor-pointer hover:border-primary-500 overflow-hidden">
+                  <p className="text-xs text-gray-400 mb-1">Shown in page header. Wide logos work best.</p>
+                  <p className="text-[11px] text-gray-400 mb-2">Optimal: 400×100px or similar 3:1–4:1 ratio (wide, not square).</p>
+                  <label className="flex flex-col items-center justify-center w-full min-h-[100px] h-28 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/50 cursor-pointer hover:border-primary-500 overflow-hidden p-2">
                     {draft.logo ? (
-                      <img src={draft.logo} alt="Logo" className="w-full h-full object-contain" />
+                      <img src={draft.logo} alt="Logo" className="max-w-full max-h-full w-auto h-auto object-contain" />
                     ) : (
                       <ImageIcon className="w-8 h-8 text-gray-400" />
                     )}
@@ -826,28 +924,136 @@ export const MyPageBuilder: React.FC = () => {
           <CollapsibleSection title="Hero Section" defaultOpen>
             <div className="space-y-4 pt-4">
               <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Hero Image</label>
-                <p className="text-xs text-gray-400 mb-2">Portrait orientation recommended (4:5 aspect ratio). Shows on landing page.</p>
-                <label className="flex flex-col items-center justify-center w-32 h-40 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/50 cursor-pointer hover:border-primary-500 overflow-hidden">
-                  {draft.heroImage ? (
-                    <img src={draft.heroImage} alt="Hero" className="w-full h-full object-cover object-top" />
-                  ) : (
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Hero images</label>
+                <p className="text-xs text-gray-400 mb-2">Add one or more images. Portrait (4:5) recommended. Use &quot;Full background&quot; for a banner-style hero.</p>
+                {(draft.heroMedia ?? []).length > 0 && (
+                  <ul className="space-y-3 mb-3">
+                    {(draft.heroMedia ?? []).map((item, index) => (
+                      <li key={`${item.url}-${index}`} className="flex items-start gap-2 p-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/30">
+                        <div className="w-16 h-20 rounded overflow-hidden flex-shrink-0 bg-gray-200 dark:bg-gray-700">
+                          <img src={item.url} alt="" className="w-full h-full object-cover object-top" />
+                        </div>
+                        <div className="flex-1 min-w-0 space-y-1.5">
+                          <select
+                            value={item.size ?? "medium"}
+                            onChange={(e) => setHeroMediaItemSize(index, e.target.value as "small" | "medium" | "large" | "fullBackground")}
+                            className="w-full text-xs px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          >
+                            {HERO_MEDIA_SIZE_OPTIONS.map((opt) => (
+                              <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                          </select>
+                          <button type="button" onClick={() => removeHeroMediaItem(index)} className="text-xs text-red-500 hover:text-red-600">Remove</button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {(draft.heroMedia ?? []).length < 6 && (
+                  <label className="inline-flex flex-col items-center justify-center w-32 h-40 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/50 cursor-pointer hover:border-primary-500 overflow-hidden">
                     <div className="text-center p-2">
                       <ImageIcon className="w-8 h-8 text-gray-400 mx-auto" />
-                      <span className="text-xs text-gray-400 mt-1 block">Add hero image</span>
+                      <span className="text-xs text-gray-400 mt-1 block">{(draft.heroMedia ?? []).length === 0 ? "Add hero image" : "Add another"}</span>
                     </div>
-                  )}
-                  <input type="file" accept="image/*" className="hidden" onChange={handleHeroImageUpload} disabled={heroImageUploading} />
-                </label>
-                {heroImageUploading && <p className="text-xs text-gray-500 mt-1">Uploading…</p>}
-                {draft.heroImage && (
-                  <button
-                    type="button"
-                    onClick={() => updateDraft({ heroImage: "" })}
-                    className="text-xs text-red-500 hover:text-red-600 mt-1"
-                  >
-                    Remove image
-                  </button>
+                    <input type="file" accept="image/*" className="hidden" onChange={handleHeroMediaAdd} disabled={heroMediaUploading} />
+                  </label>
+                )}
+                {(draft.heroMedia ?? []).length >= 6 && (
+                  <p className="text-xs text-gray-500">Max 6 images. Remove one to add another.</p>
+                )}
+                {heroMediaUploading && <p className="text-xs text-gray-500 mt-1">Uploading…</p>}
+
+                {(heroHasFullBackground || heroGridSlotCount > 0) && (
+                  <div className="mt-4 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/60 dark:bg-indigo-950/30 px-3 py-2.5 space-y-2">
+                    <p className="text-xs font-semibold text-indigo-900 dark:text-indigo-200">Fine-tune in preview →</p>
+                    <p className="text-[11px] text-indigo-800/80 dark:text-indigo-300/90">
+                      Turn on a mode, then drag on the preview (right). Save to publish.
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 items-center">
+                      {heroHasFullBackground && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setPreviewFramingTool((t) => (t === "panBg" ? "off" : "panBg"))}
+                            className={`rounded-md px-2 py-1 text-xs font-medium border ${
+                              previewFramingTool === "panBg"
+                                ? "border-indigo-600 bg-indigo-600 text-white"
+                                : "border-indigo-300 dark:border-indigo-600 bg-white dark:bg-gray-800 text-indigo-900 dark:text-indigo-100"
+                            }`}
+                          >
+                            Pan background
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPreviewFramingTool((t) => (t === "panAvatar" ? "off" : "panAvatar"))}
+                            className={`rounded-md px-2 py-1 text-xs font-medium border ${
+                              previewFramingTool === "panAvatar"
+                                ? "border-indigo-600 bg-indigo-600 text-white"
+                                : "border-indigo-300 dark:border-indigo-600 bg-white dark:bg-gray-800 text-indigo-900 dark:text-indigo-100"
+                            }`}
+                          >
+                            Pan avatar
+                          </button>
+                        </>
+                      )}
+                      {heroGridSlotCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setPreviewFramingTool((t) => (t === "focusPhoto" ? "off" : "focusPhoto"))}
+                          className={`rounded-md px-2 py-1 text-xs font-medium border ${
+                            previewFramingTool === "focusPhoto"
+                              ? "border-indigo-600 bg-indigo-600 text-white"
+                              : "border-indigo-300 dark:border-indigo-600 bg-white dark:bg-gray-800 text-indigo-900 dark:text-indigo-100"
+                          }`}
+                        >
+                          Photo focus
+                        </button>
+                      )}
+                      {previewFramingTool !== "off" && (
+                        <button
+                          type="button"
+                          onClick={() => setPreviewFramingTool("off")}
+                          className="text-xs text-indigo-700 dark:text-indigo-300 underline ml-1"
+                        >
+                          Done
+                        </button>
+                      )}
+                    </div>
+                    {previewFramingTool === "focusPhoto" && heroGridSlotCount > 1 && (
+                      <div className="flex flex-wrap gap-1 items-center text-[11px]">
+                        <span className="text-indigo-800 dark:text-indigo-300">Which photo:</span>
+                        {Array.from({ length: heroGridSlotCount }, (_, slot) => (
+                          <button
+                            key={slot}
+                            type="button"
+                            onClick={() => setPreviewFocusPhotoSlot(slot)}
+                            className={`min-w-[1.5rem] rounded px-1.5 py-0.5 font-medium ${
+                              previewFocusPhotoSlot === slot
+                                ? "bg-indigo-600 text-white"
+                                : "bg-white dark:bg-gray-800 text-indigo-900 dark:text-indigo-100 border border-indigo-200 dark:border-indigo-600"
+                            }`}
+                          >
+                            {slot + 1}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {previewFramingTool === "panBg" && (
+                      <p className="text-[11px] text-indigo-800/90 dark:text-indigo-300/90">
+                        Drag on the dark banner overlay to frame the background.
+                      </p>
+                    )}
+                    {previewFramingTool === "panAvatar" && (
+                      <p className="text-[11px] text-indigo-800/90 dark:text-indigo-300/90">
+                        Drag across the circular profile photo to pan the image inside the circle.
+                      </p>
+                    )}
+                    {previewFramingTool === "focusPhoto" && (
+                      <p className="text-[11px] text-indigo-800/90 dark:text-indigo-300/90">
+                        Drag the highlighted hero thumbnail to change what part of the image is visible.
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
               <div>
@@ -888,6 +1094,27 @@ export const MyPageBuilder: React.FC = () => {
                     className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
                   <EmojiButton onSelect={(emoji) => updateDraft({ heroPromise: (draft.heroPromise ?? "") + emoji })} />
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">Subline (after promise)</label>
+                  <TextStyleControls
+                    style={draft.textStyles?.heroSubline}
+                    onChange={(style) => updateTextStyle('heroSubline', style)}
+                    defaultSize="sm"
+                  />
+                </div>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-1">Extra line of text shown under the promise on the landing hero.</p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={draft.heroSubline ?? ""}
+                    onChange={(e) => updateDraft({ heroSubline: e.target.value })}
+                    placeholder="e.g., Join for exclusive content and DMs"
+                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+                  <EmojiButton onSelect={(emoji) => updateDraft({ heroSubline: (draft.heroSubline ?? "") + emoji })} />
                 </div>
               </div>
             </div>
@@ -1162,110 +1389,161 @@ export const MyPageBuilder: React.FC = () => {
           {/* Theme & Colors */}
           <CollapsibleSection title="Theme & Colors">
             <div className="space-y-4 pt-4">
-              {/* Primary Colors Row */}
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Primary</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={draft.theme?.primary ?? DEFAULT_THEME.primary}
-                      onChange={(e) => updateDraft({ theme: { ...draft.theme, ...DEFAULT_THEME, primary: e.target.value } })}
-                      className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 cursor-pointer"
-                    />
-                    <input
-                      type="text"
-                      value={draft.theme?.primary ?? DEFAULT_THEME.primary}
-                      onChange={(e) => updateDraft({ theme: { ...draft.theme, ...DEFAULT_THEME, primary: e.target.value } })}
-                      className="flex-1 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Accent Hover</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={draft.theme?.accentHover ?? DEFAULT_THEME.accentHover}
-                      onChange={(e) => updateDraft({ theme: { ...draft.theme, ...DEFAULT_THEME, accentHover: e.target.value } })}
-                      className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 cursor-pointer"
-                    />
-                    <input
-                      type="text"
-                      value={draft.theme?.accentHover ?? DEFAULT_THEME.accentHover}
-                      onChange={(e) => updateDraft({ theme: { ...draft.theme, ...DEFAULT_THEME, accentHover: e.target.value } })}
-                      className="flex-1 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Background</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={draft.theme?.background ?? DEFAULT_THEME.background}
-                      onChange={(e) => updateDraft({ theme: { ...draft.theme, ...DEFAULT_THEME, background: e.target.value } })}
-                      className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 cursor-pointer"
-                    />
-                    <input
-                      type="text"
-                      value={draft.theme?.background ?? DEFAULT_THEME.background}
-                      onChange={(e) => updateDraft({ theme: { ...draft.theme, ...DEFAULT_THEME, background: e.target.value } })}
-                      className="flex-1 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                  </div>
+              {/* Theme presets */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Theme preset</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {FAN_HUB_THEME_PRESETS.map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => updateTheme({ ...preset.theme, presetId: preset.id })}
+                      className={`flex flex-col items-center gap-1 p-2 rounded-lg border-2 text-left transition-colors ${
+                        (draft.theme?.presetId ?? "default") === preset.id
+                          ? "border-primary-500 bg-primary-50 dark:bg-primary-900/20"
+                          : "border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500"
+                      }`}
+                    >
+                      <span className="w-8 h-8 rounded-full border border-gray-300 dark:border-gray-600 flex-shrink-0" style={{ backgroundColor: preset.theme.primary }} />
+                      <span className="text-xs font-medium text-gray-900 dark:text-white truncate w-full text-center">{preset.name}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
-              {/* Text & Border Colors Row */}
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Text</label>
-                  <div className="flex items-center gap-2">
+              {/* Hero layout */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Hero layout (landing page)</label>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-1.5">How the hero image and name/tagline sit on the landing page. Preview updates as you change it.</p>
+                <select
+                  value={draft.heroLayout ?? "default"}
+                  onChange={(e) => updateDraft({ heroLayout: e.target.value as "default" | "centered" | "split" | "splitRight" })}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  {HERO_LAYOUT_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label} — {opt.description}</option>
+                  ))}
+                </select>
+              </div>
+              {/* Global font */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Global font</label>
+                <select
+                  value={draft.theme?.fontFamily ?? "Inter, sans-serif"}
+                  onChange={(e) => updateTheme({ fontFamily: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  {FONT_FAMILY_OPTIONS.slice(0, 18).map((f) => (
+                    <option key={f.value} value={f.value}>{f.label}</option>
+                  ))}
+                </select>
+              </div>
+              {/* Theme colors — each cell: label, description, color + hex input */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="min-h-[72px] flex flex-col">
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-0.5" title="Main brand and accent color">Primary</label>
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-1.5">Buttons, links & accents</p>
+                  <div className="flex items-center gap-2 mt-auto">
                     <input
                       type="color"
-                      value={draft.theme?.text ?? DEFAULT_THEME.text}
-                      onChange={(e) => updateDraft({ theme: { ...draft.theme, ...DEFAULT_THEME, text: e.target.value } })}
-                      className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 cursor-pointer"
+                      value={draft.theme?.primary ?? DEFAULT_THEME.primary}
+                      onChange={(e) => updateTheme({ primary: e.target.value })}
+                      className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 cursor-pointer flex-shrink-0"
                     />
                     <input
                       type="text"
-                      value={draft.theme?.text ?? DEFAULT_THEME.text}
-                      onChange={(e) => updateDraft({ theme: { ...draft.theme, ...DEFAULT_THEME, text: e.target.value } })}
-                      className="flex-1 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      value={draft.theme?.primary ?? DEFAULT_THEME.primary}
+                      onChange={(e) => updateTheme({ primary: e.target.value })}
+                      className="flex-1 min-w-0 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     />
                   </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Muted Text</label>
-                  <div className="flex items-center gap-2">
+                <div className="min-h-[72px] flex flex-col">
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-0.5" title="Color for buttons and links when hovered">Accent Hover</label>
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-1.5">Buttons & links on hover</p>
+                  <div className="flex items-center gap-2 mt-auto">
                     <input
                       type="color"
-                      value={draft.theme?.textMuted ?? DEFAULT_THEME.textMuted}
-                      onChange={(e) => updateDraft({ theme: { ...draft.theme, ...DEFAULT_THEME, textMuted: e.target.value } })}
-                      className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 cursor-pointer"
+                      value={draft.theme?.accentHover ?? DEFAULT_THEME.accentHover}
+                      onChange={(e) => updateTheme({ accentHover: e.target.value })}
+                      className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 cursor-pointer flex-shrink-0"
                     />
                     <input
                       type="text"
-                      value={draft.theme?.textMuted ?? DEFAULT_THEME.textMuted}
-                      onChange={(e) => updateDraft({ theme: { ...draft.theme, ...DEFAULT_THEME, textMuted: e.target.value } })}
-                      className="flex-1 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      value={draft.theme?.accentHover ?? DEFAULT_THEME.accentHover}
+                      onChange={(e) => updateTheme({ accentHover: e.target.value })}
+                      className="flex-1 min-w-0 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     />
                   </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Border</label>
-                  <div className="flex items-center gap-2">
+                <div className="min-h-[72px] flex flex-col">
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-0.5" title="Page and card background">Background</label>
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-1.5">Page & card background</p>
+                  <div className="flex items-center gap-2 mt-auto">
+                    <input
+                      type="color"
+                      value={draft.theme?.background ?? DEFAULT_THEME.background}
+                      onChange={(e) => updateTheme({ background: e.target.value })}
+                      className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 cursor-pointer flex-shrink-0"
+                    />
+                    <input
+                      type="text"
+                      value={draft.theme?.background ?? DEFAULT_THEME.background}
+                      onChange={(e) => updateTheme({ background: e.target.value })}
+                      className="flex-1 min-w-0 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+                <div className="min-h-[72px] flex flex-col">
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-0.5" title="Main body text color">Text</label>
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-1.5">Main body text</p>
+                  <div className="flex items-center gap-2 mt-auto">
+                    <input
+                      type="color"
+                      value={draft.theme?.text ?? DEFAULT_THEME.text}
+                      onChange={(e) => updateTheme({ text: e.target.value })}
+                      className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 cursor-pointer flex-shrink-0"
+                    />
+                    <input
+                      type="text"
+                      value={draft.theme?.text ?? DEFAULT_THEME.text}
+                      onChange={(e) => updateTheme({ text: e.target.value })}
+                      className="flex-1 min-w-0 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+                <div className="min-h-[72px] flex flex-col">
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-0.5" title="Secondary text for captions and hints">Muted Text</label>
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-1.5">Secondary text (captions, hints)</p>
+                  <div className="flex items-center gap-2 mt-auto">
+                    <input
+                      type="color"
+                      value={draft.theme?.textMuted ?? DEFAULT_THEME.textMuted}
+                      onChange={(e) => updateTheme({ textMuted: e.target.value })}
+                      className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 cursor-pointer flex-shrink-0"
+                    />
+                    <input
+                      type="text"
+                      value={draft.theme?.textMuted ?? DEFAULT_THEME.textMuted}
+                      onChange={(e) => updateTheme({ textMuted: e.target.value })}
+                      className="flex-1 min-w-0 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+                <div className="min-h-[72px] flex flex-col">
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-0.5" title="Dividers and card outlines">Border</label>
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-1.5">Dividers & card outlines</p>
+                  <div className="flex items-center gap-2 mt-auto">
                     <input
                       type="color"
                       value={draft.theme?.border ?? DEFAULT_THEME.border}
-                      onChange={(e) => updateDraft({ theme: { ...draft.theme, ...DEFAULT_THEME, border: e.target.value } })}
-                      className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 cursor-pointer"
+                      onChange={(e) => updateTheme({ border: e.target.value })}
+                      className="w-8 h-8 rounded border border-gray-300 dark:border-gray-600 cursor-pointer flex-shrink-0"
                     />
                     <input
                       type="text"
                       value={draft.theme?.border ?? DEFAULT_THEME.border}
-                      onChange={(e) => updateDraft({ theme: { ...draft.theme, ...DEFAULT_THEME, border: e.target.value } })}
-                      className="flex-1 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      onChange={(e) => updateTheme({ border: e.target.value })}
+                      className="flex-1 min-w-0 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     />
                   </div>
                 </div>
@@ -1274,7 +1552,7 @@ export const MyPageBuilder: React.FC = () => {
                 <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Button style</label>
                 <select
                   value={draft.theme?.buttonStyle ?? "solid"}
-                  onChange={(e) => updateDraft({ theme: { ...draft.theme, ...DEFAULT_THEME, buttonStyle: e.target.value as StorefrontButtonStyle } })}
+                  onChange={(e) => updateTheme({ buttonStyle: e.target.value as StorefrontButtonStyle })}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 >
                   <option value="solid">Solid</option>
@@ -1543,9 +1821,9 @@ export const MyPageBuilder: React.FC = () => {
           </div>
         </div>
 
-        {/* Right: Live Preview */}
-        <div className="lg:sticky lg:top-4">
-          <div className="flex items-center justify-between mb-2">
+        {/* Right: Live Preview — sticky so it stays visible when scrolling Theme & Colors etc. */}
+        <div className="lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-5rem)] lg:flex lg:flex-col">
+          <div className="flex items-center justify-between mb-2 flex-shrink-0">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Live preview</h3>
             <div className="flex gap-2">
               <button
@@ -1584,7 +1862,22 @@ export const MyPageBuilder: React.FC = () => {
               )}
             </div>
           </div>
-          <StorefrontPreview config={draft} previewMode={previewMode} />
+          <div className="min-h-0 lg:flex-1 lg:overflow-auto">
+            <StorefrontPreview
+              config={draft}
+              previewMode={previewMode}
+              previewFraming={{ tool: previewFramingTool, focusPhotoSlot: previewFocusPhotoSlot }}
+              onHeroMediaItemPatch={(index, patch) => {
+                setDraft((prev) => {
+                  const hm = [...(prev.heroMedia ?? [])];
+                  if (index < 0 || index >= hm.length) return prev;
+                  hm[index] = { ...hm[index], ...patch };
+                  return { ...prev, heroMedia: hm };
+                });
+              }}
+              onAvatarObjectPositionChange={(objectPosition) => updateDraft({ avatarObjectPosition: objectPosition })}
+            />
+          </div>
         </div>
       </div>
 

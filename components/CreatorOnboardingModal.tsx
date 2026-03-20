@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useAppContext } from './AppContext';
+import { auth, db } from '../firebaseConfig';
+import { doc, setDoc } from 'firebase/firestore';
 import { LogoIcon, DashboardIcon, TargetIcon, ComposeIcon, CalendarIcon, ImageIcon, SparklesIcon, HeartIcon, SettingsIcon } from './icons/UIIcons';
+import { FAN_HUB_THEME_PRESETS } from '../constants';
 
 interface CreatorOnboardingModalProps {
-    onComplete: () => void;
+    onComplete: (opts?: { openFanHub?: boolean }) => void;
 }
 
 export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ onComplete }) => {
@@ -11,18 +14,96 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
     const [step, setStep] = useState(1);
     const [niche, setNiche] = useState(user?.niche || '');
     const [audience, setAudience] = useState(user?.audience || '');
+    const [creatorGender, setCreatorGender] = useState((user as { creatorGender?: string })?.creatorGender || '');
     const [goal, setGoal] = useState('');
-    
+    const [fanHubHandle, setFanHubHandle] = useState('');
+    const [fanHubPresetId, setFanHubPresetId] = useState('default');
+    const [fanHubPrimaryColor, setFanHubPrimaryColor] = useState(FAN_HUB_THEME_PRESETS[0].theme.primary);
+    const [handleCheckStatus, setHandleCheckStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
+    const [handleCheckMessage, setHandleCheckMessage] = useState('');
+    const [fanHubSaving, setFanHubSaving] = useState(false);
+
     const userPlan = user?.plan || 'Pro';
     const isProPlan = userPlan === 'Pro';
     const isElitePlan = userPlan === 'Elite' || userPlan === 'Agency';
-    
-    // Plan-specific step counts:
-    // Pro: Welcome, Niche, Audience, Goal, Core Features, Fan Hub, Completion = 7
-    // Elite: Welcome, Niche, Audience, Goal, Core Features, Fan Hub, Premium Studio, Completion = 8
-    const totalSteps = isProPlan ? 7 : 8;
+
+    // Pro: Welcome, Content Focus, Audience, I am a..., Goal, Core, Fan Hub intro, Fan Hub setup, Completion = 9
+    // Elite: + Premium Studio = 10
+    const totalSteps = isProPlan ? 9 : 10;
+    const fanHubSetupStep = 8;
+
+    const checkHandle = useCallback(async (value: string) => {
+        const clean = value.replace(/@/g, '').toLowerCase().trim();
+        if (!clean || clean.length < 3 || clean.length > 20 || !/^[a-z0-9_]+$/.test(clean)) {
+            setHandleCheckStatus('idle');
+            setHandleCheckMessage('');
+            return;
+        }
+        setHandleCheckStatus('checking');
+        setHandleCheckMessage('');
+        try {
+            const params = new URLSearchParams({ handle: clean });
+            if (user?.id) params.set('creatorId', user.id);
+            const res = await fetch(`/api/checkHandleAvailability?${params}`);
+            const data = await res.json().catch(() => ({}));
+            if (data.available === true) {
+                setHandleCheckStatus('available');
+                setHandleCheckMessage('Available');
+            } else {
+                setHandleCheckStatus('taken');
+                setHandleCheckMessage(data.message || 'This handle is already taken');
+            }
+        } catch {
+            setHandleCheckStatus('idle');
+            setHandleCheckMessage('Could not check');
+        }
+    }, [user?.id]);
+
+    useEffect(() => {
+        const clean = fanHubHandle.replace(/@/g, '').toLowerCase().trim();
+        if (clean.length < 3 || !/^[a-z0-9_]+$/.test(clean)) {
+            setHandleCheckStatus('idle');
+            setHandleCheckMessage('');
+            return;
+        }
+        const t = setTimeout(() => checkHandle(fanHubHandle), 400);
+        return () => clearTimeout(t);
+    }, [fanHubHandle, checkHandle]);
+
+    const handleSaveFanHubAndComplete = async () => {
+        const cleanHandle = fanHubHandle.replace(/@/g, '').toLowerCase().trim();
+        if (!user?.id) return;
+        if (cleanHandle.length < 3 || cleanHandle.length > 20 || !/^[a-z0-9_]+$/.test(cleanHandle)) {
+            return;
+        }
+        setFanHubSaving(true);
+        try {
+            const preset = FAN_HUB_THEME_PRESETS.find((p) => p.id === fanHubPresetId) || FAN_HUB_THEME_PRESETS[0];
+            const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+            if (!token) throw new Error('Not authenticated');
+            const res = await fetch('/api/updateCreatorStorefront', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({
+                    handle: cleanHandle,
+                    displayName: user.name || user.email?.split('@')[0] || cleanHandle,
+                    theme: { ...preset.theme, presetId: preset.id, primary: fanHubPrimaryColor },
+                }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error((data as { message?: string }).message || 'Save failed');
+            await persistCreatorProfile();
+            if (user) await setUser({ ...user, niche, audience, hasCompletedOnboarding: true });
+            onComplete({ openFanHub: true });
+        } catch (e) {
+            setHandleCheckMessage(e instanceof Error ? e.message : 'Failed to save');
+        } finally {
+            setFanHubSaving(false);
+        }
+    };
 
     const handleSaveAndComplete = async () => {
+        await persistCreatorProfile();
         if (user) {
             await setUser({ ...user, niche, audience, hasCompletedOnboarding: true });
         }
@@ -35,6 +116,26 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
         } else {
             handleSaveAndComplete();
         }
+    };
+
+    const persistCreatorProfile = useCallback(async () => {
+        if (!user?.id) return;
+        try {
+            await setDoc(doc(db, 'users', user.id), {
+                niche,
+                audience,
+                creatorGender: creatorGender || undefined,
+                updatedAt: new Date().toISOString(),
+            }, { merge: true });
+        } catch (e) {
+            console.error('Failed to persist creator profile:', e);
+        }
+    }, [user?.id, niche, audience, creatorGender]);
+
+    const handleSkipFanHubSetup = async () => {
+        await persistCreatorProfile();
+        if (user) setUser({ ...user, niche, audience, hasCompletedOnboarding: true });
+        onComplete();
     };
 
     const handleBack = () => {
@@ -114,43 +215,54 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
             );
         }
 
-        // Step 2: Content Focus / Niche
+        // Step 2: Content Focus (multi-select, same pattern as Audience)
         if (step === 2) {
+            const contentFocusOptions = ['Lifestyle', 'Travel', 'Fashion', 'Spicy', 'Tech', 'Music', 'Fitness', 'Art', 'Gaming', 'Beauty', 'Food', 'Business'];
+            const selectedFocus = niche.split(',').map((s) => s.trim()).filter(Boolean);
+
+            const toggleFocus = (option: string) => {
+                if (selectedFocus.includes(option)) {
+                    setNiche(selectedFocus.filter((x) => x !== option).join(', '));
+                } else {
+                    setNiche([...selectedFocus, option].join(', '));
+                }
+            };
+
             return (
                 <div className="animate-fade-in">
                     <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-white">What's Your Content Focus?</h2>
                     <p className="mt-2 text-center text-gray-500 dark:text-gray-400">
-                        This helps our AI tailor suggestions to your brand and style.
+                        This helps our AI tailor suggestions to your brand and style. Select all that apply.
                     </p>
                     <div className="mt-6 space-y-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Content Niche
+                                Content Focus
                             </label>
                             <input
                                 type="text"
                                 value={niche}
                                 onChange={(e) => setNiche(e.target.value)}
-                                placeholder="e.g., Fitness, Lifestyle, Art, Music, Gaming"
+                                placeholder="e.g., Fitness, Lifestyle, Art"
                                 className="w-full p-3 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-primary-500"
                             />
                             <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                                Examples: "Fitness & Wellness", "Lifestyle Content", "Art & Illustration", "Music Production"
+                                Select multiple above or type your own (comma-separated). Click chips to toggle.
                             </p>
                         </div>
                         <div className="grid grid-cols-3 gap-2 mt-4">
-                            {['Lifestyle', 'Travel', 'Fashion', 'Spicy', 'Tech', 'Music'].map((suggestion) => (
+                            {contentFocusOptions.map((option) => (
                                 <button
-                                    key={suggestion}
+                                    key={option}
                                     type="button"
-                                    onClick={() => setNiche(suggestion)}
+                                    onClick={() => toggleFocus(option)}
                                     className={`px-3 py-2 text-xs rounded-md border transition-colors ${
-                                        niche === suggestion 
-                                            ? 'bg-primary-100 border-primary-500 text-primary-700 dark:bg-primary-900/30 dark:border-primary-500 dark:text-primary-300' 
+                                        selectedFocus.includes(option)
+                                            ? 'bg-primary-100 border-primary-500 text-primary-700 dark:bg-primary-900/30 dark:border-primary-500 dark:text-primary-300'
                                             : 'border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
                                     }`}
                                 >
-                                    {suggestion}
+                                    {option}
                                 </button>
                             ))}
                         </div>
@@ -226,8 +338,42 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
             );
         }
 
-        // Step 4: Goal
+        // Step 4: I am a... (creator type)
         if (step === 4) {
+            return (
+                <div className="animate-fade-in">
+                    <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-white">Creator Profile</h2>
+                    <p className="mt-2 text-center text-gray-500 dark:text-gray-400">
+                        Helps us generate appropriate content ideas and visuals.
+                    </p>
+                    <div className="mt-6 space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                I am a...
+                            </label>
+                            <select
+                                value={creatorGender}
+                                onChange={(e) => setCreatorGender(e.target.value)}
+                                className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                            >
+                                <option value="">Select...</option>
+                                <option value="Female">Female Creator</option>
+                                <option value="Male">Male Creator</option>
+                                <option value="Non-binary">Non-binary Creator</option>
+                                <option value="Couple">Couple</option>
+                                <option value="Other">Other</option>
+                            </select>
+                            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                Used to generate appropriate content ideas and visuals.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Step 5: Goal
+        if (step === 5) {
             return (
                 <div className="animate-fade-in">
                     <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-white">What's Your Goal?</h2>
@@ -268,8 +414,8 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
             );
         }
 
-        // Step 5: Core Features Overview
-        if (step === 5) {
+        // Step 6: Core Features Overview
+        if (step === 6) {
             return (
                 <div className="animate-fade-in">
                     <h2 className="text-xl font-bold text-center text-gray-900 dark:text-white mb-1">Your Core Tools</h2>
@@ -313,8 +459,8 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
             );
         }
 
-        // Step 6 (Pro/Elite): Fan Hub Introduction
-        if (step === 6 && (isProPlan || isElitePlan)) {
+        // Step 7 (Pro/Elite): Fan Hub Introduction
+        if (step === 7 && (isProPlan || isElitePlan)) {
             return (
                 <div className="animate-fade-in">
                     <div className="flex items-center justify-center gap-2 mb-2">
@@ -359,8 +505,106 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
             );
         }
 
-        // Step 7 (Elite only): Premium Studio Introduction
-        if (step === 7 && isElitePlan) {
+        // Step 7: Set up your Fan Hub (handle + theme)
+        if (step === fanHubSetupStep) {
+            const cleanHandle = fanHubHandle.replace(/@/g, '').toLowerCase().trim();
+            const handleValid = cleanHandle.length >= 3 && cleanHandle.length <= 20 && /^[a-z0-9_]+$/.test(cleanHandle);
+            const canSave = handleValid && handleCheckStatus === 'available';
+            return (
+                <div className="animate-fade-in">
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                        <HeartIcon />
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-white">Set up your Fan Hub</h2>
+                    </div>
+                    <p className="text-center text-gray-500 dark:text-gray-400 text-sm mb-4">
+                        Choose your page URL and theme. You can change these anytime in Fan Hub.
+                    </p>
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Your page URL</label>
+                            <div className="flex gap-2">
+                                <span className="flex items-center px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-l-md bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+                                    echoflux.ai/
+                                </span>
+                                <input
+                                    type="text"
+                                    value={fanHubHandle}
+                                    onChange={(e) => setFanHubHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                                    placeholder="yourname"
+                                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-r-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                                    maxLength={20}
+                                />
+                            </div>
+                            {handleCheckStatus === 'available' && <p className="mt-1 text-xs text-green-600 dark:text-green-400">{handleCheckMessage}</p>}
+                            {handleCheckStatus === 'taken' && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{handleCheckMessage}</p>}
+                            {handleCheckStatus === 'checking' && <p className="mt-1 text-xs text-gray-500">Checking…</p>}
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">3–20 characters, letters, numbers, underscores</p>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Theme</label>
+                            <div className="grid grid-cols-3 gap-2">
+                                {FAN_HUB_THEME_PRESETS.map((preset) => (
+                                    <button
+                                        key={preset.id}
+                                        type="button"
+                                        onClick={() => {
+                                            setFanHubPresetId(preset.id);
+                                            setFanHubPrimaryColor(preset.theme.primary);
+                                        }}
+                                        className={`flex flex-col items-center gap-1 p-2 rounded-lg border-2 transition-colors ${
+                                            fanHubPresetId === preset.id
+                                                ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                                                : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
+                                        }`}
+                                    >
+                                        <span className="w-8 h-8 rounded-full border border-gray-300 dark:border-gray-600 flex-shrink-0" style={{ backgroundColor: preset.theme.primary }} />
+                                        <span className="text-xs font-medium text-gray-900 dark:text-white truncate w-full text-center">{preset.name}</span>
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 mb-2">Pick a preset, then customize the main color below. Other colors can be set in Fan Hub → My Page.</p>
+                            <div className="flex items-center gap-3">
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Main color</label>
+                                <input
+                                    type="color"
+                                    value={fanHubPrimaryColor}
+                                    onChange={(e) => setFanHubPrimaryColor(e.target.value)}
+                                    className="w-10 h-10 rounded border border-gray-300 dark:border-gray-600 cursor-pointer"
+                                />
+                                <input
+                                    type="text"
+                                    value={fanHubPrimaryColor}
+                                    onChange={(e) => setFanHubPrimaryColor(e.target.value)}
+                                    className="flex-1 px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    <div className="mt-4 flex flex-col gap-2">
+                        {canSave && (
+                            <button
+                                type="button"
+                                onClick={handleSaveFanHubAndComplete}
+                                disabled={fanHubSaving}
+                                className="w-full px-4 py-2.5 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 disabled:opacity-50"
+                            >
+                                {fanHubSaving ? 'Saving…' : 'Save & go to Fan Hub'}
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={handleSkipFanHubSetup}
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
+                        >
+                            Skip for now
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        // Step 9 (Elite only): Premium Studio Introduction
+        if (step === 9 && isElitePlan) {
             return (
                 <div className="animate-fade-in">
                     <div className="flex items-center justify-center gap-2 mb-2">
@@ -461,7 +705,8 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
     const canProceed = () => {
         if (step === 2) return niche.trim().length > 0;
         if (step === 3) return audience.trim().length > 0;
-        if (step === 4) return goal.trim().length > 0;
+        // Step 4 (I am a...) is optional
+        if (step === 5) return goal.trim().length > 0;
         return true;
     };
 
@@ -492,13 +737,22 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                             />
                         ))}
                     </div>
-                    <button
-                        onClick={handleNext}
-                        disabled={!canProceed()}
-                        className="px-6 py-2 bg-primary-600 text-white font-semibold rounded-md hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {step === totalSteps ? "Let's Go!" : "Next"}
-                    </button>
+                    {step === fanHubSetupStep ? (
+                        <button
+                            onClick={handleSkipFanHubSetup}
+                            className="px-6 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-semibold rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                        >
+                            Skip
+                        </button>
+                    ) : (
+                        <button
+                            onClick={handleNext}
+                            disabled={!canProceed()}
+                            className="px-6 py-2 bg-primary-600 text-white font-semibold rounded-md hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {step === totalSteps ? "Let's Go!" : "Next"}
+                        </button>
+                    )}
                 </div>
             </div>
         </div>

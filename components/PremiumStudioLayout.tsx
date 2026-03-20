@@ -30,6 +30,7 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
         {tabIds.map((id) => (
           <button
             key={id}
+            id={isFanHub && id === 'myPage' ? 'tour-step-fanhub-mypage' : undefined}
             type="button"
             onClick={() => setTab(id)}
             className={`px-3 py-2 rounded-t-md text-sm font-medium transition-colors ${

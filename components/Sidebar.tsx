@@ -50,13 +50,13 @@ export const Sidebar: React.FC = () => {
 
   const allNavItems: (Omit<NavItemProps, 'page' | 'label'> & { page: Page | 'admin', label: string })[] = [
     // MAIN
-    { page: 'dashboard', icon: <DashboardIcon />, label: 'Dashboard' },
+    { page: 'dashboard', icon: <DashboardIcon />, label: 'Dashboard', tourId: 'tour-step-1-dashboard' },
     { page: 'strategy', icon: <TargetIcon />, label: 'What to Post' },
     { page: 'compose', icon: <ComposeIcon />, label: 'Create Post', tourId: 'tour-step-3-compose-nav' },
     { page: 'calendar', icon: <CalendarIcon />, label: 'Calendar' },
     { page: 'mediaLibrary', icon: <ImageIcon />, label: 'Vault' },
     ...(hasFanHubAccess ? [{ page: (hasPremiumStudioAccess ? 'onlyfansStudio' : 'premiumStudioUpgrade') as Page, icon: <SparklesIcon />, label: 'Premium Studio' }] : []),
-    ...((hasFanHubAccess || hasPremiumStudioAccess) ? [{ page: 'fanHub' as Page, icon: <HeartIcon />, label: 'Fan Hub' }] : []),
+    ...((hasFanHubAccess || hasPremiumStudioAccess) ? [{ page: 'fanHub' as Page, icon: <HeartIcon />, label: 'Fan Hub', tourId: 'tour-step-fanhub-nav' }] : []),
     { page: 'settings', icon: <SettingsIcon />, label: 'Settings' },
     { page: 'admin', icon: <AdminIcon />, label: 'Admin' },
   ];

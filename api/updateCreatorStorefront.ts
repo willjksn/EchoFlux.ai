@@ -47,12 +47,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       displayName: body.displayName !== undefined ? body.displayName : existingData?.displayName,
       bio: body.bio !== undefined ? body.bio : existingData?.bio,
       avatar: body.avatar !== undefined ? body.avatar : existingData?.avatar,
+      avatarObjectPosition:
+        body.avatarObjectPosition !== undefined ? body.avatarObjectPosition : existingData?.avatarObjectPosition,
       logo: body.logo !== undefined ? body.logo : existingData?.logo,
+      showDisplayNameOnLanding: body.showDisplayNameOnLanding !== undefined ? body.showDisplayNameOnLanding : existingData?.showDisplayNameOnLanding,
       
       // Hero Section
       heroImage: body.heroImage !== undefined ? body.heroImage : existingData?.heroImage,
+      heroMedia: body.heroMedia !== undefined ? body.heroMedia : existingData?.heroMedia,
       heroTagline: body.heroTagline !== undefined ? body.heroTagline : existingData?.heroTagline,
       heroPromise: body.heroPromise !== undefined ? body.heroPromise : existingData?.heroPromise,
+      heroSubline: body.heroSubline !== undefined ? body.heroSubline : existingData?.heroSubline,
       
       // Social Links
       socialLinks: body.socialLinks !== undefined ? body.socialLinks : existingData?.socialLinks,
@@ -64,6 +69,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       legal: body.legal !== undefined ? body.legal : existingData?.legal,
       
       theme: body.theme !== undefined ? body.theme : existingData?.theme,
+      heroLayout: body.heroLayout !== undefined ? body.heroLayout : existingData?.heroLayout,
       sections: body.sections !== undefined ? body.sections : existingData?.sections,
       sectionsOrder: body.sectionsOrder !== undefined ? body.sectionsOrder : existingData?.sectionsOrder,
       spicyMode: body.spicyMode !== undefined ? body.spicyMode : existingData?.spicyMode,

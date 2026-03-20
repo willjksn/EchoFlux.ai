@@ -157,6 +157,10 @@ export const FanHubUsers: React.FC = () => {
         lastActive: Date | null;
         firstOrder: Date | null;
         avatarUrl?: string;
+        /** True when Stripe cancel_at_period_end; access continues until subscriptionCurrentPeriodEnd */
+        cancelAtPeriodEnd?: boolean;
+        /** ISO or Date from webhook — end of current paid period */
+        subscriptionCurrentPeriodEnd?: Date | null;
       }>();
 
       // First, fetch from creators/{creatorId}/fans collection (Stripe subscribers and purchasers)
@@ -168,7 +172,18 @@ export const FanHubUsers: React.FC = () => {
           const data = doc.data();
           const fanId = doc.id;
           const subscribedAt = data.subscribedAt ? new Date(data.subscribedAt) : (data.createdAt ? new Date(data.createdAt) : null);
-          
+          const periodEndRaw = data.subscriptionCurrentPeriodEnd;
+          let subscriptionCurrentPeriodEnd: Date | null = null;
+          if (periodEndRaw != null && periodEndRaw !== "") {
+            const ts = periodEndRaw as { toDate?: () => Date };
+            if (typeof ts.toDate === "function") {
+              subscriptionCurrentPeriodEnd = ts.toDate();
+            } else {
+              const d = new Date(periodEndRaw as string | number);
+              subscriptionCurrentPeriodEnd = Number.isFinite(d.getTime()) ? d : null;
+            }
+          }
+
           userMap.set(fanId, {
             id: fanId,
             email: data.email || null,
@@ -182,6 +197,8 @@ export const FanHubUsers: React.FC = () => {
             lastActive: data.lastPaymentAt ? new Date(data.lastPaymentAt) : subscribedAt,
             firstOrder: subscribedAt,
             avatarUrl: data.avatarUrl || undefined,
+            cancelAtPeriodEnd: data.cancelAtPeriodEnd === true,
+            subscriptionCurrentPeriodEnd,
           });
         });
       } catch (e) {
@@ -229,13 +246,24 @@ export const FanHubUsers: React.FC = () => {
         legacySubSnap.docs.forEach((doc) => {
           const data = doc.data();
           const fanId = doc.id;
+          const legacyPeriodRaw = data.currentPeriodEnd;
+          let legacyPeriodEnd: Date | null = null;
+          if (legacyPeriodRaw != null && legacyPeriodRaw !== "") {
+            const ts = legacyPeriodRaw as { toDate?: () => Date };
+            if (typeof ts.toDate === "function") {
+              legacyPeriodEnd = ts.toDate();
+            } else {
+              const d = new Date(legacyPeriodRaw as string | number);
+              legacyPeriodEnd = Number.isFinite(d.getTime()) ? d : null;
+            }
+          }
           if (!userMap.has(fanId)) {
             const subscribedAt = data.updatedAt ? new Date(data.updatedAt) : null;
             userMap.set(fanId, {
               id: fanId,
               email: null,
               displayName: null,
-              subscriptionStatus: data.status || 'active',
+              subscriptionStatus: data.status || "active",
               subscribedAt,
               tips: 0,
               unlocks: 0,
@@ -243,12 +271,19 @@ export const FanHubUsers: React.FC = () => {
               total: 0,
               lastActive: subscribedAt,
               firstOrder: subscribedAt,
+              cancelAtPeriodEnd: data.cancelAtPeriodEnd === true,
+              subscriptionCurrentPeriodEnd: legacyPeriodEnd,
             });
           } else {
-            // Update subscription status if newer
             const existing = userMap.get(fanId)!;
             if (data.status && !existing.subscriptionStatus) {
               existing.subscriptionStatus = data.status;
+            }
+            if (data.cancelAtPeriodEnd === true) {
+              existing.cancelAtPeriodEnd = true;
+            }
+            if (legacyPeriodEnd && !existing.subscriptionCurrentPeriodEnd) {
+              existing.subscriptionCurrentPeriodEnd = legacyPeriodEnd;
             }
           }
         });
@@ -297,11 +332,24 @@ export const FanHubUsers: React.FC = () => {
           role = "tipper"; // Non-subscriber who only tips
         }
 
-        // Determine remaining access based on subscription status
+        // Remaining access: Expired = subscription fully ended (Stripe deleted / status canceled).
+        // Cancelled = still in paid period but cancel_at_period_end (access until period end).
+        const st = (data.subscriptionStatus || "").toLowerCase();
+        const nowMs = Date.now();
+        const periodEnd = data.subscriptionCurrentPeriodEnd;
+        const periodEndMs =
+          periodEnd instanceof Date && Number.isFinite(periodEnd.getTime()) ? periodEnd.getTime() : null;
+
         let remainingAccess: string = "Active";
-        if (data.subscriptionStatus === "canceled" || data.subscriptionStatus === "cancelled") {
-          remainingAccess = "Cancelled";
-        } else if (data.subscriptionStatus === "past_due") {
+        if (st === "canceled" || st === "cancelled") {
+          remainingAccess = "Expired";
+        } else if (st === "active" || st === "trialing") {
+          if (data.cancelAtPeriodEnd && periodEndMs != null) {
+            remainingAccess = periodEndMs > nowMs ? "Cancelled" : "Expired";
+          } else {
+            remainingAccess = "Active";
+          }
+        } else if (st === "past_due") {
           remainingAccess = "Past Due";
         } else if (data.lastActive && data.lastActive < thirtyDaysAgo && !data.subscriptionStatus) {
           remainingAccess = "Inactive";
@@ -381,7 +429,14 @@ export const FanHubUsers: React.FC = () => {
         creatorId: user.id,
         email,
         displayName,
-        subscriptionStatus: newUserRole === "member" ? (newUserPlan === "Active" ? "active" : newUserPlan.toLowerCase()) : null,
+        subscriptionStatus:
+          newUserRole === "member"
+            ? newUserPlan === "Active"
+              ? "active"
+              : newUserPlan === "Expired"
+                ? "canceled"
+                : newUserPlan.toLowerCase()
+            : null,
         manuallyAdded: true,
         role: newUserRole,
         createdAt: now,
@@ -926,7 +981,8 @@ export const FanHubUsers: React.FC = () => {
                 >
                   <option value="Active">Active</option>
                   <option value="Inactive">Inactive</option>
-                  <option value="Cancelled">Cancelled</option>
+                  <option value="Cancelled">Cancelled (non-Stripe / manual)</option>
+                  <option value="Expired">Expired (subscription ended)</option>
                 </select>
               </div>
             </div>

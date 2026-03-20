@@ -1106,16 +1106,16 @@ export const Settings: React.FC = () => {
                                 Help the AI generate content that matches you and appeals to your audience.
                             </p>
                             
-                            {/* Content Niche */}
+                            {/* Content Focus (also set during onboarding) */}
                             <div className="mb-4">
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Content Focus / Niche
+                                    Content Focus
                                 </label>
                                 <input
                                     type="text"
                                     value={contentNiche}
                                     onChange={(e) => setContentNiche(e.target.value)}
-                                    placeholder="e.g., Fitness, Lifestyle, Gaming, Fashion, Art"
+                                    placeholder="e.g., Fitness, Lifestyle, Gaming, Fashion, Art (comma-separated for multiple)"
                                     className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                                 />
                                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">

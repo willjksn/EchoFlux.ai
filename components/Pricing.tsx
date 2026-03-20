@@ -38,7 +38,8 @@ const allCreatorTiers = [
             'Fan messages',
             '100 video chat minutes/month',
             'Basic analytics',
-            'Stripe payouts (10% platform fee)'
+            'Stripe payouts (10% platform fee)',
+            'Chat session & AI comment replies (upgrade to Elite to unlock)'
         ],
         isRecommended: false
     },
@@ -52,6 +53,8 @@ const allCreatorTiers = [
             'Premium Studio tools',
             'Advanced content planning',
             'Chat session planner',
+            'AI Chat Bot in chat sessions (auto-reply as you)',
+            'AI comment replies on feed (prioritize tippers & buyers)',
             '250 video chat minutes/month',
             'Advanced fan analytics',
             'VIP fan management',

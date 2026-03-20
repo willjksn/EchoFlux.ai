@@ -801,7 +801,7 @@ const AppContent: React.FC = () => {
         finalize();
     }, [isAuthenticated, user, isFinalizingCheckout, setUser, showToast]);
 
-    const handleOnboardingComplete = async () => {
+    const handleOnboardingComplete = async (opts?: { openFanHub?: boolean }) => {
         if (user) {
             await setUser({ ...user, hasCompletedOnboarding: true });
         }
@@ -809,7 +809,11 @@ const AppContent: React.FC = () => {
         try {
             localStorage.setItem('settingsActiveTab', 'ai-training');
         } catch {}
-        setActivePage('settings');
+        if (opts?.openFanHub) {
+            setActivePage('fanHub');
+        } else {
+            setActivePage('settings');
+        }
         setTimeout(() => startTour(), 600);
     };
     

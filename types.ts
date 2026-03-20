@@ -267,12 +267,30 @@ export interface CreatorStorefrontSettings {
     displayName?: string;
     bio?: string;
     avatar?: string; // image URL - shown on feed posts (profile pic)
+    /** CSS object-position for avatar when shown in circular crop (e.g. full-background hero). E.g. `40% 20%`. */
+    avatarObjectPosition?: string;
     logo?: string;   // image URL - shown in header (like Stormij XO logo)
+    /** When false, hide display name from landing hero (still shown in header and feed) */
+    showDisplayNameOnLanding?: boolean;
 
     // Hero Section
-    heroImage?: string;         // Main hero image URL (portrait, 4:5 aspect ratio)
+    heroImage?: string;         // Legacy: single hero image URL (used if heroMedia is empty)
+    /** Multiple hero images with optional size. fullBackground = one image as section background. */
+    heroMedia?: {
+        url: string;
+        size?: 'small' | 'medium' | 'large' | 'fullBackground';
+        /** When size is fullBackground: which part of the image is visible (CSS background-position, e.g. `45% 30%`). */
+        backgroundPosition?: string;
+        /** For grid hero images: focal point (CSS object-position, e.g. `50% 25%`). */
+        objectPosition?: string;
+        /** fullBackground only: avatar overlay horizontal offset (CSS length, e.g. `1rem` or `24px`). */
+        landingAvatarLeft?: string;
+        /** fullBackground only: avatar offset from section bottom (CSS length, often negative e.g. `-48px`). */
+        landingAvatarBottom?: string;
+    }[];
     heroTagline?: string;       // Short tagline under display name
     heroPromise?: string;       // "Your access to..." promise text
+    heroSubline?: string;       // Extra line after promise text on landing hero
     
     // Text Styling (font size & color per field)
     textStyles?: {
@@ -280,6 +298,7 @@ export interface CreatorStorefrontSettings {
         bio?: TextStyle;
         heroTagline?: TextStyle;
         heroPromise?: TextStyle;
+        heroSubline?: TextStyle;
         perksTitle?: TextStyle;
         perksText?: TextStyle;
         previewTitle?: TextStyle;
@@ -306,7 +325,13 @@ export interface CreatorStorefrontSettings {
         border?: string;    // hex, border color for cards/sections
         accentHover?: string; // hex, hover state for accent/primary
         buttonStyle?: StorefrontButtonStyle; // 'solid' | 'outline' | 'pill'
+        /** Global font family for storefront (e.g. "Inter, sans-serif") */
+        fontFamily?: string;
+        /** Id of a preset (e.g. "default" | "stormij" | "ocean") for quick apply */
+        presetId?: string;
     };
+    /** Hero section layout on landing: default (image + text stack) | centered (compact) | split (image left, text right) */
+    heroLayout?: 'default' | 'centered' | 'split' | 'splitRight';
     sections?: {
         feed: boolean;
         treats: boolean;

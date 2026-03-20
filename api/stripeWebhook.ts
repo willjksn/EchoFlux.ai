@@ -289,20 +289,50 @@ async function handleConnectEvent(db: Firestore, _stripe: Stripe, event: Stripe.
     const fanId = subscription.metadata?.fanId;
     if (!creatorId || !fanId) return;
     const now = new Date().toISOString();
-    const status = subscription.status === 'active' || subscription.status === 'trialing' ? subscription.status : 'past_due';
+    const raw = subscription.status;
+    let subStatus: string;
+    if (raw === 'active' || raw === 'trialing') {
+      subStatus = raw;
+    } else if (raw === 'canceled' || raw === 'unpaid' || raw === 'incomplete_expired') {
+      subStatus = 'canceled';
+    } else if (raw === 'past_due') {
+      subStatus = 'past_due';
+    } else {
+      subStatus = raw;
+    }
+    const periodEndSec = (subscription as { current_period_end?: number }).current_period_end;
+    const subscriptionCurrentPeriodEnd = periodEndSec
+      ? new Date(periodEndSec * 1000).toISOString()
+      : null;
+    const cancelAtPeriodEnd = !!(subscription as { cancel_at_period_end?: boolean }).cancel_at_period_end;
+    const grantActive = subStatus === 'active' || subStatus === 'trialing';
+
     const subRef = db.collection('creatorSubscribers').doc(creatorId).collection('subscribers').doc(fanId);
-    await subRef.set({ status, stripeSubscriptionId: subscription.id, updatedAt: now }, { merge: true });
+    await subRef.set(
+      {
+        status: subStatus,
+        stripeSubscriptionId: subscription.id,
+        cancelAtPeriodEnd,
+        currentPeriodEnd: subscriptionCurrentPeriodEnd,
+        updatedAt: now,
+      },
+      { merge: true },
+    );
     const grantRef = db.collection('creatorEntitlements').doc(creatorId).collection('grants').doc(fanId);
     const grantSnap = await grantRef.get();
     const existing = grantSnap.data() as { unlockedProductIds?: string[] } | undefined;
-    await grantRef.set({ subscription: status === 'active' || status === 'trialing', unlockedProductIds: existing?.unlockedProductIds ?? [], updatedAt: now }, { merge: true });
-    
-    // Update fan record subscription status
+    await grantRef.set(
+      { subscription: grantActive, unlockedProductIds: existing?.unlockedProductIds ?? [], updatedAt: now },
+      { merge: true },
+    );
+
     const fanRef = db.collection('creators').doc(creatorId).collection('fans').doc(fanId);
     const fanSnap = await fanRef.get();
     if (fanSnap.exists) {
       await fanRef.update({
-        subscriptionStatus: status,
+        subscriptionStatus: subStatus,
+        cancelAtPeriodEnd,
+        subscriptionCurrentPeriodEnd,
         updatedAt: now,
       });
     }
@@ -329,10 +359,12 @@ async function handleConnectEvent(db: Firestore, _stripe: Stripe, event: Stripe.
       await fanRef.update({
         subscriptionStatus: 'canceled',
         canceledAt: now,
+        cancelAtPeriodEnd: false,
+        subscriptionCurrentPeriodEnd: null,
         updatedAt: now,
       });
     }
-    
+
     console.log(`Connect: subscription deleted creator=${creatorId} fan=${fanId}`);
     return;
   }

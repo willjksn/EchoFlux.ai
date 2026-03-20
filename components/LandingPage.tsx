@@ -428,6 +428,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                         <Feature icon={<ChatIcon />} title="AI Assistant">
                            Get content ideas, brainstorm angles, and generate captions with a creator-focused AI assistant built into the app.
                         </Feature>
+                        <Feature icon={<ChatIcon />} title="AI Chat Bot (Elite)">
+                           In chat sessions, auto-reply to fans as you with an AI Chat Bot that matches your tone. Click to enable; Pro users see an upgrade prompt to unlock.
+                        </Feature>
+                        <Feature icon={<SparklesIcon />} title="AI Comment Replies (Elite)">
+                           Auto-reply to feed comments in your voice. Prioritize fans who tip or buy treats; control reply chance with a slider. Pro users see an upgrade prompt to unlock.
+                        </Feature>
                     </dl>
                 </div>
             </div>

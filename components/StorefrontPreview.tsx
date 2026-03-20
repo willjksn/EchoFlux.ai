@@ -1,5 +1,28 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useCallback, useMemo } from "react";
 import type { CreatorStorefrontSettings, StorefrontSocialLinks, StorefrontLandingContent, TextStyle } from "../types";
+
+export type StorefrontHeroMediaItem = NonNullable<CreatorStorefrontSettings["heroMedia"]>[number];
+
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
+
+/** Parse CSS background-position / object-position as two percentages (defaults 50,50). */
+function parsePercentPair(s: string | undefined): [number, number] {
+  if (!s || s === "center") return [50, 50];
+  const t = s.trim();
+  const m = t.match(/^([\d.]+)%\s+([\d.]+)%$/);
+  if (m) return [parseFloat(m[1]), parseFloat(m[2])];
+  if (t === "top") return [50, 0];
+  if (t === "bottom") return [50, 100];
+  if (t === "left") return [0, 50];
+  if (t === "right") return [100, 50];
+  return [50, 50];
+}
+
+function formatPercentPair(x: number, y: number) {
+  return `${clamp(Math.round(x * 10) / 10, 0, 100)}% ${clamp(Math.round(y * 10) / 10, 0, 100)}%`;
+}
 
 // Font size mapping for text styles
 const FONT_SIZE_MAP: Record<NonNullable<TextStyle['fontSize']>, string> = {
@@ -23,10 +46,19 @@ function getTextStyleCSS(style?: TextStyle, defaults?: { fontSize?: string; colo
 
 export type PreviewMode = "landing" | "member";
 
+/** Controlled by My Page builder — drag interactions in the preview update draft. */
+export type StorefrontPreviewFramingTool = "off" | "panBg" | "panAvatar" | "focusPhoto";
+
 export interface StorefrontPreviewProps {
   config: Partial<CreatorStorefrontSettings>;
   previewMode: PreviewMode;
   className?: string;
+  /** Builder: current framing mode + which grid hero slot is targeted for “Photo focus”. */
+  previewFraming?: { tool: StorefrontPreviewFramingTool; focusPhotoSlot: number };
+  /** Merge patches into `heroMedia[index]` (e.g. backgroundPosition, objectPosition). */
+  onHeroMediaItemPatch?: (index: number, patch: Partial<StorefrontHeroMediaItem>) => void;
+  /** Update circular avatar crop (CSS object-position, e.g. `45% 30%`). */
+  onAvatarObjectPositionChange?: (objectPosition: string) => void;
 }
 
 // Neutral theme defaults - creators should customize
@@ -34,7 +66,17 @@ const DEFAULT_PRIMARY = "#6366f1";
 const DEFAULT_BG = "#fafafa";
 const DEFAULT_TEXT = "#1f2937";
 
-const SECTION_KEYS = ["home", "treats", "tip", "messages"] as const;
+/** Returns true if the hex color is dark (suitable for light text). */
+function isDarkBackground(hex: string): boolean {
+  const h = hex.replace(/^#/, "");
+  const r = h.length === 3 ? parseInt(h[0] + h[0], 16) : parseInt(h.slice(0, 2), 16);
+  const g = h.length === 3 ? parseInt(h[1] + h[1], 16) : parseInt(h.slice(2, 4), 16);
+  const b = h.length === 3 ? parseInt(h[2] + h[2], 16) : parseInt(h.slice(4, 6), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance < 0.45;
+}
+
+const DEFAULT_SECTION_ORDER = ["feed", "treats", "tip", "messages", "about", "saved"];
 
 // Map for display labels
 const SECTION_LABELS: Record<string, string> = {
@@ -153,28 +195,118 @@ function getVisibleSocialLinks(socialLinks?: StorefrontSocialLinks) {
   return links;
 }
 
+function getSocialIconStyle(key: string, fallback: string): React.CSSProperties {
+  switch (key) {
+    case "instagram":
+      return {
+        color: "#ffffff",
+        background: "radial-gradient(circle at 30% 107%, #fdf497 0%, #fdf497 5%, #fd5949 45%, #d6249f 60%, #285AEB 90%)",
+        border: "1px solid rgba(255,255,255,0.35)",
+        boxShadow: "0 4px 10px rgba(0,0,0,0.2)",
+      };
+    case "tiktok":
+      return {
+        color: "#ffffff",
+        background: "#0f0f10",
+        border: "1px solid rgba(255,255,255,0.28)",
+        boxShadow: "0 4px 10px rgba(0,0,0,0.22)",
+      };
+    case "x":
+      return {
+        color: "#ffffff",
+        background: "#000000",
+        border: "1px solid rgba(255,255,255,0.35)",
+        boxShadow: "0 4px 10px rgba(0,0,0,0.32)",
+      };
+    case "facebook":
+      return {
+        color: "#ffffff",
+        background: "#1877f2",
+        border: "1px solid rgba(255,255,255,0.35)",
+        boxShadow: "0 4px 10px rgba(24,119,242,0.28)",
+      };
+    case "youtube":
+      return {
+        color: "#ffffff",
+        background: "#ff0000",
+        border: "1px solid rgba(255,255,255,0.35)",
+        boxShadow: "0 4px 10px rgba(255,0,0,0.28)",
+      };
+    default:
+      return {
+        color: "#ffffff",
+        background: fallback,
+        border: "1px solid rgba(255,255,255,0.3)",
+        boxShadow: "0 4px 10px rgba(0,0,0,0.2)",
+      };
+  }
+}
+
 export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
   config,
   previewMode,
   className = "",
+  previewFraming,
+  onHeroMediaItemPatch,
+  onAvatarObjectPositionChange,
 }) => {
   const [activeTab, setActiveTab] = useState<string>("home");
   const [tipAmount, setTipAmount] = useState<string>("");
+  const framingTool = previewFraming?.tool ?? "off";
+  const focusPhotoSlot = previewFraming?.focusPhotoSlot ?? 0;
+  const heroSectionRef = useRef<HTMLElement>(null);
+  const bgDragRef = useRef<{ startClientX: number; startClientY: number; startX: number; startY: number } | null>(null);
+  const avatarPanRef = useRef<{ startClientX: number; startClientY: number; startOx: number; startOy: number } | null>(null);
+  const focusDragRef = useRef<{ startClientX: number; startClientY: number; startOx: number; startOy: number } | null>(null);
 
   const theme = config.theme ?? {};
   const primary = theme.primary || DEFAULT_PRIMARY;
   const background = theme.background || DEFAULT_BG;
   const textColor = theme.text || DEFAULT_TEXT;
+  const isDark = isDarkBackground(background);
+  const cardBg = isDark ? background : `linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, ${primary}06 52%, ${primary}08 100%)`;
+  const surfaceBg = isDark ? background : "#fff";
 
-  const memberTabs = SECTION_KEYS;
+  // Member nav tabs from sections/sectionsOrder (Saved hidden in preview — only on live storefront)
+  const sections = config.sections ?? { feed: true, treats: true, tip: true, messages: true, about: true };
+  const sectionsOrder = config.sectionsOrder ?? DEFAULT_SECTION_ORDER;
+  const memberTabs = sectionsOrder.filter(
+    (key) => key !== "saved" && (sections as Record<string, boolean>)?.[key] !== false
+  );
+  const effectiveTab = activeTab === "saved" && !memberTabs.includes("saved") ? "feed" : activeTab;
 
   const displayName = config.displayName || config.handle || "Your name";
   const bio = config.bio ?? "";
   const avatar = config.avatar;
+  /** Same crop (object-position) for every circular avatar in the preview. */
+  const avatarCropStyle: React.CSSProperties = {
+    objectPosition: config.avatarObjectPosition ?? "center",
+  };
   const logo = config.logo;
-  const heroImage = config.heroImage;
+  const showDisplayNameOnLanding = config.showDisplayNameOnLanding !== false;
+  const heroMedia = (config.heroMedia && config.heroMedia.length > 0)
+    ? config.heroMedia
+    : (config.heroImage ? [{ url: config.heroImage, size: "medium" as const }] : []);
+  const fullBgIndex = useMemo(
+    () => heroMedia.findIndex((m) => m.size === "fullBackground"),
+    [heroMedia]
+  );
+  const fullBgItem = fullBgIndex >= 0 ? heroMedia[fullBgIndex] : undefined;
+  const heroImages = heroMedia.filter((m) => m.size !== "fullBackground");
+  const heroSlots = useMemo(
+    () => heroMedia.map((m, idx) => ({ m, idx })).filter((x) => x.m.size !== "fullBackground"),
+    [heroMedia]
+  );
+  const framingInteractionsEnabled =
+    previewMode === "landing" &&
+    previewFraming != null &&
+    Boolean(onHeroMediaItemPatch || onAvatarObjectPositionChange);
+
+  const heroImage = heroImages[0]?.url ?? config.heroImage;
   const heroTagline = config.heroTagline ?? "";
   const heroPromise = config.heroPromise ?? "Your access to the real me";
+  const heroSubline = config.heroSubline ?? "";
+  const heroLayout = config.heroLayout ?? "default";
   const textStyles = config.textStyles ?? {};
   
   const landingContent = { ...DEFAULT_LANDING_CONTENT, ...config.landingContent };
@@ -186,11 +318,168 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
   const monthlyPriceCents = monetization.monthlyPrice ?? 999;
   const monthlyPrice = (monthlyPriceCents / 100).toFixed(2);
 
+  const patchHeroItem = useCallback(
+    (index: number, patch: Partial<StorefrontHeroMediaItem>) => {
+      if (!onHeroMediaItemPatch || index < 0) return;
+      onHeroMediaItemPatch(index, patch);
+    },
+    [onHeroMediaItemPatch]
+  );
+
+  const focusHeroMediaIndex = heroSlots[focusPhotoSlot]?.idx ?? -1;
+  const focusItem = heroSlots[focusPhotoSlot]?.m;
+
+  const handleBgPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (framingTool !== "panBg" || fullBgIndex < 0 || !heroSectionRef.current) return;
+      e.preventDefault();
+      e.stopPropagation();
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      const [sx, sy] = parsePercentPair(fullBgItem?.backgroundPosition);
+      bgDragRef.current = {
+        startClientX: e.clientX,
+        startClientY: e.clientY,
+        startX: sx,
+        startY: sy,
+      };
+    },
+    [framingTool, fullBgIndex, fullBgItem?.backgroundPosition]
+  );
+
+  const handleBgPointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (framingTool !== "panBg" || !bgDragRef.current || !heroSectionRef.current || fullBgIndex < 0) return;
+      const rect = heroSectionRef.current.getBoundingClientRect();
+      const w = Math.max(rect.width, 1);
+      const h = Math.max(rect.height, 1);
+      const dx = e.clientX - bgDragRef.current.startClientX;
+      const dy = e.clientY - bgDragRef.current.startClientY;
+      const sens = 0.65;
+      const nx = clamp(bgDragRef.current.startX - (dx / w) * 100 * sens, 0, 100);
+      const ny = clamp(bgDragRef.current.startY - (dy / h) * 100 * sens, 0, 100);
+      patchHeroItem(fullBgIndex, { backgroundPosition: formatPercentPair(nx, ny) });
+      bgDragRef.current = {
+        startClientX: e.clientX,
+        startClientY: e.clientY,
+        startX: nx,
+        startY: ny,
+      };
+    },
+    [framingTool, fullBgIndex, patchHeroItem]
+  );
+
+  const handleBgPointerUp = useCallback((e: React.PointerEvent) => {
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+    bgDragRef.current = null;
+  }, []);
+
+  const handleAvatarPanPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (framingTool !== "panAvatar" || !onAvatarObjectPositionChange) return;
+      e.preventDefault();
+      e.stopPropagation();
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      const [ox, oy] = parsePercentPair(config.avatarObjectPosition);
+      avatarPanRef.current = {
+        startClientX: e.clientX,
+        startClientY: e.clientY,
+        startOx: ox,
+        startOy: oy,
+      };
+    },
+    [framingTool, onAvatarObjectPositionChange, config.avatarObjectPosition]
+  );
+
+  const handleAvatarPanPointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (framingTool !== "panAvatar" || !avatarPanRef.current || !onAvatarObjectPositionChange) return;
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const w = Math.max(rect.width, 1);
+      const h = Math.max(rect.height, 1);
+      const dx = e.clientX - avatarPanRef.current.startClientX;
+      const dy = e.clientY - avatarPanRef.current.startClientY;
+      const sens = 0.85;
+      const nx = clamp(avatarPanRef.current.startOx - (dx / w) * 100 * sens, 0, 100);
+      const ny = clamp(avatarPanRef.current.startOy - (dy / h) * 100 * sens, 0, 100);
+      onAvatarObjectPositionChange(formatPercentPair(nx, ny));
+      avatarPanRef.current = {
+        startClientX: e.clientX,
+        startClientY: e.clientY,
+        startOx: nx,
+        startOy: ny,
+      };
+    },
+    [framingTool, onAvatarObjectPositionChange]
+  );
+
+  const handleAvatarPanPointerUp = useCallback((e: React.PointerEvent) => {
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+    avatarPanRef.current = null;
+  }, []);
+
+  const handleFocusPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (framingTool !== "focusPhoto" || focusHeroMediaIndex < 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      const [ox, oy] = parsePercentPair(focusItem?.objectPosition);
+      focusDragRef.current = {
+        startClientX: e.clientX,
+        startClientY: e.clientY,
+        startOx: ox,
+        startOy: oy,
+      };
+    },
+    [framingTool, focusHeroMediaIndex, focusItem?.objectPosition]
+  );
+
+  const handleFocusPointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (framingTool !== "focusPhoto" || !focusDragRef.current || focusHeroMediaIndex < 0) return;
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const w = Math.max(rect.width, 1);
+      const h = Math.max(rect.height, 1);
+      const dx = e.clientX - focusDragRef.current.startClientX;
+      const dy = e.clientY - focusDragRef.current.startClientY;
+      const sens = 0.85;
+      const nx = clamp(focusDragRef.current.startOx - (dx / w) * 100 * sens, 0, 100);
+      const ny = clamp(focusDragRef.current.startOy - (dy / h) * 100 * sens, 0, 100);
+      patchHeroItem(focusHeroMediaIndex, { objectPosition: formatPercentPair(nx, ny) });
+      focusDragRef.current = {
+        startClientX: e.clientX,
+        startClientY: e.clientY,
+        startOx: nx,
+        startOy: ny,
+      };
+    },
+    [framingTool, focusHeroMediaIndex, patchHeroItem]
+  );
+
+  const handleFocusPointerUp = useCallback((e: React.PointerEvent) => {
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+    focusDragRef.current = null;
+  }, []);
+
+  const globalFont = theme.fontFamily || "Inter, sans-serif";
   // CSS variables for theme
   const themeVars = {
     "--preview-primary": primary,
     "--preview-bg": background,
     "--preview-text": textColor,
+    "--preview-font": globalFont,
   } as React.CSSProperties;
 
   return (
@@ -198,18 +487,19 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
       className={`stormij-theme min-h-[400px] overflow-auto rounded-xl border border-gray-200 dark:border-gray-700 shadow-inner ${className}`}
       style={{ 
         ...themeVars,
+        fontFamily: globalFont,
         backgroundColor: previewMode === "landing" ? background : background,
       }}
     >
       {previewMode === "landing" && (
-        <div className="storefront-preview-landing" style={{ background: `linear-gradient(135deg, ${background} 0%, #fff 50%, ${background} 100%)` }}>
+        <div className="storefront-preview-landing" style={{ background: isDark ? background : `linear-gradient(135deg, ${background} 0%, #f8fafc 50%, ${background} 100%)` }}>
           {/* Header */}
-          <header className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: `${primary}20` }}>
-            <div className="flex items-center gap-2">
+          <header className="flex items-center justify-between px-4 py-2.5 border-b" style={{ borderColor: `${primary}20` }}>
+            <div className="flex items-center gap-2 min-h-[48px]">
               {logo ? (
-                <img src={logo} alt={displayName} className="h-7 object-contain max-w-[120px]" />
+                <img src={logo} alt={displayName} className="h-12 w-auto max-w-[240px] object-contain object-left [mix-blend-mode:multiply]" />
               ) : avatar ? (
-                <img src={avatar} alt="" className="w-7 h-7 rounded-full object-cover" />
+                <img src={avatar} alt="" className="w-7 h-7 rounded-full object-cover" style={avatarCropStyle} />
               ) : null}
               {!logo && <span className="text-xs font-medium" style={{ color: textColor }}>{displayName || "My Page"}</span>}
             </div>
@@ -219,72 +509,182 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
             </div>
           </header>
 
-          {/* Hero Section */}
-          <section className="px-4 py-6">
-            <div className="flex gap-6">
-              {/* Hero Image */}
-              {heroImage && (
-                <div 
-                  className="w-32 h-40 rounded-xl overflow-hidden flex-shrink-0" 
-                  style={{ 
-                    border: `1px solid ${primary}30`, 
-                    boxShadow: `0 18px 44px ${primary}30, 0 0 0 5px rgba(255, 255, 255, 0.45)` 
-                  }}
-                >
-                  <img src={heroImage} alt="" className="w-full h-full object-cover object-top" />
-                </div>
-              )}
-              
-              {/* Hero Text */}
-              <div className="flex-1 min-w-0">
-                <h1 className="font-bold mb-1" style={{ 
-                  ...getTextStyleCSS(textStyles.displayName, { fontSize: '1.25rem', color: textColor }),
-                  fontFamily: "var(--fan-serif, Georgia, serif)" 
-                }}>
-                  {displayName}
-                </h1>
-                {heroTagline && (
-                  <p className="mb-2" style={getTextStyleCSS(textStyles.heroTagline, { fontSize: '0.75rem', color: `${textColor}99` })}>{heroTagline}</p>
+          {/* Hero Section — fullBackground = avatar-only overlay on left; else auto-layout grid for 1–6 images */}
+          <section
+            ref={heroSectionRef}
+            className={`px-4 py-6 relative overflow-visible rounded-b-lg ${fullBgItem ? "pb-0" : ""}`}
+            style={
+              fullBgItem
+                ? {
+                    backgroundImage: `url(${fullBgItem.url})`,
+                    backgroundSize: "cover",
+                    backgroundPosition: fullBgItem.backgroundPosition ?? "center",
+                    minHeight: "160px",
+                  }
+                : undefined
+            }
+          >
+            {fullBgItem && (
+              <div
+                className={`absolute inset-0 rounded-b-lg ${framingTool === "panBg" ? "bg-black/40 cursor-grab active:cursor-grabbing touch-none" : "bg-black/40 pointer-events-none"}`}
+                aria-hidden
+                onPointerDown={handleBgPointerDown}
+                onPointerMove={handleBgPointerMove}
+                onPointerUp={handleBgPointerUp}
+                onPointerCancel={handleBgPointerUp}
+              />
+            )}
+            {fullBgItem && (
+              <div
+                className={`absolute z-10 w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg bg-gray-100 ${
+                  framingTool === "panAvatar" && framingInteractionsEnabled
+                    ? "cursor-grab active:cursor-grabbing touch-none"
+                    : ""
+                }`}
+                style={{
+                  left: fullBgItem.landingAvatarLeft ?? "1rem",
+                  bottom: fullBgItem.landingAvatarBottom ?? "-3rem",
+                  ...(framingTool === "panAvatar" && framingInteractionsEnabled
+                    ? { boxShadow: `0 0 0 3px ${primary}99, 0 8px 24px rgba(0,0,0,0.2)` }
+                    : {}),
+                }}
+                onPointerDown={framingInteractionsEnabled ? handleAvatarPanPointerDown : undefined}
+                onPointerMove={framingInteractionsEnabled ? handleAvatarPanPointerMove : undefined}
+                onPointerUp={framingInteractionsEnabled ? handleAvatarPanPointerUp : undefined}
+                onPointerCancel={framingInteractionsEnabled ? handleAvatarPanPointerUp : undefined}
+              >
+                {avatar ? (
+                  <img
+                    src={avatar}
+                    alt=""
+                    className="w-full h-full object-cover pointer-events-none"
+                    style={avatarCropStyle}
+                  />
+                ) : (
+                  <span className="w-full h-full flex items-center justify-center text-2xl font-bold pointer-events-none" style={{ color: primary }}>{(displayName || "?")[0].toUpperCase()}</span>
                 )}
-                <p className="italic mb-3" style={getTextStyleCSS(textStyles.heroPromise, { fontSize: '0.875rem', color: primary })}>{heroPromise}</p>
-                
-                {/* Social Links */}
-                {socialLinks.length > 0 && (
-                  <div className="flex gap-2">
+              </div>
+            )}
+            {!fullBgItem && (
+              <div
+                className={
+                  heroLayout === "split" || heroLayout === "splitRight"
+                    ? `relative flex flex-row gap-6 items-start ${heroLayout === "splitRight" ? "flex-row-reverse" : ""}`
+                    : "relative flex flex-col items-center text-center max-w-[420px] mx-auto"
+                }
+                style={heroLayout === "centered" ? { maxWidth: "380px", padding: "0.5rem 0" } : undefined}
+              >
+                {heroSlots.length > 0 && (
+                  <div
+                    className={`grid gap-2 w-full ${heroSlots.length === 1 ? "max-w-[200px] mx-auto" : ""} ${heroSlots.length === 2 ? "grid-cols-2 max-w-[280px] mx-auto" : ""} ${heroSlots.length === 3 ? "grid-cols-3 max-w-[320px] mx-auto" : ""} ${heroSlots.length === 4 ? "grid-cols-2 max-w-[280px] mx-auto" : ""} ${heroSlots.length >= 5 ? "grid-cols-3 max-w-[320px] mx-auto" : ""}`}
+                  >
+                    {heroSlots.slice(0, 6).map(({ m: item, idx }, slotIndex) => {
+                      const sizeClass = item.size === "small" ? "w-20 h-28" : item.size === "large" ? "w-36 h-44" : "w-28 h-36";
+                      const isFocusSlot = framingTool === "focusPhoto" && focusPhotoSlot === slotIndex;
+                      return (
+                        <div
+                          key={`${item.url}-${idx}`}
+                          className={`rounded-xl overflow-hidden ${sizeClass} justify-self-center ${isFocusSlot ? "ring-2 ring-offset-1 ring-offset-white dark:ring-offset-gray-900" : ""}`}
+                          style={{
+                            border: `1px solid ${primary}30`,
+                            boxShadow: isFocusSlot
+                              ? `0 0 0 2px ${primary}, 0 18px 44px ${primary}40`
+                              : isDark
+                                ? `0 18px 44px rgba(0,0,0,0.3), 0 0 0 5px ${primary}25`
+                                : `0 18px 44px ${primary}30, 0 0 0 5px rgba(255, 255, 255, 0.45)`,
+                          }}
+                          onPointerDown={isFocusSlot ? handleFocusPointerDown : undefined}
+                          onPointerMove={isFocusSlot ? handleFocusPointerMove : undefined}
+                          onPointerUp={isFocusSlot ? handleFocusPointerUp : undefined}
+                          onPointerCancel={isFocusSlot ? handleFocusPointerUp : undefined}
+                        >
+                          <img
+                            src={item.url}
+                            alt=""
+                            className="w-full h-full object-cover pointer-events-none"
+                            style={{ objectPosition: item.objectPosition ?? "center top" }}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {heroSlots.length === 0 && heroImage && (
+                  <div
+                    className={`rounded-xl overflow-hidden flex-shrink-0 ${heroLayout === "centered" ? "w-40 h-48 mx-auto" : heroLayout === "split" || heroLayout === "splitRight" ? "w-32 h-40" : "w-40 h-52"}`}
+                    style={{
+                      border: `1px solid ${primary}30`,
+                      boxShadow: isDark ? `0 18px 44px rgba(0,0,0,0.3), 0 0 0 5px ${primary}25` : `0 18px 44px ${primary}30, 0 0 0 5px rgba(255, 255, 255, 0.45)`,
+                    }}
+                  >
+                    <img src={heroImage} alt="" className="w-full h-full object-cover object-top" />
+                  </div>
+                )}
+                <div className={`${heroLayout === "split" || heroLayout === "splitRight" ? "flex-1 min-w-0 text-left" : "w-full"}`}>
+                  {showDisplayNameOnLanding && (
+                    <h1 className="font-bold mb-1" style={getTextStyleCSS(textStyles.displayName, { fontSize: heroLayout === "centered" ? "1.125rem" : "1.25rem", color: textColor, fontFamily: globalFont })}>
+                      {displayName}
+                    </h1>
+                  )}
+                  {heroTagline && (
+                    <p className="mb-2" style={getTextStyleCSS(textStyles.heroTagline, { fontSize: "0.75rem", color: `${textColor}99`, fontFamily: globalFont })}>{heroTagline}</p>
+                  )}
+                  <p className="italic mb-2" style={getTextStyleCSS(textStyles.heroPromise, { fontSize: "0.875rem", color: primary, fontFamily: globalFont })}>{heroPromise}</p>
+                  {heroSubline && (
+                    <p className="mb-3" style={getTextStyleCSS(textStyles.heroSubline, { fontSize: "0.8125rem", color: `${textColor}cc`, fontFamily: globalFont })}>{heroSubline}</p>
+                  )}
+                  {!heroSubline && <div className="mb-3" />}
+                  {socialLinks.length > 0 && (
+                    <div className={`flex gap-2 ${heroLayout === "split" || heroLayout === "splitRight" ? "justify-start" : "justify-center"}`}>
                     {socialLinks.map((link) => (
-                      <a
-                        key={link.key}
-                        href={link.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-7 h-7 rounded-lg flex items-center justify-center transition-transform hover:scale-110"
-                        style={{ color: primary }}
-                      >
+                      <a key={link.key} href={link.url} target="_blank" rel="noopener noreferrer" className="w-7 h-7 rounded-lg flex items-center justify-center transition-transform hover:scale-110" style={getSocialIconStyle(link.key, primary)}>
                         {link.icon}
                       </a>
                     ))}
                   </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
+            )}
+            {fullBgItem && (
+              <div className="flex gap-3 pt-14 pl-28 pr-4 pb-14">
+                <div className="flex-1 min-w-0">
+                  {showDisplayNameOnLanding && (
+                    <h1 className="font-bold mb-0.5" style={getTextStyleCSS(textStyles.displayName, { fontSize: "1.125rem", color: textColor, fontFamily: globalFont })}>{displayName}</h1>
+                  )}
+                  {heroTagline && <p className="text-xs mb-0.5" style={{ color: `${textColor}99` }}>{heroTagline}</p>}
+                  <p className="text-xs italic" style={{ color: primary }}>{heroPromise}</p>
+                  {socialLinks.length > 0 && (
+                    <div className="flex gap-2 mt-1">
+                      {socialLinks.map((link) => (
+                        <a key={link.key} href={link.url} target="_blank" rel="noopener noreferrer" className="w-6 h-6 rounded flex items-center justify-center" style={getSocialIconStyle(link.key, primary)}>{link.icon}</a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </section>
 
-          {/* Divider */}
-          <div className="mx-4 h-px" style={{ background: `linear-gradient(90deg, transparent, ${primary}40, transparent)` }} />
+          {/* Divider — extra top margin when full-bg avatar overlaps below hero */}
+          <div
+            className={`mx-4 h-px ${fullBgItem ? "mt-6" : ""}`}
+            style={{ background: `linear-gradient(90deg, transparent, ${primary}40, transparent)` }}
+          />
 
           {/* Content Sections */}
-          <div className="px-4 py-4 space-y-4">
+          <div className={`px-4 space-y-4 ${fullBgItem ? "pt-6 pb-4" : "py-4"}`}>
             {/* Why This Exists */}
             <section 
               className="rounded-2xl p-4 transition-all hover:translate-y-[-2px]" 
               style={{ 
-                background: `linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, ${primary}06 52%, ${primary}08 100%)`, 
-                border: `1px solid ${primary}18`,
-                boxShadow: `0 14px 42px ${primary}18`
+                background: cardBg, 
+                border: isDark ? `1px solid ${primary}30` : `1px solid ${primary}18`,
+                boxShadow: isDark ? `0 14px 42px rgba(0,0,0,0.2)` : `0 14px 42px ${primary}18`
               }}
             >
-              <h2 className="font-bold mb-2" style={getTextStyleCSS(textStyles.perksTitle, { fontSize: '0.875rem', color: primary })}>{landingContent.perksTitle}</h2>
-              <p className="leading-relaxed mb-2" style={getTextStyleCSS(textStyles.perksText, { fontSize: '0.75rem', color: `${textColor}cc` })}>{landingContent.perksText}</p>
+              <h2 className="font-bold mb-2" style={getTextStyleCSS(textStyles.perksTitle, { fontSize: '0.875rem', color: primary, fontFamily: globalFont })}>{landingContent.perksTitle}</h2>
+              <p className="leading-relaxed mb-2" style={getTextStyleCSS(textStyles.perksText, { fontSize: '0.75rem', color: `${textColor}cc`, fontFamily: globalFont })}>{landingContent.perksText}</p>
               {landingContent.perksList && landingContent.perksList.length > 0 && (
                 <ul className="text-xs space-y-1" style={{ color: `${textColor}99` }}>
                   {landingContent.perksList.slice(0, 3).map((item, i) => (
@@ -301,25 +701,25 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
             <section 
               className="rounded-2xl p-4 transition-all hover:translate-y-[-2px]" 
               style={{ 
-                background: `linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, ${primary}06 52%, ${primary}08 100%)`, 
-                border: `1px solid ${primary}18`,
-                boxShadow: `0 14px 42px ${primary}18`
+                background: cardBg, 
+                border: isDark ? `1px solid ${primary}30` : `1px solid ${primary}18`,
+                boxShadow: isDark ? `0 14px 42px rgba(0,0,0,0.2)` : `0 14px 42px ${primary}18`
               }}
             >
-              <h2 className="font-bold mb-2" style={getTextStyleCSS(textStyles.previewTitle, { fontSize: '0.875rem', color: primary })}>{landingContent.previewTitle}</h2>
-              <p className="leading-relaxed mb-2" style={getTextStyleCSS(textStyles.previewText, { fontSize: '0.75rem', color: `${textColor}cc` })}>{landingContent.previewText}</p>
+              <h2 className="font-bold mb-2" style={getTextStyleCSS(textStyles.previewTitle, { fontSize: '0.875rem', color: primary, fontFamily: globalFont })}>{landingContent.previewTitle}</h2>
+              <p className="leading-relaxed mb-2" style={getTextStyleCSS(textStyles.previewText, { fontSize: '0.75rem', color: `${textColor}cc`, fontFamily: globalFont })}>{landingContent.previewText}</p>
             </section>
 
             {/* The Energy */}
             <section 
               className="rounded-2xl p-4 transition-all hover:translate-y-[-2px]" 
               style={{ 
-                background: `linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, ${primary}06 52%, ${primary}08 100%)`, 
-                border: `1px solid ${primary}18`,
-                boxShadow: `0 14px 42px ${primary}18`
+                background: cardBg, 
+                border: isDark ? `1px solid ${primary}30` : `1px solid ${primary}18`,
+                boxShadow: isDark ? `0 14px 42px rgba(0,0,0,0.2)` : `0 14px 42px ${primary}18`
               }}
             >
-              <h2 className="font-bold mb-2" style={getTextStyleCSS(textStyles.energyTitle, { fontSize: '0.875rem', color: primary })}>{landingContent.energyTitle}</h2>
+              <h2 className="font-bold mb-2" style={getTextStyleCSS(textStyles.energyTitle, { fontSize: '0.875rem', color: primary, fontFamily: globalFont })}>{landingContent.energyTitle}</h2>
               <div className="space-y-1">
                 {(landingContent.energyLines ?? []).slice(0, 3).map((line, i) => (
                   <p key={i} className="text-xs" style={{ color: `${textColor}cc` }}>{line}</p>
@@ -331,13 +731,13 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
             <section 
               className="rounded-2xl p-4 transition-all hover:translate-y-[-2px]" 
               style={{ 
-                background: `linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, ${primary}06 52%, ${primary}08 100%)`, 
-                border: `1px solid ${primary}18`,
-                boxShadow: `0 14px 42px ${primary}18`
+                background: cardBg, 
+                border: isDark ? `1px solid ${primary}30` : `1px solid ${primary}18`,
+                boxShadow: isDark ? `0 14px 42px rgba(0,0,0,0.2)` : `0 14px 42px ${primary}18`
               }}
             >
-              <h2 className="font-bold mb-2" style={getTextStyleCSS(textStyles.boundaryTitle, { fontSize: '0.875rem', color: primary })}>{landingContent.boundaryTitle}</h2>
-              <p className="leading-relaxed" style={getTextStyleCSS(textStyles.boundaryText, { fontSize: '0.75rem', color: `${textColor}cc` })}>
+              <h2 className="font-bold mb-2" style={getTextStyleCSS(textStyles.boundaryTitle, { fontSize: '0.875rem', color: primary, fontFamily: globalFont })}>{landingContent.boundaryTitle}</h2>
+              <p className="leading-relaxed" style={getTextStyleCSS(textStyles.boundaryText, { fontSize: '0.75rem', color: `${textColor}cc`, fontFamily: globalFont })}>
                 {boundariesText || landingContent.boundaryText}
               </p>
             </section>
@@ -422,7 +822,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                     target="_blank"
                     rel="noopener noreferrer"
                     className="w-6 h-6 rounded-full flex items-center justify-center"
-                    style={{ color: `${textColor}66` }}
+                    style={getSocialIconStyle(link.key, primary)}
                   >
                     {link.icon}
                   </a>
@@ -445,20 +845,27 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
           <header 
             className="flex items-center justify-between px-4 py-3"
             style={{ 
-              background: `linear-gradient(135deg, ${primary}08 0%, rgba(255, 255, 255, 0.98) 50%, ${primary}06 100%)`,
-              boxShadow: `0 6px 24px ${primary}15`,
-              borderBottom: `1px solid ${primary}20`,
+              background: isDark ? background : `linear-gradient(135deg, ${primary}08 0%, rgba(255, 255, 255, 0.98) 50%, ${primary}06 100%)`,
+              boxShadow: isDark ? `0 6px 24px rgba(0,0,0,0.2)` : `0 6px 24px ${primary}15`,
+              borderBottom: `1px solid ${isDark ? `${primary}30` : `${primary}20`}`,
             }}
           >
-            <div className="flex items-center gap-2">
-              {avatar ? (
-                <img src={avatar} alt="" className="w-8 h-8 rounded-full object-cover" style={{ border: `2px solid ${primary}40` }} />
+            <div className="flex items-center gap-2 min-h-[48px]">
+              {logo ? (
+                <img src={logo} alt={displayName} className="h-12 w-auto max-w-[240px] object-contain object-left [mix-blend-mode:multiply]" />
+              ) : avatar ? (
+                <img
+                  src={avatar}
+                  alt=""
+                  className="w-8 h-8 rounded-full object-cover"
+                  style={{ border: `2px solid ${primary}40`, ...avatarCropStyle }}
+                />
               ) : (
                 <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold text-white" style={{ background: primary }}>
                   {displayName?.charAt(0) || "?"}
                 </div>
               )}
-              <span className="text-sm font-semibold" style={{ color: textColor }}>{displayName || "My Page"}</span>
+              {!logo && <span className="text-sm font-semibold" style={{ color: primary, letterSpacing: "0.01em" }}>{displayName || "My Page"}</span>}
             </div>
             <nav className="flex items-center gap-1">
               {memberTabs.map((key) => (
@@ -468,9 +875,9 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                   onClick={() => setActiveTab(key)}
                   className="px-3 py-1.5 rounded-lg text-xs font-medium transition"
                   style={{
-                    backgroundColor: activeTab === key ? `${primary}15` : "transparent",
-                    color: activeTab === key ? primary : `${textColor}99`,
-                    border: activeTab === key ? `1px solid ${primary}30` : "1px solid transparent",
+                    backgroundColor: effectiveTab === key ? `${primary}15` : "transparent",
+                    color: effectiveTab === key ? primary : `${textColor}99`,
+                    border: effectiveTab === key ? `1px solid ${primary}30` : "1px solid transparent",
                   }}
                 >
                   {SECTION_LABELS[key] || key}
@@ -490,7 +897,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
               title="Profile menu"
             >
               {avatar ? (
-                <img src={avatar} alt="" className="w-full h-full rounded-full object-cover" />
+                <img src={avatar} alt="" className="w-full h-full rounded-full object-cover" style={avatarCropStyle} />
               ) : (
                 <span style={{ fontSize: "0.75rem", fontWeight: 600, color: primary }}>
                   {(displayName || "?")[0].toUpperCase()}
@@ -501,7 +908,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
           
           {/* Content Area */}
           <div className="p-4" style={{ maxWidth: "480px", margin: "0 auto" }}>
-            {(activeTab === "home" || activeTab === "feed") && (
+            {(effectiveTab === "home" || effectiveTab === "feed") && (
               <div className="space-y-4">
                 {/* Member feed header: grid icon + Saved (0); no Saved in nav */}
                 <div
@@ -545,9 +952,9 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                 <article 
                   className="rounded-2xl overflow-hidden"
                   style={{ 
-                    background: `linear-gradient(160deg, rgba(255, 255, 255, 1) 0%, ${primary}08 100%)`,
-                    border: `1px solid ${primary}15`,
-                    boxShadow: `0 4px 16px ${primary}10, 0 1px 3px rgba(0,0,0,0.04)`,
+                    background: isDark ? background : `linear-gradient(160deg, rgba(255, 255, 255, 1) 0%, ${primary}08 100%)`,
+                    border: `1px solid ${isDark ? `${primary}30` : `${primary}15`}`,
+                    boxShadow: isDark ? `0 4px 16px rgba(0,0,0,0.2)` : `0 4px 16px ${primary}10, 0 1px 3px rgba(0,0,0,0.04)`,
                   }}
                 >
                   {/* Header - matches .feed-card-header */}
@@ -555,8 +962,8 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                     className="flex items-center gap-3"
                     style={{ 
                       padding: "0.85rem 1rem",
-                      background: "linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(249, 250, 251, 0.6) 100%)",
-                      borderBottom: "1px solid rgba(156, 163, 175, 0.15)",
+                      background: isDark ? "transparent" : "linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(249, 250, 251, 0.6) 100%)",
+                      borderBottom: isDark ? `1px solid ${primary}25` : "1px solid rgba(156, 163, 175, 0.15)",
                     }}
                   >
                     {/* Avatar - matches .feed-card-avatar */}
@@ -565,13 +972,13 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                       style={{ 
                         width: "38px", 
                         height: "38px",
-                        border: "2px solid rgba(255, 255, 255, 0.9)",
-                        boxShadow: `0 2px 8px ${primary}20`,
+                        border: isDark ? `2px solid ${primary}40` : "2px solid rgba(255, 255, 255, 0.9)",
+                        boxShadow: isDark ? `0 2px 8px rgba(0,0,0,0.2)` : `0 2px 8px ${primary}20`,
                         background: avatar ? "transparent" : `linear-gradient(135deg, ${primary}88 0%, ${primary} 100%)`,
                       }}
                     >
                       {avatar ? (
-                        <img src={avatar} alt="" className="w-full h-full object-cover" />
+                        <img src={avatar} alt="" className="w-full h-full object-cover" style={avatarCropStyle} />
                       ) : (
                         <span style={{ fontSize: "0.9rem", fontWeight: 600, color: "#fff" }}>
                           {(displayName || "?")[0].toUpperCase()}
@@ -588,7 +995,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                       </span>
                     </div>
                     {/* Time - matches .feed-card-time */}
-                    <span style={{ fontSize: "0.8rem", color: "#9ca3af", fontWeight: 400 }}>31 mins</span>
+                    <span style={{ fontSize: "0.8rem", color: isDark ? `${textColor}99` : "#9ca3af", fontWeight: 400 }}>31 mins</span>
                   </div>
                   
                   {/* Media - matches .feed-card-media-wrap */}
@@ -612,21 +1019,21 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                     className="flex items-center gap-2"
                     style={{ 
                       padding: "0.6rem 1rem",
-                      background: "linear-gradient(180deg, rgba(249, 250, 251, 0.5) 0%, rgba(255, 255, 255, 0.9) 100%)",
-                      borderBottom: "1px solid rgba(156, 163, 175, 0.12)",
+                      background: isDark ? "transparent" : "linear-gradient(180deg, rgba(249, 250, 251, 0.5) 0%, rgba(255, 255, 255, 0.9) 100%)",
+                      borderBottom: isDark ? `1px solid ${primary}20` : "1px solid rgba(156, 163, 175, 0.12)",
                     }}
                   >
                     <span className="inline-flex items-center gap-1">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={isDark ? "currentColor" : "#6b7280"} strokeWidth="2" style={isDark ? { color: `${textColor}99` } : undefined}>
                         <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
                       </svg>
-                      <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "#6b7280" }}>42</span>
+                      <span style={{ fontSize: "0.85rem", fontWeight: 600, color: isDark ? `${textColor}99` : "#6b7280" }}>42</span>
                     </span>
                     <span className="inline-flex items-center gap-1">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={isDark ? "currentColor" : "#6b7280"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={isDark ? { color: `${textColor}99` } : undefined}>
                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                       </svg>
-                      <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "#6b7280" }}>2</span>
+                      <span style={{ fontSize: "0.85rem", fontWeight: 600, color: isDark ? `${textColor}99` : "#6b7280" }}>2</span>
                     </span>
                     <span 
                       className="inline-flex items-center gap-1"
@@ -642,7 +1049,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                     </span>
                     <span
                       className="inline-flex items-center"
-                      style={{ marginLeft: "auto", color: "#6b7280" }}
+                      style={{ marginLeft: "auto", color: isDark ? `${textColor}99` : "#6b7280" }}
                       title="Save post"
                     >
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -662,7 +1069,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                       type="button"
                       style={{ 
                         fontSize: "0.8rem", 
-                        color: "#9ca3af", 
+                        color: isDark ? `${textColor}99` : "#9ca3af", 
                         marginTop: "0.5rem",
                         background: "none",
                         border: "none",
@@ -687,7 +1094,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
               </div>
             )}
 
-            {activeTab === "saved" && (
+            {effectiveTab === "saved" && (
               <div
                 className="rounded-xl border p-6 text-center"
                 style={{
@@ -701,10 +1108,10 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                 <p className="mt-1">Posts you bookmark will appear here.</p>
               </div>
             )}
-            {activeTab === "treats" && (
+            {effectiveTab === "treats" && (
               <div 
                 style={{ 
-                  background: `linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, ${primary}06 52%, ${primary}08 100%)`,
+                  background: cardBg,
                   padding: "1.5rem 1rem",
                   borderRadius: "16px",
                 }}
@@ -717,7 +1124,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                       fontWeight: 600,
                       fontStyle: "italic",
                       color: textColor, 
-                      fontFamily: "var(--fan-serif, Georgia, serif)",
+                      fontFamily: globalFont,
                       margin: "0 0 0.35rem",
                     }}
                   >
@@ -740,9 +1147,9 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                       key={i}
                       className="rounded-xl"
                       style={{ 
-                        background: "#fff",
-                        border: `1px solid ${primary}15`,
-                        boxShadow: `0 4px 16px ${primary}08`,
+                        background: surfaceBg,
+                        border: `1px solid ${isDark ? `${primary}30` : `${primary}15`}`,
+                        boxShadow: isDark ? `0 4px 16px rgba(0,0,0,0.15)` : `0 4px 16px ${primary}08`,
                         padding: "1rem",
                         display: "flex",
                         flexDirection: "column",
@@ -756,7 +1163,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                             fontWeight: 600, 
                             fontStyle: "italic",
                             color: textColor,
-                            fontFamily: "var(--fan-serif, Georgia, serif)",
+                            fontFamily: globalFont,
                             margin: 0,
                             flex: 1,
                             paddingRight: "0.5rem",
@@ -797,13 +1204,13 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
               </div>
             )}
             
-            {activeTab === "tip" && (
+            {effectiveTab === "tip" && (
               <div 
                 className="rounded-2xl overflow-hidden"
                 style={{ 
-                  background: `linear-gradient(140deg, rgba(255, 255, 255, 0.94) 0%, ${primary}06 52%, ${primary}08 100%)`,
-                  border: `1px solid ${primary}15`,
-                  boxShadow: `0 14px 42px ${primary}12`,
+                  background: cardBg,
+                  border: `1px solid ${isDark ? `${primary}30` : `${primary}15`}`,
+                  boxShadow: isDark ? `0 14px 42px rgba(0,0,0,0.2)` : `0 14px 42px ${primary}12`,
                 }}
               >
                 {/* Tip Hero */}
@@ -819,7 +1226,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                     style={{ 
                       fontSize: "clamp(1.5rem, 4vw, 1.8rem)", 
                       color: primary, 
-                      fontFamily: "var(--fan-serif, Georgia, serif)",
+                      fontFamily: globalFont,
                       margin: "0 0 0.35rem",
                     }}
                   >
@@ -845,8 +1252,8 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                           fontSize: "0.9rem", 
                           fontWeight: 500, 
                           color: `${textColor}99`,
-                          background: "#fff",
-                          border: `1px solid ${primary}25`,
+                          background: surfaceBg,
+                          border: `1px solid ${isDark ? `${primary}30` : `${primary}25`}`,
                           borderRadius: "10px",
                           cursor: "pointer",
                         }}
@@ -868,10 +1275,10 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                         width: "100%",
                         maxWidth: "130px",
                         padding: "0.5rem 0.65rem", 
-                        border: `1px solid ${primary}20`,
+                        border: `1px solid ${isDark ? `${primary}30` : `${primary}20`}`,
                         borderRadius: "8px",
                         fontSize: "0.9rem",
-                        background: "#fff",
+                        background: surfaceBg,
                         color: textColor,
                       }}
                     />
@@ -912,6 +1319,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                         borderRadius: "50%", 
                         objectFit: "cover",
                         border: `2px solid ${primary}30`,
+                        ...avatarCropStyle,
                       }} 
                     />
                   ) : (
@@ -936,12 +1344,12 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
               </div>
             )}
             
-            {activeTab === "messages" && (
+            {effectiveTab === "messages" && (
               <div className="space-y-3">
                 <p className="text-sm font-semibold" style={{ color: textColor }}>Conversation with {displayName}</p>
                 <div 
                   className="rounded-xl p-4 min-h-[150px] flex items-center justify-center"
-                  style={{ background: "#fff", border: `1px solid ${primary}15` }}
+                  style={{ background: surfaceBg, border: `1px solid ${isDark ? `${primary}30` : `${primary}15`}` }}
                 >
                   <p className="text-sm text-center" style={{ color: `${textColor}66` }}>
                     Start a conversation with {displayName}
@@ -952,7 +1360,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                     type="text" 
                     placeholder="Type a message..." 
                     className="flex-1 px-3 py-2 rounded-xl text-sm"
-                    style={{ border: `1px solid ${primary}20`, background: "#fff" }}
+                    style={{ border: `1px solid ${isDark ? `${primary}30` : `${primary}20`}`, background: surfaceBg }}
                   />
                   <button 
                     type="button"
@@ -962,6 +1370,25 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                     Send
                   </button>
                 </div>
+              </div>
+            )}
+            {effectiveTab === "about" && (
+              <div className="space-y-4">
+                <h2 className="text-base font-semibold" style={{ color: textColor }}>About {displayName}</h2>
+                {bio ? (
+                  <div className="rounded-xl p-4" style={{ background: cardBg, border: `1px solid ${isDark ? `${primary}30` : `${primary}18`}` }}>
+                    <p className="text-sm leading-relaxed" style={{ color: textColor }}>{bio}</p>
+                  </div>
+                ) : null}
+                {(boundariesText || landingContent.boundaryText) ? (
+                  <div className="rounded-xl p-4" style={{ background: cardBg, border: `1px solid ${isDark ? `${primary}30` : `${primary}18`}` }}>
+                    <h3 className="text-xs font-semibold mb-1.5" style={{ color: primary }}>Community guidelines</h3>
+                    <p className="text-sm leading-relaxed" style={{ color: `${textColor}cc` }}>{boundariesText || landingContent.boundaryText}</p>
+                  </div>
+                ) : null}
+                {!bio && !boundariesText && !landingContent.boundaryText && (
+                  <p className="text-sm" style={{ color: `${textColor}99` }}>No about or guidelines added yet.</p>
+                )}
               </div>
             )}
           </div>

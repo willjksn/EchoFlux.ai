@@ -11,6 +11,7 @@ export type StorefrontCreator = {
   displayName: string;
   bio?: string;
   avatar?: string;
+  avatarObjectPosition?: string;
   logo?: string;
   heroImage?: string;
   heroTagline?: string;
@@ -18,13 +19,22 @@ export type StorefrontCreator = {
   socialLinks?: StorefrontSocialLinks;
   landingContent?: StorefrontLandingContent;
   legal?: StorefrontLegal;
-  theme: { primary: string; background: string; text?: string; buttonStyle?: string };
+  theme: { primary: string; background: string; text?: string; buttonStyle?: string; fontFamily?: string };
+  heroLayout?: "default" | "centered" | "split" | "splitRight";
   sections: { feed: boolean; treats: boolean; tip?: boolean; messages: boolean; about?: boolean };
   sectionsOrder?: string[];
   rules?: { boundariesText?: string };
   spicyMode?: boolean;
   monetization?: CreatorMonetization;
   feedSettings?: { hideLikeCounts?: boolean; hideComments?: boolean; hideLikes?: boolean };
+  heroMedia?: {
+    url: string;
+    size?: "small" | "medium" | "large" | "fullBackground";
+    backgroundPosition?: string;
+    objectPosition?: string;
+    landingAvatarLeft?: string;
+    landingAvatarBottom?: string;
+  }[];
   textStyles?: {
     displayName?: TextStyle;
     bio?: TextStyle;
@@ -213,10 +223,12 @@ export const FanStorefrontView: React.FC = () => {
   const [legalSubpage, setLegalSubpage] = useState<"terms" | "privacy" | null>(() => parseHandleFromPath().subpage);
   const [creator, setCreator] = useState<StorefrontCreator | null>(null);
   const [subscribed, setSubscribed] = useState<boolean>(false);
+  const [cancelMembershipLoading, setCancelMembershipLoading] = useState(false);
+  const [cancelMembershipMessage, setCancelMembershipMessage] = useState<string | null>(null);
   const [entitlementLoading, setEntitlementLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"feed" | "treats" | "messages" | "tip" | "saved">("feed");
+  const [activeTab, setActiveTab] = useState<"feed" | "treats" | "messages" | "tip" | "saved" | "about">("feed");
   const [tipSelectedPreset, setTipSelectedPreset] = useState<number | null>(null);
   const [tipCustomAmount, setTipCustomAmount] = useState("");
   const [tipLoading, setTipLoading] = useState(false);
@@ -417,6 +429,32 @@ export const FanStorefrontView: React.FC = () => {
 
   const formatPrice = (cents: number) => "$" + (cents / 100).toFixed(2);
 
+  const handleCancelMembership = async () => {
+    if (!creator?.creatorId || !auth.currentUser) return;
+    if (!window.confirm("Cancel your membership? You'll keep access until the end of your current billing period.")) return;
+    setCancelMembershipLoading(true);
+    setCancelMembershipMessage(null);
+    try {
+      const token = await auth.currentUser.getIdToken(true);
+      const res = await fetch("/api/fanCancelCreatorSubscription", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ creatorId: creator.creatorId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error || "Failed to cancel");
+      const endDate = (data as { currentPeriodEnd?: string }).currentPeriodEnd;
+      const msg = endDate
+        ? `Membership will end on ${new Date(endDate).toLocaleDateString()}. You keep access until then.`
+        : "Membership set to cancel at the end of your billing period.";
+      setCancelMembershipMessage(msg);
+    } catch (e) {
+      setCancelMembershipMessage(e instanceof Error ? e.message : "Failed to cancel membership.");
+    } finally {
+      setCancelMembershipLoading(false);
+    }
+  };
+
   const fetchDmThreadAndMessages = useCallback(async () => {
     if (!creator?.creatorId || !auth.currentUser || activeTab !== "messages") return;
     setDmLoading(true);
@@ -535,11 +573,27 @@ export const FanStorefrontView: React.FC = () => {
     );
   }
 
-  const { theme, displayName, avatar, bio } = creator;
-  
+  const { theme, displayName, avatar, logo, bio, sections, sectionsOrder, rules, landingContent } = creator;
+  const avatarCropStyle: React.CSSProperties = {
+    objectPosition: creator.avatarObjectPosition ?? "center",
+  };
+
   // Member view background - uses creator theme or neutral default
   const bg = theme?.background || defaultBg;
   const primary = theme?.primary || defaultPrimary;
+
+  // Nav tabs: order from sectionsOrder, filtered by sections; always include Saved at the end
+  const memberTabKeys = (sectionsOrder || ["feed", "treats", "tip", "messages", "about"])
+    .filter((key) => key !== "saved" && (sections as Record<string, boolean>)?.[key] !== false)
+    .concat("saved");
+  const navLabels: Record<string, string> = {
+    feed: "Home",
+    treats: "Treats",
+    tip: "Tip",
+    messages: "Messages",
+    saved: "Saved",
+    about: "About",
+  };
 
   // Render legal pages (Terms/Privacy) if subpage is set
   if (legalSubpage) {
@@ -581,7 +635,7 @@ export const FanStorefrontView: React.FC = () => {
             <div className="mb-6 pb-6 border-b" style={{ borderColor: `${primary}22` }}>
               <div className="flex items-center gap-3 mb-3">
                 {avatar && (
-                  <img src={avatar} alt="" className="w-10 h-10 rounded-full object-cover" />
+                  <img src={avatar} alt="" className="w-10 h-10 rounded-full object-cover" style={avatarCropStyle} />
                 )}
                 <span className="text-sm font-medium" style={{ color: "#666" }}>{displayName}</span>
               </div>
@@ -662,10 +716,13 @@ export const FanStorefrontView: React.FC = () => {
     );
   }
 
+  const globalFont = theme?.fontFamily || "Inter, sans-serif";
+
   return (
     <div
       className="min-h-screen stormij-theme"
       style={{ 
+        fontFamily: globalFont,
         backgroundColor: bg,
         "--fan-primary": primary,
         "--fan-bg": bg,
@@ -678,76 +735,87 @@ export const FanStorefrontView: React.FC = () => {
         style={{ backgroundColor: `${primary}14` }}
       >
         <div className="storefront-header-left">
-          {avatar && (
-            <img
-              src={avatar}
-              alt=""
-              className="storefront-header-avatar"
-            />
+          {logo ? (
+            <img src={logo} alt={displayName} className="storefront-header-logo" />
+          ) : avatar ? (
+            <img src={avatar} alt="" className="storefront-header-avatar" style={avatarCropStyle} />
+          ) : (
+            <div className="storefront-header-avatar storefront-header-avatar-fallback" style={{ background: primary }}>
+              {displayName?.charAt(0) || "?"}
+            </div>
           )}
-          <span className="storefront-header-name">
-            {displayName}
-          </span>
+          {!logo && <span className="storefront-header-name">{displayName}</span>}
         </div>
         <nav className="storefront-header-nav">
-          <button
-            type="button"
-            onClick={() => setActiveTab("feed")}
-            className={`storefront-nav-btn ${activeTab === "feed" ? "active" : ""}`}
-          >
-            <svg className="storefront-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-              <polyline points="9 22 9 12 15 12 15 22" />
-            </svg>
-            <span>Home</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("treats")}
-            className={`storefront-nav-btn ${activeTab === "treats" ? "active" : ""}`}
-          >
-            <svg className="storefront-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 12 20 22 4 22 4 12" />
-              <rect x="2" y="7" width="20" height="5" />
-              <line x1="12" y1="22" x2="12" y2="7" />
-              <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" />
-              <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
-            </svg>
-            <span>Treats</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("tip")}
-            className={`storefront-nav-btn storefront-nav-tip ${activeTab === "tip" ? "active" : ""}`}
-          >
-            <svg className="storefront-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-            </svg>
-            <span>Tip</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("messages")}
-            className={`storefront-nav-btn ${activeTab === "messages" ? "active" : ""}`}
-          >
-            <svg className="storefront-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-            <span>Messages</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("saved")}
-            className={`storefront-nav-btn ${activeTab === "saved" ? "active" : ""}`}
-            title="Saved posts"
-          >
-            <svg className="storefront-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
-            </svg>
-            <span>Saved</span>
-          </button>
+          {memberTabKeys.map((key) => {
+            const isTip = key === "tip";
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setActiveTab(key)}
+                className={`storefront-nav-btn ${isTip ? "storefront-nav-tip" : ""} ${activeTab === key ? "active" : ""}`}
+                title={key === "saved" ? "Saved posts" : undefined}
+              >
+                {key === "feed" && (
+                  <svg className="storefront-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                    <polyline points="9 22 9 12 15 12 15 22" />
+                  </svg>
+                )}
+                {key === "treats" && (
+                  <svg className="storefront-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 12 20 22 4 22 4 12" />
+                    <rect x="2" y="7" width="20" height="5" />
+                    <line x1="12" y1="22" x2="12" y2="7" />
+                    <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" />
+                    <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
+                  </svg>
+                )}
+                {key === "tip" && (
+                  <svg className="storefront-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                  </svg>
+                )}
+                {key === "messages" && (
+                  <svg className="storefront-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                  </svg>
+                )}
+                {key === "saved" && (
+                  <svg className="storefront-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                  </svg>
+                )}
+                {key === "about" && (
+                  <svg className="storefront-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 16v-4M12 8h.01" />
+                  </svg>
+                )}
+                <span>{navLabels[key] || key}</span>
+              </button>
+            );
+          })}
+          <div className="storefront-header-actions">
+            <button
+              type="button"
+              onClick={handleCancelMembership}
+              disabled={cancelMembershipLoading}
+              className="storefront-cancel-membership-btn"
+              title="Cancel membership at end of billing period"
+            >
+              {cancelMembershipLoading ? "Canceling…" : "Cancel membership"}
+            </button>
+          </div>
         </nav>
       </header>
+
+      {cancelMembershipMessage && (
+        <div className="storefront-cancel-message" role="alert" style={{ backgroundColor: `${primary}18`, color: theme?.text || "#1f2937" }}>
+          {cancelMembershipMessage}
+        </div>
+      )}
 
       {!entitlementLoading && (
         <div className="fan-member-content">
@@ -756,6 +824,7 @@ export const FanStorefrontView: React.FC = () => {
                 creatorId={creator.creatorId}
                 displayName={displayName}
                 avatar={avatar}
+                avatarObjectPosition={creator.avatarObjectPosition}
                 primary={primary}
                 feedSettings={creator.feedSettings}
                 fanId={auth.currentUser?.uid}
@@ -766,6 +835,7 @@ export const FanStorefrontView: React.FC = () => {
                 creatorId={creator.creatorId}
                 displayName={displayName}
                 avatar={avatar}
+                avatarObjectPosition={creator.avatarObjectPosition}
                 primary={primary}
                 feedSettings={creator.feedSettings}
                 fanId={auth.currentUser?.uid}
@@ -881,6 +951,25 @@ export const FanStorefrontView: React.FC = () => {
                 tipLoading={tipLoading}
                 setTipLoading={setTipLoading}
               />
+            )}
+            {activeTab === "about" && (
+              <div className="fan-member-about">
+                <h2 className="fan-member-about-title">About {displayName}</h2>
+                {bio && (
+                  <div className="fan-member-about-section">
+                    <p className="fan-member-about-bio">{bio}</p>
+                  </div>
+                )}
+                {(rules?.boundariesText ?? landingContent?.boundaryText) && (
+                  <div className="fan-member-about-section">
+                    <h3 className="fan-member-about-heading">Community guidelines</h3>
+                    <p className="fan-member-about-text">{rules?.boundariesText || landingContent?.boundaryText}</p>
+                  </div>
+                )}
+                {!bio && !rules?.boundariesText && !landingContent?.boundaryText && (
+                  <p className="fan-member-empty">No about or guidelines added yet.</p>
+                )}
+              </div>
             )}
         </div>
       )}

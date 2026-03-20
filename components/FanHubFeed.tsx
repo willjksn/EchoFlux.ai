@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useAppContext } from "./AppContext";
+import { hasEliteAccess } from "../src/utils/planAccess";
 import { collection, query, orderBy, limit, getDocs, doc, runTransaction, getDoc, serverTimestamp, updateDoc, deleteDoc, setDoc, writeBatch, deleteField } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
@@ -7,6 +8,10 @@ export type FeedVisibilitySettings = {
   hideLikeCounts: boolean;
   hideComments: boolean;
   hideLikes: boolean;
+  /** Elite: AI auto-reply to comments (max 2 replies per fan per post; random chance for non-supporters) */
+  autoReplyAI?: boolean;
+  /** Elite: 0–100, chance to reply to a comment when not from a tipper/buyer (e.g. 25 = 25%) */
+  autoReplyChance?: number;
 };
 
 export type FeedPost = {
@@ -18,7 +23,7 @@ export type FeedPost = {
   createdAt?: { toDate: () => Date } | string;
   likeCount: number;
   likedBy?: string[];
-  comments: { username?: string; author?: string; text: string; hidden?: boolean }[];
+  comments: { username?: string; author?: string; text: string; hidden?: boolean; authorId?: string; isCreatorReply?: boolean }[];
   captionStyle?: "static" | "scroll-up" | "scroll-across" | "dissolve";
   overlayText?: string;
   overlayTextColor?: string;
@@ -402,7 +407,7 @@ function FeedCard({
         if (!snap.exists()) throw new Error("Post not found.");
         const data = snap.data() as Record<string, unknown>;
         const existing = Array.isArray(data.comments) ? (data.comments as FeedPost["comments"]) : [];
-        nextComments = [...existing, { username, text: text.slice(0, 500) }];
+        nextComments = [...existing, { username, author: username, text: text.slice(0, 500), authorId: currentUserId, isCreatorReply: true }];
         tx.update(postRef, { comments: nextComments });
       });
       onCommentsUpdated?.(post.id, nextComments);
@@ -882,7 +887,7 @@ function FeedCard({
 }
 
 export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = false }) => {
-  const { user, setActivePage, showToast } = useAppContext();
+  const { user, setActivePage, showToast, openPaymentModal } = useAppContext();
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [savedPostIds, setSavedPostIds] = useState<string[]>([]);
@@ -892,9 +897,12 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
     hideLikeCounts: false,
     hideComments: false,
     hideLikes: false,
+    autoReplyAI: false,
+    autoReplyChance: 25,
   });
   const [feedSettingsSaving, setFeedSettingsSaving] = useState(false);
   const creatorId = user?.id;
+  const canUseAIReplies = hasEliteAccess(user);
   const creatorName = (user as { displayName?: string })?.displayName || "You";
   const creatorAvatar = (user as { photoURL?: string })?.photoURL;
 
@@ -972,6 +980,8 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
           hideLikeCounts: !!fs.hideLikeCounts,
           hideComments: !!fs.hideComments,
           hideLikes: !!fs.hideLikes,
+          autoReplyAI: !!fs.autoReplyAI,
+          autoReplyChance: typeof fs.autoReplyChance === "number" ? Math.max(0, Math.min(100, fs.autoReplyChance)) : 25,
         });
       })
       .catch(() => setSavedPostIds([]));
@@ -1167,6 +1177,51 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
                       />
                       <span>Hide likes</span>
                     </label>
+                    {/* Elite: AI comment replies */}
+                    <div className="feed-header-ai-replies mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                      <span className="feed-header-visibility-label block mb-2">AI comment replies</span>
+                      {canUseAIReplies ? (
+                        <>
+                          <label className="feed-header-checkbox">
+                            <input
+                              type="checkbox"
+                              checked={!!feedSettings.autoReplyAI}
+                              disabled={feedSettingsSaving}
+                              onChange={(e) => saveFeedSettings({ ...feedSettings, autoReplyAI: e.target.checked })}
+                            />
+                            <span>Reply to comments with AI (your tone, max 2 per fan per post)</span>
+                          </label>
+                          {feedSettings.autoReplyAI && (
+                            <div className="mt-2">
+                              <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                Reply chance for other comments (fans who tipped or bought treats are always prioritized): {feedSettings.autoReplyChance ?? 25}%
+                              </label>
+                              <input
+                                type="range"
+                                min={0}
+                                max={100}
+                                step={5}
+                                value={feedSettings.autoReplyChance ?? 25}
+                                disabled={feedSettingsSaving}
+                                onChange={(e) => saveFeedSettings({ ...feedSettings, autoReplyChance: Number(e.target.value) })}
+                                className="w-full h-2 rounded-lg appearance-none bg-gray-200 dark:bg-gray-600 accent-primary-500"
+                              />
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Elite only — upgrade to unlock AI replies.</p>
+                          <button
+                            type="button"
+                            className="text-xs font-medium text-primary-600 dark:text-primary-400 hover:underline"
+                            onClick={() => { openPaymentModal?.({ name: "Elite", price: 79, cycle: "monthly" }); }}
+                          >
+                            Upgrade to Elite
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

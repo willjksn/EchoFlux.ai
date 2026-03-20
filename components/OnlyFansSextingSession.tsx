@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAppContext } from './AppContext';
+import { hasEliteAccess } from '../src/utils/planAccess';
 import { auth, db } from '../firebaseConfig';
 import { doc, getDoc, collection, getDocs, addDoc, Timestamp, updateDoc, serverTimestamp } from 'firebase/firestore';
 
@@ -312,9 +313,10 @@ function AISuggestionsPanel({ suggestions, onUseSuggestion, onRequestSuggestions
 
 // Main Component
 export const OnlyFansSextingSession: React.FC = () => {
-  const { user, showToast } = useAppContext();
+  const { user, showToast, openPaymentModal } = useAppContext();
   const adminUid = user?.id || '';
   const adminEmail = user?.email || null;
+  const canUseChatBot = hasEliteAccess(user);
 
   // Fans
   const [fans, setFans] = useState<FanOption[]>([]);
@@ -541,9 +543,9 @@ export const OnlyFansSextingSession: React.FC = () => {
     }
   }, [sessionStarted, recentMessages, tone, selectedFan, useCreatorPersonality, creatorPersonality, contentSpiciness, getToken]);
 
-  // Chatbot auto-reply
+  // Chatbot auto-reply (Elite only)
   useEffect(() => {
-    if (!chatBotEnabled || !sessionStarted || sessionPaused || recentMessages.length === 0 || chatBotReplying) return;
+    if (!canUseChatBot || !chatBotEnabled || !sessionStarted || sessionPaused || recentMessages.length === 0 || chatBotReplying) return;
     const last = recentMessages[recentMessages.length - 1];
     if (last.role !== 'user') return;
     if (recentMessages.length <= lastChatBotRepliedCountRef.current) return;
@@ -585,7 +587,7 @@ export const OnlyFansSextingSession: React.FC = () => {
       })
       .catch(() => {})
       .finally(() => setChatBotReplying(false));
-  }, [chatBotEnabled, sessionStarted, sessionPaused, recentMessages, tone, selectedFan, useCreatorPersonality, creatorPersonality, contentSpiciness, getToken, adminUid, chatBotReplying]);
+  }, [canUseChatBot, chatBotEnabled, sessionStarted, sessionPaused, recentMessages, tone, selectedFan, useCreatorPersonality, creatorPersonality, contentSpiciness, getToken, adminUid, chatBotReplying]);
 
   // Active Session View
   if (sessionStarted) {
@@ -606,12 +608,20 @@ export const OnlyFansSextingSession: React.FC = () => {
               </span>
               <button
                 type="button"
-                className={`chat-session-ai-chatbot-btn ${chatBotEnabled ? 'active' : ''}`}
-                onClick={() => setChatBotEnabled((on) => !on)}
-                title={chatBotEnabled ? 'AI Chat Bot is on — auto-replying to fan' : 'Turn on AI Chat Bot to auto-reply'}
+                className={`chat-session-ai-chatbot-btn ${chatBotEnabled ? 'active' : ''} ${!canUseChatBot ? 'chat-session-ai-chatbot-btn--locked' : ''}`}
+                onClick={() => {
+                  if (!canUseChatBot) {
+                    openPaymentModal?.({ name: 'Elite', price: 79, cycle: 'monthly' });
+                    showToast('AI Chat Bot is an Elite feature. Upgrade to unlock.', 'info');
+                    return;
+                  }
+                  setChatBotEnabled((on) => !on);
+                }}
+                title={!canUseChatBot ? 'Elite only — upgrade to use AI Chat Bot' : chatBotEnabled ? 'AI Chat Bot is on — auto-replying to fan' : 'Turn on AI Chat Bot to auto-reply'}
                 aria-pressed={chatBotEnabled}
+                disabled={!canUseChatBot && undefined}
               >
-                {chatBotReplying ? '…' : '🤖'} AI Chat Bot {chatBotEnabled ? 'On' : 'Off'}
+                {chatBotReplying ? '…' : '🤖'} AI Chat Bot {!canUseChatBot ? '(Elite)' : chatBotEnabled ? 'On' : 'Off'}
               </button>
               <button
                 type="button"

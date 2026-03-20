@@ -145,21 +145,81 @@ function getVisibleSocialLinks(socialLinks?: StorefrontSocialLinks) {
   return links;
 }
 
+function getSocialIconStyle(key: string, fallback: string): React.CSSProperties {
+  switch (key) {
+    case "instagram":
+      return {
+        color: "#ffffff",
+        background: "radial-gradient(circle at 30% 107%, #fdf497 0%, #fdf497 5%, #fd5949 45%, #d6249f 60%, #285AEB 90%)",
+        border: "1px solid rgba(255,255,255,0.35)",
+        boxShadow: "0 6px 14px rgba(0,0,0,0.18)",
+      };
+    case "tiktok":
+      return {
+        color: "#ffffff",
+        background: "#0f0f10",
+        border: "1px solid rgba(255,255,255,0.28)",
+        boxShadow: "0 6px 14px rgba(0,0,0,0.22)",
+      };
+    case "x":
+      return {
+        color: "#ffffff",
+        background: "#000000",
+        border: "1px solid rgba(255,255,255,0.35)",
+        boxShadow: "0 6px 14px rgba(0,0,0,0.32)",
+      };
+    case "facebook":
+      return {
+        color: "#ffffff",
+        background: "#1877f2",
+        border: "1px solid rgba(255,255,255,0.35)",
+        boxShadow: "0 6px 14px rgba(24,119,242,0.28)",
+      };
+    case "youtube":
+      return {
+        color: "#ffffff",
+        background: "#ff0000",
+        border: "1px solid rgba(255,255,255,0.35)",
+        boxShadow: "0 6px 14px rgba(255,0,0,0.28)",
+      };
+    default:
+      return {
+        color: "#ffffff",
+        background: fallback,
+        border: "1px solid rgba(255,255,255,0.3)",
+        boxShadow: "0 6px 14px rgba(0,0,0,0.18)",
+      };
+  }
+}
+
 interface FanLandingPageProps {
   creator: {
     creatorId: string;
     displayName: string;
     handle: string;
     avatar?: string;
+    /** CSS object-position inside circular hero avatar (full-background layout). */
+    avatarObjectPosition?: string;
     logo?: string;
     bio?: string;
+    showDisplayNameOnLanding?: boolean;
     heroImage?: string;
+    heroMedia?: {
+      url: string;
+      size?: "small" | "medium" | "large" | "fullBackground";
+      backgroundPosition?: string;
+      objectPosition?: string;
+      landingAvatarLeft?: string;
+      landingAvatarBottom?: string;
+    }[];
     heroTagline?: string;
     heroPromise?: string;
+    heroSubline?: string;
     socialLinks?: StorefrontSocialLinks;
     landingContent?: StorefrontLandingContent;
     legal?: StorefrontLegal;
-    theme: { primary: string; background: string; text?: string };
+    theme: { primary: string; background: string; text?: string; fontFamily?: string };
+    heroLayout?: "default" | "centered" | "split" | "splitRight";
     monetization?: { monthlyPrice?: number; tipsEnabled?: boolean };
     spicyMode?: boolean;
     rules?: { boundariesText?: string };
@@ -168,6 +228,7 @@ interface FanLandingPageProps {
       bio?: TextStyle;
       heroTagline?: TextStyle;
       heroPromise?: TextStyle;
+      heroSubline?: TextStyle;
       perksTitle?: TextStyle;
       perksText?: TextStyle;
       previewTitle?: TextStyle;
@@ -196,13 +257,17 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
 }) => {
   const { 
     displayName, 
-    avatar, 
+    avatar,
+    avatarObjectPosition,
     logo,
     bio, 
     theme, 
+    showDisplayNameOnLanding,
     heroImage,
+    heroMedia: creatorHeroMedia,
     heroTagline,
     heroPromise,
+    heroSubline,
     socialLinks,
     landingContent: creatorLandingContent,
     legal,
@@ -211,6 +276,13 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
     rules,
     textStyles,
   } = creator;
+
+  const heroMedia = (creatorHeroMedia && creatorHeroMedia.length > 0)
+    ? creatorHeroMedia
+    : (heroImage ? [{ url: heroImage, size: "medium" as const }] : []);
+  const fullBgItem = heroMedia.find((m) => m.size === "fullBackground");
+  const heroImages = heroMedia.filter((m) => m.size !== "fullBackground");
+  const primaryImage = heroImages[0]?.url ?? heroImage;
   
   const primary = theme?.primary || "#6366f1";
   const background = theme?.background || "#fafafa";
@@ -315,11 +387,15 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
     "--fan-accent": primary,
   } as React.CSSProperties;
 
+  const heroLayout = creator.heroLayout ?? "default";
+  const globalFont = theme?.fontFamily || "Inter, sans-serif";
+
   return (
     <div 
-      className={`fan-landing-page ${isDarkMode ? 'fan-dark-mode' : ''}`}
+      className={`fan-landing-page fan-landing-hero-${heroLayout} ${isDarkMode ? 'fan-dark-mode' : ''}`}
       style={{ 
         ...themeVars,
+        fontFamily: globalFont,
         background: isDarkMode 
           ? `linear-gradient(135deg, ${darkBg} 0%, #1a1a1a 50%, ${darkBg} 100%)`
           : `linear-gradient(135deg, ${background} 0%, #fff 50%, ${background} 100%)`,
@@ -332,7 +408,12 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
           {logo ? (
             <img src={logo} alt={displayName || ""} className="fan-landing-logo-img fan-landing-logo-custom" />
           ) : avatar ? (
-            <img src={avatar} alt="" className="fan-landing-logo-img" />
+            <img
+              src={avatar}
+              alt=""
+              className="fan-landing-logo-img"
+              style={{ objectPosition: avatarObjectPosition ?? "center" }}
+            />
           ) : (
             <span className="fan-landing-logo-text" style={{ backgroundColor: `${primary}20`, color: primary }}>
               {displayName?.charAt(0) || "?"}
@@ -376,41 +457,133 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
       </header>
 
       <main className="fan-landing-main">
-        {/* Hero Section */}
-        <section className="fan-landing-hero">
-          {heroImage && (
-            <div className="fan-landing-hero-image-wrap" style={{ border: `1px solid ${primary}30`, boxShadow: `0 18px 44px ${primary}30, 0 0 0 5px rgba(255, 255, 255, 0.45)` }}>
-              <img src={heroImage} alt="" className="fan-landing-hero-image" />
+        {/* Hero Section — layout: default (stack) | centered | split | splitRight; supports heroMedia + fullBackground */}
+        <section
+          className={`fan-landing-hero fan-landing-hero--${heroLayout}${fullBgItem ? " fan-landing-hero--has-bg fan-landing-hero--bg-avatar-only" : ""}`}
+          style={
+            fullBgItem
+              ? {
+                  backgroundImage: `url(${fullBgItem.url})`,
+                  backgroundSize: "cover",
+                  backgroundPosition: fullBgItem.backgroundPosition ?? "center",
+                }
+              : undefined
+          }
+        >
+          {fullBgItem && <div className="fan-landing-hero-bg-overlay" aria-hidden />}
+          {fullBgItem && (
+            <div
+              className="fan-landing-hero-avatar-overlay"
+              style={{
+                borderColor: "rgba(255,255,255,0.9)",
+                ...(fullBgItem.landingAvatarLeft != null && fullBgItem.landingAvatarLeft !== ""
+                  ? { left: fullBgItem.landingAvatarLeft }
+                  : {}),
+                ...(fullBgItem.landingAvatarBottom != null && fullBgItem.landingAvatarBottom !== ""
+                  ? { bottom: fullBgItem.landingAvatarBottom }
+                  : {}),
+              }}
+            >
+            {avatar ? (
+              <img
+                src={avatar}
+                alt=""
+                className="fan-landing-hero-avatar-img"
+                style={{ objectPosition: avatarObjectPosition ?? "center" }}
+              />
+            ) : (
+              <span className="fan-landing-hero-avatar-fallback" style={{ backgroundColor: `${primary}40`, color: primary }}>
+                {(displayName || "?")[0].toUpperCase()}
+              </span>
+            )}
+          </div>
+          )}
+          {!fullBgItem && heroImages.length > 0 && (
+            <div className={`fan-landing-hero-images fan-landing-hero-images--count-${Math.min(heroImages.length, 6)}`}>
+              {heroImages.slice(0, 6).map((item, i) => {
+                const sizeClass =
+                  item.size === "small"
+                    ? "fan-landing-hero-image-wrap fan-landing-hero-image--small"
+                    : item.size === "large"
+                      ? "fan-landing-hero-image-wrap fan-landing-hero-image--large"
+                      : "fan-landing-hero-image-wrap";
+                return (
+                  <div key={`${item.url}-${i}`} className={sizeClass} style={{ border: `1px solid ${primary}30`, boxShadow: `0 18px 44px ${primary}30, 0 0 0 5px rgba(255, 255, 255, 0.45)` }}>
+                    <img
+                      src={item.url}
+                      alt=""
+                      className="fan-landing-hero-image"
+                      style={item.objectPosition ? { objectPosition: item.objectPosition } : undefined}
+                    />
+                  </div>
+                );
+              })}
             </div>
           )}
-          <div className="fan-landing-hero-text">
-            <h1 className="fan-landing-hero-name" style={getTextStyleCSS(ts.displayName, { color: primary })}>{displayName || "Not For Everyone"}</h1>
-            {heroTagline && <p className="fan-landing-hero-tagline" style={getTextStyleCSS(ts.heroTagline, { color: `${textColor}99` })}>{heroTagline}</p>}
-            <p className="fan-landing-hero-promise" style={getTextStyleCSS(ts.heroPromise, { color: primary })}>{heroPromise || "Your access to the real me"}</p>
-            
-            {/* Social Links */}
-            {visibleSocialLinks.length > 0 && (
-              <div className="fan-landing-social-links">
-                {visibleSocialLinks.map((link) => (
-                  <a
-                    key={link.key}
-                    href={link.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="fan-landing-social-link"
-                    style={{ color: primary }}
-                  >
-                    {link.icon}
-                  </a>
-                ))}
-              </div>
-            )}
-            
-            <p className="fan-landing-hero-handle" style={{ color: `${textColor}66` }}>@{creator.handle}</p>
-          </div>
+          {!fullBgItem && heroImages.length === 0 && primaryImage && (
+            <div className="fan-landing-hero-image-wrap" style={{ border: `1px solid ${primary}30`, boxShadow: `0 18px 44px ${primary}30, 0 0 0 5px rgba(255, 255, 255, 0.45)` }}>
+              <img
+                src={primaryImage}
+                alt=""
+                className="fan-landing-hero-image"
+                style={
+                  heroImages[0]?.objectPosition
+                    ? { objectPosition: heroImages[0].objectPosition }
+                    : undefined
+                }
+              />
+            </div>
+          )}
+          {!fullBgItem && (
+            <div className="fan-landing-hero-text">
+              {showDisplayNameOnLanding !== false && (
+                <h1 className="fan-landing-hero-name" style={getTextStyleCSS(ts.displayName, { color: primary })}>{displayName || "Not For Everyone"}</h1>
+              )}
+              {heroTagline && <p className="fan-landing-hero-tagline" style={getTextStyleCSS(ts.heroTagline, { color: `${textColor}99` })}>{heroTagline}</p>}
+              <p className="fan-landing-hero-promise" style={getTextStyleCSS(ts.heroPromise, { color: primary })}>{heroPromise || "Your access to the real me"}</p>
+              {heroSubline && <p className="fan-landing-hero-subline" style={getTextStyleCSS(ts.heroSubline, { color: `${textColor}cc` })}>{heroSubline}</p>}
+              {visibleSocialLinks.length > 0 && (
+                <div className="fan-landing-social-links">
+                  {visibleSocialLinks.map((link) => (
+                    <a key={link.key} href={link.url} target="_blank" rel="noopener noreferrer" className="fan-landing-social-link" style={getSocialIconStyle(link.key, primary)}>
+                      {link.icon}
+                    </a>
+                  ))}
+                </div>
+              )}
+              <p className="fan-landing-hero-handle" style={{ color: `${textColor}66` }}>@{creator.handle}</p>
+            </div>
+          )}
         </section>
+        {fullBgItem && (
+          <section className="fan-landing-hero-meta">
+            <div className="fan-landing-hero-meta-spacer" aria-hidden />
+            <div className="fan-landing-hero-text">
+              {showDisplayNameOnLanding !== false && (
+                <h1 className="fan-landing-hero-name" style={getTextStyleCSS(ts.displayName, { color: primary })}>{displayName || "Not For Everyone"}</h1>
+              )}
+              {heroTagline && <p className="fan-landing-hero-tagline" style={getTextStyleCSS(ts.heroTagline, { color: `${textColor}99` })}>{heroTagline}</p>}
+              <p className="fan-landing-hero-promise" style={getTextStyleCSS(ts.heroPromise, { color: primary })}>{heroPromise || "Your access to the real me"}</p>
+              {heroSubline && <p className="fan-landing-hero-subline" style={getTextStyleCSS(ts.heroSubline, { color: `${textColor}cc` })}>{heroSubline}</p>}
+              {visibleSocialLinks.length > 0 && (
+                <div className="fan-landing-social-links">
+                  {visibleSocialLinks.map((link) => (
+                    <a key={link.key} href={link.url} target="_blank" rel="noopener noreferrer" className="fan-landing-social-link" style={getSocialIconStyle(link.key, primary)}>
+                      {link.icon}
+                    </a>
+                  ))}
+                </div>
+              )}
+              <p className="fan-landing-hero-handle" style={{ color: `${textColor}66` }}>@{creator.handle}</p>
+            </div>
+          </section>
+        )}
 
-        <div className="fan-landing-divider" style={{ background: `linear-gradient(90deg, transparent, ${primary}40, transparent)` }} aria-hidden="true" />
+        <div
+          className={`fan-landing-divider${fullBgItem ? " fan-landing-divider--after-fullbg-hero" : ""}`}
+          style={{ background: `linear-gradient(90deg, transparent, ${primary}40, transparent)` }}
+          aria-hidden="true"
+        />
 
         {/* Why This Exists */}
         <section className="fan-landing-section fan-landing-perks" style={{ 
@@ -633,7 +806,7 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
                 target="_blank"
                 rel="noopener noreferrer"
                 className="fan-landing-social-link-sm"
-                style={{ color: `${textColor}66` }}
+                style={getSocialIconStyle(link.key, primary)}
               >
                 {link.icon}
               </a>

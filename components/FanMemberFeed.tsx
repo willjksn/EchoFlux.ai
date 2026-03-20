@@ -30,6 +30,8 @@ interface FanMemberFeedProps {
   creatorId: string;
   displayName: string;
   avatar?: string;
+  /** CSS object-position for circular avatar (matches storefront “pan avatar”). */
+  avatarObjectPosition?: string;
   primary?: string;
   feedSettings?: FanFeedVisibilitySettings;
   /** Logged-in fan's uid; when set, bookmarks are persisted and loaded from Firestore */
@@ -102,16 +104,22 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   creatorId,
   displayName,
   avatar,
+  avatarObjectPosition,
   primary = "#6366f1",
   feedSettings,
   fanId,
 }) => {
+  const avatarCropStyle: React.CSSProperties = {
+    objectPosition: avatarObjectPosition ?? "center",
+  };
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
   const [bookmarkedPosts, setBookmarkedPosts] = useState<Set<string>>(new Set());
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
   const [bookmarkSaving, setBookmarkSaving] = useState(false);
+  const [commentDraft, setCommentDraft] = useState<Record<string, string>>({});
+  const [commentSending, setCommentSending] = useState<string | null>(null);
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
@@ -174,6 +182,38 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
       })
       .catch(() => {});
   }, [fanId, creatorId]);
+
+  const submitComment = useCallback(
+    async (postId: string) => {
+      const text = (commentDraft[postId] ?? "").trim();
+      if (!text || !fanId || commentSending) return;
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) return;
+      setCommentSending(postId);
+      try {
+        const res = await fetch("/api/addCommentToPost", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            creatorId,
+            postId,
+            text,
+            authorDisplayName: auth.currentUser?.displayName ?? undefined,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (data.success) {
+          setCommentDraft((prev) => ({ ...prev, [postId]: "" }));
+          fetchPosts();
+        }
+      } catch (err) {
+        console.error("Failed to add comment", err);
+      } finally {
+        setCommentSending(null);
+      }
+    },
+    [creatorId, fanId, commentDraft, commentSending, fetchPosts]
+  );
 
   const toggleBookmark = useCallback(
     async (postId: string) => {
@@ -268,7 +308,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
               <div className="fan-feed-post-header">
                 <div className="fan-feed-post-avatar">
                   {avatar ? (
-                    <img src={avatar} alt="" className="fan-feed-avatar-img" />
+                    <img src={avatar} alt="" className="fan-feed-avatar-img" style={avatarCropStyle} />
                   ) : (
                     <span className="fan-feed-avatar-placeholder">{displayName?.charAt(0) || "?"}</span>
                   )}
@@ -361,13 +401,19 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                       type="text"
                       className="fan-feed-comment-input"
                       placeholder="Write a comment..."
+                      value={commentDraft[post.id] ?? ""}
+                      onChange={(e) => setCommentDraft((prev) => ({ ...prev, [post.id]: e.target.value }))}
+                      onKeyDown={(e) => e.key === "Enter" && submitComment(post.id)}
+                      disabled={!fanId || !!commentSending}
                     />
                     <button
                       type="button"
                       className="fan-feed-comment-send"
                       style={{ backgroundColor: primary }}
+                      onClick={() => submitComment(post.id)}
+                      disabled={!fanId || !(commentDraft[post.id] ?? "").trim() || !!commentSending}
                     >
-                      Send
+                      {commentSending === post.id ? "…" : "Send"}
                     </button>
                   </div>
                   <div className="fan-feed-comments-list">
@@ -388,6 +434,7 @@ interface FanMemberSavedProps {
   creatorId: string;
   displayName: string;
   avatar?: string;
+  avatarObjectPosition?: string;
   primary?: string;
   feedSettings?: FanFeedVisibilitySettings;
   fanId: string | undefined;
@@ -397,10 +444,14 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
   creatorId,
   displayName,
   avatar,
+  avatarObjectPosition,
   primary = "#6366f1",
   feedSettings,
   fanId,
 }) => {
+  const avatarCropStyle: React.CSSProperties = {
+    objectPosition: avatarObjectPosition ?? "center",
+  };
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [unsavingId, setUnsavingId] = useState<string | null>(null);
@@ -527,7 +578,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
               <div className="fan-feed-post-header">
                 <div className="fan-feed-post-avatar">
                   {avatar ? (
-                    <img src={avatar} alt="" className="fan-feed-avatar-img" />
+                    <img src={avatar} alt="" className="fan-feed-avatar-img" style={avatarCropStyle} />
                   ) : (
                     <span className="fan-feed-avatar-placeholder">{displayName?.charAt(0) || "?"}</span>
                   )}
