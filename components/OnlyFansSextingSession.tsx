@@ -5,6 +5,7 @@ import { useAppContext } from './AppContext';
 import { hasEliteAccess } from '../src/utils/planAccess';
 import { auth, db } from '../firebaseConfig';
 import { doc, getDoc, collection, getDocs, addDoc, Timestamp, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { formatFanDisplayLabel, formatFanPlainMoniker } from '../src/lib/fanHubDisplay';
 
 type SessionStatus = 'setup' | 'active' | 'paused' | 'ended';
 type DurationPreset = '15' | '30' | '45' | '60' | 'custom';
@@ -21,6 +22,8 @@ interface Message {
 interface FanOption {
   uid: string;
   displayName?: string;
+  /** Global member handle from users/{uid}.username when set */
+  username?: string;
   email?: string;
   memberId?: string;
 }
@@ -128,9 +131,10 @@ interface FanDropdownProps {
 }
 
 function getDisplay(fan: FanOption): string {
-  if (fan.displayName?.trim()) return fan.displayName.trim();
-  if (fan.email?.trim()) return fan.email.trim();
-  return fan.uid.slice(0, 8);
+  return formatFanDisplayLabel(
+    { username: fan.username, displayName: fan.displayName },
+    { fallback: fan.uid.slice(0, 8) }
+  );
 }
 
 function matchFan(fan: FanOption, q: string): boolean {
@@ -138,8 +142,9 @@ function matchFan(fan: FanOption, q: string): boolean {
   const lower = q.trim().toLowerCase();
   const display = getDisplay(fan).toLowerCase();
   const email = (fan.email ?? '').toLowerCase();
+  const un = (fan.username ?? '').toLowerCase();
   const uid = fan.uid.toLowerCase();
-  return display.includes(lower) || email.includes(lower) || uid.includes(lower);
+  return display.includes(lower) || email.includes(lower) || uid.includes(lower) || un.includes(lower);
 }
 
 function FanDropdown({ fans, selectedUid, onSelect, loading, placeholder = 'Select Fan' }: FanDropdownProps) {
@@ -365,16 +370,31 @@ export const OnlyFansSextingSession: React.FC = () => {
     if (!adminUid) return;
     setFansLoading(true);
     getDocs(collection(db, 'users', adminUid, 'onlyfans_fan_preferences'))
-      .then((snap) => {
-        const list: FanOption[] = snap.docs.map((d) => {
-          const data = d.data();
-          return {
-            uid: d.id,
-            displayName: data.name || d.id,
-            email: data.email || '',
-            memberId: d.id,
-          };
-        });
+      .then(async (snap) => {
+        const list: FanOption[] = await Promise.all(
+          snap.docs.map(async (d) => {
+            const data = d.data();
+            let username: string | undefined;
+            try {
+              const uSnap = await getDoc(doc(db, 'users', d.id));
+              if (uSnap.exists()) {
+                const raw = uSnap.data()?.username;
+                if (typeof raw === 'string' && raw.trim()) {
+                  username = raw.trim().toLowerCase();
+                }
+              }
+            } catch {
+              /* ignore */
+            }
+            return {
+              uid: d.id,
+              displayName: typeof data.name === 'string' ? data.name : undefined,
+              username,
+              email: typeof data.email === 'string' ? data.email : '',
+              memberId: d.id,
+            };
+          })
+        );
         setFans(list);
       })
       .catch(() => setFans([]))
@@ -524,7 +544,7 @@ export const OnlyFansSextingSession: React.FC = () => {
         },
         body: JSON.stringify({
           recentMessages,
-          fanName: selectedFan?.displayName || selectedFan?.email || undefined,
+          fanName: formatFanPlainMoniker(selectedFan ?? {}) || undefined,
           creatorPersona: useCreatorPersonality ? creatorPersonality : undefined,
           tone: toneParam,
           numSuggestions: 6,
@@ -566,7 +586,7 @@ export const OnlyFansSextingSession: React.FC = () => {
           },
           body: JSON.stringify({
             recentMessages,
-            fanName: selectedFan?.displayName || selectedFan?.email || undefined,
+            fanName: formatFanPlainMoniker(selectedFan ?? {}) || undefined,
             creatorPersona: useCreatorPersonality ? creatorPersonality : undefined,
             tone: toneParam,
             numSuggestions: 1,
@@ -751,7 +771,7 @@ export const OnlyFansSextingSession: React.FC = () => {
           open={sessionEndModalOpen}
           onClose={() => setSessionEndModalOpen(false)}
           onConfirm={handleEndSession}
-          fanName={selectedFan?.displayName || selectedFan?.email}
+          fanName={formatFanDisplayLabel(selectedFan ?? {}, { fallback: '' }) || undefined}
         />
       </>
     );

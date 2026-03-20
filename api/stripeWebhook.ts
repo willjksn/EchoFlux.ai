@@ -113,6 +113,15 @@ async function handleConnectEvent(db: Firestore, _stripe: Stripe, event: Stripe.
       const fanName = session.customer_details?.name || session.metadata?.fanName || null;
       const fanRef = db.collection('creators').doc(creatorId).collection('fans').doc(fanId);
       const fanSnap = await fanRef.get();
+      let memberUsername: string | null = null;
+      try {
+        const uSnap = await db.collection('users').doc(fanId).get();
+        const u = uSnap.data() as { username?: string } | undefined;
+        const raw = typeof u?.username === 'string' ? u.username.trim().toLowerCase() : '';
+        if (raw.length >= 3 && /^[a-z0-9_]+$/.test(raw)) memberUsername = raw;
+      } catch {
+        /* ignore */
+      }
       if (!fanSnap.exists) {
         // New fan - create record
         await fanRef.set({
@@ -120,6 +129,7 @@ async function handleConnectEvent(db: Firestore, _stripe: Stripe, event: Stripe.
           creatorId,
           email: fanEmail,
           displayName: fanName,
+          ...(memberUsername ? { username: memberUsername } : {}),
           stripeCustomerId: typeof session.customer === 'string' ? session.customer : (session.customer as any)?.id || null,
           subscriptionStatus: 'active',
           subscribedAt: now,
@@ -130,11 +140,13 @@ async function handleConnectEvent(db: Firestore, _stripe: Stripe, event: Stripe.
         });
       } else {
         // Existing fan - update subscription status
-        await fanRef.update({
+        const patch: Record<string, unknown> = {
           subscriptionStatus: 'active',
           lastPaymentAt: now,
           updatedAt: now,
-        });
+        };
+        if (memberUsername) patch.username = memberUsername;
+        await fanRef.update(patch);
       }
       
       console.log(`Connect: subscription created creator=${creatorId} fan=${fanId}`);

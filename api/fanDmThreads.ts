@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 import { FAN_DM_THREADS, getThreadId } from "./_fanDmHelpers.js";
+import { formatFanDisplayLabel } from "./_fanHubDisplay.js";
 
 type ThreadDoc = {
   creatorId: string;
@@ -57,8 +58,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } else {
           const userSnap = await db.collection("users").doc(data.fanId).get();
           if (userSnap.exists) {
-            const u = userSnap.data() as { name?: string; displayName?: string; avatar?: string };
-            thread.otherPartyDisplayName = u?.displayName || u?.name || "Fan";
+            const u = userSnap.data() as {
+              name?: string;
+              displayName?: string;
+              username?: string;
+              avatar?: string;
+            };
+            thread.otherPartyDisplayName = formatFanDisplayLabel(
+              {
+                username: u?.username,
+                displayName: u?.displayName,
+                name: u?.name,
+              },
+              { fallback: "Fan" }
+            );
             thread.otherPartyAvatar = u?.avatar;
           } else {
             thread.otherPartyDisplayName = "Fan";

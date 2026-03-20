@@ -34,8 +34,11 @@ export type SendToDropPayload = {
   content: string;
   mediaUrls?: string[];
   mediaUrl?: string;
+  mediaType?: "image" | "video";
   visibility: DropVisibility;
   lockedPrice?: number; // required when visibility === 'locked'
+  /** When locked + multiple media: public teaser index (same as Fan Hub Posts composer). */
+  previewMediaIndex?: number;
   title?: string;
 };
 
@@ -118,28 +121,66 @@ export async function sendToScheduledPost(
   return { postId, eventId };
 }
 
-/** Write a drop to Fan Hub Feed: users/{userId}/onlyfans_feed. */
+/**
+ * Fan Hub “drop” → same collection as Fan Hub Posts (`creators/{userId}/fanPosts`).
+ * (Legacy `users/.../onlyfans_feed` is no longer written — member feed reads `fanPosts`.)
+ */
 export async function sendToDrop(
   db: Firestore,
   userId: string,
   payload: SendToDropPayload
 ): Promise<{ dropId: string }> {
-  if (payload.visibility === 'locked' && (payload.lockedPrice == null || payload.lockedPrice < 0)) {
-    throw new Error('lockedPrice is required when visibility is locked');
+  if (payload.visibility === "locked" && (payload.lockedPrice == null || payload.lockedPrice < 0)) {
+    throw new Error("lockedPrice is required when visibility is locked");
   }
-  const drop = {
-    content: payload.content,
-    mediaUrls: payload.mediaUrls ?? (payload.mediaUrl ? [payload.mediaUrl] : []),
-    mediaUrl: payload.mediaUrl ?? payload.mediaUrls?.[0],
-    visibility: payload.visibility,
-    lockedPrice: payload.visibility === 'locked' ? (payload.lockedPrice ?? 0) : undefined,
-    title: payload.title ?? '',
-  };
-  const ref = await addDoc(collection(db, 'users', userId, 'onlyfans_feed'), {
-    ...drop,
+  const mediaUrls =
+    payload.mediaUrls && payload.mediaUrls.length > 0
+      ? payload.mediaUrls
+      : payload.mediaUrl
+        ? [payload.mediaUrl]
+        : [];
+  const mediaTypes: ("image" | "video")[] = mediaUrls.map((_, i) =>
+    i === 0 && payload.mediaType === "video" ? "video" : "image"
+  );
+
+  let lockedContent: { enabled: true; priceCents: number; previewMediaIndex?: number } | undefined;
+  if (payload.visibility === "locked") {
+    const priceCents = Math.round((payload.lockedPrice ?? 0) * 100);
+    lockedContent = {
+      enabled: true,
+      priceCents,
+      ...(mediaUrls.length > 1 && typeof payload.previewMediaIndex === "number"
+        ? {
+            previewMediaIndex: Math.max(
+              0,
+              Math.min(mediaUrls.length - 1, Math.floor(payload.previewMediaIndex))
+            ),
+          }
+        : {}),
+    };
+  }
+
+  const postData: Record<string, unknown> = {
+    creatorId: userId,
+    body: payload.content,
+    mediaUrls,
+    mediaTypes,
+    likeCount: 0,
+    likedBy: [],
+    comments: [],
+    status: "published",
+    hideLikeCounts: false,
+    hideComments: false,
+    hideLikes: false,
+    showTipButton: true,
+    dropVisibility: payload.visibility,
+    title: payload.title ?? "",
     createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
+    publishedAt: serverTimestamp(),
+    ...(lockedContent ? { lockedContent } : {}),
+  };
+
+  const ref = await addDoc(collection(db, "creators", userId, "fanPosts"), postData);
   return { dropId: ref.id };
 }
 

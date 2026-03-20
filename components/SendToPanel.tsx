@@ -45,6 +45,8 @@ export const SendToPanel: React.FC<SendToPanelProps> = ({ payload, onSent, class
   const [scheduledTime, setScheduledTime] = useState('12:00');
   const [visibility, setVisibility] = useState<DropVisibility>('subscriber');
   const [lockedPrice, setLockedPrice] = useState<string>('4.99');
+  /** Public teaser index for locked drops with multiple media (matches Fan Hub Posts). */
+  const [dropPreviewMediaIndex, setDropPreviewMediaIndex] = useState(0);
   const [campaignName, setCampaignName] = useState('');
 
   const handleSend = async (target: SendTarget) => {
@@ -90,12 +92,23 @@ export const SendToPanel: React.FC<SendToPanelProps> = ({ payload, onSent, class
           break;
         }
         case 'drop': {
+          const mediaCount =
+            (payload.mediaUrls?.length ?? 0) > 0
+              ? payload.mediaUrls!.length
+              : payload.mediaUrl
+                ? 1
+                : 0;
           const dropPayload: SendToDropPayload = {
             content: payload.content,
             mediaUrls: payload.mediaUrls,
             mediaUrl: payload.mediaUrl,
+            mediaType: payload.mediaType,
             visibility,
             lockedPrice: visibility === 'locked' ? parseFloat(lockedPrice) || 0 : undefined,
+            previewMediaIndex:
+              visibility === 'locked' && mediaCount > 1
+                ? Math.min(dropPreviewMediaIndex, mediaCount - 1)
+                : undefined,
             title: 'Drop',
           };
           await sendToDrop(db, user.id, dropPayload);
@@ -227,6 +240,27 @@ export const SendToPanel: React.FC<SendToPanelProps> = ({ payload, onSent, class
             </label>
           )}
         </div>
+        {visibility === "locked" && (payload.mediaUrls?.length ?? 0) > 1 && (
+          <div className="text-sm">
+            <label className="block text-gray-600 dark:text-gray-400 mb-1">
+              Public preview (locked drops) — which media stays visible
+            </label>
+            <select
+              value={Math.min(
+                dropPreviewMediaIndex,
+                Math.max(0, (payload.mediaUrls?.length ?? 1) - 1)
+              )}
+              onChange={(e) => setDropPreviewMediaIndex(Number(e.target.value))}
+              className="rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-2 py-1"
+            >
+              {(payload.mediaUrls ?? []).map((_, i) => (
+                <option key={i} value={i}>
+                  Media #{i + 1}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div className="text-sm">
           <label className="block text-gray-600 dark:text-gray-400 mb-1">Campaign name (optional)</label>

@@ -63,18 +63,17 @@ Get-Process -Id <pid>
 
 ### 2. `Invalid vercel.json - builds should NOT have more than 128 items`
 
-This project defines **200+** serverless handlers under `api/**/*.ts`. The Vercel CLI turns each into a **build** entry for `vercel dev`, and validation **caps that list at 128**, so **`vercel dev` cannot start** for this repo as-is.
+This repo has **~200+** serverless entry files under `api/` (files not named with a leading `_`). The Vercel CLI builds a **separate build entry per route** for `vercel dev`, and **caps that list at 128**, so **`npm run dev:vercel` cannot succeed** until the route count drops below 128 or Vercel changes the CLI.
 
-That does **not** mean production deploys are invalid (deployment uses a different pipeline), only that **local `vercel dev` hits this limit**.
+Repo `vercel.json` no longer uses a broad `functions: { "api/**/*.ts": … }` block (that duplicated work and didn’t fix the cap). **Production / Preview deployments** use a different pipeline and can still deploy this project; set **function duration** in the [Vercel project dashboard](https://vercel.com/docs/functions/configuring-functions/duration) if you need longer than the default timeout on Pro.
 
-**Workarounds:**
+**Local full stack (recommended):**
 
 | Approach | When to use |
 |----------|-------------|
-| **`npm run dev` + `DEV_API_PROXY`** | Full UI + real `/api` against a deployed URL (see top of this doc). |
-| **`npm run dev` only** | UI + Firebase in the browser; ignore `/api` errors in the console. |
-| **Vercel Preview deployment** | Test the full app on the preview URL from a git push. |
-| **Long-term** | Fewer top-level `api/` entrypoints (e.g. consolidate routes) or ask Vercel support about the dev limit. |
+| **`npm run dev` + `DEV_API_PROXY=https://your-deployment.vercel.app`** | Full UI on localhost; `/api/*` hits your real Vercel backend (see top of this doc). |
+| **Open the Preview / Production URL** | Full app + API on Vercel after `git push` or deploy. |
+| **Long-term** | Fewer `api/*.ts` entrypoints (e.g. catch-all router) if you must run `vercel dev` locally. |
 
 ---
 
@@ -93,9 +92,7 @@ Set **`DEV_API_PROXY`** as above, or ignore those errors if you only need UI + F
 
 ## Port 3000 already in use
 
-`vite.config.ts` sets `strictPort: true`. If **3000** is taken, Vite **exits**.
-
-Free the port or stop the other dev server, then run `npm run dev` again.
+`vite.config.ts` uses **`strictPort: false`**: if **3000** is busy, Vite picks the next free port (e.g. **3001**) and prints the URL in the terminal. Open that URL, or free 3000 if you need that port specifically.
 
 ---
 
@@ -112,3 +109,12 @@ npm run build
 ```
 
 If this fails, fix reported errors before worrying about dev servers.
+
+---
+
+## Vercel backend (production / preview)
+
+1. **Project linked:** `vercel link` in the repo root (creates `.vercel/`).
+2. **Environment variables** in the Vercel project (Settings → Environment Variables): at minimum whatever `api/_firebaseAdmin.ts` and Stripe/OpenAI routes need (`FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`, etc.). Mirror values from `ENV_SETUP_GUIDE.md` if present.
+3. **Deploy:** push to GitHub (if connected) or `vercel --prod`. Static app + `api/*` serverless are defined by `vercel.json` (`framework: vite`, `outputDirectory: dist`, rewrites to `/index.html` for non-API routes).
+4. **Local serverless:** `npm run dev:vercel` is **not expected to work** here (too many API routes for the CLI’s 128-build cap). Use **`npm run dev` + `DEV_API_PROXY`** or test on a **Preview** URL instead.

@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { DocumentReference } from "firebase-admin/firestore";
 import { getVerifyAuth, getModelRouter, withErrorHandling } from "./_errorHandler.js";
 import { sanitizeForAI } from "./_inputSanitizer.js";
 import { getAdminDb } from "./_firebaseAdmin.js";
@@ -92,14 +93,27 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   const creatorData = creatorSnap.data() || {};
   const creatorName = String(creatorData.displayName ?? authorDisplayName ?? "Creator").trim() || "Creator";
 
-  // Load post from users/{creatorId}/posts (source of truth for feed)
-  const userPostRef = db.collection("users").doc(creatorIdStr).collection("posts").doc(postIdStr);
-  const postSnap = await userPostRef.get();
-  if (!postSnap.exists()) {
+  // Resolve post across fan hub paths (Fan Hub Posts composer → creators/.../fanPosts; legacy → users/.../posts, creators/.../posts)
+  const candidateRefs = [
+    db.collection("creators").doc(creatorIdStr).collection("fanPosts").doc(postIdStr),
+    db.collection("users").doc(creatorIdStr).collection("posts").doc(postIdStr),
+    db.collection("creators").doc(creatorIdStr).collection("posts").doc(postIdStr),
+  ];
+  const existingRefs: DocumentReference[] = [];
+  let postData: Record<string, unknown> = {};
+  for (const ref of candidateRefs) {
+    const snap = await ref.get();
+    if (snap.exists) {
+      existingRefs.push(ref);
+      if (Object.keys(postData).length === 0) {
+        postData = snap.data() || {};
+      }
+    }
+  }
+  if (existingRefs.length === 0) {
     res.status(404).json({ error: "Post not found" });
     return;
   }
-  const postData = postSnap.data() || {};
   const existingComments: Comment[] = Array.isArray(postData.comments) ? postData.comments : [];
   const postBody = postData.body ?? postData.caption ?? "";
 
@@ -149,16 +163,11 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     }
   }
 
-  await userPostRef.update({ comments: nextComments });
+  await Promise.all(existingRefs.map((ref) => ref.update({ comments: nextComments })));
   const rootPostRef = db.collection("posts").doc(postIdStr);
   const rootSnap = await rootPostRef.get();
   if (rootSnap.exists()) {
     await rootPostRef.update({ comments: nextComments });
-  }
-  const creatorPostRef = db.collection("creators").doc(creatorIdStr).collection("posts").doc(postIdStr);
-  const creatorPostSnap = await creatorPostRef.get();
-  if (creatorPostSnap.exists()) {
-    await creatorPostRef.update({ comments: nextComments });
   }
 
   res.status(200).json({ success: true, comments: nextComments });

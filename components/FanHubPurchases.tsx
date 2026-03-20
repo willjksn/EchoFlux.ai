@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useAppContext } from "./AppContext";
 import { auth, db } from "../firebaseConfig";
 import { collection, addDoc, serverTimestamp, Timestamp } from "firebase/firestore";
+import { formatFanDisplayLabel } from "../src/lib/fanHubDisplay";
 
 type ScheduleStatus = "pending" | "scheduled" | "completed" | "cancelled";
 
@@ -310,7 +311,12 @@ export const FanHubPurchases: React.FC = () => {
                   <div className="purchases-card-info">
                     <p className="purchases-card-product">{p.productName}</p>
                     <p className="purchases-card-meta">
-                      {p.fanName || p.email}
+                      <span>
+                        {formatFanDisplayLabel({ displayName: p.fanName }, { fallback: "Member" })}
+                        {p.email && p.email.includes("@") && (
+                          <span className="purchases-card-meta-email"> · {p.email}</span>
+                        )}
+                      </span>
                       <span className="purchases-card-amount">{formatAmount(p.amountCents)}</span>
                     </p>
                     <p className="purchases-card-date">

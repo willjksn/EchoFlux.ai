@@ -64,7 +64,11 @@ service cloud.firestore {
         // Invite-grant markers (server-controlled)
         'inviteGrantPlan',
         'inviteGrantExpiresAt',
-        'inviteGrantExpiredAt'
+        'inviteGrantExpiredAt',
+
+        // Fan/member username — set only via Admin API (claimMemberUsername)
+        'username',
+        'usernameUpdatedAt'
       ];
     }
 
@@ -89,12 +93,20 @@ service cloud.firestore {
           'inviteGrantPlan',
           'inviteGrantExpiresAt',
           'inviteGrantExpiredAt'
-        ]));
+        ]))
+        && !request.resource.data.keys().hasAny(['username', 'usernameUpdatedAt']);
     }
 
     function isSafeUserUpdate() {
       // Prevent updating any restricted fields from the client.
       return !(request.resource.data.diff(resource.data).changedKeys().hasAny(restrictedUserFields()));
+    }
+
+    /** Fan Hub post visible to any signed-in user (feed is gated in-app; published = public-ish doc). */
+    function fanPostReadableByAuthenticatedFan() {
+      return !resource.data.keys().hasAny(['status'])
+        || resource.data.status == 'published'
+        || resource.data.status == 'Published';
     }
 
     /** -------------------------------------------------------
@@ -183,6 +195,16 @@ service cloud.firestore {
     }
 
     /** -------------------------------------------------------
+     *  MEMBER USERNAMES (global handles for fans)
+     *  - Public read for availability checks in Fan Hub
+     *  - Writes only via Admin SDK (api/claimMemberUsername)
+     *  ------------------------------------------------------- */
+    match /usernames/{username} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    /** -------------------------------------------------------
      *  CREATORS COLLECTION (Fan Hub storefront / My Page)
      *  -------------------------------------------------------
      *  - Creator can read their own doc (creatorId == auth.uid) for My Page builder
@@ -190,8 +212,48 @@ service cloud.firestore {
      *  - Public storefront reads are done via getBioPage API (by handle)
      *  ------------------------------------------------------- */
     match /creators/{creatorId} {
+      // Creator profile doc (My Page / storefront metadata) — owner read; writes via Admin API
       allow read: if isAuthenticated() && request.auth.uid == creatorId;
       allow write: if false;
+
+      /** Fan Hub posts — creators manage; signed-in users read published (member feed / previews). */
+      match /fanPosts/{postId} {
+        allow read: if isAuthenticated() && (
+          request.auth.uid == creatorId || fanPostReadableByAuthenticatedFan()
+        );
+        allow create: if isOwner(creatorId);
+        allow update, delete: if isOwner(creatorId);
+      }
+
+      /** Legacy mirror under creators */
+      match /posts/{postId} {
+        allow read: if isAuthenticated() && (
+          request.auth.uid == creatorId || fanPostReadableByAuthenticatedFan()
+        );
+        allow create: if isOwner(creatorId);
+        allow update, delete: if isOwner(creatorId);
+      }
+
+      /** Stripe / entitlements mirror — creator manages; fan reads own doc */
+      match /fans/{fanId} {
+        allow read: if isOwner(creatorId) || (isAuthenticated() && request.auth.uid == fanId);
+        allow create, update, delete: if isOwner(creatorId);
+      }
+
+      /** Manual CRM-style fan entries */
+      match /fanUsers/{manualId} {
+        allow read, write: if isOwner(creatorId);
+      }
+
+      /** Treat unlock grants (creator tools) */
+      match /treatGrants/{grantId} {
+        allow read, write: if isOwner(creatorId);
+      }
+
+      /** Live video sessions — creator manages */
+      match /liveVideoChats/{sessionId} {
+        allow read, write: if isOwner(creatorId);
+      }
     }
 
     /** -------------------------------------------------------

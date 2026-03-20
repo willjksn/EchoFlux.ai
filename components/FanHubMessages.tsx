@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useAppContext } from "./AppContext";
 import { auth } from "../firebaseConfig";
 import type { FanDmThread, FanDmMessage } from "../types";
 import VideoCallRoom from "./VideoCallRoom";
+import { useAutosizeTextarea } from "../src/hooks/useAutosizeTextarea";
+import { formatDmShortTime } from "../src/lib/fanHubDisplay";
 
 const VideoIcon = () => (
   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -23,7 +25,9 @@ export const FanHubMessages: React.FC = () => {
   const [sending, setSending] = useState(false);
   const [reportingId, setReportingId] = useState<string | null>(null);
   const [blockingFanId, setBlockingFanId] = useState<string | null>(null);
-  
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const { ref: replyTextareaRef } = useAutosizeTextarea(reply);
+
   // Instant video call state
   const [startingVideo, setStartingVideo] = useState(false);
   const [activeVideoSession, setActiveVideoSession] = useState<{ sessionId: string; creatorId: string } | null>(null);
@@ -82,6 +86,11 @@ export const FanHubMessages: React.FC = () => {
     };
   }, [selectedThread?.id, creatorId, fetchMessagesForThread]);
 
+  useEffect(() => {
+    if (messagesLoading) return;
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, messagesLoading, selectedThread?.id]);
+
   const sendReply = async () => {
     if (!selectedThread || !reply.trim() || !creatorId) return;
     const content = reply.trim();
@@ -104,6 +113,7 @@ export const FanHubMessages: React.FC = () => {
       if (!res.ok) throw new Error((data as { error?: string }).error || "Failed to send");
       const next = await fetchMessagesForThread(selectedThread);
       setMessages(next);
+      requestAnimationFrame(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }));
       showToast?.("Sent", "success");
     } catch (e) {
       setReply(content);
@@ -326,6 +336,15 @@ export const FanHubMessages: React.FC = () => {
                         >
                           {m.content}
                         </span>
+                        {formatDmShortTime(m.createdAt) && (
+                          <span
+                            className={`text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 px-1 ${
+                              m.senderId === creatorId ? "self-end" : "self-start"
+                            }`}
+                          >
+                            {formatDmShortTime(m.createdAt)}
+                          </span>
+                        )}
                         {m.senderId !== creatorId && (
                           <button
                             type="button"
@@ -340,15 +359,22 @@ export const FanHubMessages: React.FC = () => {
                     </div>
                   ))
                 )}
+                <div ref={messagesEndRef} aria-hidden />
               </div>
-              <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex gap-2">
-                <input
-                  type="text"
+              <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex gap-2 items-end">
+                <textarea
+                  ref={replyTextareaRef}
+                  rows={1}
                   value={reply}
                   onChange={(e) => setReply(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendReply()}
-                  placeholder="Reply..."
-                  className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      void sendReply();
+                    }
+                  }}
+                  placeholder="Reply… (Shift+Enter for newline)"
+                  className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm resize-none min-h-[40px] max-h-[160px] leading-snug"
                 />
                 <button
                   type="button"

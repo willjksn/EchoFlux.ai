@@ -70,12 +70,11 @@ export default defineConfig(({ mode }) => {
     ],
     server: {
       port: 3000,
-      strictPort: true,
+      /** Avoid hard fail when 3000–3002 are taken (e.g. other Vite / vercel processes). */
+      strictPort: false,
       host: "localhost",
       hmr: {
         host: "localhost",
-        protocol: "ws",
-        port: 3000,
       },
       proxy: {
         "/api": {

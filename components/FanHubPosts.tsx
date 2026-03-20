@@ -169,6 +169,8 @@ export const FanHubPosts: React.FC = () => {
   // Locked content
   const [lockEnabled, setLockEnabled] = useState(false);
   const [lockPrice, setLockPrice] = useState("");
+  /** Which attached media index is the public teaser when post is locked (multi-media only). */
+  const [lockPreviewMediaIndex, setLockPreviewMediaIndex] = useState(0);
   
   // Poll
   const [pollEnabled, setPollEnabled] = useState(false);
@@ -743,9 +745,14 @@ DO NOT include hashtags.`;
       
       // Locked content
       if (lockEnabled && lockPrice) {
+        const previewIdx =
+          uploadedUrls.length > 1
+            ? Math.max(0, Math.min(uploadedUrls.length - 1, lockPreviewMediaIndex))
+            : 0;
         (postData as Record<string, unknown>).lockedContent = {
           enabled: true,
           priceCents: Math.round(parseFloat(lockPrice) * 100),
+          ...(uploadedUrls.length > 1 ? { previewMediaIndex: previewIdx } : {}),
         };
       }
       
@@ -826,6 +833,7 @@ DO NOT include hashtags.`;
     setCustomTone("");
     setLockEnabled(false);
     setLockPrice("");
+    setLockPreviewMediaIndex(0);
     setPollEnabled(false);
     setPollQuestion("");
     setPollOptions(["", ""]);
@@ -1124,22 +1132,42 @@ DO NOT include hashtags.`;
                 </button>
                 
                 {lockEnabled && (
-                  <div className="mt-3 flex items-center gap-2">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">Price:</span>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
-                      <input
-                        type="number"
-                        min={1}
-                        max={1000}
-                        step={0.01}
-                        value={lockPrice}
-                        onChange={(e) => setLockPrice(e.target.value)}
-                        placeholder="0.00"
-                        className="w-28 pl-7 pr-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                      />
+                  <div className="mt-3 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">Price:</span>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={1000}
+                          step={0.01}
+                          value={lockPrice}
+                          onChange={(e) => setLockPrice(e.target.value)}
+                          placeholder="0.00"
+                          className="w-28 pl-7 pr-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                        />
+                      </div>
+                      <span className="text-xs text-gray-400">($1 - $1000)</span>
                     </div>
-                    <span className="text-xs text-gray-400">($1 - $1000)</span>
+                    {media.length > 1 && (
+                      <div>
+                        <label className="text-xs text-gray-600 dark:text-gray-400 block mb-1">
+                          Public preview — which media stays visible (others show locked until purchase)
+                        </label>
+                        <select
+                          value={Math.min(lockPreviewMediaIndex, Math.max(0, media.length - 1))}
+                          onChange={(e) => setLockPreviewMediaIndex(Number(e.target.value))}
+                          className="w-full max-w-xs px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                        >
+                          {media.map((_, i) => (
+                            <option key={i} value={i}>
+                              Media #{i + 1}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

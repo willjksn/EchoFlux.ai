@@ -1,9 +1,12 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { auth } from "../firebaseConfig";
 import type { TreatProduct, FanDmThread, FanDmMessage, StorefrontSocialLinks, StorefrontLandingContent, StorefrontLegal, CreatorMonetization, TextStyle } from "../types";
 import { FanLandingPage } from "./FanLandingPage";
 import { FanMemberFeed, FanMemberSaved } from "./FanMemberFeed";
+import { MemberUsernameGateModal } from "./MemberUsernameGateModal";
 import { DEFAULT_PRIVACY_POLICY, DEFAULT_TERMS_OF_SERVICE } from "../constants";
+import { useAutosizeTextarea } from "../src/hooks/useAutosizeTextarea";
+import { formatDmShortTime } from "../src/lib/fanHubDisplay";
 
 export type StorefrontCreator = {
   creatorId: string;
@@ -223,6 +226,7 @@ export const FanStorefrontView: React.FC = () => {
   const [legalSubpage, setLegalSubpage] = useState<"terms" | "privacy" | null>(() => parseHandleFromPath().subpage);
   const [creator, setCreator] = useState<StorefrontCreator | null>(null);
   const [subscribed, setSubscribed] = useState<boolean>(false);
+  const [memberUsernameRequired, setMemberUsernameRequired] = useState(false);
   const [cancelMembershipLoading, setCancelMembershipLoading] = useState(false);
   const [cancelMembershipMessage, setCancelMembershipMessage] = useState<string | null>(null);
   const [entitlementLoading, setEntitlementLoading] = useState(false);
@@ -244,6 +248,8 @@ export const FanStorefrontView: React.FC = () => {
   const [dmLoading, setDmLoading] = useState(false);
   const [dmSending, setDmSending] = useState(false);
   const [dmInput, setDmInput] = useState("");
+  const dmMessagesEndRef = useRef<HTMLDivElement | null>(null);
+  const { ref: dmTextareaRef } = useAutosizeTextarea(dmInput);
   const [fanBanned, setFanBanned] = useState(false);
   const [reportingMessageId, setReportingMessageId] = useState<string | null>(null);
 
@@ -299,6 +305,7 @@ export const FanStorefrontView: React.FC = () => {
   useEffect(() => {
     if (!creator?.creatorId || !isLoggedIn) {
       setSubscribed(false);
+      setMemberUsernameRequired(false);
       return;
     }
 
@@ -315,9 +322,13 @@ export const FanStorefrontView: React.FC = () => {
         if (cancelled) return;
         const data = await res.json().catch(() => ({}));
         setSubscribed(!!(data as { subscribed?: boolean }).subscribed);
+        setMemberUsernameRequired(!!(data as { memberUsernameRequired?: boolean }).memberUsernameRequired);
         setUnlockedProductIds(Array.isArray((data as { unlockedProductIds?: string[] }).unlockedProductIds) ? (data as { unlockedProductIds: string[] }).unlockedProductIds : []);
       } catch {
-        if (!cancelled) setSubscribed(false);
+        if (!cancelled) {
+          setSubscribed(false);
+          setMemberUsernameRequired(false);
+        }
       } finally {
         if (!cancelled) setEntitlementLoading(false);
       }
@@ -391,8 +402,19 @@ export const FanStorefrontView: React.FC = () => {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string }).error || "Failed to join");
-      // Successfully joined - update subscribed state
+      // Successfully joined — sync entitlement (username may still be required)
       setSubscribed(true);
+      try {
+        const token2 = await auth.currentUser.getIdToken(true);
+        const entRes = await fetch(
+          `/api/getFanEntitlement?creatorId=${encodeURIComponent(creator.creatorId)}`,
+          { headers: { Authorization: `Bearer ${token2}` } }
+        );
+        const ent = await entRes.json().catch(() => ({}));
+        setMemberUsernameRequired(!!(ent as { memberUsernameRequired?: boolean }).memberUsernameRequired);
+      } catch {
+        /* keep prior state */
+      }
     } catch (e) {
       console.error("Failed to join free membership:", e);
     } finally {
@@ -494,6 +516,11 @@ export const FanStorefrontView: React.FC = () => {
     if (activeTab === "messages" && creator?.creatorId && isLoggedIn) fetchDmThreadAndMessages();
   }, [activeTab, creator?.creatorId, isLoggedIn, fetchDmThreadAndMessages]);
 
+  useEffect(() => {
+    if (activeTab !== "messages" || dmLoading) return;
+    requestAnimationFrame(() => dmMessagesEndRef.current?.scrollIntoView({ behavior: "smooth" }));
+  }, [activeTab, dmMessages, dmLoading]);
+
   const reportMessage = async (messageId: string) => {
     if (!dmThread || !auth.currentUser) return;
     setReportingMessageId(messageId);
@@ -540,6 +567,7 @@ export const FanStorefrontView: React.FC = () => {
       if (!res.ok) throw new Error((data as { error?: string }).error || "Failed to send");
       setDmInput("");
       await fetchDmThreadAndMessages();
+      requestAnimationFrame(() => dmMessagesEndRef.current?.scrollIntoView({ behavior: "smooth" }));
     } catch {
       // could toast
     } finally {
@@ -699,7 +727,7 @@ export const FanStorefrontView: React.FC = () => {
   // Check for ?preview=member query param to allow previewing member view
   const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const previewMember = urlParams?.get("preview") === "member";
-  
+
   const showLanding = previewMember ? false : (!isLoggedIn || !subscribed);
 
   if (showLanding) {
@@ -729,6 +757,15 @@ export const FanStorefrontView: React.FC = () => {
         "--fan-text": theme?.text || "#1f2937",
       } as React.CSSProperties}
     >
+      {memberUsernameRequired && creator && !previewMember && (
+        <MemberUsernameGateModal
+          creatorId={creator.creatorId}
+          creatorDisplayName={displayName}
+          primaryColor={primary}
+          textColor={theme?.text}
+          onComplete={() => setMemberUsernameRequired(false)}
+        />
+      )}
       {/* Member Header */}
       <header
         className="storefront-member-header"
@@ -902,6 +939,9 @@ export const FanStorefrontView: React.FC = () => {
                             className={`fan-member-message ${m.senderId === auth.currentUser?.uid ? "fan-member-message-sent" : "fan-member-message-received"}`}
                           >
                             <span className="fan-member-message-content">{m.content}</span>
+                            {formatDmShortTime(m.createdAt) && (
+                              <span className="fan-member-message-time">{formatDmShortTime(m.createdAt)}</span>
+                            )}
                             {m.senderId !== auth.currentUser?.uid && (
                               <button
                                 type="button"
@@ -915,14 +955,21 @@ export const FanStorefrontView: React.FC = () => {
                           </div>
                         ))
                       )}
+                      <div ref={dmMessagesEndRef} aria-hidden />
                     </div>
                     <div className="fan-member-messages-compose">
-                      <input
-                        type="text"
+                      <textarea
+                        ref={dmTextareaRef}
+                        rows={1}
                         value={dmInput}
                         onChange={(e) => setDmInput(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendDm()}
-                        placeholder="Type a message..."
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            void sendDm();
+                          }
+                        }}
+                        placeholder="Type a message… (Shift+Enter for newline)"
                         className="fan-member-messages-input"
                       />
                       <button

@@ -1,16 +1,32 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { collection, getDocs, orderBy, query, limit, Timestamp, doc, getDoc, setDoc } from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  orderBy,
+  query,
+  limit,
+  Timestamp,
+  doc,
+  getDoc,
+  setDoc,
+  type DocumentData,
+} from "firebase/firestore";
 import { db, auth } from "../firebaseConfig";
+import {
+  parseLockedContent,
+  isMediaSlotLocked,
+  type LockedPostContent,
+} from "../src/lib/lockedPostMedia";
 
 const SAVED_BY_CREATOR_KEY = "savedPostIdsByCreator";
 
 interface Post {
   id: string;
   content: string;
-  mediaUrl?: string;
-  mediaType?: "image" | "video";
+  mediaUrls: string[];
+  mediaTypes: ("image" | "video")[];
   createdAt: Date;
   likesCount: number;
   commentsCount: number;
@@ -18,6 +34,7 @@ interface Post {
   hideComments?: boolean;
   hideLikes?: boolean;
   hideLikeCounts?: boolean;
+  lockedContent?: LockedPostContent;
 }
 
 export interface FanFeedVisibilitySettings {
@@ -42,8 +59,8 @@ const DEMO_POSTS: Post[] = [
   {
     id: "demo-1",
     content: "Good morning everyone 🌸 Starting the day with some coffee and journaling. What's everyone up to today?",
-    mediaUrl: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=600&h=600&fit=crop",
-    mediaType: "image",
+    mediaUrls: ["https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=600&h=600&fit=crop"],
+    mediaTypes: ["image"],
     createdAt: new Date(Date.now() - 1000 * 60 * 30), // 30 mins ago
     likesCount: 42,
     commentsCount: 8,
@@ -51,8 +68,8 @@ const DEMO_POSTS: Post[] = [
   {
     id: "demo-2",
     content: "Behind the scenes from yesterday's shoot 📸 We had so much fun with this one. Can't wait to share more!",
-    mediaUrl: "https://images.unsplash.com/photo-1516575334481-f85287c2c82d?w=600&h=600&fit=crop",
-    mediaType: "image",
+    mediaUrls: ["https://images.unsplash.com/photo-1516575334481-f85287c2c82d?w=600&h=600&fit=crop"],
+    mediaTypes: ["image"],
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 4), // 4 hours ago
     likesCount: 128,
     commentsCount: 23,
@@ -60,8 +77,8 @@ const DEMO_POSTS: Post[] = [
   {
     id: "demo-3",
     content: "Quick life update: Been working on something really exciting that I'll share with you all soon. Hint: it involves a trip ✈️",
-    mediaUrl: "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=600&h=600&fit=crop",
-    mediaType: "image",
+    mediaUrls: ["https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=600&h=600&fit=crop"],
+    mediaTypes: ["image"],
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24), // 1 day ago
     likesCount: 89,
     commentsCount: 15,
@@ -69,7 +86,8 @@ const DEMO_POSTS: Post[] = [
   {
     id: "demo-4",
     content: "Thinking about doing a Q&A session this week. Drop your questions below and I'll answer them in my next post 💬",
-    mediaUrl: "",
+    mediaUrls: [],
+    mediaTypes: [],
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48), // 2 days ago
     likesCount: 156,
     commentsCount: 67,
@@ -77,13 +95,110 @@ const DEMO_POSTS: Post[] = [
   {
     id: "demo-5",
     content: "New content dropping this weekend! 🎉 Make sure your notifications are on so you don't miss it.",
-    mediaUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&h=600&fit=crop",
-    mediaType: "image",
+    mediaUrls: ["https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&h=600&fit=crop"],
+    mediaTypes: ["image"],
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 72), // 3 days ago
     likesCount: 203,
     commentsCount: 34,
   },
+  {
+    id: "demo-locked-multi",
+    content: "Locked set — first image is your free preview 🔒",
+    mediaUrls: [
+      "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=400&fit=crop",
+      "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=400&h=400&fit=crop",
+      "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=400&h=400&fit=crop",
+    ],
+    mediaTypes: ["image", "image", "image"],
+    lockedContent: { enabled: true, priceCents: 999, previewMediaIndex: 0 },
+    createdAt: new Date(Date.now() - 1000 * 60 * 120),
+    likesCount: 12,
+    commentsCount: 2,
+  },
 ];
+
+function postFromFirestore(docId: string, data: DocumentData): Post | null {
+  const status = (data.status as string) || "published";
+  if (status === "draft") return null;
+  const createdAt =
+    data.createdAt instanceof Timestamp
+      ? data.createdAt.toDate()
+      : new Date((data.createdAt as string) || Date.now());
+  const mediaUrls: string[] = Array.isArray(data.mediaUrls)
+    ? (data.mediaUrls as string[]).filter((u) => typeof u === "string" && u)
+    : data.mediaUrl
+      ? [String(data.mediaUrl)]
+      : [];
+  const rawTypes = Array.isArray(data.mediaTypes) ? (data.mediaTypes as string[]) : [];
+  const mediaTypes: ("image" | "video")[] = mediaUrls.map((_, i) => {
+    const t = rawTypes[i];
+    return t === "video" ? "video" : "image";
+  });
+  const comments = (data.comments as { text: string }[]) || [];
+  const lc = parseLockedContent(data.lockedContent);
+  return {
+    id: docId,
+    content: (data.body as string) || (data.content as string) || "",
+    mediaUrls,
+    mediaTypes,
+    createdAt,
+    likesCount:
+      typeof data.likeCount === "number" ? data.likeCount : (data.likesCount as number) || 0,
+    commentsCount: comments.length || (data.commentsCount as number) || 0,
+    pinned: !!(data.pinned as boolean),
+    hideComments: data.hideComments as boolean | undefined,
+    hideLikes: data.hideLikes as boolean | undefined,
+    hideLikeCounts: data.hideLikeCounts as boolean | undefined,
+    lockedContent: lc,
+  };
+}
+
+function FanMemberPostMedia({ post, primary }: { post: Post; primary: string }) {
+  const urls = post.mediaUrls;
+  const types = post.mediaTypes;
+  const n = urls.length;
+  if (n === 0) return null;
+  const lockedCfg = post.lockedContent?.enabled ? post.lockedContent : undefined;
+  const gridClass = n > 1 ? "fan-feed-post-media fan-feed-post-media-grid" : "fan-feed-post-media";
+  return (
+    <div className={gridClass}>
+      {urls.map((url, i) => {
+        const isVideo = types[i] === "video";
+        const locked = isMediaSlotLocked(lockedCfg, i, n);
+        return (
+          <div
+            key={`${post.id}-m-${i}`}
+            className={`fan-feed-media-cell${locked ? " fan-feed-media-cell--locked" : ""}`}
+          >
+            {isVideo ? (
+              <video
+                src={url}
+                controls={!locked}
+                className="fan-feed-media-video"
+                playsInline
+                preload="metadata"
+              />
+            ) : (
+              <img src={url} alt="" className="fan-feed-media-image" />
+            )}
+            {locked && (
+              <div className="fan-feed-media-lock-overlay">
+                <span className="fan-feed-media-lock-icon" aria-hidden>
+                  🔒
+                </span>
+                <span className="fan-feed-media-lock-text" style={{ color: primary }}>
+                  {post.lockedContent?.priceCents != null && post.lockedContent.priceCents > 0
+                    ? `Unlock $${(post.lockedContent.priceCents / 100).toFixed(2)}`
+                    : "Locked"}
+                </span>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function formatTimeAgo(date: Date): string {
   const now = new Date();
@@ -124,34 +239,25 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   const fetchPosts = useCallback(async () => {
     setLoading(true);
     try {
-      const postsRef = collection(db, `creators/${creatorId}/posts`);
-      const q = query(postsRef, orderBy("createdAt", "desc"), limit(20));
-      const snapshot = await getDocs(q);
-
-      const realPosts: Post[] = [];
-      snapshot.docs.forEach((docSnap) => {
-        const data = docSnap.data();
-        const status = (data.status as string) || "published";
-        if (status === "draft") return;
-        const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date((data.createdAt as string) || Date.now());
-        const mediaUrls = data.mediaUrls as string[] | undefined;
-        const mediaTypes = data.mediaTypes as ("image" | "video")[] | undefined;
-        const comments = (data.comments as { text: string }[]) || [];
-        realPosts.push({
-          id: docSnap.id,
-          content: (data.body as string) || (data.content as string) || "",
-          mediaUrl: mediaUrls?.[0] || (data.mediaUrl as string) || "",
-          mediaType: mediaTypes?.[0] || (data.mediaType as "image" | "video"),
-          createdAt,
-          likesCount: typeof data.likeCount === "number" ? data.likeCount : (data.likesCount as number) || 0,
-          commentsCount: comments.length || (data.commentsCount as number) || 0,
-          pinned: !!(data.pinned as boolean),
-          hideComments: data.hideComments as boolean | undefined,
-          hideLikes: data.hideLikes as boolean | undefined,
-          hideLikeCounts: data.hideLikeCounts as boolean | undefined,
+      const tryCollections = [
+        collection(db, "creators", creatorId, "fanPosts"),
+        collection(db, "creators", creatorId, "posts"),
+      ];
+      let realPosts: Post[] = [];
+      for (const postsRef of tryCollections) {
+        const q = query(postsRef, orderBy("createdAt", "desc"), limit(20));
+        const snapshot = await getDocs(q);
+        const batch: Post[] = [];
+        snapshot.docs.forEach((docSnap) => {
+          const p = postFromFirestore(docSnap.id, docSnap.data());
+          if (p) batch.push(p);
         });
-      });
-      realPosts.sort((a, b) => (a.pinned && !b.pinned ? -1 : !a.pinned && b.pinned ? 1 : 0));
+        batch.sort((a, b) => (a.pinned && !b.pinned ? -1 : !a.pinned && b.pinned ? 1 : 0));
+        if (batch.length > 0) {
+          realPosts = batch;
+          break;
+        }
+      }
 
       if (realPosts.length === 0) {
         setPosts(DEMO_POSTS);
@@ -330,15 +436,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
                 <p>{post.content}</p>
               </div>
 
-              {post.mediaUrl && (
-                <div className="fan-feed-post-media">
-                  {post.mediaType === "video" ? (
-                    <video src={post.mediaUrl} controls className="fan-feed-media-video" />
-                  ) : (
-                    <img src={post.mediaUrl} alt="" className="fan-feed-media-image" />
-                  )}
-                </div>
-              )}
+              <FanMemberPostMedia post={post} primary={primary} />
 
               <div className="fan-feed-post-actions">
                 {!(feedSettings?.hideLikes || post.hideLikes) && (
@@ -498,32 +596,19 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
           return;
         }
         return Promise.all(
-          ids.map((postId) => getDoc(doc(db!, "creators", creatorId, "posts", postId)))
-        ).then((docs) => {
+          ids.map(async (postId) => {
+            const fanPostSnap = await getDoc(doc(db!, "creators", creatorId, "fanPosts", postId));
+            if (fanPostSnap.exists()) return { postId, snap: fanPostSnap };
+            const legacySnap = await getDoc(doc(db!, "creators", creatorId, "posts", postId));
+            return { postId, snap: legacySnap };
+          })
+        ).then((results) => {
           if (cancelled) return;
           const list: Post[] = [];
-          docs.forEach((d, i) => {
-            if (!d.exists() || !ids[i]) return;
-            const data = d.data();
-            const status = (data.status as string) || "published";
-            if (status === "draft") return;
-            const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date((data.createdAt as string) || Date.now());
-            const mediaUrls = data.mediaUrls as string[] | undefined;
-            const mediaTypes = data.mediaTypes as ("image" | "video")[] | undefined;
-            const comments = (data.comments as { text: string }[]) || [];
-            list.push({
-              id: ids[i],
-              content: (data.body as string) || (data.content as string) || "",
-              mediaUrl: mediaUrls?.[0] || (data.mediaUrl as string) || "",
-              mediaType: mediaTypes?.[0] || (data.mediaType as "image" | "video"),
-              createdAt,
-              likesCount: typeof data.likeCount === "number" ? data.likeCount : (data.likesCount as number) || 0,
-              commentsCount: comments.length || (data.commentsCount as number) || 0,
-              pinned: !!(data.pinned as boolean),
-              hideComments: data.hideComments as boolean | undefined,
-              hideLikes: data.hideLikes as boolean | undefined,
-              hideLikeCounts: data.hideLikeCounts as boolean | undefined,
-            });
+          results.forEach(({ postId, snap }) => {
+            if (!snap.exists()) return;
+            const p = postFromFirestore(postId, snap.data());
+            if (p) list.push(p);
           });
           list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
           setPosts(list);
@@ -591,15 +676,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
               <div className="fan-feed-post-content">
                 <p>{post.content}</p>
               </div>
-              {post.mediaUrl && (
-                <div className="fan-feed-post-media">
-                  {post.mediaType === "video" ? (
-                    <video src={post.mediaUrl} controls className="fan-feed-media-video" />
-                  ) : (
-                    <img src={post.mediaUrl} alt="" className="fan-feed-media-image" />
-                  )}
-                </div>
-              )}
+              <FanMemberPostMedia post={post} primary={primary} />
               <div className="fan-feed-post-actions">
                 <button
                   type="button"

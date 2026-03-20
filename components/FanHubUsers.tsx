@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useAppContext } from "./AppContext";
 import { auth, db } from "../firebaseConfig";
 import { collection, query, getDocs, doc, deleteDoc, addDoc, setDoc, serverTimestamp, updateDoc, where, orderBy } from "firebase/firestore";
+import { formatFanDisplayLabel, initialsFromFanLabel } from "../src/lib/fanHubDisplay";
 
 type UserRole = "admin" | "member" | "tipper";
 
@@ -9,6 +10,8 @@ interface FanUser {
   id: string;
   name: string;
   email: string;
+  /** Member @handle when known (for search / display) */
+  memberUsername?: string | null;
   role: UserRole;
   plan: string | null;
   signupDate: Date;
@@ -148,6 +151,7 @@ export const FanHubUsers: React.FC = () => {
         id: string;
         email: string | null;
         displayName: string | null;
+        username?: string | null;
         subscriptionStatus: string | null;
         subscribedAt: Date | null;
         tips: number;
@@ -184,10 +188,13 @@ export const FanHubUsers: React.FC = () => {
             }
           }
 
+          const rawUsername =
+            typeof data.username === "string" ? data.username.trim().toLowerCase() : null;
           userMap.set(fanId, {
             id: fanId,
             email: data.email || null,
             displayName: data.displayName || null,
+            username: rawUsername || null,
             subscriptionStatus: data.subscriptionStatus || null,
             subscribedAt,
             tips: 0,
@@ -217,6 +224,7 @@ export const FanHubUsers: React.FC = () => {
           id: fanId,
           email: fanEmail,
           displayName: null,
+          username: null as string | null,
           subscriptionStatus: null,
           subscribedAt: null,
           tips: 0,
@@ -263,6 +271,7 @@ export const FanHubUsers: React.FC = () => {
               id: fanId,
               email: null,
               displayName: null,
+              username: null,
               subscriptionStatus: data.status || "active",
               subscribedAt,
               tips: 0,
@@ -304,6 +313,7 @@ export const FanHubUsers: React.FC = () => {
               id: fanId,
               email: data.email || null,
               displayName: data.name || null,
+              username: null,
               subscriptionStatus: null,
               subscribedAt: null,
               tips: 0,
@@ -323,8 +333,14 @@ export const FanHubUsers: React.FC = () => {
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       const fanUsers: FanUser[] = Array.from(userMap.values()).map((data) => {
         const email = data.email || data.id;
-        const namePart = data.displayName || (email.includes("@") ? email.split("@")[0] : email) || "Fan";
-        const name = namePart.charAt(0).toUpperCase() + namePart.slice(1);
+        const name = formatFanDisplayLabel(
+          {
+            username: data.username,
+            displayName: data.displayName,
+          },
+          { fallback: "Member" }
+        );
+        const memberUsername = data.username || null;
 
         // Determine role based on subscription and spending
         let role: UserRole = "member";
@@ -359,6 +375,7 @@ export const FanHubUsers: React.FC = () => {
           id: data.id,
           name,
           email,
+          memberUsername,
           role,
           plan: data.subscriptionStatus === "active" || data.subscriptionStatus === "trialing" ? "Active" : (data.total > 0 ? "Purchaser" : null),
           signupDate: data.subscribedAt || data.firstOrder || new Date(),
@@ -598,7 +615,8 @@ export const FanHubUsers: React.FC = () => {
   const filteredUsers = users.filter(
     (u) =>
       u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchQuery.toLowerCase())
+      u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (u.memberUsername && u.memberUsername.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   // Group users by role
@@ -627,7 +645,7 @@ export const FanHubUsers: React.FC = () => {
       <td className="px-4 py-3">
         <div className="flex items-center gap-3">
           <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold ${getAvatarColor(fanUser.name)}`}>
-            {getInitials(fanUser.name)}
+            {initialsFromFanLabel(fanUser.name)}
           </div>
           <div>
             <div className="flex items-center gap-2">

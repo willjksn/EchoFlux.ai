@@ -2,11 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from './AppContext';
 import { UserIcon, SearchIcon, XMarkIcon } from './icons/UIIcons';
 import { db } from '../firebaseConfig';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { formatFanDisplayLabel, initialsFromFanLabel } from '../src/lib/fanHubDisplay';
 
 interface Fan {
     id: string;
     name: string;
+    /** From `users/{fanId}` when available */
+    username?: string | null;
+    profileDisplayName?: string | null;
     preferences?: {
         subscriptionTier?: 'Free' | 'Paid';
         isVIP?: boolean;
@@ -39,12 +43,18 @@ export const FanSelector: React.FC<FanSelectorProps> = ({
     const [newFanName, setNewFanName] = useState('');
     const containerRef = useRef<HTMLDivElement | null>(null);
 
+    const fanLabel = (fan: Fan) =>
+        formatFanDisplayLabel(
+            { username: fan.username, displayName: fan.profileDisplayName, name: fan.name },
+            { fallback: fan.id.length > 10 ? `${fan.id.slice(0, 8)}…` : fan.id }
+        );
+
     const loadFans = async () => {
         if (!user?.id) return;
         setIsLoading(true);
         try {
             const fansSnap = await getDocs(collection(db, 'users', user.id, 'onlyfans_fan_preferences'));
-            const fansList = fansSnap.docs.map(doc => {
+            const fansList: Fan[] = fansSnap.docs.map(doc => {
                 const data = doc.data();
                 return {
                     id: doc.id,
@@ -67,7 +77,23 @@ export const FanSelector: React.FC<FanSelectorProps> = ({
                     }
                 };
             });
-            setFans(fansList);
+            const enriched = await Promise.all(
+                fansList.map(async (fan) => {
+                    try {
+                        const u = await getDoc(doc(db, 'users', fan.id));
+                        if (!u.exists()) return { ...fan, username: null as string | null, profileDisplayName: null as string | null };
+                        const ud = u.data();
+                        return {
+                            ...fan,
+                            username: typeof ud.username === 'string' ? ud.username : null,
+                            profileDisplayName: typeof ud.displayName === 'string' ? ud.displayName : null,
+                        };
+                    } catch {
+                        return { ...fan, username: null as string | null, profileDisplayName: null as string | null };
+                    }
+                })
+            );
+            setFans(enriched);
         } catch (error) {
             console.error('Error loading fans:', error);
         } finally {
@@ -97,14 +123,11 @@ export const FanSelector: React.FC<FanSelectorProps> = ({
         };
     }, [showFanGrid]);
 
-    const filteredFans = fans.filter(fan =>
-        fan.name.toLowerCase().includes(fanSearchQuery.toLowerCase()) ||
-        fan.id.toLowerCase().includes(fanSearchQuery.toLowerCase())
-    );
-
-    const getInitials = (name: string) => {
-        return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-    };
+    const filteredFans = fans.filter((fan) => {
+        const q = fanSearchQuery.toLowerCase();
+        const label = fanLabel(fan).toLowerCase();
+        return label.includes(q) || fan.id.toLowerCase().includes(q) || fan.name.toLowerCase().includes(q);
+    });
 
     const getTierColor = (tier?: string) => {
         switch (tier) {
@@ -163,7 +186,7 @@ export const FanSelector: React.FC<FanSelectorProps> = ({
                     <span className="flex items-center gap-2">
                         <UserIcon className="w-5 h-5 text-primary-600 dark:text-primary-400" />
                         <span className="font-medium">
-                            {selectedFan ? selectedFan.name : 'Select Fan to Personalize Captions (Optional)'}
+                            {selectedFan ? fanLabel(selectedFan) : 'Select Fan to Personalize Captions (Optional)'}
                         </span>
                     </span>
                     <div className="flex items-center gap-2">
@@ -231,7 +254,7 @@ export const FanSelector: React.FC<FanSelectorProps> = ({
                                     <div
                                         key={fan.id}
                                         onClick={() => {
-                                            onSelectFan(fan.id, fan.name);
+                                            onSelectFan(fan.id, fanLabel(fan));
                                             setShowFanGrid(false);
                                         }}
                                         className={`p-3 rounded-lg cursor-pointer transition-all ${
@@ -246,12 +269,12 @@ export const FanSelector: React.FC<FanSelectorProps> = ({
                                                     ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                                                     : 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
                                             }`}>
-                                                {getInitials(fan.name)}
+                                                {initialsFromFanLabel(fanLabel(fan))}
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2">
                                                     <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                                                        {fan.name}
+                                                        {fanLabel(fan)}
                                                     </div>
                                                     {fan.preferences?.isVIP && (
                                                         <span className="px-1.5 py-0.5 text-xs font-semibold rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300">
@@ -334,11 +357,11 @@ export const FanSelector: React.FC<FanSelectorProps> = ({
             {selectedFan && (
                 <div className="flex items-center gap-2 p-2 bg-primary-50 dark:bg-primary-900/20 rounded-md border border-primary-200 dark:border-primary-800">
                     <div className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-700 dark:text-primary-300 text-xs font-semibold">
-                        {getInitials(selectedFan.name)}
+                        {initialsFromFanLabel(fanLabel(selectedFan))}
                     </div>
                     <div className="flex-1">
                         <div className="flex items-center gap-2">
-                            <div className="text-sm font-medium text-gray-900 dark:text-white">{selectedFan.name}</div>
+                            <div className="text-sm font-medium text-gray-900 dark:text-white">{fanLabel(selectedFan)}</div>
                             {selectedFan.preferences?.isVIP && (
                                 <span className="px-1.5 py-0.5 text-xs font-semibold rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300">
                                     VIP
@@ -384,7 +407,7 @@ export const FanSelector: React.FC<FanSelectorProps> = ({
                                 <div
                                     key={fan.id}
                                     onClick={() => {
-                                        onSelectFan(fan.id, fan.name);
+                                        onSelectFan(fan.id, fanLabel(fan));
                                         setShowFanGrid(false);
                                     }}
                                     className={`p-3 rounded-lg border-2 cursor-pointer transition-all hover:shadow-md ${
@@ -395,12 +418,12 @@ export const FanSelector: React.FC<FanSelectorProps> = ({
                                 >
                                     <div className="flex items-start gap-2">
                                         <div className="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-700 dark:text-primary-300 text-xs font-semibold flex-shrink-0">
-                                            {getInitials(fan.name)}
+                                            {initialsFromFanLabel(fanLabel(fan))}
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2">
                                                 <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                                                    {fan.name}
+                                                    {fanLabel(fan)}
                                                 </div>
                                                 {fan.preferences?.isVIP && (
                                                     <span className="px-1.5 py-0.5 text-xs font-semibold rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300">

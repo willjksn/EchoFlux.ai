@@ -1,8 +1,25 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useAppContext } from "./AppContext";
 import { hasEliteAccess } from "../src/utils/planAccess";
-import { collection, query, orderBy, limit, getDocs, doc, runTransaction, getDoc, serverTimestamp, updateDoc, deleteDoc, setDoc, writeBatch, deleteField } from "firebase/firestore";
+import {
+  collection,
+  query,
+  orderBy,
+  limit,
+  getDocs,
+  doc,
+  runTransaction,
+  getDoc,
+  serverTimestamp,
+  updateDoc,
+  deleteDoc,
+  setDoc,
+  deleteField,
+  type QueryDocumentSnapshot,
+  type DocumentData,
+} from "firebase/firestore";
 import { db } from "../firebaseConfig";
+import type { LockedPostContent } from "../src/lib/lockedPostMedia";
 
 export type FeedVisibilitySettings = {
   hideLikeCounts: boolean;
@@ -32,10 +49,11 @@ export type FeedPost = {
   overlayItalic?: boolean;
   hideComments?: boolean;
   hideLikes?: boolean;
+  hideLikeCounts?: boolean;
   showTipButton?: boolean;
   poll?: { question: string; options: string[]; optionVotes?: number[] };
   tipGoal?: { description: string; targetCents: number; raisedCents: number };
-  lockedContent?: { enabled: boolean; priceCents: number };
+  lockedContent?: LockedPostContent;
   status?: "published" | "scheduled" | "draft";
   pinned?: boolean;
   pinnedAt?: { toDate: () => Date } | string;
@@ -44,6 +62,66 @@ export type FeedPost = {
   scheduledAt?: { toDate: () => Date } | Date | null;
   publishedAt?: { toDate: () => Date } | Date | null;
 };
+
+function feedPostCreatedMs(p: FeedPost): number {
+  const c = p.createdAt;
+  if (!c) return 0;
+  if (typeof c === "string") return new Date(c).getTime() || 0;
+  try {
+    return (c as { toDate?: () => Date }).toDate?.()?.getTime() ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Map Firestore doc → FeedPost; supports Compose (`content`, `Published`) + Fan Hub Posts (`fanPosts`). */
+function firestoreDocToFeedPost(docSnap: QueryDocumentSnapshot<DocumentData>, isAdminMode: boolean): FeedPost | null {
+  const d = docSnap.data();
+  const raw = d.status;
+  const s = String(raw ?? "published").trim().toLowerCase();
+  let status: NonNullable<FeedPost["status"]> = "published";
+  if (s === "draft") status = "draft";
+  else if (s === "scheduled") status = "scheduled";
+  else status = "published";
+  if (!isAdminMode && status !== "published") return null;
+
+  const createdRaw = d.createdAt ?? d.publishedAt;
+  let createdAt: FeedPost["createdAt"] = new Date().toISOString();
+  if (
+    createdRaw &&
+    typeof createdRaw === "object" &&
+    "toDate" in createdRaw &&
+    typeof (createdRaw as { toDate: () => Date }).toDate === "function"
+  ) {
+    createdAt = createdRaw as { toDate: () => Date };
+  } else if (typeof createdRaw === "string") {
+    createdAt = createdRaw;
+  }
+
+  return {
+    id: docSnap.id,
+    body: (d.body as string) ?? (d.caption as string) ?? (d.content as string) ?? "",
+    mediaUrls: (d.mediaUrls as string[]) ?? (d.mediaUrl ? [d.mediaUrl as string] : []) ?? [],
+    mediaTypes: (d.mediaTypes as ("image" | "video")[]) ?? [],
+    audioUrls: (d.audioUrls as string[]) ?? [],
+    createdAt,
+    likeCount: typeof d.likeCount === "number" ? d.likeCount : typeof d.likesCount === "number" ? d.likesCount : 0,
+    likedBy: (d.likedBy as string[]) ?? [],
+    comments: (d.comments as FeedPost["comments"]) ?? [],
+    captionStyle: (d.captionStyle as FeedPost["captionStyle"]) ?? "static",
+    overlayTextSize: typeof d.overlayTextSize === "number" ? d.overlayTextSize : 18,
+    hideComments: !!d.hideComments,
+    hideLikes: !!d.hideLikes,
+    hideLikeCounts: !!d.hideLikeCounts,
+    showTipButton: d.showTipButton !== false,
+    poll: d.poll as FeedPost["poll"] | undefined,
+    tipGoal: d.tipGoal as FeedPost["tipGoal"] | undefined,
+    lockedContent: d.lockedContent as FeedPost["lockedContent"] | undefined,
+    status,
+    pinned: !!d.pinned,
+    pinnedAt: d.pinnedAt as FeedPost["pinnedAt"],
+  };
+}
 
 const EditIcon = () => (
   <svg className="admin-action-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -915,44 +993,37 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
       }
       
       try {
-        const postsRef = collection(db, "users", creatorId, "posts");
-        const q = query(postsRef, orderBy("createdAt", "desc"), limit(50));
-        const snap = await getDocs(q);
-        
-        const list: FeedPost[] = [];
-        snap.forEach((docSnap) => {
-          const d = docSnap.data();
-          const status = (d.status as string) ?? "published";
-          // In admin mode, show all posts; otherwise only show published
-          if (!isAdminMode && status !== "published") return;
-          list.push({
-            id: docSnap.id,
-            body: (d.body as string) ?? (d.caption as string) ?? "",
-            mediaUrls: (d.mediaUrls as string[]) ?? (d.mediaUrl ? [d.mediaUrl as string] : []) ?? [],
-            mediaTypes: (d.mediaTypes as ("image" | "video")[]) ?? [],
-            audioUrls: (d.audioUrls as string[]) ?? [],
-            createdAt: d.createdAt as { toDate: () => Date },
-            likeCount: typeof d.likeCount === "number" ? d.likeCount : 0,
-            likedBy: (d.likedBy as string[]) ?? [],
-            comments: (d.comments as FeedPost["comments"]) ?? [],
-            captionStyle: (d.captionStyle as FeedPost["captionStyle"]) ?? "static",
-            overlayTextSize: typeof d.overlayTextSize === "number" ? d.overlayTextSize : 18,
-            hideComments: !!d.hideComments,
-            hideLikes: !!d.hideLikes,
-            showTipButton: d.showTipButton !== false,
-            poll: d.poll as FeedPost["poll"] | undefined,
-            tipGoal: d.tipGoal as FeedPost["tipGoal"] | undefined,
-            status: status as FeedPost["status"],
-            pinned: !!d.pinned,
-            pinnedAt: d.pinnedAt as FeedPost["pinnedAt"],
-          });
+        const userQ = query(collection(db, "users", creatorId, "posts"), orderBy("createdAt", "desc"), limit(50));
+        const userSnap = await getDocs(userQ);
+
+        let fanSnap: Awaited<ReturnType<typeof getDocs>> | null = null;
+        try {
+          const fanQ = query(
+            collection(db, "creators", creatorId, "fanPosts"),
+            orderBy("createdAt", "desc"),
+            limit(50)
+          );
+          fanSnap = await getDocs(fanQ);
+        } catch (fanErr) {
+          console.warn("Fan Hub: fanPosts query failed (index may be missing):", fanErr);
+        }
+
+        const byId = new Map<string, FeedPost>();
+        userSnap.forEach((docSnap) => {
+          const fp = firestoreDocToFeedPost(docSnap, isAdminMode);
+          if (fp) byId.set(fp.id, fp);
         });
+        fanSnap?.forEach((docSnap) => {
+          const fp = firestoreDocToFeedPost(docSnap, isAdminMode);
+          if (fp) byId.set(fp.id, fp);
+        });
+
+        const list = Array.from(byId.values());
         list.sort((a, b) => {
           if (a.pinned && !b.pinned) return -1;
           if (!a.pinned && b.pinned) return 1;
-          return 0;
+          return feedPostCreatedMs(b) - feedPostCreatedMs(a);
         });
-        // Use demo posts if no real posts exist
         setPosts(list.length > 0 ? list : DEMO_POSTS);
       } catch (err) {
         console.warn("Could not load posts, using demo data:", err);
@@ -1034,12 +1105,13 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
     
     setDeletingPostId(postId);
     try {
-      // Try both paths - posts collection and user's posts subcollection
-      try {
-        await deleteDoc(doc(db, "posts", postId));
-      } catch {
-        await deleteDoc(doc(db, "users", creatorId, "posts", postId));
-      }
+      const refs = [
+        doc(db, "posts", postId),
+        doc(db, "users", creatorId, "posts", postId),
+        doc(db, "creators", creatorId, "posts", postId),
+        doc(db, "creators", creatorId, "fanPosts", postId),
+      ];
+      await Promise.all(refs.map((r) => deleteDoc(r).catch(() => undefined)));
       setPosts((prev) => prev.filter((p) => p.id !== postId));
     } catch (err) {
       console.error("Failed to delete post:", err);
@@ -1054,13 +1126,19 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
     
     const newStatus = currentStatus === "published" ? "draft" : "published";
     try {
-      // Try both paths
-      try {
-        await updateDoc(doc(db, "posts", postId), { status: newStatus });
-      } catch {
-        await updateDoc(doc(db, "users", creatorId, "posts", postId), { status: newStatus });
-      }
-      setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, status: newStatus } : p));
+      const refs = [
+        doc(db, "posts", postId),
+        doc(db, "users", creatorId, "posts", postId),
+        doc(db, "creators", creatorId, "posts", postId),
+        doc(db, "creators", creatorId, "fanPosts", postId),
+      ];
+      await Promise.all(
+        refs.map(async (r) => {
+          const s = await getDoc(r);
+          if (s.exists()) await updateDoc(r, { status: newStatus });
+        })
+      );
+      setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, status: newStatus } : p)));
     } catch (err) {
       console.error("Failed to toggle visibility:", err);
       alert("Failed to update post status. Please try again.");
@@ -1070,8 +1148,6 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
   const handleTogglePin = useCallback(
     async (postId: string, currentlyPinned: boolean) => {
       if (!db || !creatorId) return;
-      const userPostsRef = collection(db, "users", creatorId, "posts");
-      const creatorsPostsRef = collection(db, "creators", creatorId, "posts");
       const newPinned = !currentlyPinned;
       setPosts((prev) => {
         const next = prev.map((p) => {
@@ -1083,19 +1159,29 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
         return next;
       });
       try {
-        const batch = writeBatch(db);
+        const syncPin = async (pid: string, pinned: boolean) => {
+          const refs = [
+            doc(db, "posts", pid),
+            doc(db, "users", creatorId, "posts", pid),
+            doc(db, "creators", creatorId, "posts", pid),
+            doc(db, "creators", creatorId, "fanPosts", pid),
+          ];
+          const updates = pinned
+            ? { pinned: true, pinnedAt: serverTimestamp() }
+            : { pinned: false, pinnedAt: deleteField() };
+          await Promise.all(
+            refs.map(async (r) => {
+              const s = await getDoc(r);
+              if (s.exists()) await updateDoc(r, updates);
+            })
+          );
+        };
         if (newPinned) {
-          batch.set(doc(userPostsRef, postId), { pinned: true, pinnedAt: serverTimestamp() }, { merge: true });
           const otherPinned = posts.filter((p) => p.pinned && p.id !== postId);
-          otherPinned.forEach((p) => batch.update(doc(userPostsRef, p.id), { pinned: false, pinnedAt: deleteField() }));
+          await Promise.all(otherPinned.map((p) => syncPin(p.id, false)));
+          await syncPin(postId, true);
         } else {
-          batch.update(doc(userPostsRef, postId), { pinned: false, pinnedAt: deleteField() });
-        }
-        await batch.commit();
-        if (newPinned) {
-          await setDoc(doc(creatorsPostsRef, postId), { pinned: true, pinnedAt: serverTimestamp() }, { merge: true });
-        } else {
-          await updateDoc(doc(creatorsPostsRef, postId), { pinned: false, pinnedAt: deleteField() }).catch(() => {});
+          await syncPin(postId, false);
         }
       } catch (err) {
         console.error("Failed to toggle pin:", err);

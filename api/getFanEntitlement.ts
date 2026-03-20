@@ -85,7 +85,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    return res.status(200).json({ subscribed, membershipType, unlockedProductIds });
+    // Member username (global fan handle) — server read; clients cannot write username on users/*
+    let memberUsername: string | null = null;
+    let memberUsernameRequired = false;
+    const userSnap = await db.collection("users").doc(fanId).get();
+    const uData = userSnap.data() as { username?: string } | undefined;
+    const u = typeof uData?.username === "string" ? uData.username.trim().toLowerCase() : "";
+    if (u.length >= 3 && /^[a-z0-9_]+$/.test(u)) {
+      memberUsername = u;
+    }
+    if (subscribed && !memberUsername) {
+      memberUsernameRequired = true;
+    }
+
+    return res.status(200).json({
+      subscribed,
+      membershipType,
+      unlockedProductIds,
+      memberUsername,
+      memberUsernameRequired,
+    });
   } catch (error: unknown) {
     console.error("getFanEntitlement error:", error);
     return res.status(500).json({

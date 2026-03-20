@@ -54,10 +54,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const fanRef = db.collection("creators").doc(creatorId).collection("fans").doc(fanId);
     const fanSnap = await fanRef.get();
 
+    const syncMemberUsernameToFan = async () => {
+      try {
+        const userSnap = await db.collection("users").doc(fanId).get();
+        const raw = userSnap.data() as { username?: string } | undefined;
+        const un = typeof raw?.username === "string" ? raw.username.trim().toLowerCase() : "";
+        if (un.length >= 3 && /^[a-z0-9_]+$/.test(un)) {
+          await fanRef.set({ username: un, updatedAt: now }, { merge: true });
+        }
+      } catch {
+        // non-fatal
+      }
+    };
+
     if (fanSnap.exists) {
       const existingData = fanSnap.data() as { subscriptionStatus?: string };
       // If already an active subscriber, just return success
       if (existingData?.subscriptionStatus === 'active' || existingData?.subscriptionStatus === 'free') {
+        await syncMemberUsernameToFan();
         return res.status(200).json({ 
           success: true, 
           message: "Already a member",
@@ -70,6 +84,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         freeJoinedAt: now,
         updatedAt: now,
       });
+      await syncMemberUsernameToFan();
     } else {
       // Create new free member record
       await fanRef.set({
@@ -86,6 +101,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         createdAt: now,
         updatedAt: now,
       });
+      await syncMemberUsernameToFan();
     }
 
     // Also grant entitlements for free members

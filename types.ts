@@ -1,4 +1,5 @@
 import React from 'react';
+import type { LockedPostContent } from './src/lib/lockedPostMedia';
 
 declare global {
   interface AIStudio {
@@ -377,6 +378,33 @@ export type TreatProductType =
     | 'custom';
 
 /** Single product in the treats store (Firestore: products/{productId}) */
+/** Locked / PPV block on fan feed posts — alias for `LockedPostContent` in `src/lib/lockedPostMedia.ts`. */
+export type FanHubPostLockedContent = LockedPostContent;
+
+/** Firestore-aligned fields for creator-published fan hub posts (subset; extend as needed). */
+export interface CreatorFanHubPostFirestore {
+  creatorId?: string;
+  body?: string;
+  content?: string;
+  mediaUrls?: string[];
+  mediaTypes?: ("image" | "video")[];
+  audioUrls?: string[];
+  lockedContent?: FanHubPostLockedContent;
+  likeCount?: number;
+  likesCount?: number;
+  likedBy?: string[];
+  comments?: unknown[];
+  commentsCount?: number;
+  status?: "published" | "scheduled" | "draft";
+  pinned?: boolean;
+  hideComments?: boolean;
+  hideLikes?: boolean;
+  /** When true, fans do not see like counts on this post */
+  hideLikeCounts?: boolean;
+  createdAt?: unknown;
+  publishedAt?: unknown;
+}
+
 export interface TreatProduct {
     id: string;
     creatorId: string;
@@ -657,6 +685,8 @@ export interface User {
     amount: number;
     claimedAt: string;
   }>;
+  /** Global fan / member handle (lowercase); set only via `api/claimMemberUsername` */
+  username?: string;
 }
 
 export interface Notification {

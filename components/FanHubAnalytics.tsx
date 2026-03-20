@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useAppContext } from "./AppContext";
 import { auth, db } from "../firebaseConfig";
 import { collection, query, where, getDocs, orderBy, Timestamp } from "firebase/firestore";
+import { formatFanDisplayLabel } from "../src/lib/fanHubDisplay";
 
 type DateRange = "7d" | "30d" | "90d" | "all";
 
@@ -243,20 +244,29 @@ export const FanHubAnalytics: React.FC = () => {
       setRecentTransactions(transactions);
 
       // Calculate fan metrics from orders
-      const fanSpending = new Map<string, { total: number; lastActive: Date; firstOrder: Date }>();
+      const fanSpending = new Map<
+        string,
+        { total: number; lastActive: Date; firstOrder: Date; fanName?: string | null; fanEmail?: string | null }
+      >();
       orders.forEach((o: any) => {
-        const fanId = o.fanEmail || o.fanId || "unknown";
+        const fanId = o.fanId || o.fanEmail || "unknown";
+        const fanEmail = (typeof o.fanEmail === "string" && o.fanEmail) || (fanId.includes("@") ? fanId : null);
+        const fanName = (typeof o.fanName === "string" && o.fanName.trim()) ? o.fanName.trim() : null;
         const existing = fanSpending.get(fanId);
         const orderDate = new Date(o.createdAt);
         if (existing) {
           existing.total += o.amountCents || 0;
           if (orderDate > existing.lastActive) existing.lastActive = orderDate;
           if (orderDate < existing.firstOrder) existing.firstOrder = orderDate;
+          if (fanName && !existing.fanName) existing.fanName = fanName;
+          if (fanEmail && !existing.fanEmail) existing.fanEmail = fanEmail;
         } else {
           fanSpending.set(fanId, {
             total: o.amountCents || 0,
             lastActive: orderDate,
             firstOrder: orderDate,
+            fanName,
+            fanEmail,
           });
         }
       });
@@ -291,8 +301,11 @@ export const FanHubAnalytics: React.FC = () => {
         .slice(0, 10)
         .map(([id, data]) => ({
           id,
-          name: id.split("@")[0] || "Fan",
-          email: id,
+          name: formatFanDisplayLabel(
+            { displayName: data.fanName },
+            { fallback: id.includes("@") ? "Member" : "Fan" }
+          ),
+          email: data.fanEmail || (id.includes("@") ? id : id),
           totalSpentCents: data.total,
           lastActiveAt: data.lastActive,
         }));
@@ -508,7 +521,9 @@ export const FanHubAnalytics: React.FC = () => {
                     </div>
                     <div>
                       <p className="font-medium text-gray-900 dark:text-white">{fan.name}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">{fan.email}</p>
+                      {fan.email && fan.email.includes("@") && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{fan.email}</p>
+                      )}
                     </div>
                   </div>
                   <div className="text-right">
@@ -561,7 +576,10 @@ export const FanHubAnalytics: React.FC = () => {
                          tx.productName || "Treat Purchase"}
                       </p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {tx.fanName || tx.fanEmail}
+                        {formatFanDisplayLabel({ displayName: tx.fanName }, { fallback: "Member" })}
+                        {tx.fanEmail && tx.fanEmail !== "Unknown" && tx.fanEmail.includes("@") && (
+                          <span className="block text-[11px] opacity-80 mt-0.5">{tx.fanEmail}</span>
+                        )}
                       </p>
                     </div>
                   </div>

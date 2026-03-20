@@ -42,12 +42,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const messages = messagesSnap.docs.map((d) => {
       const data = d.data();
+      const rawCreated = data.createdAt;
+      let createdAt: string;
+      if (rawCreated && typeof (rawCreated as { toDate?: () => Date }).toDate === "function") {
+        createdAt = (rawCreated as { toDate: () => Date }).toDate().toISOString();
+      } else if (typeof rawCreated === "string") {
+        createdAt = rawCreated;
+      } else {
+        createdAt = "";
+      }
       return {
         id: d.id,
         threadId,
         senderId: data.senderId,
         content: data.content,
-        createdAt: data.createdAt,
+        createdAt,
         reported: data.reported,
         reportId: data.reportId,
       };
