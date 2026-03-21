@@ -15,7 +15,10 @@ import {
   formatDmDayCalendarKey,
   formatDmDateDividerLabel,
   formatDmBubbleAuthorLine,
+  formatCreatorDmBubblePrimaryLine,
+  formatCreatorDmBubbleSecondaryLine,
 } from "../src/lib/fanHubDisplay";
+import { uploadFanDmAttachment, type DmAttachmentKind } from "../src/lib/dmMediaUpload";
 import { FanHubNotificationBell } from "./FanHubNotificationBell";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 
@@ -91,6 +94,23 @@ function parseHandleFromPath(): { handle: string | null; subpage: "terms" | "pri
 }
 
 const TIP_PRESET_AMOUNTS = [5, 10, 25, 50, 100, 250];
+
+const DmPhotoIcon = () => (
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+    <circle cx="8.5" cy="8.5" r="1.5" />
+    <polyline points="21 15 16 10 5 21" />
+  </svg>
+);
+
+const DmMicIcon = () => (
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+    <line x1="12" y1="19" x2="12" y2="23" />
+    <line x1="8" y1="23" x2="16" y2="23" />
+  </svg>
+);
 
 interface TipSectionProps {
   creatorId: string;
@@ -264,6 +284,10 @@ export const FanStorefrontView: React.FC = () => {
   const [dmInput, setDmInput] = useState("");
   const dmMessagesEndRef = useRef<HTMLDivElement | null>(null);
   const { ref: dmTextareaRef } = useAutosizeTextarea(dmInput);
+  const dmFileInputRef = useRef<HTMLInputElement | null>(null);
+  const dmMediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const dmMediaChunksRef = useRef<Blob[]>([]);
+  const [dmRecordingVoice, setDmRecordingVoice] = useState(false);
   const [fanBanned, setFanBanned] = useState(false);
 
   const unreadMessageTabCount = useUnreadNewMessageNotificationCount(
@@ -551,17 +575,38 @@ export const FanStorefrontView: React.FC = () => {
     requestAnimationFrame(() => dmMessagesEndRef.current?.scrollIntoView({ behavior: "smooth" }));
   }, [activeTab, dmMessages, dmLoading]);
 
-  const sendDm = async () => {
-    if (!creator?.creatorId || !auth.currentUser || !dmInput.trim()) return;
+  useEffect(() => {
+    return () => {
+      const r = dmMediaRecorderRef.current;
+      if (r && r.state !== "inactive") {
+        r.onstop = null;
+        r.stop();
+      }
+    };
+  }, []);
+
+  const sendDmWithPayload = async (
+    content: string,
+    attachmentUrl?: string,
+    attachmentType?: DmAttachmentKind
+  ) => {
+    if (!creator?.creatorId || !auth.currentUser) return;
+    if (!content.trim() && !attachmentUrl) return;
     setDmSending(true);
+    const prevInput = dmInput;
+    setDmInput("");
     try {
       const token = await auth.currentUser.getIdToken(true);
       const body: Record<string, string> = {
         creatorId: creator.creatorId,
         fanId: auth.currentUser.uid,
-        content: dmInput.trim(),
+        content: content.trim(),
       };
       if (dmThread) body.threadId = dmThread.id;
+      if (attachmentUrl) {
+        body.attachmentUrl = attachmentUrl;
+        if (attachmentType) body.attachmentType = attachmentType;
+      }
       const res = await fetch("/api/fanDmSend", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -569,14 +614,81 @@ export const FanStorefrontView: React.FC = () => {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string }).error || "Failed to send");
-      setDmInput("");
       await fetchDmThreadAndMessages();
       requestAnimationFrame(() => dmMessagesEndRef.current?.scrollIntoView({ behavior: "smooth" }));
     } catch {
-      // could toast
+      setDmInput(prevInput);
     } finally {
       setDmSending(false);
     }
+  };
+
+  const sendDm = async () => {
+    if (!creator?.creatorId || !auth.currentUser || !dmInput.trim()) return;
+    await sendDmWithPayload(dmInput.trim());
+  };
+
+  const onDmFileSelected: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !auth.currentUser) return;
+    const caption = dmInput.trim();
+    try {
+      const { url, attachmentType } = await uploadFanDmAttachment(auth.currentUser.uid, file);
+      await sendDmWithPayload(caption, url, attachmentType);
+    } catch {
+      /* silent */
+    }
+  };
+
+  const stopDmRecording = useCallback(() => {
+    const rec = dmMediaRecorderRef.current;
+    if (!rec || rec.state === "inactive") {
+      setDmRecordingVoice(false);
+      return;
+    }
+    rec.stop();
+  }, []);
+
+  const startDmVoiceRecording = async () => {
+    if (!auth.currentUser || !creator?.creatorId || dmRecordingVoice) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mime = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
+      const rec = new MediaRecorder(stream, { mimeType: mime });
+      dmMediaChunksRef.current = [];
+      rec.ondataavailable = (ev) => {
+        if (ev.data.size) dmMediaChunksRef.current.push(ev.data);
+      };
+      rec.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        setDmRecordingVoice(false);
+        dmMediaRecorderRef.current = null;
+        const chunks = dmMediaChunksRef.current;
+        dmMediaChunksRef.current = [];
+        const uid = auth.currentUser?.uid;
+        if (!chunks.length || !uid) return;
+        const blob = new Blob(chunks, { type: mime });
+        const ext = mime.includes("webm") ? "webm" : "m4a";
+        const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: mime });
+        try {
+          const { url } = await uploadFanDmAttachment(uid, file);
+          await sendDmWithPayload("", url, "audio");
+        } catch {
+          /* silent */
+        }
+      };
+      dmMediaRecorderRef.current = rec;
+      rec.start();
+      setDmRecordingVoice(true);
+    } catch {
+      /* mic denied */
+    }
+  };
+
+  const toggleDmVoice = () => {
+    if (dmRecordingVoice) stopDmRecording();
+    else void startDmVoiceRecording();
   };
 
   /* Neutral theme defaults - creators should customize */
@@ -607,6 +719,8 @@ export const FanStorefrontView: React.FC = () => {
 
   const { theme, displayName, avatar, logo, bio, sections, sectionsOrder, rules, landingContent } = creator;
   const avatarCropStyle: React.CSSProperties = getAvatarCropStyle(creator.avatarObjectPosition);
+  const creatorDmPrimary = formatCreatorDmBubblePrimaryLine(displayName, creator.handle);
+  const creatorDmSecondary = formatCreatorDmBubbleSecondaryLine(displayName, creator.handle);
 
   // Member view background - uses creator theme or neutral default
   const bg = theme?.background || defaultBg;
@@ -956,7 +1070,10 @@ export const FanStorefrontView: React.FC = () => {
                         <p className="fan-member-messages-empty">No messages yet. Say hi below.</p>
                       ) : (
                         dmMessages.map((m, i) => {
-                          const isFan = m.senderId === auth.currentUser?.uid;
+                          const fanUid = auth.currentUser?.uid;
+                          const isFan = dmThread
+                            ? m.senderId === dmThread.fanId
+                            : m.senderId === fanUid;
                           const prev = dmMessages[i - 1];
                           const showDayDivider =
                             !prev ||
@@ -964,9 +1081,6 @@ export const FanStorefrontView: React.FC = () => {
                           const dividerLabel = formatDmDateDividerLabel(m.createdAt);
                           const timeStr = formatDmShortTime(m.createdAt);
                           const fanLine = formatDmBubbleAuthorLine(dmLabels?.fan || "You");
-                          const creatorLine = formatDmBubbleAuthorLine(
-                            dmLabels?.creator || dmThread?.otherPartyDisplayName || displayName
-                          );
                           return (
                             <Fragment key={m.id}>
                               {showDayDivider && dividerLabel ? (
@@ -980,16 +1094,63 @@ export const FanStorefrontView: React.FC = () => {
                                 className={`fan-member-message ${isFan ? "fan-member-message-sent" : "fan-member-message-received"}`}
                               >
                                 <div
-                                  className={`flex w-full min-w-0 shrink-0 ${isFan ? "justify-end" : "justify-start"}`}
+                                  className={`fh-dm-chat-row ${isFan ? "fh-dm-chat-row--out" : "fh-dm-chat-row--in"}`}
                                 >
                                   <div
-                                    className={`flex flex-col max-w-[min(85%,22rem)] sm:max-w-[min(80%,22rem)] ${isFan ? "items-end" : "items-start"}`}
+                                    className={`fh-dm-bubble-wrap ${isFan ? "fh-dm-bubble-wrap--out" : "fh-dm-bubble-wrap--in"}`}
                                   >
                                     <div className={`fh-dm-bubble ${isFan ? "fh-dm-bubble--me" : "fh-dm-bubble--them"}`}>
-                                      <div className="fh-dm-bubble__head">{isFan ? fanLine : creatorLine}</div>
-                                      <div className="fh-dm-bubble__body">{m.content}</div>
+                                      {isFan ? (
+                                        <div className="fh-dm-bubble__head fh-dm-bubble__head--primary">{fanLine}</div>
+                                      ) : (
+                                        <div className="fh-dm-bubble__head-stack">
+                                          <div className="fh-dm-bubble__head fh-dm-bubble__head--primary">{creatorDmPrimary}</div>
+                                          {creatorDmSecondary ? (
+                                            <div className="fh-dm-bubble__head fh-dm-bubble__head--secondary">
+                                              {creatorDmSecondary}
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      )}
+                                      <div className="fh-dm-bubble__body">
+                                        {m.attachmentUrl && m.attachmentType === "image" ? (
+                                          <div className="fh-dm-attachment">
+                                            <img src={m.attachmentUrl} alt="" loading="lazy" />
+                                          </div>
+                                        ) : null}
+                                        {m.attachmentUrl && m.attachmentType === "video" ? (
+                                          <div className="fh-dm-attachment">
+                                            <video src={m.attachmentUrl} controls playsInline />
+                                          </div>
+                                        ) : null}
+                                        {m.attachmentUrl && m.attachmentType === "audio" ? (
+                                          <div className="fh-dm-attachment">
+                                            <audio src={m.attachmentUrl} controls />
+                                          </div>
+                                        ) : null}
+                                        {m.content?.trim() ? m.content : null}
+                                        {!m.content?.trim() && !m.attachmentUrl ? (
+                                          <span className="italic opacity-70">(empty message)</span>
+                                        ) : null}
+                                      </div>
                                       {isFan && timeStr ? (
-                                        <div className="fh-dm-bubble__foot fh-dm-bubble__foot--me">{timeStr}</div>
+                                        <div className="fh-dm-bubble__foot fh-dm-bubble__foot--me">
+                                          {timeStr}
+                                          {m.read ? (
+                                            <span className="fh-dm-bubble__receipt" title="Creator has seen this">
+                                              {" "}
+                                              — Read
+                                            </span>
+                                          ) : (
+                                            <span
+                                              className="fh-dm-bubble__receipt fh-dm-bubble__receipt--unread"
+                                              title="Not read yet"
+                                            >
+                                              {" "}
+                                              — Unread
+                                            </span>
+                                          )}
+                                        </div>
                                       ) : null}
                                     </div>
                                     {!isFan && timeStr ? (
@@ -1005,6 +1166,35 @@ export const FanStorefrontView: React.FC = () => {
                       <div ref={dmMessagesEndRef} aria-hidden />
                     </div>
                     <div className="fan-member-messages-compose">
+                      <input
+                        ref={dmFileInputRef}
+                        type="file"
+                        accept="image/*,video/*"
+                        className="hidden"
+                        onChange={onDmFileSelected}
+                      />
+                      <div className="fh-dm-compose-actions">
+                        <button
+                          type="button"
+                          className="fh-dm-compose-icon"
+                          title="Photo or video"
+                          aria-label="Upload photo or video"
+                          disabled={dmSending || fanBanned}
+                          onClick={() => dmFileInputRef.current?.click()}
+                        >
+                          <DmPhotoIcon />
+                        </button>
+                        <button
+                          type="button"
+                          className={`fh-dm-compose-icon ${dmRecordingVoice ? "fh-dm-compose-icon--recording" : ""}`}
+                          title={dmRecordingVoice ? "Stop and send" : "Voice message"}
+                          aria-label={dmRecordingVoice ? "Stop recording" : "Record voice"}
+                          disabled={dmSending || fanBanned}
+                          onClick={() => toggleDmVoice()}
+                        >
+                          <DmMicIcon />
+                        </button>
+                      </div>
                       <textarea
                         ref={dmTextareaRef}
                         rows={1}
@@ -1016,7 +1206,7 @@ export const FanStorefrontView: React.FC = () => {
                             void sendDm();
                           }
                         }}
-                        placeholder="Type a message… (Shift+Enter for newline)"
+                        placeholder="Message"
                         className="fan-member-messages-input"
                       />
                       <button

@@ -34,6 +34,24 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
 
   const unreadMessagesTabCount = useUnreadNewMessageNotificationCount(isFanHub ? null : false);
 
+  /** Sync dm_muted_threads mirror so message badges respect conversations muted before this feature. */
+  useEffect(() => {
+    if (!isFanHub) return;
+    const u = auth.currentUser;
+    if (!u) return;
+    void (async () => {
+      try {
+        const token = await u.getIdToken();
+        await fetch('/api/fanDmMutedThreadsSync', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, [isFanHub]);
+
   useEffect(() => {
     const uid = auth.currentUser?.uid;
     if (!isFanHub || tab !== 'messages' || !uid) return;

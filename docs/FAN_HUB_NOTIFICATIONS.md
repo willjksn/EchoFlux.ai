@@ -19,7 +19,17 @@ The bell listens with `onSnapshot` on `users/{uid}/notifications` ordered by `cr
 ## When notifications are created
 
 - **DMs:** `api/fanDmSend.ts` calls `sendFanNotification` for the **other** participant (`new_message`).
+  - If the **creator** has **muted** that thread (`fanDmThreads.creatorInboxMuted`), **no** notification is written for the creator (messages still deliver in the thread).
 - **Video chat:** `api/liveVideoChat.ts` uses `sendFanNotification` for fan-facing events.
+
+## Creator mute (messages + bell)
+
+- Thread flag: `fanDmThreads/{threadId}.creatorInboxMuted` (set via `POST /api/fanDmThreadCreatorInbox` action `mute` / `unmute`).
+- **Mirror for the client:** `users/{creatorId}/dm_muted_threads/{threadId}` (Admin writes only; see `firestore.rules`). Used so the app can hide DM badges without reading `fanDmThreads` from the browser.
+- **On mute:** existing unread `new_message` rows for that `threadId` are marked read under `users/{creatorId}/notifications` (`markNewMessageNotificationsReadForThread` in `api/_fanDmMutedMirror.ts`).
+- **Badge / tab count:** `useUnreadNewMessageNotificationCount` ignores unread `new_message` docs whose `data.threadId` is in `dm_muted_threads`.
+- **Bell:** `FanHubNotificationBell` uses the same muted set for the red badge; muted DM rows show a **Muted** label.
+- **Sync:** `POST /api/fanDmMutedThreadsSync` rebuilds the mirror from all threads (called when opening Fan Hub in `PremiumStudioLayout`).
 
 Add more call sites by importing `sendFanNotification` from `api/_fanNotifications.ts` (server-side only).
 

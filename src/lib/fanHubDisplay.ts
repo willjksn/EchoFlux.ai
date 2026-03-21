@@ -241,6 +241,50 @@ export function formatCreatorOutgoingDmBadge(username?: string | null, displayNa
   return "YOU";
 }
 
+/** Sidebar / list: short relative time (e.g. 1h, 13h, 2w). */
+export function formatDmRelativeShort(raw: string | undefined | null): string {
+  if (raw == null || raw === "") return "";
+  const ms = new Date(raw).getTime();
+  if (Number.isNaN(ms)) return "";
+  const diff = Date.now() - ms;
+  if (diff < 0) return "now";
+  const sec = Math.floor(diff / 1000);
+  if (sec < 45) return "now";
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m`;
+  const hr = Math.floor(min / 60);
+  if (hr < 48) return `${hr}h`;
+  const day = Math.floor(hr / 24);
+  if (day < 14) return `${day}d`;
+  const wk = Math.floor(day / 7);
+  if (wk < 8) return `${wk}w`;
+  const mo = Math.floor(day / 30);
+  return `${Math.max(1, mo)}mo`;
+}
+
+/** Readable first line in creator’s outgoing bubble (name or @handle). */
+export function formatCreatorDmBubblePrimaryLine(
+  displayName?: string | null,
+  username?: string | null
+): string {
+  const n = (displayName || "").trim();
+  if (n) return n;
+  const u = safeUsernameForHandle(username);
+  if (u) return `@${u}`;
+  return "You";
+}
+
+/** Second line: STORMIJ-style handle when we also show a real name. */
+export function formatCreatorDmBubbleSecondaryLine(
+  displayName?: string | null,
+  username?: string | null
+): string | null {
+  const n = (displayName || "").trim();
+  const u = safeUsernameForHandle(username);
+  if (n && u) return formatCreatorOutgoingDmBadge(username, null);
+  return null;
+}
+
 export function fanHubInitials(
   username: string | null | undefined,
   displayName: string | null | undefined,

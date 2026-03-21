@@ -10,6 +10,10 @@ type ThreadDoc = {
   lastMessageAt: string;
   lastMessagePreview?: string;
   fanHasSentMessage?: boolean;
+  creatorInboxPinned?: boolean;
+  creatorInboxPinnedAt?: string;
+  creatorInboxMuted?: boolean;
+  creatorMarkedUnread?: boolean;
   createdAt: string;
   updatedAt: string;
   otherPartyDisplayName?: string;

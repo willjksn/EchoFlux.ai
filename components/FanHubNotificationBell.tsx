@@ -12,6 +12,29 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "../firebaseConfig";
 
+/** DM thread ids the creator muted (no new_message badge; server mirror). */
+function useDmMutedThreadIds(uid: string | null): Set<string> {
+  const [mutedIds, setMutedIds] = useState(() => new Set<string>());
+  useEffect(() => {
+    if (!uid) {
+      setMutedIds(new Set());
+      return;
+    }
+    const coll = collection(db, "users", uid, "dm_muted_threads");
+    const off = onSnapshot(
+      coll,
+      (snap) => {
+        const next = new Set<string>();
+        snap.forEach((d) => next.add(d.id));
+        setMutedIds(next);
+      },
+      () => setMutedIds(new Set())
+    );
+    return () => off();
+  }, [uid]);
+  return mutedIds;
+}
+
 export type FanHubNotificationBellProps = {
   /** Member storefront accent (e.g. creator primary). Creator hub can omit for CSS vars. */
   accentColor?: string;
@@ -38,6 +61,8 @@ type Row = {
   body: string;
   read: boolean;
   createdAtMs: number;
+  type: string;
+  threadId?: string;
 };
 
 /**
@@ -54,6 +79,7 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
   const [rows, setRows] = useState<Row[]>([]);
   const [listenError, setListenError] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const mutedThreadIds = useDmMutedThreadIds(uid);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => setUid(u?.uid ?? null));
@@ -74,12 +100,15 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
         setListenError(null);
         const next: Row[] = snap.docs.map((d) => {
           const data = d.data() as Record<string, unknown>;
+          const payload = data.data as { threadId?: string } | undefined;
           return {
             id: d.id,
             title: String(data.title ?? "Notification"),
             body: String(data.body ?? ""),
             read: data.read === true,
             createdAtMs: createdAtMs(data),
+            type: String(data.type ?? ""),
+            threadId: typeof payload?.threadId === "string" ? payload.threadId : undefined,
           };
         });
         next.sort((a, b) => b.createdAtMs - a.createdAtMs);
@@ -94,7 +123,13 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
     return () => off();
   }, [uid]);
 
-  const unread = useMemo(() => rows.filter((r) => !r.read).length, [rows]);
+  const unread = useMemo(() => {
+    return rows.filter((r) => {
+      if (r.read) return false;
+      if (r.type === "new_message" && r.threadId && mutedThreadIds.has(r.threadId)) return false;
+      return true;
+    }).length;
+  }, [rows, mutedThreadIds]);
 
   useEffect(() => {
     if (!open) return;
@@ -176,29 +211,46 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
               <p className="p-4 text-sm text-gray-500 dark:text-gray-400 text-center">No notifications yet.</p>
             ) : (
               <ul className="divide-y divide-black/5 dark:divide-slate-700">
-                {rows.map((r) => (
-                  <li key={r.id}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!r.read) void markRead(r.id);
-                      }}
-                      className={`w-full text-left px-3 py-2.5 hover:bg-black/[0.03] dark:hover:bg-white/5 ${
-                        r.read ? "opacity-80" : "bg-pink-50/50 dark:bg-pink-950/20"
-                      }`}
-                    >
-                      <p className="text-sm font-medium text-gray-900 dark:text-white pr-6">{r.title}</p>
-                      {r.body ? (
-                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5 line-clamp-3">{r.body}</p>
-                      ) : null}
-                      {r.createdAtMs ? (
-                        <p className="text-[10px] text-gray-400 mt-1">
-                          {new Date(r.createdAtMs).toLocaleString()}
+                {rows.map((r) => {
+                  const mutedDm =
+                    r.type === "new_message" &&
+                    r.threadId &&
+                    mutedThreadIds.has(r.threadId);
+                  return (
+                    <li key={r.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!r.read) void markRead(r.id);
+                        }}
+                        className={`w-full text-left px-3 py-2.5 hover:bg-black/[0.03] dark:hover:bg-white/5 ${
+                          r.read
+                            ? "opacity-80"
+                            : mutedDm
+                              ? "opacity-70 bg-gray-50/80 dark:bg-slate-800/50"
+                              : "bg-pink-50/50 dark:bg-pink-950/20"
+                        }`}
+                      >
+                        <p className="text-sm font-medium text-gray-900 dark:text-white pr-6 flex items-center gap-2 flex-wrap">
+                          {r.title}
+                          {mutedDm ? (
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                              Muted
+                            </span>
+                          ) : null}
                         </p>
-                      ) : null}
-                    </button>
-                  </li>
-                ))}
+                        {r.body ? (
+                          <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5 line-clamp-3">{r.body}</p>
+                        ) : null}
+                        {r.createdAtMs ? (
+                          <p className="text-[10px] text-gray-400 mt-1">
+                            {new Date(r.createdAtMs).toLocaleString()}
+                          </p>
+                        ) : null}
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>

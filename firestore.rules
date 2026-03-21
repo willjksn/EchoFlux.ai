@@ -139,6 +139,15 @@ service cloud.firestore {
       // This allows Admin users to update plans, roles, and other user fields
       allow read, write: if isAdmin();
 
+      /**
+       * DM muted thread ids (mirror of fanDmThreads.creatorInboxMuted) — written only by Admin API.
+       * Client reads to hide message notifications for muted conversations.
+       */
+      match /dm_muted_threads/{threadId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+
       /** ---------------------------------------------------
        * USER SUBCOLLECTIONS (messages, posts, CRM, calendar, voices, strategies, media_library, etc.)
        * ----------------------------------------------------

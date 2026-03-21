@@ -491,6 +491,13 @@ export interface FanDmThread {
     lastMessagePreview?: string;
     createdAt: string;
     updatedAt: string;
+    /** True if the fan has sent at least one message (for Requests tab). */
+    fanHasSentMessage?: boolean;
+    /** Creator inbox: pin / mute / manual unread (set via /api/fanDmThreadCreatorInbox). */
+    creatorInboxPinned?: boolean;
+    creatorInboxPinnedAt?: string;
+    creatorInboxMuted?: boolean;
+    creatorMarkedUnread?: boolean;
     /** For list display: other party display name/avatar (set by API) */
     otherPartyDisplayName?: string;
     otherPartyAvatar?: string;
@@ -505,6 +512,9 @@ export interface FanDmMessage {
     createdAt: string;  // ISO
     /** True when the recipient has opened the thread (see /api/fanDmMessages mark-as-read). */
     read?: boolean;
+    /** Optional media (Firebase Storage or CDN URL). */
+    attachmentUrl?: string;
+    attachmentType?: "image" | "video" | "audio";
     reported?: boolean;
     reportId?: string;
 }

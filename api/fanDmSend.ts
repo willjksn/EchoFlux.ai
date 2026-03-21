@@ -36,8 +36,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const fanId = body.fanId as string;
   const threadIdParam = body.threadId as string | undefined;
   const content = typeof body.content === "string" ? body.content.trim() : "";
-  if (!content) {
-    return res.status(400).json({ error: "content is required" });
+  const attachmentUrl = typeof body.attachmentUrl === "string" ? body.attachmentUrl.trim() : "";
+  const attachmentTypeRaw = body.attachmentType;
+  const attachmentType =
+    attachmentTypeRaw === "image" || attachmentTypeRaw === "video" || attachmentTypeRaw === "audio"
+      ? attachmentTypeRaw
+      : undefined;
+  if (!content && !attachmentUrl) {
+    return res.status(400).json({ error: "content or attachmentUrl is required" });
   }
 
   let creatorIdFinal: string;
@@ -83,12 +89,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const threadSnap = await threadRef.get();
     const fanHasSentMessage = uid === fanIdFinal;
 
+    const previewText =
+      content.slice(0, 100) ||
+      (attachmentType === "image"
+        ? "📷 Photo"
+        : attachmentType === "video"
+          ? "🎬 Video"
+          : attachmentType === "audio"
+            ? "🎤 Voice message"
+            : attachmentUrl
+              ? "Attachment"
+              : "");
+
     if (!threadSnap.exists) {
       await threadRef.set({
         creatorId: creatorIdFinal,
         fanId: fanIdFinal,
         lastMessageAt: now,
-        lastMessagePreview: content.slice(0, 100),
+        lastMessagePreview: previewText,
         fanHasSentMessage,
         createdAt: now,
         updatedAt: now,
@@ -96,7 +114,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } else {
       const update: Record<string, unknown> = {
         lastMessageAt: now,
-        lastMessagePreview: content.slice(0, 100),
+        lastMessagePreview: previewText,
         updatedAt: now,
       };
       if (fanHasSentMessage) update.fanHasSentMessage = true;
@@ -104,26 +122,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const msgRef = threadRef.collection(FAN_DM_MESSAGES).doc();
-    await msgRef.set({
+    const msgPayload: Record<string, unknown> = {
       senderId: uid,
-      content,
+      content: content || "",
       createdAt: now,
       read: false,
-    });
+    };
+    if (attachmentUrl) msgPayload.attachmentUrl = attachmentUrl;
+    if (attachmentType) msgPayload.attachmentType = attachmentType;
+    await msgRef.set(msgPayload);
 
     const recipientId = uid === fanIdFinal ? creatorIdFinal : fanIdFinal;
+    const threadAfter = (await threadRef.get()).data() as { creatorInboxMuted?: boolean } | undefined;
+    const creatorMutedThisThread =
+      recipientId === creatorIdFinal && threadAfter?.creatorInboxMuted === true;
+
     try {
-      await sendFanNotification({
-        fanId: recipientId,
-        type: "new_message",
-        title: uid === fanIdFinal ? "New message from a fan" : "New reply from creator",
-        body: content.slice(0, 200),
-        data: {
-          threadId,
-          creatorId: creatorIdFinal,
-          fanId: fanIdFinal,
-        },
-      });
+      if (!creatorMutedThisThread) {
+        await sendFanNotification({
+          fanId: recipientId,
+          type: "new_message",
+          title: uid === fanIdFinal ? "New message from a fan" : "New reply from creator",
+          body: (content || previewText).slice(0, 200),
+          data: {
+            threadId,
+            creatorId: creatorIdFinal,
+            fanId: fanIdFinal,
+          },
+        });
+      }
     } catch (notifyErr) {
       console.error("fanDmSend: notification failed (message still sent)", notifyErr);
     }
@@ -133,9 +160,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         id: msgRef.id,
         threadId,
         senderId: uid,
-        content,
+        content: content || "",
         createdAt: now,
         read: false,
+        ...(attachmentUrl ? { attachmentUrl, attachmentType } : {}),
       },
     });
   } catch (e: unknown) {
