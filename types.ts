@@ -503,6 +503,8 @@ export interface FanDmMessage {
     senderId: string;   // creatorId or fanId
     content: string;
     createdAt: string;  // ISO
+    /** True when the recipient has opened the thread (see /api/fanDmMessages mark-as-read). */
+    read?: boolean;
     reported?: boolean;
     reportId?: string;
 }

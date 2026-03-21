@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 import { FAN_DM_THREADS, getThreadId } from "./_fanDmHelpers.js";
-import { formatFanDisplayLabel } from "./_fanHubDisplay.js";
+import { resolveFanPartyDisplayLabel } from "./_fanDmLabels.js";
 
 type ThreadDoc = {
   creatorId: string;
@@ -12,6 +12,8 @@ type ThreadDoc = {
   fanHasSentMessage?: boolean;
   createdAt: string;
   updatedAt: string;
+  otherPartyDisplayName?: string;
+  otherPartyAvatar?: string;
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -39,12 +41,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .limit(100)
       .get();
 
-    const threads: Array<ThreadDoc & { id: string; otherPartyDisplayName?: string; otherPartyAvatar?: string }> = [];
+    const threads: Array<ThreadDoc & { id: string }> = [];
     for (const d of snap.docs) {
       const data = d.data() as ThreadDoc;
       // List all threads for this creator/fan. (Filtering by fanHasSentMessage hid migrated Stormij
       // threads and threads where senderId didn’t match fanId.)
-      const thread = { id: d.id, ...data };
+      const thread: ThreadDoc & { id: string } = { id: d.id, ...data };
       const otherId = as === "creator" ? data.fanId : data.creatorId;
       try {
         if (as === "fan") {
@@ -57,27 +59,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             thread.otherPartyDisplayName = "Creator";
           }
         } else {
-          const userSnap = await db.collection("users").doc(data.fanId).get();
-          if (userSnap.exists) {
-            const u = userSnap.data() as {
-              name?: string;
-              displayName?: string;
-              username?: string;
-              email?: string;
-              avatar?: string;
-            };
-            thread.otherPartyDisplayName = formatFanDisplayLabel(
-              {
-                username: u?.username,
-                displayName: u?.displayName,
-                name: u?.name,
-                email: u?.email,
-              },
-              { fallback: "Fan" }
-            );
-            thread.otherPartyAvatar = u?.avatar;
-          } else {
-            thread.otherPartyDisplayName = "Fan";
+          try {
+            thread.otherPartyDisplayName = await resolveFanPartyDisplayLabel(db, data.creatorId, data.fanId);
+          } catch {
+            thread.otherPartyDisplayName = "Member";
+          }
+          try {
+            const userSnap = await db.collection("users").doc(data.fanId).get();
+            if (userSnap.exists) {
+              const u = userSnap.data() as { avatar?: string };
+              thread.otherPartyAvatar = u?.avatar;
+            }
+          } catch {
+            /* ignore */
           }
         }
       } catch {

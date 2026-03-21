@@ -108,6 +108,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       senderId: uid,
       content,
       createdAt: now,
+      read: false,
     });
 
     const recipientId = uid === fanIdFinal ? creatorIdFinal : fanIdFinal;
@@ -134,6 +135,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         senderId: uid,
         content,
         createdAt: now,
+        read: false,
       },
     });
   } catch (e: unknown) {

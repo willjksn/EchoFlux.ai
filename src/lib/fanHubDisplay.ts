@@ -137,23 +137,66 @@ export function formatFanPlainMoniker(input: FanDisplayInput): string | undefine
   return local || undefined;
 }
 
-/** Short local time for DM bubbles (ISO string or Firestore-like `{ seconds }`). */
-export function formatDmShortTime(raw: unknown): string {
-  if (raw == null || raw === "") return "";
-  let ms: number | null = null;
+/** Parse message timestamp to epoch ms (ISO string or Firestore-like `{ seconds }`). */
+export function parseDmMessageTimeMs(raw: unknown): number | null {
+  if (raw == null || raw === "") return null;
   if (typeof raw === "string") {
     const d = new Date(raw);
-    ms = Number.isNaN(d.getTime()) ? null : d.getTime();
-  } else if (
+    return Number.isNaN(d.getTime()) ? null : d.getTime();
+  }
+  if (
     typeof raw === "object" &&
     raw !== null &&
     "seconds" in raw &&
     typeof (raw as { seconds: unknown }).seconds === "number"
   ) {
-    ms = (raw as { seconds: number }).seconds * 1000;
+    return (raw as { seconds: number }).seconds * 1000;
   }
+  return null;
+}
+
+/** Short local time only (e.g. legacy list rows). */
+export function formatDmShortTime(raw: unknown): string {
+  const ms = parseDmMessageTimeMs(raw);
   if (ms == null) return "";
   return new Date(ms).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+/** Stable day key for grouping (YYYY-MM-DD in local calendar). */
+export function formatDmDayCalendarKey(raw: unknown): string {
+  const ms = parseDmMessageTimeMs(raw);
+  if (ms == null) return "";
+  const d = new Date(ms);
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${mo}-${day}`;
+}
+
+/** Centered date divider label (e.g. Sat, Mar 21, 2026). */
+export function formatDmDateDividerLabel(raw: unknown): string {
+  const ms = parseDmMessageTimeMs(raw);
+  if (ms == null) return "";
+  return new Date(ms).toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+/** Full date + time for bubble footer (e.g. Sat, Mar 21, 2026, 3:40 PM). */
+export function formatDmBubbleDateTime(raw: unknown): string {
+  const ms = parseDmMessageTimeMs(raw);
+  if (ms == null) return "";
+  return new Date(ms).toLocaleString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 /** Initials for avatars from a display label (strips leading @). */
@@ -168,6 +211,36 @@ export function initialsFromFanLabel(label: string): string {
 }
 
 /** Avatar initials: prefer username, then safe display name, then email local part. */
+/**
+ * Stormij-style author line inside a DM bubble (@HANDLE in caps).
+ */
+export function formatDmBubbleAuthorLine(label: string): string {
+  const s = label.trim();
+  if (!s) return "";
+  if (s.startsWith("@")) {
+    const h = s
+      .slice(1)
+      .toUpperCase()
+      .replace(/[^A-Z0-9_.]/g, "")
+      .replace(/^\.+|\.+$/g, "");
+    return h ? `@${h}` : "@MEMBER";
+  }
+  return s.toUpperCase().replace(/\s+/g, "_").slice(0, 28);
+}
+
+/**
+ * Outgoing creator bubble badge (username → STORMIJ_XO style; else display name).
+ */
+export function formatCreatorOutgoingDmBadge(username?: string | null, displayName?: string | null): string {
+  const u = safeUsernameForHandle(username);
+  if (u) {
+    return u.toUpperCase().replace(/[^a-z0-9_]/gi, "_").replace(/_+/g, "_").slice(0, 32);
+  }
+  const n = (displayName || "").trim();
+  if (n) return n.toUpperCase().replace(/\s+/g, "_").slice(0, 28);
+  return "YOU";
+}
+
 export function fanHubInitials(
   username: string | null | undefined,
   displayName: string | null | undefined,

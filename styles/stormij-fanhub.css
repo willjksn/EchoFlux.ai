@@ -6123,3 +6123,97 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
     padding: 2rem 1rem;
   }
 }
+
+/* —— Fan Hub Messages (Stormijxo-style DM bubbles) —— */
+.stormij-theme .fh-dm-date-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  margin: 0.75rem 0 0.5rem;
+}
+.stormij-theme .fh-dm-date-divider__line {
+  flex: 1;
+  height: 1px;
+  background: color-mix(in srgb, var(--text-muted, #6b7280) 35%, transparent);
+}
+.stormij-theme .fh-dm-date-divider__label {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--text-muted, #6b7280);
+  white-space: nowrap;
+}
+.stormij-theme .fh-dm-row {
+  display: flex;
+  width: 100%;
+}
+.stormij-theme .fh-dm-row--me {
+  justify-content: flex-end;
+}
+.stormij-theme .fh-dm-row--them {
+  justify-content: flex-start;
+}
+.stormij-theme .fh-dm-bubble {
+  max-width: min(80%, 22rem);
+  padding: 0.5rem 0.75rem 0.4rem;
+  font-size: 0.875rem;
+  line-height: 1.35;
+  position: relative;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.stormij-theme .fh-dm-bubble--me {
+  background: linear-gradient(135deg, #ec4899, #db2777);
+  color: #fff;
+  border-radius: 14px 14px 4px 14px;
+}
+.stormij-theme .fh-dm-bubble--them {
+  background: #e4dff2;
+  color: #111827;
+  border-radius: 14px 14px 14px 4px;
+}
+.dark .stormij-theme .fh-dm-bubble--them {
+  background: #3d3848;
+  color: #f3f4f6;
+}
+.stormij-theme .fh-dm-bubble__head {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  opacity: 0.92;
+  margin-bottom: 0.2rem;
+  font-variant: all-small-caps;
+}
+.stormij-theme .fh-dm-bubble--them .fh-dm-bubble__head {
+  color: #6b7280;
+}
+.dark .stormij-theme .fh-dm-bubble--them .fh-dm-bubble__head {
+  color: #9ca3af;
+}
+.stormij-theme .fh-dm-bubble__body {
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.stormij-theme .fh-dm-bubble__foot {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.65rem;
+  line-height: 1.2;
+}
+.stormij-theme .fh-dm-bubble__foot--me {
+  text-align: right;
+  color: rgba(255, 255, 255, 0.88);
+}
+.stormij-theme .fh-dm-bubble__receipt {
+  font-weight: 500;
+  opacity: 0.95;
+}
+.stormij-theme .fh-dm-bubble__receipt--unread {
+  opacity: 0.55;
+}
+.stormij-theme .fh-dm-bubble--them .fh-dm-bubble__foot {
+  color: #6b7280;
+}
+.dark .stormij-theme .fh-dm-bubble--them .fh-dm-bubble__foot {
+  color: #9ca3af;
+}

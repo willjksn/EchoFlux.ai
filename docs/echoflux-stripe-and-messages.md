@@ -61,7 +61,7 @@ Fan–creator DMs, report message, block fan, and bans are **server-only**: all 
 | Collection | Purpose |
 |------------|---------|
 | **fanDmThreads** | One doc per creator–fan pair. Fields: `creatorId`, `fanId`, `lastMessageAt`, `lastMessagePreview`, `createdAt`, `updatedAt`. Doc ID = `[creatorId, fanId].sort().join('_')`. |
-| **fanDmThreads/{threadId}/messages** | Messages. Fields: `senderId`, `content`, `createdAt`, `reported`, `reportId`. |
+| **fanDmThreads/{threadId}/messages** | Messages. Fields: `senderId`, `content`, `createdAt`, optional `read` (recipient opened thread), `reported`, `reportId`. |
 | **creatorBlocks/{creatorId}/blocked/{fanId}** | Block list; doc exists = fan is banned (cannot message or purchase). |
 | **reports** | Admin queue. Fields: `creatorId`, `fanId`, `threadId`, `messageId`, `reporterId`, `reason`, `status` (pending \| reviewed \| dismissed), `createdAt`, `reviewedAt`, `reviewedBy`. |
 

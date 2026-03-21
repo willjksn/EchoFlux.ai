@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import { auth } from "../firebaseConfig";
 import type { TreatProduct, FanDmThread, FanDmMessage, StorefrontSocialLinks, StorefrontLandingContent, StorefrontLegal, CreatorMonetization, TextStyle } from "../types";
 import { FanLandingPage } from "./FanLandingPage";
@@ -10,7 +10,7 @@ import {
   useUnreadNewMessageNotificationCount,
   clearNewMessageNotificationBadge,
 } from "./useUnreadNewMessageNotifications";
-import { formatDmShortTime } from "../src/lib/fanHubDisplay";
+import { formatDmShortTime, formatDmBubbleAuthorLine } from "../src/lib/fanHubDisplay";
 import { FanHubNotificationBell } from "./FanHubNotificationBell";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 
@@ -253,13 +253,13 @@ export const FanStorefrontView: React.FC = () => {
   const [joiningFree, setJoiningFree] = useState(false);
   const [dmThread, setDmThread] = useState<FanDmThread | null>(null);
   const [dmMessages, setDmMessages] = useState<FanDmMessage[]>([]);
+  const [dmLabels, setDmLabels] = useState<{ fan: string; creator: string } | null>(null);
   const [dmLoading, setDmLoading] = useState(false);
   const [dmSending, setDmSending] = useState(false);
   const [dmInput, setDmInput] = useState("");
   const dmMessagesEndRef = useRef<HTMLDivElement | null>(null);
   const { ref: dmTextareaRef } = useAutosizeTextarea(dmInput);
   const [fanBanned, setFanBanned] = useState(false);
-  const [reportingMessageId, setReportingMessageId] = useState<string | null>(null);
 
   const unreadMessageTabCount = useUnreadNewMessageNotificationCount(
     isLoggedIn && creator ? creator.creatorId : false
@@ -518,12 +518,20 @@ export const FanStorefrontView: React.FC = () => {
         );
         const msgData = await msgRes.json().catch(() => ({}));
         setDmMessages(Array.isArray(msgData.messages) ? msgData.messages : []);
+        const raw = msgData.labels as { fan?: unknown; creator?: unknown } | undefined;
+        setDmLabels(
+          raw && typeof raw.fan === "string" && typeof raw.creator === "string"
+            ? { fan: raw.fan, creator: raw.creator }
+            : null
+        );
       } else {
         setDmMessages([]);
+        setDmLabels(null);
       }
     } catch {
       setDmThread(null);
       setDmMessages([]);
+      setDmLabels(null);
     } finally {
       setDmLoading(false);
     }
@@ -537,32 +545,6 @@ export const FanStorefrontView: React.FC = () => {
     if (activeTab !== "messages" || dmLoading) return;
     requestAnimationFrame(() => dmMessagesEndRef.current?.scrollIntoView({ behavior: "smooth" }));
   }, [activeTab, dmMessages, dmLoading]);
-
-  const reportMessage = async (messageId: string) => {
-    if (!dmThread || !auth.currentUser) return;
-    setReportingMessageId(messageId);
-    try {
-      const token = await auth.currentUser.getIdToken(true);
-      const res = await fetch("/api/reportMessage", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          threadId: dmThread.id,
-          messageId,
-          reason: "Reported by fan",
-        }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error((data as { error?: string }).error || "Failed to report");
-      }
-      await fetchDmThreadAndMessages();
-    } catch {
-      // could toast
-    } finally {
-      setReportingMessageId(null);
-    }
-  };
 
   const sendDm = async () => {
     if (!creator?.creatorId || !auth.currentUser || !dmInput.trim()) return;
@@ -968,27 +950,47 @@ export const FanStorefrontView: React.FC = () => {
                       {dmMessages.length === 0 ? (
                         <p className="fan-member-messages-empty">No messages yet. Say hi below.</p>
                       ) : (
-                        dmMessages.map((m) => (
-                          <div
-                            key={m.id}
-                            className={`fan-member-message ${m.senderId === auth.currentUser?.uid ? "fan-member-message-sent" : "fan-member-message-received"}`}
-                          >
-                            <span className="fan-member-message-content">{m.content}</span>
-                            {formatDmShortTime(m.createdAt) && (
-                              <span className="fan-member-message-time">{formatDmShortTime(m.createdAt)}</span>
-                            )}
-                            {m.senderId !== auth.currentUser?.uid && (
-                              <button
-                                type="button"
-                                onClick={() => reportMessage(m.id)}
-                                disabled={!!reportingMessageId || !!m.reported}
-                                className="fan-member-message-report"
+                        dmMessages.map((m, i) => {
+                          const isFan = m.senderId === auth.currentUser?.uid;
+                          const prev = dmMessages[i - 1];
+                          const showDayDivider =
+                            !prev ||
+                            formatDmDayCalendarKey(prev.createdAt) !== formatDmDayCalendarKey(m.createdAt);
+                          const dividerLabel = formatDmDateDividerLabel(m.createdAt);
+                          const dateTimeStr = formatDmBubbleDateTime(m.createdAt);
+                          const fanLine = formatDmBubbleAuthorLine(dmLabels?.fan || "You");
+                          const creatorLine = formatDmBubbleAuthorLine(
+                            dmLabels?.creator || dmThread?.otherPartyDisplayName || displayName
+                          );
+                          return (
+                            <Fragment key={m.id}>
+                              {showDayDivider && dividerLabel ? (
+                                <div className="fh-dm-date-divider" role="separator">
+                                  <span className="fh-dm-date-divider__line" aria-hidden />
+                                  <span className="fh-dm-date-divider__label">{dividerLabel}</span>
+                                  <span className="fh-dm-date-divider__line" aria-hidden />
+                                </div>
+                              ) : null}
+                              <div
+                                className={`fan-member-message ${isFan ? "fan-member-message-sent" : "fan-member-message-received"}`}
                               >
-                                {m.reported ? "Reported" : reportingMessageId === m.id ? "Reporting…" : "Report"}
-                              </button>
-                            )}
-                          </div>
-                        ))
+                                <div className={`fh-dm-row ${isFan ? "fh-dm-row--me" : "fh-dm-row--them"}`}>
+                                  <div className="flex flex-col items-stretch max-w-[85%] sm:max-w-[80%]">
+                                    <div className={`fh-dm-bubble ${isFan ? "fh-dm-bubble--me" : "fh-dm-bubble--them"}`}>
+                                      <div className="fh-dm-bubble__head">{isFan ? fanLine : creatorLine}</div>
+                                      <div className="fh-dm-bubble__body">{m.content}</div>
+                                      {dateTimeStr ? (
+                                        <div className={`fh-dm-bubble__foot ${isFan ? "fh-dm-bubble__foot--me" : ""}`}>
+                                          {dateTimeStr}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </Fragment>
+                          );
+                        })
                       )}
                       <div ref={dmMessagesEndRef} aria-hidden />
                     </div>

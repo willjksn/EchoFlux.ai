@@ -62,4 +62,14 @@ The Fan Hub uses `/api/fanDmThreads` and `/api/fanDmMessages`. If those requests
 
 - Collection: `fanDmThreads`
 - Document id: `sort([creatorId, fanId]).join('_')`
-- Subcollection: `messages` with `senderId`, `content`, `createdAt`
+- Subcollection: `messages` with `senderId`, `content`, `createdAt`, optional **`read`** (boolean)
+
+### Read receipts (creator inbox only)
+
+- **`read: true`** on a message means the **fan** has opened the thread and that row was a **creator-sent** message (set when the fan calls `GET /api/fanDmMessages`).
+- The **creator** inbox shows **· Read** / **· Unread** on **their own** bubbles only. The storefront **does not** show read receipts to fans.
+- **`POST /api/fanDmSend`** sets **`read: false`** on new messages. The creator opening the thread does **not** mark fan messages as read.
+
+### Display labels (fan @handle)
+
+`GET /api/fanDmMessages` returns **`labels: { fan, creator }`** for bubble headers. The server merges **`users/{fanId}`** with **`creators/{creatorId}/fans/{fanId}`** so the fan row shows **`@username`** (or name) even when the global user doc is sparse. Thread list (`GET /api/fanDmThreads?as=creator`) uses the same fan resolution.
