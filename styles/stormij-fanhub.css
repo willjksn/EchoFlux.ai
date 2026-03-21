@@ -308,6 +308,15 @@
   padding: 10px 8px 0;
   border-radius: 20px 20px 0 0;
 }
+/* Dark: no pink wash on gray-900 shell — subtle primary rim only */
+.dark .stormij-theme .fan-hub-feed-chrome {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--fan-primary) 12%, #0f172a) 0%,
+    color-mix(in srgb, var(--fan-primary) 5%, #111827) 64px,
+    transparent 100%
+  );
+}
 .stormij-theme .feed-header-wrap {
   background: #fff;
   border: 1px solid color-mix(in srgb, var(--fan-primary, #e8b4c8) 16%, #f5e6ec);
@@ -315,11 +324,18 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 .dark .stormij-theme .feed-header-wrap {
-  background: #1f2937;
-  border-color: color-mix(in srgb, var(--fan-primary) 22%, #4b5563);
+  background: linear-gradient(165deg, #1e293b 0%, #0f172a 55%, #0c1222 100%);
+  border-color: color-mix(in srgb, var(--fan-primary) 20%, #334155);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--fan-primary) 14%, rgba(148, 163, 184, 0.25)),
+    0 12px 32px -12px rgba(0, 0, 0, 0.55);
 }
+/* Title removed from admin feed header; keep rules for any other .feed-title usage */
 .stormij-theme .feed-title {
   color: color-mix(in srgb, var(--fan-primary) 28%, #1a1214);
+}
+.dark .stormij-theme .feed-title {
+  color: color-mix(in srgb, var(--fan-primary) 38%, #f1f5f9);
 }
 
 /* Burgundy / ink from primary (text + icons) */
@@ -403,9 +419,31 @@
   box-shadow: 0 12px 28px -8px rgba(0, 0, 0, 0.1), 0 4px 10px -6px rgba(0, 0, 0, 0.06);
 }
 .dark .stormij-theme .feed-header-visibility-popover {
-  border-color: #4b5563;
-  background: #374151;
-  box-shadow: 0 12px 28px -8px rgba(0, 0, 0, 0.45);
+  border-color: color-mix(in srgb, var(--fan-primary) 18%, #475569);
+  background: linear-gradient(180deg, #1e293b 0%, #172033 100%);
+  box-shadow:
+    0 0 0 1px rgba(15, 23, 42, 0.8),
+    0 20px 40px -12px rgba(0, 0, 0, 0.65);
+  color: #e2e8f0;
+}
+.dark .stormij-theme .feed-header-visibility-popover .feed-header-checkbox {
+  background: rgba(15, 23, 42, 0.65);
+  border-color: color-mix(in srgb, var(--fan-primary) 14%, #475569);
+  color: #e2e8f0;
+}
+.dark .stormij-theme .feed-header-visibility-popover .feed-header-checkbox:hover {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: color-mix(in srgb, var(--fan-primary) 28%, #64748b);
+  color: #f8fafc;
+}
+.dark .stormij-theme .feed-header-visibility-popover .feed-header-checkbox span {
+  color: inherit;
+}
+.dark .stormij-theme .feed-header-visibility-popover input[type="checkbox"] {
+  accent-color: var(--fan-primary, #818cf8);
+}
+.dark .stormij-theme .feed-header-ai-replies {
+  border-color: color-mix(in srgb, var(--fan-primary) 16%, #475569) !important;
 }
 .stormij-theme .feed-header-visibility {
   border-top-color: color-mix(in srgb, var(--fan-primary) 10%, #e5e7eb);
@@ -578,6 +616,34 @@
   box-shadow: 0 2px 8px rgba(139, 92, 246, 0.15);
   border: 2px solid rgba(255, 255, 255, 0.9);
   background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%);
+}
+/* Initial letter: always light on gradient (gray --text-muted was wrong on purple / primary) */
+.feed-card-avatar-initial {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+/* Fan Hub chrome: avatar circle follows creator --fan-primary (not fixed violet) */
+.stormij-theme .feed-card-avatar {
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 78%, #ffffff) 0%,
+    var(--fan-primary, #6366f1) 55%,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 75%, #000000) 100%
+  );
+  border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 22%, #ffffff);
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--fan-primary, #6366f1) 32%, transparent);
+}
+.dark .stormij-theme .feed-card-avatar {
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 55%, #1f2937) 0%,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 40%, #111827) 100%
+  );
+  border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 35%, #374151);
+  box-shadow: 0 2px 14px color-mix(in srgb, var(--fan-primary, #6366f1) 40%, transparent);
 }
 .feed-card-avatar-img {
   width: 100%; height: 100%; object-fit: cover; object-position: center;

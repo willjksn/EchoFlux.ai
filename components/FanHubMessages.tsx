@@ -21,6 +21,8 @@ export const FanHubMessages: React.FC = () => {
   const [selectedThread, setSelectedThread] = useState<FanDmThread | null>(null);
   const [messages, setMessages] = useState<FanDmMessage[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
+  /** Set when /api/fanDmMessages fails (otherwise empty array looked like “no messages”). */
+  const [messagesError, setMessagesError] = useState<string | null>(null);
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
   const [reportingId, setReportingId] = useState<string | null>(null);
@@ -122,8 +124,9 @@ export const FanHubMessages: React.FC = () => {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string }).error || "Failed to send");
-      const next = await fetchMessagesForThread(selectedThread);
+      const { messages: next, error: loadErr } = await fetchMessagesForThread(selectedThread);
       setMessages(next);
+      setMessagesError(loadErr);
       requestAnimationFrame(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }));
       showToast?.("Sent", "success");
     } catch (e) {
@@ -269,7 +272,18 @@ export const FanHubMessages: React.FC = () => {
           {loading ? (
             <p className="p-4 text-gray-500 dark:text-gray-400 text-sm">Loading...</p>
           ) : threads.length === 0 ? (
-            <p className="p-4 text-gray-500 dark:text-gray-400 text-sm">No conversations yet.</p>
+            <div className="p-4 text-gray-500 dark:text-gray-400 text-sm space-y-2">
+              <p>No conversations yet.</p>
+              <p className="text-xs leading-relaxed opacity-90">
+                Threads show up here after a fan sends a message from your storefront, or after you migrate/sync DMs.
+                If you imported from Stormij, run{" "}
+                <code className="text-[11px] bg-gray-100 dark:bg-gray-900 px-1 rounded">npm run sync:fan-dm-threads</code>{" "}
+                (see <code className="text-[11px] bg-gray-100 dark:bg-gray-900 px-1 rounded">scripts/sync-conversations-to-fanDmThreads.ts</code>
+                ). On localhost, set <code className="text-[11px] bg-gray-100 dark:bg-gray-900 px-1 rounded">DEV_API_PROXY</code> in{" "}
+                <code className="text-[11px] bg-gray-100 dark:bg-gray-900 px-1 rounded">.env.local</code> so{" "}
+                <code className="text-[11px] bg-gray-100 dark:bg-gray-900 px-1 rounded">/api/*</code> works.
+              </p>
+            </div>
           ) : (
             <ul className="divide-y divide-gray-200 dark:divide-gray-700">
               {threads.map((t) => (
@@ -330,7 +344,28 @@ export const FanHubMessages: React.FC = () => {
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-2">
                 {messagesLoading ? (
-                  <p className="text-sm text-gray-500">Loading...</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Loading messages…</p>
+                ) : messagesError ? (
+                  <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-sm text-amber-900 dark:text-amber-100">
+                    <p className="font-medium">Messages couldn’t load</p>
+                    <p className="mt-1 text-xs opacity-90">{messagesError}</p>
+                    {import.meta.env.DEV && (
+                      <p className="mt-2 text-xs opacity-80">
+                        Local dev: add{" "}
+                        <code className="px-1 rounded bg-black/10 dark:bg-white/10">DEV_API_PROXY=https://your-app.vercel.app</code> to{" "}
+                        <code className="px-1 rounded bg-black/10 dark:bg-white/10">.env.local</code> — see{" "}
+                        <code className="px-1 rounded bg-black/10 dark:bg-white/10">docs/LOCAL_DEV.md</code>.
+                      </p>
+                    )}
+                  </div>
+                ) : messages.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center min-h-[180px] text-center px-4 text-gray-500 dark:text-gray-400 text-sm">
+                    <p>No messages in this conversation yet.</p>
+                    <p className="mt-2 text-xs max-w-sm">
+                      Send a reply below, or if history is missing after a migration, confirm threads and messages exist in Firestore under{" "}
+                      <code className="text-[11px] bg-gray-100 dark:bg-gray-800 px-1 rounded">fanDmThreads</code>.
+                    </p>
+                  </div>
                 ) : (
                   messages.map((m) => (
                     <div
@@ -345,7 +380,7 @@ export const FanHubMessages: React.FC = () => {
                               : "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white"
                           }`}
                         >
-                          {m.content}
+                          {m.content?.trim() ? m.content : <span className="italic opacity-70">(empty message)</span>}
                         </span>
                         {formatDmShortTime(m.createdAt) && (
                           <span

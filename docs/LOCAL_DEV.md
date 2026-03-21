@@ -41,6 +41,40 @@ npm run dev
 
 ---
 
+## Vercel Preview: `manifest.json` 401, `/api` 500, Firestore “permission denied”
+
+These are **three different causes**:
+
+### 1. `manifest.json` / static assets → **401**
+
+Usually **Vercel Deployment Protection** (password or Vercel login) on Preview deployments. The browser fetches `/manifest.json` **without** always sending the same auth as the page, so the request can return **401**.
+
+**Fix (pick one):**
+
+- **Vercel** → Project → **Settings** → *Deployment Protection* → allow **Protection Bypass for Automation** or disable protection for **Preview** (team policy permitting), **or**
+- Sign in through Vercel’s access screen in the **same browser** so cookies apply, **or**
+- Ignore the PWA manifest warning on Preview; production may be configured differently.
+
+### 2. `/api/creatorOrders`, `/api/fanDmThreads`, … → **500**
+
+Serverless routes need **Firebase Admin** (and any other secrets) in Vercel.
+
+**Fix:** Vercel → Project → **Settings** → **Environment Variables** → ensure **Preview** has the same keys as Production, especially:
+
+- `FIREBASE_SERVICE_ACCOUNT_KEY_BASE64` (or `FIREBASE_ADMIN_KEY`)
+
+Redeploy Preview after saving. Check **Functions** logs for the exact error if it persists.
+
+### 3. Client `FirebaseError: Missing or insufficient permissions`
+
+Rules did not allow the signed-in user to read that path. After updating **`firestore.rules`** (e.g. creator reading linked fans’ `users/{fanId}`), deploy rules:
+
+```bash
+firebase deploy --only firestore:rules
+```
+
+---
+
 ## `npm run dev:vercel` fails
 
 ### 1. Port already in use

@@ -120,6 +120,15 @@ service cloud.firestore {
       // User can read themselves
       allow read: if isOwner(userId);
 
+      // Creators may read a fan's public profile doc only if that fan is linked to them
+      // (OnlyFansFans / Fan Hub enrich: users/{fanId} + creators/.../fans — rules are doc-level).
+      allow read: if isAuthenticated()
+        && request.auth.uid != userId
+        && (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)/onlyfans_fan_preferences/$(userId))
+          || exists(/databases/$(database)/documents/creators/$(request.auth.uid)/fans/$(userId))
+        );
+
       // User can create their own doc with restricted defaults only
       allow create: if isOwner(userId) && isSafeUserCreate();
 
@@ -259,6 +268,18 @@ service cloud.firestore {
       /** Live video sessions — creator manages */
       match /liveVideoChats/{sessionId} {
         allow read, write: if isOwner(creatorId);
+      }
+
+      /** Subscriber / member mirror under creator (Dashboard fan stats; writes via Admin / webhooks) */
+      match /subscribers/{subscriberId} {
+        allow read: if isOwner(creatorId) || isAdmin();
+        allow write: if false;
+      }
+
+      /** Order mirror for revenue widgets (Dashboard / AdminDashboard; writes via Admin / Stripe) */
+      match /orders/{orderId} {
+        allow read: if isOwner(creatorId) || isAdmin();
+        allow write: if false;
       }
     }
 

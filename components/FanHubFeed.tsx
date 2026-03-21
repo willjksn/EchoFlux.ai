@@ -535,7 +535,7 @@ function FeedCard({
               style={getAvatarCropStyle(avatarObjectPosition)}
             />
           ) : (
-            <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text-muted)" }}>
+            <span className="feed-card-avatar-initial" aria-hidden>
               {(creatorName || "?")[0].toUpperCase()}
             </span>
           )}
@@ -1300,7 +1300,7 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
 
   return (
     <div className="fan-hub-feed-chrome">
-    <main className="member-feed-main">
+    <main className="member-feed-main" aria-label="Fan Hub posts">
       <div className="feed-header-wrap">
         <div className="feed-header">
           <button
@@ -1312,7 +1312,6 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
           >
             <GridIcon />
           </button>
-          <h1 className="feed-title">Feed</h1>
           <div className="feed-header-right">
             {isAdminMode && (
               <div className="feed-header-visibility-dropdown" ref={visibilityRef}>

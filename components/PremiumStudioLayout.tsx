@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useMemo } from 'react';
 import { useTabFromUrl } from '../src/hooks/useTabFromUrl';
 import { useCreatorFanHubTheme } from '../src/hooks/useCreatorFanHubTheme';
+import { useUI } from './contexts/UIContext';
 import { auth } from '../firebaseConfig';
 import { STUDIO_TAB_IDS, FAN_HUB_TAB_IDS, STUDIO_TAB_LABELS, FAN_HUB_TAB_LABELS } from '../constants';
 
@@ -28,10 +29,30 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
 
   const creatorId = isFanHub ? auth.currentUser?.uid : undefined;
   const fanTheme = useCreatorFanHubTheme(creatorId);
+  const { isDarkMode } = useUI();
 
   const fanHubShellStyle = useMemo((): React.CSSProperties => {
     if (!isFanHub) return {};
     const { primary, background, text, textMuted, border, accentHover, fontFamily } = fanTheme;
+    // App dark mode: don’t paint the Fan Hub with the public storefront’s light paper (#fafafa).
+    if (isDarkMode) {
+      const bg = '#0f172a';
+      const bg2 = '#111827';
+      const ink = '#f1f5f9';
+      const muted = '#94a3b8';
+      const edge = '#334155';
+      return {
+        '--fan-primary': primary,
+        '--fan-bg': bg2,
+        '--fan-text': ink,
+        '--fan-text-muted': muted,
+        '--fan-border': edge,
+        '--fan-accent-hover': accentHover,
+        background: `linear-gradient(180deg, ${bg} 0%, ${bg2} 40%, ${bg2} 100%)`,
+        color: ink,
+        ...(fontFamily ? ({ fontFamily, '--fan-sans': fontFamily } as React.CSSProperties) : {}),
+      };
+    }
     return {
       '--fan-primary': primary,
       '--fan-bg': background,
@@ -43,7 +64,7 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
       color: text,
       ...(fontFamily ? ({ fontFamily, '--fan-sans': fontFamily } as React.CSSProperties) : {}),
     };
-  }, [isFanHub, fanTheme]);
+  }, [isFanHub, fanTheme, isDarkMode]);
 
   const inner = (
     <>
@@ -53,7 +74,7 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
         }`}
         style={
           isFanHub
-            ? { borderColor: `${fanTheme.primary}33` }
+            ? { borderColor: isDarkMode ? `${fanTheme.primary}40` : `${fanTheme.primary}33` }
             : undefined
         }
       >
@@ -76,11 +97,17 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
               isFanHub
                 ? tab === id
                   ? { backgroundColor: fanTheme.primary, color: '#fff' }
-                  : {
-                      backgroundColor: `color-mix(in srgb, ${fanTheme.primary} 10%, ${fanTheme.background})`,
-                      color: fanTheme.text,
-                      border: `1px solid color-mix(in srgb, ${fanTheme.primary} 22%, ${fanTheme.border})`,
-                    }
+                  : isDarkMode
+                    ? {
+                        backgroundColor: `color-mix(in srgb, ${fanTheme.primary} 12%, #1e293b)`,
+                        color: '#e2e8f0',
+                        border: `1px solid color-mix(in srgb, ${fanTheme.primary} 28%, #334155)`,
+                      }
+                    : {
+                        backgroundColor: `color-mix(in srgb, ${fanTheme.primary} 10%, ${fanTheme.background})`,
+                        color: fanTheme.text,
+                        border: `1px solid color-mix(in srgb, ${fanTheme.primary} 22%, ${fanTheme.border})`,
+                      }
                 : undefined
             }
           >
@@ -97,10 +124,12 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
   if (isFanHub) {
     return (
       <div
-        className="stormij-theme -m-6 min-h-full p-6 rounded-xl shadow-sm border border-black/5"
+        className="stormij-theme -m-6 min-h-full p-6 rounded-xl shadow-sm border border-black/5 dark:border-slate-600/60"
         style={{
           ...fanHubShellStyle,
-          borderColor: `${fanTheme.primary}22`,
+          borderColor: isDarkMode
+            ? `color-mix(in srgb, ${fanTheme.primary} 32%, #334155)`
+            : `${fanTheme.primary}22`,
         }}
       >
         <div className="max-w-7xl mx-auto">{inner}</div>
