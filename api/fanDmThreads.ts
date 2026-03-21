@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
-import { FAN_DM_THREADS, getThreadId } from "./_fanDmHelpers.js";
+import { FAN_DM_THREADS } from "./_fanDmHelpers.js";
 import { resolveFanPartyDisplayLabel } from "./_fanDmLabels.js";
 
 type ThreadDoc = {
@@ -41,44 +41,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .limit(100)
       .get();
 
-    const threads: Array<ThreadDoc & { id: string }> = [];
-    for (const d of snap.docs) {
-      const data = d.data() as ThreadDoc;
-      // List all threads for this creator/fan. (Filtering by fanHasSentMessage hid migrated Stormij
-      // threads and threads where senderId didn’t match fanId.)
-      const thread: ThreadDoc & { id: string } = { id: d.id, ...data };
-      const otherId = as === "creator" ? data.fanId : data.creatorId;
-      try {
-        if (as === "fan") {
-          const creatorSnap = await db.collection("creators").doc(data.creatorId).get();
-          if (creatorSnap.exists) {
-            const c = creatorSnap.data() as { displayName?: string; avatar?: string };
-            thread.otherPartyDisplayName = c?.displayName || "Creator";
-            thread.otherPartyAvatar = c?.avatar;
+    /** Enrich all threads in parallel — sequential awaits were very slow for large inboxes. */
+    const threads: Array<ThreadDoc & { id: string }> = await Promise.all(
+      snap.docs.map(async (d) => {
+        const data = d.data() as ThreadDoc;
+        const thread: ThreadDoc & { id: string } = { id: d.id, ...data };
+        try {
+          if (as === "fan") {
+            const creatorSnap = await db.collection("creators").doc(data.creatorId).get();
+            if (creatorSnap.exists) {
+              const c = creatorSnap.data() as { displayName?: string; avatar?: string };
+              thread.otherPartyDisplayName = c?.displayName || "Creator";
+              thread.otherPartyAvatar = c?.avatar;
+            } else {
+              thread.otherPartyDisplayName = "Creator";
+            }
           } else {
-            thread.otherPartyDisplayName = "Creator";
-          }
-        } else {
-          try {
-            thread.otherPartyDisplayName = await resolveFanPartyDisplayLabel(db, data.creatorId, data.fanId);
-          } catch {
-            thread.otherPartyDisplayName = "Member";
-          }
-          try {
-            const userSnap = await db.collection("users").doc(data.fanId).get();
+            const [fanLabel, userSnap] = await Promise.all([
+              resolveFanPartyDisplayLabel(db, data.creatorId, data.fanId).catch(() => "Member"),
+              db.collection("users").doc(data.fanId).get(),
+            ]);
+            thread.otherPartyDisplayName = fanLabel;
             if (userSnap.exists) {
               const u = userSnap.data() as { avatar?: string };
               thread.otherPartyAvatar = u?.avatar;
             }
-          } catch {
-            /* ignore */
           }
+        } catch {
+          thread.otherPartyDisplayName = as === "creator" ? "Member" : "Creator";
         }
-      } catch {
-        thread.otherPartyDisplayName = as === "creator" ? "Fan" : "Creator";
-      }
-      threads.push(thread);
-    }
+        return thread;
+      })
+    );
 
     return res.status(200).json({ threads });
   } catch (e: unknown) {

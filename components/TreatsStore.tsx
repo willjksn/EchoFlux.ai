@@ -171,9 +171,12 @@ const DEFAULT_TREAT_IMAGES: Record<string, string> = {
 
 export const TreatsStore: React.FC = () => {
   const { user, showToast } = useAppContext();
-  const creatorId = user?.id;
+  /** Align with API / Firestore rules (Firebase uid). */
+  const creatorId = auth.currentUser?.uid ?? user?.id;
   const [products, setProducts] = useState<TreatProduct[]>([]);
   const [loading, setLoading] = useState(true);
+  /** Defer purchases/sessions listeners until products request finishes so the tab feels fast. */
+  const [treatsDataReady, setTreatsDataReady] = useState(false);
   const [editing, setEditing] = useState<TreatProduct | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -187,8 +190,10 @@ export const TreatsStore: React.FC = () => {
   const fetchProducts = useCallback(async () => {
     if (!creatorId) return;
     setLoading(true);
+    setTreatsDataReady(false);
     try {
-      const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+      // Avoid getIdToken(true) here — forced refresh adds seconds on every Treats tab visit.
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       const res = await fetch(
         `/api/products?creatorId=${encodeURIComponent(creatorId)}&includeArchived=true`,
         { headers: token ? { Authorization: `Bearer ${token}` } : {} }
@@ -224,6 +229,7 @@ export const TreatsStore: React.FC = () => {
       }
     } finally {
       setLoading(false);
+      setTreatsDataReady(true);
     }
   }, [creatorId]);
 
@@ -232,8 +238,16 @@ export const TreatsStore: React.FC = () => {
   }, [fetchProducts]);
 
   useEffect(() => {
-    if (!db || !creatorId) {
+    if (!creatorId) {
+      setTreatsDataReady(false);
       setScheduledTreats([]);
+      setUpcomingSessions([]);
+    }
+  }, [creatorId]);
+
+  useEffect(() => {
+    if (!db || !creatorId || !treatsDataReady) {
+      if (!creatorId || !treatsDataReady) setScheduledTreats([]);
       return;
     }
     const q = query(
@@ -265,11 +279,11 @@ export const TreatsStore: React.FC = () => {
       },
       () => setScheduledTreats([])
     );
-  }, [creatorId]);
+  }, [creatorId, treatsDataReady]);
 
   useEffect(() => {
-    if (!db || !creatorId) {
-      setUpcomingSessions([]);
+    if (!db || !creatorId || !treatsDataReady) {
+      if (!creatorId || !treatsDataReady) setUpcomingSessions([]);
       return;
     }
     const q = query(
@@ -306,7 +320,7 @@ export const TreatsStore: React.FC = () => {
       },
       () => setUpcomingSessions([])
     );
-  }, [creatorId]);
+  }, [creatorId, treatsDataReady]);
 
   const createProductViaFirestore = useCallback(
     async (payload: {
@@ -373,7 +387,7 @@ export const TreatsStore: React.FC = () => {
     };
 
     try {
-      const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       let res: Response;
       try {
         res = await fetch("/api/products", {
@@ -417,7 +431,7 @@ export const TreatsStore: React.FC = () => {
   ) => {
     setSaving(true);
     try {
-      const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       let res: Response;
       try {
         res = await fetch(`/api/products?id=${encodeURIComponent(productId)}`, {
@@ -465,7 +479,7 @@ export const TreatsStore: React.FC = () => {
   const handleDelete = async (productId: string) => {
     if (!window.confirm("Delete this product? This cannot be undone.")) return;
     try {
-      const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       let res: Response;
       try {
         res = await fetch(`/api/products?id=${encodeURIComponent(productId)}`, {

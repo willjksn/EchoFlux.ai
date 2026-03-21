@@ -30,6 +30,8 @@ DMs are **not** read from Firestore in the browser. The app calls:
 | `GET /api/fanDmThreads?as=creator` | List threads (`fanDmThreads` collection) |
 | `GET /api/fanDmMessages?threadId=…` | List messages (`fanDmThreads/{id}/messages`) |
 | `POST /api/fanDmSend` | Send a reply |
+| `POST /api/deleteFanDmThread` | **Creator only** — delete thread + all messages (`body: { threadId }`) |
+| `POST /api/deleteFanDmMessage` | **Creator only** — delete one message; refreshes thread preview (`body: { threadId, messageId }`) |
 
 All of these need a valid **Firebase ID token** (`Authorization: Bearer …`) and a working **Firebase Admin** backend (Vercel env: `FIREBASE_SERVICE_ACCOUNT_KEY_BASE64`).
 

@@ -5,7 +5,7 @@ import type { FanDmThread, FanDmMessage } from "../types";
 import VideoCallRoom from "./VideoCallRoom";
 import { useAutosizeTextarea } from "../src/hooks/useAutosizeTextarea";
 import {
-  formatDmBubbleDateTime,
+  formatDmShortTime,
   formatDmDayCalendarKey,
   formatDmDateDividerLabel,
   formatCreatorOutgoingDmBadge,
@@ -16,6 +16,24 @@ const VideoIcon = () => (
   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <polygon points="23 7 16 12 23 17 23 7" />
     <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+  </svg>
+);
+
+const TrashThreadIcon = () => (
+  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <line x1="10" y1="11" x2="10" y2="17" />
+    <line x1="14" y1="11" x2="14" y2="17" />
+  </svg>
+);
+
+const TrashMessageIcon = () => (
+  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <line x1="10" y1="11" x2="10" y2="17" />
+    <line x1="14" y1="11" x2="14" y2="17" />
   </svg>
 );
 
@@ -34,7 +52,8 @@ const DEV_PROXY_BANNER_KEY = "fanhub-messages-dev-proxy-dismiss";
 
 export const FanHubMessages: React.FC = () => {
   const { user, showToast } = useAppContext();
-  const creatorId = user?.id;
+  /** Must match message `senderId` from API (Firebase Auth uid). */
+  const creatorId = auth.currentUser?.uid ?? user?.id;
   const [threads, setThreads] = useState<FanDmThread[]>([]);
   /** When thread list API fails, empty threads looked like “no conversations”. */
   const [threadsError, setThreadsError] = useState<string | null>(null);
@@ -49,6 +68,8 @@ export const FanHubMessages: React.FC = () => {
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
   const [blockingFanId, setBlockingFanId] = useState<string | null>(null);
+  const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
+  const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const { ref: replyTextareaRef } = useAutosizeTextarea(reply);
 
@@ -140,7 +161,7 @@ export const FanHubMessages: React.FC = () => {
           typeof rawLabels.fan === "string" &&
           typeof rawLabels.creator === "string"
             ? { fan: rawLabels.fan, creator: rawLabels.creator }
-            : null;
+            : null; // creator inbox: API omits labels (uses thread list + profile)
         return {
           messages: Array.isArray(data.messages) ? (data.messages as FanDmMessage[]) : [],
           error: null,
@@ -247,6 +268,70 @@ export const FanHubMessages: React.FC = () => {
     }
   };
 
+  const handleDeleteMessage = async (messageId: string) => {
+    if (!selectedThread) return;
+    if (!window.confirm("Delete this message? This cannot be undone.")) return;
+    setDeletingMessageId(messageId);
+    try {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+      const res = await fetch("/api/deleteFanDmMessage", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ threadId: selectedThread.id, messageId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error || "Failed to delete message");
+      showToast?.("Message deleted", "success");
+      const { messages: next, error: loadErr, labels: nextLabels } = await fetchMessagesForThread(selectedThread);
+      setMessages(next);
+      setMessagesError(loadErr);
+      setMessageLabels(nextLabels);
+      void fetchThreads();
+    } catch (e) {
+      showToast?.(e instanceof Error ? e.message : "Failed to delete", "error");
+    } finally {
+      setDeletingMessageId(null);
+    }
+  };
+
+  const handleDeleteThread = async (thread: FanDmThread) => {
+    if (
+      !window.confirm(
+        `Delete conversation with ${thread.otherPartyDisplayName || "this member"}? All messages will be removed. This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    setDeletingThreadId(thread.id);
+    try {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+      const res = await fetch("/api/deleteFanDmThread", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ threadId: thread.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error || "Failed to delete");
+      showToast?.("Conversation deleted", "success");
+      if (selectedThread?.id === thread.id) {
+        setSelectedThread(null);
+        setMessages([]);
+        setMessageLabels(null);
+      }
+      void fetchThreads();
+    } catch (e) {
+      showToast?.(e instanceof Error ? e.message : "Failed to delete", "error");
+    } finally {
+      setDeletingThreadId(null);
+    }
+  };
+
   // Start instant video call with fan
   const handleStartInstantVideo = async (fanId: string, fanDisplayName: string) => {
     if (!creatorId) return;
@@ -324,7 +409,7 @@ export const FanHubMessages: React.FC = () => {
   const creatorBubbleBadge = formatCreatorOutgoingDmBadge(user?.username, user?.name);
 
   return (
-    <div className="max-w-4xl mx-auto p-6 stormij-theme fh-messages-hub">
+    <div className="max-w-7xl mx-auto p-4 sm:p-6 stormij-theme fh-messages-hub">
       <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Messages</h1>
       {import.meta.env.DEV && showDevProxyBanner ? (
         <div className="mb-4 rounded-lg border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/40 px-4 py-3 text-sm text-sky-950 dark:text-sky-100">
@@ -361,8 +446,8 @@ export const FanHubMessages: React.FC = () => {
           </div>
         </div>
       ) : null}
-      <div className="flex gap-6 flex-col sm:flex-row">
-        <div className="w-full sm:w-72 flex-shrink-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
+      <div className="flex gap-4 sm:gap-6 flex-col lg:flex-row">
+        <div className="w-full lg:w-80 flex-shrink-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden lg:max-h-[min(85vh,720px)] lg:flex lg:flex-col">
           {loading ? (
             <p className="p-4 text-gray-500 dark:text-gray-400 text-sm">Loading...</p>
           ) : threadsError ? (
@@ -410,13 +495,13 @@ export const FanHubMessages: React.FC = () => {
               </p>
             </div>
           ) : (
-            <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+            <ul className="divide-y divide-gray-200 dark:divide-gray-700 lg:flex-1 lg:overflow-y-auto min-h-0">
               {threads.map((t) => (
-                <li key={t.id}>
+                <li key={t.id} className="flex items-stretch min-w-0">
                   <button
                     type="button"
                     onClick={() => setSelectedThread(t)}
-                    className={`w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition ${
+                    className={`flex-1 min-w-0 text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition ${
                       selectedThread?.id === t.id ? "fh-selected-soft" : ""
                     }`}
                   >
@@ -429,12 +514,26 @@ export const FanHubMessages: React.FC = () => {
                       </p>
                     )}
                   </button>
+                  <button
+                    type="button"
+                    className="shrink-0 px-3 flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 dark:hover:text-red-400 disabled:opacity-40"
+                    aria-label={`Delete conversation with ${t.otherPartyDisplayName || "member"}`}
+                    title="Delete conversation"
+                    disabled={deletingThreadId === t.id}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      void handleDeleteThread(t);
+                    }}
+                  >
+                    <TrashThreadIcon />
+                  </button>
                 </li>
               ))}
             </ul>
           )}
         </div>
-        <div className="flex-1 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden flex flex-col min-h-[320px]">
+        <div className="flex-1 min-w-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden flex flex-col min-h-[min(70vh,560px)] lg:max-h-[min(85vh,720px)]">
           {!selectedThread ? (
             <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400 text-sm">
               Select a conversation
@@ -469,7 +568,7 @@ export const FanHubMessages: React.FC = () => {
                   </button>
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              <div className="flex-1 overflow-y-auto p-4 space-y-2 min-w-0 flex flex-col">
                 {messagesLoading ? (
                   <p className="text-sm text-gray-500 dark:text-gray-400">Loading messages…</p>
                 ) : messagesError ? (
@@ -500,7 +599,7 @@ export const FanHubMessages: React.FC = () => {
                     const showDayDivider =
                       !prev || formatDmDayCalendarKey(prev.createdAt) !== formatDmDayCalendarKey(m.createdAt);
                     const dividerLabel = formatDmDateDividerLabel(m.createdAt);
-                    const dateTimeStr = formatDmBubbleDateTime(m.createdAt);
+                    const timeStr = formatDmShortTime(m.createdAt);
                     return (
                       <Fragment key={m.id}>
                         {showDayDivider && dividerLabel ? (
@@ -510,9 +609,26 @@ export const FanHubMessages: React.FC = () => {
                             <span className="fh-dm-date-divider__line" aria-hidden />
                           </div>
                         ) : null}
-                        <div className={`fh-dm-row ${isMe ? "fh-dm-row--me" : "fh-dm-row--them"}`}>
-                          <div className="flex flex-col items-stretch max-w-[85%] sm:max-w-[80%]">
+                        <div
+                          className={`flex w-full min-w-0 shrink-0 ${isMe ? "justify-end" : "justify-start"}`}
+                        >
+                          <div
+                            className={`flex flex-col max-w-[min(92%,30rem)] sm:max-w-[min(88%,34rem)] ${isMe ? "items-end" : "items-start"}`}
+                          >
                             <div className={`fh-dm-bubble ${isMe ? "fh-dm-bubble--me" : "fh-dm-bubble--them"}`}>
+                              <button
+                                type="button"
+                                className={`fh-dm-bubble__delete ${isMe ? "fh-dm-bubble__delete--me" : ""}`}
+                                aria-label="Delete message"
+                                title="Delete message"
+                                disabled={deletingMessageId === m.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void handleDeleteMessage(m.id);
+                                }}
+                              >
+                                <TrashMessageIcon />
+                              </button>
                               <div className="fh-dm-bubble__head">
                                 {isMe ? creatorBubbleBadge : fanBubbleLine}
                               </div>
@@ -523,28 +639,29 @@ export const FanHubMessages: React.FC = () => {
                                   <span className="italic opacity-70">(empty message)</span>
                                 )}
                               </div>
-                              {dateTimeStr ? (
-                                <div className={`fh-dm-bubble__foot ${isMe ? "fh-dm-bubble__foot--me" : ""}`}>
-                                  {dateTimeStr}
-                                  {isMe ? (
-                                    m.read ? (
-                                      <span className="fh-dm-bubble__receipt" title="Fan has seen this message">
-                                        {" "}
-                                        · Read
-                                      </span>
-                                    ) : (
-                                      <span
-                                        className="fh-dm-bubble__receipt fh-dm-bubble__receipt--unread"
-                                        title="Fan has not opened this thread since you sent this"
-                                      >
-                                        {" "}
-                                        · Unread
-                                      </span>
-                                    )
-                                  ) : null}
+                              {isMe && timeStr ? (
+                                <div className="fh-dm-bubble__foot fh-dm-bubble__foot--me">
+                                  {timeStr}
+                                  {m.read ? (
+                                    <span className="fh-dm-bubble__receipt" title="Fan has seen this message">
+                                      {" "}
+                                      · Read
+                                    </span>
+                                  ) : (
+                                    <span
+                                      className="fh-dm-bubble__receipt fh-dm-bubble__receipt--unread"
+                                      title="Fan has not opened this thread since you sent this"
+                                    >
+                                      {" "}
+                                      · Unread
+                                    </span>
+                                  )}
                                 </div>
                               ) : null}
                             </div>
+                            {!isMe && timeStr ? (
+                              <div className="fh-dm-meta-below">{timeStr}</div>
+                            ) : null}
                           </div>
                         </div>
                       </Fragment>

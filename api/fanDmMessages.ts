@@ -1,11 +1,39 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import type { QueryDocumentSnapshot } from "firebase-admin/firestore";
+import type { Firestore, QueryDocumentSnapshot, QuerySnapshot } from "firebase-admin/firestore";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
 import { FAN_DM_THREADS, FAN_DM_MESSAGES } from "./_fanDmHelpers.js";
 import { resolveFanPartyDisplayLabel, resolveCreatorPartyDisplayLabel } from "./_fanDmLabels.js";
 
 const BATCH_SIZE = 400;
+
+async function markCreatorMessagesReadByFan(
+  db: Firestore,
+  thread: { creatorId: string; fanId: string },
+  fanUid: string,
+  messagesSnap: QuerySnapshot
+): Promise<Set<string>> {
+  const markedIds = new Set<string>();
+  if (!db || fanUid !== thread.fanId) return markedIds;
+
+  const toMarkRead: QueryDocumentSnapshot[] = [];
+  for (const d of messagesSnap.docs) {
+    const data = d.data();
+    if (data.read === true) continue;
+    if (data.senderId === thread.creatorId) toMarkRead.push(d);
+  }
+
+  for (let i = 0; i < toMarkRead.length; i += BATCH_SIZE) {
+    const chunk = toMarkRead.slice(i, i + BATCH_SIZE);
+    const batch = db.batch();
+    for (const d of chunk) {
+      batch.update(d.ref, { read: true });
+      markedIds.add(d.id);
+    }
+    await batch.commit();
+  }
+  return markedIds;
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") {
@@ -36,7 +64,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: "Not a participant" });
     }
 
-    // Avoid orderBy("createdAt"): Firestore drops docs missing that field (some migrated Stormij rows).
     const messagesSnap = await db
       .collection(FAN_DM_THREADS)
       .doc(threadId)
@@ -55,34 +82,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return "";
     };
 
-    /**
-     * Read receipts are for the creator only: when the fan opens the thread, mark creator-sent
-     * messages as read (Stormij-style). Creator opening the thread does not mark fan messages.
-     */
-    const toMarkRead: QueryDocumentSnapshot[] = [];
-    if (uid === thread.fanId) {
-      for (const d of messagesSnap.docs) {
-        const data = d.data();
-        if (data.read === true) continue;
-        if (data.senderId === thread.creatorId) toMarkRead.push(d);
-      }
-    }
+    const isFanViewer = uid === thread.fanId;
 
-    const markedIds = new Set<string>();
-    for (let i = 0; i < toMarkRead.length; i += BATCH_SIZE) {
-      const chunk = toMarkRead.slice(i, i + BATCH_SIZE);
-      const batch = db.batch();
-      for (const d of chunk) {
-        batch.update(d.ref, { read: true });
-        markedIds.add(d.id);
-      }
-      await batch.commit();
-    }
+    const labelsPromise = isFanViewer
+      ? Promise.all([
+          resolveFanPartyDisplayLabel(db, thread.creatorId, thread.fanId),
+          resolveCreatorPartyDisplayLabel(db, thread.creatorId),
+        ]).then(([fan, creator]) => ({ fan, creator }))
+      : Promise.resolve<{ fan: string; creator: string } | null>(null);
 
-    const [fanLabel, creatorLabel] = await Promise.all([
-      resolveFanPartyDisplayLabel(db, thread.creatorId, thread.fanId),
-      resolveCreatorPartyDisplayLabel(db, thread.creatorId),
-    ]);
+    const markedIdsPromise = markCreatorMessagesReadByFan(db, thread, uid, messagesSnap);
+
+    const [labels, markedIds] = await Promise.all([labelsPromise, markedIdsPromise]);
 
     const messages = messagesSnap.docs
       .map((d) => {
@@ -108,7 +119,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       messages,
       creatorId: thread.creatorId,
       fanId: thread.fanId,
-      labels: { fan: fanLabel, creator: creatorLabel },
+      ...(labels ? { labels } : {}),
     });
   } catch (e: unknown) {
     console.error("fanDmMessages error:", e);

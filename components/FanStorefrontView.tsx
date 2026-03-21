@@ -10,7 +10,12 @@ import {
   useUnreadNewMessageNotificationCount,
   clearNewMessageNotificationBadge,
 } from "./useUnreadNewMessageNotifications";
-import { formatDmShortTime, formatDmBubbleAuthorLine } from "../src/lib/fanHubDisplay";
+import {
+  formatDmShortTime,
+  formatDmDayCalendarKey,
+  formatDmDateDividerLabel,
+  formatDmBubbleAuthorLine,
+} from "../src/lib/fanHubDisplay";
 import { FanHubNotificationBell } from "./FanHubNotificationBell";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 
@@ -957,7 +962,7 @@ export const FanStorefrontView: React.FC = () => {
                             !prev ||
                             formatDmDayCalendarKey(prev.createdAt) !== formatDmDayCalendarKey(m.createdAt);
                           const dividerLabel = formatDmDateDividerLabel(m.createdAt);
-                          const dateTimeStr = formatDmBubbleDateTime(m.createdAt);
+                          const timeStr = formatDmShortTime(m.createdAt);
                           const fanLine = formatDmBubbleAuthorLine(dmLabels?.fan || "You");
                           const creatorLine = formatDmBubbleAuthorLine(
                             dmLabels?.creator || dmThread?.otherPartyDisplayName || displayName
@@ -974,17 +979,22 @@ export const FanStorefrontView: React.FC = () => {
                               <div
                                 className={`fan-member-message ${isFan ? "fan-member-message-sent" : "fan-member-message-received"}`}
                               >
-                                <div className={`fh-dm-row ${isFan ? "fh-dm-row--me" : "fh-dm-row--them"}`}>
-                                  <div className="flex flex-col items-stretch max-w-[85%] sm:max-w-[80%]">
+                                <div
+                                  className={`flex w-full min-w-0 shrink-0 ${isFan ? "justify-end" : "justify-start"}`}
+                                >
+                                  <div
+                                    className={`flex flex-col max-w-[min(85%,22rem)] sm:max-w-[min(80%,22rem)] ${isFan ? "items-end" : "items-start"}`}
+                                  >
                                     <div className={`fh-dm-bubble ${isFan ? "fh-dm-bubble--me" : "fh-dm-bubble--them"}`}>
                                       <div className="fh-dm-bubble__head">{isFan ? fanLine : creatorLine}</div>
                                       <div className="fh-dm-bubble__body">{m.content}</div>
-                                      {dateTimeStr ? (
-                                        <div className={`fh-dm-bubble__foot ${isFan ? "fh-dm-bubble__foot--me" : ""}`}>
-                                          {dateTimeStr}
-                                        </div>
+                                      {isFan && timeStr ? (
+                                        <div className="fh-dm-bubble__foot fh-dm-bubble__foot--me">{timeStr}</div>
                                       ) : null}
                                     </div>
+                                    {!isFan && timeStr ? (
+                                      <div className="fh-dm-meta-below">{timeStr}</div>
+                                    ) : null}
                                   </div>
                                 </div>
                               </div>
