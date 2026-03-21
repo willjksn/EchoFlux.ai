@@ -67,7 +67,7 @@ export const FanHubPurchases: React.FC = () => {
     if (!user?.id) return;
     setLoading(true);
     try {
-      const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       const res = await fetch("/api/creatorOrders?limit=200", {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });

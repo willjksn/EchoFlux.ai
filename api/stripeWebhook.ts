@@ -4,6 +4,10 @@ import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { recordPlanChangeEvent } from './_planChangeEvents.js';
 import { grantReferralRewardOnConversion } from './_grantReferralReward.js';
+import {
+  upsertFanHubFanPreferenceFromMember,
+  ensureFanDmThreadForMember,
+} from './_syncFanHubFanPreference.js';
 
 // Initialize Firebase Admin if not already initialized
 if (!getApps().length) {
@@ -210,6 +214,12 @@ async function handleConnectEvent(db: Firestore, _stripe: Stripe, event: Stripe.
         });
       }
 
+      try {
+        await upsertFanHubFanPreferenceFromMember(db, creatorId, fanId, now, 'stripe_product');
+      } catch (e) {
+        console.error('syncFanHubFanPreference (product):', e);
+      }
+
       const statsRef = db.collection('creatorStats').doc(creatorId);
       const statsSnap = await statsRef.get();
       const stats = statsSnap.data() as { totalRevenueCents?: number; totalOrders?: number } | undefined;
@@ -276,6 +286,12 @@ async function handleConnectEvent(db: Firestore, _stripe: Stripe, event: Stripe.
           totalSpentCents: (fanData.totalSpentCents || 0) + amountTotal,
           updatedAt: now,
         });
+      }
+
+      try {
+        await upsertFanHubFanPreferenceFromMember(db, creatorId, fanId, now, 'stripe_tip');
+      } catch (e) {
+        console.error('syncFanHubFanPreference (tip):', e);
       }
 
       // Update creator stats
@@ -347,6 +363,11 @@ async function handleConnectEvent(db: Firestore, _stripe: Stripe, event: Stripe.
         subscriptionCurrentPeriodEnd,
         updatedAt: now,
       });
+      try {
+        await upsertFanHubFanPreferenceFromMember(db, creatorId, fanId, now, 'stripe_subscription_updated');
+      } catch (e) {
+        console.error('syncFanHubFanPreference (subscription updated):', e);
+      }
     }
     return;
   }
@@ -375,6 +396,11 @@ async function handleConnectEvent(db: Firestore, _stripe: Stripe, event: Stripe.
         subscriptionCurrentPeriodEnd: null,
         updatedAt: now,
       });
+      try {
+        await upsertFanHubFanPreferenceFromMember(db, creatorId, fanId, now, 'stripe_subscription_canceled');
+      } catch (e) {
+        console.error('syncFanHubFanPreference (subscription deleted):', e);
+      }
     }
 
     console.log(`Connect: subscription deleted creator=${creatorId} fan=${fanId}`);

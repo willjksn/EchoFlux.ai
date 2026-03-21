@@ -3,7 +3,7 @@
  * Body: { username: string, creatorId: string }
  * - Creates usernames/{lowercase} -> { uid }
  * - Sets users/{uid}.username (server only; clients cannot write this field)
- * - Denormalizes username onto all creators/*/fans/{uid} docs for this fan
+ * - Denormalizes username onto all creators' fans subcollections for this fan
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { FieldPath } from "firebase-admin/firestore";
@@ -105,7 +105,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: "Failed to claim username" });
   }
 
-  // Denormalize onto all creators/*/fans/{uid} (includes current creator)
+  // Denormalize onto all creators' fans docs for this uid (includes current creator)
   try {
     const groupSnap = await db.collectionGroup("fans").where(FieldPath.documentId(), "==", uid).get();
 

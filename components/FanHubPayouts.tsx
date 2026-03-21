@@ -19,7 +19,7 @@ export const FanHubPayouts: React.FC = () => {
   const fetchStatus = async () => {
     setLoading(true);
     try {
-      const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       const res = await fetch("/api/stripeConnectStatus", {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
@@ -45,7 +45,7 @@ export const FanHubPayouts: React.FC = () => {
   const handleConnect = async () => {
     setConnecting(true);
     try {
-      const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       const res = await fetch("/api/stripeConnectOnboard", {
         method: "POST",
         headers: {
@@ -150,7 +150,7 @@ export const FanHubPayouts: React.FC = () => {
               type="button"
               onClick={handleConnect}
               disabled={connecting}
-              className="px-4 py-2 rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
+              className="px-4 py-2 fh-btn disabled:opacity-50 flex items-center gap-2"
             >
               {connecting ? (
                 <>

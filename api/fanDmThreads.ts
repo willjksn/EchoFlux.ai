@@ -42,7 +42,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const threads: Array<ThreadDoc & { id: string; otherPartyDisplayName?: string; otherPartyAvatar?: string }> = [];
     for (const d of snap.docs) {
       const data = d.data() as ThreadDoc;
-      if (as === "creator" && !data.fanHasSentMessage) continue;
+      // List all threads for this creator/fan. (Filtering by fanHasSentMessage hid migrated Stormij
+      // threads and threads where senderId didn’t match fanId.)
       const thread = { id: d.id, ...data };
       const otherId = as === "creator" ? data.fanId : data.creatorId;
       try {
@@ -62,6 +63,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               name?: string;
               displayName?: string;
               username?: string;
+              email?: string;
               avatar?: string;
             };
             thread.otherPartyDisplayName = formatFanDisplayLabel(
@@ -69,6 +71,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 username: u?.username,
                 displayName: u?.displayName,
                 name: u?.name,
+                email: u?.email,
               },
               { fallback: "Fan" }
             );

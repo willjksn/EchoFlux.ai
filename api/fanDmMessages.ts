@@ -32,35 +32,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: "Not a participant" });
     }
 
+    // Avoid orderBy("createdAt"): Firestore drops docs missing that field (some migrated Stormij rows).
     const messagesSnap = await db
       .collection(FAN_DM_THREADS)
       .doc(threadId)
       .collection(FAN_DM_MESSAGES)
-      .orderBy("createdAt", "asc")
       .limit(500)
       .get();
 
-    const messages = messagesSnap.docs.map((d) => {
-      const data = d.data();
-      const rawCreated = data.createdAt;
-      let createdAt: string;
+    const parseCreated = (rawCreated: unknown): string => {
       if (rawCreated && typeof (rawCreated as { toDate?: () => Date }).toDate === "function") {
-        createdAt = (rawCreated as { toDate: () => Date }).toDate().toISOString();
-      } else if (typeof rawCreated === "string") {
-        createdAt = rawCreated;
-      } else {
-        createdAt = "";
+        return (rawCreated as { toDate: () => Date }).toDate().toISOString();
       }
-      return {
-        id: d.id,
-        threadId,
-        senderId: data.senderId,
-        content: data.content,
-        createdAt,
-        reported: data.reported,
-        reportId: data.reportId,
-      };
-    });
+      if (typeof rawCreated === "string" || typeof rawCreated === "number") {
+        const d = new Date(rawCreated);
+        return Number.isFinite(d.getTime()) ? d.toISOString() : "";
+      }
+      return "";
+    };
+
+    const messages = messagesSnap.docs
+      .map((d) => {
+        const data = d.data();
+        const createdAt = parseCreated(data.createdAt);
+        return {
+          id: d.id,
+          threadId,
+          senderId: data.senderId,
+          content: data.content,
+          createdAt,
+          reported: data.reported,
+          reportId: data.reportId,
+          _sort: createdAt || d.id,
+        };
+      })
+      .sort((a, b) => a._sort.localeCompare(b._sort))
+      .map(({ _sort: _s, ...m }) => m);
 
     return res.status(200).json({ messages, creatorId: thread.creatorId, fanId: thread.fanId });
   } catch (e: unknown) {

@@ -1,5 +1,5 @@
 
-import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
+import React, { createContext, useState, useEffect, useCallback, useContext, ReactNode } from 'react';
 import { Page, DashboardNavState, TourStep, PaymentPlan, Toast, ComposeContextData, Plan } from '../../types';
 import { useAuth } from './AuthContext';
 import { getTourStepsForPlan } from '../../constants';
@@ -357,10 +357,11 @@ export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         setPaymentPlan(null);
     };
 
-    const showToast = (message: string, type: 'success' | 'error' | 'info') => {
+    /** Stable ref so consumers' useCallback(..., [showToast]) does not invalidate every render (avoids API refetch loops). */
+    const showToast = useCallback((message: string, type: 'success' | 'error' | 'info') => {
         setToast({ message, type });
         setTimeout(() => setToast(null), 3000);
-    };
+    }, []);
 
     const openCRM = (targetUser: { name: string; avatar: string }) => {
         setActiveCRMProfileId(targetUser.name); // Using name as ID for simplicity

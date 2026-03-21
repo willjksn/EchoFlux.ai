@@ -1,5 +1,6 @@
 /**
- * Fan-facing display labels for creator tools (Stormij-style: prefer @handle, not raw email).
+ * Fan / member labels for creator tools (Stormij-style: prefer @handle, not raw email).
+ * Aligned with fan-hub-display from commit ab5360d (required member usernames / fan labels).
  */
 
 export type FanDisplayInput = {
@@ -7,27 +8,118 @@ export type FanDisplayInput = {
   displayName?: string | null;
   /** Legacy / manual fan name */
   name?: string | null;
-  /** Only for admin secondary lines — never used as primary label */
+  /** When set, avoids using displayName that duplicates the account email */
   email?: string | null;
 };
+
+function eqIgnoreCase(a: string | undefined, b: string | undefined): boolean {
+  return !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+function emailLocalPart(email: string | null | undefined): string | null {
+  const e = email?.trim();
+  if (!e || !e.includes("@")) return null;
+  const local = e.split("@")[0]?.trim();
+  return local || null;
+}
+
+/** Lowercase handle; if `username` mistakenly holds an email, use local part only. */
+export function safeUsernameForHandle(username: string | null | undefined): string | null {
+  const u = username?.trim().toLowerCase();
+  if (!u) return null;
+  if (u.includes("@")) {
+    const local = u.split("@")[0]?.trim();
+    return local ? local.slice(0, 60) : null;
+  }
+  return u.slice(0, 60);
+}
+
+/** Auth displayName — often equals email; never treat full email as public label. */
+function safeDisplayNameForHandle(
+  displayName: string | null | undefined,
+  email: string | null | undefined
+): string | null {
+  const d = displayName?.trim();
+  if (!d) return null;
+  const em = email?.trim();
+  if (em && eqIgnoreCase(d, em)) return null;
+  if (d.includes("@")) {
+    const local = d.split("@")[0]?.trim();
+    if (em && eqIgnoreCase(d, em)) return null;
+    return local || null;
+  }
+  return d;
+}
+
+/** Stored name (e.g. fan card) — skip generic placeholder and email duplicates. */
+function safeNameField(name: string | null | undefined, email: string | null | undefined): string | null {
+  const n = name?.trim();
+  if (!n || n.toLowerCase() === "member") return null;
+  const em = email?.trim();
+  if (em && eqIgnoreCase(n, em)) return null;
+  if (n.includes("@")) {
+    const local = n.split("@")[0]?.trim();
+    return local || null;
+  }
+  return n;
+}
+
+/**
+ * Short label for lists: @username, else safe display name / name, else email local part, else Member.
+ */
+export function fanHubListLabel(
+  username: string | null | undefined,
+  displayName: string | null | undefined,
+  email: string | null | undefined,
+  extraName?: string | null | undefined
+): string {
+  const u = safeUsernameForHandle(username);
+  if (u) return `@${u}`;
+  const dn =
+    safeDisplayNameForHandle(displayName, email) || safeNameField(extraName, email);
+  if (dn) return dn;
+  const local = emailLocalPart(email);
+  return local || "Member";
+}
+
+export function fanHubListLabelFromInput(
+  input: FanDisplayInput,
+  options?: { fallback?: string }
+): string {
+  const fallback = options?.fallback ?? "Member";
+  const label = fanHubListLabel(
+    input.username,
+    input.displayName,
+    input.email,
+    input.name
+  );
+  if (label === "Member" && options?.fallback) return fallback;
+  return label;
+}
 
 const MEMBER_USERNAME_RE = /^[a-z0-9_]{3,32}$/;
 
 /**
- * Primary label for lists and headers: @username > displayName > name > fallback.
- * Does not use email as the visible name.
+ * Primary label for lists and headers.
+ * When `email` is provided, uses the same rules as `fanHubListLabel` (no raw emails as primary).
  */
 export function formatFanDisplayLabel(
   input: FanDisplayInput,
   options?: { fallback?: string }
 ): string {
+  const hasEmailContext = input.email != null && String(input.email).trim().length > 0;
+  if (hasEmailContext) {
+    return fanHubListLabelFromInput(input, options);
+  }
   const fallback = options?.fallback ?? "Member";
   const rawU = typeof input.username === "string" ? input.username.trim().toLowerCase() : "";
   if (rawU && MEMBER_USERNAME_RE.test(rawU)) return `@${rawU}`;
+  const su = safeUsernameForHandle(input.username);
+  if (su) return `@${su}`;
   const dn = typeof input.displayName === "string" ? input.displayName.trim() : "";
   if (dn) return dn;
   const nm = typeof input.name === "string" ? input.name.trim() : "";
-  if (nm) return nm;
+  if (nm && nm.toLowerCase() !== "member") return nm;
   return fallback;
 }
 
@@ -35,13 +127,14 @@ export function formatFanDisplayLabel(
  * For AI prompts / plain sentences — handle without @, never exposes full email.
  */
 export function formatFanPlainMoniker(input: FanDisplayInput): string | undefined {
-  const rawU = typeof input.username === "string" ? input.username.trim().toLowerCase() : "";
-  if (rawU && MEMBER_USERNAME_RE.test(rawU)) return rawU;
-  const dn = typeof input.displayName === "string" ? input.displayName.trim() : "";
+  const u = safeUsernameForHandle(input.username);
+  if (u) return u;
+  const dn = safeDisplayNameForHandle(input.displayName, input.email);
   if (dn) return dn;
-  const nm = typeof input.name === "string" ? input.name.trim() : "";
+  const nm = safeNameField(input.name, input.email);
   if (nm) return nm;
-  return undefined;
+  const local = emailLocalPart(input.email);
+  return local || undefined;
 }
 
 /** Short local time for DM bubbles (ISO string or Firestore-like `{ seconds }`). */
@@ -69,7 +162,39 @@ export function initialsFromFanLabel(label: string): string {
   if (!s) return "?";
   const parts = s.split(/[\s_]+/).filter(Boolean);
   if (parts.length >= 2) {
-    return (parts[0][0] + parts[1][0]).toUpperCase().slice(0, 2);
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase().slice(0, 2);
   }
   return s.slice(0, 2).toUpperCase();
+}
+
+/** Avatar initials: prefer username, then safe display name, then email local part. */
+export function fanHubInitials(
+  username: string | null | undefined,
+  displayName: string | null | undefined,
+  email: string | null | undefined
+): string {
+  const u = safeUsernameForHandle(username);
+  if (u) {
+    const alnum = u.replace(/[^a-z0-9]/gi, "");
+    if (alnum.length >= 2) return alnum.slice(0, 2).toUpperCase();
+    if (alnum.length === 1) return alnum[0].toUpperCase();
+    return u.slice(0, 2).toUpperCase();
+  }
+  const dn = safeDisplayNameForHandle(displayName, email);
+  if (dn) {
+    const parts = dn.trim().split(/\s+/);
+    if (parts.length >= 2 && parts[0].length && parts[parts.length - 1].length) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase().slice(0, 2);
+    }
+    if (parts[0]?.length) return parts[0][0].toUpperCase().slice(0, 2);
+  }
+  const local = emailLocalPart(email);
+  if (local) {
+    const alnum = local.replace(/[^a-z0-9]/gi, "");
+    if (alnum.length >= 2) return alnum.slice(0, 2).toUpperCase();
+    if (alnum.length === 1) return alnum[0].toUpperCase();
+    const c = local[0];
+    if (c && /[A-Z0-9]/i.test(c)) return c.toUpperCase();
+  }
+  return "?";
 }

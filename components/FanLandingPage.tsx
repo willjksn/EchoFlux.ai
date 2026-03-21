@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { auth } from "../firebaseConfig";
 import type { StorefrontSocialLinks, StorefrontLandingContent, StorefrontLegal, TextStyle } from "../types";
+import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 
 // Sun/Moon icons for theme toggle
 const SunIcon = () => (
@@ -412,7 +413,7 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
               src={avatar}
               alt=""
               className="fan-landing-logo-img"
-              style={{ objectPosition: avatarObjectPosition ?? "center" }}
+              style={getAvatarCropStyle(avatarObjectPosition)}
             />
           ) : (
             <span className="fan-landing-logo-text" style={{ backgroundColor: `${primary}20`, color: primary }}>
@@ -489,7 +490,7 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
                 src={avatar}
                 alt=""
                 className="fan-landing-hero-avatar-img"
-                style={{ objectPosition: avatarObjectPosition ?? "center" }}
+                style={getAvatarCropStyle(avatarObjectPosition)}
               />
             ) : (
               <span className="fan-landing-hero-avatar-fallback" style={{ backgroundColor: `${primary}40`, color: primary }}>

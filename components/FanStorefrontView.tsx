@@ -7,6 +7,7 @@ import { MemberUsernameGateModal } from "./MemberUsernameGateModal";
 import { DEFAULT_PRIVACY_POLICY, DEFAULT_TERMS_OF_SERVICE } from "../constants";
 import { useAutosizeTextarea } from "../src/hooks/useAutosizeTextarea";
 import { formatDmShortTime } from "../src/lib/fanHubDisplay";
+import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 
 export type StorefrontCreator = {
   creatorId: string;
@@ -602,9 +603,7 @@ export const FanStorefrontView: React.FC = () => {
   }
 
   const { theme, displayName, avatar, logo, bio, sections, sectionsOrder, rules, landingContent } = creator;
-  const avatarCropStyle: React.CSSProperties = {
-    objectPosition: creator.avatarObjectPosition ?? "center",
-  };
+  const avatarCropStyle: React.CSSProperties = getAvatarCropStyle(creator.avatarObjectPosition);
 
   // Member view background - uses creator theme or neutral default
   const bg = theme?.background || defaultBg;

@@ -12,7 +12,7 @@ firebase deploy --only firestore:rules
 
 - **`usernames/{handle}`** — public read (availability checks), no client writes (claims go through `api/claimMemberUsername`).
 - **`users/{uid}`** — `username` / `usernameUpdatedAt` are **restricted** (server-only).
-- **`creators/{creatorId}`** — owner read; profile writes via Admin API.
+- **`creators/{creatorId}`** — owner read; most profile writes via Admin API. **Exception:** owner may **create/update** only the **`feedSettings`** field (used by `FanHubFeed` save visibility).
 - **`creators/{creatorId}/fanPosts`**, **`.../posts`** — creator CRUD; any **authenticated** user may **read** documents whose `status` is missing or `published` / `Published` (member feed + previews). Stricter entitlement for paid content remains app/API-layer where needed.
 - **`creators/{creatorId}/fans/{fanId}`** — creator full access; fan may **read** their own `{fanId}` doc.
 - **`fanUsers`**, **`treatGrants`**, **`liveVideoChats`** under each creator — creator only.

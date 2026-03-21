@@ -1,10 +1,16 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useAppContext } from "./AppContext";
 import { doc, getDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage, auth } from "../firebaseConfig";
 import type { CreatorStorefrontSettings, StorefrontButtonStyle, StorefrontSocialLinks, StorefrontLandingContent, StorefrontLegal, TextStyle } from "../types";
 import { STOREFRONT_CONTENT_POLICY, DEFAULT_PRIVACY_POLICY, DEFAULT_TERMS_OF_SERVICE, FAN_HUB_THEME_PRESETS, HERO_LAYOUT_OPTIONS, HERO_MEDIA_SIZE_OPTIONS } from "../constants";
+import { getAvatarCropStyle } from "../src/lib/avatarCrop";
+import {
+  clampPan,
+  parseObjectPositionPercentPair,
+  formatObjectPositionPercentPair,
+} from "../src/lib/objectPositionPan";
 import { StorefrontPreview } from "./StorefrontPreview";
 import { UserIcon, ImageIcon, GlobeIcon } from "./icons/UIIcons";
 import { EmojiButton } from "./EmojiPicker";
@@ -80,6 +86,35 @@ const DEFAULT_LEGAL: StorefrontLegal = {
   privacyText: "",
   privacyLastUpdated: "",
 };
+
+function clampPercent(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
+
+/** Parse CSS object-position for avatar crop sliders (matches StorefrontPreview). */
+function parseAvatarPercentPair(s: string | undefined | null): [number, number] {
+  if (s == null || s === "" || s === "center") return [50, 50];
+  const t = String(s).trim();
+  const mComma = t.match(/^([\d.]+)%\s*,\s*([\d.]+)%$/);
+  if (mComma) {
+    return [clampPercent(parseFloat(mComma[1]), 0, 100), clampPercent(parseFloat(mComma[2]), 0, 100)];
+  }
+  const m = t.match(/^([\d.]+)%\s+([\d.]+)%$/);
+  if (m) {
+    return [clampPercent(parseFloat(m[1]), 0, 100), clampPercent(parseFloat(m[2]), 0, 100)];
+  }
+  const m1 = t.match(/^([\d.]+)%$/);
+  if (m1) return [clampPercent(parseFloat(m1[1]), 0, 100), 50];
+  if (t === "top") return [50, 0];
+  if (t === "bottom") return [50, 100];
+  if (t === "left") return [0, 50];
+  if (t === "right") return [100, 50];
+  return [50, 50];
+}
+
+function formatAvatarPercentPair(x: number, y: number) {
+  return `${clampPercent(Math.round(x * 10) / 10, 0, 100)}% ${clampPercent(Math.round(y * 10) / 10, 0, 100)}%`;
+}
 
 function normalizeForCompare(a: Partial<CreatorStorefrontSettings>): string {
   return JSON.stringify({
@@ -409,6 +444,72 @@ export const MyPageBuilder: React.FC = () => {
     [draft.heroMedia]
   );
 
+  const builderAvatarPanRef = useRef<{
+    startClientX: number;
+    startClientY: number;
+    startOx: number;
+    startOy: number;
+  } | null>(null);
+
+  const onBuilderAvatarPanPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (previewFramingTool !== "panAvatar" || !draft.avatar) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.currentTarget.setPointerCapture(e.pointerId);
+      const [ox, oy] = parseObjectPositionPercentPair(draft.avatarObjectPosition);
+      builderAvatarPanRef.current = {
+        startClientX: e.clientX,
+        startClientY: e.clientY,
+        startOx: ox,
+        startOy: oy,
+      };
+    },
+    [previewFramingTool, draft.avatar, draft.avatarObjectPosition]
+  );
+
+  const onBuilderAvatarPanPointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (previewFramingTool !== "panAvatar" || !builderAvatarPanRef.current) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const w = Math.max(rect.width, 1);
+      const h = Math.max(rect.height, 1);
+      const dx = e.clientX - builderAvatarPanRef.current.startClientX;
+      const dy = e.clientY - builderAvatarPanRef.current.startClientY;
+      const sens = 0.85;
+      const nx = clampPan(
+        builderAvatarPanRef.current.startOx - (dx / w) * 100 * sens,
+        0,
+        100
+      );
+      const ny = clampPan(
+        builderAvatarPanRef.current.startOy - (dy / h) * 100 * sens,
+        0,
+        100
+      );
+      setDraft((prev) => ({
+        ...prev,
+        avatarObjectPosition: formatObjectPositionPercentPair(nx, ny),
+      }));
+      builderAvatarPanRef.current = {
+        startClientX: e.clientX,
+        startClientY: e.clientY,
+        startOx: nx,
+        startOy: ny,
+      };
+    },
+    [previewFramingTool]
+  );
+
+  const onBuilderAvatarPanPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+    builderAvatarPanRef.current = null;
+  }, []);
+
   const isDirty = useMemo(
     () => normalizeForCompare(draft) !== normalizeForCompare(saved),
     [draft, saved]
@@ -419,8 +520,13 @@ export const MyPageBuilder: React.FC = () => {
     setPreviewFocusPhotoSlot((s) => (gridCount > 0 && s >= gridCount ? 0 : s));
   }, [draft.heroMedia]);
 
+  // Framing tools are landing-only (pan avatar, pan bg, photo focus). Clear when leaving Landing preview.
   useEffect(() => {
-    if (previewMode !== "landing") setPreviewFramingTool("off");
+    setPreviewFramingTool((tool) => {
+      if (previewMode === "landing") return tool;
+      if (tool === "panBg" || tool === "focusPhoto" || tool === "panAvatar") return "off";
+      return tool;
+    });
   }, [previewMode]);
 
   const loadSettings = useCallback(async () => {
@@ -887,19 +993,43 @@ export const MyPageBuilder: React.FC = () => {
                 <div>
                   <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Feed Avatar</label>
                   <p className="text-xs text-gray-400 mb-2">Shown on your posts</p>
-                  <label className="flex flex-col items-center justify-center w-20 h-20 rounded-full border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/50 cursor-pointer hover:border-primary-500 overflow-hidden">
-                    {draft.avatar ? (
-                      <img
-                        src={draft.avatar}
-                        alt="Avatar"
-                        className="w-full h-full object-cover"
-                        style={{ objectPosition: draft.avatarObjectPosition ?? "center" }}
-                      />
-                    ) : (
-                      <UserIcon className="w-8 h-8 text-gray-400" />
-                    )}
-                    <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} disabled={avatarUploading} />
-                  </label>
+                  {(() => {
+                    const panHere = previewFramingTool === "panAvatar" && !!draft.avatar;
+                    return (
+                      <label
+                        className={`flex flex-col items-center justify-center w-20 h-20 rounded-full border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/50 overflow-hidden ${
+                          panHere
+                            ? "pointer-events-none cursor-default border-indigo-300 dark:border-indigo-600"
+                            : "cursor-pointer hover:border-primary-500"
+                        }`}
+                      >
+                        {draft.avatar ? (
+                          <div
+                            className={`relative h-full w-full rounded-full overflow-hidden ${
+                              panHere
+                                ? "pointer-events-auto cursor-grab active:cursor-grabbing touch-none ring-2 ring-indigo-500 ring-offset-2 ring-offset-gray-50 dark:ring-offset-gray-900"
+                                : ""
+                            }`}
+                            onPointerDown={panHere ? onBuilderAvatarPanPointerDown : undefined}
+                            onPointerMove={panHere ? onBuilderAvatarPanPointerMove : undefined}
+                            onPointerUp={panHere ? onBuilderAvatarPanPointerUp : undefined}
+                            onPointerCancel={panHere ? onBuilderAvatarPanPointerUp : undefined}
+                          >
+                            <img
+                              src={draft.avatar}
+                              alt="Avatar"
+                              className="h-full w-full object-cover pointer-events-none select-none"
+                              style={getAvatarCropStyle(draft.avatarObjectPosition)}
+                              draggable={false}
+                            />
+                          </div>
+                        ) : (
+                          <UserIcon className="w-8 h-8 text-gray-400" />
+                        )}
+                        <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} disabled={avatarUploading} />
+                      </label>
+                    );
+                  })()}
                   {avatarUploading && <p className="text-xs text-gray-500 mt-1">Uploading…</p>}
                 </div>
                 <div>
@@ -917,6 +1047,103 @@ export const MyPageBuilder: React.FC = () => {
                   {logoUploading && <p className="text-xs text-gray-500 mt-1">Uploading…</p>}
                 </div>
               </div>
+              {draft.avatar ? (
+                <div className="mt-1.5 rounded-md border border-indigo-200 dark:border-indigo-800 bg-indigo-50/70 dark:bg-indigo-950/30 px-2 py-1.5">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="text-[10px] font-medium text-indigo-900 dark:text-indigo-200">Avatar crop</span>
+                    <span
+                      className="text-[9px] text-indigo-800/85 dark:text-indigo-300/90 truncate max-w-[14rem]"
+                      title="Very tall/narrow photos fill the width first, so H may barely move; V usually does more."
+                    >
+                      H works best on wider photos
+                    </span>
+                  </div>
+                  {(() => {
+                    const [px, py] = parseAvatarPercentPair(draft.avatarObjectPosition);
+                    return (
+                      <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                        <div className="min-w-0">
+                          <label className="flex justify-between text-[9px] text-indigo-900 dark:text-indigo-200/90 tabular-nums">
+                            <span>H</span>
+                            <span>{typeof px === "number" ? px : 50}</span>
+                          </label>
+                          <input
+                            type="range"
+                            min={0}
+                            max={100}
+                            step={1}
+                            value={Number.isFinite(px) ? px : 50}
+                            onChange={(e) => {
+                              const nv = Number(e.target.value);
+                              setDraft((prev) => {
+                                const [, py0] = parseAvatarPercentPair(prev.avatarObjectPosition);
+                                return {
+                                  ...prev,
+                                  avatarObjectPosition: formatAvatarPercentPair(nv, py0),
+                                };
+                              });
+                            }}
+                            className="w-full h-1 accent-indigo-600"
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <label className="flex justify-between text-[9px] text-indigo-900 dark:text-indigo-200/90 tabular-nums">
+                            <span>V</span>
+                            <span>{typeof py === "number" ? py : 50}</span>
+                          </label>
+                          <input
+                            type="range"
+                            min={0}
+                            max={100}
+                            step={1}
+                            value={Number.isFinite(py) ? py : 50}
+                            onChange={(e) => {
+                              const nv = Number(e.target.value);
+                              setDraft((prev) => {
+                                const [px0] = parseAvatarPercentPair(prev.avatarObjectPosition);
+                                return {
+                                  ...prev,
+                                  avatarObjectPosition: formatAvatarPercentPair(px0, nv),
+                                };
+                              });
+                            }}
+                            className="w-full h-1 accent-indigo-600"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  <div className="flex flex-wrap gap-1 mt-1 items-center">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewFramingTool((t) => (t === "panAvatar" ? "off" : "panAvatar"))}
+                      className={`rounded px-1.5 py-0.5 text-[9px] font-medium border ${
+                        previewFramingTool === "panAvatar"
+                          ? "border-indigo-600 bg-indigo-600 text-white dark:border-indigo-500 dark:bg-indigo-600"
+                          : "border-indigo-300 dark:border-indigo-600 bg-white dark:bg-gray-800 text-indigo-900 dark:text-indigo-100"
+                      }`}
+                    >
+                      {previewFramingTool === "panAvatar" ? "Dragging — use circle above" : "Drag to pan (circle above)"}
+                    </button>
+                    {previewFramingTool === "panAvatar" && (
+                      <button
+                        type="button"
+                        onClick={() => setPreviewFramingTool("off")}
+                        className="rounded px-1.5 py-0.5 text-[9px] font-medium border border-indigo-300 dark:border-indigo-600 bg-white dark:bg-gray-800 text-indigo-900 dark:text-indigo-100"
+                      >
+                        Done
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => updateDraft({ avatarObjectPosition: undefined })}
+                      className="text-[9px] text-indigo-700 dark:text-indigo-300 underline"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </CollapsibleSection>
 
@@ -963,18 +1190,39 @@ export const MyPageBuilder: React.FC = () => {
                 )}
                 {heroMediaUploading && <p className="text-xs text-gray-500 mt-1">Uploading…</p>}
 
+                <div className="mt-4">
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Hero layout (landing page)</label>
+                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-1.5">
+                    Put your hero photo on the left or right with text beside it — same as the live landing preview.
+                  </p>
+                  <select
+                    value={draft.heroLayout ?? "default"}
+                    onChange={(e) => updateDraft({ heroLayout: e.target.value as "default" | "centered" | "split" | "splitRight" })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                  >
+                    {HERO_LAYOUT_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label} — {opt.description}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 {(heroHasFullBackground || heroGridSlotCount > 0) && (
-                  <div className="mt-4 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/60 dark:bg-indigo-950/30 px-3 py-2.5 space-y-2">
-                    <p className="text-xs font-semibold text-indigo-900 dark:text-indigo-200">Fine-tune in preview →</p>
-                    <p className="text-[11px] text-indigo-800/80 dark:text-indigo-300/90">
-                      Turn on a mode, then drag on the preview (right). Save to publish.
+                  <div className="mt-3 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/60 dark:bg-indigo-950/30 px-3 py-2 space-y-1.5">
+                    <p className="text-xs font-semibold text-indigo-900 dark:text-indigo-200">Fine-tune in Landing preview →</p>
+                    <p className="text-[11px] text-indigo-800/80 dark:text-indigo-300/90 leading-snug">
+                      Turn on a mode, drag on the preview (right), then Save.
                     </p>
                     <div className="flex flex-wrap gap-1.5 items-center">
                       {heroHasFullBackground && (
                         <>
                           <button
                             type="button"
-                            onClick={() => setPreviewFramingTool((t) => (t === "panBg" ? "off" : "panBg"))}
+                            onClick={() => {
+                              setPreviewMode("landing");
+                              setPreviewFramingTool((t) => (t === "panBg" ? "off" : "panBg"));
+                            }}
                             className={`rounded-md px-2 py-1 text-xs font-medium border ${
                               previewFramingTool === "panBg"
                                 ? "border-indigo-600 bg-indigo-600 text-white"
@@ -985,21 +1233,27 @@ export const MyPageBuilder: React.FC = () => {
                           </button>
                           <button
                             type="button"
-                            onClick={() => setPreviewFramingTool((t) => (t === "panAvatar" ? "off" : "panAvatar"))}
+                            onClick={() => {
+                              setPreviewMode("landing");
+                              setPreviewFramingTool((t) => (t === "panAvatar" ? "off" : "panAvatar"));
+                            }}
                             className={`rounded-md px-2 py-1 text-xs font-medium border ${
                               previewFramingTool === "panAvatar"
                                 ? "border-indigo-600 bg-indigo-600 text-white"
                                 : "border-indigo-300 dark:border-indigo-600 bg-white dark:bg-gray-800 text-indigo-900 dark:text-indigo-100"
                             }`}
                           >
-                            Pan avatar
+                            Pan overlay avatar
                           </button>
                         </>
                       )}
                       {heroGridSlotCount > 0 && (
                         <button
                           type="button"
-                          onClick={() => setPreviewFramingTool((t) => (t === "focusPhoto" ? "off" : "focusPhoto"))}
+                          onClick={() => {
+                            setPreviewMode("landing");
+                            setPreviewFramingTool((t) => (t === "focusPhoto" ? "off" : "focusPhoto"));
+                          }}
                           className={`rounded-md px-2 py-1 text-xs font-medium border ${
                             previewFramingTool === "focusPhoto"
                               ? "border-indigo-600 bg-indigo-600 text-white"
@@ -1013,15 +1267,15 @@ export const MyPageBuilder: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => setPreviewFramingTool("off")}
-                          className="text-xs text-indigo-700 dark:text-indigo-300 underline ml-1"
+                          className="text-xs text-indigo-700 dark:text-indigo-300 underline"
                         >
                           Done
                         </button>
                       )}
                     </div>
                     {previewFramingTool === "focusPhoto" && heroGridSlotCount > 1 && (
-                      <div className="flex flex-wrap gap-1 items-center text-[11px]">
-                        <span className="text-indigo-800 dark:text-indigo-300">Which photo:</span>
+                      <div className="flex flex-wrap gap-1 items-center text-[11px] text-indigo-800 dark:text-indigo-300">
+                        <span>Which photo:</span>
                         {Array.from({ length: heroGridSlotCount }, (_, slot) => (
                           <button
                             key={slot}
@@ -1043,9 +1297,9 @@ export const MyPageBuilder: React.FC = () => {
                         Drag on the dark banner overlay to frame the background.
                       </p>
                     )}
-                    {previewFramingTool === "panAvatar" && (
+                    {previewFramingTool === "panAvatar" && heroHasFullBackground && (
                       <p className="text-[11px] text-indigo-800/90 dark:text-indigo-300/90">
-                        Drag across the circular profile photo to pan the image inside the circle.
+                        Drag the circle on the banner in the preview.
                       </p>
                     )}
                     {previewFramingTool === "focusPhoto" && (
@@ -1409,20 +1663,6 @@ export const MyPageBuilder: React.FC = () => {
                     </button>
                   ))}
                 </div>
-              </div>
-              {/* Hero layout */}
-              <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Hero layout (landing page)</label>
-                <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-1.5">How the hero image and name/tagline sit on the landing page. Preview updates as you change it.</p>
-                <select
-                  value={draft.heroLayout ?? "default"}
-                  onChange={(e) => updateDraft({ heroLayout: e.target.value as "default" | "centered" | "split" | "splitRight" })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                >
-                  {HERO_LAYOUT_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label} — {opt.description}</option>
-                  ))}
-                </select>
               </div>
               {/* Global font */}
               <div>

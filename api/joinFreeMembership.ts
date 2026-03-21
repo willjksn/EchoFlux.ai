@@ -1,6 +1,10 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { verifyAuth } from "./verifyAuth.js";
+import {
+  upsertFanHubFanPreferenceFromMember,
+  ensureFanDmThreadForMember,
+} from "./_syncFanHubFanPreference.js";
 
 /**
  * POST: Join a creator's fan page for free (no payment required).
@@ -67,11 +71,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     };
 
+    const syncFanHubFanCardAndThread = async () => {
+      try {
+        await upsertFanHubFanPreferenceFromMember(db, creatorId, fanId, now, "free_membership");
+        await ensureFanDmThreadForMember(db, creatorId, fanId, now);
+      } catch (e) {
+        console.error("syncFanHubFanPreference (free join):", e);
+      }
+    };
+
     if (fanSnap.exists) {
       const existingData = fanSnap.data() as { subscriptionStatus?: string };
       // If already an active subscriber, just return success
       if (existingData?.subscriptionStatus === 'active' || existingData?.subscriptionStatus === 'free') {
         await syncMemberUsernameToFan();
+        await syncFanHubFanCardAndThread();
         return res.status(200).json({ 
           success: true, 
           message: "Already a member",
@@ -115,6 +129,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       unlockedProductIds: unlocked, 
       updatedAt: now 
     }, { merge: true });
+
+    await syncFanHubFanCardAndThread();
 
     // Update creator stats
     const statsRef = db.collection("creatorStats").doc(creatorId);

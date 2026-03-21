@@ -3,6 +3,18 @@ import { useAppContext } from './AppContext';
 import { UserIcon, SearchIcon, StarIcon, SparklesIcon, TrashIcon, EditIcon, PlusIcon, XMarkIcon } from './icons/UIIcons';
 import { auth, db } from '../firebaseConfig';
 import { collection, getDocs, doc, getDoc, setDoc, deleteDoc, updateDoc, query, orderBy, limit, Timestamp, where } from 'firebase/firestore';
+import { fanHubListLabel, safeUsernameForHandle } from '../src/lib/fanHubDisplay';
+
+function usernameFromFanDoc(fd: Record<string, unknown>): string | null {
+  const keys = ['username', 'memberUsername', 'handle', 'instagram_handle', 'instagramHandle'] as const;
+  for (const k of keys) {
+    const v = fd[k];
+    if (typeof v === 'string' && v.trim()) {
+      return safeUsernameForHandle(v.replace(/^@/, ''));
+    }
+  }
+  return null;
+}
 
 type FanActivityType = 'session' | 'rating' | 'content' | 'calendar' | 'media';
 
@@ -136,40 +148,95 @@ export const OnlyFansFans: React.FC = () => {
         }
     };
 
-    // Load fans
+    // Load fans (enrich from users/{fanId} + creators/.../fans so labels match User Management / ab5360d rules)
     const loadFans = async () => {
         if (!user?.id) return;
         setIsLoading(true);
         try {
             const fansSnap = await getDocs(collection(db, 'users', user.id, 'onlyfans_fan_preferences'));
-            const fansList = fansSnap.docs.map(doc => {
-                const data = doc.data();
-                return {
-                    id: doc.id,
-                    name: data.name || doc.id,
-                    preferences: {
-                        ...data,
-                        spendingLevel: data.spendingLevel || (data.totalSpent ? Math.min(5, Math.max(1, Math.ceil(data.totalSpent / 200))) : 0),
-                        totalSessions: data.totalSessions || 0,
-                        isBigSpender: data.isBigSpender || (data.spendingLevel && data.spendingLevel >= 4) || false,
-                        isLoyalFan: data.isLoyalFan || (data.totalSessions && data.totalSessions >= 5) || false,
-                        subscriptionTier: (() => {
-                            // Migrate old 'VIP' or 'Regular' tiers to 'Paid' or 'Free'
-                            const tier = data.subscriptionTier;
-                            if (tier === 'VIP' || tier === 'Regular') {
-                                return 'Paid';
+            const docs = fansSnap.docs;
+            const CHUNK = 25;
+            const fansList: Fan[] = [];
+            for (let i = 0; i < docs.length; i += CHUNK) {
+                const chunk = docs.slice(i, i + CHUNK);
+                const part = await Promise.all(
+                    chunk.map(async (docSnap) => {
+                        const data = docSnap.data();
+                        const fanId = docSnap.id;
+                        let username: string | null = null;
+                        let displayName: string | null =
+                            typeof data.displayName === 'string' && data.displayName.trim()
+                                ? data.displayName.trim()
+                                : null;
+                        let email: string | null = typeof data.email === 'string' ? data.email : null;
+
+                        try {
+                            const [uSnap, fSnap] = await Promise.all([
+                                getDoc(doc(db, 'users', fanId)),
+                                getDoc(doc(db, 'creators', user.id, 'fans', fanId)),
+                            ]);
+                            if (fSnap.exists()) {
+                                const fd = fSnap.data() as Record<string, unknown>;
+                                const fromFan = usernameFromFanDoc(fd);
+                                if (fromFan) username = fromFan;
+                                if (!displayName && typeof fd.displayName === 'string' && fd.displayName.trim()) {
+                                    displayName = fd.displayName.trim();
+                                }
+                                if (!email && typeof fd.email === 'string' && fd.email) email = fd.email;
                             }
-                            return tier || (data.totalSessions >= 3 ? 'Paid' : 'Free');
-                        })(),
-                        isVIP: data.isVIP || false,  // Only use checkbox value, not auto-set from spending
-                        lastSessionDate: data.lastSessionDate?.toDate ? data.lastSessionDate.toDate().toISOString() : (data.lastSessionDate || undefined),
-                        engagementHistory: data.engagementHistory || [],
-                        notes: data.notes || '',
-                        reminders: data.reminders || [],
-                        tags: data.tags || []
-                    }
-                };
-            });
+                            if (uSnap.exists()) {
+                                const ud = uSnap.data() as Record<string, unknown>;
+                                const uu =
+                                    typeof ud.username === 'string' && ud.username.trim()
+                                        ? safeUsernameForHandle(ud.username)
+                                        : null;
+                                if (uu) username = uu;
+                                if (!displayName && typeof ud.displayName === 'string' && ud.displayName.trim()) {
+                                    displayName = ud.displayName.trim();
+                                }
+                                if (!email && typeof ud.email === 'string' && ud.email) email = ud.email;
+                            }
+                        } catch (e) {
+                            console.warn('OnlyFansFans: enrich fan row', fanId, e);
+                        }
+
+                        const prefName = typeof data.name === 'string' ? data.name : null;
+                        const listName = fanHubListLabel(username, displayName, email, prefName);
+
+                        return {
+                            id: fanId,
+                            name: listName,
+                            preferences: {
+                                ...data,
+                                spendingLevel:
+                                    data.spendingLevel ||
+                                    (data.totalSpent ? Math.min(5, Math.max(1, Math.ceil(data.totalSpent / 200))) : 0),
+                                totalSessions: data.totalSessions || 0,
+                                isBigSpender:
+                                    data.isBigSpender || (data.spendingLevel && data.spendingLevel >= 4) || false,
+                                isLoyalFan:
+                                    data.isLoyalFan || (data.totalSessions && data.totalSessions >= 5) || false,
+                                subscriptionTier: (() => {
+                                    const tier = data.subscriptionTier;
+                                    if (tier === 'VIP' || tier === 'Regular') {
+                                        return 'Paid';
+                                    }
+                                    return tier || (data.totalSessions >= 3 ? 'Paid' : 'Free');
+                                })(),
+                                isVIP: data.isVIP || false,
+                                lastSessionDate: data.lastSessionDate?.toDate
+                                    ? data.lastSessionDate.toDate().toISOString()
+                                    : data.lastSessionDate || undefined,
+                                engagementHistory: data.engagementHistory || [],
+                                notes: data.notes || '',
+                                reminders: data.reminders || [],
+                                tags: data.tags || [],
+                            },
+                        };
+                    })
+                );
+                fansList.push(...part);
+            }
             setFans(fansList);
         } catch (error) {
             console.error('Error loading fans:', error);

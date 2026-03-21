@@ -31,7 +31,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const creatorId = decoded.uid;
-  const limitNum = Math.min(parseInt(String(req.query.limit || "100"), 10) || 100, 500);
+  const limitNum = Math.min(parseInt(String(req.query.limit || "100"), 10) || 100, 1000);
 
   try {
     const db = getAdminDb();

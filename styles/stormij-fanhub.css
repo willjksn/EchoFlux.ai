@@ -1,34 +1,131 @@
-/* Fan Hub theme — scoped to .stormij-theme. Uses app-default neutrals; Stormij-style feed/treat *components* stay below. */
-/* Per-creator: inline --fan-primary, --fan-bg, --fan-text on this wrapper. */
+/* Fan Hub theme — scoped to .stormij-theme. */
+/* Per-creator colors: parent sets --fan-primary, --fan-bg, --fan-text (etc.) inline — do not assign fixed brand hex here. */
 .stormij-theme {
   --bg: var(--fan-bg, #fafafa);
   --bg-card: #fff;
   --text: var(--fan-text, #1f2937);
-  --text-muted: #6b7280;
+  --text-muted: var(--fan-text-muted, #6b7280);
   --accent: var(--fan-primary, #6366f1);
-  --accent-hover: #4f46e5;
-  --accent-soft: rgba(99, 102, 241, 0.16);
+  --accent-hover: var(--fan-accent-hover, #4f46e5);
+  --accent-soft: color-mix(in srgb, var(--fan-primary, #6366f1) 18%, transparent);
   --blue-hint: #8b9dc3;
-  --border: #e5e7eb;
-  --serif: "Cormorant Garamond", Georgia, serif;
-  --sans: "DM Sans", system-ui, sans-serif;
+  --border: var(--fan-border, #e5e7eb);
+  --serif: var(--fan-serif, "Cormorant Garamond", Georgia, serif);
+  --sans: var(--fan-sans, "DM Sans", system-ui, sans-serif);
   --brand: var(--accent);
   --brand-hover: var(--accent-hover);
-  --surface: #fafafa;
-  --surface-2: #f3f4f6;
+  --surface: color-mix(in srgb, var(--fan-bg, #fafafa) 92%, #ffffff);
+  --surface-2: color-mix(in srgb, var(--fan-bg, #fafafa) 85%, #e5e7eb);
   --success: #15803d;
   --warning: #b45309;
   --danger: #c53030;
 
-  --fan-primary: #6366f1;
-  --fan-bg: #fafafa;
-  --fan-text: #1f2937;
-  --fan-accent: var(--fan-primary);
-  --fan-serif: "Cormorant Garamond", Georgia, serif;
-  --fan-text-muted: #6b7280;
+  --fan-accent: var(--fan-primary, #6366f1);
 
-  /* No full-page tint — parent main (bg-gray-100 / dark:bg-gray-900) shows through */
   background: transparent;
+}
+
+/* Creator-themed controls (Tailwind `primary-*` stays app indigo; use these inside .stormij-theme) */
+.stormij-theme .fh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  color: #fff;
+  background-color: var(--fan-primary, #6366f1);
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+.stormij-theme .fh-btn:hover:not(:disabled) {
+  background-color: var(--fan-accent-hover, #4f46e5);
+}
+.stormij-theme .fh-btn:disabled {
+  opacity: 0.5;
+}
+.stormij-theme .fh-link {
+  color: var(--fan-primary, #6366f1);
+}
+.stormij-theme .fh-link:hover {
+  color: var(--fan-accent-hover, #4f46e5);
+}
+.stormij-theme .fh-range {
+  accent-color: var(--fan-primary, #6366f1);
+}
+.stormij-theme .fh-selected-soft {
+  background-color: color-mix(in srgb, var(--fan-primary, #6366f1) 14%, transparent);
+}
+.stormij-theme .fh-bubble-me {
+  background-color: var(--fan-primary, #6366f1);
+  color: #fff;
+}
+
+/*
+ * Fan Hub shell uses .stormij-theme + creator CSS vars. Many panels still use Tailwind
+ * `primary-*` (app indigo). Remap those utilities inside .stormij-theme to storefront colors.
+ */
+.stormij-theme .bg-primary-600 {
+  background-color: var(--fan-primary, #6366f1) !important;
+}
+.stormij-theme .hover\:bg-primary-700:hover {
+  background-color: var(--fan-accent-hover, #4f46e5) !important;
+}
+.stormij-theme .bg-primary-500 {
+  background-color: color-mix(in srgb, var(--fan-primary, #6366f1) 92%, #000) !important;
+}
+.stormij-theme .border-primary-500 {
+  border-color: var(--fan-primary, #6366f1) !important;
+}
+.stormij-theme .bg-primary-50 {
+  background-color: color-mix(in srgb, var(--fan-primary, #6366f1) 12%, #fff) !important;
+}
+.dark .stormij-theme .dark\:bg-primary-900\/20 {
+  background-color: color-mix(in srgb, var(--fan-primary, #6366f1) 22%, transparent) !important;
+}
+.stormij-theme .bg-primary-100 {
+  background-color: color-mix(in srgb, var(--fan-primary, #6366f1) 18%, #fff) !important;
+}
+.dark .stormij-theme .dark\:bg-primary-900\/30 {
+  background-color: color-mix(in srgb, var(--fan-primary, #6366f1) 30%, transparent) !important;
+}
+.stormij-theme .text-primary-600 {
+  color: var(--fan-primary, #6366f1) !important;
+}
+.stormij-theme .text-primary-400 {
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 70%, #fff) !important;
+}
+.stormij-theme .text-primary-700 {
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 55%, #000) !important;
+}
+.stormij-theme .text-primary-300 {
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 65%, #fff) !important;
+}
+.stormij-theme .text-primary-900 {
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 35%, #000) !important;
+}
+.stormij-theme .text-primary-100 {
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 15%, #fff) !important;
+}
+.stormij-theme .hover\:text-primary-700:hover {
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 45%, #000) !important;
+}
+.stormij-theme .hover\:text-primary-300:hover {
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 50%, #fff) !important;
+}
+.stormij-theme .hover\:text-primary-400:hover {
+  color: color-mix(in srgb, var(--fan-primary, #6366f1) 72%, #fff) !important;
+}
+.stormij-theme .hover\:text-primary-600:hover {
+  color: var(--fan-primary, #6366f1) !important;
+}
+.stormij-theme .accent-primary-500,
+.stormij-theme .accent-primary-600 {
+  accent-color: var(--fan-primary, #6366f1) !important;
+}
+.stormij-theme .ring-primary-500 {
+  --tw-ring-color: var(--fan-primary, #6366f1) !important;
+}
+.stormij-theme .border-primary-600 {
+  border-color: var(--fan-primary, #6366f1) !important;
 }
 
 /* ========== Member feed (Stormij_xo member/member-feed.css parity) ========== */
@@ -196,6 +293,137 @@
   color: #a5b4fc;
 }
 
+/*
+ * Fan Hub feed chrome (reference): soft pink page band, white card, controls stay WHITE
+ * with only a whisper of rose border + burgundy ink — not pink-filled buttons.
+ */
+.stormij-theme .fan-hub-feed-chrome {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--fan-primary, #e8b4c8) 11%, #fff) 0%,
+    color-mix(in srgb, var(--fan-primary, #e8b4c8) 4%, var(--fan-bg, #fafafa)) 72px,
+    transparent 100%
+  );
+  margin: 0 -2px;
+  padding: 10px 8px 0;
+  border-radius: 20px 20px 0 0;
+}
+.stormij-theme .feed-header-wrap {
+  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--fan-primary, #e8b4c8) 16%, #f5e6ec);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.dark .stormij-theme .feed-header-wrap {
+  background: #1f2937;
+  border-color: color-mix(in srgb, var(--fan-primary) 22%, #4b5563);
+}
+.stormij-theme .feed-title {
+  color: color-mix(in srgb, var(--fan-primary) 28%, #1a1214);
+}
+
+/* Burgundy / ink from primary (text + icons) */
+.stormij-theme .feed-saved-link {
+  border: 1px solid color-mix(in srgb, var(--fan-primary) 18%, #f0e4ea);
+  background: #fff;
+  color: color-mix(in srgb, var(--fan-primary) 42%, #1f0e14);
+  border-radius: 9999px;
+  padding: 0.45rem 1rem;
+}
+.stormij-theme .feed-saved-link:hover {
+  background: #fdfcfd;
+  border-color: color-mix(in srgb, var(--fan-primary) 26%, #ead5df);
+  color: color-mix(in srgb, var(--fan-primary) 38%, #1a0c12);
+  transform: translateY(-1px);
+}
+.dark .stormij-theme .feed-saved-link {
+  border-color: color-mix(in srgb, var(--fan-primary) 24%, #4b5563);
+  background: #111827;
+  color: color-mix(in srgb, var(--fan-primary) 48%, #fce7f0);
+}
+.dark .stormij-theme .feed-saved-link:hover {
+  background: #1f2937;
+  border-color: color-mix(in srgb, var(--fan-primary) 34%, #6b7280);
+}
+
+.stormij-theme .feed-view-toggle {
+  border: 1px solid color-mix(in srgb, var(--fan-primary) 18%, #f0e4ea);
+  background: #fff;
+  box-shadow: none;
+}
+.stormij-theme .feed-view-toggle:hover {
+  background: #fdfcfd;
+  border-color: color-mix(in srgb, var(--fan-primary) 26%, #ead5df);
+}
+.stormij-theme .feed-view-toggle svg {
+  stroke: color-mix(in srgb, var(--fan-primary) 44%, #261018);
+}
+.stormij-theme .feed-view-toggle:hover svg {
+  stroke: color-mix(in srgb, var(--fan-primary) 38%, #1f0e14);
+}
+.dark .stormij-theme .feed-view-toggle {
+  border-color: color-mix(in srgb, var(--fan-primary) 24%, #4b5563);
+  background: #111827;
+}
+.dark .stormij-theme .feed-view-toggle:hover {
+  background: #1f2937;
+  border-color: color-mix(in srgb, var(--fan-primary) 32%, #6b7280);
+}
+.dark .stormij-theme .feed-view-toggle svg {
+  stroke: color-mix(in srgb, var(--fan-primary) 42%, #e9d0dc);
+}
+.dark .stormij-theme .feed-view-toggle:hover svg {
+  stroke: color-mix(in srgb, var(--fan-primary) 52%, #f5e0eb);
+}
+
+.stormij-theme .feed-header-visibility-btn {
+  border: 1px solid color-mix(in srgb, var(--fan-primary) 18%, #f0e4ea);
+  background: #fff;
+  color: color-mix(in srgb, var(--fan-primary) 40%, #1f0e14);
+}
+.stormij-theme .feed-header-visibility-btn:hover {
+  background: #fdfcfd;
+  border-color: color-mix(in srgb, var(--fan-primary) 26%, #ead5df);
+  color: color-mix(in srgb, var(--fan-text, #1f2937) 92%, var(--fan-primary));
+}
+.dark .stormij-theme .feed-header-visibility-btn {
+  border-color: color-mix(in srgb, var(--fan-primary) 24%, #4b5563);
+  background: #111827;
+  color: color-mix(in srgb, var(--fan-primary) 45%, #f3e8ee);
+}
+.dark .stormij-theme .feed-header-visibility-btn:hover {
+  background: #1f2937;
+  border-color: color-mix(in srgb, var(--fan-primary) 34%, #6b7280);
+  color: #f9fafb;
+}
+
+.stormij-theme .feed-header-visibility-popover {
+  border: 1px solid color-mix(in srgb, var(--fan-primary) 14%, #ececec);
+  background: #fff;
+  box-shadow: 0 12px 28px -8px rgba(0, 0, 0, 0.1), 0 4px 10px -6px rgba(0, 0, 0, 0.06);
+}
+.dark .stormij-theme .feed-header-visibility-popover {
+  border-color: #4b5563;
+  background: #374151;
+  box-shadow: 0 12px 28px -8px rgba(0, 0, 0, 0.45);
+}
+.stormij-theme .feed-header-visibility {
+  border-top-color: color-mix(in srgb, var(--fan-primary) 10%, #e5e7eb);
+}
+.dark .stormij-theme .feed-header-visibility {
+  border-top-color: #4b5563;
+}
+.stormij-theme .feed-header-visibility-label {
+  color: color-mix(in srgb, var(--fan-text-muted, #6b7280) 82%, var(--fan-primary));
+}
+.dark .stormij-theme .feed-header-visibility-label {
+  color: #9ca3af;
+}
+.stormij-theme .feed-header-checkbox:hover {
+  color: color-mix(in srgb, var(--fan-primary) 35%, #1f0e14);
+  border-color: color-mix(in srgb, var(--fan-primary) 20%, #e5e7eb);
+}
+
 .feed-view-toggle {
   width: 38px; height: 38px; padding: 0;
   border: 1px solid #e5e7eb;
@@ -293,6 +521,30 @@
 }
 .dark .feed-card:hover {
   border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 40%, transparent);
+}
+
+/* Break up pink on post cards: crisp white + thin rose edge (Fan Hub / stormij) */
+.stormij-theme .feed-card {
+  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--fan-primary) 11%, #ebe3e7);
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.06);
+}
+.stormij-theme .feed-card:hover {
+  border-color: color-mix(in srgb, var(--fan-primary) 17%, #dfd2d8);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+}
+.dark .stormij-theme .feed-card {
+  background: linear-gradient(180deg, #1f2937 0%, #1a1f2c 100%);
+  border-color: color-mix(in srgb, var(--fan-primary) 15%, #4b5563);
+}
+.dark .stormij-theme .feed-card:hover {
+  border-color: color-mix(in srgb, var(--fan-primary) 28%, #6b7280);
+}
+.stormij-theme .feed-card-username {
+  color: color-mix(in srgb, var(--fan-primary) 32%, #1f1418);
+}
+.dark .stormij-theme .feed-card-username {
+  color: color-mix(in srgb, var(--fan-primary) 45%, #e5e7eb);
 }
 
 .feed-card-text-only {
@@ -652,6 +904,46 @@
 .dark .bookmark-btn .bookmark-outline { color: #9ca3af; }
 .dark .bookmark-btn.bookmarked .bookmark-filled { color: #c4b5fd; }
 
+/* Fan Hub: bookmark matches creator primary (overrides purple / Tailwind primary above) */
+.stormij-theme .bookmark-btn .bookmark-outline {
+  color: color-mix(in srgb, var(--fan-primary) 38%, #6b7280);
+}
+.stormij-theme .bookmark-btn .bookmark-filled {
+  color: var(--fan-primary);
+}
+.stormij-theme .bookmark-btn:hover .bookmark-outline {
+  color: var(--fan-primary);
+}
+.stormij-theme .bookmark-btn:hover {
+  background: color-mix(in srgb, var(--fan-primary) 12%, transparent);
+}
+.stormij-theme .bookmark-btn.bookmarked .bookmark-filled {
+  color: var(--fan-primary);
+}
+.dark .stormij-theme .bookmark-btn .bookmark-outline {
+  color: color-mix(in srgb, var(--fan-primary) 35%, #9ca3af);
+}
+.dark .stormij-theme .bookmark-btn:hover {
+  background: color-mix(in srgb, var(--fan-primary) 18%, transparent);
+}
+.dark .stormij-theme .bookmark-btn.bookmarked .bookmark-filled {
+  color: color-mix(in srgb, var(--fan-primary) 72%, #fff);
+}
+
+.stormij-theme .fan-hub-reward-summary {
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 6%, #f9fafb);
+}
+.dark .stormij-theme .fan-hub-reward-summary {
+  background: rgba(31, 41, 55, 0.75);
+}
+
+.stormij-theme .fan-hub-monthly-totals-row {
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 7%, #f9fafb);
+}
+.dark .stormij-theme .fan-hub-monthly-totals-row {
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 12%, #1f2937);
+}
+
 /* Tip Button - uses creator's theme color */
 .feed-card-send-tip {
   margin-left: 0.5rem;
@@ -986,6 +1278,28 @@
 .feed-comments-modal-compose-avatar {
   width: 32px;
   height: 32px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--fan-primary, #8b5cf6) 55%, #fff) 0%,
+    var(--fan-primary, #8b5cf6) 100%
+  );
+}
+.feed-comments-modal-compose-avatar span {
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+.feed-comments-modal-compose-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
 }
 .feed-comments-modal-compose-input-wrap {
   flex: 1;

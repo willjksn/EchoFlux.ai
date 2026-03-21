@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useAppContext } from "./AppContext";
 import { auth, db } from "../firebaseConfig";
-import { collection, query, getDocs, doc, deleteDoc, addDoc, setDoc, serverTimestamp, updateDoc, where, orderBy } from "firebase/firestore";
-import { formatFanDisplayLabel, initialsFromFanLabel } from "../src/lib/fanHubDisplay";
+import { collection, query, getDocs, getDoc, doc, deleteDoc, addDoc, setDoc, serverTimestamp, updateDoc, where } from "firebase/firestore";
+import { formatFanDisplayLabel, initialsFromFanLabel, safeUsernameForHandle } from "../src/lib/fanHubDisplay";
+import { pickLatestMemberAccessEnd, formatRemainingAccessForFanRow } from "../src/lib/memberAccessEnd";
 
 type UserRole = "admin" | "member" | "tipper";
 
@@ -16,6 +17,7 @@ interface FanUser {
   plan: string | null;
   signupDate: Date;
   remainingAccess: "Active" | "Expired" | "Cancelled" | string;
+  /** Month-to-date (calendar month) from orders — matches Monthly Totals row */
   monthlySpendCents: number;
   storePurchasesCents: number;
   tipsCents: number;
@@ -82,6 +84,24 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
+/** Plan / access pill: semantic colors (not creator accent) */
+function planStatusBadgeClass(label: string): string | null {
+  const s = label.trim().toLowerCase();
+  if (s === "active") {
+    return "px-2 py-1 text-xs font-medium rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/35 dark:text-emerald-300";
+  }
+  if (s === "cancelled") {
+    return "px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800 dark:bg-red-900/35 dark:text-red-300";
+  }
+  if (s === "expired") {
+    return "px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400";
+  }
+  if (s === "inactive") {
+    return "px-2 py-1 text-xs font-medium rounded-full bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200";
+  }
+  return null;
+}
+
 function getAvatarColor(name: string): string {
   const colors = [
     "bg-indigo-500",
@@ -135,7 +155,7 @@ export const FanHubUsers: React.FC = () => {
     setLoading(true);
 
     try {
-      const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
       // Fetch orders for spend calculation
@@ -144,20 +164,48 @@ export const FanHubUsers: React.FC = () => {
       if (ordersRes.ok) {
         const data = await ordersRes.json();
         orders = data.orders || [];
+      } else if (import.meta.env.DEV && (ordersRes.status === 404 || ordersRes.status === 502)) {
+        console.warn(
+          `[FanHubUsers] /api/creatorOrders returned ${ordersRes.status}. ` +
+            "Vite does not run serverless routes locally unless you proxy: add DEV_API_PROXY=https://your-app.vercel.app to .env.local (see docs/LOCAL_DEV.md). User list still loads from Firestore; store spend columns may be incomplete."
+        );
       }
 
       // Build user map - start with fans collection (primary source)
+      const firestoreDate = (v: unknown): Date | null => {
+        if (v == null || v === "") return null;
+        if (typeof v === "object" && v !== null && "toDate" in v && typeof (v as { toDate: () => Date }).toDate === "function") {
+          const d = (v as { toDate: () => Date }).toDate();
+          return Number.isFinite(d.getTime()) ? d : null;
+        }
+        if (typeof v === "string" || typeof v === "number") {
+          const d = new Date(v);
+          return Number.isFinite(d.getTime()) ? d : null;
+        }
+        return null;
+      };
+
+      const nowRef = new Date();
+      const monthStart = new Date(nowRef.getFullYear(), nowRef.getMonth(), 1);
+      const monthEnd = new Date(nowRef.getFullYear(), nowRef.getMonth() + 1, 0, 23, 59, 59, 999);
+      const isInCurrentMonth = (d: Date) => d >= monthStart && d <= monthEnd;
+
       const userMap = new Map<string, {
         id: string;
         email: string | null;
         displayName: string | null;
         username?: string | null;
+        /** From fans doc role (admin / member / tipper) — Stormij migration + manual */
+        storedRole?: UserRole | null;
         subscriptionStatus: string | null;
         subscribedAt: Date | null;
         tips: number;
         unlocks: number;
         treats: number;
         total: number;
+        mtdTips: number;
+        mtdUnlocks: number;
+        mtdTreats: number;
         lastActive: Date | null;
         firstOrder: Date | null;
         avatarUrl?: string;
@@ -168,40 +216,69 @@ export const FanHubUsers: React.FC = () => {
       }>();
 
       // First, fetch from creators/{creatorId}/fans collection (Stripe subscribers and purchasers)
+      // Note: Do not use orderBy("createdAt") here — Firestore omits docs missing that field, so migrated
+      // Stormij fans (or older webhook rows) can disappear from the list. Sort client-side instead.
       try {
         const fansRef = collection(db, "creators", user.id, "fans");
-        const fansQuery = query(fansRef, orderBy("createdAt", "desc"));
-        const fansSnap = await getDocs(fansQuery);
-        fansSnap.docs.forEach((doc) => {
+        const fansSnap = await getDocs(fansRef);
+        const fanDocs = [...fansSnap.docs].sort((a, b) => {
+          const da = a.data();
+          const db_ = b.data();
+          const ta =
+            (da.createdAt as { toDate?: () => Date })?.toDate?.()?.getTime() ??
+            (da.subscribedAt as { toDate?: () => Date })?.toDate?.()?.getTime() ??
+            (typeof da.createdAt === "string" || typeof da.createdAt === "number"
+              ? new Date(da.createdAt as string | number).getTime()
+              : 0);
+          const tb =
+            (db_.createdAt as { toDate?: () => Date })?.toDate?.()?.getTime() ??
+            (db_.subscribedAt as { toDate?: () => Date })?.toDate?.()?.getTime() ??
+            (typeof db_.createdAt === "string" || typeof db_.createdAt === "number"
+              ? new Date(db_.createdAt as string | number).getTime()
+              : 0);
+          return tb - ta;
+        });
+        fanDocs.forEach((doc) => {
           const data = doc.data();
           const fanId = doc.id;
-          const subscribedAt = data.subscribedAt ? new Date(data.subscribedAt) : (data.createdAt ? new Date(data.createdAt) : null);
-          const periodEndRaw = data.subscriptionCurrentPeriodEnd;
-          let subscriptionCurrentPeriodEnd: Date | null = null;
-          if (periodEndRaw != null && periodEndRaw !== "") {
-            const ts = periodEndRaw as { toDate?: () => Date };
-            if (typeof ts.toDate === "function") {
-              subscriptionCurrentPeriodEnd = ts.toDate();
-            } else {
-              const d = new Date(periodEndRaw as string | number);
-              subscriptionCurrentPeriodEnd = Number.isFinite(d.getTime()) ? d : null;
-            }
-          }
+          const subscribedAt =
+            firestoreDate(data.subscribedAt) ??
+            firestoreDate(data.createdAt) ??
+            null;
+          const subscriptionCurrentPeriodEnd = pickLatestMemberAccessEnd(data as Record<string, unknown>);
 
-          const rawUsername =
-            typeof data.username === "string" ? data.username.trim().toLowerCase() : null;
+          const rawUsernameFromDoc =
+            (typeof data.username === "string" && data.username.trim()) ||
+            (typeof data.memberUsername === "string" && data.memberUsername.trim()) ||
+            (typeof data.handle === "string" && data.handle.trim()) ||
+            (typeof data.instagram_handle === "string" && data.instagram_handle.trim()) ||
+            (typeof data.instagramHandle === "string" && data.instagramHandle.trim()) ||
+            "";
+          const rawUsername = rawUsernameFromDoc
+            ? rawUsernameFromDoc.replace(/^@/, "").toLowerCase()
+            : null;
+          const roleRaw = typeof data.role === "string" ? data.role.toLowerCase() : "";
+          let storedRole: UserRole | null = null;
+          if (roleRaw === "admin") storedRole = "admin";
+          else if (roleRaw === "tipper") storedRole = "tipper";
+          else if (roleRaw === "member") storedRole = "member";
+
           userMap.set(fanId, {
             id: fanId,
             email: data.email || null,
             displayName: data.displayName || null,
             username: rawUsername || null,
+            storedRole,
             subscriptionStatus: data.subscriptionStatus || null,
             subscribedAt,
             tips: 0,
             unlocks: 0,
             treats: 0,
+            mtdTips: 0,
+            mtdUnlocks: 0,
+            mtdTreats: 0,
             total: data.totalSpentCents || 0,
-            lastActive: data.lastPaymentAt ? new Date(data.lastPaymentAt) : subscribedAt,
+            lastActive: firestoreDate(data.lastPaymentAt) ?? subscribedAt,
             firstOrder: subscribedAt,
             avatarUrl: data.avatarUrl || undefined,
             cancelAtPeriodEnd: data.cancelAtPeriodEnd === true,
@@ -225,11 +302,15 @@ export const FanHubUsers: React.FC = () => {
           email: fanEmail,
           displayName: null,
           username: null as string | null,
+          storedRole: null as UserRole | null,
           subscriptionStatus: null,
           subscribedAt: null,
           tips: 0,
           unlocks: 0,
           treats: 0,
+          mtdTips: 0,
+          mtdUnlocks: 0,
+          mtdTreats: 0,
           total: 0,
           lastActive: null,
           firstOrder: null,
@@ -239,6 +320,12 @@ export const FanHubUsers: React.FC = () => {
         else if (type === "unlock" || type === "unlock_media") existing.unlocks += amount;
         else existing.treats += amount;
         existing.total += amount;
+
+        if (isInCurrentMonth(orderDate)) {
+          if (type === "tip") existing.mtdTips += amount;
+          else if (type === "unlock" || type === "unlock_media") existing.mtdUnlocks += amount;
+          else existing.mtdTreats += amount;
+        }
 
         if (!existing.lastActive || orderDate > existing.lastActive) existing.lastActive = orderDate;
         if (!existing.firstOrder || orderDate < existing.firstOrder) existing.firstOrder = orderDate;
@@ -254,17 +341,7 @@ export const FanHubUsers: React.FC = () => {
         legacySubSnap.docs.forEach((doc) => {
           const data = doc.data();
           const fanId = doc.id;
-          const legacyPeriodRaw = data.currentPeriodEnd;
-          let legacyPeriodEnd: Date | null = null;
-          if (legacyPeriodRaw != null && legacyPeriodRaw !== "") {
-            const ts = legacyPeriodRaw as { toDate?: () => Date };
-            if (typeof ts.toDate === "function") {
-              legacyPeriodEnd = ts.toDate();
-            } else {
-              const d = new Date(legacyPeriodRaw as string | number);
-              legacyPeriodEnd = Number.isFinite(d.getTime()) ? d : null;
-            }
-          }
+          const legacyPeriodEnd = pickLatestMemberAccessEnd(data as Record<string, unknown>);
           if (!userMap.has(fanId)) {
             const subscribedAt = data.updatedAt ? new Date(data.updatedAt) : null;
             userMap.set(fanId, {
@@ -277,6 +354,9 @@ export const FanHubUsers: React.FC = () => {
               tips: 0,
               unlocks: 0,
               treats: 0,
+              mtdTips: 0,
+              mtdUnlocks: 0,
+              mtdTreats: 0,
               total: 0,
               lastActive: subscribedAt,
               firstOrder: subscribedAt,
@@ -291,8 +371,11 @@ export const FanHubUsers: React.FC = () => {
             if (data.cancelAtPeriodEnd === true) {
               existing.cancelAtPeriodEnd = true;
             }
-            if (legacyPeriodEnd && !existing.subscriptionCurrentPeriodEnd) {
-              existing.subscriptionCurrentPeriodEnd = legacyPeriodEnd;
+            if (legacyPeriodEnd) {
+              const cur = existing.subscriptionCurrentPeriodEnd;
+              if (!cur || legacyPeriodEnd.getTime() > cur.getTime()) {
+                existing.subscriptionCurrentPeriodEnd = legacyPeriodEnd;
+              }
             }
           }
         });
@@ -319,6 +402,9 @@ export const FanHubUsers: React.FC = () => {
               tips: 0,
               unlocks: 0,
               treats: 0,
+              mtdTips: 0,
+              mtdUnlocks: 0,
+              mtdTreats: 0,
               total: 0,
               lastActive: createdAt,
               firstOrder: createdAt,
@@ -329,6 +415,38 @@ export const FanHubUsers: React.FC = () => {
         // Manual users collection may not exist
       }
 
+      // Merge `users/{fanId}` so @username shows when `fans` doc lacks it (Stripe + claimed handles)
+      const profileIds = [...userMap.keys()];
+      const PROFILE_CHUNK = 30;
+      for (let i = 0; i < profileIds.length; i += PROFILE_CHUNK) {
+        const chunk = profileIds.slice(i, i + PROFILE_CHUNK);
+        await Promise.all(
+          chunk.map(async (fanId) => {
+            try {
+              const uSnap = await getDoc(doc(db, "users", fanId));
+              if (!uSnap.exists()) return;
+              const u = uSnap.data() as { username?: string; displayName?: string; name?: string };
+              const entry = userMap.get(fanId);
+              if (!entry) return;
+              const uu = safeUsernameForHandle(
+                typeof u.username === "string" ? u.username : undefined
+              );
+              if (uu && !entry.username) {
+                entry.username = uu;
+              }
+              if (!entry.displayName) {
+                const dn = typeof u.displayName === "string" ? u.displayName.trim() : "";
+                const nm = typeof u.name === "string" ? u.name.trim() : "";
+                if (dn) entry.displayName = dn;
+                else if (nm) entry.displayName = nm;
+              }
+            } catch {
+              /* ignore */
+            }
+          })
+        );
+      }
+
       // Convert to FanUser array
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       const fanUsers: FanUser[] = Array.from(userMap.values()).map((data) => {
@@ -337,53 +455,55 @@ export const FanHubUsers: React.FC = () => {
           {
             username: data.username,
             displayName: data.displayName,
+            email: data.email || undefined,
           },
           { fallback: "Member" }
         );
         const memberUsername = data.username || null;
 
-        // Determine role based on subscription and spending
-        let role: UserRole = "member";
-        if (!data.subscriptionStatus && data.tips > 0 && data.treats === 0 && data.unlocks === 0) {
-          role = "tipper"; // Non-subscriber who only tips
+        // Role: prefer explicit fans doc (Stormij / Add User), else infer tipper from spend
+        let role: UserRole = data.storedRole || "member";
+        if (!data.storedRole && !data.subscriptionStatus && data.tips > 0 && data.treats === 0 && data.unlocks === 0) {
+          role = "tipper";
         }
 
-        // Remaining access: Expired = subscription fully ended (Stripe deleted / status canceled).
-        // Cancelled = still in paid period but cancel_at_period_end (access until period end).
-        const st = (data.subscriptionStatus || "").toLowerCase();
-        const nowMs = Date.now();
-        const periodEnd = data.subscriptionCurrentPeriodEnd;
-        const periodEndMs =
-          periodEnd instanceof Date && Number.isFinite(periodEnd.getTime()) ? periodEnd.getTime() : null;
-
-        let remainingAccess: string = "Active";
-        if (st === "canceled" || st === "cancelled") {
-          remainingAccess = "Expired";
-        } else if (st === "active" || st === "trialing") {
-          if (data.cancelAtPeriodEnd && periodEndMs != null) {
-            remainingAccess = periodEndMs > nowMs ? "Cancelled" : "Expired";
-          } else {
-            remainingAccess = "Active";
-          }
-        } else if (st === "past_due") {
-          remainingAccess = "Past Due";
-        } else if (data.lastActive && data.lastActive < thirtyDaysAgo && !data.subscriptionStatus) {
+        let remainingAccess = formatRemainingAccessForFanRow({
+          subscriptionStatus: data.subscriptionStatus,
+          cancelAtPeriodEnd: data.cancelAtPeriodEnd === true,
+          accessEnd: data.subscriptionCurrentPeriodEnd ?? null,
+        });
+        if (
+          remainingAccess === "—" &&
+          data.lastActive &&
+          data.lastActive < thirtyDaysAgo &&
+          !data.subscriptionStatus
+        ) {
           remainingAccess = "Inactive";
         }
 
+        const stPlan = (data.subscriptionStatus || "").toLowerCase();
+        let plan: string | null = null;
+        if (stPlan === "active" || stPlan === "trialing") plan = "Active";
+        else if (stPlan === "canceled" || stPlan === "cancelled") plan = "Cancelled";
+        else if (stPlan === "past_due") plan = "Past Due";
+        else if (data.total > 0) plan = "Purchaser";
+
+        const mtdTips = data.mtdTips ?? 0;
+        const mtdTreats = data.mtdTreats ?? 0;
+        const mtdUnlocks = data.mtdUnlocks ?? 0;
         return {
           id: data.id,
           name,
           email,
           memberUsername,
           role,
-          plan: data.subscriptionStatus === "active" || data.subscriptionStatus === "trialing" ? "Active" : (data.total > 0 ? "Purchaser" : null),
+          plan,
           signupDate: data.subscribedAt || data.firstOrder || new Date(),
           remainingAccess,
-          monthlySpendCents: data.total,
-          storePurchasesCents: data.treats,
-          tipsCents: data.tips,
-          unlocksCents: data.unlocks,
+          monthlySpendCents: mtdTips + mtdTreats + mtdUnlocks,
+          storePurchasesCents: mtdTreats,
+          tipsCents: mtdTips,
+          unlocksCents: mtdUnlocks,
           lastActiveAt: data.lastActive,
           avatarUrl: data.avatarUrl,
         };
@@ -548,7 +668,7 @@ export const FanHubUsers: React.FC = () => {
     if (!selectedUser || grantVideoMinutes <= 0) return;
     setIsGrantingMinutes(true);
     try {
-      const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       const res = await fetch("/api/videoUsageStats?action=addMinutes", {
         method: "POST",
         headers: {
@@ -640,8 +760,11 @@ export const FanHubUsers: React.FC = () => {
     );
   }
 
-  const UserRow: React.FC<{ fanUser: FanUser; showActions?: boolean }> = ({ fanUser, showActions = true }) => (
-    <tr className="hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-colors">
+  const UserRow: React.FC<{ fanUser: FanUser; showActions?: boolean }> = ({ fanUser, showActions = true }) => {
+    const planBadgeClass = fanUser.plan ? planStatusBadgeClass(fanUser.plan) : null;
+    const accessBadgeClass = planStatusBadgeClass(fanUser.remainingAccess);
+    return (
+    <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
       <td className="px-4 py-3">
         <div className="flex items-center gap-3">
           <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold ${getAvatarColor(fanUser.name)}`}>
@@ -651,7 +774,7 @@ export const FanHubUsers: React.FC = () => {
             <div className="flex items-center gap-2">
               <span className="font-medium text-gray-900 dark:text-white">{fanUser.name}</span>
               {fanUser.role === "admin" && (
-                <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 rounded">
+                <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-slate-200 text-slate-800 dark:bg-slate-600 dark:text-slate-100 rounded">
                   ADMIN
                 </span>
               )}
@@ -662,9 +785,13 @@ export const FanHubUsers: React.FC = () => {
       </td>
       <td className="px-4 py-3">
         {fanUser.plan ? (
-          <span className="px-2 py-1 text-xs font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 rounded-full">
-            {fanUser.plan}
-          </span>
+          planBadgeClass ? (
+            <span className={planBadgeClass}>{fanUser.plan}</span>
+          ) : (
+            <span className="px-2 py-1 text-xs font-medium rounded-full bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+              {fanUser.plan}
+            </span>
+          )
         ) : (
           <span className="text-gray-400">—</span>
         )}
@@ -673,7 +800,11 @@ export const FanHubUsers: React.FC = () => {
         {formatDate(fanUser.signupDate)}
       </td>
       <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
-        {fanUser.remainingAccess}
+        {accessBadgeClass ? (
+          <span className={accessBadgeClass}>{fanUser.remainingAccess}</span>
+        ) : (
+          fanUser.remainingAccess
+        )}
       </td>
       <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
         {formatCents(fanUser.monthlySpendCents)}
@@ -692,7 +823,7 @@ export const FanHubUsers: React.FC = () => {
           <div className="flex items-center gap-2">
             <button
               onClick={() => handleManageUser(fanUser)}
-              className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium"
+              className="fh-link text-sm font-medium"
             >
               Manage
             </button>
@@ -738,7 +869,8 @@ export const FanHubUsers: React.FC = () => {
         )}
       </td>
     </tr>
-  );
+    );
+  };
 
   const SectionHeader: React.FC<{ title: string; count: number }> = ({ title, count }) => (
     <tr className="bg-gray-50 dark:bg-gray-800/50">
@@ -757,8 +889,9 @@ export const FanHubUsers: React.FC = () => {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">User Management</h1>
         <div className="flex items-center gap-3">
           <button
+            type="button"
             onClick={() => setShowAddModal(true)}
-            className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
+            className="fh-btn px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2"
           >
             <PlusIcon />
             Add User
@@ -768,7 +901,7 @@ export const FanHubUsers: React.FC = () => {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by name or email..."
+              placeholder="Search by name, @handle, or email..."
               className="pl-9 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm w-64"
             />
             <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
@@ -782,7 +915,10 @@ export const FanHubUsers: React.FC = () => {
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-100 dark:border-gray-700 overflow-hidden">
         {loading ? (
           <div className="p-8 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mx-auto mb-4"></div>
+            <div
+              className="animate-spin rounded-full h-8 w-8 border-b-2 mx-auto mb-4"
+              style={{ borderColor: "var(--fan-primary, #6366f1)" }}
+            />
             <p className="text-gray-500 dark:text-gray-400">Loading users...</p>
           </div>
         ) : (
@@ -821,10 +957,15 @@ export const FanHubUsers: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {/* Monthly Totals Row */}
-                <tr className="bg-indigo-50/50 dark:bg-indigo-900/10">
+                <tr className="fan-hub-monthly-totals-row">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-white text-xs font-semibold">
+                      <div
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold"
+                        style={{
+                          background: `linear-gradient(135deg, var(--fan-primary, #6366f1) 0%, color-mix(in srgb, var(--fan-primary, #6366f1) 65%, #1e1b4b) 100%)`,
+                        }}
+                      >
                         Σ
                       </div>
                       <span className="font-semibold text-gray-900 dark:text-white">Monthly Totals</span>
@@ -835,16 +976,28 @@ export const FanHubUsers: React.FC = () => {
                     {getMonthYear(new Date())}
                   </td>
                   <td className="px-4 py-3 text-gray-400">—</td>
-                  <td className="px-4 py-3 text-sm font-semibold text-indigo-600 dark:text-indigo-400">
+                  <td
+                    className="px-4 py-3 text-sm font-semibold"
+                    style={{ color: "var(--fan-primary, #6366f1)" }}
+                  >
                     {formatCents(monthlyTotals.spend)}
                   </td>
-                  <td className="px-4 py-3 text-sm font-semibold text-indigo-600 dark:text-indigo-400">
+                  <td
+                    className="px-4 py-3 text-sm font-semibold"
+                    style={{ color: "var(--fan-primary, #6366f1)" }}
+                  >
                     {formatCents(monthlyTotals.purchases)}
                   </td>
-                  <td className="px-4 py-3 text-sm font-semibold text-indigo-600 dark:text-indigo-400">
+                  <td
+                    className="px-4 py-3 text-sm font-semibold"
+                    style={{ color: "var(--fan-primary, #6366f1)" }}
+                  >
                     {formatCents(monthlyTotals.tips)}
                   </td>
-                  <td className="px-4 py-3 text-sm font-semibold text-indigo-600 dark:text-indigo-400">
+                  <td
+                    className="px-4 py-3 text-sm font-semibold"
+                    style={{ color: "var(--fan-primary, #6366f1)" }}
+                  >
                     {formatCents(monthlyTotals.unlocks)}
                   </td>
                   <td className="px-4 py-3 text-gray-400">—</td>
@@ -960,7 +1113,7 @@ export const FanHubUsers: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowNewUserPassword(!showNewUserPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-sm fh-link"
                   >
                     {showNewUserPassword ? "Hide" : "Show"}
                   </button>
@@ -1012,9 +1165,10 @@ export const FanHubUsers: React.FC = () => {
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleAddUser}
                 disabled={!newUserEmail.trim() || addingUser}
-                className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="fh-btn px-4 py-2 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {addingUser ? "Adding..." : "Add User"}
               </button>
@@ -1065,7 +1219,7 @@ export const FanHubUsers: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="px-3 py-2 text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700"
+                    className="px-3 py-2 text-sm fh-link"
                   >
                     {showPassword ? "Hide" : "Show"}
                   </button>
@@ -1081,7 +1235,7 @@ export const FanHubUsers: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleSendPasswordReset}
-                  className="w-full px-4 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm font-medium transition-colors"
+                  className="w-full px-4 py-2.5 fh-btn rounded-lg text-sm font-medium"
                 >
                   Send password reset email
                 </button>
@@ -1124,7 +1278,7 @@ export const FanHubUsers: React.FC = () => {
                       type="button"
                       onClick={handleGrantTreat}
                       disabled={!grantTreatType}
-                      className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-4 py-2 fh-btn rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Grant
                     </button>
@@ -1185,7 +1339,7 @@ export const FanHubUsers: React.FC = () => {
               </div>
 
               {/* Reward Summary */}
-              <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-4 border border-indigo-100 dark:border-indigo-800/50">
+              <div className="fan-hub-reward-summary rounded-lg p-4 border border-gray-200 dark:border-gray-600">
                 <h5 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Reward summary</h5>
                 {selectedUser.role === "member" ? (
                   <div className="space-y-1 text-sm">
@@ -1237,7 +1391,7 @@ export const FanHubUsers: React.FC = () => {
                   setGrantTreatType("");
                   setGrantTreatCount(1);
                 }}
-                className="flex-1 px-6 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm font-medium transition-colors"
+                className="flex-1 px-6 py-2.5 fh-btn rounded-lg text-sm font-medium"
               >
                 Save changes
               </button>

@@ -20,6 +20,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import type { LockedPostContent } from "../src/lib/lockedPostMedia";
+import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 
 export type FeedVisibilitySettings = {
   hideLikeCounts: boolean;
@@ -355,6 +356,7 @@ function FeedCard({
   post,
   creatorName,
   creatorAvatar,
+  avatarObjectPosition,
   currentUserId,
   savedPostIds,
   onLikeUpdated,
@@ -369,6 +371,8 @@ function FeedCard({
   post: FeedPost;
   creatorName: string;
   creatorAvatar?: string;
+  /** Matches storefront / My Page circular crop */
+  avatarObjectPosition?: string;
   currentUserId?: string;
   savedPostIds: string[];
   onLikeUpdated?: (postId: string, likedBy: string[], likeCount: number) => void;
@@ -524,7 +528,12 @@ function FeedCard({
       <div className="feed-card-header">
         <div className="feed-card-avatar">
           {creatorAvatar ? (
-            <img src={creatorAvatar} alt="" className="feed-card-avatar-img" />
+            <img
+              src={creatorAvatar}
+              alt=""
+              className="feed-card-avatar-img"
+              style={getAvatarCropStyle(avatarObjectPosition)}
+            />
           ) : (
             <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text-muted)" }}>
               {(creatorName || "?")[0].toUpperCase()}
@@ -937,7 +946,16 @@ function FeedCard({
                 {currentUserId && (
                   <form className="feed-comments-modal-compose" onSubmit={submitModalComment}>
                     <div className="feed-comments-modal-item-avatar feed-comments-modal-compose-avatar" aria-hidden>
-                      <span>{(creatorName || "U").charAt(0).toUpperCase()}</span>
+                      {creatorAvatar ? (
+                        <img
+                          src={creatorAvatar}
+                          alt=""
+                          className="feed-comments-modal-compose-avatar-img"
+                          style={getAvatarCropStyle(avatarObjectPosition)}
+                        />
+                      ) : (
+                        <span>{(creatorName || "?").charAt(0).toUpperCase()}</span>
+                      )}
                     </div>
                     <div className="feed-comments-modal-compose-input-wrap">
                       <input
@@ -979,10 +997,43 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
     autoReplyChance: 25,
   });
   const [feedSettingsSaving, setFeedSettingsSaving] = useState(false);
+  const [creatorStorefront, setCreatorStorefront] = useState<{
+    displayName?: string;
+    avatar?: string;
+    avatarObjectPosition?: string;
+  }>({});
   const creatorId = user?.id;
   const canUseAIReplies = hasEliteAccess(user);
-  const creatorName = (user as { displayName?: string })?.displayName || "You";
-  const creatorAvatar = (user as { photoURL?: string })?.photoURL;
+  const creatorName =
+    creatorStorefront.displayName?.trim() ||
+    (user as { displayName?: string })?.displayName?.trim() ||
+    "Creator";
+  const creatorAvatar =
+    creatorStorefront.avatar?.trim() || (user as { photoURL?: string })?.photoURL || undefined;
+  const avatarObjectPosition = creatorStorefront.avatarObjectPosition;
+
+  useEffect(() => {
+    if (!creatorId || !db) {
+      setCreatorStorefront({});
+      return;
+    }
+    let cancelled = false;
+    getDoc(doc(db, "creators", creatorId))
+      .then((snap) => {
+        if (cancelled || !snap.exists()) return;
+        const d = snap.data() as Record<string, unknown>;
+        setCreatorStorefront({
+          displayName: typeof d.displayName === "string" ? d.displayName : undefined,
+          avatar: typeof d.avatar === "string" ? d.avatar : undefined,
+          avatarObjectPosition:
+            typeof d.avatarObjectPosition === "string" ? d.avatarObjectPosition : undefined,
+        });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [creatorId]);
 
   useEffect(() => {
     const loadPosts = async () => {
@@ -1058,26 +1109,66 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
       .catch(() => setSavedPostIds([]));
   }, [creatorId]);
 
-  const saveFeedSettings = useCallback(
-    async (next: FeedVisibilitySettings) => {
-      if (!db || !creatorId || feedSettingsSaving) return;
-      const previous = feedSettings;
-      setFeedSettings(next);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSettingsRef = useRef<FeedVisibilitySettings | null>(null);
+
+  const persistFeedSettings = useCallback(
+    async (toSave: FeedVisibilitySettings) => {
+      if (!db || !creatorId) return;
       setFeedSettingsSaving(true);
       try {
-        const userRef = doc(db, "users", creatorId);
-        await setDoc(userRef, { fanHubFeedSettings: next }, { merge: true });
-        const creatorsRef = doc(db, "creators", creatorId);
-        await setDoc(creatorsRef, { feedSettings: next }, { merge: true });
+        await setDoc(doc(db, "users", creatorId), { fanHubFeedSettings: toSave }, { merge: true });
+        await setDoc(doc(db, "creators", creatorId), { feedSettings: toSave }, { merge: true });
       } catch (err) {
         console.error("Failed to save feed settings", err);
-        setFeedSettings(previous);
         showToast?.("Failed to save visibility settings", "error");
       } finally {
         setFeedSettingsSaving(false);
       }
     },
-    [creatorId, feedSettingsSaving, feedSettings, showToast]
+    [creatorId, showToast]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, []);
+
+  const saveFeedSettings = useCallback(
+    (next: FeedVisibilitySettings, options?: { debounce?: boolean }) => {
+      if (!db || !creatorId) return;
+      const previous = feedSettings;
+      setFeedSettings(next);
+
+      if (options?.debounce) {
+        pendingSettingsRef.current = next;
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = setTimeout(() => {
+          saveTimeoutRef.current = null;
+          const toSave = pendingSettingsRef.current;
+          pendingSettingsRef.current = null;
+          if (toSave) void persistFeedSettings(toSave);
+        }, 300);
+        return;
+      }
+
+      if (feedSettingsSaving) return;
+      setFeedSettingsSaving(true);
+      (async () => {
+        try {
+          await setDoc(doc(db, "users", creatorId), { fanHubFeedSettings: next }, { merge: true });
+          await setDoc(doc(db, "creators", creatorId), { feedSettings: next }, { merge: true });
+        } catch (err) {
+          console.error("Failed to save feed settings", err);
+          setFeedSettings(previous);
+          showToast?.("Failed to save visibility settings", "error");
+        } finally {
+          setFeedSettingsSaving(false);
+        }
+      })();
+    },
+    [creatorId, feedSettingsSaving, feedSettings, showToast, persistFeedSettings]
   );
 
   const handleLikeUpdated = useCallback((postId: string, likedBy: string[], likeCount: number) => {
@@ -1203,11 +1294,12 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
     const handleClickOutside = (e: MouseEvent) => {
       if (visibilityRef.current && !visibilityRef.current.contains(e.target as Node)) setVisibilityOpen(false);
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("click", handleClickOutside, true);
+    return () => document.removeEventListener("click", handleClickOutside, true);
   }, [visibilityOpen]);
 
   return (
+    <div className="fan-hub-feed-chrome">
     <main className="member-feed-main">
       <div className="feed-header-wrap">
         <div className="feed-header">
@@ -1240,7 +1332,6 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
                       <input
                         type="checkbox"
                         checked={feedSettings.hideLikeCounts}
-                        disabled={feedSettingsSaving}
                         onChange={(e) => saveFeedSettings({ ...feedSettings, hideLikeCounts: e.target.checked })}
                       />
                       <span>Hide like counts</span>
@@ -1249,7 +1340,6 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
                       <input
                         type="checkbox"
                         checked={feedSettings.hideComments}
-                        disabled={feedSettingsSaving}
                         onChange={(e) => saveFeedSettings({ ...feedSettings, hideComments: e.target.checked })}
                       />
                       <span>Hide comments</span>
@@ -1258,7 +1348,6 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
                       <input
                         type="checkbox"
                         checked={feedSettings.hideLikes}
-                        disabled={feedSettingsSaving}
                         onChange={(e) => saveFeedSettings({ ...feedSettings, hideLikes: e.target.checked })}
                       />
                       <span>Hide likes</span>
@@ -1272,7 +1361,6 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
                             <input
                               type="checkbox"
                               checked={!!feedSettings.autoReplyAI}
-                              disabled={feedSettingsSaving}
                               onChange={(e) => saveFeedSettings({ ...feedSettings, autoReplyAI: e.target.checked })}
                             />
                             <span>Reply to comments with AI (your tone, max 2 per fan per post)</span>
@@ -1288,9 +1376,8 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
                                 max={100}
                                 step={5}
                                 value={feedSettings.autoReplyChance ?? 25}
-                                disabled={feedSettingsSaving}
-                                onChange={(e) => saveFeedSettings({ ...feedSettings, autoReplyChance: Number(e.target.value) })}
-                                className="w-full h-2 rounded-lg appearance-none bg-gray-200 dark:bg-gray-600 accent-primary-500"
+                                onChange={(e) => saveFeedSettings({ ...feedSettings, autoReplyChance: Number(e.target.value) }, { debounce: true })}
+                                className="w-full h-2 rounded-lg appearance-none bg-gray-200 dark:bg-gray-600 fh-range"
                               />
                             </div>
                           )}
@@ -1300,7 +1387,7 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
                           <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Elite only — upgrade to unlock AI replies.</p>
                           <button
                             type="button"
-                            className="text-xs font-medium text-primary-600 dark:text-primary-400 hover:underline"
+                            className="text-xs font-medium fh-link hover:underline"
                             onClick={() => { openPaymentModal?.({ name: "Elite", price: 79, cycle: "monthly" }); }}
                           >
                             Upgrade to Elite
@@ -1313,7 +1400,7 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
               </div>
             )}
             <button type="button" className="feed-saved-link">
-              Saved ({savedPostIds.length})
+              Saved Posts ({savedPostIds.length})
             </button>
           </div>
         </div>
@@ -1333,6 +1420,7 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
                 post={post}
                 creatorName={creatorName}
                 creatorAvatar={creatorAvatar}
+                avatarObjectPosition={avatarObjectPosition}
                 currentUserId={creatorId}
                 savedPostIds={savedPostIds}
                 onLikeUpdated={handleLikeUpdated}
@@ -1379,5 +1467,6 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
         </>
       )}
     </main>
+    </div>
   );
 };

@@ -874,7 +874,7 @@ DO NOT include hashtags.`;
         <button
           type="button"
           onClick={() => setShowComposer(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition font-medium"
+          className="flex items-center gap-2 px-4 py-2 fh-btn transition font-medium"
         >
           <PlusIcon />
           New Post

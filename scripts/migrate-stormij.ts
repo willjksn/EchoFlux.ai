@@ -4,8 +4,9 @@
  * This script copies data from Stormij's Firebase to Echoflux's Firebase.
  * It is READ-ONLY on the Stormij side - no data is modified or deleted.
  * 
- * USAGE:
- *   npx ts-node scripts/migrate-stormij.ts [--dry-run] [--collection=posts,treats,members]
+ * USAGE (repo uses "type": "module" — use --esm):
+ *   npx ts-node --esm scripts/migrate-stormij.ts [--dry-run] [--collection=posts,treats,members]
+ *   Or: npm run migrate:stormij:dry -- --creator-id=YOUR_UID
  * 
  * OPTIONS:
  *   --dry-run         Preview what would be migrated without writing
@@ -17,16 +18,22 @@
  *   - Set environment variables before running
  */
 
-import * as admin from 'firebase-admin';
+import admin from 'firebase-admin';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+// ESM: no __dirname (package.json has "type": "module")
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // ============================================================================
 // CONFIGURATION - Update these paths before running
 // ============================================================================
 
-const STORMIJ_SERVICE_ACCOUNT_PATH = process.env.STORMIJ_SERVICE_ACCOUNT || './stormij-service-account.json';
-const ECHOFLUX_SERVICE_ACCOUNT_PATH = process.env.ECHOFLUX_SERVICE_ACCOUNT || './echoflux-service-account.json';
+const PROJECT_ROOT = path.join(__dirname, '..');
+const STORMIJ_SERVICE_ACCOUNT_PATH = process.env.STORMIJ_SERVICE_ACCOUNT || path.join(PROJECT_ROOT, 'stormij-service-account.json');
+const ECHOFLUX_SERVICE_ACCOUNT_PATH = process.env.ECHOFLUX_SERVICE_ACCOUNT || path.join(PROJECT_ROOT, 'echoflux-service-account.json');
 
 // The Echoflux creator ID (user ID) that will own the migrated data
 const ECHOFLUX_CREATOR_ID = process.env.ECHOFLUX_CREATOR_ID || '';
@@ -57,7 +64,7 @@ function initializeApps() {
     console.log('\nTo get the service account:');
     console.log('1. Go to Firebase Console → Stormij project → Project Settings → Service Accounts');
     console.log('2. Click "Generate new private key"');
-    console.log('3. Save as stormij-service-account.json in the scripts folder');
+    console.log('3. Save as stormij-service-account.json in the project root:', PROJECT_ROOT);
     process.exit(1);
   }
 
@@ -66,18 +73,21 @@ function initializeApps() {
     console.log('\nTo get the service account:');
     console.log('1. Go to Firebase Console → Echoflux project → Project Settings → Service Accounts');
     console.log('2. Click "Generate new private key"');
-    console.log('3. Save as echoflux-service-account.json in the scripts folder');
+    console.log('3. Save as echoflux-service-account.json in the project root:', PROJECT_ROOT);
     process.exit(1);
   }
 
+  const stormijKey = JSON.parse(fs.readFileSync(STORMIJ_SERVICE_ACCOUNT_PATH, 'utf8')) as admin.ServiceAccount;
+  const echofluxKey = JSON.parse(fs.readFileSync(ECHOFLUX_SERVICE_ACCOUNT_PATH, 'utf8')) as admin.ServiceAccount;
+
   // Initialize Stormij (source) - READ ONLY
   const stormijApp = admin.initializeApp({
-    credential: admin.credential.cert(require(path.resolve(STORMIJ_SERVICE_ACCOUNT_PATH))),
+    credential: admin.credential.cert(stormijKey),
   }, 'stormij');
 
   // Initialize Echoflux (destination)
   const echofluxApp = admin.initializeApp({
-    credential: admin.credential.cert(require(path.resolve(ECHOFLUX_SERVICE_ACCOUNT_PATH))),
+    credential: admin.credential.cert(echofluxKey),
   }, 'echoflux');
 
   return {
@@ -287,27 +297,75 @@ async function migrateMembers(
     for (const doc of snapshot.docs) {
       try {
         const data = doc.data();
-        
+
+        const usernameRaw =
+          (typeof data.username === 'string' && data.username.trim()) ||
+          (typeof data.handle === 'string' && data.handle.trim()) ||
+          (typeof data.instagram_handle === 'string' && data.instagram_handle.trim()) ||
+          (typeof data.instagramHandle === 'string' && data.instagramHandle.trim()) ||
+          (typeof data.memberUsername === 'string' && data.memberUsername.trim()) ||
+          '';
+        const username = usernameRaw ? usernameRaw.replace(/^@/, '').toLowerCase() : null;
+
+        const roleLower = String(data.role || data.userRole || '').toLowerCase();
+        const role =
+          roleLower === 'admin' || data.isAdmin === true || data.is_admin === true
+            ? 'admin'
+            : roleLower === 'tipper'
+              ? 'tipper'
+              : roleLower === 'member'
+                ? 'member'
+                : undefined;
+
+        const statusStr = String(
+          data.subscriptionStatus || data.subscription_status || data.status || data.planStatus || ''
+        ).toLowerCase();
+        const cancelAtEnd = data.cancelAtPeriodEnd === true || data.cancel_at_period_end === true;
+        let subscriptionStatus = 'active';
+        if (statusStr.includes('cancel') || statusStr === 'canceled' || statusStr === 'cancelled' || data.cancelled === true || data.canceled === true) {
+          subscriptionStatus = 'canceled';
+        } else if (statusStr.includes('past_due')) {
+          subscriptionStatus = 'past_due';
+        } else if (statusStr.includes('trialing')) {
+          subscriptionStatus = 'trialing';
+        } else if (statusStr.includes('active')) {
+          subscriptionStatus = 'active';
+        } else if (statusStr) {
+          subscriptionStatus = statusStr;
+        }
+        if (cancelAtEnd && subscriptionStatus !== 'canceled') {
+          subscriptionStatus = 'active';
+        }
+
+        const periodEnd = data.subscriptionCurrentPeriodEnd || data.current_period_end || data.currentPeriodEnd || null;
+
         // Store as fan in Echoflux
-        const echofluxMember = {
+        const joinedAt = data.createdAt || admin.firestore.FieldValue.serverTimestamp();
+        const echofluxMember: Record<string, unknown> = {
           id: doc.id,
           creatorId,
           email: data.email || null,
-          displayName: data.displayName || data.instagram_handle || data.note || null,
+          displayName: data.displayName || data.name || data.note || null,
+          username,
           uid: data.uid || data.userId || null,
-          subscriptionStatus: 'active', // Assume active for migration
-          subscribedAt: data.createdAt || admin.firestore.FieldValue.serverTimestamp(),
+          subscriptionStatus,
+          subscribedAt: joinedAt,
+          createdAt: joinedAt,
+          cancelAtPeriodEnd: cancelAtEnd,
+          ...(periodEnd != null ? { subscriptionCurrentPeriodEnd: periodEnd } : {}),
+          ...(role ? { role } : {}),
           // Migration metadata
           migratedFrom: 'stormij',
           migratedAt: admin.firestore.FieldValue.serverTimestamp(),
           originalDocId: doc.id,
         };
 
+        const fanDocId = (data.uid || data.userId || doc.id) as string;
         await echofluxDb
           .collection('creators')
           .doc(creatorId)
           .collection('fans')
-          .doc(doc.id)
+          .doc(fanDocId)
           .set(echofluxMember);
         
         stat.written++;
@@ -504,16 +562,29 @@ async function migrateSiteConfig(
       return stat;
     }
 
+    const heroImage =
+      (data.heroImageUrl as string) ||
+      (data.heroImage as string) ||
+      (data.landingHeroImageUrl as string) ||
+      (data.memberHeroImageUrl as string) ||
+      (data.hero_image as string) ||
+      '';
+    const displayName =
+      (data.displayName as string) || (data.siteTitle as string) || 'Stormi J';
+    const bio = (data.bio as string) || (data.tagline as string) || '';
+    const avatar = (data.avatarUrl as string) || (data.avatar as string) || (data.logoUrl as string) || '';
+    const logo = (data.logoUrl as string) || (data.logo as string) || '';
+
     // Map to Echoflux creator storefront settings
     const storefrontSettings = {
       handle: ECHOFLUX_CREATOR_HANDLE,
-      displayName: 'Stormi J',
-      bio: '',
-      avatar: '', // Will need to be uploaded separately
-      logo: '',
-      heroImage: '',
-      heroTagline: '',
-      heroPromise: 'Your access to the real me',
+      displayName,
+      bio,
+      avatar,
+      logo,
+      heroImage,
+      heroTagline: (data.heroTagline as string) || (data.hero_tagline as string) || '',
+      heroPromise: (data.heroPromise as string) || (data.hero_promise as string) || 'Your access to the real me',
       theme: {
         primary: '#d4558b',
         background: '#fff2f8',
@@ -658,8 +729,10 @@ async function main() {
     console.log('\n✅ Migration completed successfully!');
     console.log(`\nNext steps:`);
     console.log(`1. Verify data in Echoflux Firebase Console`);
-    console.log(`2. Test the page at echoflux.ai/${ECHOFLUX_CREATOR_HANDLE}`);
-    console.log(`3. Upload images (avatar, hero, logo) through the Page Builder`);
+    console.log(`2. If you migrated conversations, sync DMs for Fan Hub Messages:`);
+    console.log(`   npm run sync:fan-dm-threads -- --creator-id=${creatorId}`);
+    console.log(`3. Test the page at echoflux.ai/${ECHOFLUX_CREATOR_HANDLE}`);
+    console.log(`4. Hero/avatar: re-run site_config migration if URLs were added in Stormij, or set in My Page`);
   } else {
     console.log('\n⚠️  Migration completed with errors. Review the errors above.');
   }

@@ -36,29 +36,40 @@ export const FanHubMessages: React.FC = () => {
     if (!creatorId) return;
     setLoading(true);
     try {
-      const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       const res = await fetch("/api/fanDmThreads?as=creator", {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       const data = await res.json().catch(() => ({}));
-      setThreads(Array.isArray(data.threads) ? data.threads : []);
-      if (!selectedThread && data.threads?.length) {
-        setSelectedThread(data.threads[0]);
+      if (!res.ok) {
+        const err = (data as { error?: string }).error || res.statusText;
+        console.error("fanDmThreads:", res.status, err);
+        showToast?.(err === "Unauthorized" ? "Sign in again to load messages." : `Messages list failed (${res.status})`, "error");
       }
+      setThreads(Array.isArray(data.threads) ? data.threads : []);
     } catch {
       setThreads([]);
     } finally {
       setLoading(false);
     }
-  }, [creatorId]);
+  }, [creatorId, showToast]);
 
   useEffect(() => {
     fetchThreads();
   }, [fetchThreads]);
 
+  /** Keep selection in sync when threads load/refresh (avoids stale closure missing first-thread select). */
+  useEffect(() => {
+    setSelectedThread((prev) => {
+      if (threads.length === 0) return null;
+      if (prev && threads.some((t) => t.id === prev.id)) return prev;
+      return threads[0];
+    });
+  }, [threads]);
+
   const fetchMessagesForThread = useCallback(
     async (thread: FanDmThread): Promise<FanDmMessage[]> => {
-      const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       const res = await fetch(
         `/api/fanDmMessages?threadId=${encodeURIComponent(thread.id)}`,
         { headers: token ? { Authorization: `Bearer ${token}` } : {} }
@@ -97,7 +108,7 @@ export const FanHubMessages: React.FC = () => {
     setSending(true);
     setReply("");
     try {
-      const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       const res = await fetch("/api/fanDmSend", {
         method: "POST",
         headers: {
@@ -127,7 +138,7 @@ export const FanHubMessages: React.FC = () => {
     if (!selectedThread) return;
     setReportingId(messageId);
     try {
-      const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       const res = await fetch("/api/reportMessage", {
         method: "POST",
         headers: {
@@ -156,7 +167,7 @@ export const FanHubMessages: React.FC = () => {
     if (!window.confirm("Block this fan? They will no longer be able to message or purchase.")) return;
     setBlockingFanId(fanId);
     try {
-      const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       const res = await fetch("/api/blockFan", {
         method: "POST",
         headers: {
@@ -191,7 +202,7 @@ export const FanHubMessages: React.FC = () => {
     
     setStartingVideo(true);
     try {
-      const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       if (!token) throw new Error("Please sign in");
 
       const res = await fetch("/api/liveVideoChat?action=instant", {
@@ -267,7 +278,7 @@ export const FanHubMessages: React.FC = () => {
                     type="button"
                     onClick={() => setSelectedThread(t)}
                     className={`w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition ${
-                      selectedThread?.id === t.id ? "bg-primary-50 dark:bg-primary-900/20" : ""
+                      selectedThread?.id === t.id ? "fh-selected-soft" : ""
                     }`}
                   >
                     <p className="font-medium text-gray-900 dark:text-white truncate">
@@ -380,7 +391,7 @@ export const FanHubMessages: React.FC = () => {
                   type="button"
                   onClick={sendReply}
                   disabled={sending || !reply.trim()}
-                  className="px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 disabled:opacity-50"
+                  className="px-4 py-2 fh-btn text-sm font-medium disabled:opacity-50"
                 >
                   {sending ? "Sending…" : "Send"}
                 </button>

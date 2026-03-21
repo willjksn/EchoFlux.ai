@@ -219,7 +219,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const fetchUsageStats = async () => {
       try {
         const { auth } = await import('../../firebaseConfig');
-        const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+        const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
         const response = await fetch('/api/getUsageStats', {
           headers: {
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -252,7 +252,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const fetchAnnouncements = async () => {
       try {
-        const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+        const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
         if (!token) return;
 
         const res = await fetch("/api/getAnnouncements", {
@@ -316,7 +316,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const fetchAdminAlerts = async () => {
       try {
-        const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+        const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
         if (!token || cancelled) return;
 
         // Fetch unread admin alerts from Firestore

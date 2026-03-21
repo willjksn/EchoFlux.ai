@@ -88,6 +88,19 @@ AggregateError [ECONNREFUSED]
 
 Set **`DEV_API_PROXY`** as above, or ignore those errors if you only need UI + Firebase client SDK.
 
+### `GET /api/creatorOrders … 404` or `502` on localhost
+
+The route **exists** on Vercel (`api/creatorOrders.ts`). Plain `npm run dev` does not start those handlers unless you **proxy** `/api` to a deployment (`DEV_API_PROXY`). Without it, the Fan Hub Users page still loads members from Firestore, but **order-based spend** may show as empty.
+
+---
+
+## Firebase `auth/quota-exceeded` (securetoken.googleapis.com 400)
+
+This usually means **too many forced ID token refreshes** (`getIdToken(true)`) in a short time, or a **project daily limit** in Firebase Console.
+
+- The app avoids forcing refresh on every page load and on polling intervals; use a **cached** token (`getIdToken()`) unless you just changed custom claims.
+- If you still hit the limit: wait for the quota window to reset, check **Firebase Console → Usage**, and ensure the **Web API key** is not over-restricted for your domain.
+
 ---
 
 ## Port 3000 already in use

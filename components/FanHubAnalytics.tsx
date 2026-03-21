@@ -149,7 +149,7 @@ export const FanHubAnalytics: React.FC = () => {
     setLoading(true);
 
     try {
-      const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
       const startDate = getDateRangeStart(dateRange);
 
@@ -302,7 +302,7 @@ export const FanHubAnalytics: React.FC = () => {
         .map(([id, data]) => ({
           id,
           name: formatFanDisplayLabel(
-            { displayName: data.fanName },
+            { displayName: data.fanName, email: data.fanEmail },
             { fallback: id.includes("@") ? "Member" : "Fan" }
           ),
           email: data.fanEmail || (id.includes("@") ? id : id),
@@ -576,7 +576,10 @@ export const FanHubAnalytics: React.FC = () => {
                          tx.productName || "Treat Purchase"}
                       </p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {formatFanDisplayLabel({ displayName: tx.fanName }, { fallback: "Member" })}
+                        {formatFanDisplayLabel(
+                          { displayName: tx.fanName, email: tx.fanEmail },
+                          { fallback: "Member" }
+                        )}
                         {tx.fanEmail && tx.fanEmail !== "Unknown" && tx.fanEmail.includes("@") && (
                           <span className="block text-[11px] opacity-80 mt-0.5">{tx.fanEmail}</span>
                         )}

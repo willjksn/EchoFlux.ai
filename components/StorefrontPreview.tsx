@@ -1,28 +1,13 @@
 import React, { useState, useRef, useCallback, useMemo } from "react";
 import type { CreatorStorefrontSettings, StorefrontSocialLinks, StorefrontLandingContent, TextStyle } from "../types";
+import { getAvatarCropStyle } from "../src/lib/avatarCrop";
+import {
+  clampPan,
+  parseObjectPositionPercentPair,
+  formatObjectPositionPercentPair,
+} from "../src/lib/objectPositionPan";
 
 export type StorefrontHeroMediaItem = NonNullable<CreatorStorefrontSettings["heroMedia"]>[number];
-
-function clamp(n: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, n));
-}
-
-/** Parse CSS background-position / object-position as two percentages (defaults 50,50). */
-function parsePercentPair(s: string | undefined): [number, number] {
-  if (!s || s === "center") return [50, 50];
-  const t = s.trim();
-  const m = t.match(/^([\d.]+)%\s+([\d.]+)%$/);
-  if (m) return [parseFloat(m[1]), parseFloat(m[2])];
-  if (t === "top") return [50, 0];
-  if (t === "bottom") return [50, 100];
-  if (t === "left") return [0, 50];
-  if (t === "right") return [100, 50];
-  return [50, 50];
-}
-
-function formatPercentPair(x: number, y: number) {
-  return `${clamp(Math.round(x * 10) / 10, 0, 100)}% ${clamp(Math.round(y * 10) / 10, 0, 100)}%`;
-}
 
 // Font size mapping for text styles
 const FONT_SIZE_MAP: Record<NonNullable<TextStyle['fontSize']>, string> = {
@@ -278,10 +263,8 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
   const displayName = config.displayName || config.handle || "Your name";
   const bio = config.bio ?? "";
   const avatar = config.avatar;
-  /** Same crop (object-position) for every circular avatar in the preview. */
-  const avatarCropStyle: React.CSSProperties = {
-    objectPosition: config.avatarObjectPosition ?? "center",
-  };
+  /** Same crop for every circular avatar in the preview. */
+  const avatarCropStyle: React.CSSProperties = getAvatarCropStyle(config.avatarObjectPosition);
   const logo = config.logo;
   const showDisplayNameOnLanding = config.showDisplayNameOnLanding !== false;
   const heroMedia = (config.heroMedia && config.heroMedia.length > 0)
@@ -335,7 +318,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
       e.preventDefault();
       e.stopPropagation();
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-      const [sx, sy] = parsePercentPair(fullBgItem?.backgroundPosition);
+      const [sx, sy] = parseObjectPositionPercentPair(fullBgItem?.backgroundPosition);
       bgDragRef.current = {
         startClientX: e.clientX,
         startClientY: e.clientY,
@@ -355,9 +338,9 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
       const dx = e.clientX - bgDragRef.current.startClientX;
       const dy = e.clientY - bgDragRef.current.startClientY;
       const sens = 0.65;
-      const nx = clamp(bgDragRef.current.startX - (dx / w) * 100 * sens, 0, 100);
-      const ny = clamp(bgDragRef.current.startY - (dy / h) * 100 * sens, 0, 100);
-      patchHeroItem(fullBgIndex, { backgroundPosition: formatPercentPair(nx, ny) });
+      const nx = clampPan(bgDragRef.current.startX - (dx / w) * 100 * sens, 0, 100);
+      const ny = clampPan(bgDragRef.current.startY - (dy / h) * 100 * sens, 0, 100);
+      patchHeroItem(fullBgIndex, { backgroundPosition: formatObjectPositionPercentPair(nx, ny) });
       bgDragRef.current = {
         startClientX: e.clientX,
         startClientY: e.clientY,
@@ -383,7 +366,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
       e.preventDefault();
       e.stopPropagation();
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-      const [ox, oy] = parsePercentPair(config.avatarObjectPosition);
+      const [ox, oy] = parseObjectPositionPercentPair(config.avatarObjectPosition);
       avatarPanRef.current = {
         startClientX: e.clientX,
         startClientY: e.clientY,
@@ -403,9 +386,9 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
       const dx = e.clientX - avatarPanRef.current.startClientX;
       const dy = e.clientY - avatarPanRef.current.startClientY;
       const sens = 0.85;
-      const nx = clamp(avatarPanRef.current.startOx - (dx / w) * 100 * sens, 0, 100);
-      const ny = clamp(avatarPanRef.current.startOy - (dy / h) * 100 * sens, 0, 100);
-      onAvatarObjectPositionChange(formatPercentPair(nx, ny));
+      const nx = clampPan(avatarPanRef.current.startOx - (dx / w) * 100 * sens, 0, 100);
+      const ny = clampPan(avatarPanRef.current.startOy - (dy / h) * 100 * sens, 0, 100);
+      onAvatarObjectPositionChange(formatObjectPositionPercentPair(nx, ny));
       avatarPanRef.current = {
         startClientX: e.clientX,
         startClientY: e.clientY,
@@ -431,7 +414,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
       e.preventDefault();
       e.stopPropagation();
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-      const [ox, oy] = parsePercentPair(focusItem?.objectPosition);
+      const [ox, oy] = parseObjectPositionPercentPair(focusItem?.objectPosition);
       focusDragRef.current = {
         startClientX: e.clientX,
         startClientY: e.clientY,
@@ -451,9 +434,9 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
       const dx = e.clientX - focusDragRef.current.startClientX;
       const dy = e.clientY - focusDragRef.current.startClientY;
       const sens = 0.85;
-      const nx = clamp(focusDragRef.current.startOx - (dx / w) * 100 * sens, 0, 100);
-      const ny = clamp(focusDragRef.current.startOy - (dy / h) * 100 * sens, 0, 100);
-      patchHeroItem(focusHeroMediaIndex, { objectPosition: formatPercentPair(nx, ny) });
+      const nx = clampPan(focusDragRef.current.startOx - (dx / w) * 100 * sens, 0, 100);
+      const ny = clampPan(focusDragRef.current.startOy - (dy / h) * 100 * sens, 0, 100);
+      patchHeroItem(focusHeroMediaIndex, { objectPosition: formatObjectPositionPercentPair(nx, ny) });
       focusDragRef.current = {
         startClientX: e.clientX,
         startClientY: e.clientY,
@@ -498,9 +481,15 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
             <div className="flex items-center gap-2 min-h-[48px]">
               {logo ? (
                 <img src={logo} alt={displayName} className="h-12 w-auto max-w-[240px] object-contain object-left [mix-blend-mode:multiply]" />
-              ) : avatar ? (
-                <img src={avatar} alt="" className="w-7 h-7 rounded-full object-cover" style={avatarCropStyle} />
-              ) : null}
+              ) : (
+                <span
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                  style={{ background: `${primary}22`, color: primary }}
+                  aria-hidden
+                >
+                  {(displayName || "?")[0].toUpperCase()}
+                </span>
+              )}
               {!logo && <span className="text-xs font-medium" style={{ color: textColor }}>{displayName || "My Page"}</span>}
             </div>
             <div className="flex gap-3">
@@ -910,52 +899,47 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
           <div className="p-4" style={{ maxWidth: "480px", margin: "0 auto" }}>
             {(effectiveTab === "home" || effectiveTab === "feed") && (
               <div className="space-y-4">
-                {/* Member feed header: grid icon + Saved (0); no Saved in nav */}
-                <div
-                  className="flex items-center justify-between gap-2 mb-3"
-                  style={{
-                    padding: "0.5rem 0",
-                    borderBottom: "1px solid rgba(156, 163, 175, 0.2)",
-                  }}
-                >
-                  <span
-                    className="inline-flex items-center justify-center rounded-lg border"
-                    style={{
-                      width: "32px",
-                      height: "32px",
-                      borderColor: `${primary}30`,
-                      color: primary,
-                    }}
-                    title="Grid view"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="3" y="3" width="7" height="7" rx="1" />
-                      <rect x="14" y="3" width="7" height="7" rx="1" />
-                      <rect x="3" y="14" width="7" height="7" rx="1" />
-                      <rect x="14" y="14" width="7" height="7" rx="1" />
-                    </svg>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab("saved")}
-                    className="rounded-lg border px-3 py-1.5 text-sm font-semibold"
-                    style={{
-                      borderColor: `${primary}40`,
-                      color: primary,
-                      background: "transparent",
-                    }}
-                  >
-                    Saved (0)
-                  </button>
+                {/* Member feed header — same chrome classes as Fan Hub (stormij-fanhub.css) */}
+                <div className="fan-hub-feed-chrome -mx-1 mb-1">
+                  <div className="feed-header-wrap">
+                    <div className="feed-header">
+                      <button
+                        type="button"
+                        className="feed-view-toggle"
+                        title="Grid view"
+                        aria-label="Grid view"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <rect x="3" y="3" width="7" height="7" rx="1" />
+                          <rect x="14" y="3" width="7" height="7" rx="1" />
+                          <rect x="3" y="14" width="7" height="7" rx="1" />
+                          <rect x="14" y="14" width="7" height="7" rx="1" />
+                        </svg>
+                      </button>
+                      <div className="feed-header-right">
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab("saved")}
+                          className="feed-saved-link"
+                        >
+                          Saved Posts (0)
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                {/* Sample Feed Post - matches .feed-card structure */}
-                <article 
-                  className="rounded-2xl overflow-hidden"
-                  style={{ 
-                    background: isDark ? background : `linear-gradient(160deg, rgba(255, 255, 255, 1) 0%, ${primary}08 100%)`,
-                    border: `1px solid ${isDark ? `${primary}30` : `${primary}15`}`,
-                    boxShadow: isDark ? `0 4px 16px rgba(0,0,0,0.2)` : `0 4px 16px ${primary}10, 0 1px 3px rgba(0,0,0,0.04)`,
-                  }}
+                {/* Sample Feed Post - matches Fan Hub .feed-card (white + hairline border) */}
+                <article
+                  className={`feed-card rounded-2xl overflow-hidden${isDark ? " storefront-preview-feed-card--dark" : ""}`}
+                  style={
+                    isDark
+                      ? {
+                          background: "linear-gradient(180deg, #1f2937 0%, #1a1f2c 100%)",
+                          borderColor: `${primary}55`,
+                          boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
+                        }
+                      : undefined
+                  }
                 >
                   {/* Header - matches .feed-card-header */}
                   <div 
@@ -987,9 +971,13 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                     </div>
                     {/* Creator info - matches .feed-card-creator */}
                     <div className="flex-1 min-w-0">
-                      <span 
-                        className="block font-semibold"
-                        style={{ fontSize: "0.95rem", color: primary, letterSpacing: "0.01em" }}
+                      <span
+                        className="feed-card-username block font-semibold"
+                        style={{
+                          fontSize: "0.95rem",
+                          letterSpacing: "0.01em",
+                          ...(isDark ? { color: textColor } : {}),
+                        }}
                       >
                         {displayName}
                       </span>

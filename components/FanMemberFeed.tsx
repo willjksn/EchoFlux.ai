@@ -19,6 +19,7 @@ import {
   isMediaSlotLocked,
   type LockedPostContent,
 } from "../src/lib/lockedPostMedia";
+import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 
 const SAVED_BY_CREATOR_KEY = "savedPostIdsByCreator";
 
@@ -224,9 +225,7 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
   feedSettings,
   fanId,
 }) => {
-  const avatarCropStyle: React.CSSProperties = {
-    objectPosition: avatarObjectPosition ?? "center",
-  };
+  const avatarCropStyle: React.CSSProperties = getAvatarCropStyle(avatarObjectPosition);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
@@ -547,9 +546,7 @@ export const FanMemberSaved: React.FC<FanMemberSavedProps> = ({
   feedSettings,
   fanId,
 }) => {
-  const avatarCropStyle: React.CSSProperties = {
-    objectPosition: avatarObjectPosition ?? "center",
-  };
+  const avatarCropStyle: React.CSSProperties = getAvatarCropStyle(avatarObjectPosition);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [unsavingId, setUnsavingId] = useState<string | null>(null);

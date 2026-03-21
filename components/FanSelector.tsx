@@ -8,6 +8,8 @@ import { formatFanDisplayLabel, initialsFromFanLabel } from '../src/lib/fanHubDi
 interface Fan {
     id: string;
     name: string;
+    /** From preferences / profile — used so we never show raw email as the primary label */
+    email?: string | null;
     /** From `users/{fanId}` when available */
     username?: string | null;
     profileDisplayName?: string | null;
@@ -45,7 +47,12 @@ export const FanSelector: React.FC<FanSelectorProps> = ({
 
     const fanLabel = (fan: Fan) =>
         formatFanDisplayLabel(
-            { username: fan.username, displayName: fan.profileDisplayName, name: fan.name },
+            {
+                username: fan.username,
+                displayName: fan.profileDisplayName,
+                name: fan.name,
+                email: fan.email,
+            },
             { fallback: fan.id.length > 10 ? `${fan.id.slice(0, 8)}…` : fan.id }
         );
 
@@ -59,6 +66,7 @@ export const FanSelector: React.FC<FanSelectorProps> = ({
                 return {
                     id: doc.id,
                     name: data.name || doc.id,
+                    email: typeof data.email === 'string' ? data.email : null,
                     preferences: {
                         subscriptionTier: (() => {
                             // Migrate old 'VIP' or 'Regular' tiers to 'Paid' or 'Free'
@@ -83,10 +91,12 @@ export const FanSelector: React.FC<FanSelectorProps> = ({
                         const u = await getDoc(doc(db, 'users', fan.id));
                         if (!u.exists()) return { ...fan, username: null as string | null, profileDisplayName: null as string | null };
                         const ud = u.data();
+                        const uEmail = typeof ud.email === 'string' ? ud.email : null;
                         return {
                             ...fan,
                             username: typeof ud.username === 'string' ? ud.username : null,
                             profileDisplayName: typeof ud.displayName === 'string' ? ud.displayName : null,
+                            email: fan.email || uEmail,
                         };
                     } catch {
                         return { ...fan, username: null as string | null, profileDisplayName: null as string | null };

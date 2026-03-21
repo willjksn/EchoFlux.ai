@@ -781,7 +781,7 @@ export const OnlyFansStudio: React.FC<{ mode?: 'studio' | 'fanHub' }> = ({ mode 
     // Fan Hub: only these tabs when mode === 'fanHub' (Stormij theme wrapper for feed/treats styling)
     if (mode === 'fanHub' && premiumTab) {
         const wrap = (content: React.ReactNode) => (
-            <div className="stormij-theme" style={{ minHeight: "100%", color: "var(--text)", fontFamily: "var(--sans)" }}>
+            <div style={{ minHeight: "100%", color: "var(--text)", fontFamily: "var(--sans, system-ui, sans-serif)" }}>
                 {content}
             </div>
         );

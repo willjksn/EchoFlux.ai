@@ -123,6 +123,22 @@ npx ts-node scripts/migrate-stormij.ts --creator-id=YOUR_CREATOR_ID
 
 This will copy all data to Echoflux.
 
+**After migration, Fan Hub Messages will stay empty until you sync DMs.** The script stores Stormij chats under `creators/{creatorId}/conversations`, but EchoFlux reads **`fanDmThreads`**. Run:
+
+```bash
+npm run sync:fan-dm-threads -- --creator-id=YOUR_CREATOR_ID
+```
+
+(Optional dry run: add `--dry-run` at the end.)
+
+**After migration, fan cards + chat session pickers read `users/{creatorId}/onlyfans_fan_preferences`.** That is **not** filled by `migrate-stormij.ts`. Run the one-off backfill once per creator:
+
+```bash
+npm run backfill:fan-hub -- --creator-id=YOUR_CREATOR_ID
+```
+
+Details: [BACKFILL_FAN_HUB.md](./BACKFILL_FAN_HUB.md).
+
 ---
 
 ## Step 5: Verify the Migration
@@ -133,7 +149,8 @@ This will copy all data to Echoflux.
 2. Verify these collections have data:
    - `creators/{creatorId}/fanPosts`
    - `creators/{creatorId}/fans`
-   - `creators/{creatorId}/conversations`
+   - `creators/{creatorId}/conversations` (raw Stormij shape)
+   - **`fanDmThreads`** (after `npm run sync:fan-dm-threads` — required for Fan Hub Messages)
    - `products`
    - `purchases`
 
@@ -177,6 +194,24 @@ When you're ready to point stormijxo.com to Echoflux:
    - Value: `echoflux.ai` (or your Vercel domain)
 2. In Vercel, add the custom domain
 3. Configure the app to recognize stormijxo.com → stormijxo handle
+
+---
+
+### Fan Hub **Users** tab empty
+
+`FanHubUsers` loads `creators/{creatorId}/fans` with `orderBy("createdAt")`. Migrated fan docs must include **`createdAt`** (newer `migrate-stormij.ts` sets it). If you migrated before that fix, re-run members only:
+
+```bash
+npm run migrate:stormij -- --creator-id=YOUR_CREATOR_ID --collection=members
+```
+
+Fan documents use **`users/{uid}` as doc id when `uid`/`userId` exists** on the Stormij member (better match for Stripe). Otherwise the Stormij member doc id is used.
+
+**Member fields mapped for User Management (Stormij → `creators/.../fans`):** `username` / `handle` / `instagram_handle`, `role` (`admin` / `member` / `tipper`), `subscriptionStatus` / `status`, `cancelAtPeriodEnd`, `subscriptionCurrentPeriodEnd` when present. **Signup date** in the UI uses `subscribedAt` / `createdAt` from Stormij — it is not from Stripe until you connect Stripe; odd dates usually come from source data in the old project.
+
+### Hero image missing on landing
+
+`site_config` migration maps common Stormij fields (`heroImageUrl`, `heroImage`, etc.). If your Stormij field names differ, set **My Page** in EchoFlux or extend `migrateSiteConfig` in `scripts/migrate-stormij.ts`.
 
 ---
 

@@ -208,13 +208,19 @@ service cloud.firestore {
      *  CREATORS COLLECTION (Fan Hub storefront / My Page)
      *  -------------------------------------------------------
      *  - Creator can read their own doc (creatorId == auth.uid) for My Page builder
-     *  - Writes go through API (updateCreatorStorefront) via Admin SDK
+     *  - Most storefront writes: API (updateCreatorStorefront) via Admin SDK
+     *  - Client exception: FanHubFeed saves `feedSettings` (merge) — must allow owner update/create for that field only
      *  - Public storefront reads are done via getBioPage API (by handle)
      *  ------------------------------------------------------- */
     match /creators/{creatorId} {
-      // Creator profile doc (My Page / storefront metadata) — owner read; writes via Admin API
       allow read: if isAuthenticated() && request.auth.uid == creatorId;
-      allow write: if false;
+
+      // Block arbitrary client writes; allow only feedSettings mirror from FanHubFeed (matches users.fanHubFeedSettings)
+      allow create: if isOwner(creatorId)
+        && request.resource.data.keys().hasOnly(['feedSettings']);
+      allow update: if isOwner(creatorId)
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['feedSettings']);
+      allow delete: if false;
 
       /** Fan Hub posts — creators manage; signed-in users read published (member feed / previews). */
       match /fanPosts/{postId} {

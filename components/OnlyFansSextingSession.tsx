@@ -5,7 +5,23 @@ import { useAppContext } from './AppContext';
 import { hasEliteAccess } from '../src/utils/planAccess';
 import { auth, db } from '../firebaseConfig';
 import { doc, getDoc, collection, getDocs, addDoc, Timestamp, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { formatFanDisplayLabel, formatFanPlainMoniker } from '../src/lib/fanHubDisplay';
+import {
+  formatFanDisplayLabel,
+  formatFanPlainMoniker,
+  fanHubListLabel,
+  safeUsernameForHandle,
+} from '../src/lib/fanHubDisplay';
+
+function usernameFromFanDoc(fd: Record<string, unknown>): string | null {
+  const keys = ['username', 'memberUsername', 'handle', 'instagram_handle', 'instagramHandle'] as const;
+  for (const k of keys) {
+    const v = fd[k];
+    if (typeof v === 'string' && v.trim()) {
+      return safeUsernameForHandle(v.replace(/^@/, ''));
+    }
+  }
+  return null;
+}
 
 type SessionStatus = 'setup' | 'active' | 'paused' | 'ended';
 type DurationPreset = '15' | '30' | '45' | '60' | 'custom';
@@ -26,6 +42,8 @@ interface FanOption {
   username?: string;
   email?: string;
   memberId?: string;
+  /** Resolved list row (never truncated UID — see load fans effect) */
+  listLabel: string;
 }
 
 interface SextingContextMessage {
@@ -131,10 +149,7 @@ interface FanDropdownProps {
 }
 
 function getDisplay(fan: FanOption): string {
-  return formatFanDisplayLabel(
-    { username: fan.username, displayName: fan.displayName },
-    { fallback: fan.uid.slice(0, 8) }
-  );
+  return fan.listLabel;
 }
 
 function matchFan(fan: FanOption, q: string): boolean {
@@ -365,36 +380,73 @@ export const OnlyFansSextingSession: React.FC = () => {
   const selectedFan = fans.find((f) => f.uid === selectedUid);
   const recentMessages = messagesToContext(messages, adminUid);
 
-  // Load fans
+  // Load fans — same enrichment as Fans tab (users + creators/.../fans + fanHubListLabel; no UID truncation)
   useEffect(() => {
     if (!adminUid) return;
     setFansLoading(true);
     getDocs(collection(db, 'users', adminUid, 'onlyfans_fan_preferences'))
       .then(async (snap) => {
-        const list: FanOption[] = await Promise.all(
-          snap.docs.map(async (d) => {
-            const data = d.data();
-            let username: string | undefined;
-            try {
-              const uSnap = await getDoc(doc(db, 'users', d.id));
-              if (uSnap.exists()) {
-                const raw = uSnap.data()?.username;
-                if (typeof raw === 'string' && raw.trim()) {
-                  username = raw.trim().toLowerCase();
+        const docs = snap.docs;
+        const CHUNK = 25;
+        const list: FanOption[] = [];
+        for (let i = 0; i < docs.length; i += CHUNK) {
+          const chunk = docs.slice(i, i + CHUNK);
+          const part = await Promise.all(
+            chunk.map(async (d) => {
+              const data = d.data();
+              const fanId = d.id;
+              let username: string | undefined;
+              let displayName: string | null =
+                typeof data.displayName === 'string' && data.displayName.trim()
+                  ? data.displayName.trim()
+                  : null;
+              let email: string | null = typeof data.email === 'string' ? data.email : null;
+              const prefName = typeof data.name === 'string' ? data.name : null;
+
+              try {
+                const [uSnap, fSnap] = await Promise.all([
+                  getDoc(doc(db, 'users', fanId)),
+                  getDoc(doc(db, 'creators', adminUid, 'fans', fanId)),
+                ]);
+                if (fSnap.exists()) {
+                  const fd = fSnap.data() as Record<string, unknown>;
+                  const fromFan = usernameFromFanDoc(fd);
+                  if (fromFan) username = fromFan;
+                  if (!displayName && typeof fd.displayName === 'string' && fd.displayName.trim()) {
+                    displayName = fd.displayName.trim();
+                  }
+                  if (!email && typeof fd.email === 'string' && fd.email) email = fd.email;
                 }
+                if (uSnap.exists()) {
+                  const ud = uSnap.data() as Record<string, unknown>;
+                  const uu =
+                    typeof ud.username === 'string' && ud.username.trim()
+                      ? safeUsernameForHandle(ud.username) ?? undefined
+                      : undefined;
+                  if (uu) username = uu;
+                  if (!displayName && typeof ud.displayName === 'string' && ud.displayName.trim()) {
+                    displayName = ud.displayName.trim();
+                  }
+                  if (!email && typeof ud.email === 'string' && ud.email) email = ud.email;
+                }
+              } catch {
+                /* ignore */
               }
-            } catch {
-              /* ignore */
-            }
-            return {
-              uid: d.id,
-              displayName: typeof data.name === 'string' ? data.name : undefined,
-              username,
-              email: typeof data.email === 'string' ? data.email : '',
-              memberId: d.id,
-            };
-          })
-        );
+
+              const listLabel = fanHubListLabel(username ?? null, displayName, email, prefName);
+
+              return {
+                uid: fanId,
+                displayName: displayName ?? undefined,
+                username,
+                email: email ?? '',
+                memberId: fanId,
+                listLabel,
+              };
+            })
+          );
+          list.push(...part);
+        }
         setFans(list);
       })
       .catch(() => setFans([]))
@@ -771,7 +823,7 @@ export const OnlyFansSextingSession: React.FC = () => {
           open={sessionEndModalOpen}
           onClose={() => setSessionEndModalOpen(false)}
           onConfirm={handleEndSession}
-          fanName={formatFanDisplayLabel(selectedFan ?? {}, { fallback: '' }) || undefined}
+          fanName={selectedFan?.listLabel || undefined}
         />
       </>
     );
