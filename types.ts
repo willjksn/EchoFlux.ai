@@ -292,6 +292,7 @@ export interface CreatorStorefrontSettings {
     heroTagline?: string;       // Short tagline under display name
     heroPromise?: string;       // "Your access to..." promise text
     heroSubline?: string;       // Extra line after promise text on landing hero
+    heroSubline2?: string;      // Optional second line below heroSubline on landing hero
     
     // Text Styling (font size & color per field)
     textStyles?: {
@@ -300,6 +301,7 @@ export interface CreatorStorefrontSettings {
         heroTagline?: TextStyle;
         heroPromise?: TextStyle;
         heroSubline?: TextStyle;
+        heroSubline2?: TextStyle;
         perksTitle?: TextStyle;
         perksText?: TextStyle;
         previewTitle?: TextStyle;

@@ -1,12 +1,73 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useAppContext } from "./AppContext";
 import { auth, db } from "../firebaseConfig";
-import { collection, query, where, getDocs, onSnapshot, doc, updateDoc, orderBy, limit } from "firebase/firestore";
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  onSnapshot,
+  doc,
+  updateDoc,
+  addDoc,
+  deleteDoc,
+  type QueryDocumentSnapshot,
+} from "firebase/firestore";
 import type { TreatProduct, TreatProductType } from "../types";
 import { SparklesIcon, CalendarIcon } from "./icons/UIIcons";
 
-function formatPrice(cents: number): string {
-  return "$" + (cents / 100).toFixed(2);
+function formatPrice(cents: number | null | undefined): string {
+  const n = Number(cents);
+  if (!Number.isFinite(n)) return "—";
+  return "$" + (n / 100).toFixed(2);
+}
+
+/** Safe dollars string for treat form inputs (handles missing / odd API types). */
+function treatProductToPriceDollarString(product: TreatProduct | null | undefined): string {
+  if (!product) return "";
+  const raw = (product as { priceCents?: unknown }).priceCents;
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n)) return "";
+  return (n / 100).toFixed(2);
+}
+
+function treatProductQuantityString(product: TreatProduct | null | undefined): string {
+  if (product == null) return "";
+  const q = product.quantityLimit;
+  if (q == null) return "";
+  return String(q);
+}
+
+/** Map Firestore product doc → TreatProduct (API + client fallback). */
+function firestoreDocToTreatProduct(d: QueryDocumentSnapshot): TreatProduct {
+  const x = d.data();
+  const createdRaw = x.createdAt;
+  const updatedRaw = x.updatedAt;
+  const createdAt =
+    createdRaw && typeof (createdRaw as { toDate?: () => Date }).toDate === "function"
+      ? (createdRaw as { toDate: () => Date }).toDate().toISOString()
+      : String(createdRaw ?? "");
+  const updatedAt =
+    updatedRaw && typeof (updatedRaw as { toDate?: () => Date }).toDate === "function"
+      ? (updatedRaw as { toDate: () => Date }).toDate().toISOString()
+      : String(updatedRaw ?? "");
+  return {
+    id: d.id,
+    creatorId: String(x.creatorId ?? ""),
+    type: ((x.type as TreatProductType) || "custom") as TreatProductType,
+    title: String(x.title ?? ""),
+    description: typeof x.description === "string" ? x.description : undefined,
+    priceCents: Number(x.priceCents) || 0,
+    mediaUrl: typeof x.mediaUrl === "string" ? x.mediaUrl : undefined,
+    imageUrl: typeof x.imageUrl === "string" ? x.imageUrl : undefined,
+    archived: !!x.archived,
+    visible: x.visible !== false,
+    sortOrder: typeof x.sortOrder === "number" ? x.sortOrder : undefined,
+    quantityLimit: typeof x.quantityLimit === "number" ? x.quantityLimit : undefined,
+    soldCount: typeof x.soldCount === "number" ? x.soldCount : undefined,
+    createdAt,
+    updatedAt,
+  };
 }
 
 function formatScheduledDate(dateStr: string): string {
@@ -62,13 +123,6 @@ const CheckCircleIcon = () => (
   </svg>
 );
 
-const VideoIcon = () => (
-  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polygon points="23 7 16 12 23 17 23 7" />
-    <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-  </svg>
-);
-
 const SettingsIcon = () => (
   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="3" />
@@ -115,13 +169,6 @@ const DEFAULT_TREAT_IMAGES: Record<string, string> = {
   custom: "https://images.unsplash.com/photo-1513151233558-d860c5398176?w=400&h=300&fit=crop",
 };
 
-function getTreatImage(product: TreatProduct): string | null {
-  // Use custom image if set
-  if (product.imageUrl) return product.imageUrl;
-  // Fall back to default image for this type
-  return DEFAULT_TREAT_IMAGES[product.type] || null;
-}
-
 export const TreatsStore: React.FC = () => {
   const { user, showToast } = useAppContext();
   const creatorId = user?.id;
@@ -146,15 +193,35 @@ export const TreatsStore: React.FC = () => {
         `/api/products?creatorId=${encodeURIComponent(creatorId)}&includeArchived=true`,
         { headers: token ? { Authorization: `Bearer ${token}` } : {} }
       );
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error((data as { error?: string }).error || "Failed to load products");
+      if (res.ok) {
+        const data = await res.json();
+        setProducts((data.products as TreatProduct[]) || []);
+        return;
       }
-      const data = await res.json();
-      setProducts((data.products as TreatProduct[]) || []);
+      const data = await res.json().catch(() => ({}));
+      throw new Error((data as { error?: string }).error || `Failed to load products (${res.status})`);
     } catch (e) {
-      console.warn("Products API error (may need backend running):", e);
-      setProducts([]);
+      console.warn("Products API error (trying Firestore fallback):", e);
+      if (!db) {
+        setProducts([]);
+        return;
+      }
+      try {
+        const q = query(collection(db, "products"), where("creatorId", "==", creatorId));
+        const snap = await getDocs(q);
+        let list = snap.docs.map(firestoreDocToTreatProduct);
+        list.sort((a, b) => {
+          const orderDiff = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+          if (orderDiff !== 0) return orderDiff;
+          const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return bTime - aTime;
+        });
+        setProducts(list);
+      } catch (fe) {
+        console.warn("Firestore products load failed:", fe);
+        setProducts([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -241,6 +308,42 @@ export const TreatsStore: React.FC = () => {
     );
   }, [creatorId]);
 
+  const createProductViaFirestore = useCallback(
+    async (payload: {
+      type: TreatProductType;
+      title: string;
+      description?: string;
+      priceCents: number;
+      mediaUrl?: string;
+      visible: boolean;
+      quantityLimit?: number;
+    }) => {
+      if (!db || !creatorId || !auth.currentUser) return false;
+      const now = new Date().toISOString();
+      const docData: Record<string, unknown> = {
+        creatorId,
+        type: payload.type,
+        title: payload.title,
+        description: payload.description?.trim() ? payload.description.trim() : null,
+        priceCents: Math.max(0, payload.priceCents),
+        mediaUrl: payload.mediaUrl?.trim() ? payload.mediaUrl.trim() : null,
+        imageUrl: null,
+        archived: false,
+        visible: payload.visible,
+        sortOrder: 0,
+        soldCount: 0,
+        createdAt: now,
+        updatedAt: now,
+      };
+      if (payload.quantityLimit != null && Number.isFinite(payload.quantityLimit)) {
+        docData.quantityLimit = Math.max(0, Math.floor(payload.quantityLimit));
+      }
+      await addDoc(collection(db, "products"), docData);
+      return true;
+    },
+    [creatorId]
+  );
+
   const handleCreate = async (payload: {
     type: TreatProductType;
     title: string;
@@ -252,30 +355,55 @@ export const TreatsStore: React.FC = () => {
   }) => {
     if (!creatorId) return;
     setSaving(true);
+    const body = JSON.stringify({
+      creatorId,
+      type: payload.type,
+      title: payload.title,
+      description: payload.description || undefined,
+      priceCents: payload.priceCents,
+      mediaUrl: payload.mediaUrl,
+      visible: payload.visible,
+      quantityLimit: payload.quantityLimit,
+    });
+
+    const finishOk = (msg: string) => {
+      showToast?.(msg, "success");
+      setShowForm(false);
+      void fetchProducts();
+    };
+
     try {
       const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
-      const res = await fetch("/api/products", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          creatorId,
-          type: payload.type,
-          title: payload.title,
-          description: payload.description || undefined,
-          priceCents: payload.priceCents,
-          mediaUrl: payload.mediaUrl,
-          visible: payload.visible,
-          quantityLimit: payload.quantityLimit,
-        }),
-      });
+      let res: Response;
+      try {
+        res = await fetch("/api/products", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body,
+        });
+      } catch {
+        if (await createProductViaFirestore(payload)) {
+          finishOk("Product added (saved directly — API unreachable; use Vercel dev or DEV_API_PROXY for API mode).");
+          return;
+        }
+        throw new Error("Network error and could not save to database.");
+      }
+
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((data as { error?: string }).error || "Failed to create");
-      showToast?.("Product added", "success");
-      setShowForm(false);
-      fetchProducts();
+      if (res.ok) {
+        finishOk("Product added");
+        return;
+      }
+
+      if (res.status === 404 && (await createProductViaFirestore(payload))) {
+        finishOk("Product added (saved directly — /api not running locally; deploy or use vercel dev).");
+        return;
+      }
+
+      throw new Error((data as { error?: string }).error || `Failed to create (${res.status})`);
     } catch (e) {
       showToast?.(e instanceof Error ? e.message : "Failed to create product", "error");
     } finally {
@@ -285,24 +413,48 @@ export const TreatsStore: React.FC = () => {
 
   const handleUpdate = async (
     productId: string,
-    updates: Partial<{ title: string; description: string; priceCents: number; mediaUrl: string; visible: boolean; archived: boolean; type: TreatProductType; quantityLimit: number }>
+    updates: Partial<{ title: string; description: string; priceCents: number; mediaUrl: string; imageUrl: string; visible: boolean; archived: boolean; type: TreatProductType; quantityLimit: number }>
   ) => {
     setSaving(true);
     try {
       const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
-      const res = await fetch(`/api/products?id=${encodeURIComponent(productId)}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify(updates),
-      });
+      let res: Response;
+      try {
+        res = await fetch(`/api/products?id=${encodeURIComponent(productId)}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify(updates),
+        });
+      } catch {
+        if (db) {
+          const patch: Record<string, unknown> = { ...updates, updatedAt: new Date().toISOString() };
+          await updateDoc(doc(db, "products", productId), patch);
+          showToast?.("Updated (direct database — API unreachable)", "success");
+          setEditing(null);
+          void fetchProducts();
+          return;
+        }
+        throw new Error("Network error");
+      }
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((data as { error?: string }).error || "Failed to update");
-      showToast?.("Updated", "success");
-      setEditing(null);
-      fetchProducts();
+      if (res.ok) {
+        showToast?.("Updated", "success");
+        setEditing(null);
+        void fetchProducts();
+        return;
+      }
+      if (res.status === 404 && db) {
+        const patch: Record<string, unknown> = { ...updates, updatedAt: new Date().toISOString() };
+        await updateDoc(doc(db, "products", productId), patch);
+        showToast?.("Updated (direct database)", "success");
+        setEditing(null);
+        void fetchProducts();
+        return;
+      }
+      throw new Error((data as { error?: string }).error || "Failed to update");
     } catch (e) {
       showToast?.(e instanceof Error ? e.message : "Failed to update", "error");
     } finally {
@@ -314,17 +466,37 @@ export const TreatsStore: React.FC = () => {
     if (!window.confirm("Delete this product? This cannot be undone.")) return;
     try {
       const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
-      const res = await fetch(`/api/products?id=${encodeURIComponent(productId)}`, {
-        method: "DELETE",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error((data as { error?: string }).error || "Failed to delete");
+      let res: Response;
+      try {
+        res = await fetch(`/api/products?id=${encodeURIComponent(productId)}`, {
+          method: "DELETE",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+      } catch {
+        if (db) {
+          await deleteDoc(doc(db, "products", productId));
+          showToast?.("Product deleted (direct database)", "success");
+          setEditing(null);
+          void fetchProducts();
+          return;
+        }
+        throw new Error("Network error");
       }
-      showToast?.("Product deleted", "success");
-      setEditing(null);
-      fetchProducts();
+      if (res.ok) {
+        showToast?.("Product deleted", "success");
+        setEditing(null);
+        void fetchProducts();
+        return;
+      }
+      if (res.status === 404 && db) {
+        await deleteDoc(doc(db, "products", productId));
+        showToast?.("Product deleted (direct database)", "success");
+        setEditing(null);
+        void fetchProducts();
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      throw new Error((data as { error?: string }).error || "Failed to delete");
     } catch (e) {
       showToast?.(e instanceof Error ? e.message : "Failed to delete", "error");
     }
@@ -376,11 +548,13 @@ export const TreatsStore: React.FC = () => {
 
   return (
     <main className="treats-main">
-      <div className="treats-top-row">
-        <section className="treats-store-header">
-          <h1 className="treats-title">Treats</h1>
-          <p className="treats-subhead">Personal messages, voice notes, and more — just for you.</p>
-        </section>
+      <div className={`treats-top-row${viewMode === "fan" ? " treats-top-row--fan-only" : ""}`}>
+        {viewMode === "manage" ? (
+          <section className="treats-store-header">
+            <h1 className="treats-title">Treats</h1>
+            <p className="treats-subhead">Personal messages, voice notes, and more — just for you.</p>
+          </section>
+        ) : null}
 
         <div className="treats-view-toggle">
           <button
@@ -463,58 +637,69 @@ export const TreatsStore: React.FC = () => {
             </section>
           )}
 
-          {loading ? (
-            <p className="treats-loading">Loading…</p>
-          ) : displayTreats.length === 0 ? (
-            <p className="treats-empty">No treats available yet. Add some in Manage!</p>
-          ) : (
-            <>
-              <div className="treats-grid treats-grid-fan">
-                {displayTreats.map((p) => {
-                  const soldOut = typeof p.quantityLimit === "number" && p.quantityLimit > 0 && (p.soldCount ?? 0) >= p.quantityLimit;
-                  const qtyLeft = typeof p.quantityLimit === "number" && p.quantityLimit > 0
-                    ? p.quantityLimit - (p.soldCount ?? 0)
-                    : null;
-                  const isVideoCall = p.type.startsWith("live_video_");
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      className={`treat-card treat-card-fan${soldOut ? " sold-out" : ""}${isVideoCall ? " treat-card-video" : ""}${getTreatImage(p) ? " has-image" : ""}`}
-                      disabled={soldOut || purchaseLoading !== null}
-                      onClick={() => handlePurchase(p.id)}
-                    >
-                      {getTreatImage(p) && (
-                        <div className="treat-card-image">
-                          <img src={getTreatImage(p)!} alt={p.title} loading="lazy" />
+          <div className="treats-fan-shell">
+            <div className="treats-stormij-panel">
+              <header className="treats-stormij-panel-header">
+                <h2 className="treats-stormij-panel-title">Treats</h2>
+                <p className="treats-stormij-panel-sub">
+                  Personal messages, voice notes, and more — just for you.
+                </p>
+                <div className="treats-stormij-panel-rule" aria-hidden />
+              </header>
+              {loading ? (
+                <p className="treats-stormij-panel-state">Loading…</p>
+              ) : displayTreats.length === 0 ? (
+                <p className="treats-stormij-panel-state treats-stormij-panel-state--empty">
+                  No treats available yet. Add some in Manage!
+                </p>
+              ) : (
+                <div className="treats-stormij-grid">
+                  {displayTreats.map((p) => {
+                    const soldOut =
+                      typeof p.quantityLimit === "number" &&
+                      p.quantityLimit > 0 &&
+                      (p.soldCount ?? 0) >= p.quantityLimit;
+                    const qtyLeft =
+                      typeof p.quantityLimit === "number" && p.quantityLimit > 0
+                        ? p.quantityLimit - (p.soldCount ?? 0)
+                        : null;
+                    return (
+                      <article
+                        key={p.id}
+                        className={`treats-stormij-card${soldOut ? " treats-stormij-card--sold-out" : ""}`}
+                      >
+                        <div className="treats-stormij-card-row1">
+                          <h3 className="treats-stormij-card-title">{p.title}</h3>
+                          <div className="treats-stormij-card-price-block">
+                            <span className="treats-stormij-card-price">{formatPrice(p.priceCents)}</span>
+                            <span className="treats-stormij-card-heart" aria-hidden>
+                              ♡
+                            </span>
+                          </div>
                         </div>
-                      )}
-                      <div className="treat-card-inner">
-                        <div className="treat-card-header">
-                          <h2 className="treat-card-title">
-                            {isVideoCall && <VideoIcon />}
-                            {p.title}
-                          </h2>
-                          <span className="treat-card-price">{formatPrice(p.priceCents)}</span>
-                        </div>
-                        {p.description && <p className="treat-card-desc">{p.description}</p>}
-                        <div className="treat-card-footer">
-                          <span className={`treat-card-qty${soldOut ? " treat-card-qty-sold" : ""}`}>
+                        {p.description ? (
+                          <p className="treats-stormij-card-desc">{p.description}</p>
+                        ) : null}
+                        <div className="treats-stormij-card-footer">
+                          <span className="treats-stormij-card-stock">
                             {soldOut ? "Sold out" : qtyLeft !== null ? `${qtyLeft} left` : "Available"}
                           </span>
-                          {!soldOut && (
-                            <span className="treat-card-cta">
-                              {purchaseLoading === p.id ? "…" : "Purchase"}
-                            </span>
-                          )}
+                          <button
+                            type="button"
+                            className="treats-stormij-card-purchase"
+                            disabled={soldOut || purchaseLoading !== null}
+                            onClick={() => void handlePurchase(p.id)}
+                          >
+                            {purchaseLoading === p.id ? "…" : soldOut ? "Sold out" : "Purchase"}
+                          </button>
                         </div>
-                      </div>
-                  </button>
-                );
-              })}
-              </div>
-            </>
-          )}
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
         </>
       ) : (
         <>
@@ -575,11 +760,6 @@ export const TreatsStore: React.FC = () => {
                       />
                     ) : (
                       <>
-                        {getTreatImage(p) && (
-                          <div className="treat-manage-card-image">
-                            <img src={getTreatImage(p)!} alt={p.title} />
-                          </div>
-                        )}
                         <div className="treat-manage-card-content">
                           <h3 className="treat-manage-card-title">{p.title}</h3>
                           <div className="treat-manage-card-meta">
@@ -631,6 +811,7 @@ export const TreatsStore: React.FC = () => {
 
       {showForm && (
         <ProductForm
+          key="treats-add-product"
           product={null}
           onSave={handleCreate}
           onClose={() => {
@@ -659,10 +840,25 @@ const InlineEditForm: React.FC<{
   saving: boolean;
 }> = ({ product, onSave, onCancel, saving }) => {
   const [title, setTitle] = useState(product.title);
-  const [priceDollars, setPriceDollars] = useState(String(product.priceCents / 100));
+  const [priceDollars, setPriceDollars] = useState(() => treatProductToPriceDollarString(product));
   const [description, setDescription] = useState(product.description ?? "");
   const [imageUrl, setImageUrl] = useState(product.imageUrl ?? "");
-  const [quantityLimit, setQuantityLimit] = useState(product.quantityLimit ? String(product.quantityLimit) : "");
+  const [quantityLimit, setQuantityLimit] = useState(() => treatProductQuantityString(product));
+
+  const onInlinePriceChange = (raw: string) => {
+    if (raw === "") {
+      setPriceDollars("");
+      return;
+    }
+    if (/^\d*\.?\d*$/.test(raw)) setPriceDollars(raw);
+  };
+  const onInlineQtyChange = (raw: string) => {
+    if (raw === "") {
+      setQuantityLimit("");
+      return;
+    }
+    if (/^\d+$/.test(raw)) setQuantityLimit(raw);
+  };
 
   const defaultImage = DEFAULT_TREAT_IMAGES[product.type];
 
@@ -696,11 +892,11 @@ const InlineEditForm: React.FC<{
       <div className="treat-inline-field">
         <label>Price ($)</label>
         <input
-          type="number"
-          step="0.01"
-          min="0"
+          type="text"
+          inputMode="decimal"
+          autoComplete="off"
           value={priceDollars}
-          onChange={(e) => setPriceDollars(e.target.value)}
+          onChange={(e) => onInlinePriceChange(e.target.value)}
           placeholder="0.00"
         />
       </div>
@@ -730,12 +926,12 @@ const InlineEditForm: React.FC<{
       <div className="treat-inline-field">
         <label>Quantity left (decremented on each purchase)</label>
         <input
-          type="number"
-          min="0"
-          step="1"
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
           value={quantityLimit}
-          onChange={(e) => setQuantityLimit(e.target.value)}
-          placeholder="Unlimited"
+          onChange={(e) => onInlineQtyChange(e.target.value)}
+          placeholder="Unlimited (leave blank)"
         />
       </div>
       <div className="treat-inline-actions">
@@ -765,24 +961,46 @@ const ProductForm: React.FC<{
   saving: boolean;
 }> = ({ product, onSave, onClose, saving }) => {
   const type: TreatProductType = "custom";
-  const [title, setTitle] = useState(product?.title ?? "");
-  const [description, setDescription] = useState(product?.description ?? "");
-  const [priceCents, setPriceCents] = useState(product ? String(product.priceCents) : "");
-  const [mediaUrl, setMediaUrl] = useState(product?.mediaUrl ?? "");
-  const [quantityLimit, setQuantityLimit] = useState(product?.quantityLimit ? String(product.quantityLimit) : "");
+  const [title, setTitle] = useState(() => product?.title ?? "");
+  const [description, setDescription] = useState(() => product?.description ?? "");
+  /** Dollar string while typing — do not normalize on every keystroke (breaks cursor / decimals). */
+  const [priceDollars, setPriceDollars] = useState(() => treatProductToPriceDollarString(product));
+  const [mediaUrl, setMediaUrl] = useState(() => (product?.mediaUrl != null ? String(product.mediaUrl) : ""));
+  const [quantityLimit, setQuantityLimit] = useState(() => treatProductQuantityString(product));
+
+  const onPriceDollarsChange = (raw: string) => {
+    if (raw === "") {
+      setPriceDollars("");
+      return;
+    }
+    // Allow typing partial values: "", "1", "12.", "12.5", "0.99"
+    if (/^\d*\.?\d*$/.test(raw)) {
+      setPriceDollars(raw);
+    }
+  };
+
+  const onQuantityChange = (raw: string) => {
+    if (raw === "") {
+      setQuantityLimit("");
+      return;
+    }
+    if (/^\d+$/.test(raw)) {
+      setQuantityLimit(raw);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cents = Math.round(parseFloat(priceCents) * 100) || 0;
+    const cents = Math.round(parseFloat(priceDollars || "0") * 100) || 0;
     if (!title.trim()) return;
     await onSave({
       type,
       title: title.trim(),
       description: description.trim() || undefined,
       priceCents: cents,
-      mediaUrl: mediaUrl.trim() || undefined,
+      mediaUrl: String(mediaUrl ?? "").trim() || undefined,
       visible: true,
-      quantityLimit: quantityLimit ? parseInt(quantityLimit, 10) : undefined,
+      quantityLimit: quantityLimit.trim() ? parseInt(quantityLimit, 10) : undefined,
     });
   };
 
@@ -819,28 +1037,19 @@ const ProductForm: React.FC<{
             <div className="treats-form-field">
               <label>Price ($)</label>
               <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={priceCents !== "" ? (Number(priceCents) / 100).toFixed(2) : ""}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === "") {
-                    setPriceCents("");
-                  } else {
-                    const dollars = parseFloat(val) || 0;
-                    setPriceCents(String(Math.round(dollars * 100)));
-                  }
-                }}
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                value={priceDollars}
+                onChange={(e) => onPriceDollarsChange(e.target.value)}
                 onKeyDown={(e) => {
-                  // Allow arrow keys to increment/decrement
-                  if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-                    e.preventDefault();
-                    const currentVal = priceCents !== "" ? Number(priceCents) / 100 : 0;
-                    const step = 0.01;
-                    const newVal = e.key === "ArrowUp" ? currentVal + step : Math.max(0, currentVal - step);
-                    setPriceCents(String(Math.round(newVal * 100)));
-                  }
+                  if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+                  e.preventDefault();
+                  const cur = parseFloat(priceDollars || "0");
+                  const base = Number.isFinite(cur) ? cur : 0;
+                  const step = 0.01;
+                  const next = e.key === "ArrowUp" ? base + step : Math.max(0, base - step);
+                  setPriceDollars(next.toFixed(2));
                 }}
                 placeholder="0.00"
               />
@@ -848,12 +1057,12 @@ const ProductForm: React.FC<{
             <div className="treats-form-field">
               <label>Quantity limit</label>
               <input
-                type="number"
-                min="0"
-                step="1"
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
                 value={quantityLimit}
-                onChange={(e) => setQuantityLimit(e.target.value)}
-                placeholder="Unlimited"
+                onChange={(e) => onQuantityChange(e.target.value)}
+                placeholder="Unlimited (leave blank)"
               />
             </div>
           </div>

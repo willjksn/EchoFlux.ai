@@ -131,6 +131,12 @@ npm run sync:fan-dm-threads -- --creator-id=YOUR_CREATOR_ID
 
 (Optional dry run: add `--dry-run` at the end.)
 
+If chats in your EchoFlux project are still only under the **root** collection `conversations` (Stormij shape) and not under `creators/{id}/conversations`, use:
+
+```bash
+npm run sync:fan-dm-threads -- --creator-id=YOUR_CREATOR_ID --source=root
+```
+
 **After migration, fan cards + chat session pickers read `users/{creatorId}/onlyfans_fan_preferences`.** That is **not** filled by `migrate-stormij.ts`. Run the one-off backfill once per creator:
 
 ```bash

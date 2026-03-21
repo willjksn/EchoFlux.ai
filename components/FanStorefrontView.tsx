@@ -23,7 +23,7 @@ export type StorefrontCreator = {
   socialLinks?: StorefrontSocialLinks;
   landingContent?: StorefrontLandingContent;
   legal?: StorefrontLegal;
-  theme: { primary: string; background: string; text?: string; buttonStyle?: string; fontFamily?: string };
+  theme: { primary: string; background: string; text?: string; buttonStyle?: string; fontFamily?: string; accentHover?: string };
   heroLayout?: "default" | "centered" | "split" | "splitRight";
   sections: { feed: boolean; treats: boolean; tip?: boolean; messages: boolean; about?: boolean };
   sectionsOrder?: string[];
@@ -231,6 +231,8 @@ export const FanStorefrontView: React.FC = () => {
   const [cancelMembershipLoading, setCancelMembershipLoading] = useState(false);
   const [cancelMembershipMessage, setCancelMembershipMessage] = useState<string | null>(null);
   const [entitlementLoading, setEntitlementLoading] = useState(false);
+  /** Bumps when entitlement effect re-runs so stale async completions don't leave loading stuck. */
+  const entitlementFetchGen = useRef(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"feed" | "treats" | "messages" | "tip" | "saved" | "about">("feed");
@@ -307,10 +309,11 @@ export const FanStorefrontView: React.FC = () => {
     if (!creator?.creatorId || !isLoggedIn) {
       setSubscribed(false);
       setMemberUsernameRequired(false);
+      setEntitlementLoading(false);
       return;
     }
 
-    let cancelled = false;
+    const gen = ++entitlementFetchGen.current;
     setEntitlementLoading(true);
 
     (async () => {
@@ -320,24 +323,22 @@ export const FanStorefrontView: React.FC = () => {
           `/api/getFanEntitlement?creatorId=${encodeURIComponent(creator.creatorId)}`,
           { headers: token ? { Authorization: `Bearer ${token}` } : {} }
         );
-        if (cancelled) return;
         const data = await res.json().catch(() => ({}));
+        if (gen !== entitlementFetchGen.current) return;
         setSubscribed(!!(data as { subscribed?: boolean }).subscribed);
         setMemberUsernameRequired(!!(data as { memberUsernameRequired?: boolean }).memberUsernameRequired);
         setUnlockedProductIds(Array.isArray((data as { unlockedProductIds?: string[] }).unlockedProductIds) ? (data as { unlockedProductIds: string[] }).unlockedProductIds : []);
       } catch {
-        if (!cancelled) {
+        if (gen === entitlementFetchGen.current) {
           setSubscribed(false);
           setMemberUsernameRequired(false);
         }
       } finally {
-        if (!cancelled) setEntitlementLoading(false);
+        if (gen === entitlementFetchGen.current) {
+          setEntitlementLoading(false);
+        }
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
   }, [creator?.creatorId, isLoggedIn]);
 
   const fetchTreats = useCallback(async () => {
@@ -752,6 +753,8 @@ export const FanStorefrontView: React.FC = () => {
         fontFamily: globalFont,
         backgroundColor: bg,
         "--fan-primary": primary,
+        "--fan-accent": primary,
+        "--fan-accent-hover": theme?.accentHover ?? primary,
         "--fan-bg": bg,
         "--fan-text": theme?.text || "#1f2937",
       } as React.CSSProperties}

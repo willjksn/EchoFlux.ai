@@ -216,6 +216,7 @@ interface FanLandingPageProps {
     heroTagline?: string;
     heroPromise?: string;
     heroSubline?: string;
+    heroSubline2?: string;
     socialLinks?: StorefrontSocialLinks;
     landingContent?: StorefrontLandingContent;
     legal?: StorefrontLegal;
@@ -230,6 +231,7 @@ interface FanLandingPageProps {
       heroTagline?: TextStyle;
       heroPromise?: TextStyle;
       heroSubline?: TextStyle;
+      heroSubline2?: TextStyle;
       perksTitle?: TextStyle;
       perksText?: TextStyle;
       previewTitle?: TextStyle;
@@ -269,6 +271,7 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
     heroTagline,
     heroPromise,
     heroSubline,
+    heroSubline2,
     socialLinks,
     landingContent: creatorLandingContent,
     legal,
@@ -543,6 +546,7 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
               {heroTagline && <p className="fan-landing-hero-tagline" style={getTextStyleCSS(ts.heroTagline, { color: `${textColor}99` })}>{heroTagline}</p>}
               <p className="fan-landing-hero-promise" style={getTextStyleCSS(ts.heroPromise, { color: primary })}>{heroPromise || "Your access to the real me"}</p>
               {heroSubline && <p className="fan-landing-hero-subline" style={getTextStyleCSS(ts.heroSubline, { color: `${textColor}cc` })}>{heroSubline}</p>}
+              {heroSubline2 && <p className="fan-landing-hero-subline fan-landing-hero-subline--2" style={getTextStyleCSS(ts.heroSubline2, { color: `${textColor}99` })}>{heroSubline2}</p>}
               {visibleSocialLinks.length > 0 && (
                 <div className="fan-landing-social-links">
                   {visibleSocialLinks.map((link) => (
@@ -566,6 +570,7 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
               {heroTagline && <p className="fan-landing-hero-tagline" style={getTextStyleCSS(ts.heroTagline, { color: `${textColor}99` })}>{heroTagline}</p>}
               <p className="fan-landing-hero-promise" style={getTextStyleCSS(ts.heroPromise, { color: primary })}>{heroPromise || "Your access to the real me"}</p>
               {heroSubline && <p className="fan-landing-hero-subline" style={getTextStyleCSS(ts.heroSubline, { color: `${textColor}cc` })}>{heroSubline}</p>}
+              {heroSubline2 && <p className="fan-landing-hero-subline fan-landing-hero-subline--2" style={getTextStyleCSS(ts.heroSubline2, { color: `${textColor}99` })}>{heroSubline2}</p>}
               {visibleSocialLinks.length > 0 && (
                 <div className="fan-landing-social-links">
                   {visibleSocialLinks.map((link) => (

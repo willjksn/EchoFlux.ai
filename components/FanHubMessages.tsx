@@ -13,10 +13,25 @@ const VideoIcon = () => (
   </svg>
 );
 
+/** Vite’s /api proxy often returns plain text on 502 — res.json() hides the real message. */
+async function parseApiBody(res: Response): Promise<{ json: Record<string, unknown>; plainTextHint: string | null }> {
+  const text = await res.text();
+  if (!text.trim()) return { json: {}, plainTextHint: res.statusText || null };
+  try {
+    return { json: JSON.parse(text) as Record<string, unknown>, plainTextHint: null };
+  } catch {
+    return { json: {}, plainTextHint: text.slice(0, 500) };
+  }
+}
+
+const DEV_PROXY_BANNER_KEY = "fanhub-messages-dev-proxy-dismiss";
+
 export const FanHubMessages: React.FC = () => {
   const { user, showToast } = useAppContext();
   const creatorId = user?.id;
   const [threads, setThreads] = useState<FanDmThread[]>([]);
+  /** When thread list API fails, empty threads looked like “no conversations”. */
+  const [threadsError, setThreadsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedThread, setSelectedThread] = useState<FanDmThread | null>(null);
   const [messages, setMessages] = useState<FanDmMessage[]>([]);
@@ -33,24 +48,44 @@ export const FanHubMessages: React.FC = () => {
   // Instant video call state
   const [startingVideo, setStartingVideo] = useState(false);
   const [activeVideoSession, setActiveVideoSession] = useState<{ sessionId: string; creatorId: string } | null>(null);
+  const [showDevProxyBanner, setShowDevProxyBanner] = useState(() => {
+    if (!import.meta.env.DEV) return false;
+    try {
+      return sessionStorage.getItem(DEV_PROXY_BANNER_KEY) !== "1";
+    } catch {
+      return true;
+    }
+  });
 
   const fetchThreads = useCallback(async () => {
     if (!creatorId) return;
     setLoading(true);
+    setThreadsError(null);
     try {
       const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       const res = await fetch("/api/fanDmThreads?as=creator", {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      const data = await res.json().catch(() => ({}));
+      const { json: data, plainTextHint } = await parseApiBody(res);
       if (!res.ok) {
-        const err = (data as { error?: string }).error || res.statusText;
+        const err =
+          (data.error as string) ||
+          plainTextHint ||
+          res.statusText ||
+          `HTTP ${res.status}`;
         console.error("fanDmThreads:", res.status, err);
+        setThreads([]);
+        setThreadsError(err);
         showToast?.(err === "Unauthorized" ? "Sign in again to load messages." : `Messages list failed (${res.status})`, "error");
+        return;
       }
       setThreads(Array.isArray(data.threads) ? data.threads : []);
-    } catch {
+      setThreadsError(null);
+    } catch (e) {
       setThreads([]);
+      const msg = e instanceof Error ? e.message : "Network error";
+      setThreadsError(msg);
+      showToast?.("Could not load conversations.", "error");
     } finally {
       setLoading(false);
     }
@@ -70,14 +105,32 @@ export const FanHubMessages: React.FC = () => {
   }, [threads]);
 
   const fetchMessagesForThread = useCallback(
-    async (thread: FanDmThread): Promise<FanDmMessage[]> => {
+    async (thread: FanDmThread): Promise<{ messages: FanDmMessage[]; error: string | null }> => {
       const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
-      const res = await fetch(
-        `/api/fanDmMessages?threadId=${encodeURIComponent(thread.id)}`,
-        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
-      );
-      const data = await res.json().catch(() => ({}));
-      return Array.isArray(data.messages) ? data.messages : [];
+      try {
+        const res = await fetch(
+          `/api/fanDmMessages?threadId=${encodeURIComponent(thread.id)}`,
+          { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+        );
+        const { json: data, plainTextHint } = await parseApiBody(res);
+        if (!res.ok) {
+          const err =
+            (data.error as string) ||
+            (typeof data.details === "string" ? data.details : null) ||
+            plainTextHint ||
+            `HTTP ${res.status}`;
+          return { messages: [], error: err };
+        }
+        return {
+          messages: Array.isArray(data.messages) ? (data.messages as FanDmMessage[]) : [],
+          error: null,
+        };
+      } catch (e) {
+        return {
+          messages: [],
+          error: e instanceof Error ? e.message : "Network error",
+        };
+      }
     },
     []
   );
@@ -85,12 +138,17 @@ export const FanHubMessages: React.FC = () => {
   useEffect(() => {
     if (!selectedThread || !creatorId) {
       setMessages([]);
+      setMessagesError(null);
       return;
     }
     let cancelled = false;
     setMessagesLoading(true);
-    fetchMessagesForThread(selectedThread).then((list) => {
-      if (!cancelled) setMessages(list);
+    setMessagesError(null);
+    fetchMessagesForThread(selectedThread).then(({ messages: list, error }) => {
+      if (!cancelled) {
+        setMessages(list);
+        setMessagesError(error);
+      }
     }).finally(() => {
       if (!cancelled) setMessagesLoading(false);
     });
@@ -267,19 +325,85 @@ export const FanHubMessages: React.FC = () => {
   return (
     <div className="max-w-4xl mx-auto p-6">
       <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Messages</h1>
+      {import.meta.env.DEV && showDevProxyBanner ? (
+        <div className="mb-4 rounded-lg border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/40 px-4 py-3 text-sm text-sky-950 dark:text-sky-100">
+          <div className="flex justify-between gap-2 items-start">
+            <div>
+              <p className="font-semibold">Localhost: Messages need a real `/api` backend</p>
+              <p className="mt-1 text-xs opacity-90 leading-relaxed">
+                Plain <code className="px-1 rounded bg-black/10 dark:bg-white/10">npm run dev</code> does not run Vercel functions. Create{" "}
+                <code className="px-1 rounded bg-black/10 dark:bg-white/10">.env.local</code> in the project root with:
+              </p>
+              <pre className="mt-2 text-[11px] bg-black/5 dark:bg-white/10 p-2 rounded overflow-x-auto">
+                DEV_API_PROXY=https://YOUR-APP.vercel.app
+              </pre>
+              <p className="mt-2 text-xs opacity-90">
+                No trailing slash. Restart the dev server. In the terminal you should see{" "}
+                <code className="px-1 rounded bg-black/10 dark:bg-white/10">[vite] API proxy active</code>. See{" "}
+                <code className="px-1 rounded bg-black/10 dark:bg-white/10">docs/LOCAL_DEV.md</code>.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  sessionStorage.setItem(DEV_PROXY_BANNER_KEY, "1");
+                } catch {
+                  /* ignore */
+                }
+                setShowDevProxyBanner(false);
+              }}
+              className="text-xs shrink-0 text-sky-700 dark:text-sky-300 hover:underline"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      ) : null}
       <div className="flex gap-6 flex-col sm:flex-row">
         <div className="w-full sm:w-72 flex-shrink-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
           {loading ? (
             <p className="p-4 text-gray-500 dark:text-gray-400 text-sm">Loading...</p>
+          ) : threadsError ? (
+            <div className="p-4 text-sm space-y-2">
+              <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-amber-900 dark:text-amber-100">
+                <p className="font-medium">Conversations couldn’t load</p>
+                <p className="mt-1 text-xs opacity-90 break-words">{threadsError}</p>
+                {import.meta.env.DEV ? (
+                  <p className="mt-2 text-xs opacity-80">
+                    Local dev: set{" "}
+                    <code className="px-1 rounded bg-black/10 dark:bg-white/10">DEV_API_PROXY=https://your-app.vercel.app</code> in{" "}
+                    <code className="px-1 rounded bg-black/10 dark:bg-white/10">.env.local</code> and restart — see{" "}
+                    <code className="px-1 rounded bg-black/10 dark:bg-white/10">docs/LOCAL_DEV.md</code>.
+                  </p>
+                ) : (
+                  threadsError.includes("Database unavailable") || threadsError.includes("500") ? (
+                    <p className="mt-2 text-xs opacity-80">
+                      If this persists on the live site, check Vercel env{" "}
+                      <code className="px-1 rounded bg-black/10 dark:bg-white/10">FIREBASE_SERVICE_ACCOUNT_KEY_BASE64</code> and function logs.
+                    </p>
+                  ) : null
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => void fetchThreads()}
+                className="text-xs font-medium text-primary-600 dark:text-primary-400 hover:underline"
+              >
+                Retry
+              </button>
+            </div>
           ) : threads.length === 0 ? (
             <div className="p-4 text-gray-500 dark:text-gray-400 text-sm space-y-2">
               <p>No conversations yet.</p>
               <p className="text-xs leading-relaxed opacity-90">
                 Threads show up here after a fan sends a message from your storefront, or after you migrate/sync DMs.
-                If you imported from Stormij, run{" "}
-                <code className="text-[11px] bg-gray-100 dark:bg-gray-900 px-1 rounded">npm run sync:fan-dm-threads</code>{" "}
-                (see <code className="text-[11px] bg-gray-100 dark:bg-gray-900 px-1 rounded">scripts/sync-conversations-to-fanDmThreads.ts</code>
-                ). On localhost, set <code className="text-[11px] bg-gray-100 dark:bg-gray-900 px-1 rounded">DEV_API_PROXY</code> in{" "}
+                Stormij keeps DMs under <code className="text-[11px] bg-gray-100 dark:bg-gray-900 px-1 rounded">conversations</code>; Fan Hub reads{" "}
+                <code className="text-[11px] bg-gray-100 dark:bg-gray-900 px-1 rounded">fanDmThreads</code>. Run{" "}
+                <code className="text-[11px] bg-gray-100 dark:bg-gray-900 px-1 rounded">npm run sync:fan-dm-threads -- --creator-id=YOUR_UID</code>
+                {" "}(add <code className="text-[11px] bg-gray-100 dark:bg-gray-900 px-1 rounded">--source=root</code> if chats are still at the root{" "}
+                <code className="text-[11px] bg-gray-100 dark:bg-gray-900 px-1 rounded">conversations</code> collection). On localhost, set{" "}
+                <code className="text-[11px] bg-gray-100 dark:bg-gray-900 px-1 rounded">DEV_API_PROXY</code> in{" "}
                 <code className="text-[11px] bg-gray-100 dark:bg-gray-900 px-1 rounded">.env.local</code> so{" "}
                 <code className="text-[11px] bg-gray-100 dark:bg-gray-900 px-1 rounded">/api/*</code> works.
               </p>

@@ -58,7 +58,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       heroTagline: body.heroTagline !== undefined ? body.heroTagline : existingData?.heroTagline,
       heroPromise: body.heroPromise !== undefined ? body.heroPromise : existingData?.heroPromise,
       heroSubline: body.heroSubline !== undefined ? body.heroSubline : existingData?.heroSubline,
-      
+      heroSubline2: body.heroSubline2 !== undefined ? body.heroSubline2 : existingData?.heroSubline2,
+
+      textStyles: body.textStyles !== undefined ? body.textStyles : existingData?.textStyles,
+
       // Social Links
       socialLinks: body.socialLinks !== undefined ? body.socialLinks : existingData?.socialLinks,
       

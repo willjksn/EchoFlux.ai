@@ -130,6 +130,7 @@ function normalizeForCompare(a: Partial<CreatorStorefrontSettings>): string {
     heroTagline: a.heroTagline ?? "",
     heroPromise: a.heroPromise ?? "",
     heroSubline: a.heroSubline ?? "",
+    heroSubline2: a.heroSubline2 ?? "",
     socialLinks: a.socialLinks ?? DEFAULT_SOCIAL_LINKS,
     landingContent: a.landingContent ?? DEFAULT_LANDING_CONTENT,
     legal: a.legal ?? DEFAULT_LEGAL,
@@ -667,6 +668,7 @@ export const MyPageBuilder: React.FC = () => {
         heroTagline: draft.heroTagline,
         heroPromise: draft.heroPromise,
         heroSubline: draft.heroSubline,
+        heroSubline2: draft.heroSubline2,
         socialLinks: draft.socialLinks,
         landingContent: draft.landingContent,
         legal: draft.legal,
@@ -1369,6 +1371,29 @@ export const MyPageBuilder: React.FC = () => {
                     className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
                   <EmojiButton onSelect={(emoji) => updateDraft({ heroSubline: (draft.heroSubline ?? "") + emoji })} />
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">Second subline (optional)</label>
+                  <TextStyleControls
+                    style={draft.textStyles?.heroSubline2}
+                    onChange={(style) => updateTextStyle("heroSubline2", style)}
+                    defaultSize="sm"
+                  />
+                </div>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-1">
+                  Another line below the first subline (e.g. a short perk or disclaimer).
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={draft.heroSubline2 ?? ""}
+                    onChange={(e) => updateDraft({ heroSubline2: e.target.value })}
+                    placeholder="e.g., Cancel anytime · Secure checkout"
+                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+                  <EmojiButton onSelect={(emoji) => updateDraft({ heroSubline2: (draft.heroSubline2 ?? "") + emoji })} />
                 </div>
               </div>
             </div>

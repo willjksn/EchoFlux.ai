@@ -7,6 +7,8 @@ const COLLECTION = "products";
 
 function toProduct(doc: FirebaseFirestore.DocumentSnapshot): TreatProduct {
   const d = doc.data() as Record<string, unknown>;
+  const q = d.quantityLimit;
+  const s = d.soldCount;
   return {
     id: doc.id,
     creatorId: d.creatorId as string,
@@ -15,9 +17,12 @@ function toProduct(doc: FirebaseFirestore.DocumentSnapshot): TreatProduct {
     description: d.description as string | undefined,
     priceCents: (d.priceCents as number) ?? 0,
     mediaUrl: d.mediaUrl as string | undefined,
+    imageUrl: d.imageUrl as string | undefined,
     archived: !!(d.archived as boolean),
     visible: d.visible !== false,
     sortOrder: d.sortOrder as number | undefined,
+    quantityLimit: typeof q === "number" ? q : undefined,
+    soldCount: typeof s === "number" ? s : undefined,
     createdAt: d.createdAt as string,
     updatedAt: d.updatedAt as string,
   };
@@ -91,7 +96,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const priceCents = Math.max(0, Number(body.priceCents) || 0);
     const description = typeof body.description === "string" ? body.description.trim() : undefined;
     const mediaUrl = typeof body.mediaUrl === "string" ? body.mediaUrl.trim() : undefined;
+    const imageUrl = typeof body.imageUrl === "string" ? body.imageUrl.trim() : undefined;
     const visible = body.visible !== false;
+    const quantityLimit =
+      typeof body.quantityLimit === "number" && body.quantityLimit >= 0
+        ? Math.floor(body.quantityLimit)
+        : undefined;
     const now = new Date().toISOString();
 
     try {
@@ -99,19 +109,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!db) return res.status(500).json({ error: "Database unavailable" });
 
       const ref = db.collection(COLLECTION).doc();
-      const doc = {
+      const doc: Record<string, unknown> = {
         creatorId,
         type,
         title,
         description: description || null,
         priceCents,
         mediaUrl: mediaUrl || null,
+        imageUrl: imageUrl || null,
         archived: false,
         visible,
         sortOrder: 0,
+        soldCount: 0,
         createdAt: now,
         updatedAt: now,
       };
+      if (quantityLimit !== undefined) doc.quantityLimit = quantityLimit;
       await ref.set(doc);
       const product = toProduct(await ref.get());
       return res.status(201).json({ product });
@@ -149,6 +162,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (typeof body.visible === "boolean") updates.visible = body.visible;
       if (typeof body.sortOrder === "number") updates.sortOrder = body.sortOrder;
       if (typeof body.type === "string") updates.type = body.type;
+      if (body.quantityLimit !== undefined) {
+        updates.quantityLimit =
+          body.quantityLimit === null || body.quantityLimit === ""
+            ? null
+            : Math.max(0, Math.floor(Number(body.quantityLimit)));
+      }
+      if (typeof body.imageUrl === "string") updates.imageUrl = body.imageUrl.trim() || null;
 
       await ref.update(updates);
       const product = toProduct(await ref.get());

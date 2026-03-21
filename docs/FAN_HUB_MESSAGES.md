@@ -1,5 +1,28 @@
 # Fan Hub Messages (creator inbox)
 
+## Where Stormij stores DMs vs what EchoFlux reads
+
+| Location | Used by |
+|----------|---------|
+| Stormij: top-level `conversations/{id}/messages` | Legacy Stormij Firebase only |
+| After migration: `creators/{creatorId}/conversations/{id}/messages` | Raw copy in EchoFlux; **Fan Hub still does not read this** |
+| **`fanDmThreads/{threadId}/messages`** | **Fan Hub Messages** (`/api/fanDmThreads`, `/api/fanDmMessages`) |
+
+Populate `fanDmThreads` with:
+
+```bash
+npm run sync:fan-dm-threads -- --creator-id=YOUR_UID
+```
+
+- Default: reads **`creators/{creatorId}/conversations`** (post–`migrate-stormij` layout).
+- If your EchoFlux project still has chats only under the **root** collection `conversations` (same shape as Stormij):
+
+```bash
+npm run sync:fan-dm-threads -- --creator-id=YOUR_UID --source=root
+```
+
+---
+
 DMs are **not** read from Firestore in the browser. The app calls:
 
 | Endpoint | Role |
@@ -9,6 +32,10 @@ DMs are **not** read from Firestore in the browser. The app calls:
 | `POST /api/fanDmSend` | Send a reply |
 
 All of these need a valid **Firebase ID token** (`Authorization: Bearer …`) and a working **Firebase Admin** backend (Vercel env: `FIREBASE_SERVICE_ACCOUNT_KEY_BASE64`).
+
+## UI: “Conversations couldn’t load” or “Messages couldn’t load”
+
+The Fan Hub uses `/api/fanDmThreads` and `/api/fanDmMessages`. If those requests fail, the UI now shows the **error** instead of looking like an empty inbox.
 
 ## If the list is empty (“No conversations yet”)
 

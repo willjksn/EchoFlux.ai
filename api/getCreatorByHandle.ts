@@ -104,6 +104,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       heroTagline: (creatorData?.heroTagline as string) || undefined,
       heroPromise: (creatorData?.heroPromise as string) || undefined,
       heroSubline: (creatorData?.heroSubline as string) || undefined,
+      heroSubline2: (creatorData?.heroSubline2 as string) || undefined,
       socialLinks,
       landingContent,
       legal,

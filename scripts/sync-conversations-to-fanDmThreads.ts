@@ -1,11 +1,17 @@
 /**
- * One-time sync: copy creators/{creatorId}/conversations (Stormij-migrated) into fanDmThreads
- * so Fan Hub Messages shows them.
+ * One-time sync: copy Stormij-shaped DM threads into `fanDmThreads` so Fan Hub Messages can read them.
  *
- * Run AFTER migrate-stormij.ts (real migration) for conversations.
+ * Stormij stores chats as:
+ *   - Top-level `conversations/{convId}/messages/{msgId}` (source Stormij project), OR
+ *   - After `migrate-stormij.ts`: `creators/{creatorId}/conversations/...` (EchoFlux project).
+ *
+ * Fan Hub **only** reads `fanDmThreads/{sortedCreatorFanId}` — it does **not** query `conversations`.
  *
  * USAGE (repo has "type": "module"):
  *   npm run sync:fan-dm-threads -- --creator-id=YOUR_CREATOR_ID [--dry-run]
+ *
+ * If your EchoFlux Firestore still has the legacy **root** collection `conversations` (not under creators):
+ *   npm run sync:fan-dm-threads -- --creator-id=YOUR_CREATOR_ID --source=root
  */
 
 import admin from "firebase-admin";
@@ -51,6 +57,9 @@ function getCreatorId(): string {
 
 const dryRun = process.argv.includes("--dry-run");
 
+/** Read `conversations` at DB root (Stormij shape) instead of `creators/{id}/conversations`. */
+const sourceRoot = process.argv.some((a) => a === "--source=root" || a === "--from-stormij-root");
+
 function getThreadId(creatorId: string, fanId: string): string {
   return [creatorId, fanId].sort().join("_");
 }
@@ -68,22 +77,45 @@ async function main() {
   }
   const db = admin.firestore();
 
-  const convRef = db.collection("creators").doc(creatorId).collection("conversations");
-  const snapshot = await convRef.get();
-  console.log(`Found ${snapshot.size} conversations under creators/${creatorId}/conversations`);
+  const conversationsCol = sourceRoot
+    ? db.collection("conversations")
+    : db.collection("creators").doc(creatorId).collection("conversations");
+  const snapshot = await conversationsCol.get();
+  if (sourceRoot) {
+    console.log(
+      `Found ${snapshot.size} conversations under top-level collection "conversations" (Stormij root). ` +
+        `Thread creatorId will be set to --creator-id=${creatorId} for each.`
+    );
+  } else {
+    console.log(`Found ${snapshot.size} conversations under creators/${creatorId}/conversations`);
+  }
 
   let threadsCreated = 0;
   let messagesCopied = 0;
 
   for (const convDoc of snapshot.docs) {
     const data = convDoc.data();
+    if (sourceRoot) {
+      const docCreator = data.creatorId as string | undefined;
+      if (docCreator && docCreator !== creatorId) {
+        continue;
+      }
+    }
     const fanId = (data.memberUid || convDoc.id) as string;
     if (!fanId) continue;
 
     const threadId = getThreadId(creatorId, fanId);
     let lastMessageAtIso = toIso(data.lastMessageAt || data.updatedAt || data.createdAt);
 
-    const messagesSnap = await convRef.doc(convDoc.id).collection("messages").orderBy("createdAt", "asc").get();
+    const messagesSnap = await conversationsCol
+      .doc(convDoc.id)
+      .collection("messages")
+      .orderBy("createdAt", "asc")
+      .get()
+      .catch(async () =>
+        // Some legacy rows omit createdAt for ordering — fall back to unsorted get()
+        conversationsCol.doc(convDoc.id).collection("messages").get()
+      );
     let fanHasSentMessage = false;
     const messageDocs: { id: string; data: Record<string, unknown> }[] = [];
 

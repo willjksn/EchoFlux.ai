@@ -246,6 +246,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
 
   const theme = config.theme ?? {};
   const primary = theme.primary || DEFAULT_PRIMARY;
+  const accentHover = theme.accentHover ?? primary;
   const background = theme.background || DEFAULT_BG;
   const textColor = theme.text || DEFAULT_TEXT;
   const isDark = isDarkBackground(background);
@@ -289,6 +290,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
   const heroTagline = config.heroTagline ?? "";
   const heroPromise = config.heroPromise ?? "Your access to the real me";
   const heroSubline = config.heroSubline ?? "";
+  const heroSubline2 = config.heroSubline2 ?? "";
   const heroLayout = config.heroLayout ?? "default";
   const textStyles = config.textStyles ?? {};
   
@@ -620,9 +622,17 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                   )}
                   <p className="italic mb-2" style={getTextStyleCSS(textStyles.heroPromise, { fontSize: "0.875rem", color: primary, fontFamily: globalFont })}>{heroPromise}</p>
                   {heroSubline && (
-                    <p className="mb-3" style={getTextStyleCSS(textStyles.heroSubline, { fontSize: "0.8125rem", color: `${textColor}cc`, fontFamily: globalFont })}>{heroSubline}</p>
+                    <p
+                      className={heroSubline2 ? "mb-1" : "mb-3"}
+                      style={getTextStyleCSS(textStyles.heroSubline, { fontSize: "0.8125rem", color: `${textColor}cc`, fontFamily: globalFont })}
+                    >
+                      {heroSubline}
+                    </p>
                   )}
-                  {!heroSubline && <div className="mb-3" />}
+                  {heroSubline2 && (
+                    <p className="mb-3" style={getTextStyleCSS(textStyles.heroSubline2, { fontSize: "0.75rem", color: `${textColor}99`, fontFamily: globalFont })}>{heroSubline2}</p>
+                  )}
+                  {!heroSubline && !heroSubline2 && <div className="mb-3" />}
                   {socialLinks.length > 0 && (
                     <div className={`flex gap-2 ${heroLayout === "split" || heroLayout === "splitRight" ? "justify-start" : "justify-center"}`}>
                     {socialLinks.map((link) => (
@@ -643,6 +653,12 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                   )}
                   {heroTagline && <p className="text-xs mb-0.5" style={{ color: `${textColor}99` }}>{heroTagline}</p>}
                   <p className="text-xs italic" style={{ color: primary }}>{heroPromise}</p>
+                  {heroSubline && (
+                    <p className="text-[11px] mt-0.5 mb-0.5" style={getTextStyleCSS(textStyles.heroSubline, { color: `${textColor}cc`, fontFamily: globalFont })}>{heroSubline}</p>
+                  )}
+                  {heroSubline2 && (
+                    <p className="text-[10px] mb-1" style={getTextStyleCSS(textStyles.heroSubline2, { color: `${textColor}99`, fontFamily: globalFont })}>{heroSubline2}</p>
+                  )}
                   {socialLinks.length > 0 && (
                     <div className="flex gap-2 mt-1">
                       {socialLinks.map((link) => (
@@ -829,7 +845,18 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
       )}
 
       {previewMode === "member" && (
-        <div style={{ backgroundColor: background, minHeight: "100%" }}>
+        <div
+          style={{
+            backgroundColor: background,
+            minHeight: "100%",
+            "--fan-primary": primary,
+            "--fan-accent": primary,
+            "--fan-accent-hover": accentHover,
+            "--fan-text": textColor,
+            "--fan-text-muted": isDark ? `${textColor}99` : "#7c5b68",
+            "--fan-bg": background,
+          } as React.CSSProperties}
+        >
           {/* Member Header */}
           <header 
             className="flex items-center justify-between px-4 py-3"
@@ -895,8 +922,8 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
             </button>
           </header>
           
-          {/* Content Area */}
-          <div className="p-4" style={{ maxWidth: "480px", margin: "0 auto" }}>
+          {/* Content Area — matches FanStorefrontView .fan-member-content + fan-landing-feed.css */}
+          <div className="fan-member-content" style={{ maxWidth: "min(480px, 100%)" }}>
             {(effectiveTab === "home" || effectiveTab === "feed") && (
               <div className="space-y-4">
                 {/* Member feed header — same chrome classes as Fan Hub (stormij-fanhub.css) */}
@@ -1097,21 +1124,19 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
               </div>
             )}
             {effectiveTab === "treats" && (
-              <div 
-                style={{ 
+              <div
+                style={{
                   background: cardBg,
                   padding: "1.5rem 1rem",
                   borderRadius: "16px",
                 }}
               >
-                {/* Header */}
                 <div className="text-center" style={{ marginBottom: "1.25rem" }}>
-                  <h2 
-                    style={{ 
-                      fontSize: "clamp(1.5rem, 4vw, 1.8rem)", 
-                      fontWeight: 600,
-                      fontStyle: "italic",
-                      color: textColor, 
+                  <h2
+                    className="font-semibold italic"
+                    style={{
+                      fontSize: "clamp(1.5rem, 4vw, 1.8rem)",
+                      color: textColor,
                       fontFamily: globalFont,
                       margin: "0 0 0.35rem",
                     }}
@@ -1122,72 +1147,39 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                     Personal messages, voice notes, and more — just for you.
                   </p>
                 </div>
-                
-                {/* Treat Cards Grid */}
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { name: "30-Second Voice Note", price: 25, desc: "I'll say your name. Keep it short.", left: 10 },
-                    { name: "60-Second Voice Note", price: 45, desc: "More direct. Slightly longer.", left: 8 },
-                    { name: "Private Video Reply", price: 35, desc: "Ask me something. I'll respond.", left: 12 },
-                    { name: "Birthday Message", price: 50, desc: "Custom video. Don't make it weird.", left: 6 },
-                  ].map((treat, i) => (
-                    <div 
-                      key={i}
-                      className="rounded-xl"
-                      style={{ 
-                        background: surfaceBg,
-                        border: `1px solid ${isDark ? `${primary}30` : `${primary}15`}`,
-                        boxShadow: isDark ? `0 4px 16px rgba(0,0,0,0.15)` : `0 4px 16px ${primary}08`,
-                        padding: "1rem",
-                        display: "flex",
-                        flexDirection: "column",
-                      }}
-                    >
-                      {/* Title & Price Row */}
-                      <div className="flex items-start justify-between" style={{ marginBottom: "0.5rem" }}>
-                        <h3 
-                          style={{ 
-                            fontSize: "0.85rem", 
-                            fontWeight: 600, 
-                            fontStyle: "italic",
-                            color: textColor,
-                            fontFamily: globalFont,
-                            margin: 0,
-                            flex: 1,
-                            paddingRight: "0.5rem",
-                          }}
-                        >
-                          {treat.name}
-                        </h3>
-                        <span style={{ fontSize: "1rem", fontWeight: 700, color: primary }}>
+
+                {/* Same card chrome as live Fan Hub — styles/fan-landing-feed.css */}
+                <div className="fan-member-treats">
+                  <div className="fan-member-treats-grid">
+                    {[
+                      { typeLabel: "voice note", title: "30-Second Voice Note", price: 25, desc: "I'll say your name. Keep it short.", left: 10 },
+                      { typeLabel: "voice note", title: "60-Second Voice Note", price: 45, desc: "More direct. Slightly longer.", left: 8 },
+                      { typeLabel: "video reply", title: "Private Video Reply", price: 35, desc: "Ask me something. I'll respond.", left: 12 },
+                      { typeLabel: "custom", title: "Birthday Message", price: 50, desc: "Custom video. Don't make it weird.", left: 6 },
+                    ].map((treat, i) => (
+                      <div key={i} className="fan-member-treat-card">
+                        <p className="fan-member-treat-type">{treat.typeLabel}</p>
+                        <h3 className="fan-member-treat-title">{treat.title}</h3>
+                        <p className="fan-member-treat-desc">{treat.desc}</p>
+                        <p className="fan-member-treat-price">
                           ${treat.price}
-                          <span style={{ fontSize: "0.7rem", verticalAlign: "super", color: primary }}>♡</span>
-                        </span>
+                          <span style={{ fontSize: "0.75rem", verticalAlign: "super", marginLeft: "0.1rem" }} aria-hidden>
+                            ♡
+                          </span>
+                        </p>
+                        <div className="fan-member-treat-action">
+                          <span style={{ fontSize: "0.85rem", color: "var(--fan-text-muted)" }}>{treat.left} left</span>
+                          <button type="button" className="fan-member-treat-buy">
+                            Purchase
+                          </button>
+                        </div>
                       </div>
-                      
-                      {/* Description */}
-                      <p style={{ fontSize: "0.75rem", color: `${textColor}88`, margin: "0 0 0.75rem", lineHeight: 1.4 }}>
-                        {treat.desc}
-                      </p>
-                      
-                      {/* Footer */}
-                      <div 
-                        className="flex items-center justify-between"
-                        style={{ 
-                          marginTop: "auto",
-                          paddingTop: "0.5rem",
-                          borderTop: `1px solid ${primary}10`,
-                        }}
-                      >
-                        <span style={{ fontSize: "0.7rem", color: `${textColor}66` }}>{treat.left} left</span>
-                        <span style={{ fontSize: "0.8rem", fontWeight: 600, color: primary, cursor: "pointer" }}>Purchase</span>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-                
+
                 <p className="text-center" style={{ fontSize: "0.75rem", color: `${textColor}55`, marginTop: "1rem" }}>
-                  Preview — configure treats in the store
+                  Preview — real products come from your Treats store
                 </p>
               </div>
             )}
@@ -1333,31 +1325,35 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
             )}
             
             {effectiveTab === "messages" && (
-              <div className="space-y-3">
-                <p className="text-sm font-semibold" style={{ color: textColor }}>Conversation with {displayName}</p>
-                <div 
-                  className="rounded-xl p-4 min-h-[150px] flex items-center justify-center"
-                  style={{ background: surfaceBg, border: `1px solid ${isDark ? `${primary}30` : `${primary}15`}` }}
-                >
-                  <p className="text-sm text-center" style={{ color: `${textColor}66` }}>
-                    Start a conversation with {displayName}
-                  </p>
+              <div className="fan-member-messages">
+                <p className="fan-member-messages-title">Conversation with {displayName}</p>
+                <div className="fan-member-messages-list">
+                  <div className="fan-member-message fan-member-message-received">
+                    <span className="fan-member-message-content">
+                      Hey! Thanks for being here — this is how DMs look for fans.
+                    </span>
+                    <span className="fan-member-message-time">2:31 PM</span>
+                  </div>
+                  <div className="fan-member-message fan-member-message-sent">
+                    <span className="fan-member-message-content">Love the new drop! 🔥</span>
+                    <span className="fan-member-message-time">2:32 PM</span>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <input 
-                    type="text" 
-                    placeholder="Type a message..." 
-                    className="flex-1 px-3 py-2 rounded-xl text-sm"
-                    style={{ border: `1px solid ${isDark ? `${primary}30` : `${primary}20`}`, background: surfaceBg }}
+                <div className="fan-member-messages-compose">
+                  <textarea
+                    readOnly
+                    rows={2}
+                    className="fan-member-messages-input"
+                    placeholder="Type a message… (Shift+Enter for newline)"
+                    defaultValue=""
                   />
-                  <button 
-                    type="button"
-                    className="px-4 py-2 rounded-xl text-sm font-semibold text-white"
-                    style={{ background: primary }}
-                  >
+                  <button type="button" className="fan-member-messages-send" style={{ backgroundColor: primary }}>
                     Send
                   </button>
                 </div>
+                <p className="text-center text-[11px] mt-2" style={{ color: "var(--fan-text-muted)" }}>
+                  Preview — live thread loads for subscribed fans.
+                </p>
               </div>
             )}
             {effectiveTab === "about" && (
