@@ -241,7 +241,7 @@ export function formatCreatorOutgoingDmBadge(username?: string | null, displayNa
   return "YOU";
 }
 
-/** Sidebar / list: short relative time (e.g. 1h, 13h, 2w). */
+/** Sidebar / list: short relative time (e.g. 3 mins, 13h, 1d after 24h+). */
 export function formatDmRelativeShort(raw: string | undefined | null): string {
   if (raw == null || raw === "") return "";
   const ms = new Date(raw).getTime();
@@ -251,9 +251,10 @@ export function formatDmRelativeShort(raw: string | undefined | null): string {
   const sec = Math.floor(diff / 1000);
   if (sec < 45) return "now";
   const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}m`;
+  if (min < 1) return "now";
+  if (min < 60) return min === 1 ? "1 min" : `${min} mins`;
   const hr = Math.floor(min / 60);
-  if (hr < 48) return `${hr}h`;
+  if (hr < 24) return `${hr}h`;
   const day = Math.floor(hr / 24);
   if (day < 14) return `${day}d`;
   const wk = Math.floor(day / 7);

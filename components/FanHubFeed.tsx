@@ -21,6 +21,7 @@ import {
 import { db } from "../firebaseConfig";
 import type { LockedPostContent } from "../src/lib/lockedPostMedia";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
+import { inferIsVideoFromUrl, normalizePostMediaTypes } from "../src/lib/mediaUrlInfer";
 
 export type FeedVisibilitySettings = {
   hideLikeCounts: boolean;
@@ -99,11 +100,18 @@ function firestoreDocToFeedPost(docSnap: QueryDocumentSnapshot<DocumentData>, is
     createdAt = createdRaw;
   }
 
+  let rawMediaUrls: string[] = Array.isArray(d.mediaUrls)
+    ? (d.mediaUrls as string[]).filter((u): u is string => typeof u === "string" && !!u.trim())
+    : [];
+  if (rawMediaUrls.length === 0 && d.mediaUrl) {
+    rawMediaUrls = [String(d.mediaUrl)];
+  }
+
   return {
     id: docSnap.id,
     body: (d.body as string) ?? (d.caption as string) ?? (d.content as string) ?? "",
-    mediaUrls: (d.mediaUrls as string[]) ?? (d.mediaUrl ? [d.mediaUrl as string] : []) ?? [],
-    mediaTypes: (d.mediaTypes as ("image" | "video")[]) ?? [],
+    mediaUrls: rawMediaUrls,
+    mediaTypes: normalizePostMediaTypes(rawMediaUrls, (d.mediaTypes as string[]) ?? []),
     audioUrls: (d.audioUrls as string[]) ?? [],
     createdAt,
     likeCount: typeof d.likeCount === "number" ? d.likeCount : typeof d.likesCount === "number" ? d.likesCount : 0,
@@ -386,16 +394,15 @@ function FeedCard({
 }) {
   const firstUrl = post.mediaUrls?.[0];
   const hasTipGoal = !!(post.tipGoal && typeof post.tipGoal.targetCents === "number" && post.tipGoal.targetCents > 0);
-  const isVideo = post.mediaTypes?.[0] === "video" || (firstUrl && /\.(mp4|webm|mov|ogg)(\?|$)/i.test(firstUrl));
+  const isVideo =
+    post.mediaTypes?.[0] === "video" || (firstUrl ? inferIsVideoFromUrl(firstUrl) : false);
   const mediaTotals = useMemo(() => {
     const items = Array.isArray(post.mediaUrls) ? post.mediaUrls : [];
     return items.reduce(
       (acc, url, index) => {
         const explicitType = post.mediaTypes?.[index];
         const detectedType =
-          explicitType === "video" || /\.(mp4|webm|mov|ogg)(\?|$)/i.test(url || "")
-            ? "video"
-            : "image";
+          explicitType === "video" || inferIsVideoFromUrl(url || "") ? "video" : "image";
         if (detectedType === "video") acc.videos += 1;
         else acc.images += 1;
         return acc;
@@ -1442,7 +1449,8 @@ export const FanHubFeed: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = 
           <div className="feed-grid">
             {!loading && posts.map((post) => {
               const firstUrl = post.mediaUrls?.[0];
-              const isVideo = post.mediaTypes?.[0] === "video" || (firstUrl && /\.(mp4|webm|mov|ogg)(\?|$)/i.test(firstUrl));
+              const isVideo =
+                post.mediaTypes?.[0] === "video" || (firstUrl ? inferIsVideoFromUrl(firstUrl) : false);
               return (
                 <button
                   key={post.id}

@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from './AppContext';
+import { usePremiumStudioTab } from './PremiumStudioLayout';
 import { UserIcon, SearchIcon, StarIcon, SparklesIcon, TrashIcon, EditIcon, PlusIcon, XMarkIcon } from './icons/UIIcons';
 import { auth, db } from '../firebaseConfig';
 import { collection, getDocs, doc, getDoc, setDoc, deleteDoc, updateDoc, query, orderBy, limit, Timestamp, where } from 'firebase/firestore';
@@ -59,6 +60,7 @@ interface Fan {
 
 export const OnlyFansFans: React.FC = () => {
     const { user, showToast } = useAppContext();
+    const fanHubTab = usePremiumStudioTab();
     const [fans, setFans] = useState<Fan[]>([]);
     const [selectedFan, setSelectedFan] = useState<Fan | null>(null);
     const [fanSearchQuery, setFanSearchQuery] = useState('');
@@ -111,6 +113,8 @@ export const OnlyFansFans: React.FC = () => {
     });
     const [isSavingFan, setIsSavingFan] = useState(false);
     const [showActivities, setShowActivities] = useState(false);
+    const [blockingFanId, setBlockingFanId] = useState<string | null>(null);
+    const fanDetailsPanelRef = useRef<HTMLDivElement | null>(null);
 
     // Load custom content for a specific fan
     const loadCustomContent = async (fanId: string) => {
@@ -245,6 +249,56 @@ export const OnlyFansFans: React.FC = () => {
             setIsLoading(false);
         }
     };
+
+    const handleBlockFan = async (fanId: string) => {
+        if (!window.confirm('Block this fan? They will no longer be able to message or purchase.')) return;
+        setBlockingFanId(fanId);
+        try {
+            const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+            const res = await fetch('/api/blockFan', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({ fanId }),
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error((data as { error?: string }).error || 'Failed to block');
+            }
+            showToast?.('Fan blocked', 'success');
+            setSelectedFan(null);
+            await loadFans();
+        } catch (e) {
+            showToast?.(e instanceof Error ? e.message : 'Failed to block', 'error');
+        } finally {
+            setBlockingFanId(null);
+        }
+    };
+
+    // Messages tab → “Fan card”: open the same Fan Details panel as the Fans grid.
+    useEffect(() => {
+        const pending = fanHubTab?.pendingFanIdForFansTab;
+        const clearPending = fanHubTab?.clearPendingFanIdForFansTab;
+        if (!pending || !clearPending) return;
+        if (isLoading) return;
+        const match = fans.find((f) => f.id === pending);
+        if (match) {
+            setSelectedFan(match);
+            setViewMode('grid');
+            clearPending();
+            requestAnimationFrame(() => {
+                fanDetailsPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            });
+            return;
+        }
+        showToast?.(
+            "This member isn’t in your Fans list yet. They’ll appear here once added or after they join.",
+            'info'
+        );
+        clearPending();
+    }, [fanHubTab?.pendingFanIdForFansTab, fanHubTab?.clearPendingFanIdForFansTab, fans, isLoading, showToast]);
 
     // Load session history from database
     const loadSessionHistory = async (fanId: string, forceExpand: boolean = false) => {
@@ -1048,7 +1102,7 @@ export const OnlyFansFans: React.FC = () => {
 
             {/* Selected Fan Details Panel */}
             {selectedFan && viewMode === 'grid' && (
-                <div className="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                <div ref={fanDetailsPanelRef} className="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
                             Fan Details: {selectedFan.name}
@@ -1091,6 +1145,17 @@ export const OnlyFansFans: React.FC = () => {
                             className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
                             rows={3}
                         />
+                    </div>
+
+                    <div className="mb-4">
+                        <button
+                            type="button"
+                            onClick={() => void handleBlockFan(selectedFan.id)}
+                            disabled={blockingFanId === selectedFan.id}
+                            className="w-full py-2.5 rounded-lg text-sm font-medium text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50"
+                        >
+                            {blockingFanId === selectedFan.id ? 'Blocking…' : 'Block fan'}
+                        </button>
                     </div>
 
                     {/* Last 5 Activities */}

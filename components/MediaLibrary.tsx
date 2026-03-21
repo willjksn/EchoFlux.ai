@@ -8,6 +8,15 @@ import { collection, setDoc, doc, getDocs, deleteDoc, query, orderBy, updateDoc,
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { CreateFolderModal } from './CreateFolderModal';
 import { MoveToFolderModal } from './MoveToFolderModal';
+import {
+  AUDIO_RECORDER_TIMESLICE_MS,
+  createAudioMediaRecorder,
+  effectiveBlobType,
+  fileExtensionForAudioMime,
+  normalizeVoiceRecordingFileType,
+  stopMediaRecorderSafe,
+} from '../src/lib/browserMediaRecording';
+import { AudioLevelMeter } from './AudioLevelMeter';
 
 const GENERAL_FOLDER_ID = 'general';
 
@@ -32,6 +41,7 @@ export const MediaLibrary: React.FC = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingCountdown, setRecordingCountdown] = useState<number | null>(null);
   const [isSavingVoice, setIsSavingVoice] = useState(false);
+  const [voiceMeterStream, setVoiceMeterStream] = useState<MediaStream | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
@@ -466,8 +476,9 @@ export const MediaLibrary: React.FC = () => {
       await new Promise((r) => setTimeout(r, 1000));
       setRecordingCountdown(null);
       
-      // Start recording
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+      setVoiceMeterStream(stream);
+      const mediaRecorder = createAudioMediaRecorder(stream);
+      const requestedMime = mediaRecorder.mimeType || undefined;
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
       
@@ -478,8 +489,10 @@ export const MediaLibrary: React.FC = () => {
       };
       
       mediaRecorder.onstop = async () => {
+        setVoiceMeterStream(null);
         stream.getTracks().forEach((t) => t.stop());
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const blobType = effectiveBlobType(mediaRecorder, requestedMime);
+        const audioBlob = new Blob(audioChunksRef.current, { type: blobType });
         
         if (!user?.id) {
           showToast('Please sign in to save recordings', 'error');
@@ -487,26 +500,32 @@ export const MediaLibrary: React.FC = () => {
           return;
         }
         
+        if (audioBlob.size < 256) {
+          showToast('Recording was too short or empty.', 'error');
+          setIsRecording(false);
+          return;
+        }
+        
         setIsSavingVoice(true);
         
         try {
-          // Upload to Firebase Storage
+          const normType = normalizeVoiceRecordingFileType(blobType);
+          const ext = fileExtensionForAudioMime(normType);
           const timestamp = Date.now();
-          const fileName = `voice_${timestamp}.webm`;
+          const fileName = `voice_${timestamp}.${ext}`;
           const storagePath = `users/${user.id}/media_library/${fileName}`;
           const storageRef = ref(storage, storagePath);
           
-          await uploadBytes(storageRef, audioBlob, { contentType: 'audio/webm' });
+          await uploadBytes(storageRef, audioBlob, { contentType: normType });
           const mediaUrl = await getDownloadURL(storageRef);
           
-          // Save to vault (media_library collection)
           const mediaItem: MediaLibraryItem = {
             id: timestamp.toString(),
             userId: user.id,
             url: mediaUrl,
             name: fileName,
             type: 'audio',
-            mimeType: 'audio/webm',
+            mimeType: normType,
             size: audioBlob.size,
             uploadedAt: new Date().toISOString(),
             usedInPosts: [],
@@ -527,12 +546,13 @@ export const MediaLibrary: React.FC = () => {
         }
       };
       
-      mediaRecorder.start();
+      mediaRecorder.start(AUDIO_RECORDER_TIMESLICE_MS);
       setIsRecording(true);
     } catch (error: unknown) {
       console.error('Failed to start recording:', error);
       setIsRequestingMic(false);
       setRecordingCountdown(null);
+      setVoiceMeterStream(null);
       
       // Provide specific error messages
       if (error instanceof Error) {
@@ -550,9 +570,7 @@ export const MediaLibrary: React.FC = () => {
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-    }
+    stopMediaRecorderSafe(mediaRecorderRef.current);
   };
 
   // Get filtered items based on selected folder and type filter
@@ -656,6 +674,11 @@ export const MediaLibrary: React.FC = () => {
                 className="hidden"
               />
             </div>
+            {isRecording && voiceMeterStream ? (
+              <div className="mt-3 max-w-xl">
+                <AudioLevelMeter stream={voiceMeterStream} />
+              </div>
+            ) : null}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6 overflow-x-hidden">

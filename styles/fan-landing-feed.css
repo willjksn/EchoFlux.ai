@@ -1762,10 +1762,18 @@
   cursor: not-allowed;
 }
 
+.fan-member-messages-compose-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}
+
 .fan-member-messages-compose {
   display: flex;
   gap: 0.5rem;
   align-items: flex-end;
+  width: 100%;
 }
 
 .fan-member-messages-input {

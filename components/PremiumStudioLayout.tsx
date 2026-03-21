@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useTabFromUrl } from '../src/hooks/useTabFromUrl';
 import { useCreatorFanHubTheme } from '../src/hooks/useCreatorFanHubTheme';
 import { useUI } from './contexts/UIContext';
@@ -10,7 +10,16 @@ import {
   clearNewMessageNotificationBadge,
 } from './useUnreadNewMessageNotifications';
 
-const PremiumStudioTabContext = createContext<{ tab: string; setTab: (tab: string) => void } | null>(null);
+export type PremiumStudioTabContextValue = {
+  tab: string;
+  setTab: (tab: string) => void;
+  /** Fan Hub: open Fans tab and select this fan (matches Fans page fan card). */
+  pendingFanIdForFansTab: string | null;
+  clearPendingFanIdForFansTab: () => void;
+  openFanInFansTab: (fanId: string) => void;
+};
+
+const PremiumStudioTabContext = createContext<PremiumStudioTabContextValue | null>(null);
 export const usePremiumStudioTab = () => useContext(PremiumStudioTabContext);
 
 /** Legacy alias for Fan Hub tab when using unified layout */
@@ -31,6 +40,16 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
   const labels = isFanHub ? FAN_HUB_TAB_LABELS : STUDIO_TAB_LABELS;
 
   const [tab, setTab] = useTabFromUrl(pathPrefix, tabIds, defaultTab);
+  const [pendingFanIdForFansTab, setPendingFanIdForFansTab] = useState<string | null>(null);
+  const clearPendingFanIdForFansTab = useCallback(() => setPendingFanIdForFansTab(null), []);
+  const openFanInFansTab = useCallback(
+    (fanId: string) => {
+      if (!isFanHub) return;
+      setPendingFanIdForFansTab(fanId);
+      setTab('fans');
+    },
+    [isFanHub, setTab]
+  );
 
   const unreadMessagesTabCount = useUnreadNewMessageNotificationCount(isFanHub ? null : false);
 
@@ -166,7 +185,15 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
           />
         ) : null}
       </div>
-      <PremiumStudioTabContext.Provider value={{ tab, setTab }}>
+      <PremiumStudioTabContext.Provider
+        value={{
+          tab,
+          setTab,
+          pendingFanIdForFansTab: isFanHub ? pendingFanIdForFansTab : null,
+          clearPendingFanIdForFansTab: isFanHub ? clearPendingFanIdForFansTab : () => {},
+          openFanInFansTab,
+        }}
+      >
         {children}
       </PremiumStudioTabContext.Provider>
     </>

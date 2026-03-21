@@ -20,6 +20,8 @@ import {
   type LockedPostContent,
 } from "../src/lib/lockedPostMedia";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
+import { inferIsVideoFromUrl, normalizePostMediaTypes } from "../src/lib/mediaUrlInfer";
+import { DmAudioPlayer } from "./DmAudioPlayer";
 
 const SAVED_BY_CREATOR_KEY = "savedPostIdsByCreator";
 
@@ -131,10 +133,10 @@ function postFromFirestore(docId: string, data: DocumentData): Post | null {
       ? [String(data.mediaUrl)]
       : [];
   const rawTypes = Array.isArray(data.mediaTypes) ? (data.mediaTypes as string[]) : [];
-  const mediaTypes: ("image" | "video")[] = mediaUrls.map((_, i) => {
-    const t = rawTypes[i];
-    return t === "video" ? "video" : "image";
-  });
+  const mediaTypes = normalizePostMediaTypes(mediaUrls, rawTypes);
+  const audioUrls: string[] = Array.isArray(data.audioUrls)
+    ? (data.audioUrls as string[]).filter((u) => typeof u === "string" && u.trim())
+    : [];
   const comments = (data.comments as { text: string }[]) || [];
   const lc = parseLockedContent(data.lockedContent);
   return {
@@ -142,6 +144,7 @@ function postFromFirestore(docId: string, data: DocumentData): Post | null {
     content: (data.body as string) || (data.content as string) || "",
     mediaUrls,
     mediaTypes,
+    audioUrls: audioUrls.length ? audioUrls : undefined,
     createdAt,
     likesCount:
       typeof data.likeCount === "number" ? data.likeCount : (data.likesCount as number) || 0,
@@ -164,7 +167,7 @@ function FanMemberPostMedia({ post, primary }: { post: Post; primary: string }) 
   return (
     <div className={gridClass}>
       {urls.map((url, i) => {
-        const isVideo = types[i] === "video";
+        const isVideo = types[i] === "video" || inferIsVideoFromUrl(url);
         const locked = isMediaSlotLocked(lockedCfg, i, n);
         return (
           <div
@@ -436,6 +439,14 @@ export const FanMemberFeed: React.FC<FanMemberFeedProps> = ({
               </div>
 
               <FanMemberPostMedia post={post} primary={primary} />
+
+              {post.audioUrls && post.audioUrls.length > 0 ? (
+                <div className="fan-feed-post-audio mt-2 space-y-2 px-1">
+                  {post.audioUrls.map((url) => (
+                    <DmAudioPlayer key={`${post.id}-a-${url.slice(-24)}`} src={url} className="w-full" />
+                  ))}
+                </div>
+              ) : null}
 
               <div className="fan-feed-post-actions">
                 {!(feedSettings?.hideLikes || post.hideLikes) && (

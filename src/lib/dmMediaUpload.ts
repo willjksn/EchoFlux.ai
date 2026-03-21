@@ -5,10 +5,12 @@ export type DmAttachmentKind = "image" | "video" | "audio";
 
 export function inferDmAttachmentKind(file: File): DmAttachmentKind {
   const t = (file.type || "").toLowerCase();
+  const name = file.name.toLowerCase();
+  /** Safari / some browsers use video/mp4 container for mic-only MediaRecorder. */
+  if (name.startsWith("voice-") && t.startsWith("video/")) return "audio";
   if (t.startsWith("image/")) return "image";
   if (t.startsWith("video/")) return "video";
   if (t.startsWith("audio/")) return "audio";
-  const name = file.name.toLowerCase();
   if (/\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(name)) return "image";
   if (/\.(mp4|webm|mov|m4v)$/i.test(name)) return "video";
   if (/\.(webm|ogg|mp3|m4a|wav|aac)$/i.test(name)) return "audio";

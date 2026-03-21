@@ -3,6 +3,19 @@ import { useAppContext } from "./AppContext";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, limit, setDoc, doc } from "firebase/firestore";
 import { db, storage, auth } from "../firebaseConfig";
+import {
+  AUDIO_RECORDER_TIMESLICE_MS,
+  VIDEO_RECORDER_TIMESLICE_MS,
+  createAudioMediaRecorder,
+  createVideoMediaRecorder,
+  effectiveBlobType,
+  fileExtensionForAudioMime,
+  fileExtensionForVideoMime,
+  normalizeVoiceRecordingFileType,
+  stopMediaRecorderSafe,
+  waitUntilVideoTrackLive,
+} from "../src/lib/browserMediaRecording";
+import { AudioLevelMeter } from "./AudioLevelMeter";
 import { FanHubFeed, type FeedPost } from "./FanHubFeed";
 import { EmojiButton } from "./EmojiPicker";
 
@@ -58,6 +71,12 @@ const FolderIcon = () => (
 const MicIcon = () => (
   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+  </svg>
+);
+
+const VideoCamIcon = () => (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
   </svg>
 );
 
@@ -153,6 +172,14 @@ export const FanHubPosts: React.FC = () => {
   const [recordingCountdown, setRecordingCountdown] = useState<number | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const [voiceMeterStream, setVoiceMeterStream] = useState<MediaStream | null>(null);
+
+  const [isRecordingVideo, setIsRecordingVideo] = useState(false);
+  const [isSavingVideo, setIsSavingVideo] = useState(false);
+  const [videoLiveStream, setVideoLiveStream] = useState<MediaStream | null>(null);
+  const videoMediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const videoChunksRef = useRef<Blob[]>([]);
+  const videoPreviewRef = useRef<HTMLVideoElement | null>(null);
   
   // Vault
   const [showVault, setShowVault] = useState(false);
@@ -387,6 +414,7 @@ export const FanHubPosts: React.FC = () => {
   const [isRequestingMic, setIsRequestingMic] = useState(false);
   
   const startRecording = async () => {
+    if (isRecordingVideo || isSavingVideo) return;
     try {
       // Check if microphone permission is already granted
       const permissionStatus = await navigator.permissions.query({ name: "microphone" as PermissionName });
@@ -402,7 +430,9 @@ export const FanHubPosts: React.FC = () => {
         showToast?.("Please allow microphone access to record voice notes", "info");
       }
       
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
       setIsRequestingMic(false);
       
       // Countdown
@@ -414,8 +444,9 @@ export const FanHubPosts: React.FC = () => {
       await new Promise((r) => setTimeout(r, 1000));
       setRecordingCountdown(null);
       
-      // Start recording
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm;codecs=opus" });
+      setVoiceMeterStream(stream);
+      const mediaRecorder = createAudioMediaRecorder(stream);
+      const requestedMime = mediaRecorder.mimeType || undefined;
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
       
@@ -426,8 +457,10 @@ export const FanHubPosts: React.FC = () => {
       };
       
       mediaRecorder.onstop = async () => {
+        setVoiceMeterStream(null);
         stream.getTracks().forEach((t) => t.stop());
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const blobType = effectiveBlobType(mediaRecorder, requestedMime);
+        const audioBlob = new Blob(audioChunksRef.current, { type: blobType });
         
         if (!user?.id) {
           showToast?.("Please sign in to save recordings", "error");
@@ -435,26 +468,32 @@ export const FanHubPosts: React.FC = () => {
           return;
         }
         
+        if (audioBlob.size < 256) {
+          showToast?.("Recording was too short or empty.", "error");
+          setIsRecording(false);
+          return;
+        }
+        
         setIsSavingVoice(true);
         
         try {
-          // Upload to Firebase Storage (in the vault folder)
+          const normType = normalizeVoiceRecordingFileType(blobType);
+          const ext = fileExtensionForAudioMime(normType);
           const timestamp = Date.now();
-          const fileName = `voice_${timestamp}.webm`;
+          const fileName = `voice_${timestamp}.${ext}`;
           const storagePath = `users/${user.id}/media_library/${fileName}`;
           const storageRef = ref(storage, storagePath);
           
-          await uploadBytes(storageRef, audioBlob, { contentType: "audio/webm" });
+          await uploadBytes(storageRef, audioBlob, { contentType: normType });
           const mediaUrl = await getDownloadURL(storageRef);
           
-          // Save to vault (media_library collection)
           const mediaItem = {
             id: timestamp.toString(),
             userId: user.id,
             url: mediaUrl,
             name: fileName,
             type: "audio" as const,
-            mimeType: "audio/webm",
+            mimeType: normType,
             size: audioBlob.size,
             uploadedAt: new Date().toISOString(),
             usedInPosts: [],
@@ -464,7 +503,6 @@ export const FanHubPosts: React.FC = () => {
           
           await setDoc(doc(db, "users", user.id, "media_library", mediaItem.id), mediaItem);
           
-          // Add to current post media (mark as from vault since it's now saved)
           setMedia((prev) => [
             ...prev,
             { url: mediaUrl, type: "audio", fromVault: true },
@@ -480,12 +518,13 @@ export const FanHubPosts: React.FC = () => {
         }
       };
       
-      mediaRecorder.start();
+      mediaRecorder.start(AUDIO_RECORDER_TIMESLICE_MS);
       setIsRecording(true);
     } catch (error: unknown) {
       console.error("Failed to start recording:", error);
       setIsRequestingMic(false);
       setRecordingCountdown(null);
+      setVoiceMeterStream(null);
       
       // Provide specific error messages
       if (error instanceof Error) {
@@ -503,10 +542,96 @@ export const FanHubPosts: React.FC = () => {
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      mediaRecorderRef.current.stop();
+    stopMediaRecorderSafe(mediaRecorderRef.current);
+  };
+
+  const stopVideoRecording = () => {
+    stopMediaRecorderSafe(videoMediaRecorderRef.current);
+  };
+
+  const startVideoRecording = async () => {
+    if (!user?.id || isRecordingVideo || isRecording || isSavingVideo) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: { echoCancellation: true, noiseSuppression: true },
+      });
+      setVideoLiveStream(stream);
+      await waitUntilVideoTrackLive(stream);
+      await new Promise((r) => setTimeout(r, 250));
+
+      const rec = createVideoMediaRecorder(stream);
+      const requestedMime = rec.mimeType || undefined;
+      videoMediaRecorderRef.current = rec;
+      videoChunksRef.current = [];
+      rec.ondataavailable = (e) => {
+        if (e.data.size > 0) videoChunksRef.current.push(e.data);
+      };
+      rec.onstop = async () => {
+        setVideoLiveStream(null);
+        stream.getTracks().forEach((t) => t.stop());
+        setIsRecordingVideo(false);
+        videoMediaRecorderRef.current = null;
+        const chunks = videoChunksRef.current;
+        videoChunksRef.current = [];
+        if (!chunks.length || !user?.id) return;
+        const blobType = effectiveBlobType(rec, requestedMime);
+        const videoBlob = new Blob(chunks, { type: blobType });
+        if (videoBlob.size < 512) {
+          showToast?.("Video was too short or empty.", "error");
+          return;
+        }
+        setIsSavingVideo(true);
+        try {
+          const ext = fileExtensionForVideoMime(blobType);
+          const timestamp = Date.now();
+          const fileName = `camera_${timestamp}.${ext}`;
+          const storagePath = `users/${user.id}/media_library/${fileName}`;
+          const storageRef = ref(storage, storagePath);
+          await uploadBytes(storageRef, videoBlob, { contentType: blobType || `video/${ext}` });
+          const mediaUrl = await getDownloadURL(storageRef);
+          const mediaItem = {
+            id: timestamp.toString(),
+            userId: user.id,
+            url: mediaUrl,
+            name: fileName,
+            type: "video" as const,
+            mimeType: blobType || `video/${ext}`,
+            size: videoBlob.size,
+            uploadedAt: new Date().toISOString(),
+            usedInPosts: [],
+            tags: ["camera-recording"],
+            folderId: "general",
+          };
+          await setDoc(doc(db, "users", user.id, "media_library", mediaItem.id), mediaItem);
+          setMedia((prev) => [...prev, { url: mediaUrl, type: "video", fromVault: true }]);
+          showToast?.("Video saved to vault", "success");
+        } catch (err) {
+          console.error(err);
+          showToast?.("Failed to save video recording", "error");
+        } finally {
+          setIsSavingVideo(false);
+        }
+      };
+      rec.start(VIDEO_RECORDER_TIMESLICE_MS);
+      setIsRecordingVideo(true);
+    } catch {
+      setVideoLiveStream(null);
+      showToast?.("Camera or microphone permission denied, or not available on this device.", "error");
     }
   };
+
+  useEffect(() => {
+    const el = videoPreviewRef.current;
+    const s = videoLiveStream;
+    if (el && s) {
+      el.srcObject = s;
+      el.muted = true;
+      void el.play().catch(() => {});
+    } else if (el) {
+      el.srcObject = null;
+    }
+  }, [videoLiveStream]);
 
   // Remove media
   const removeMedia = (index: number) => {
@@ -824,6 +949,19 @@ DO NOT include hashtags.`;
   };
 
   const resetForm = () => {
+    stopMediaRecorderSafe(mediaRecorderRef.current);
+    stopMediaRecorderSafe(videoMediaRecorderRef.current);
+    setVoiceMeterStream((prev) => {
+      prev?.getTracks().forEach((t) => t.stop());
+      return null;
+    });
+    setVideoLiveStream((prev) => {
+      prev?.getTracks().forEach((t) => t.stop());
+      return null;
+    });
+    setIsRecording(false);
+    setIsRecordingVideo(false);
+    setRecordingCountdown(null);
     media.forEach((item) => {
       if (item.url.startsWith("blob:")) URL.revokeObjectURL(item.url);
     });
@@ -964,6 +1102,26 @@ DO NOT include hashtags.`;
                   </div>
                 )}
                 
+                {isRecording && voiceMeterStream ? (
+                  <div className="mb-3 max-w-md">
+                    <AudioLevelMeter stream={voiceMeterStream} />
+                  </div>
+                ) : null}
+                {isRecordingVideo && videoLiveStream ? (
+                  <div className="mb-3 rounded-xl border border-gray-200 dark:border-gray-600 overflow-hidden bg-black">
+                    <video
+                      ref={videoPreviewRef}
+                      className="w-full max-h-60 object-cover"
+                      playsInline
+                      muted
+                      aria-label="Camera preview while recording"
+                    />
+                    <div className="p-2 bg-gray-900/95 border-t border-gray-700">
+                      <AudioLevelMeter stream={videoLiveStream} barColor="#f472b6" />
+                    </div>
+                  </div>
+                ) : null}
+
                 {/* Media Buttons */}
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -997,7 +1155,8 @@ DO NOT include hashtags.`;
                     <button
                       type="button"
                       onClick={startRecording}
-                      className="flex items-center gap-2 px-3 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 text-sm font-medium transition"
+                      disabled={isRecordingVideo || isSavingVideo}
+                      className="flex items-center gap-2 px-3 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 text-sm font-medium transition disabled:opacity-45 disabled:pointer-events-none"
                     >
                       <MicIcon />
                       Record Voice
@@ -1014,6 +1173,37 @@ DO NOT include hashtags.`;
                     >
                       <StopIcon />
                       Stop Recording
+                    </button>
+                  )}
+                  {isSavingVideo ? (
+                    <div className="flex items-center gap-2 px-3 py-2 bg-rose-100 dark:bg-rose-900/30 text-rose-800 dark:text-rose-200 rounded-lg text-sm font-medium">
+                      <div className="w-4 h-4 border-2 border-rose-500 border-t-transparent rounded-full animate-spin" />
+                      Saving video to vault…
+                    </div>
+                  ) : isRecordingVideo ? (
+                    <button
+                      type="button"
+                      onClick={stopVideoRecording}
+                      className="flex items-center gap-2 px-3 py-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 text-sm font-medium transition animate-pulse"
+                    >
+                      <StopIcon />
+                      Stop & save video
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void startVideoRecording()}
+                      disabled={
+                        uploading ||
+                        isRecording ||
+                        recordingCountdown !== null ||
+                        isSavingVoice ||
+                        isRequestingMic
+                      }
+                      className="flex items-center gap-2 px-3 py-2 bg-rose-100 dark:bg-rose-900/30 text-rose-800 dark:text-rose-200 rounded-lg hover:bg-rose-200 dark:hover:bg-rose-900/50 text-sm font-medium transition disabled:opacity-45 disabled:pointer-events-none"
+                    >
+                      <VideoCamIcon />
+                      Record video (camera)
                     </button>
                   )}
                 </div>

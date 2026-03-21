@@ -14,6 +14,18 @@ import {
   formatCreatorDmBubbleSecondaryLine,
 } from "../src/lib/fanHubDisplay";
 import { uploadFanDmAttachment, type DmAttachmentKind } from "../src/lib/dmMediaUpload";
+import {
+  AUDIO_RECORDER_TIMESLICE_MS,
+  createAudioMediaRecorder,
+  effectiveBlobType,
+  fileExtensionForAudioMime,
+  normalizeVoiceRecordingFileType,
+  stopMediaRecorderSafe,
+} from "../src/lib/browserMediaRecording";
+import { AudioLevelMeter } from "./AudioLevelMeter";
+import { DmAudioPlayer } from "./DmAudioPlayer";
+import { inferIsAudioFromUrl } from "../src/lib/mediaUrlInfer";
+import { usePremiumStudioTab } from "./PremiumStudioLayout";
 
 const VideoIcon = () => (
   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -114,16 +126,6 @@ const MenuIconMute = () => (
   </svg>
 );
 
-type FanCardPayload = {
-  fanId: string;
-  displayLabel?: string;
-  email?: string;
-  username?: string;
-  name?: string;
-  notes?: string;
-  avatar?: string;
-};
-
 type MemberRow = { fanId: string; label: string };
 
 /** Vite’s /api proxy often returns plain text on 502 — res.json() hides the real message. */
@@ -141,6 +143,7 @@ const DEV_PROXY_BANNER_KEY = "fanhub-messages-dev-proxy-dismiss";
 
 export const FanHubMessages: React.FC = () => {
   const { user, showToast } = useAppContext();
+  const premiumTab = usePremiumStudioTab();
   /** Must match message `senderId` from API (Firebase Auth uid). */
   const creatorId = auth.currentUser?.uid ?? user?.id;
   const [threads, setThreads] = useState<FanDmThread[]>([]);
@@ -156,7 +159,6 @@ export const FanHubMessages: React.FC = () => {
   const [messagesError, setMessagesError] = useState<string | null>(null);
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
-  const [blockingFanId, setBlockingFanId] = useState<string | null>(null);
   const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
   const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -168,9 +170,6 @@ export const FanHubMessages: React.FC = () => {
   const [newDmMembers, setNewDmMembers] = useState<MemberRow[]>([]);
   const [newDmLoading, setNewDmLoading] = useState(false);
   const [ensuringThreadFanId, setEnsuringThreadFanId] = useState<string | null>(null);
-  const [showFanCardModal, setShowFanCardModal] = useState(false);
-  const [fanCardLoading, setFanCardLoading] = useState(false);
-  const [fanCard, setFanCard] = useState<FanCardPayload | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaChunksRef = useRef<Blob[]>([]);
@@ -468,31 +467,46 @@ export const FanHubMessages: React.FC = () => {
     const rec = mediaRecorderRef.current;
     if (!rec || rec.state === "inactive") {
       setIsRecordingVoice(false);
+      setVoiceMeterStream(null);
       return;
     }
-    rec.stop();
+    stopMediaRecorderSafe(rec);
   }, []);
 
   const startVoiceRecording = async () => {
     if (!creatorId || !selectedThread || isRecordingVoice) return;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mime = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
-      const rec = new MediaRecorder(stream, { mimeType: mime });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+      setVoiceMeterStream(stream);
+      const rec = createAudioMediaRecorder(stream);
+      const requestedMime = rec.mimeType || undefined;
       mediaChunksRef.current = [];
       rec.ondataavailable = (ev) => {
         if (ev.data.size) mediaChunksRef.current.push(ev.data);
       };
       rec.onstop = async () => {
+        setVoiceMeterStream(null);
         stream.getTracks().forEach((t) => t.stop());
         setIsRecordingVoice(false);
         mediaRecorderRef.current = null;
         const chunks = mediaChunksRef.current;
         mediaChunksRef.current = [];
         if (!chunks.length || !creatorId || !selectedThread) return;
-        const blob = new Blob(chunks, { type: mime });
-        const ext = mime.includes("webm") ? "webm" : "m4a";
-        const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: mime });
+        const blobType = effectiveBlobType(rec, requestedMime);
+        const blob = new Blob(chunks, { type: blobType });
+        if (blob.size < 256) {
+          showToast?.("Recording was too short or empty. Try again.", "error");
+          return;
+        }
+        const fileType = normalizeVoiceRecordingFileType(blobType);
+        const ext = fileExtensionForAudioMime(fileType);
+        const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: fileType });
         try {
           const { url } = await uploadFanDmAttachment(creatorId, file);
           await sendDmWithPayload("", url, "audio");
@@ -501,9 +515,10 @@ export const FanHubMessages: React.FC = () => {
         }
       };
       mediaRecorderRef.current = rec;
-      rec.start();
+      rec.start(AUDIO_RECORDER_TIMESLICE_MS);
       setIsRecordingVoice(true);
     } catch {
+      setVoiceMeterStream(null);
       showToast?.("Microphone permission denied or unavailable.", "error");
     }
   };
@@ -513,26 +528,10 @@ export const FanHubMessages: React.FC = () => {
     else void startVoiceRecording();
   };
 
-  const openFanCard = useCallback(async () => {
+  const openFanOnFansTab = () => {
     if (!selectedThread) return;
-    setShowFanCardModal(true);
-    setFanCardLoading(true);
-    setFanCard(null);
-    try {
-      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
-      const res = await fetch(`/api/fanDmFanCard?fanId=${encodeURIComponent(selectedThread.fanId)}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      const { json: data } = await parseApiBody(res);
-      if (!res.ok) throw new Error((data.error as string) || "Failed to load");
-      setFanCard(data as FanCardPayload);
-    } catch {
-      showToast?.("Could not load fan card.", "error");
-      setShowFanCardModal(false);
-    } finally {
-      setFanCardLoading(false);
-    }
-  }, [selectedThread, showToast]);
+    premiumTab?.openFanInFansTab(selectedThread.fanId);
+  };
 
   const startConversationWithMember = async (fanId: string) => {
     if (!creatorId) return;
@@ -558,33 +557,6 @@ export const FanHubMessages: React.FC = () => {
       showToast?.(e instanceof Error ? e.message : "Failed", "error");
     } finally {
       setEnsuringThreadFanId(null);
-    }
-  };
-
-  const handleBlockFan = async (fanId: string) => {
-    if (!window.confirm("Block this fan? They will no longer be able to message or purchase.")) return;
-    setBlockingFanId(fanId);
-    try {
-      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
-      const res = await fetch("/api/blockFan", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ fanId }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error((data as { error?: string }).error || "Failed to block");
-      }
-      showToast?.("Fan blocked", "success");
-      setSelectedThread(null);
-      fetchThreads();
-    } catch (e) {
-      showToast?.(e instanceof Error ? e.message : "Failed to block", "error");
-    } finally {
-      setBlockingFanId(null);
     }
   };
 
@@ -1041,10 +1013,10 @@ export const FanHubMessages: React.FC = () => {
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"
-                    onClick={() => void openFanCard()}
+                    onClick={openFanOnFansTab}
                     className="fh-dm-sidebar-icon-btn"
-                    title="Fan card"
-                    aria-label="Open fan card and notes"
+                    title="Open fan card on Fans tab"
+                    aria-label="Open full fan card on Fans tab"
                   >
                     <MoreVerticalIcon />
                   </button>
@@ -1059,14 +1031,6 @@ export const FanHubMessages: React.FC = () => {
                   >
                     <VideoIcon />
                     <span className="hidden sm:inline">{startingVideo ? "Starting..." : "Video"}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleBlockFan(selectedThread.fanId)}
-                    disabled={!!blockingFanId}
-                    className="text-sm text-red-600 dark:text-red-400 hover:underline disabled:opacity-50"
-                  >
-                    {blockingFanId === selectedThread.fanId ? "Blocking…" : "Block"}
                   </button>
                 </div>
               </div>
@@ -1096,8 +1060,7 @@ export const FanHubMessages: React.FC = () => {
                   </div>
                 ) : (
                   messages.map((m, i) => {
-                    const isMe =
-                      !!selectedThread && m.senderId === selectedThread.creatorId;
+                    const isMe = Boolean(creatorId && m.senderId === creatorId);
                     const prev = messages[i - 1];
                     const showDayDivider =
                       !prev || formatDmDayCalendarKey(prev.createdAt) !== formatDmDayCalendarKey(m.createdAt);
@@ -1118,7 +1081,14 @@ export const FanHubMessages: React.FC = () => {
                           <div
                             className={`fh-dm-bubble-wrap ${isMe ? "fh-dm-bubble-wrap--out" : "fh-dm-bubble-wrap--in"}`}
                           >
-                            <div className={`fh-dm-bubble ${isMe ? "fh-dm-bubble--me" : "fh-dm-bubble--them"}`}>
+                            <div
+                              className={`fh-dm-bubble ${isMe ? "fh-dm-bubble--me" : "fh-dm-bubble--them"}`}
+                              style={
+                                isMe
+                                  ? { background: "linear-gradient(135deg, #ec4899, #db2777)", color: "#fff" }
+                                  : undefined
+                              }
+                            >
                               <button
                                 type="button"
                                 className={`fh-dm-bubble__delete ${isMe ? "fh-dm-bubble__delete--me" : ""}`}
@@ -1153,9 +1123,13 @@ export const FanHubMessages: React.FC = () => {
                                     <video src={m.attachmentUrl} controls playsInline />
                                   </div>
                                 ) : null}
-                                {m.attachmentUrl && m.attachmentType === "audio" ? (
+                                {m.attachmentUrl &&
+                                (m.attachmentType === "audio" ||
+                                  (inferIsAudioFromUrl(m.attachmentUrl) &&
+                                    m.attachmentType !== "image" &&
+                                    m.attachmentType !== "video")) ? (
                                   <div className="fh-dm-attachment">
-                                    <audio src={m.attachmentUrl} controls />
+                                    <DmAudioPlayer src={m.attachmentUrl} className="w-full max-w-sm" />
                                   </div>
                                 ) : null}
                                 {m.content?.trim() ? m.content : null}
@@ -1194,7 +1168,11 @@ export const FanHubMessages: React.FC = () => {
                 )}
                 <div ref={messagesEndRef} aria-hidden />
               </div>
-              <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex gap-2 items-end">
+              <div className="p-4 border-t border-gray-200 dark:border-gray-700 space-y-2">
+                {isRecordingVoice && voiceMeterStream ? (
+                  <AudioLevelMeter stream={voiceMeterStream} className="w-full max-w-md" />
+                ) : null}
+                <div className="flex gap-2 items-end">
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -1246,6 +1224,7 @@ export const FanHubMessages: React.FC = () => {
                 >
                   {sending ? "Sending…" : "Send"}
                 </button>
+                </div>
               </div>
             </>
           )}
@@ -1313,85 +1292,6 @@ export const FanHubMessages: React.FC = () => {
         </div>
       ) : null}
 
-      {showFanCardModal ? (
-        <div
-          className="fh-dm-modal-overlay"
-          role="dialog"
-          aria-modal
-          aria-labelledby="fh-fan-card-title"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setShowFanCardModal(false);
-          }}
-        >
-          <div className="fh-dm-modal">
-            <div className="fh-dm-modal__head">
-              <span id="fh-fan-card-title">Fan card</span>
-              <button
-                type="button"
-                className="fh-dm-modal__close"
-                aria-label="Close"
-                onClick={() => setShowFanCardModal(false)}
-              >
-                ×
-              </button>
-            </div>
-            <div className="fh-dm-modal__body text-sm space-y-3">
-              {fanCardLoading ? (
-                <p className="text-gray-500 dark:text-gray-400">Loading…</p>
-              ) : fanCard ? (
-                <>
-                  <div className="flex items-center gap-3">
-                    {fanCard.avatar ? (
-                      <img src={fanCard.avatar} alt="" className="w-12 h-12 rounded-full object-cover" />
-                    ) : null}
-                    <div>
-                      <p className="font-semibold text-gray-900 dark:text-white">
-                        {fanCard.displayLabel || "Member"}
-                      </p>
-                      {fanCard.username ? (
-                        <p className="text-xs text-gray-500 dark:text-gray-400">@{fanCard.username}</p>
-                      ) : null}
-                    </div>
-                  </div>
-                  {fanCard.name ? (
-                    <p>
-                      <span className="text-gray-500 dark:text-gray-400">Name: </span>
-                      {fanCard.name}
-                    </p>
-                  ) : null}
-                  {fanCard.email ? (
-                    <p className="break-all">
-                      <span className="text-gray-500 dark:text-gray-400">Email: </span>
-                      {fanCard.email}
-                    </p>
-                  ) : null}
-                  <div>
-                    <p className="text-gray-500 dark:text-gray-400 font-medium mb-1">Notes</p>
-                    <p className="whitespace-pre-wrap rounded-lg bg-gray-50 dark:bg-gray-900/80 p-3 text-gray-800 dark:text-gray-200 min-h-[4rem]">
-                      {fanCard.notes?.trim() ? fanCard.notes : "No notes yet."}
-                    </p>
-                  </div>
-                  {selectedThread?.fanId === fanCard.fanId ? (
-                    <button
-                      type="button"
-                      className="w-full mt-2 py-2 rounded-lg text-sm font-medium text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 hover:bg-red-50 dark:hover:bg-red-950/30"
-                      disabled={!!blockingFanId}
-                      onClick={() => {
-                        setShowFanCardModal(false);
-                        void handleBlockFan(selectedThread.fanId);
-                      }}
-                    >
-                      {blockingFanId === selectedThread.fanId ? "Blocking…" : "Block fan"}
-                    </button>
-                  ) : null}
-                </>
-              ) : (
-                <p className="text-gray-500 dark:text-gray-400">Nothing to show.</p>
-              )}
-            </div>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 };

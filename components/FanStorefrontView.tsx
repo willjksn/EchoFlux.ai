@@ -19,6 +19,17 @@ import {
   formatCreatorDmBubbleSecondaryLine,
 } from "../src/lib/fanHubDisplay";
 import { uploadFanDmAttachment, type DmAttachmentKind } from "../src/lib/dmMediaUpload";
+import {
+  AUDIO_RECORDER_TIMESLICE_MS,
+  createAudioMediaRecorder,
+  effectiveBlobType,
+  fileExtensionForAudioMime,
+  normalizeVoiceRecordingFileType,
+  stopMediaRecorderSafe,
+} from "../src/lib/browserMediaRecording";
+import { AudioLevelMeter } from "./AudioLevelMeter";
+import { DmAudioPlayer } from "./DmAudioPlayer";
+import { inferIsAudioFromUrl } from "../src/lib/mediaUrlInfer";
 import { FanHubNotificationBell } from "./FanHubNotificationBell";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 
@@ -580,7 +591,7 @@ export const FanStorefrontView: React.FC = () => {
       const r = dmMediaRecorderRef.current;
       if (r && r.state !== "inactive") {
         r.onstop = null;
-        r.stop();
+        stopMediaRecorderSafe(r);
       }
     };
   }, []);
@@ -645,22 +656,27 @@ export const FanStorefrontView: React.FC = () => {
     const rec = dmMediaRecorderRef.current;
     if (!rec || rec.state === "inactive") {
       setDmRecordingVoice(false);
+      setDmVoiceMeterStream(null);
       return;
     }
-    rec.stop();
+    stopMediaRecorderSafe(rec);
   }, []);
 
   const startDmVoiceRecording = async () => {
     if (!auth.currentUser || !creator?.creatorId || dmRecordingVoice) return;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mime = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
-      const rec = new MediaRecorder(stream, { mimeType: mime });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
+      setDmVoiceMeterStream(stream);
+      const rec = createAudioMediaRecorder(stream);
+      const requestedMime = rec.mimeType || undefined;
       dmMediaChunksRef.current = [];
       rec.ondataavailable = (ev) => {
         if (ev.data.size) dmMediaChunksRef.current.push(ev.data);
       };
       rec.onstop = async () => {
+        setDmVoiceMeterStream(null);
         stream.getTracks().forEach((t) => t.stop());
         setDmRecordingVoice(false);
         dmMediaRecorderRef.current = null;
@@ -668,9 +684,12 @@ export const FanStorefrontView: React.FC = () => {
         dmMediaChunksRef.current = [];
         const uid = auth.currentUser?.uid;
         if (!chunks.length || !uid) return;
-        const blob = new Blob(chunks, { type: mime });
-        const ext = mime.includes("webm") ? "webm" : "m4a";
-        const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: mime });
+        const blobType = effectiveBlobType(rec, requestedMime);
+        const blob = new Blob(chunks, { type: blobType });
+        if (blob.size < 256) return;
+        const fileType = normalizeVoiceRecordingFileType(blobType);
+        const ext = fileExtensionForAudioMime(fileType);
+        const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: fileType });
         try {
           const { url } = await uploadFanDmAttachment(uid, file);
           await sendDmWithPayload("", url, "audio");
@@ -679,10 +698,10 @@ export const FanStorefrontView: React.FC = () => {
         }
       };
       dmMediaRecorderRef.current = rec;
-      rec.start();
+      rec.start(AUDIO_RECORDER_TIMESLICE_MS);
       setDmRecordingVoice(true);
     } catch {
-      /* mic denied */
+      setDmVoiceMeterStream(null);
     }
   };
 
@@ -1123,9 +1142,13 @@ export const FanStorefrontView: React.FC = () => {
                                             <video src={m.attachmentUrl} controls playsInline />
                                           </div>
                                         ) : null}
-                                        {m.attachmentUrl && m.attachmentType === "audio" ? (
+                                        {m.attachmentUrl &&
+                                        (m.attachmentType === "audio" ||
+                                          (inferIsAudioFromUrl(m.attachmentUrl) &&
+                                            m.attachmentType !== "image" &&
+                                            m.attachmentType !== "video")) ? (
                                           <div className="fh-dm-attachment">
-                                            <audio src={m.attachmentUrl} controls />
+                                            <DmAudioPlayer src={m.attachmentUrl} className="w-full max-w-sm" />
                                           </div>
                                         ) : null}
                                         {m.content?.trim() ? m.content : null}
@@ -1165,7 +1188,13 @@ export const FanStorefrontView: React.FC = () => {
                       )}
                       <div ref={dmMessagesEndRef} aria-hidden />
                     </div>
-                    <div className="fan-member-messages-compose">
+                    <div className="fan-member-messages-compose-wrap">
+                      {dmRecordingVoice && dmVoiceMeterStream ? (
+                        <div className="w-full">
+                          <AudioLevelMeter stream={dmVoiceMeterStream} barColor={primary} />
+                        </div>
+                      ) : null}
+                      <div className="fan-member-messages-compose">
                       <input
                         ref={dmFileInputRef}
                         type="file"
@@ -1218,6 +1247,7 @@ export const FanStorefrontView: React.FC = () => {
                       >
                         {dmSending ? "Sending…" : "Send"}
                       </button>
+                      </div>
                     </div>
                   </>
                 )}

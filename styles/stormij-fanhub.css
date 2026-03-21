@@ -6354,7 +6354,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 }
 .stormij-theme .fh-dm-thread-row__time {
   flex-shrink: 0;
-  font-size: 0.65rem;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--text-muted, #6b7280);
 }
@@ -6543,8 +6543,9 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 }
 .stormij-theme .fh-dm-compose-actions {
   display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
   flex-shrink: 0;
 }
 .stormij-theme .fh-dm-compose-icon {
