@@ -6,7 +6,12 @@ import { FanMemberFeed, FanMemberSaved } from "./FanMemberFeed";
 import { MemberUsernameGateModal } from "./MemberUsernameGateModal";
 import { DEFAULT_PRIVACY_POLICY, DEFAULT_TERMS_OF_SERVICE } from "../constants";
 import { useAutosizeTextarea } from "../src/hooks/useAutosizeTextarea";
+import {
+  useUnreadNewMessageNotificationCount,
+  clearNewMessageNotificationBadge,
+} from "./useUnreadNewMessageNotifications";
 import { formatDmShortTime } from "../src/lib/fanHubDisplay";
+import { FanHubNotificationBell } from "./FanHubNotificationBell";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 
 export type StorefrontCreator = {
@@ -255,6 +260,16 @@ export const FanStorefrontView: React.FC = () => {
   const { ref: dmTextareaRef } = useAutosizeTextarea(dmInput);
   const [fanBanned, setFanBanned] = useState(false);
   const [reportingMessageId, setReportingMessageId] = useState<string | null>(null);
+
+  const unreadMessageTabCount = useUnreadNewMessageNotificationCount(
+    isLoggedIn && creator ? creator.creatorId : false
+  );
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (activeTab !== "messages" || !uid || !creator?.creatorId) return;
+    void clearNewMessageNotificationBadge(uid, creator.creatorId);
+  }, [activeTab, creator?.creatorId]);
 
   useEffect(() => {
     const { handle: h, subpage } = parseHandleFromPath();
@@ -832,11 +847,29 @@ export const FanStorefrontView: React.FC = () => {
                     <path d="M12 16v-4M12 8h.01" />
                   </svg>
                 )}
-                <span>{navLabels[key] || key}</span>
+                <span className="inline-flex items-center gap-1">
+                  {navLabels[key] || key}
+                  {key === "messages" && unreadMessageTabCount > 0 ? (
+                    <span
+                      className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold leading-none inline-flex items-center justify-center text-white"
+                      style={{ backgroundColor: primary }}
+                      aria-label={`${unreadMessageTabCount} unread messages`}
+                    >
+                      {unreadMessageTabCount > 9 ? "9+" : unreadMessageTabCount}
+                    </span>
+                  ) : null}
+                </span>
               </button>
             );
           })}
           <div className="storefront-header-actions">
+            {isLoggedIn && (
+              <FanHubNotificationBell
+                accentColor={primary}
+                iconColor={theme?.text || "#6f4858"}
+                className="storefront-header-notify-bell"
+              />
+            )}
             <button
               type="button"
               onClick={handleCancelMembership}

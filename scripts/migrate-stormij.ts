@@ -186,8 +186,114 @@ async function migratePosts(
   return stat;
 }
 
+/** Valid `TreatProduct.type` values in EchoFlux (`types.ts`) — used when Stormij already stores `type`. */
+const ECHOFLUX_TREAT_PRODUCT_TYPES = new Set<string>([
+  'tip',
+  'unlock_media',
+  'bundle',
+  'chat_session',
+  'voice_note_30s',
+  'voice_note_60s',
+  'private_video_reply',
+  'birthday_message',
+  'overthinking_response',
+  'random_checkin',
+  'live_chat_5m',
+  'live_chat_15m',
+  'live_chat_30m',
+  'live_chat_45m',
+  'live_chat_60m',
+  'live_chat_1h',
+  'live_video_5m',
+  'live_video_10m',
+  'live_video_15m',
+  'live_video_30m',
+  'live_video_45m',
+  'live_video_60m',
+  'custom',
+]);
+
+function strField(v: unknown): string {
+  return typeof v === 'string' ? v.trim() : '';
+}
+
+function numField(v: unknown): number | null {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string' && v.trim() !== '') {
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
 /**
- * Migrate Treats (products collection)
+ * Stormij historically used `price` in dollars (4.99) or whole dollars (5). Some docs may use
+ * `price` / `priceCents` as integer cents (499). Prefer explicit `priceCents` / `amountCents` when present.
+ */
+function stormijPriceToCents(data: Record<string, unknown>): number {
+  const explicit =
+    numField(data.priceCents) ?? numField(data.amountCents) ?? numField(data.priceInCents);
+  if (explicit != null && explicit >= 0) return Math.round(explicit);
+
+  const price = numField(data.price);
+  if (price == null) return 0;
+  // Fractional → dollars (e.g. 4.99 → 499 cents)
+  if (!Number.isInteger(price)) return Math.max(0, Math.round(price * 100));
+  // Integer: 0–99 → treat as whole dollars (5 → $5.00); 100+ → treat as cents (499 → $4.99)
+  if (price >= 0 && price < 100) return Math.max(0, Math.round(price * 100));
+  return Math.max(0, Math.round(price));
+}
+
+function inferQuantityLimit(data: Record<string, unknown>): number | undefined {
+  const lim =
+    numField(data.quantityLimit) ??
+    numField(data.quantityTotal) ??
+    numField(data.totalQuantity) ??
+    numField(data.maxQuantity);
+  if (lim == null || lim < 0) return undefined;
+  return Math.round(lim);
+}
+
+function inferSoldCount(data: Record<string, unknown>, quantityLimit?: number): number {
+  const explicit =
+    numField(data.soldCount) ?? numField(data.sold) ?? numField(data.quantitySold);
+  if (explicit != null && explicit >= 0) return Math.round(explicit);
+  const total = numField(data.quantityTotal) ?? numField(data.totalQuantity);
+  const left = numField(data.quantityLeft) ?? numField(data.remaining);
+  if (total != null && left != null && total >= left) return Math.round(total - left);
+  if (quantityLimit != null && left != null && quantityLimit >= left) {
+    return Math.round(quantityLimit - left);
+  }
+  return 0;
+}
+
+function normalizeTreatType(raw: unknown, docId: string, title: string): string {
+  if (typeof raw === 'string' && ECHOFLUX_TREAT_PRODUCT_TYPES.has(raw)) return raw;
+  return mapTreatType(docId, title);
+}
+
+function coerceFirestoreTime(
+  v: unknown
+): admin.firestore.Timestamp | admin.firestore.FieldValue {
+  if (v == null) return admin.firestore.FieldValue.serverTimestamp();
+  if (v instanceof admin.firestore.Timestamp) return v;
+  try {
+    if (typeof (v as { toDate?: () => Date }).toDate === 'function') {
+      const d = (v as { toDate: () => Date }).toDate();
+      if (d && !isNaN(d.getTime())) return admin.firestore.Timestamp.fromDate(d);
+    }
+  } catch {
+    /* ignore */
+  }
+  if (typeof v === 'string' || typeof v === 'number') {
+    const d = new Date(v);
+    if (!isNaN(d.getTime())) return admin.firestore.Timestamp.fromDate(d);
+  }
+  return admin.firestore.FieldValue.serverTimestamp();
+}
+
+/**
+ * Migrate Treats → EchoFlux `products/{docId}` (schema: `api/products.ts`, `types.TreatProduct`).
  */
 async function migrateTreats(
   stormijDb: admin.firestore.Firestore,
@@ -205,7 +311,12 @@ async function migrateTreats(
     console.log(`   Found ${snapshot.size} treats in Stormij`);
 
     if (dryRun) {
-      console.log('   [DRY RUN] Would migrate treats to products collection');
+      if (snapshot.docs.length > 0) {
+        const sample = snapshot.docs[0];
+        const keys = Object.keys(sample.data() || {}).sort();
+        console.log(`   [DRY RUN] Sample doc "${sample.id}" fields: ${keys.join(', ')}`);
+      }
+      console.log('   [DRY RUN] Would write to EchoFlux collection `products` with title, priceCents, visible, sortOrder, …');
       stat.skipped = snapshot.size;
       return stat;
     }
@@ -213,27 +324,72 @@ async function migrateTreats(
     for (const doc of snapshot.docs) {
       try {
         const data = doc.data();
-        
-        // Transform to Echoflux products format
-        const echofluxProduct = {
-          id: doc.id,
+        const title =
+          strField(data.title) ||
+          strField(data.name) ||
+          strField(data.label) ||
+          'Untitled treat';
+        const description =
+          strField(data.description) || strField(data.body) || undefined;
+
+        const visible =
+          typeof data.visible === 'boolean'
+            ? data.visible
+            : data.hidden === true || data.isHidden === true
+              ? false
+              : data.active === false
+                ? false
+                : true;
+
+        const archived = !!(data.archived || data.deleted || data.isArchived);
+
+        const sortOrder =
+          numField(data.sortOrder) ??
+          numField(data.order) ??
+          numField(data.position) ??
+          0;
+
+        const quantityLimit = inferQuantityLimit(data);
+        const soldCount = inferSoldCount(data, quantityLimit);
+
+        const mediaUrl =
+          strField(data.mediaUrl) ||
+          strField(data.media) ||
+          strField(data.videoUrl) ||
+          undefined;
+        const imageUrl =
+          strField(data.imageUrl) ||
+          strField(data.image) ||
+          strField(data.thumbnailUrl) ||
+          strField(data.photoUrl) ||
+          undefined;
+
+        const durationMinutes =
+          numField(data.durationMinutes) ?? numField(data.duration) ?? undefined;
+
+        const echofluxProduct: Record<string, unknown> = {
           creatorId,
-          name: data.name || '',
-          description: data.description || '',
-          priceCents: (data.price || 0) * 100, // Convert dollars to cents
-          type: mapTreatType(data.id, data.name),
-          quantityLeft: data.quantityLeft ?? null,
-          quantityTotal: data.quantityLeft ?? null,
-          order: data.order || 0,
-          hidden: data.hidden || false,
-          active: !data.hidden,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          // Migration metadata
+          type: normalizeTreatType(data.type, doc.id, title),
+          title,
+          description: description ?? null,
+          priceCents: stormijPriceToCents(data),
+          mediaUrl: mediaUrl ?? null,
+          imageUrl: imageUrl ?? null,
+          archived,
+          visible,
+          sortOrder: Math.round(sortOrder),
+          soldCount,
+          createdAt: coerceFirestoreTime(data.createdAt ?? data.created),
+          updatedAt: coerceFirestoreTime(data.updatedAt ?? data.updated),
           migratedFrom: 'stormij',
           migratedAt: admin.firestore.FieldValue.serverTimestamp(),
           originalDocId: doc.id,
         };
+
+        if (quantityLimit !== undefined) echofluxProduct.quantityLimit = quantityLimit;
+        if (durationMinutes != null && durationMinutes > 0) {
+          echofluxProduct.durationMinutes = durationMinutes;
+        }
 
         await echofluxDb.collection('products').doc(doc.id).set(echofluxProduct);
         stat.written++;
@@ -251,7 +407,7 @@ async function migrateTreats(
 }
 
 /**
- * Map Stormij treat ID/name to Echoflux product type
+ * Map Stormij treat ID/name to Echoflux product type (when `type` field missing or unknown).
  */
 function mapTreatType(id: string, name: string): string {
   const idLower = (id || '').toLowerCase();
@@ -267,6 +423,10 @@ function mapTreatType(id: string, name: string): string {
   if (idLower.includes('chat-session-30') || nameLower.includes('30-min')) return 'live_chat_30m';
   if (idLower.includes('chat-session-45') || nameLower.includes('45-min')) return 'live_chat_45m';
   if (idLower.includes('chat-session-60') || nameLower.includes('1-hour')) return 'live_chat_1h';
+  if (nameLower.includes('live video') && nameLower.includes('5')) return 'live_video_5m';
+  if (nameLower.includes('live video') && nameLower.includes('10')) return 'live_video_10m';
+  if (nameLower.includes('live video') && nameLower.includes('15')) return 'live_video_15m';
+  if (nameLower.includes('live video') && nameLower.includes('30')) return 'live_video_30m';
   return 'custom';
 }
 
@@ -307,15 +467,35 @@ async function migrateMembers(
           '';
         const username = usernameRaw ? usernameRaw.replace(/^@/, '').toLowerCase() : null;
 
-        const roleLower = String(data.role || data.userRole || '').toLowerCase();
-        const role =
-          roleLower === 'admin' || data.isAdmin === true || data.is_admin === true
+        const roleLower = String(
+          data.role || data.userRole || data.user_role || data.memberRole || data.member_role || ''
+        ).toLowerCase();
+        let role: 'admin' | 'tipper' | 'member' | undefined =
+          roleLower === 'admin' ||
+          roleLower === 'administrator' ||
+          roleLower === 'owner' ||
+          roleLower === 'moderator' ||
+          data.isAdmin === true ||
+          data.is_admin === true
             ? 'admin'
             : roleLower === 'tipper'
               ? 'tipper'
               : roleLower === 'member'
                 ? 'member'
                 : undefined;
+        if (!role) {
+          const access = String(data.accessLevel || data.access_level || '').toLowerCase();
+          if (access === 'admin') role = 'admin';
+        }
+        if (!role && Array.isArray(data.permissions)) {
+          for (const p of data.permissions) {
+            const ps = String(p).toLowerCase();
+            if (ps === 'admin' || ps === 'administrator') {
+              role = 'admin';
+              break;
+            }
+          }
+        }
 
         const statusStr = String(
           data.subscriptionStatus || data.subscription_status || data.status || data.planStatus || ''

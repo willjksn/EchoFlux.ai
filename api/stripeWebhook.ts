@@ -68,342 +68,372 @@ function verifyWebhookSignature(rawBody: Buffer, sig: string): Stripe.Event {
   throw new Error('Webhook signature verification failed (no valid secret)');
 }
 
-/** Connect event handling: fan subscriptions + one-time purchases; orders; entitlements; refunds. */
-async function handleConnectEvent(db: Firestore, _stripe: Stripe, event: Stripe.Event): Promise<void> {
+const FAN_HUB_CHECKOUT_TYPES = new Set(['subscription', 'product', 'tip']);
 
+/**
+ * Fan Hub checkout (creator storefront): same Firestore updates for Connect checkouts and
+ * platform-account checkouts (e.g. PLATFORM_OWNER_CREATOR_IDS / Stormij).
+ * Returns true if this session was handled as fan hub (caller should skip EchoFlux creator billing).
+ */
+async function processFanHubCheckoutSessionCompleted(
+  db: Firestore,
+  session: Stripe.Checkout.Session,
+): Promise<boolean> {
+  const creatorId = session.metadata?.creatorId;
+  const fanId = session.metadata?.fanId || session.client_reference_id;
+  const type = session.metadata?.type;
+  if (!creatorId || !fanId || !type || !FAN_HUB_CHECKOUT_TYPES.has(type)) {
+    return false;
+  }
+
+  const now = new Date().toISOString();
+
+  if (type === 'subscription' && session.subscription) {
+    const amountTotal = session.amount_total ?? 0;
+    const subRef = db.collection('creatorSubscribers').doc(creatorId).collection('subscribers').doc(fanId);
+    await subRef.set({ status: 'active', stripeSubscriptionId: session.subscription, updatedAt: now }, { merge: true });
+    const grantRef = db.collection('creatorEntitlements').doc(creatorId).collection('grants').doc(fanId);
+    const grantSnap = await grantRef.get();
+    const existing = grantSnap.data() as { unlockedProductIds?: string[] } | undefined;
+    const unlocked = Array.isArray(existing?.unlockedProductIds) ? existing.unlockedProductIds : [];
+    await grantRef.set({ subscription: true, unlockedProductIds: unlocked, updatedAt: now }, { merge: true });
+
+    const orderRef = db.collection('orders').doc();
+    await orderRef.set({
+      creatorId,
+      fanId,
+      productId: null,
+      type: 'subscription',
+      stripeSessionId: session.id,
+      stripeSubscriptionId: session.subscription,
+      amountCents: amountTotal,
+      status: 'paid',
+      fanEmail: session.customer_details?.email || session.metadata?.fanEmail || null,
+      fanName: session.customer_details?.name || session.metadata?.fanName || null,
+      createdAt: now,
+    });
+
+    const statsRef = db.collection('creatorStats').doc(creatorId);
+    const statsSnap = await statsRef.get();
+    const stats = statsSnap.data() as { totalRevenueCents?: number; totalOrders?: number } | undefined;
+    const totalRevenue = (stats?.totalRevenueCents ?? 0) + amountTotal;
+    const totalOrders = (stats?.totalOrders ?? 0) + 1;
+    await statsRef.set({ totalRevenueCents: totalRevenue, totalOrders, updatedAt: now }, { merge: true });
+
+    const fanEmail = session.customer_details?.email || session.metadata?.fanEmail || null;
+    const fanName = session.customer_details?.name || session.metadata?.fanName || null;
+    const fanRef = db.collection('creators').doc(creatorId).collection('fans').doc(fanId);
+    const fanSnap = await fanRef.get();
+    let memberUsername: string | null = null;
+    try {
+      const uSnap = await db.collection('users').doc(fanId).get();
+      const u = uSnap.data() as { username?: string } | undefined;
+      const raw = typeof u?.username === 'string' ? u.username.trim().toLowerCase() : '';
+      if (raw.length >= 3 && /^[a-z0-9_]+$/.test(raw)) memberUsername = raw;
+    } catch {
+      /* ignore */
+    }
+    if (!fanSnap.exists) {
+      await fanRef.set({
+        id: fanId,
+        creatorId,
+        email: fanEmail,
+        displayName: fanName,
+        ...(memberUsername ? { username: memberUsername } : {}),
+        stripeCustomerId: typeof session.customer === 'string' ? session.customer : (session.customer as any)?.id || null,
+        subscriptionStatus: 'active',
+        subscribedAt: now,
+        lastPaymentAt: now,
+        totalSpentCents: amountTotal,
+        createdAt: now,
+        updatedAt: now,
+      });
+    } else {
+      const patch: Record<string, unknown> = {
+        subscriptionStatus: 'active',
+        lastPaymentAt: now,
+        updatedAt: now,
+      };
+      if (memberUsername) patch.username = memberUsername;
+      await fanRef.update(patch);
+    }
+
+    try {
+      await ensureFanDmThreadForMember(db, creatorId, fanId, now);
+    } catch (e) {
+      console.warn('ensureFanDmThreadForMember (subscription checkout):', e);
+    }
+
+    console.log(`Fan hub: subscription checkout creator=${creatorId} fan=${fanId}`);
+    return true;
+  }
+
+  if (type === 'product' && session.metadata?.productId) {
+    const productId = session.metadata.productId as string;
+    const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : (session.payment_intent as Stripe.PaymentIntent)?.id;
+    const amountTotal = session.amount_total ?? 0;
+
+    const orderRef = db.collection('orders').doc();
+    await orderRef.set({
+      creatorId,
+      fanId,
+      productId,
+      type: 'product',
+      stripeSessionId: session.id,
+      stripePaymentIntentId: paymentIntentId || null,
+      amountCents: amountTotal,
+      status: 'paid',
+      createdAt: now,
+    });
+
+    const grantRef = db.collection('creatorEntitlements').doc(creatorId).collection('grants').doc(fanId);
+    const grantSnap = await grantRef.get();
+    const existing = grantSnap.data() as { unlockedProductIds?: string[] } | undefined;
+    const unlocked = Array.isArray(existing?.unlockedProductIds) ? existing.unlockedProductIds : [];
+    if (!unlocked.includes(productId)) {
+      await grantRef.set({ unlockedProductIds: [...unlocked, productId], updatedAt: now }, { merge: true });
+    }
+
+    const fanEmail = session.customer_details?.email || session.metadata?.fanEmail || null;
+    const fanName = session.customer_details?.name || session.metadata?.fanName || null;
+    const fanRef = db.collection('creators').doc(creatorId).collection('fans').doc(fanId);
+    const fanSnap = await fanRef.get();
+    if (!fanSnap.exists) {
+      await fanRef.set({
+        id: fanId,
+        creatorId,
+        email: fanEmail,
+        displayName: fanName,
+        stripeCustomerId: typeof session.customer === 'string' ? session.customer : (session.customer as any)?.id || null,
+        subscriptionStatus: null,
+        lastPurchaseAt: now,
+        totalSpentCents: amountTotal,
+        purchaseCount: 1,
+        createdAt: now,
+        updatedAt: now,
+      });
+    } else {
+      const fanData = fanSnap.data() as { totalSpentCents?: number; purchaseCount?: number };
+      await fanRef.update({
+        lastPurchaseAt: now,
+        totalSpentCents: (fanData.totalSpentCents || 0) + amountTotal,
+        purchaseCount: (fanData.purchaseCount || 0) + 1,
+        updatedAt: now,
+      });
+    }
+
+    try {
+      await upsertFanHubFanPreferenceFromMember(db, creatorId, fanId, now, 'stripe_product');
+    } catch (e) {
+      console.error('syncFanHubFanPreference (product):', e);
+    }
+
+    const statsRef = db.collection('creatorStats').doc(creatorId);
+    const statsSnap = await statsRef.get();
+    const stats = statsSnap.data() as { totalRevenueCents?: number; totalOrders?: number } | undefined;
+    const totalRevenue = (stats?.totalRevenueCents ?? 0) + amountTotal;
+    const totalOrders = (stats?.totalOrders ?? 0) + 1;
+    await statsRef.set({ totalRevenueCents: totalRevenue, totalOrders, updatedAt: now }, { merge: true });
+    console.log(`Fan hub: product checkout creator=${creatorId} fan=${fanId} product=${productId}`);
+    return true;
+  }
+
+  if (type === 'tip') {
+    const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : (session.payment_intent as Stripe.PaymentIntent)?.id;
+    const amountTotal = session.amount_total ?? 0;
+    const tipHandle = session.metadata?.tipHandle || 'Anonymous';
+
+    const orderRef = db.collection('orders').doc();
+    await orderRef.set({
+      creatorId,
+      fanId,
+      type: 'tip',
+      stripeSessionId: session.id,
+      stripePaymentIntentId: paymentIntentId || null,
+      amountCents: amountTotal,
+      tipHandle,
+      status: 'paid',
+      createdAt: now,
+    });
+
+    const fanEmail = session.customer_details?.email || null;
+    const fanName = session.customer_details?.name || tipHandle;
+    const isAnonymous = fanId.startsWith('anon_');
+
+    const fanRef = db.collection('creators').doc(creatorId).collection('fans').doc(fanId);
+    const fanSnap = await fanRef.get();
+    if (!fanSnap.exists) {
+      await fanRef.set({
+        id: fanId,
+        creatorId,
+        email: fanEmail,
+        displayName: fanName,
+        tipHandle,
+        role: 'tipper',
+        isAnonymous,
+        stripeCustomerId: typeof session.customer === 'string' ? session.customer : (session.customer as any)?.id || null,
+        subscriptionStatus: null,
+        lastTipAt: now,
+        totalTipsCents: amountTotal,
+        tipCount: 1,
+        totalSpentCents: amountTotal,
+        createdAt: now,
+        updatedAt: now,
+      });
+    } else {
+      const fanData = fanSnap.data() as { totalTipsCents?: number; tipCount?: number; totalSpentCents?: number };
+      await fanRef.update({
+        lastTipAt: now,
+        totalTipsCents: (fanData.totalTipsCents || 0) + amountTotal,
+        tipCount: (fanData.tipCount || 0) + 1,
+        totalSpentCents: (fanData.totalSpentCents || 0) + amountTotal,
+        updatedAt: now,
+      });
+    }
+
+    try {
+      await upsertFanHubFanPreferenceFromMember(db, creatorId, fanId, now, 'stripe_tip');
+    } catch (e) {
+      console.error('syncFanHubFanPreference (tip):', e);
+    }
+
+    const statsRef = db.collection('creatorStats').doc(creatorId);
+    const statsSnap = await statsRef.get();
+    const stats = statsSnap.data() as { totalRevenueCents?: number; totalTipsCents?: number; totalTipCount?: number } | undefined;
+    await statsRef.set({
+      totalRevenueCents: (stats?.totalRevenueCents ?? 0) + amountTotal,
+      totalTipsCents: (stats?.totalTipsCents ?? 0) + amountTotal,
+      totalTipCount: (stats?.totalTipCount ?? 0) + 1,
+      updatedAt: now,
+    }, { merge: true });
+
+    console.log(`Fan hub: tip creator=${creatorId} fan=${fanId} amount=${amountTotal} handle=${tipHandle}`);
+    return true;
+  }
+
+  return false;
+}
+
+/** Fan Hub subscription lifecycle (Connect + platform Stripe). Returns true if handled. */
+async function processFanHubSubscriptionUpdated(
+  db: Firestore,
+  subscription: Stripe.Subscription,
+): Promise<boolean> {
+  const creatorId = subscription.metadata?.creatorId;
+  const fanId = subscription.metadata?.fanId;
+  if (!creatorId || !fanId) return false;
+
+  const now = new Date().toISOString();
+  const raw = subscription.status;
+  let subStatus: string;
+  if (raw === 'active' || raw === 'trialing') {
+    subStatus = raw;
+  } else if (raw === 'canceled' || raw === 'unpaid' || raw === 'incomplete_expired') {
+    subStatus = 'canceled';
+  } else if (raw === 'past_due') {
+    subStatus = 'past_due';
+  } else {
+    subStatus = raw;
+  }
+  const periodEndSec = (subscription as { current_period_end?: number }).current_period_end;
+  const subscriptionCurrentPeriodEnd = periodEndSec
+    ? new Date(periodEndSec * 1000).toISOString()
+    : null;
+  const cancelAtPeriodEnd = !!(subscription as { cancel_at_period_end?: boolean }).cancel_at_period_end;
+  const grantActive = subStatus === 'active' || subStatus === 'trialing';
+
+  const subRef = db.collection('creatorSubscribers').doc(creatorId).collection('subscribers').doc(fanId);
+  await subRef.set(
+    {
+      status: subStatus,
+      stripeSubscriptionId: subscription.id,
+      cancelAtPeriodEnd,
+      currentPeriodEnd: subscriptionCurrentPeriodEnd,
+      updatedAt: now,
+    },
+    { merge: true },
+  );
+  const grantRef = db.collection('creatorEntitlements').doc(creatorId).collection('grants').doc(fanId);
+  const grantSnap = await grantRef.get();
+  const existing = grantSnap.data() as { unlockedProductIds?: string[] } | undefined;
+  await grantRef.set(
+    { subscription: grantActive, unlockedProductIds: existing?.unlockedProductIds ?? [], updatedAt: now },
+    { merge: true },
+  );
+
+  const fanRef = db.collection('creators').doc(creatorId).collection('fans').doc(fanId);
+  const fanSnap = await fanRef.get();
+  if (fanSnap.exists) {
+    await fanRef.update({
+      subscriptionStatus: subStatus,
+      cancelAtPeriodEnd,
+      subscriptionCurrentPeriodEnd,
+      updatedAt: now,
+    });
+    try {
+      await upsertFanHubFanPreferenceFromMember(db, creatorId, fanId, now, 'stripe_subscription_updated');
+    } catch (e) {
+      console.error('syncFanHubFanPreference (subscription updated):', e);
+    }
+  }
+
+  console.log(`Fan hub: subscription updated creator=${creatorId} fan=${fanId} status=${subStatus}`);
+  return true;
+}
+
+/** Fan Hub subscription canceled. Returns true if handled. */
+async function processFanHubSubscriptionDeleted(db: Firestore, subscription: Stripe.Subscription): Promise<boolean> {
+  const creatorId = subscription.metadata?.creatorId;
+  const fanId = subscription.metadata?.fanId;
+  if (!creatorId || !fanId) return false;
+
+  const now = new Date().toISOString();
+  const subRef = db.collection('creatorSubscribers').doc(creatorId).collection('subscribers').doc(fanId);
+  await subRef.set({ status: 'canceled', updatedAt: now }, { merge: true });
+  const grantRef = db.collection('creatorEntitlements').doc(creatorId).collection('grants').doc(fanId);
+  const grantSnap = await grantRef.get();
+  const existing = grantSnap.data() as { unlockedProductIds?: string[] } | undefined;
+  await grantRef.set({ subscription: false, unlockedProductIds: existing?.unlockedProductIds ?? [], updatedAt: now }, { merge: true });
+
+  const fanRef = db.collection('creators').doc(creatorId).collection('fans').doc(fanId);
+  const fanSnap = await fanRef.get();
+  if (fanSnap.exists) {
+    await fanRef.update({
+      subscriptionStatus: 'canceled',
+      canceledAt: now,
+      cancelAtPeriodEnd: false,
+      subscriptionCurrentPeriodEnd: null,
+      updatedAt: now,
+    });
+    try {
+      await upsertFanHubFanPreferenceFromMember(db, creatorId, fanId, now, 'stripe_subscription_canceled');
+    } catch (e) {
+      console.error('syncFanHubFanPreference (subscription deleted):', e);
+    }
+  }
+
+  console.log(`Fan hub: subscription deleted creator=${creatorId} fan=${fanId}`);
+  return true;
+}
+
+/** Connect + same handlers: fan storefront events (checkout on connected account includes event.account). */
+async function handleConnectEvent(db: Firestore, _stripe: Stripe, event: Stripe.Event): Promise<void> {
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object as Stripe.Checkout.Session;
-    const creatorId = session.metadata?.creatorId;
-    const fanId = session.metadata?.fanId || session.client_reference_id;
-    const type = session.metadata?.type;
-    if (!creatorId || !fanId) return;
-
-    const now = new Date().toISOString();
-
-    if (type === 'subscription' && session.subscription) {
-      const amountTotal = session.amount_total ?? 0;
-      const subRef = db.collection('creatorSubscribers').doc(creatorId).collection('subscribers').doc(fanId);
-      await subRef.set({ status: 'active', stripeSubscriptionId: session.subscription, updatedAt: now }, { merge: true });
-      const grantRef = db.collection('creatorEntitlements').doc(creatorId).collection('grants').doc(fanId);
-      const grantSnap = await grantRef.get();
-      const existing = grantSnap.data() as { unlockedProductIds?: string[] } | undefined;
-      const unlocked = Array.isArray(existing?.unlockedProductIds) ? existing.unlockedProductIds : [];
-      await grantRef.set({ subscription: true, unlockedProductIds: unlocked, updatedAt: now }, { merge: true });
-
-      const orderRef = db.collection('orders').doc();
-      await orderRef.set({
-        creatorId,
-        fanId,
-        productId: null,
-        type: 'subscription',
-        stripeSessionId: session.id,
-        stripeSubscriptionId: session.subscription,
-        amountCents: amountTotal,
-        status: 'paid',
-        fanEmail: session.customer_details?.email || session.metadata?.fanEmail || null,
-        fanName: session.customer_details?.name || session.metadata?.fanName || null,
-        createdAt: now,
-      });
-
-      const statsRef = db.collection('creatorStats').doc(creatorId);
-      const statsSnap = await statsRef.get();
-      const stats = statsSnap.data() as { totalRevenueCents?: number; totalOrders?: number } | undefined;
-      const totalRevenue = (stats?.totalRevenueCents ?? 0) + amountTotal;
-      const totalOrders = (stats?.totalOrders ?? 0) + 1;
-      await statsRef.set({ totalRevenueCents: totalRevenue, totalOrders, updatedAt: now }, { merge: true });
-      
-      // Also create/update fan record in creators/{creatorId}/fans collection
-      const fanEmail = session.customer_details?.email || session.metadata?.fanEmail || null;
-      const fanName = session.customer_details?.name || session.metadata?.fanName || null;
-      const fanRef = db.collection('creators').doc(creatorId).collection('fans').doc(fanId);
-      const fanSnap = await fanRef.get();
-      let memberUsername: string | null = null;
-      try {
-        const uSnap = await db.collection('users').doc(fanId).get();
-        const u = uSnap.data() as { username?: string } | undefined;
-        const raw = typeof u?.username === 'string' ? u.username.trim().toLowerCase() : '';
-        if (raw.length >= 3 && /^[a-z0-9_]+$/.test(raw)) memberUsername = raw;
-      } catch {
-        /* ignore */
-      }
-      if (!fanSnap.exists) {
-        // New fan - create record
-        await fanRef.set({
-          id: fanId,
-          creatorId,
-          email: fanEmail,
-          displayName: fanName,
-          ...(memberUsername ? { username: memberUsername } : {}),
-          stripeCustomerId: typeof session.customer === 'string' ? session.customer : (session.customer as any)?.id || null,
-          subscriptionStatus: 'active',
-          subscribedAt: now,
-          lastPaymentAt: now,
-          totalSpentCents: amountTotal,
-          createdAt: now,
-          updatedAt: now,
-        });
-      } else {
-        // Existing fan - update subscription status
-        const patch: Record<string, unknown> = {
-          subscriptionStatus: 'active',
-          lastPaymentAt: now,
-          updatedAt: now,
-        };
-        if (memberUsername) patch.username = memberUsername;
-        await fanRef.update(patch);
-      }
-      
-      console.log(`Connect: subscription created creator=${creatorId} fan=${fanId}`);
-      return;
-    }
-
-    if (type === 'product' && session.metadata?.productId) {
-      const productId = session.metadata.productId as string;
-      const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : (session.payment_intent as Stripe.PaymentIntent)?.id;
-      const amountTotal = session.amount_total ?? 0;
-
-      const orderRef = db.collection('orders').doc();
-      await orderRef.set({
-        creatorId,
-        fanId,
-        productId,
-        type: 'product',
-        stripeSessionId: session.id,
-        stripePaymentIntentId: paymentIntentId || null,
-        amountCents: amountTotal,
-        status: 'paid',
-        createdAt: now,
-      });
-
-      const grantRef = db.collection('creatorEntitlements').doc(creatorId).collection('grants').doc(fanId);
-      const grantSnap = await grantRef.get();
-      const existing = grantSnap.data() as { unlockedProductIds?: string[] } | undefined;
-      const unlocked = Array.isArray(existing?.unlockedProductIds) ? existing.unlockedProductIds : [];
-      if (!unlocked.includes(productId)) {
-        await grantRef.set({ unlockedProductIds: [...unlocked, productId], updatedAt: now }, { merge: true });
-      }
-      
-      // Update fan record with purchase
-      const fanEmail = session.customer_details?.email || session.metadata?.fanEmail || null;
-      const fanName = session.customer_details?.name || session.metadata?.fanName || null;
-      const fanRef = db.collection('creators').doc(creatorId).collection('fans').doc(fanId);
-      const fanSnap = await fanRef.get();
-      if (!fanSnap.exists) {
-        // New fan from product purchase (non-subscriber)
-        await fanRef.set({
-          id: fanId,
-          creatorId,
-          email: fanEmail,
-          displayName: fanName,
-          stripeCustomerId: typeof session.customer === 'string' ? session.customer : (session.customer as any)?.id || null,
-          subscriptionStatus: null, // Not a subscriber, just a purchaser
-          lastPurchaseAt: now,
-          totalSpentCents: amountTotal,
-          purchaseCount: 1,
-          createdAt: now,
-          updatedAt: now,
-        });
-      } else {
-        // Update existing fan
-        const fanData = fanSnap.data() as { totalSpentCents?: number; purchaseCount?: number };
-        await fanRef.update({
-          lastPurchaseAt: now,
-          totalSpentCents: (fanData.totalSpentCents || 0) + amountTotal,
-          purchaseCount: (fanData.purchaseCount || 0) + 1,
-          updatedAt: now,
-        });
-      }
-
-      try {
-        await upsertFanHubFanPreferenceFromMember(db, creatorId, fanId, now, 'stripe_product');
-      } catch (e) {
-        console.error('syncFanHubFanPreference (product):', e);
-      }
-
-      const statsRef = db.collection('creatorStats').doc(creatorId);
-      const statsSnap = await statsRef.get();
-      const stats = statsSnap.data() as { totalRevenueCents?: number; totalOrders?: number } | undefined;
-      const totalRevenue = (stats?.totalRevenueCents ?? 0) + amountTotal;
-      const totalOrders = (stats?.totalOrders ?? 0) + 1;
-      await statsRef.set({ totalRevenueCents: totalRevenue, totalOrders, updatedAt: now }, { merge: true });
-      console.log(`Connect: product order creator=${creatorId} fan=${fanId} product=${productId}`);
-      return;
-    }
-
-    // Handle tips (one-time payments without a productId)
-    if (type === 'tip') {
-      const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : (session.payment_intent as Stripe.PaymentIntent)?.id;
-      const amountTotal = session.amount_total ?? 0;
-      const tipHandle = session.metadata?.tipHandle || 'Anonymous';
-
-      // Record the tip as an order
-      const orderRef = db.collection('orders').doc();
-      await orderRef.set({
-        creatorId,
-        fanId,
-        type: 'tip',
-        stripeSessionId: session.id,
-        stripePaymentIntentId: paymentIntentId || null,
-        amountCents: amountTotal,
-        tipHandle,
-        status: 'paid',
-        createdAt: now,
-      });
-
-      // Create/update fan record as tipper
-      const fanEmail = session.customer_details?.email || null;
-      const fanName = session.customer_details?.name || tipHandle;
-      const isAnonymous = fanId.startsWith('anon_');
-      
-      const fanRef = db.collection('creators').doc(creatorId).collection('fans').doc(fanId);
-      const fanSnap = await fanRef.get();
-      if (!fanSnap.exists) {
-        // New tipper
-        await fanRef.set({
-          id: fanId,
-          creatorId,
-          email: fanEmail,
-          displayName: fanName,
-          tipHandle,
-          role: 'tipper', // Mark as tipper (non-subscriber who tips)
-          isAnonymous,
-          stripeCustomerId: typeof session.customer === 'string' ? session.customer : (session.customer as any)?.id || null,
-          subscriptionStatus: null, // Not a subscriber
-          lastTipAt: now,
-          totalTipsCents: amountTotal,
-          tipCount: 1,
-          totalSpentCents: amountTotal,
-          createdAt: now,
-          updatedAt: now,
-        });
-      } else {
-        // Existing fan/tipper - update tip stats
-        const fanData = fanSnap.data() as { totalTipsCents?: number; tipCount?: number; totalSpentCents?: number };
-        await fanRef.update({
-          lastTipAt: now,
-          totalTipsCents: (fanData.totalTipsCents || 0) + amountTotal,
-          tipCount: (fanData.tipCount || 0) + 1,
-          totalSpentCents: (fanData.totalSpentCents || 0) + amountTotal,
-          updatedAt: now,
-        });
-      }
-
-      try {
-        await upsertFanHubFanPreferenceFromMember(db, creatorId, fanId, now, 'stripe_tip');
-      } catch (e) {
-        console.error('syncFanHubFanPreference (tip):', e);
-      }
-
-      // Update creator stats
-      const statsRef = db.collection('creatorStats').doc(creatorId);
-      const statsSnap = await statsRef.get();
-      const stats = statsSnap.data() as { totalRevenueCents?: number; totalTipsCents?: number; totalTipCount?: number } | undefined;
-      await statsRef.set({
-        totalRevenueCents: (stats?.totalRevenueCents ?? 0) + amountTotal,
-        totalTipsCents: (stats?.totalTipsCents ?? 0) + amountTotal,
-        totalTipCount: (stats?.totalTipCount ?? 0) + 1,
-        updatedAt: now,
-      }, { merge: true });
-
-      console.log(`Connect: tip received creator=${creatorId} fan=${fanId} amount=${amountTotal} handle=${tipHandle}`);
-      return;
+    const handled = await processFanHubCheckoutSessionCompleted(db, session);
+    if (!handled) {
+      console.warn('Connect checkout.session.completed missing fan hub metadata', session.id);
     }
     return;
   }
 
   if (event.type === 'customer.subscription.updated') {
-    const subscription = event.data.object as Stripe.Subscription;
-    const creatorId = subscription.metadata?.creatorId;
-    const fanId = subscription.metadata?.fanId;
-    if (!creatorId || !fanId) return;
-    const now = new Date().toISOString();
-    const raw = subscription.status;
-    let subStatus: string;
-    if (raw === 'active' || raw === 'trialing') {
-      subStatus = raw;
-    } else if (raw === 'canceled' || raw === 'unpaid' || raw === 'incomplete_expired') {
-      subStatus = 'canceled';
-    } else if (raw === 'past_due') {
-      subStatus = 'past_due';
-    } else {
-      subStatus = raw;
-    }
-    const periodEndSec = (subscription as { current_period_end?: number }).current_period_end;
-    const subscriptionCurrentPeriodEnd = periodEndSec
-      ? new Date(periodEndSec * 1000).toISOString()
-      : null;
-    const cancelAtPeriodEnd = !!(subscription as { cancel_at_period_end?: boolean }).cancel_at_period_end;
-    const grantActive = subStatus === 'active' || subStatus === 'trialing';
-
-    const subRef = db.collection('creatorSubscribers').doc(creatorId).collection('subscribers').doc(fanId);
-    await subRef.set(
-      {
-        status: subStatus,
-        stripeSubscriptionId: subscription.id,
-        cancelAtPeriodEnd,
-        currentPeriodEnd: subscriptionCurrentPeriodEnd,
-        updatedAt: now,
-      },
-      { merge: true },
-    );
-    const grantRef = db.collection('creatorEntitlements').doc(creatorId).collection('grants').doc(fanId);
-    const grantSnap = await grantRef.get();
-    const existing = grantSnap.data() as { unlockedProductIds?: string[] } | undefined;
-    await grantRef.set(
-      { subscription: grantActive, unlockedProductIds: existing?.unlockedProductIds ?? [], updatedAt: now },
-      { merge: true },
-    );
-
-    const fanRef = db.collection('creators').doc(creatorId).collection('fans').doc(fanId);
-    const fanSnap = await fanRef.get();
-    if (fanSnap.exists) {
-      await fanRef.update({
-        subscriptionStatus: subStatus,
-        cancelAtPeriodEnd,
-        subscriptionCurrentPeriodEnd,
-        updatedAt: now,
-      });
-      try {
-        await upsertFanHubFanPreferenceFromMember(db, creatorId, fanId, now, 'stripe_subscription_updated');
-      } catch (e) {
-        console.error('syncFanHubFanPreference (subscription updated):', e);
-      }
-    }
+    await processFanHubSubscriptionUpdated(db, event.data.object as Stripe.Subscription);
     return;
   }
 
   if (event.type === 'customer.subscription.deleted') {
-    const subscription = event.data.object as Stripe.Subscription;
-    const creatorId = subscription.metadata?.creatorId;
-    const fanId = subscription.metadata?.fanId;
-    if (!creatorId || !fanId) return;
-    const now = new Date().toISOString();
-    const subRef = db.collection('creatorSubscribers').doc(creatorId).collection('subscribers').doc(fanId);
-    await subRef.set({ status: 'canceled', updatedAt: now }, { merge: true });
-    const grantRef = db.collection('creatorEntitlements').doc(creatorId).collection('grants').doc(fanId);
-    const grantSnap = await grantRef.get();
-    const existing = grantSnap.data() as { unlockedProductIds?: string[] } | undefined;
-    await grantRef.set({ subscription: false, unlockedProductIds: existing?.unlockedProductIds ?? [], updatedAt: now }, { merge: true });
-    
-    // Update fan record subscription status to cancelled
-    const fanRef = db.collection('creators').doc(creatorId).collection('fans').doc(fanId);
-    const fanSnap = await fanRef.get();
-    if (fanSnap.exists) {
-      await fanRef.update({
-        subscriptionStatus: 'canceled',
-        canceledAt: now,
-        cancelAtPeriodEnd: false,
-        subscriptionCurrentPeriodEnd: null,
-        updatedAt: now,
-      });
-      try {
-        await upsertFanHubFanPreferenceFromMember(db, creatorId, fanId, now, 'stripe_subscription_canceled');
-      } catch (e) {
-        console.error('syncFanHubFanPreference (subscription deleted):', e);
-      }
-    }
-
-    console.log(`Connect: subscription deleted creator=${creatorId} fan=${fanId}`);
+    await processFanHubSubscriptionDeleted(db, event.data.object as Stripe.Subscription);
     return;
   }
 
@@ -435,7 +465,25 @@ async function handleConnectEvent(db: Firestore, _stripe: Stripe, event: Stripe.
     const totalRevenue = Math.max(0, (stats?.totalRevenueCents ?? 0) - amountCents);
     const totalOrders = Math.max(0, (stats?.totalOrders ?? 1) - 1);
     await statsRef.set({ totalRevenueCents: totalRevenue, totalOrders, updatedAt: new Date().toISOString() }, { merge: true });
-    console.log(`Connect: refund processed creator=${creatorId} order=${orderDoc.id}`);
+    console.log(`Fan hub: refund processed creator=${creatorId} order=${orderDoc.id}`);
+  }
+}
+
+/** If invoice is for a Fan Hub subscription, skip EchoFlux creator-tool billing side effects. */
+async function isFanHubSubscriptionInvoice(stripe: Stripe, invoice: Stripe.Invoice): Promise<boolean> {
+  const subField = (invoice as Stripe.Invoice & { subscription?: string | Stripe.Subscription | null }).subscription;
+  const subId =
+    typeof subField === 'string'
+      ? subField
+      : subField && typeof subField === 'object' && 'id' in subField
+        ? (subField as { id: string }).id
+        : null;
+  if (!subId) return false;
+  try {
+    const sub = await stripe.subscriptions.retrieve(subId);
+    return !!(sub.metadata?.creatorId && sub.metadata?.fanId);
+  } catch {
+    return false;
   }
 }
 
@@ -523,7 +571,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
           break;
         }
-        
+
+        // Fan Hub on platform Stripe (e.g. PLATFORM_OWNER_CREATOR_IDS) — same Firestore as Connect path
+        const fanHubCheckoutDone = await processFanHubCheckoutSessionCompleted(db, session);
+        if (fanHubCheckoutDone) {
+          break;
+        }
+        // Do not treat fan checkout as EchoFlux creator billing if metadata is clearly Fan Hub
+        if (
+          session.metadata?.creatorId &&
+          session.metadata?.type &&
+          FAN_HUB_CHECKOUT_TYPES.has(session.metadata.type)
+        ) {
+          console.warn('Fan hub checkout.session.completed not applied (incomplete session?)', session.id);
+          break;
+        }
+
         if (session.mode === 'subscription' && session.subscription) {
           const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
           const userId = session.metadata?.userId || session.client_reference_id;
@@ -597,6 +660,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       case 'customer.subscription.updated': {
         const subscription = event.data.object as Stripe.Subscription;
+        if (await processFanHubSubscriptionUpdated(db, subscription)) {
+          break;
+        }
+
         const customerId = subscription.customer as string;
 
         // Find user by Stripe customer ID
@@ -637,6 +704,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription;
+        if (await processFanHubSubscriptionDeleted(db, subscription)) {
+          break;
+        }
+
         const customerId = subscription.customer as string;
 
         // Find user by Stripe customer ID
@@ -662,6 +733,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       case 'invoice.payment_succeeded': {
         const invoice = event.data.object as Stripe.Invoice;
+        if (await isFanHubSubscriptionInvoice(stripe, invoice)) {
+          console.log('Fan hub: invoice.payment_succeeded — skip EchoFlux creator quota reset');
+          break;
+        }
+
         const customerId = invoice.customer as string;
 
         // Find user by Stripe customer ID
@@ -718,6 +794,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       case 'invoice.payment_failed': {
         const invoice = event.data.object as Stripe.Invoice;
+        if (await isFanHubSubscriptionInvoice(stripe, invoice)) {
+          console.log('Fan hub: invoice.payment_failed — skip EchoFlux creator billing alerts');
+          break;
+        }
+
         const customerId = invoice.customer as string;
 
         // Find user by Stripe customer ID

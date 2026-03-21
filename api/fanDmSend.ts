@@ -8,6 +8,7 @@ import {
   getThreadId,
   isFanBlocked,
 } from "./_fanDmHelpers.js";
+import { sendFanNotification } from "./_fanNotifications.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
@@ -108,6 +109,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       content,
       createdAt: now,
     });
+
+    const recipientId = uid === fanIdFinal ? creatorIdFinal : fanIdFinal;
+    try {
+      await sendFanNotification({
+        fanId: recipientId,
+        type: "new_message",
+        title: uid === fanIdFinal ? "New message from a fan" : "New reply from creator",
+        body: content.slice(0, 200),
+        data: {
+          threadId,
+          creatorId: creatorIdFinal,
+          fanId: fanIdFinal,
+        },
+      });
+    } catch (notifyErr) {
+      console.error("fanDmSend: notification failed (message still sent)", notifyErr);
+    }
 
     return res.status(201).json({
       message: {

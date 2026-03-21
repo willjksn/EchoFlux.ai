@@ -5644,8 +5644,15 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 }
 
 .storefront-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
   margin-left: auto;
   padding-left: 0.5rem;
+}
+
+.storefront-header-notify-bell {
+  flex-shrink: 0;
 }
 
 .storefront-cancel-membership-btn {

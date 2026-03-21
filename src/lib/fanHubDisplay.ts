@@ -198,3 +198,47 @@ export function fanHubInitials(
   }
   return "?";
 }
+
+/** Role stored on `creators/{creatorId}/fans/{fanId}` (Stormij, Stripe, manual). */
+export type FanHubStoredRole = "admin" | "member" | "tipper";
+
+/**
+ * Normalize admin/member/tipper from a Firestore fan (or Stormij member) document.
+ * Stormij and older rows use mixed field names (`userRole`, `isAdmin`, `permissions`, etc.).
+ */
+export function parseFanMemberRoleFromFirestore(data: Record<string, unknown>): FanHubStoredRole | null {
+  const s = (v: unknown): string => String(v ?? "").toLowerCase().trim();
+
+  if (data.isAdmin === true || data.is_admin === true) return "admin";
+
+  const roleStr =
+    s(data.role) ||
+    s(data.userRole) ||
+    s(data.user_role) ||
+    s(data.memberRole) ||
+    s(data.member_role);
+
+  if (
+    roleStr === "admin" ||
+    roleStr === "administrator" ||
+    roleStr === "owner" ||
+    roleStr === "moderator"
+  ) {
+    return "admin";
+  }
+  if (roleStr === "tipper") return "tipper";
+  if (roleStr === "member") return "member";
+
+  const access = s(data.accessLevel) || s(data.access_level);
+  if (access === "admin") return "admin";
+
+  const perms = data.permissions;
+  if (Array.isArray(perms)) {
+    for (const p of perms) {
+      const ps = s(p);
+      if (ps === "admin" || ps === "administrator") return "admin";
+    }
+  }
+
+  return null;
+}

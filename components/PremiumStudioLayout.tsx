@@ -1,9 +1,14 @@
-import React, { createContext, useContext, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useMemo } from 'react';
 import { useTabFromUrl } from '../src/hooks/useTabFromUrl';
 import { useCreatorFanHubTheme } from '../src/hooks/useCreatorFanHubTheme';
 import { useUI } from './contexts/UIContext';
 import { auth } from '../firebaseConfig';
 import { STUDIO_TAB_IDS, FAN_HUB_TAB_IDS, STUDIO_TAB_LABELS, FAN_HUB_TAB_LABELS } from '../constants';
+import { FanHubNotificationBell } from './FanHubNotificationBell';
+import {
+  useUnreadNewMessageNotificationCount,
+  clearNewMessageNotificationBadge,
+} from './useUnreadNewMessageNotifications';
 
 const PremiumStudioTabContext = createContext<{ tab: string; setTab: (tab: string) => void } | null>(null);
 export const usePremiumStudioTab = () => useContext(PremiumStudioTabContext);
@@ -26,6 +31,14 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
   const labels = isFanHub ? FAN_HUB_TAB_LABELS : STUDIO_TAB_LABELS;
 
   const [tab, setTab] = useTabFromUrl(pathPrefix, tabIds, defaultTab);
+
+  const unreadMessagesTabCount = useUnreadNewMessageNotificationCount(isFanHub ? null : false);
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!isFanHub || tab !== 'messages' || !uid) return;
+    void clearNewMessageNotificationBadge(uid, null);
+  }, [isFanHub, tab]);
 
   const creatorId = isFanHub ? auth.currentUser?.uid : undefined;
   const fanTheme = useCreatorFanHubTheme(creatorId);
@@ -69,7 +82,7 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
   const inner = (
     <>
       <div
-        className={`mb-4 flex flex-wrap gap-1 pb-2 ${
+        className={`mb-4 flex flex-wrap items-center justify-between gap-2 pb-2 ${
           isFanHub ? 'border-b' : 'border-b border-gray-200 dark:border-gray-700'
         }`}
         style={
@@ -78,42 +91,62 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
             : undefined
         }
       >
-        {tabIds.map((id) => (
-          <button
-            key={id}
-            id={isFanHub && id === 'myPage' ? 'tour-step-fanhub-mypage' : undefined}
-            type="button"
-            onClick={() => setTab(id)}
-            className={`px-3 py-2 rounded-t-md text-sm font-medium transition-colors ${
-              tab === id
-                ? isFanHub
-                  ? 'text-white shadow-sm'
-                  : 'bg-primary-600 text-white'
-                : isFanHub
-                  ? 'hover:opacity-95'
-                  : 'bg-gray-100 dark:bg-gray-700/50 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-            }`}
-            style={
-              isFanHub
-                ? tab === id
-                  ? { backgroundColor: fanTheme.primary, color: '#fff' }
-                  : isDarkMode
-                    ? {
-                        backgroundColor: `color-mix(in srgb, ${fanTheme.primary} 12%, #1e293b)`,
-                        color: '#e2e8f0',
-                        border: `1px solid color-mix(in srgb, ${fanTheme.primary} 28%, #334155)`,
-                      }
-                    : {
-                        backgroundColor: `color-mix(in srgb, ${fanTheme.primary} 10%, ${fanTheme.background})`,
-                        color: fanTheme.text,
-                        border: `1px solid color-mix(in srgb, ${fanTheme.primary} 22%, ${fanTheme.border})`,
-                      }
-                : undefined
-            }
-          >
-            {labels[id as keyof typeof labels]}
-          </button>
-        ))}
+        <div className="flex flex-wrap gap-1 min-w-0 flex-1">
+          {tabIds.map((id) => (
+            <button
+              key={id}
+              id={isFanHub && id === 'myPage' ? 'tour-step-fanhub-mypage' : undefined}
+              type="button"
+              onClick={() => setTab(id)}
+              className={`px-3 py-2 rounded-t-md text-sm font-medium transition-colors ${
+                tab === id
+                  ? isFanHub
+                    ? 'text-white shadow-sm'
+                    : 'bg-primary-600 text-white'
+                  : isFanHub
+                    ? 'hover:opacity-95'
+                    : 'bg-gray-100 dark:bg-gray-700/50 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+              }`}
+              style={
+                isFanHub
+                  ? tab === id
+                    ? { backgroundColor: fanTheme.primary, color: '#fff' }
+                    : isDarkMode
+                      ? {
+                          backgroundColor: `color-mix(in srgb, ${fanTheme.primary} 12%, #1e293b)`,
+                          color: '#e2e8f0',
+                          border: `1px solid color-mix(in srgb, ${fanTheme.primary} 28%, #334155)`,
+                        }
+                      : {
+                          backgroundColor: `color-mix(in srgb, ${fanTheme.primary} 10%, ${fanTheme.background})`,
+                          color: fanTheme.text,
+                          border: `1px solid color-mix(in srgb, ${fanTheme.primary} 22%, ${fanTheme.border})`,
+                        }
+                  : undefined
+              }
+            >
+              <span className="inline-flex items-center gap-1.5">
+                {labels[id as keyof typeof labels]}
+                {isFanHub && id === 'messages' && unreadMessagesTabCount > 0 ? (
+                  <span
+                    className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold leading-none inline-flex items-center justify-center text-white"
+                    style={{ backgroundColor: fanTheme.primary }}
+                    aria-label={`${unreadMessagesTabCount} unread messages`}
+                  >
+                    {unreadMessagesTabCount > 9 ? '9+' : unreadMessagesTabCount}
+                  </span>
+                ) : null}
+              </span>
+            </button>
+          ))}
+        </div>
+        {isFanHub ? (
+          <FanHubNotificationBell
+            accentColor={fanTheme.primary}
+            iconColor={isDarkMode ? '#e2e8f0' : fanTheme.text}
+            className="shrink-0"
+          />
+        ) : null}
       </div>
       <PremiumStudioTabContext.Provider value={{ tab, setTab }}>
         {children}

@@ -205,7 +205,7 @@ When you're ready to point stormijxo.com to Echoflux:
 
 ### Fan Hub **Users** tab empty
 
-`FanHubUsers` loads `creators/{creatorId}/fans` with `orderBy("createdAt")`. Migrated fan docs must include **`createdAt`** (newer `migrate-stormij.ts` sets it). If you migrated before that fix, re-run members only:
+`FanHubUsers` loads **`creators/{creatorId}/fans`** (no `orderBy` — docs missing `createdAt` still appear; list is sorted in the client). Migrated fan docs should include **`createdAt`** / **`subscribedAt`**. If you migrated before that fix, re-run members only:
 
 ```bash
 npm run migrate:stormij -- --creator-id=YOUR_CREATOR_ID --collection=members
@@ -213,7 +213,11 @@ npm run migrate:stormij -- --creator-id=YOUR_CREATOR_ID --collection=members
 
 Fan documents use **`users/{uid}` as doc id when `uid`/`userId` exists** on the Stormij member (better match for Stripe). Otherwise the Stormij member doc id is used.
 
-**Member fields mapped for User Management (Stormij → `creators/.../fans`):** `username` / `handle` / `instagram_handle`, `role` (`admin` / `member` / `tipper`), `subscriptionStatus` / `status`, `cancelAtPeriodEnd`, `subscriptionCurrentPeriodEnd` when present. **Signup date** in the UI uses `subscribedAt` / `createdAt` from Stormij — it is not from Stripe until you connect Stripe; odd dates usually come from source data in the old project.
+**Member fields mapped for User Management (Stormij → `creators/.../fans`):** `username` / `handle` / `instagram_handle`, **`role`** / **`userRole`** / **`isAdmin`**, `accessLevel`, `permissions` (admin detection), `subscriptionStatus` / `status`, `cancelAtPeriodEnd`, `subscriptionCurrentPeriodEnd` when present. The **Admins** section uses `parseFanMemberRoleFromFirestore` in `src/lib/fanHubDisplay.ts` (also merges role hints from **`users/{fanId}`** when the `fans` doc has no `role`). **Signup date** in the UI uses `subscribedAt` / `createdAt` from Stormij — it is not from Stripe until you connect Stripe; odd dates usually come from source data in the old project.
+
+### Fan Hub **Users** — admins show as members
+
+Re-run **members** migration so `role: "admin"` is written, or ensure each admin’s `creators/.../fans/{fanId}` doc has `role`, `userRole`, `isAdmin`, `accessLevel`, or `permissions` as in Stormij. The UI now recognizes common legacy shapes; if yours differ, extend `parseFanMemberRoleFromFirestore` in `src/lib/fanHubDisplay.ts`.
 
 ### Hero image missing on landing
 
@@ -278,11 +282,34 @@ Available collections:
 | Stormij Collection | Echoflux Location | Notes |
 |-------------------|-------------------|-------|
 | `posts` | `creators/{id}/fanPosts` | All fields preserved |
-| `treats` | `products` | Price converted to cents |
+| `treats` | `products` | Mapped to EchoFlux `TreatProduct` shape (see below) |
 | `members` | `creators/{id}/fans` | Subscriber list |
 | `purchases` | `purchases` | Transaction history |
 | `conversations` | `creators/{id}/conversations` | Includes all messages |
 | `site_config/content` | `creators/{id}` | Storefront settings |
+
+### Treats → `products` field mapping
+
+Stormij root collection `treats` is written to EchoFlux `products/{sameDocId}` with fields expected by `api/products.ts` and the Fan Hub treats UI (`title`, `priceCents`, `visible`, `sortOrder`, etc.).
+
+| EchoFlux field | Stormij / source |
+|----------------|------------------|
+| `title` | `title`, or `name`, or `label` |
+| `description` | `description`, or `body` |
+| `priceCents` | `priceCents`, `amountCents`, or `price` (see below) |
+| `type` | `type` if already an EchoFlux treat type; else inferred from doc id + title |
+| `visible` | `visible`, or `hidden` / `isHidden` / `active` |
+| `archived` | `archived`, `deleted`, `isArchived` |
+| `sortOrder` | `sortOrder`, `order`, or `position` |
+| `quantityLimit` | `quantityLimit`, `quantityTotal`, `totalQuantity`, `maxQuantity` |
+| `soldCount` | `soldCount`, `sold`, `quantitySold`, or derived from total − `quantityLeft` |
+| `mediaUrl` / `imageUrl` | `mediaUrl`, `media`, `videoUrl` / `imageUrl`, `image`, `thumbnailUrl`, `photoUrl` |
+| `durationMinutes` | `durationMinutes`, `duration` |
+| `createdAt` / `updatedAt` | Preserved from Stormij when present |
+
+**Price:** If `priceCents` (or `amountCents`) exists, it is used as-is. Otherwise `price`: fractional values (e.g. `4.99`) are treated as **dollars**; integers `0–99` as **whole dollars** (`5` → 500 cents); integers **`100+` as cents** (e.g. `499` → $4.99). If your Stormij data used a different convention, fix prices in Firebase or adjust `stormijPriceToCents` in `scripts/migrate-stormij.ts`.
+
+Re-running `--collection=treats` overwrites each `products` doc id with the latest mapping (safe to re-migrate after fixing the script).
 
 ---
 

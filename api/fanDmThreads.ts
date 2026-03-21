@@ -89,9 +89,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ threads });
   } catch (e: unknown) {
     console.error("fanDmThreads list error:", e);
+    const msg = (e as Error)?.message || String(e);
+    const missingAdmin =
+      msg.includes("FIREBASE_SERVICE_ACCOUNT_KEY_BASE64") ||
+      msg.includes("FIREBASE_ADMIN_KEY") ||
+      msg.includes("Firebase Admin");
     return res.status(500).json({
       error: "Failed to list threads",
-      details: process.env.NODE_ENV === "development" ? (e as Error)?.message : undefined,
+      details: process.env.VERCEL_ENV === "preview" || process.env.NODE_ENV === "development" ? msg : undefined,
+      hint: missingAdmin
+        ? "Add FIREBASE_SERVICE_ACCOUNT_KEY_BASE64 (or FIREBASE_ADMIN_KEY) to Vercel → Environment Variables for Preview, then redeploy. See docs/LOCAL_DEV.md"
+        : msg.includes("index") || msg.includes("FAILED_PRECONDITION")
+          ? "Deploy Firestore indexes (firebase deploy --only firestore:indexes) if this mentions a missing composite index."
+          : undefined,
     });
   }
 }

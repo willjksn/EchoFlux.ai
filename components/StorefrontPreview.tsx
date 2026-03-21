@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useMemo } from "react";
+import React, { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import type { CreatorStorefrontSettings, StorefrontSocialLinks, StorefrontLandingContent, TextStyle } from "../types";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 import {
@@ -6,6 +6,12 @@ import {
   parseObjectPositionPercentPair,
   formatObjectPositionPercentPair,
 } from "../src/lib/objectPositionPan";
+import { FanHubNotificationBell } from "./FanHubNotificationBell";
+import { auth } from "../firebaseConfig";
+import {
+  useUnreadNewMessageNotificationCount,
+  clearNewMessageNotificationBadge,
+} from "./useUnreadNewMessageNotifications";
 
 export type StorefrontHeroMediaItem = NonNullable<CreatorStorefrontSettings["heroMedia"]>[number];
 
@@ -261,6 +267,16 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
   );
   const effectiveTab = activeTab === "saved" && !memberTabs.includes("saved") ? "feed" : activeTab;
 
+  const unreadMessageTabCount = useUnreadNewMessageNotificationCount(
+    previewMode === "member" ? null : false
+  );
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (previewMode !== "member" || effectiveTab !== "messages" || !uid) return;
+    void clearNewMessageNotificationBadge(uid, null);
+  }, [previewMode, effectiveTab]);
+
   const displayName = config.displayName || config.handle || "Your name";
   const bio = config.bio ?? "";
   const avatar = config.avatar;
@@ -469,7 +485,11 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
 
   return (
     <div
-      className={`stormij-theme min-h-[400px] overflow-auto rounded-xl border border-gray-200 dark:border-gray-700 shadow-inner ${className}`}
+      className={`stormij-theme min-h-[400px] rounded-xl border border-gray-200 dark:border-gray-700 shadow-inner ${
+        previewMode === "member"
+          ? "flex flex-col overflow-hidden max-h-[min(85vh,900px)]"
+          : "overflow-auto"
+      } ${className}`}
       style={{ 
         ...themeVars,
         fontFamily: globalFont,
@@ -846,9 +866,10 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
 
       {previewMode === "member" && (
         <div
+          className="flex flex-col flex-1 min-h-0"
           style={{
             backgroundColor: background,
-            minHeight: "100%",
+            minHeight: 0,
             "--fan-primary": primary,
             "--fan-accent": primary,
             "--fan-accent-hover": accentHover,
@@ -857,9 +878,9 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
             "--fan-bg": background,
           } as React.CSSProperties}
         >
-          {/* Member Header */}
+          {/* Member Header — outside scroll so notification dropdown isn’t clipped */}
           <header 
-            className="flex items-center justify-between px-4 py-3"
+            className="flex items-center justify-between px-4 py-3 flex-shrink-0 gap-2"
             style={{ 
               background: isDark ? background : `linear-gradient(135deg, ${primary}08 0%, rgba(255, 255, 255, 0.98) 50%, ${primary}06 100%)`,
               boxShadow: isDark ? `0 6px 24px rgba(0,0,0,0.2)` : `0 6px 24px ${primary}15`,
@@ -883,46 +904,61 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
               )}
               {!logo && <span className="text-sm font-semibold" style={{ color: primary, letterSpacing: "0.01em" }}>{displayName || "My Page"}</span>}
             </div>
-            <nav className="flex items-center gap-1">
+            <nav className="flex items-center gap-1 flex-1 justify-center min-w-0 overflow-x-auto">
               {memberTabs.map((key) => (
                 <button
                   key={key}
                   type="button"
                   onClick={() => setActiveTab(key)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium transition"
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium transition flex-shrink-0"
                   style={{
                     backgroundColor: effectiveTab === key ? `${primary}15` : "transparent",
                     color: effectiveTab === key ? primary : `${textColor}99`,
                     border: effectiveTab === key ? `1px solid ${primary}30` : "1px solid transparent",
                   }}
                 >
-                  {SECTION_LABELS[key] || key}
+                  <span className="inline-flex items-center gap-1">
+                    {SECTION_LABELS[key] || key}
+                    {key === "messages" && unreadMessageTabCount > 0 ? (
+                      <span
+                        className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold leading-none inline-flex items-center justify-center text-white"
+                        style={{ backgroundColor: primary }}
+                        aria-label={`${unreadMessageTabCount} unread messages`}
+                      >
+                        {unreadMessageTabCount > 9 ? "9+" : unreadMessageTabCount}
+                      </span>
+                    ) : null}
+                  </span>
                 </button>
               ))}
             </nav>
-            {/* Profile avatar button */}
-            <button
-              type="button"
-              className="rounded-full flex items-center justify-center flex-shrink-0"
-              style={{
-                width: "32px",
-                height: "32px",
-                background: `linear-gradient(135deg, ${primary}20 0%, ${primary}40 100%)`,
-                border: `2px solid ${primary}30`,
-              }}
-              title="Profile menu"
-            >
-              {avatar ? (
-                <img src={avatar} alt="" className="w-full h-full rounded-full object-cover" style={avatarCropStyle} />
-              ) : (
-                <span style={{ fontSize: "0.75rem", fontWeight: 600, color: primary }}>
-                  {(displayName || "?")[0].toUpperCase()}
-                </span>
-              )}
-            </button>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <FanHubNotificationBell accentColor={primary} iconColor={textColor} className="storefront-preview-notify-bell" />
+              {/* Profile avatar button */}
+              <button
+                type="button"
+                className="rounded-full flex items-center justify-center flex-shrink-0"
+                style={{
+                  width: "32px",
+                  height: "32px",
+                  background: `linear-gradient(135deg, ${primary}20 0%, ${primary}40 100%)`,
+                  border: `2px solid ${primary}30`,
+                }}
+                title="Profile menu"
+              >
+                {avatar ? (
+                  <img src={avatar} alt="" className="w-full h-full rounded-full object-cover" style={avatarCropStyle} />
+                ) : (
+                  <span style={{ fontSize: "0.75rem", fontWeight: 600, color: primary }}>
+                    {(displayName || "?")[0].toUpperCase()}
+                  </span>
+                )}
+              </button>
+            </div>
           </header>
           
           {/* Content Area — matches FanStorefrontView .fan-member-content + fan-landing-feed.css */}
+          <div className="flex-1 min-h-0 overflow-auto">
           <div className="fan-member-content" style={{ maxWidth: "min(480px, 100%)" }}>
             {(effectiveTab === "home" || effectiveTab === "feed") && (
               <div className="space-y-4">
@@ -1375,6 +1411,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                 )}
               </div>
             )}
+          </div>
           </div>
         </div>
       )}

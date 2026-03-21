@@ -2,7 +2,12 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useAppContext } from "./AppContext";
 import { auth, db } from "../firebaseConfig";
 import { collection, query, getDocs, getDoc, doc, deleteDoc, addDoc, setDoc, serverTimestamp, updateDoc, where } from "firebase/firestore";
-import { formatFanDisplayLabel, initialsFromFanLabel, safeUsernameForHandle } from "../src/lib/fanHubDisplay";
+import {
+  formatFanDisplayLabel,
+  initialsFromFanLabel,
+  parseFanMemberRoleFromFirestore,
+  safeUsernameForHandle,
+} from "../src/lib/fanHubDisplay";
 import { pickLatestMemberAccessEnd, formatRemainingAccessForFanRow } from "../src/lib/memberAccessEnd";
 
 type UserRole = "admin" | "member" | "tipper";
@@ -257,11 +262,7 @@ export const FanHubUsers: React.FC = () => {
           const rawUsername = rawUsernameFromDoc
             ? rawUsernameFromDoc.replace(/^@/, "").toLowerCase()
             : null;
-          const roleRaw = typeof data.role === "string" ? data.role.toLowerCase() : "";
-          let storedRole: UserRole | null = null;
-          if (roleRaw === "admin") storedRole = "admin";
-          else if (roleRaw === "tipper") storedRole = "tipper";
-          else if (roleRaw === "member") storedRole = "member";
+          const storedRole = parseFanMemberRoleFromFirestore(data as Record<string, unknown>) as UserRole | null;
 
           userMap.set(fanId, {
             id: fanId,
@@ -425,7 +426,7 @@ export const FanHubUsers: React.FC = () => {
             try {
               const uSnap = await getDoc(doc(db, "users", fanId));
               if (!uSnap.exists()) return;
-              const u = uSnap.data() as { username?: string; displayName?: string; name?: string };
+              const u = uSnap.data() as Record<string, unknown>;
               const entry = userMap.get(fanId);
               if (!entry) return;
               const uu = safeUsernameForHandle(
@@ -439,6 +440,11 @@ export const FanHubUsers: React.FC = () => {
                 const nm = typeof u.name === "string" ? u.name.trim() : "";
                 if (dn) entry.displayName = dn;
                 else if (nm) entry.displayName = nm;
+              }
+              // Stormij sometimes stored admin/role only on `users/{uid}`, not on `fans/{uid}`
+              if (!entry.storedRole) {
+                const fromUser = parseFanMemberRoleFromFirestore(u);
+                if (fromUser) entry.storedRole = fromUser;
               }
             } catch {
               /* ignore */

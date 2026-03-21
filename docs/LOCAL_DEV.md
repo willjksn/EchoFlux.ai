@@ -63,7 +63,9 @@ Serverless routes need **Firebase Admin** (and any other secrets) in Vercel.
 
 - `FIREBASE_SERVICE_ACCOUNT_KEY_BASE64` (or `FIREBASE_ADMIN_KEY`)
 
-Redeploy Preview after saving. Check **Functions** logs for the exact error if it persists.
+When adding a variable, tick **Preview** (and **Production** as needed). Redeploy the Preview after saving. The JSON response from `/api/fanDmThreads` may include a `hint` field explaining missing Admin config or a missing Firestore index.
+
+**Note:** The browser console will **not** (and should not) contain `FIREBASE_SERVICE_ACCOUNT_KEY_BASE64`; that secret exists only on the server. A previous client warning about it was a false positive and has been removed from env validation.
 
 ### 3. Client `FirebaseError: Missing or insufficient permissions`
 
