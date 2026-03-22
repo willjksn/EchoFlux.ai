@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, Fragment, useMemo } from "react";
 import { useAppContext } from "./AppContext";
-import { auth } from "../firebaseConfig";
+import { auth, db } from "../firebaseConfig";
+import { doc, getDoc } from "firebase/firestore";
 import type { FanDmThread, FanDmMessage } from "../types";
 import VideoCallRoom from "./VideoCallRoom";
 import { useAutosizeTextarea } from "../src/hooks/useAutosizeTextarea";
@@ -179,6 +180,34 @@ export const FanHubMessages: React.FC = () => {
   const [voiceMeterKey, setVoiceMeterKey] = useState(0);
   const [threadRowMenuOpenId, setThreadRowMenuOpenId] = useState<string | null>(null);
   const [inboxActionThreadId, setInboxActionThreadId] = useState<string | null>(null);
+  /** Firestore `creators/{id}` — Auth `user` often lacks displayName for bubble headers. */
+  const [creatorBubbleProfile, setCreatorBubbleProfile] = useState<{
+    displayName?: string;
+    handle?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!creatorId) {
+      setCreatorBubbleProfile(null);
+      return;
+    }
+    let cancelled = false;
+    getDoc(doc(db, "creators", creatorId))
+      .then((snap) => {
+        if (cancelled || !snap.exists()) return;
+        const d = snap.data() as Record<string, unknown>;
+        setCreatorBubbleProfile({
+          displayName: typeof d.displayName === "string" ? d.displayName : undefined,
+          handle: typeof d.handle === "string" ? d.handle : undefined,
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setCreatorBubbleProfile(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [creatorId]);
 
   const filteredThreads = useMemo(() => {
     let t = threads;
@@ -762,8 +791,10 @@ export const FanHubMessages: React.FC = () => {
   const fanBubbleHead = formatDmBubbleAuthorLine(
     messageLabels?.fan || selectedThread?.otherPartyDisplayName || "Member"
   );
-  const creatorPrimary = formatCreatorDmBubblePrimaryLine(user?.name, user?.username);
-  const creatorSecondary = formatCreatorDmBubbleSecondaryLine(user?.name, user?.username);
+  const creatorDisplayName = creatorBubbleProfile?.displayName ?? user?.name;
+  const creatorHandle = creatorBubbleProfile?.handle ?? user?.username;
+  const creatorPrimary = formatCreatorDmBubblePrimaryLine(creatorDisplayName, creatorHandle);
+  const creatorSecondary = formatCreatorDmBubbleSecondaryLine(creatorDisplayName, creatorHandle);
 
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 stormij-theme fh-messages-hub">
@@ -880,19 +911,8 @@ export const FanHubMessages: React.FC = () => {
               </button>
             </div>
           ) : threads.length === 0 ? (
-            <div className="p-4 text-gray-500 dark:text-gray-400 text-sm space-y-2">
+            <div className="p-4 text-gray-500 dark:text-gray-400 text-sm">
               <p>No conversations yet.</p>
-              <p className="text-xs leading-relaxed opacity-90">
-                Threads show up here after a fan sends a message from your storefront, or after you migrate/sync DMs.
-                Stormij keeps DMs under <code className="text-[11px] bg-gray-100 dark:bg-gray-900 px-1 rounded">conversations</code>; Fan Hub reads{" "}
-                <code className="text-[11px] bg-gray-100 dark:bg-gray-900 px-1 rounded">fanDmThreads</code>. Run{" "}
-                <code className="text-[11px] bg-gray-100 dark:bg-gray-900 px-1 rounded">npm run sync:fan-dm-threads -- --creator-id=YOUR_UID</code>
-                {" "}(add <code className="text-[11px] bg-gray-100 dark:bg-gray-900 px-1 rounded">--source=root</code> if chats are still at the root{" "}
-                <code className="text-[11px] bg-gray-100 dark:bg-gray-900 px-1 rounded">conversations</code> collection). On localhost, set{" "}
-                <code className="text-[11px] bg-gray-100 dark:bg-gray-900 px-1 rounded">DEV_API_PROXY</code> in{" "}
-                <code className="text-[11px] bg-gray-100 dark:bg-gray-900 px-1 rounded">.env.local</code> so{" "}
-                <code className="text-[11px] bg-gray-100 dark:bg-gray-900 px-1 rounded">/api/*</code> works.
-              </p>
             </div>
           ) : filteredThreads.length === 0 ? (
             <p className="p-4 text-sm text-gray-500 dark:text-gray-400">
@@ -1052,7 +1072,7 @@ export const FanHubMessages: React.FC = () => {
                       handleStartInstantVideo(selectedThread.fanId, selectedThread.otherPartyDisplayName || "Member")
                     }
                     disabled={startingVideo}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-fuchsia-500 to-pink-500 text-white text-sm font-medium hover:from-fuchsia-600 hover:to-pink-600 disabled:opacity-50 transition"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-primary-600 to-primary-700 text-white text-sm font-medium hover:from-primary-700 hover:to-primary-800 disabled:opacity-50 transition"
                     title="Start instant video call"
                   >
                     <VideoIcon />
@@ -1079,14 +1099,16 @@ export const FanHubMessages: React.FC = () => {
                 ) : messages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center min-h-[180px] text-center px-4 text-gray-500 dark:text-gray-400 text-sm">
                     <p>No messages in this conversation yet.</p>
-                    <p className="mt-2 text-xs max-w-sm">
-                      Send a reply below, or if history is missing after a migration, confirm threads and messages exist in Firestore under{" "}
-                      <code className="text-[11px] bg-gray-100 dark:bg-gray-800 px-1 rounded">fanDmThreads</code>.
-                    </p>
+                    <p className="mt-2 text-xs max-w-sm opacity-90">Send a reply below.</p>
                   </div>
                 ) : (
                   messages.map((m, i) => {
-                    const isMe = Boolean(creatorId && m.senderId === creatorId);
+                    /** Migrated Stormij rows may use a legacy creator uid in `senderId`; treat “not fan” as creator outbound. */
+                    const isFromFan =
+                      !!selectedThread?.fanId && m.senderId === selectedThread.fanId;
+                    const isMe = selectedThread
+                      ? !isFromFan
+                      : Boolean(creatorId && m.senderId === creatorId);
                     const prev = messages[i - 1];
                     const showDayDivider =
                       !prev || formatDmDayCalendarKey(prev.createdAt) !== formatDmDayCalendarKey(m.createdAt);
@@ -1109,11 +1131,6 @@ export const FanHubMessages: React.FC = () => {
                           >
                             <div
                               className={`fh-dm-bubble ${isMe ? "fh-dm-bubble--me" : "fh-dm-bubble--them"}`}
-                              style={
-                                isMe
-                                  ? { background: "linear-gradient(135deg, #ec4899, #db2777)", color: "#fff" }
-                                  : undefined
-                              }
                             >
                               <button
                                 type="button"
