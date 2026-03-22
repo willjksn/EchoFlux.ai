@@ -10,7 +10,7 @@ import {
 } from "../src/lib/fanHubDisplay";
 import { pickLatestMemberAccessEnd, formatRemainingAccessForFanRow } from "../src/lib/memberAccessEnd";
 
-type UserRole = "admin" | "member" | "tipper";
+type UserRole = "admin" | "member" | "tipper" | "treat_buyer";
 
 interface FanUser {
   id: string;
@@ -467,9 +467,11 @@ export const FanHubUsers: React.FC = () => {
         );
         const memberUsername = data.username || null;
 
-        // Role: prefer explicit fans doc (Stormij / Add User), else infer tipper from spend
-        let role: UserRole = data.storedRole || "member";
-        if (!data.storedRole && !data.subscriptionStatus && data.tips > 0 && data.treats === 0 && data.unlocks === 0) {
+        // Role: prefer explicit fans doc (Stormij / Add User), else infer tipper / guest treat buyer
+        let role: UserRole = (data.storedRole as UserRole) || "member";
+        if (!data.storedRole && String(data.id).startsWith("guest_")) {
+          role = "treat_buyer";
+        } else if (!data.storedRole && !data.subscriptionStatus && data.tips > 0 && data.treats === 0 && data.unlocks === 0) {
           role = "tipper";
         }
 
@@ -515,13 +517,16 @@ export const FanHubUsers: React.FC = () => {
         };
       });
 
-      // Sort: admins first, then active subscribers, then by signup date
+      // Sort: admins first, then active subscribers, treat buyers, tippers, then by signup date
+      const roleRank = (r: UserRole) =>
+        r === "admin" ? 0 : r === "member" ? 1 : r === "treat_buyer" ? 2 : r === "tipper" ? 3 : 4;
       fanUsers.sort((a, b) => {
         if (a.role === "admin" && b.role !== "admin") return -1;
         if (a.role !== "admin" && b.role === "admin") return 1;
-        // Active subscribers first
         if (a.plan === "Active" && b.plan !== "Active") return -1;
         if (a.plan !== "Active" && b.plan === "Active") return 1;
+        const rr = roleRank(a.role) - roleRank(b.role);
+        if (rr !== 0) return rr;
         return b.signupDate.getTime() - a.signupDate.getTime();
       });
 
@@ -748,6 +753,7 @@ export const FanHubUsers: React.FC = () => {
   // Group users by role
   const admins = filteredUsers.filter((u) => u.role === "admin");
   const members = filteredUsers.filter((u) => u.role === "member");
+  const treatBuyers = filteredUsers.filter((u) => u.role === "treat_buyer");
   const tippers = filteredUsers.filter((u) => u.role === "tipper");
 
   // Calculate monthly totals
@@ -782,6 +788,11 @@ export const FanHubUsers: React.FC = () => {
               {fanUser.role === "admin" && (
                 <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-slate-200 text-slate-800 dark:bg-slate-600 dark:text-slate-100 rounded">
                   ADMIN
+                </span>
+              )}
+              {fanUser.role === "treat_buyer" && (
+                <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-violet-100 text-violet-900 dark:bg-violet-900/40 dark:text-violet-200 rounded">
+                  TREAT BUYER
                 </span>
               )}
             </div>
@@ -1029,6 +1040,20 @@ export const FanHubUsers: React.FC = () => {
                   </>
                 )}
 
+                {/* Treat buyers (guest checkout / pre-subscribe purchases) */}
+                <SectionHeader title="Treat buyers" count={treatBuyers.length} />
+                {treatBuyers.length > 0 ? (
+                  treatBuyers.map((fanUser) => (
+                    <UserRow key={fanUser.id} fanUser={fanUser} />
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={9} className="px-4 py-4 text-sm text-gray-500 dark:text-gray-400 italic">
+                      No treat buyers yet. They appear when someone buys a treat from your landing page before subscribing.
+                    </td>
+                  </tr>
+                )}
+
                 {/* Tippers Section */}
                 <SectionHeader title="Tippers" count={tippers.length} />
                 {tippers.length > 0 ? (
@@ -1140,11 +1165,13 @@ export const FanHubUsers: React.FC = () => {
                   <option value="member">Member (Subscriber/Fan)</option>
                   <option value="admin">Admin</option>
                   <option value="tipper">Tipper (Non-subscriber)</option>
+                  <option value="treat_buyer">Treat buyer (bought a treat without subscribing)</option>
                 </select>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   {newUserRole === "admin" && "Admins have full access to manage the fan page."}
                   {newUserRole === "member" && "Members are subscribers who pay through Stripe."}
                   {newUserRole === "tipper" && "Tippers can tip from the landing page without subscribing."}
+                  {newUserRole === "treat_buyer" && "Treat buyers purchased from your page before subscribing; they often appear automatically from guest checkout."}
                 </p>
               </div>
               <div>

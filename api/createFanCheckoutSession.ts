@@ -18,7 +18,8 @@ const PLATFORM_OWNER_IDS = (process.env.PLATFORM_OWNER_CREATOR_IDS || "").split(
  * For regular creators: Funds go to creator's Connect account with 10% platform fee.
  * For platform owners (e.g., Stormij): Funds go directly to EchoFlux, no Connect account needed.
  * 
- * Body: { creatorId, type: 'subscription' | 'product' | 'tip', productId?, subscriptionPriceCents?, amountCents?, tipHandle?, successUrl?, cancelUrl? }
+ * Body: { creatorId, type: 'subscription' | 'product' | 'tip', productId?, subscriptionPriceCents?, amountCents?, tipHandle?, successUrl?, cancelUrl?, guestProduct?: boolean }
+ * guestProduct: true → treat checkout without Firebase auth; Stripe collects email; webhook uses guest_${stripeCustomerId}.
  * 
  * Tips can be made without authentication (anonymous tippers).
  */
@@ -41,9 +42,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     tipHandle?: string;
     successUrl?: string;
     cancelUrl?: string;
+    guestProduct?: boolean;
   };
 
-  const { creatorId, type, productId, subscriptionPriceCents, amountCents, tipHandle, successUrl, cancelUrl } = body;
+  const { creatorId, type, productId, subscriptionPriceCents, amountCents, tipHandle, successUrl, cancelUrl, guestProduct } = body;
   if (!creatorId || !type) {
     return res.status(400).json({ error: "creatorId and type are required" });
   }
@@ -57,12 +59,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: "amountCents must be at least 100 ($1) for tips" });
   }
 
-  // Tips can be anonymous, subscriptions and products require authentication
+  const allowGuestProduct = type === "product" && guestProduct === true;
+
+  // Tips can be anonymous; guest treat checkout has no Firebase user (Stripe collects email).
   const decoded = await verifyAuth(req);
   const fanId = decoded?.uid || `anon_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
-  
-  // Subscriptions and products require authentication
-  if (type !== "tip" && !decoded?.uid) {
+
+  if (type !== "tip" && !decoded?.uid && !allowGuestProduct) {
     return res.status(401).json({ error: "Unauthorized - please sign in" });
   }
   const origin = (req.headers.origin || req.headers.referer || "").replace(/\/$/, "") || process.env.NEXT_PUBLIC_APP_URL || "https://echoflux.ai";
@@ -72,12 +75,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const db = getAdminDb();
 
-    if (await isFanBlocked(db, creatorId, fanId)) {
+    if (decoded?.uid && (await isFanBlocked(db, creatorId, decoded.uid))) {
       return res.status(403).json({ error: "You cannot purchase from this creator" });
     }
 
     const creatorSnap = await db.collection("creators").doc(creatorId).get();
-    const creatorData = creatorSnap.data() as { stripeConnectAccountId?: string; displayName?: string; handle?: string } | undefined;
+    const creatorData = creatorSnap.data() as {
+      stripeConnectAccountId?: string;
+      displayName?: string;
+      handle?: string;
+      publicTreatsOnLanding?: boolean;
+    } | undefined;
+
+    if (allowGuestProduct) {
+      if (!creatorData?.publicTreatsOnLanding) {
+        return res.status(403).json({ error: "Treats are not available for guest checkout on this page" });
+      }
+    }
     
     // Check if this is a platform owner (e.g., Stormij) - payments go directly to EchoFlux
     const isPlatformOwner = PLATFORM_OWNER_IDS.includes(creatorId);
@@ -150,13 +164,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!productSnap.exists) {
         return res.status(404).json({ error: "Product not found" });
       }
-      const product = productSnap.data() as { creatorId?: string; title?: string; priceCents?: number; archived?: boolean; visible?: boolean };
+      const product = productSnap.data() as {
+        creatorId?: string;
+        title?: string;
+        priceCents?: number;
+        archived?: boolean;
+        visible?: boolean;
+        showOnLandingPage?: boolean;
+        showInMemberStore?: boolean;
+      };
       if (product.creatorId !== creatorId || product.archived) {
         return res.status(404).json({ error: "Product not found" });
       }
+      if (product.visible === false) {
+        return res.status(404).json({ error: "Product not found" });
+      }
+      if (allowGuestProduct && product.showOnLandingPage === false) {
+        return res.status(404).json({ error: "Product not found" });
+      }
+      if (!allowGuestProduct && decoded?.uid && product.showInMemberStore === false) {
+        return res.status(400).json({ error: "This treat is not available in the member store" });
+      }
       const priceCents = Math.max(50, Number(product.priceCents) || 0);
       const title = product.title || "Treat";
-
       const sessionParams: Stripe.Checkout.SessionCreateParams = {
         mode: "payment",
         payment_method_types: ["card"],
@@ -166,7 +196,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               currency: "usd",
               product_data: {
                 name: title,
-                metadata: { creatorId, productId: productId!, fanId },
+                metadata: { creatorId, productId: productId!, guestProduct: allowGuestProduct ? "true" : "false" },
               },
               unit_amount: priceCents,
             },
@@ -175,14 +205,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ],
         success_url: successUrl || defaultSuccess,
         cancel_url: cancelUrl || defaultCancel,
-        client_reference_id: fanId,
+        client_reference_id: allowGuestProduct ? `landing_${Date.now()}_${Math.random().toString(36).slice(2, 9)}` : fanId,
         metadata: {
           creatorId,
-          fanId,
+          fanId: allowGuestProduct ? "guest_pending" : fanId,
           type: "product",
           productId: productId!,
           isPlatformOwner: isPlatformOwner ? "true" : "false",
+          ...(allowGuestProduct ? { guestCheckout: "true", entry: "landing_treats" } : {}),
         },
+        ...(allowGuestProduct
+          ? {
+              customer_creation: "always",
+            }
+          : {}),
         // Only add application_fee_amount for regular creators (not platform owners)
         ...(isPlatformOwner ? {} : {
           payment_intent_data: {

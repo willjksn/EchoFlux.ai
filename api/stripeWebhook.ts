@@ -8,6 +8,7 @@ import {
   upsertFanHubFanPreferenceFromMember,
   ensureFanDmThreadForMember,
 } from './_syncFanHubFanPreference.js';
+import { mergeGuestTreatPurchasesIntoUid } from './_mergeGuestFanPurchases.js';
 
 // Initialize Firebase Admin if not already initialized
 if (!getApps().length) {
@@ -80,9 +81,25 @@ async function processFanHubCheckoutSessionCompleted(
   session: Stripe.Checkout.Session,
 ): Promise<boolean> {
   const creatorId = session.metadata?.creatorId;
-  const fanId = session.metadata?.fanId || session.client_reference_id;
   const type = session.metadata?.type;
-  if (!creatorId || !fanId || !type || !FAN_HUB_CHECKOUT_TYPES.has(type)) {
+  if (!creatorId || !type || !FAN_HUB_CHECKOUT_TYPES.has(type)) {
+    return false;
+  }
+
+  const stripeCustId =
+    typeof session.customer === 'string'
+      ? session.customer
+      : (session.customer as { id?: string } | null)?.id || null;
+
+  const isGuestProductCheckout = type === 'product' && session.metadata?.guestCheckout === 'true';
+  let fanId = (session.metadata?.fanId || session.client_reference_id) as string;
+  if (isGuestProductCheckout) {
+    if (!stripeCustId) {
+      console.warn('Fan hub guest product checkout missing Stripe customer', session.id);
+      return false;
+    }
+    fanId = `guest_${stripeCustId}`;
+  } else if (!fanId || fanId === 'guest_pending') {
     return false;
   }
 
@@ -164,6 +181,16 @@ async function processFanHubCheckoutSessionCompleted(
       console.warn('ensureFanDmThreadForMember (subscription checkout):', e);
     }
 
+    try {
+      const cust =
+        typeof session.customer === 'string'
+          ? session.customer
+          : (session.customer as { id?: string } | null)?.id || null;
+      await mergeGuestTreatPurchasesIntoUid(db, creatorId, fanId, cust, now);
+    } catch (e) {
+      console.warn('mergeGuestTreatPurchasesIntoUid (subscription checkout):', e);
+    }
+
     console.log(`Fan hub: subscription checkout creator=${creatorId} fan=${fanId}`);
     return true;
   }
@@ -172,6 +199,10 @@ async function processFanHubCheckoutSessionCompleted(
     const productId = session.metadata.productId as string;
     const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : (session.payment_intent as Stripe.PaymentIntent)?.id;
     const amountTotal = session.amount_total ?? 0;
+
+    const fanEmail = session.customer_details?.email || session.metadata?.fanEmail || null;
+    const fanName = session.customer_details?.name || session.metadata?.fanName || null;
+    const isGuestFan = fanId.startsWith('guest_');
 
     const orderRef = db.collection('orders').doc();
     await orderRef.set({
@@ -183,6 +214,9 @@ async function processFanHubCheckoutSessionCompleted(
       stripePaymentIntentId: paymentIntentId || null,
       amountCents: amountTotal,
       status: 'paid',
+      fanEmail,
+      fanName,
+      ...(isGuestProductCheckout ? { guestCheckout: true } : {}),
       createdAt: now,
     });
 
@@ -194,8 +228,6 @@ async function processFanHubCheckoutSessionCompleted(
       await grantRef.set({ unlockedProductIds: [...unlocked, productId], updatedAt: now }, { merge: true });
     }
 
-    const fanEmail = session.customer_details?.email || session.metadata?.fanEmail || null;
-    const fanName = session.customer_details?.name || session.metadata?.fanName || null;
     const fanRef = db.collection('creators').doc(creatorId).collection('fans').doc(fanId);
     const fanSnap = await fanRef.get();
     if (!fanSnap.exists) {
@@ -206,6 +238,7 @@ async function processFanHubCheckoutSessionCompleted(
         displayName: fanName,
         stripeCustomerId: typeof session.customer === 'string' ? session.customer : (session.customer as any)?.id || null,
         subscriptionStatus: null,
+        ...(isGuestFan ? { role: 'treat_buyer' as const } : {}),
         lastPurchaseAt: now,
         totalSpentCents: amountTotal,
         purchaseCount: 1,
@@ -214,18 +247,26 @@ async function processFanHubCheckoutSessionCompleted(
       });
     } else {
       const fanData = fanSnap.data() as { totalSpentCents?: number; purchaseCount?: number };
-      await fanRef.update({
+      const patch: Record<string, unknown> = {
         lastPurchaseAt: now,
         totalSpentCents: (fanData.totalSpentCents || 0) + amountTotal,
         purchaseCount: (fanData.purchaseCount || 0) + 1,
         updatedAt: now,
-      });
+      };
+      if (isGuestFan) {
+        patch.role = 'treat_buyer';
+        if (fanEmail) patch.email = fanEmail;
+        if (fanName) patch.displayName = fanName;
+      }
+      await fanRef.update(patch);
     }
 
-    try {
-      await upsertFanHubFanPreferenceFromMember(db, creatorId, fanId, now, 'stripe_product');
-    } catch (e) {
-      console.error('syncFanHubFanPreference (product):', e);
+    if (!isGuestFan) {
+      try {
+        await upsertFanHubFanPreferenceFromMember(db, creatorId, fanId, now, 'stripe_product');
+      } catch (e) {
+        console.error('syncFanHubFanPreference (product):', e);
+      }
     }
 
     const statsRef = db.collection('creatorStats').doc(creatorId);

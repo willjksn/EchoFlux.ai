@@ -142,6 +142,7 @@ function normalizeForCompare(a: Partial<CreatorStorefrontSettings>): string {
     rules: a.rules ?? {},
     monetization: a.monetization ?? {},
     textStyles: a.textStyles ?? {},
+    publicTreatsOnLanding: a.publicTreatsOnLanding === true,
   });
 }
 
@@ -681,6 +682,7 @@ export const MyPageBuilder: React.FC = () => {
         monetization: draft.monetization,
         textStyles: draft.textStyles,
         onboardingStatus: draft.onboardingStatus,
+        publicTreatsOnLanding: draft.publicTreatsOnLanding === true,
       };
       console.log("[MyPageBuilder] Saving payload:", payload);
       const token = auth.currentUser ? await auth.currentUser.getIdToken(true) : null;
@@ -1847,11 +1849,36 @@ export const MyPageBuilder: React.FC = () => {
                   <input
                     type="checkbox"
                     checked={draft.sections?.[key] ?? true}
-                    onChange={(e) => updateDraft({ sections: { ...draft.sections, ...DEFAULT_SECTIONS, [key]: e.target.checked } })}
+                    onChange={(e) => {
+                      const v = e.target.checked;
+                      if (key === "treats" && !v) {
+                        updateDraft({
+                          sections: { ...draft.sections, ...DEFAULT_SECTIONS, treats: false },
+                          publicTreatsOnLanding: false,
+                        });
+                      } else {
+                        updateDraft({ sections: { ...draft.sections, ...DEFAULT_SECTIONS, [key]: v } });
+                      }
+                    }}
                     className="rounded border-gray-300 dark:border-gray-600 text-primary-600"
                   />
                 </label>
               ))}
+              <label className="flex items-center justify-between gap-3 cursor-pointer group pt-2 border-t border-gray-200 dark:border-gray-600">
+                <div>
+                  <span className="text-sm text-gray-700 dark:text-gray-300">Show treats on public landing</span>
+                  <p className="text-xs text-gray-400 dark:text-gray-500">
+                    Lets visitors buy visible treats without signing in (Stripe collects email). Requires Treats enabled above.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={draft.publicTreatsOnLanding === true}
+                  disabled={draft.sections?.treats === false}
+                  onChange={(e) => updateDraft({ publicTreatsOnLanding: e.target.checked })}
+                  className="rounded border-gray-300 dark:border-gray-600 text-primary-600 disabled:opacity-40"
+                />
+              </label>
             </div>
           </CollapsibleSection>
 

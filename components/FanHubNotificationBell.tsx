@@ -41,6 +41,10 @@ export type FanHubNotificationBellProps = {
   /** Text/icon color for member header contrast */
   iconColor?: string;
   className?: string;
+  /**
+   * Smaller icon + padding + stroke to align with compact nav chrome (e.g. My Page preview tabs).
+   */
+  compact?: boolean;
 };
 
 function createdAtMs(data: Record<string, unknown>): number {
@@ -73,6 +77,7 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
   accentColor,
   iconColor,
   className = "",
+  compact = false,
 }) => {
   const [uid, setUid] = useState<string | null>(() => auth.currentUser?.uid ?? null);
   const [open, setOpen] = useState(false);
@@ -162,23 +167,34 @@ export const FanHubNotificationBell: React.FC<FanHubNotificationBellProps> = ({
     color: iconColor || "var(--fan-text, #6f4858)",
   } as React.CSSProperties;
 
+  const btnPad = compact ? "p-1.5" : "p-2";
+  const iconClass = compact ? "h-4 w-4" : "h-5 w-5";
+  const strokeW = compact ? 1.5 : 2;
+  const ringClass = compact
+    ? "focus-visible:ring-1 focus-visible:ring-offset-0"
+    : "focus-visible:ring-2 focus-visible:ring-offset-1";
+
   return (
     <div className={`relative ${className}`} ref={wrapRef}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="relative inline-flex items-center justify-center rounded-lg p-2 transition hover:bg-black/5 dark:hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+        className={`relative inline-flex items-center justify-center rounded-lg ${btnPad} transition hover:bg-black/5 dark:hover:bg-white/10 focus:outline-none focus-visible:ring-primary-500/40 dark:focus-visible:ring-primary-400/50 ${ringClass}`}
         style={bellStyle}
         aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"}
         title="Notifications"
       >
-        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+        <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeW} aria-hidden>
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
         </svg>
         {unread > 0 ? (
           <span
-            className="absolute -top-0.5 -right-0.5 min-w-[1.1rem] h-[1.1rem] px-0.5 rounded-full text-[10px] font-bold text-white flex items-center justify-center"
+            className={`absolute rounded-full font-bold text-white flex items-center justify-center ${
+              compact
+                ? "-top-0.5 -right-0.5 min-w-[0.95rem] h-[0.95rem] px-[2px] text-[9px] leading-none"
+                : "-top-0.5 -right-0.5 min-w-[1.1rem] h-[1.1rem] px-0.5 text-[10px]"
+            }`}
             style={{ backgroundColor: accentColor || "var(--fan-primary, #d4558b)" }}
           >
             {unread > 9 ? "9+" : unread}

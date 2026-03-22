@@ -79,6 +79,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       rules: body.rules !== undefined ? body.rules : existingData?.rules,
       monetization: body.monetization !== undefined ? body.monetization : existingData?.monetization,
       onboardingStatus: body.onboardingStatus !== undefined ? body.onboardingStatus : existingData?.onboardingStatus,
+      publicTreatsOnLanding:
+        body.publicTreatsOnLanding !== undefined ? body.publicTreatsOnLanding : existingData?.publicTreatsOnLanding,
       updatedAt: new Date().toISOString(),
     };
 

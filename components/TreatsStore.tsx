@@ -31,6 +31,15 @@ function treatProductToPriceDollarString(product: TreatProduct | null | undefine
   return (n / 100).toFixed(2);
 }
 
+/** Firestore rejects `undefined` in update payloads. */
+function firestoreSafePatch(raw: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (v !== undefined) out[k] = v;
+  }
+  return out;
+}
+
 function treatProductQuantityString(product: TreatProduct | null | undefined): string {
   if (product == null) return "";
   const q = product.quantityLimit;
@@ -62,6 +71,8 @@ function firestoreDocToTreatProduct(d: QueryDocumentSnapshot): TreatProduct {
     imageUrl: typeof x.imageUrl === "string" ? x.imageUrl : undefined,
     archived: !!x.archived,
     visible: x.visible !== false,
+    showOnLandingPage: x.showOnLandingPage !== false,
+    showInMemberStore: x.showInMemberStore !== false,
     sortOrder: typeof x.sortOrder === "number" ? x.sortOrder : undefined,
     quantityLimit: typeof x.quantityLimit === "number" ? x.quantityLimit : undefined,
     soldCount: typeof x.soldCount === "number" ? x.soldCount : undefined,
@@ -130,45 +141,6 @@ const SettingsIcon = () => (
   </svg>
 );
 
-// Default images by treat type - auto-assigned when no custom image is set
-const DEFAULT_TREAT_IMAGES: Record<string, string> = {
-  // Video calls - pink/romantic aesthetic
-  live_video_5m: "https://images.unsplash.com/photo-1596558450268-9c27524ba856?w=400&h=300&fit=crop",
-  live_video_10m: "https://images.unsplash.com/photo-1596558450268-9c27524ba856?w=400&h=300&fit=crop",
-  live_video_15m: "https://images.unsplash.com/photo-1596558450268-9c27524ba856?w=400&h=300&fit=crop",
-  live_video_30m: "https://images.unsplash.com/photo-1596558450268-9c27524ba856?w=400&h=300&fit=crop",
-  live_video_45m: "https://images.unsplash.com/photo-1596558450268-9c27524ba856?w=400&h=300&fit=crop",
-  live_video_60m: "https://images.unsplash.com/photo-1596558450268-9c27524ba856?w=400&h=300&fit=crop",
-  // Live chat - cozy texting vibe
-  live_chat_5m: "https://images.unsplash.com/photo-1534536281715-e28d76689b4d?w=400&h=300&fit=crop",
-  live_chat_15m: "https://images.unsplash.com/photo-1534536281715-e28d76689b4d?w=400&h=300&fit=crop",
-  live_chat_30m: "https://images.unsplash.com/photo-1534536281715-e28d76689b4d?w=400&h=300&fit=crop",
-  live_chat_45m: "https://images.unsplash.com/photo-1534536281715-e28d76689b4d?w=400&h=300&fit=crop",
-  live_chat_60m: "https://images.unsplash.com/photo-1534536281715-e28d76689b4d?w=400&h=300&fit=crop",
-  live_chat_1h: "https://images.unsplash.com/photo-1534536281715-e28d76689b4d?w=400&h=300&fit=crop",
-  // Voice notes - pink neon aesthetic
-  voice_note_30s: "https://images.unsplash.com/photo-1614680376593-902f74cf0d41?w=400&h=300&fit=crop",
-  voice_note_60s: "https://images.unsplash.com/photo-1614680376593-902f74cf0d41?w=400&h=300&fit=crop",
-  // Private video reply - pink heart/love aesthetic
-  private_video_reply: "https://images.unsplash.com/photo-1518199266791-5375a83190b7?w=400&h=300&fit=crop",
-  // Chat session
-  chat_session: "https://images.unsplash.com/photo-1516321165247-4aa89a48be28?w=400&h=300&fit=crop",
-  // Birthday message - celebration themed
-  birthday_message: "https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=400&h=300&fit=crop",
-  // Overthinking response - thoughtful/cozy
-  overthinking_response: "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=400&h=300&fit=crop",
-  // Random checkin - surprise/hello
-  random_checkin: "https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=400&h=300&fit=crop",
-  // Tips - heart/appreciation themed
-  tip: "https://images.unsplash.com/photo-1518568814500-bf0f8d125f46?w=400&h=300&fit=crop",
-  // Unlock media - lock/exclusive
-  unlock_media: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=300&fit=crop",
-  // Bundle - gift/package
-  bundle: "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=400&h=300&fit=crop",
-  // Custom - sparkle/special
-  custom: "https://images.unsplash.com/photo-1513151233558-d860c5398176?w=400&h=300&fit=crop",
-};
-
 export const TreatsStore: React.FC = () => {
   const { user, showToast } = useAppContext();
   /** Align with API / Firestore rules (Firebase uid). */
@@ -180,6 +152,8 @@ export const TreatsStore: React.FC = () => {
   const [editing, setEditing] = useState<TreatProduct | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  /** Row-level PATCH (publish / placement) so other cards don’t disable or flash. */
+  const [patchingId, setPatchingId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("fan");
   const [purchaseLoading, setPurchaseLoading] = useState<string | null>(null);
@@ -187,10 +161,13 @@ export const TreatsStore: React.FC = () => {
   const [scheduledTreats, setScheduledTreats] = useState<ScheduledPurchase[]>([]);
   const [upcomingSessions, setUpcomingSessions] = useState<UpcomingSession[]>([]);
 
-  const fetchProducts = useCallback(async () => {
+  const fetchProducts = useCallback(async (opts?: { quiet?: boolean }) => {
     if (!creatorId) return;
-    setLoading(true);
-    setTreatsDataReady(false);
+    const quiet = opts?.quiet === true;
+    if (!quiet) {
+      setLoading(true);
+      setTreatsDataReady(false);
+    }
     try {
       // Avoid getIdToken(true) here — forced refresh adds seconds on every Treats tab visit.
       const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
@@ -228,8 +205,10 @@ export const TreatsStore: React.FC = () => {
         setProducts([]);
       }
     } finally {
-      setLoading(false);
-      setTreatsDataReady(true);
+      if (!quiet) {
+        setLoading(false);
+        setTreatsDataReady(true);
+      }
     }
   }, [creatorId]);
 
@@ -330,6 +309,8 @@ export const TreatsStore: React.FC = () => {
       priceCents: number;
       mediaUrl?: string;
       visible: boolean;
+      showOnLandingPage?: boolean;
+      showInMemberStore?: boolean;
       quantityLimit?: number;
     }) => {
       if (!db || !creatorId || !auth.currentUser) return false;
@@ -344,6 +325,8 @@ export const TreatsStore: React.FC = () => {
         imageUrl: null,
         archived: false,
         visible: payload.visible,
+        showOnLandingPage: payload.showOnLandingPage !== false,
+        showInMemberStore: payload.showInMemberStore !== false,
         sortOrder: 0,
         soldCount: 0,
         createdAt: now,
@@ -365,6 +348,8 @@ export const TreatsStore: React.FC = () => {
     priceCents: number;
     mediaUrl?: string;
     visible: boolean;
+    showOnLandingPage?: boolean;
+    showInMemberStore?: boolean;
     quantityLimit?: number;
   }) => {
     if (!creatorId) return;
@@ -377,6 +362,8 @@ export const TreatsStore: React.FC = () => {
       priceCents: payload.priceCents,
       mediaUrl: payload.mediaUrl,
       visible: payload.visible,
+      showOnLandingPage: payload.showOnLandingPage !== false,
+      showInMemberStore: payload.showInMemberStore !== false,
       quantityLimit: payload.quantityLimit,
     });
 
@@ -427,9 +414,24 @@ export const TreatsStore: React.FC = () => {
 
   const handleUpdate = async (
     productId: string,
-    updates: Partial<{ title: string; description: string; priceCents: number; mediaUrl: string; imageUrl: string; visible: boolean; archived: boolean; type: TreatProductType; quantityLimit: number }>
+    updates: Partial<{
+      title: string;
+      description: string;
+      priceCents: number;
+      mediaUrl: string;
+      imageUrl: string;
+      visible: boolean;
+      showOnLandingPage: boolean;
+      showInMemberStore: boolean;
+      archived: boolean;
+      type: TreatProductType;
+      quantityLimit: number;
+    }>,
+    options?: { useGlobalSaving?: boolean }
   ) => {
-    setSaving(true);
+    const useGlobalSaving = options?.useGlobalSaving !== false;
+    if (useGlobalSaving) setSaving(true);
+    else setPatchingId(productId);
     try {
       const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       let res: Response;
@@ -444,35 +446,43 @@ export const TreatsStore: React.FC = () => {
         });
       } catch {
         if (db) {
-          const patch: Record<string, unknown> = { ...updates, updatedAt: new Date().toISOString() };
+          const patch = firestoreSafePatch({ ...updates, updatedAt: new Date().toISOString() });
           await updateDoc(doc(db, "products", productId), patch);
-          showToast?.("Updated (direct database — API unreachable)", "success");
+          if (useGlobalSaving) showToast?.("Updated (direct database — API unreachable)", "success");
           setEditing(null);
-          void fetchProducts();
+          void fetchProducts({ quiet: !useGlobalSaving });
           return;
         }
         throw new Error("Network error");
       }
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        showToast?.("Updated", "success");
+      const data = (await res.json().catch(() => ({}))) as { product?: TreatProduct; error?: string };
+      if (res.ok && data.product) {
+        setProducts((prev) => prev.map((pr) => (pr.id === productId ? { ...pr, ...data.product! } : pr)));
+        if (useGlobalSaving) showToast?.("Updated", "success");
         setEditing(null);
-        void fetchProducts();
+        return;
+      }
+      if (res.ok) {
+        void fetchProducts({ quiet: true });
+        if (useGlobalSaving) showToast?.("Updated", "success");
+        setEditing(null);
         return;
       }
       if (res.status === 404 && db) {
-        const patch: Record<string, unknown> = { ...updates, updatedAt: new Date().toISOString() };
+        const patch = firestoreSafePatch({ ...updates, updatedAt: new Date().toISOString() });
         await updateDoc(doc(db, "products", productId), patch);
-        showToast?.("Updated (direct database)", "success");
+        if (useGlobalSaving) showToast?.("Updated (direct database)", "success");
         setEditing(null);
-        void fetchProducts();
+        void fetchProducts({ quiet: true });
         return;
       }
-      throw new Error((data as { error?: string }).error || "Failed to update");
+      throw new Error(data.error || "Failed to update");
     } catch (e) {
       showToast?.(e instanceof Error ? e.message : "Failed to update", "error");
+      void fetchProducts({ quiet: true });
     } finally {
       setSaving(false);
+      setPatchingId(null);
     }
   };
 
@@ -491,7 +501,7 @@ export const TreatsStore: React.FC = () => {
           await deleteDoc(doc(db, "products", productId));
           showToast?.("Product deleted (direct database)", "success");
           setEditing(null);
-          void fetchProducts();
+          void fetchProducts({ quiet: true });
           return;
         }
         throw new Error("Network error");
@@ -499,14 +509,14 @@ export const TreatsStore: React.FC = () => {
       if (res.ok) {
         showToast?.("Product deleted", "success");
         setEditing(null);
-        void fetchProducts();
+        void fetchProducts({ quiet: true });
         return;
       }
       if (res.status === 404 && db) {
         await deleteDoc(doc(db, "products", productId));
         showToast?.("Product deleted (direct database)", "success");
         setEditing(null);
-        void fetchProducts();
+        void fetchProducts({ quiet: true });
         return;
       }
       const data = await res.json().catch(() => ({}));
@@ -547,7 +557,10 @@ export const TreatsStore: React.FC = () => {
     return filtered;
   }, [products, showArchived]);
 
-  const visibleProducts = useMemo(() => products.filter((p) => !p.archived && p.visible), [products]);
+  const visibleProducts = useMemo(
+    () => products.filter((p) => !p.archived && p.visible && p.showInMemberStore !== false),
+    [products]
+  );
 
   // Use actual products only - no demo data
   const displayTreats = visibleProducts;
@@ -718,14 +731,13 @@ export const TreatsStore: React.FC = () => {
       ) : (
         <>
           <div className="treats-manage-toolbar">
-            <label className="treats-archive-toggle">
-              <input
-                type="checkbox"
-                checked={showArchived}
-                onChange={(e) => setShowArchived(e.target.checked)}
-              />
-              Show archived
-            </label>
+            <button
+              type="button"
+              className={`treats-archive-btn${showArchived ? " treats-archive-btn--active" : ""}`}
+              onClick={() => setShowArchived((v) => !v)}
+            >
+              {showArchived ? "Hide archived" : "Show archived"}
+            </button>
             <button
               type="button"
               className="treats-add-btn"
@@ -763,7 +775,6 @@ export const TreatsStore: React.FC = () => {
                             title: payload.title,
                             description: payload.description,
                             priceCents: payload.priceCents,
-                            mediaUrl: payload.mediaUrl,
                             imageUrl: payload.imageUrl,
                             visible: payload.visible,
                             quantityLimit: payload.quantityLimit,
@@ -787,31 +798,83 @@ export const TreatsStore: React.FC = () => {
                           </div>
                           {p.description && <p className="treat-manage-card-desc">{p.description}</p>}
                         </div>
-                        <div className="treat-manage-card-actions">
-                          <button
-                            type="button"
-                            className="treat-manage-btn"
-                            onClick={() => handleUpdate(p.id, { visible: !p.visible })}
+                        <div className="treat-manage-card-right">
+                          <div className="treat-manage-card-actions treat-manage-card-actions--row">
+                            <button
+                              type="button"
+                              className="treat-manage-btn"
+                              disabled={patchingId === p.id}
+                              onClick={() =>
+                                void handleUpdate(p.id, { visible: !p.visible }, { useGlobalSaving: false })
+                              }
+                            >
+                              {p.visible ? "Unpublish" : "Publish"}
+                            </button>
+                            <button
+                              type="button"
+                              className="treat-manage-btn"
+                              disabled={patchingId === p.id}
+                              onClick={() => {
+                                setShowForm(false);
+                                setEditing(p);
+                              }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="treat-manage-btn danger"
+                              disabled={patchingId === p.id}
+                              onClick={() => handleDelete(p.id)}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                          <div
+                            className={`treat-manage-placement${!p.visible ? " treat-manage-placement--disabled" : ""}`}
+                            aria-disabled={!p.visible}
                           >
-                            {p.visible ? "Hide" : "Show"}
-                          </button>
-                          <button
-                            type="button"
-                            className="treat-manage-btn"
-                            onClick={() => {
-                              setShowForm(false);
-                              setEditing(p);
-                            }}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            className="treat-manage-btn danger"
-                            onClick={() => handleDelete(p.id)}
-                          >
-                            Delete
-                          </button>
+                            <span className="treat-manage-placement-label">Show where</span>
+                            <div className="treat-manage-toggle-row">
+                              <button
+                                type="button"
+                                className={`treat-manage-toggle${p.showOnLandingPage !== false ? " treat-manage-toggle--on" : ""}`}
+                                disabled={!p.visible || patchingId === p.id}
+                                onClick={() =>
+                                  void handleUpdate(
+                                    p.id,
+                                    { showOnLandingPage: !(p.showOnLandingPage !== false) },
+                                    { useGlobalSaving: false }
+                                  )
+                                }
+                              >
+                                Landing store
+                                <span className="treat-manage-toggle-state">
+                                  {p.showOnLandingPage !== false ? "On" : "Off"}
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                className={`treat-manage-toggle${p.showInMemberStore !== false ? " treat-manage-toggle--on" : ""}`}
+                                disabled={!p.visible || patchingId === p.id}
+                                onClick={() =>
+                                  void handleUpdate(
+                                    p.id,
+                                    { showInMemberStore: !(p.showInMemberStore !== false) },
+                                    { useGlobalSaving: false }
+                                  )
+                                }
+                              >
+                                Member tab
+                                <span className="treat-manage-toggle-state">
+                                  {p.showInMemberStore !== false ? "On" : "Off"}
+                                </span>
+                              </button>
+                            </div>
+                            {!p.visible ? (
+                              <p className="treat-manage-placement-hint">Publish the treat to choose where it appears.</p>
+                            ) : null}
+                          </div>
                         </div>
                       </>
                     )}
@@ -845,7 +908,6 @@ const InlineEditForm: React.FC<{
     title: string;
     description?: string;
     priceCents: number;
-    mediaUrl?: string;
     imageUrl?: string;
     visible: boolean;
     quantityLimit?: number;
@@ -873,8 +935,6 @@ const InlineEditForm: React.FC<{
     }
     if (/^\d+$/.test(raw)) setQuantityLimit(raw);
   };
-
-  const defaultImage = DEFAULT_TREAT_IMAGES[product.type];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -924,18 +984,13 @@ const InlineEditForm: React.FC<{
         />
       </div>
       <div className="treat-inline-field">
-        <label>Card Image URL {defaultImage && "(leave blank for default)"}</label>
+        <label>Card image URL (optional)</label>
         <input
           type="url"
           value={imageUrl}
           onChange={(e) => setImageUrl(e.target.value)}
-          placeholder={defaultImage ? "Using default image for this type" : "https://example.com/image.jpg"}
+          placeholder="https://…"
         />
-        {(imageUrl || defaultImage) && (
-          <div className="treat-image-preview">
-            <img src={imageUrl || defaultImage} alt="Preview" />
-          </div>
-        )}
       </div>
       <div className="treat-inline-field">
         <label>Quantity left (decremented on each purchase)</label>
@@ -969,6 +1024,8 @@ const ProductForm: React.FC<{
     priceCents: number;
     mediaUrl?: string;
     visible: boolean;
+    showOnLandingPage?: boolean;
+    showInMemberStore?: boolean;
     quantityLimit?: number;
   }) => Promise<void>;
   onClose: () => void;

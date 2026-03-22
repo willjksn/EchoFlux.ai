@@ -790,6 +790,43 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
             </div>
           </section>
 
+          {config.publicTreatsOnLanding === true && sections.treats !== false && (
+            <section className="px-4 py-3 storefront-preview-treats-section">
+              <div
+                className="rounded-2xl p-4 text-center"
+                style={{
+                  border: `1px solid ${primary}25`,
+                  background: isDark
+                    ? `linear-gradient(160deg, rgba(0,0,0,0.35) 0%, ${primary}12 100%)`
+                    : `linear-gradient(160deg, #fffef9 0%, ${primary}0d 100%)`,
+                  boxShadow: `0 8px 28px ${primary}12`,
+                }}
+              >
+                <p className="text-lg m-0 mb-1" aria-hidden>
+                  ✨
+                </p>
+                <h3 className="text-sm font-semibold m-0 mb-1" style={{ color: textColor }}>
+                  Want something sweet?
+                </h3>
+                <p className="text-xs leading-relaxed m-0 mb-3" style={{ color: `${textColor}aa` }}>
+                  Come by the treat shop — little extras, surprises, and picks just for you.
+                </p>
+                <button
+                  type="button"
+                  className="w-full py-2.5 rounded-xl text-sm font-semibold text-white cursor-default pointer-events-none"
+                  style={{
+                    background: `linear-gradient(135deg, ${primary} 0%, ${primary}dd 100%)`,
+                    boxShadow: `0 4px 14px ${primary}40`,
+                  }}
+                  disabled
+                  aria-label="Preview: shop treats button"
+                >
+                  Shop treats
+                </button>
+              </div>
+            </section>
+          )}
+
           {/* Tip Section */}
           <section className="px-4 pb-6 pt-2">
             <div className="pt-6 border-t text-center" style={{ borderColor: `${primary}20` }}>
@@ -933,7 +970,12 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
               ))}
             </nav>
             <div className="flex items-center gap-1.5 flex-shrink-0">
-              <FanHubNotificationBell accentColor={primary} iconColor={textColor} className="storefront-preview-notify-bell" />
+              <FanHubNotificationBell
+                accentColor={primary}
+                iconColor={`${textColor}99`}
+                compact
+                className="storefront-preview-notify-bell"
+              />
               {/* Profile avatar button */}
               <button
                 type="button"

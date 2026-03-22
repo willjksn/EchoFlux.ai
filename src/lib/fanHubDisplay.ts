@@ -318,7 +318,7 @@ export function fanHubInitials(
 }
 
 /** Role stored on `creators/{creatorId}/fans/{fanId}` (Stormij, Stripe, manual). */
-export type FanHubStoredRole = "admin" | "member" | "tipper";
+export type FanHubStoredRole = "admin" | "member" | "tipper" | "treat_buyer";
 
 /**
  * Normalize admin/member/tipper from a Firestore fan (or Stormij member) document.
@@ -345,6 +345,7 @@ export function parseFanMemberRoleFromFirestore(data: Record<string, unknown>): 
     return "admin";
   }
   if (roleStr === "tipper") return "tipper";
+  if (roleStr === "treat_buyer" || roleStr === "treat buyer") return "treat_buyer";
   if (roleStr === "member") return "member";
 
   const access = s(data.accessLevel) || s(data.access_level);

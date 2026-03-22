@@ -20,6 +20,8 @@ function toProduct(doc: FirebaseFirestore.DocumentSnapshot): TreatProduct {
     imageUrl: d.imageUrl as string | undefined,
     archived: !!(d.archived as boolean),
     visible: d.visible !== false,
+    showOnLandingPage: d.showOnLandingPage !== false,
+    showInMemberStore: d.showInMemberStore !== false,
     sortOrder: d.sortOrder as number | undefined,
     quantityLimit: typeof q === "number" ? q : undefined,
     soldCount: typeof s === "number" ? s : undefined,
@@ -59,6 +61,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let products = snap.docs.map((doc) => toProduct(doc));
       if (!isCreator) {
         products = products.filter((p) => p.visible);
+        const ctx = typeof req.query.context === "string" ? req.query.context : "";
+        if (ctx === "landing") {
+          products = products.filter((p) => p.showOnLandingPage !== false);
+        } else if (ctx === "member") {
+          products = products.filter((p) => p.showInMemberStore !== false);
+        }
       }
       // Sort client-side: by sortOrder (ascending), then createdAt (descending)
       products.sort((a, b) => {
@@ -98,6 +106,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const mediaUrl = typeof body.mediaUrl === "string" ? body.mediaUrl.trim() : undefined;
     const imageUrl = typeof body.imageUrl === "string" ? body.imageUrl.trim() : undefined;
     const visible = body.visible !== false;
+    const showOnLandingPage = body.showOnLandingPage !== false;
+    const showInMemberStore = body.showInMemberStore !== false;
     const quantityLimit =
       typeof body.quantityLimit === "number" && body.quantityLimit >= 0
         ? Math.floor(body.quantityLimit)
@@ -160,6 +170,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (body.mediaUrl !== undefined) updates.mediaUrl = body.mediaUrl === "" ? null : body.mediaUrl;
       if (typeof body.archived === "boolean") updates.archived = body.archived;
       if (typeof body.visible === "boolean") updates.visible = body.visible;
+      if (typeof body.showOnLandingPage === "boolean") updates.showOnLandingPage = body.showOnLandingPage;
+      if (typeof body.showInMemberStore === "boolean") updates.showInMemberStore = body.showInMemberStore;
       if (typeof body.sortOrder === "number") updates.sortOrder = body.sortOrder;
       if (typeof body.type === "string") updates.type = body.type;
       if (body.quantityLimit !== undefined) {

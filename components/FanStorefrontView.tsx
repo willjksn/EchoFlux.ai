@@ -52,6 +52,8 @@ export type StorefrontCreator = {
   heroLayout?: "default" | "centered" | "split" | "splitRight";
   sections: { feed: boolean; treats: boolean; tip?: boolean; messages: boolean; about?: boolean };
   sectionsOrder?: string[];
+  /** Guest-visible treats on public landing (no sign-in). */
+  publicTreatsOnLanding?: boolean;
   rules?: { boundariesText?: string };
   spicyMode?: boolean;
   monetization?: CreatorMonetization;
@@ -285,6 +287,11 @@ export const FanStorefrontView: React.FC = () => {
   const [unlockedProductIds, setUnlockedProductIds] = useState<string[]>([]);
   const [treatsProducts, setTreatsProducts] = useState<TreatProduct[]>([]);
   const [treatsLoading, setTreatsLoading] = useState(false);
+  /** Visible treats on public landing when creator enables guest checkout */
+  const [landingTreatsProducts, setLandingTreatsProducts] = useState<TreatProduct[]>([]);
+  const [landingTreatsLoading, setLandingTreatsLoading] = useState(false);
+  const [guestTreatPurchasingId, setGuestTreatPurchasingId] = useState<string | null>(null);
+  const [treatLinkMessage, setTreatLinkMessage] = useState<string | null>(null);
   const [purchasingId, setPurchasingId] = useState<string | null>(null);
   const [subscribing, setSubscribing] = useState(false);
   const [joiningFree, setJoiningFree] = useState(false);
@@ -303,6 +310,9 @@ export const FanStorefrontView: React.FC = () => {
   const [dmVoiceMeterStream, setDmVoiceMeterStream] = useState<MediaStream | null>(null);
   const [dmVoiceMeterKey, setDmVoiceMeterKey] = useState(0);
   const [fanBanned, setFanBanned] = useState(false);
+
+  const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+  const previewMember = urlParams?.get("preview") === "member";
 
   const unreadMessageTabCount = useUnreadNewMessageNotificationCount(
     isLoggedIn && creator ? creator.creatorId : false
@@ -403,7 +413,9 @@ export const FanStorefrontView: React.FC = () => {
     if (!creator?.creatorId) return;
     setTreatsLoading(true);
     try {
-      const res = await fetch(`/api/products?creatorId=${encodeURIComponent(creator.creatorId)}`);
+      const res = await fetch(
+        `/api/products?creatorId=${encodeURIComponent(creator.creatorId)}&context=member`
+      );
       if (!res.ok) return;
       const data = await res.json();
       setTreatsProducts(Array.isArray(data.products) ? data.products : []);
@@ -417,6 +429,135 @@ export const FanStorefrontView: React.FC = () => {
   useEffect(() => {
     if (activeTab === "treats" && creator?.creatorId) fetchTreats();
   }, [activeTab, creator?.creatorId, fetchTreats]);
+
+  const onPublicLanding =
+    !previewMember && (!isLoggedIn || !subscribed);
+
+  useEffect(() => {
+    if (
+      !creator?.creatorId ||
+      !creator.publicTreatsOnLanding ||
+      creator.sections?.treats === false ||
+      !onPublicLanding
+    ) {
+      if (!onPublicLanding) setLandingTreatsProducts([]);
+      return;
+    }
+    let cancelled = false;
+    setLandingTreatsLoading(true);
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/products?creatorId=${encodeURIComponent(creator.creatorId)}&context=landing`
+        );
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (!cancelled) {
+          setLandingTreatsProducts(Array.isArray(data.products) ? data.products : []);
+        }
+      } catch {
+        if (!cancelled) setLandingTreatsProducts([]);
+      } finally {
+        if (!cancelled) setLandingTreatsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    creator?.creatorId,
+    creator?.publicTreatsOnLanding,
+    creator?.sections?.treats,
+    onPublicLanding,
+  ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !creator?.creatorId || !isLoggedIn || !auth.currentUser) return;
+    const params = new URLSearchParams(window.location.search);
+    const sid = params.get("session_id");
+    const ok = params.get("treat_success") === "1";
+    if (!sid || !ok) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await auth.currentUser!.getIdToken(true);
+        const res = await fetch("/api/claimGuestPurchase", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ sessionId: sid }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (res.ok) {
+          const merged = (data as { merged?: boolean }).merged;
+          setTreatLinkMessage(
+            merged
+              ? "Your purchase is linked to your account. You can subscribe anytime for full member access."
+              : "You're all set — this purchase was already on your account."
+          );
+          const gen = ++entitlementFetchGen.current;
+          try {
+            const entRes = await fetch(
+              `/api/getFanEntitlement?creatorId=${encodeURIComponent(creator.creatorId)}`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            const ent = await entRes.json().catch(() => ({}));
+            if (gen === entitlementFetchGen.current) {
+              setSubscribed(!!(ent as { subscribed?: boolean }).subscribed);
+              setUnlockedProductIds(
+                Array.isArray((ent as { unlockedProductIds?: string[] }).unlockedProductIds)
+                  ? (ent as { unlockedProductIds: string[] }).unlockedProductIds
+                  : []
+              );
+            }
+          } catch {
+            /* ignore */
+          }
+        } else {
+          setTreatLinkMessage((data as { error?: string }).error || "Could not link purchase to your account.");
+        }
+        const url = new URL(window.location.href);
+        url.searchParams.delete("session_id");
+        url.searchParams.delete("treat_success");
+        const qs = url.searchParams.toString();
+        window.history.replaceState({}, "", url.pathname + (qs ? `?${qs}` : ""));
+      } catch {
+        if (!cancelled) setTreatLinkMessage("Could not link purchase. Try again or contact support.");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [creator?.creatorId, isLoggedIn]);
+
+  const handleGuestTreatPurchase = async (productId: string) => {
+    if (!creator?.creatorId) return;
+    setGuestTreatPurchasingId(productId);
+    try {
+      const base = `${window.location.origin}${window.location.pathname}`;
+      const res = await fetch("/api/createFanCheckoutSession", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          creatorId: creator.creatorId,
+          type: "product",
+          productId,
+          guestProduct: true,
+          successUrl: `${base}?treat_success=1&session_id={CHECKOUT_SESSION_ID}`,
+          cancelUrl: base,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error || "Checkout failed");
+      const url = (data as { url?: string }).url;
+      if (url) window.location.href = url;
+    } catch {
+      alert("Checkout could not start. Please try again.");
+    } finally {
+      setGuestTreatPurchasingId(null);
+    }
+  };
 
   const handleSubscribe = async () => {
     if (!creator?.creatorId || !auth.currentUser) {
@@ -869,10 +1010,6 @@ export const FanStorefrontView: React.FC = () => {
     );
   }
 
-  // Check for ?preview=member query param to allow previewing member view
-  const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
-  const previewMember = urlParams?.get("preview") === "member";
-
   const showLanding = previewMember ? false : (!isLoggedIn || !subscribed);
 
   if (showLanding) {
@@ -885,6 +1022,13 @@ export const FanStorefrontView: React.FC = () => {
         subscribing={subscribing}
         joiningFree={joiningFree}
         isLoggedIn={isLoggedIn}
+        publicTreatsOnLanding={creator.publicTreatsOnLanding === true}
+        sectionsTreatsEnabled={creator.sections?.treats !== false}
+        landingTreatProducts={landingTreatsProducts}
+        landingTreatsLoading={landingTreatsLoading}
+        onGuestPurchaseTreat={handleGuestTreatPurchase}
+        guestTreatPurchasingId={guestTreatPurchasingId}
+        treatLinkAccountMessage={treatLinkMessage}
       />
     );
   }

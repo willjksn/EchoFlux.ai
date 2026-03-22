@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { auth } from "../firebaseConfig";
-import type { StorefrontSocialLinks, StorefrontLandingContent, StorefrontLegal, TextStyle } from "../types";
+import type { StorefrontSocialLinks, StorefrontLandingContent, StorefrontLegal, TextStyle, TreatProduct } from "../types";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
 
 // Sun/Moon icons for theme toggle
@@ -247,6 +247,15 @@ interface FanLandingPageProps {
   subscribing: boolean;
   joiningFree?: boolean;
   isLoggedIn: boolean;
+  /** Guest checkout for visible treats on landing */
+  publicTreatsOnLanding?: boolean;
+  sectionsTreatsEnabled?: boolean;
+  landingTreatProducts?: TreatProduct[];
+  landingTreatsLoading?: boolean;
+  onGuestPurchaseTreat?: (productId: string) => void;
+  guestTreatPurchasingId?: string | null;
+  /** After returning from Stripe + optional claim API */
+  treatLinkAccountMessage?: string | null;
 }
 
 export const FanLandingPage: React.FC<FanLandingPageProps> = ({
@@ -257,6 +266,13 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
   subscribing,
   joiningFree = false,
   isLoggedIn,
+  publicTreatsOnLanding = false,
+  sectionsTreatsEnabled = true,
+  landingTreatProducts = [],
+  landingTreatsLoading = false,
+  onGuestPurchaseTreat,
+  guestTreatPurchasingId = null,
+  treatLinkAccountMessage = null,
 }) => {
   const { 
     displayName, 
@@ -303,6 +319,35 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
   const [tipError, setTipError] = useState("");
   const [tipHandle, setTipHandle] = useState("");
   const [tipCustomAmount, setTipCustomAmount] = useState("");
+  const [treatStoreOpen, setTreatStoreOpen] = useState(false);
+
+  const showLandingTreatEntry =
+    publicTreatsOnLanding &&
+    sectionsTreatsEnabled &&
+    !!onGuestPurchaseTreat &&
+    (landingTreatsLoading || landingTreatProducts.length > 0);
+
+  useEffect(() => {
+    if (!treatStoreOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setTreatStoreOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [treatStoreOpen]);
+
+  useEffect(() => {
+    if (!treatStoreOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [treatStoreOpen]);
+
+  useEffect(() => {
+    if (!showLandingTreatEntry) setTreatStoreOpen(false);
+  }, [showLandingTreatEntry]);
   
   // Dark mode state - persisted in localStorage per creator page
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -704,6 +749,167 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
               </p>
             </article>
           </div>
+
+          {treatLinkAccountMessage && (
+            <div
+              className="fan-landing-section mx-4 my-3 rounded-xl px-4 py-3 text-sm"
+              style={{
+                background: isDarkMode ? "rgba(99,102,241,0.2)" : `${primary}12`,
+                border: `1px solid ${primary}35`,
+                color: effectiveText,
+              }}
+              role="status"
+            >
+              {treatLinkAccountMessage}
+            </div>
+          )}
+
+          {showLandingTreatEntry && (
+            <section
+              className="fan-landing-section fan-landing-guest-treats mx-4 my-4 rounded-2xl p-4"
+              style={{
+                background: isDarkMode
+                  ? "rgba(30, 30, 30, 0.94)"
+                  : `linear-gradient(140deg, rgba(255,255,255,0.96) 0%, ${primary}0a 100%)`,
+                border: isDarkMode ? "1px solid rgba(255,255,255,0.1)" : `1px solid ${primary}22`,
+              }}
+            >
+              <h2 className="fan-landing-section-title text-lg mb-1" style={{ color: primary }}>
+                Treat store
+              </h2>
+              <p className="text-xs mb-4" style={{ color: isDarkMode ? "rgba(255,255,255,0.65)" : `${textColor}99` }}>
+                Browse treats without a membership — checkout with your email. If you subscribe later with the same email, your purchases link to your account.
+              </p>
+              <button
+                type="button"
+                className="fan-landing-subscribe-btn w-full sm:w-auto px-6 py-3 text-sm font-semibold"
+                style={{ background: `linear-gradient(135deg, ${primary} 0%, ${primary}dd 100%)` }}
+                onClick={() => setTreatStoreOpen(true)}
+              >
+                {landingTreatsLoading ? "Loading…" : `Open treat store${landingTreatProducts.length ? ` (${landingTreatProducts.length})` : ""}`}
+              </button>
+            </section>
+          )}
+
+          {treatStoreOpen && onGuestPurchaseTreat && (
+            <div
+              className="fan-landing-treat-modal-backdrop"
+              style={{
+                position: "fixed",
+                inset: 0,
+                zIndex: 10050,
+                background: "rgba(0,0,0,0.55)",
+                display: "flex",
+                alignItems: "flex-end",
+                justifyContent: "center",
+                padding: "0",
+              }}
+              role="presentation"
+              onClick={() => setTreatStoreOpen(false)}
+            >
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="fan-landing-treat-modal-title"
+                className="fan-landing-treat-modal"
+                style={{
+                  width: "100%",
+                  maxWidth: "min(520px, 100%)",
+                  maxHeight: "min(85vh, 720px)",
+                  overflow: "hidden",
+                  display: "flex",
+                  flexDirection: "column",
+                  background: isDarkMode ? "#1a1a1a" : "#fff",
+                  color: effectiveText,
+                  borderTopLeftRadius: "1.25rem",
+                  borderTopRightRadius: "1.25rem",
+                  boxShadow: "0 -8px 40px rgba(0,0,0,0.25)",
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div
+                  className="fan-landing-treat-modal-header"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "0.75rem",
+                    padding: "1rem 1.25rem",
+                    borderBottom: `1px solid ${isDarkMode ? "rgba(255,255,255,0.1)" : `${primary}20`}`,
+                  }}
+                >
+                  <h2 id="fan-landing-treat-modal-title" className="text-base font-bold m-0" style={{ color: primary }}>
+                    Treat store
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => setTreatStoreOpen(false)}
+                    className="rounded-full px-3 py-1 text-sm font-medium"
+                    style={{
+                      border: `1px solid ${primary}40`,
+                      color: effectiveText,
+                      background: isDarkMode ? "rgba(255,255,255,0.06)" : `${primary}10`,
+                    }}
+                  >
+                    Close
+                  </button>
+                </div>
+                <div
+                  className="fan-landing-treat-modal-body"
+                  style={{
+                    overflowY: "auto",
+                    padding: "1rem 1.25rem 1.5rem",
+                    WebkitOverflowScrolling: "touch",
+                  }}
+                >
+                  {landingTreatsLoading ? (
+                    <p className="text-sm m-0" style={{ color: effectiveText }}>Loading treats…</p>
+                  ) : landingTreatProducts.length === 0 ? (
+                    <p className="text-sm italic m-0" style={{ color: isDarkMode ? "rgba(255,255,255,0.5)" : `${textColor}88` }}>
+                      No treats available right now.
+                    </p>
+                  ) : (
+                    <ul className="space-y-3 list-none m-0 p-0">
+                      {landingTreatProducts.map((p) => (
+                        <li
+                          key={p.id}
+                          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-xl p-3"
+                          style={{
+                            background: isDarkMode ? "rgba(0,0,0,0.25)" : "rgba(255,255,255,0.9)",
+                            border: `1px solid ${primary}18`,
+                          }}
+                        >
+                          <div>
+                            <p className="text-xs font-medium uppercase tracking-wide m-0" style={{ color: primary }}>
+                              {p.type.replace(/_/g, " ")}
+                            </p>
+                            <p className="font-semibold m-0 mt-0.5" style={{ color: effectiveText }}>{p.title}</p>
+                            {p.description ? (
+                              <p className="text-xs mt-1 mb-0" style={{ color: isDarkMode ? "rgba(255,255,255,0.6)" : `${textColor}99` }}>
+                                {p.description}
+                              </p>
+                            ) : null}
+                            <p className="text-sm font-bold mt-1 mb-0" style={{ color: primary }}>
+                              ${(p.priceCents / 100).toFixed(2)}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            className="fan-landing-subscribe-btn shrink-0 px-4 py-2.5 text-sm"
+                            style={{ background: `linear-gradient(135deg, ${primary} 0%, ${primary}dd 100%)` }}
+                            disabled={!!guestTreatPurchasingId}
+                            onClick={() => onGuestPurchaseTreat(p.id)}
+                          >
+                            {guestTreatPurchasingId === p.id ? "Redirecting…" : "Buy"}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Tip Section */}
           {(monetization?.tipsEnabled !== false) && (

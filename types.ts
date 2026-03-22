@@ -350,6 +350,8 @@ export interface CreatorStorefrontSettings {
     };
     monetization?: CreatorMonetization;
     onboardingStatus?: string;
+    /** When true, visible treats can be purchased on the public landing page without signing in (guest Stripe checkout). */
+    publicTreatsOnLanding?: boolean;
     updatedAt?: string;  // ISO
 }
 
@@ -420,8 +422,12 @@ export interface TreatProduct {
     /** Card thumbnail/preview image URL */
     imageUrl?: string;
     archived: boolean;
-    /** When false, product is hidden from storefront (creator toggle) */
+    /** When false, product is hidden everywhere (unpublished) */
     visible: boolean;
+    /** When false, hidden from public landing treat store / guest checkout. Default true if omitted. */
+    showOnLandingPage?: boolean;
+    /** When false, hidden from logged-in members’ Treats tab. Default true if omitted. */
+    showInMemberStore?: boolean;
     sortOrder?: number;
     /** For live_video types: duration in minutes */
     durationMinutes?: number;

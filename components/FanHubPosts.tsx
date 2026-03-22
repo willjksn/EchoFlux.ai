@@ -884,10 +884,12 @@ DO NOT include hashtags.`;
       for (const item of media) {
         if (item.fromVault) {
           // Already uploaded, use URL directly
+          const vaultUrl = typeof item.url === "string" ? item.url.trim() : "";
+          if (!vaultUrl) continue;
           if (item.type === "audio") {
-            audioUrls.push(item.url);
+            audioUrls.push(vaultUrl);
           } else {
-            uploadedUrls.push(item.url);
+            uploadedUrls.push(vaultUrl);
             mediaTypes.push(item.type as "image" | "video");
           }
         } else if (item.file) {
@@ -916,7 +918,8 @@ DO NOT include hashtags.`;
         body: caption,
         mediaUrls: uploadedUrls,
         mediaTypes,
-        audioUrls: audioUrls.length > 0 ? audioUrls : undefined,
+        // Firestore rejects `undefined`; use [] when there is no audio
+        audioUrls,
         likeCount: 0,
         likedBy: [],
         comments: [],
