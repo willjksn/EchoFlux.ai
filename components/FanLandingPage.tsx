@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { auth } from "../firebaseConfig";
 import type { StorefrontSocialLinks, StorefrontLandingContent, StorefrontLegal, TextStyle, TreatProduct } from "../types";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
+import { resolveStoreCopy } from "../src/lib/storefrontStoreCopy";
 
 // Sun/Moon icons for theme toggle
 const SunIcon = () => (
@@ -775,10 +776,10 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
               }}
             >
               <h2 className="fan-landing-section-title text-lg mb-1" style={{ color: primary }}>
-                Treat store
+                {storeCopy.publicStoreCardTitle}
               </h2>
               <p className="text-xs mb-4" style={{ color: isDarkMode ? "rgba(255,255,255,0.65)" : `${textColor}99` }}>
-                Browse treats without a membership — checkout with your email. If you subscribe later with the same email, your purchases link to your account.
+                {storeCopy.publicStoreCardDescription}
               </p>
               <button
                 type="button"
@@ -786,7 +787,9 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
                 style={{ background: `linear-gradient(135deg, ${primary} 0%, ${primary}dd 100%)` }}
                 onClick={() => setTreatStoreOpen(true)}
               >
-                {landingTreatsLoading ? "Loading…" : `Open treat store${landingTreatProducts.length ? ` (${landingTreatProducts.length})` : ""}`}
+                {landingTreatsLoading
+                  ? storeCopy.memberStoreLoadingMessage
+                  : `${storeCopy.publicStoreOpenCtaLabel}${landingTreatProducts.length ? ` (${landingTreatProducts.length})` : ""}`}
               </button>
             </section>
           )}
@@ -839,7 +842,7 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
                   }}
                 >
                   <h2 id="fan-landing-treat-modal-title" className="text-base font-bold m-0" style={{ color: primary }}>
-                    Treat store
+                    {storeCopy.publicStoreModalTitle}
                   </h2>
                   <button
                     type="button"
@@ -863,10 +866,10 @@ export const FanLandingPage: React.FC<FanLandingPageProps> = ({
                   }}
                 >
                   {landingTreatsLoading ? (
-                    <p className="text-sm m-0" style={{ color: effectiveText }}>Loading treats…</p>
+                    <p className="text-sm m-0" style={{ color: effectiveText }}>{storeCopy.memberStoreLoadingMessage}</p>
                   ) : landingTreatProducts.length === 0 ? (
                     <p className="text-sm italic m-0" style={{ color: isDarkMode ? "rgba(255,255,255,0.5)" : `${textColor}88` }}>
-                      No treats available right now.
+                      {storeCopy.publicStoreModalEmptyMessage}
                     </p>
                   ) : (
                     <ul className="space-y-3 list-none m-0 p-0">

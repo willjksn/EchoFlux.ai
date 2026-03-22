@@ -34,7 +34,7 @@ const allCreatorTiers = [
             'Content calendar with reminders',
             'My Vault (5 GB storage)',
             'Fan Hub storefront',
-            'Subscriptions, tips, and Treats store',
+            'Subscriptions, tips, and store',
             'Fan messages',
             '100 video chat minutes/month',
             'Basic analytics',

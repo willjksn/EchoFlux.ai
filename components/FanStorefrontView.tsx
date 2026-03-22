@@ -33,6 +33,7 @@ import { DmAudioPlayer } from "./DmAudioPlayer";
 import { inferIsAudioFromUrl } from "../src/lib/mediaUrlInfer";
 import { FanHubNotificationBell } from "./FanHubNotificationBell";
 import { getAvatarCropStyle } from "../src/lib/avatarCrop";
+import { resolveStoreCopy } from "../src/lib/storefrontStoreCopy";
 
 export type StorefrontCreator = {
   creatorId: string;
@@ -888,6 +889,9 @@ export const FanStorefrontView: React.FC = () => {
   }
 
   const { theme, displayName, avatar, logo, bio, sections, sectionsOrder, rules, landingContent } = creator;
+  const storeCopy = resolveStoreCopy(landingContent);
+  const guidelinesSectionTitle =
+    (landingContent?.boundaryTitle && landingContent.boundaryTitle.trim()) || "Community Guidelines";
   const avatarCropStyle: React.CSSProperties = getAvatarCropStyle(creator.avatarObjectPosition);
   const creatorDmPrimary = formatCreatorDmBubblePrimaryLine(displayName, creator.handle);
   const creatorDmSecondary = formatCreatorDmBubbleSecondaryLine(displayName, creator.handle);
@@ -902,7 +906,7 @@ export const FanStorefrontView: React.FC = () => {
     .concat("saved");
   const navLabels: Record<string, string> = {
     feed: "Home",
-    treats: "Treats",
+    treats: storeCopy.memberStoreTitle,
     tip: "Tip",
     messages: "Messages",
     saved: "Saved",
@@ -1190,9 +1194,9 @@ export const FanStorefrontView: React.FC = () => {
             {activeTab === "treats" && (
               <div className="fan-member-treats">
                 {treatsLoading ? (
-                  <p className="fan-member-loading">Loading treats...</p>
+                  <p className="fan-member-loading">{storeCopy.memberStoreLoadingMessage}</p>
                 ) : treatsProducts.length === 0 ? (
-                  <p className="fan-member-empty">No treats in the store yet.</p>
+                  <p className="fan-member-empty">{storeCopy.memberStoreEmptyMessage}</p>
                 ) : (
                   <div className="fan-member-treats-grid">
                     {treatsProducts.map((p) => {
@@ -1431,7 +1435,7 @@ export const FanStorefrontView: React.FC = () => {
                 )}
                 {(rules?.boundariesText ?? landingContent?.boundaryText) && (
                   <div className="fan-member-about-section">
-                    <h3 className="fan-member-about-heading">Community guidelines</h3>
+                    <h3 className="fan-member-about-heading">{guidelinesSectionTitle}</h3>
                     <p className="fan-member-about-text">{rules?.boundariesText || landingContent?.boundaryText}</p>
                   </div>
                 )}

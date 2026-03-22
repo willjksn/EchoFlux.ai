@@ -243,8 +243,29 @@ export interface StorefrontLandingContent {
     previewList?: string[];     // Features list
     energyTitle?: string;       // "The Energy" testimonial section title
     energyLines?: string[];     // Array of energy/vibe lines
-    boundaryTitle?: string;     // "The Boundary" FAQ section title
+    boundaryTitle?: string;     // "The Boundary" FAQ section title (also member About tab guidelines heading)
     boundaryText?: string;      // Boundary/rules text
+    /** Member hub store tab + panel: main title (default "Store") */
+    memberStoreTitle?: string;
+    /** Subtitle under the store panel title */
+    memberStoreSubtitle?: string;
+    /** Empty state when no products (fan-facing) */
+    memberStoreEmptyMessage?: string;
+    /** Loading line in store panel */
+    memberStoreLoadingMessage?: string;
+    /** Public landing promo card (subscribers / preview): headline */
+    storeLandingHeadline?: string;
+    storeLandingDescription?: string;
+    storeLandingCtaLabel?: string;
+    /** Guest checkout card on public landing */
+    publicStoreCardTitle?: string;
+    publicStoreCardDescription?: string;
+    /** Guest "open store" button (count may be appended as " (3)") */
+    publicStoreOpenCtaLabel?: string;
+    /** Title of the guest store modal */
+    publicStoreModalTitle?: string;
+    /** Guest modal when there are no products */
+    publicStoreModalEmptyMessage?: string;
 }
 
 /** Legal pages configuration */
@@ -350,12 +371,12 @@ export interface CreatorStorefrontSettings {
     };
     monetization?: CreatorMonetization;
     onboardingStatus?: string;
-    /** When true, visible treats can be purchased on the public landing page without signing in (guest Stripe checkout). */
+    /** When true, visible store products can be purchased on the public landing page without signing in (guest Stripe checkout). */
     publicTreatsOnLanding?: boolean;
     updatedAt?: string;  // ISO
 }
 
-/** Treats store product type (creator-defined treat types in Fan Hub) */
+/** Fan Hub store product type (creator-defined product kinds) */
 export type TreatProductType =
     | 'tip'
     | 'unlock_media'
@@ -381,7 +402,6 @@ export type TreatProductType =
     | 'live_video_60m'
     | 'custom';
 
-/** Single product in the treats store (Firestore: products/{productId}) */
 /** Locked / PPV block on fan feed posts — alias for `LockedPostContent` in `src/lib/lockedPostMedia.ts`. */
 export type FanHubPostLockedContent = LockedPostContent;
 
@@ -409,6 +429,7 @@ export interface CreatorFanHubPostFirestore {
   publishedAt?: unknown;
 }
 
+/** Single product in the fan store (Firestore: products/{productId}). */
 export interface TreatProduct {
     id: string;
     creatorId: string;
@@ -424,9 +445,9 @@ export interface TreatProduct {
     archived: boolean;
     /** When false, product is hidden everywhere (unpublished) */
     visible: boolean;
-    /** When false, hidden from public landing treat store / guest checkout. Default true if omitted. */
+    /** When false, hidden from public landing store / guest checkout. Default true if omitted. */
     showOnLandingPage?: boolean;
-    /** When false, hidden from logged-in members’ Treats tab. Default true if omitted. */
+    /** When false, hidden from logged-in members’ store tab. Default true if omitted. */
     showInMemberStore?: boolean;
     sortOrder?: number;
     /** For live_video types: duration in minutes */

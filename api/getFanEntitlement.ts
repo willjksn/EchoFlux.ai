@@ -4,7 +4,7 @@ import { verifyAuth } from "./verifyAuth.js";
 
 /**
  * Check if the current user (fan) has an active subscription/entitlement to the given creator.
- * Used by fan storefront: if subscribed, show Feed + Treats + Messages; otherwise show landing.
+ * Used by fan storefront: if subscribed, show Feed + Store + Messages; otherwise show landing.
  *
  * Firestore: creatorSubscribers/{creatorId}/subscribers/{fanId} with { status: 'active', ... }
  * or equivalent. Until that is populated, returns { subscribed: false } when no doc exists.

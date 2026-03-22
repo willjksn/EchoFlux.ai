@@ -194,7 +194,7 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                                     <li>• Create Post - caption generator</li>
                                     <li>• Calendar - content scheduling</li>
                                     <li>• Fan Hub - build your fan community</li>
-                                    <li>• Treats Store - sell to your fans</li>
+                                    <li>• Store — sell products to your fans</li>
                                     <li>• 5GB Vault storage</li>
                                     <li>• 500 AI generations per month</li>
                                 </>
@@ -491,7 +491,7 @@ export const CreatorOnboardingModal: React.FC<CreatorOnboardingModalProps> = ({ 
                             <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">Connect directly with your fans through private messaging.</p>
                         </div>
                         <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                            <h4 className="font-semibold text-gray-900 dark:text-white text-sm">Treats Store</h4>
+                            <h4 className="font-semibold text-gray-900 dark:text-white text-sm">Fan store</h4>
                             <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">Sell digital products, tips, and exclusive content to your fans.</p>
                         </div>
                     </div>

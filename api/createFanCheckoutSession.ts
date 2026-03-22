@@ -19,7 +19,7 @@ const PLATFORM_OWNER_IDS = (process.env.PLATFORM_OWNER_CREATOR_IDS || "").split(
  * For platform owners (e.g., Stormij): Funds go directly to EchoFlux, no Connect account needed.
  * 
  * Body: { creatorId, type: 'subscription' | 'product' | 'tip', productId?, subscriptionPriceCents?, amountCents?, tipHandle?, successUrl?, cancelUrl?, guestProduct?: boolean }
- * guestProduct: true → treat checkout without Firebase auth; Stripe collects email; webhook uses guest_${stripeCustomerId}.
+ * guestProduct: true → guest store checkout without Firebase auth; Stripe collects email; webhook uses guest_${stripeCustomerId}.
  * 
  * Tips can be made without authentication (anonymous tippers).
  */
@@ -61,7 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const allowGuestProduct = type === "product" && guestProduct === true;
 
-  // Tips can be anonymous; guest treat checkout has no Firebase user (Stripe collects email).
+  // Tips can be anonymous; guest store checkout has no Firebase user (Stripe collects email).
   const decoded = await verifyAuth(req);
   const fanId = decoded?.uid || `anon_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 
@@ -89,7 +89,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (allowGuestProduct) {
       if (!creatorData?.publicTreatsOnLanding) {
-        return res.status(403).json({ error: "Treats are not available for guest checkout on this page" });
+        return res.status(403).json({ error: "Store purchases are not available for guest checkout on this page" });
       }
     }
     
@@ -158,7 +158,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ url: session.url, sessionId: session.id });
     }
 
-    // ==================== PRODUCT/TREAT ====================
+    // ==================== STORE PRODUCT ====================
     if (type === "product") {
       const productSnap = await db.collection("products").doc(productId!).get();
       if (!productSnap.exists) {
@@ -183,10 +183,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(404).json({ error: "Product not found" });
       }
       if (!allowGuestProduct && decoded?.uid && product.showInMemberStore === false) {
-        return res.status(400).json({ error: "This treat is not available in the member store" });
+        return res.status(400).json({ error: "This product is not available in the member store" });
       }
       const priceCents = Math.max(50, Number(product.priceCents) || 0);
-      const title = product.title || "Treat";
+      const title = product.title || "Product";
       const sessionParams: Stripe.Checkout.SessionCreateParams = {
         mode: "payment",
         payment_method_types: ["card"],

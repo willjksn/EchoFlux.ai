@@ -467,7 +467,7 @@ export const FanHubUsers: React.FC = () => {
         );
         const memberUsername = data.username || null;
 
-        // Role: prefer explicit fans doc (Stormij / Add User), else infer tipper / guest treat buyer
+        // Role: prefer explicit fans doc (Stormij / Add User), else infer tipper / guest store buyer
         let role: UserRole = (data.storedRole as UserRole) || "member";
         if (!data.storedRole && String(data.id).startsWith("guest_")) {
           role = "treat_buyer";
@@ -671,7 +671,7 @@ export const FanHubUsers: React.FC = () => {
       setGrantTreatCount(1);
     } catch (error) {
       console.error("Error granting treat:", error);
-      showToast?.("Failed to grant treat", "error");
+      showToast?.("Failed to grant", "error");
     }
   };
 
@@ -792,7 +792,7 @@ export const FanHubUsers: React.FC = () => {
               )}
               {fanUser.role === "treat_buyer" && (
                 <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-violet-100 text-violet-900 dark:bg-violet-900/40 dark:text-violet-200 rounded">
-                  TREAT BUYER
+                  STORE BUYER
                 </span>
               )}
             </div>
@@ -1040,8 +1040,8 @@ export const FanHubUsers: React.FC = () => {
                   </>
                 )}
 
-                {/* Treat buyers (guest checkout / pre-subscribe purchases) */}
-                <SectionHeader title="Treat buyers" count={treatBuyers.length} />
+                {/* Store buyers (guest checkout / pre-subscribe purchases) */}
+                <SectionHeader title="Store buyers" count={treatBuyers.length} />
                 {treatBuyers.length > 0 ? (
                   treatBuyers.map((fanUser) => (
                     <UserRow key={fanUser.id} fanUser={fanUser} />
@@ -1049,7 +1049,7 @@ export const FanHubUsers: React.FC = () => {
                 ) : (
                   <tr>
                     <td colSpan={9} className="px-4 py-4 text-sm text-gray-500 dark:text-gray-400 italic">
-                      No treat buyers yet. They appear when someone buys a treat from your landing page before subscribing.
+                      No store buyers yet. They appear when someone buys from your store on the landing page before subscribing.
                     </td>
                   </tr>
                 )}
@@ -1165,13 +1165,13 @@ export const FanHubUsers: React.FC = () => {
                   <option value="member">Member (Subscriber/Fan)</option>
                   <option value="admin">Admin</option>
                   <option value="tipper">Tipper (Non-subscriber)</option>
-                  <option value="treat_buyer">Treat buyer (bought a treat without subscribing)</option>
+                  <option value="treat_buyer">Store buyer (purchased without subscribing)</option>
                 </select>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   {newUserRole === "admin" && "Admins have full access to manage the fan page."}
                   {newUserRole === "member" && "Members are subscribers who pay through Stripe."}
                   {newUserRole === "tipper" && "Tippers can tip from the landing page without subscribing."}
-                  {newUserRole === "treat_buyer" && "Treat buyers purchased from your page before subscribing; they often appear automatically from guest checkout."}
+                  {newUserRole === "treat_buyer" && "Store buyers purchased from your page before subscribing; they often appear automatically from guest checkout."}
                 </p>
               </div>
               <div>
@@ -1277,11 +1277,11 @@ export const FanHubUsers: React.FC = () => {
                 </p>
               </div>
 
-              {/* Grant Treat Redeem Section */}
+              {/* Grant store redemption */}
               <div>
-                <h5 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Grant treat redeem</h5>
+                <h5 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Grant store redemption</h5>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                  Select a treat and how many to grant. The member will receive an in-app notification.
+                  Select a product and how many to grant. The member will receive an in-app notification.
                 </p>
                 {selectedUser.role === "member" ? (
                   <div className="flex items-center gap-2">
@@ -1290,7 +1290,7 @@ export const FanHubUsers: React.FC = () => {
                       onChange={(e) => setGrantTreatType(e.target.value)}
                       className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
                     >
-                      <option value="">Select a treat...</option>
+                      <option value="">Select a product…</option>
                       <option value="tip">Tip</option>
                       <option value="voice_note_30s">30 sec voice note</option>
                       <option value="voice_note_60s">60 sec voice note</option>

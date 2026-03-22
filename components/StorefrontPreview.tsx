@@ -12,6 +12,7 @@ import {
   useUnreadNewMessageNotificationCount,
   clearNewMessageNotificationBadge,
 } from "./useUnreadNewMessageNotifications";
+import { resolveStoreCopy } from "../src/lib/storefrontStoreCopy";
 
 export type StorefrontHeroMediaItem = NonNullable<CreatorStorefrontSettings["heroMedia"]>[number];
 
@@ -73,7 +74,7 @@ const DEFAULT_SECTION_ORDER = ["feed", "treats", "tip", "messages", "about", "sa
 const SECTION_LABELS: Record<string, string> = {
   home: "Home",
   feed: "Home",
-  treats: "Treats",
+  treats: "Store",
   tip: "Tip",
   messages: "Messages",
   sessions: "Chat Session",
@@ -311,6 +312,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
   const textStyles = config.textStyles ?? {};
   
   const landingContent = { ...DEFAULT_LANDING_CONTENT, ...config.landingContent };
+  const storeCopy = resolveStoreCopy(landingContent);
   const socialLinks = getVisibleSocialLinks(config.socialLinks);
   
   const boundariesText = config.rules?.boundariesText ?? landingContent.boundaryText ?? "";
@@ -806,10 +808,10 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                   ✨
                 </p>
                 <h3 className="text-sm font-semibold m-0 mb-1" style={{ color: textColor }}>
-                  Want something sweet?
+                  {storeCopy.storeLandingHeadline}
                 </h3>
                 <p className="text-xs leading-relaxed m-0 mb-3" style={{ color: `${textColor}aa` }}>
-                  Come by the treat shop — little extras, surprises, and picks just for you.
+                  {storeCopy.storeLandingDescription}
                 </p>
                 <button
                   type="button"
@@ -819,9 +821,9 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                     boxShadow: `0 4px 14px ${primary}40`,
                   }}
                   disabled
-                  aria-label="Preview: shop treats button"
+                  aria-label="Preview: store CTA"
                 >
-                  Shop treats
+                  {storeCopy.storeLandingCtaLabel}
                 </button>
               </div>
             </section>
@@ -1219,10 +1221,10 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                       margin: "0 0 0.35rem",
                     }}
                   >
-                    Treats
+                    {storeCopy.memberStoreTitle}
                   </h2>
                   <p style={{ fontSize: "0.9rem", color: `${textColor}77`, margin: 0 }}>
-                    Personal messages, voice notes, and more — just for you.
+                    {storeCopy.memberStoreSubtitle}
                   </p>
                 </div>
 
@@ -1257,7 +1259,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                 </div>
 
                 <p className="text-center" style={{ fontSize: "0.75rem", color: `${textColor}55`, marginTop: "1rem" }}>
-                  Preview — real products come from your Treats store
+                  Preview — products are managed in Fan Hub → Store
                 </p>
               </div>
             )}
@@ -1444,7 +1446,7 @@ export const StorefrontPreview: React.FC<StorefrontPreviewProps> = ({
                 ) : null}
                 {(boundariesText || landingContent.boundaryText) ? (
                   <div className="rounded-xl p-4" style={{ background: cardBg, border: `1px solid ${isDark ? `${primary}30` : `${primary}18`}` }}>
-                    <h3 className="text-xs font-semibold mb-1.5" style={{ color: primary }}>Community guidelines</h3>
+                    <h3 className="text-xs font-semibold mb-1.5" style={{ color: primary }}>{landingContent.boundaryTitle}</h3>
                     <p className="text-sm leading-relaxed" style={{ color: `${textColor}cc` }}>{boundariesText || landingContent.boundaryText}</p>
                   </div>
                 ) : null}

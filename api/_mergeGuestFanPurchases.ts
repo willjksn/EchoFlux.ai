@@ -1,5 +1,5 @@
 /**
- * Guest treat checkouts use Firestore doc id `guest_${stripeCustomerId}`.
+ * Guest store checkouts use Firestore doc id `guest_${stripeCustomerId}`.
  * When the fan later has a Firebase uid (subscribe or claim), merge grants + fan row + orders into `uid`.
  */
 import type { Firestore } from "firebase-admin/firestore";

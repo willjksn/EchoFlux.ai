@@ -618,7 +618,7 @@ ${platforms.map(platform => {
 - NEVER say "link in bio" - this IS their own page, there's no external link needed.
 - Optimal length: 100-500 characters. Write engaging, personal content for your fan community.
 - Focus on connection, exclusivity, and fan engagement. Use casual, authentic language.
-- Can include light CTAs for tips, treats, or engagement (likes, comments).
+- Can include light CTAs for tips, your store, or engagement (likes, comments).
 - Emojis are encouraged (2-4) to add personality and warmth.
 - If the user provides specific keywords or themes, you MUST incorporate them directly into the caption.`;
   }

@@ -1033,7 +1033,7 @@ export const AdminDashboard: React.FC = () => {
                         <div className="p-4 bg-gradient-to-br from-pink-50 to-pink-100 dark:from-pink-900/20 dark:to-pink-800/20 rounded-lg border border-pink-200 dark:border-pink-700">
                             <div className="flex items-center gap-2 mb-2">
                                 <HeartIcon className="w-4 h-4 text-pink-600 dark:text-pink-400" />
-                                <p className="text-xs font-medium text-pink-700 dark:text-pink-300">Treats Store</p>
+                                <p className="text-xs font-medium text-pink-700 dark:text-pink-300">Fan store</p>
                             </div>
                             <p className="text-xl font-bold text-pink-900 dark:text-pink-100">${fanHubRevenue.treats.toFixed(2)}</p>
                             <p className="text-xs text-pink-600 dark:text-pink-400 mt-1">

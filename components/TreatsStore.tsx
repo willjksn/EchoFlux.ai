@@ -15,6 +15,7 @@ import {
 } from "firebase/firestore";
 import type { TreatProduct, TreatProductType } from "../types";
 import { SparklesIcon, CalendarIcon } from "./icons/UIIcons";
+import { useCreatorStoreCopy } from "../src/hooks/useCreatorStoreCopy";
 
 function formatPrice(cents: number | null | undefined): string {
   const n = Number(cents);
@@ -157,6 +158,7 @@ export const TreatsStore: React.FC = () => {
   const [showArchived, setShowArchived] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("fan");
   const [purchaseLoading, setPurchaseLoading] = useState<string | null>(null);
+  const storeCopy = useCreatorStoreCopy(creatorId);
 
   const [scheduledTreats, setScheduledTreats] = useState<ScheduledPurchase[]>([]);
   const [upcomingSessions, setUpcomingSessions] = useState<UpcomingSession[]>([]);
@@ -169,7 +171,7 @@ export const TreatsStore: React.FC = () => {
       setTreatsDataReady(false);
     }
     try {
-      // Avoid getIdToken(true) here — forced refresh adds seconds on every Treats tab visit.
+      // Avoid getIdToken(true) here — forced refresh adds seconds on every Store tab visit.
       const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
       const res = await fetch(
         `/api/products?creatorId=${encodeURIComponent(creatorId)}&includeArchived=true`,
@@ -242,7 +244,7 @@ export const TreatsStore: React.FC = () => {
           const data = d.data();
           list.push({
             id: d.id,
-            productName: (data.productName as string) || "Treat",
+            productName: (data.productName as string) || "Product",
             scheduledDate: data.scheduledDate as string | undefined,
             scheduledTime: data.scheduledTime as string | undefined,
             scheduledAt: data.scheduledAt?.toDate?.() as Date | undefined,
@@ -568,7 +570,7 @@ export const TreatsStore: React.FC = () => {
   if (!creatorId) {
     return (
       <main className="treats-main">
-        <p className="treats-empty">Sign in to view the treats store.</p>
+        <p className="treats-empty">Sign in to manage your store.</p>
       </main>
     );
   }
@@ -578,8 +580,10 @@ export const TreatsStore: React.FC = () => {
       <div className={`treats-top-row${viewMode === "fan" ? " treats-top-row--fan-only" : ""}`}>
         {viewMode === "manage" ? (
           <section className="treats-store-header">
-            <h1 className="treats-title">Treats</h1>
-            <p className="treats-subhead">Personal messages, voice notes, and more — just for you.</p>
+            <h1 className="treats-title">Store</h1>
+            <p className="treats-subhead">
+              Manage products, pricing, and visibility. Use <strong>Store</strong> preview to see what fans see (name and copy come from My Page).
+            </p>
           </section>
         ) : null}
 
@@ -667,17 +671,15 @@ export const TreatsStore: React.FC = () => {
           <div className="treats-fan-shell">
             <div className="treats-stormij-panel">
               <header className="treats-stormij-panel-header">
-                <h2 className="treats-stormij-panel-title">Treats</h2>
-                <p className="treats-stormij-panel-sub">
-                  Personal messages, voice notes, and more — just for you.
-                </p>
+                <h2 className="treats-stormij-panel-title">{storeCopy.memberStoreTitle}</h2>
+                <p className="treats-stormij-panel-sub">{storeCopy.memberStoreSubtitle}</p>
                 <div className="treats-stormij-panel-rule" aria-hidden />
               </header>
               {loading ? (
-                <p className="treats-stormij-panel-state">Loading…</p>
+                <p className="treats-stormij-panel-state">{storeCopy.memberStoreLoadingMessage}</p>
               ) : displayTreats.length === 0 ? (
                 <p className="treats-stormij-panel-state treats-stormij-panel-state--empty">
-                  No treats available yet. Add some in Manage!
+                  {storeCopy.memberStoreEmptyMessage}
                 </p>
               ) : (
                 <div className="treats-stormij-grid">
@@ -754,7 +756,7 @@ export const TreatsStore: React.FC = () => {
           {loading ? (
             <p className="treats-loading">Loading…</p>
           ) : displayedProducts.length === 0 ? (
-            <p className="treats-empty">No treats yet. Create one above!</p>
+            <p className="treats-empty">No products yet. Create one above!</p>
           ) : (
             <div className="treats-manage-list">
               {displayedProducts.map((p) => {

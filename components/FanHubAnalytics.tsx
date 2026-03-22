@@ -122,6 +122,20 @@ function getDateRangeStart(range: DateRange): Date | null {
   return new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 }
 
+function csvEscapeCell(value: string | number): string {
+  const s = String(value ?? "");
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+/** Creator-facing export labels (not internal order types). */
+function orderRowExportType(typeRaw: string): string {
+  if (typeRaw === "tip") return "Tip";
+  if (typeRaw === "unlock" || typeRaw === "unlock_media") return "Content unlock";
+  if (typeRaw === "subscription") return "Subscription";
+  return "Store";
+}
+
 export const FanHubAnalytics: React.FC = () => {
   const { user, showToast } = useAppContext();
   const [dateRange, setDateRange] = useState<DateRange>("30d");
@@ -143,6 +157,8 @@ export const FanHubAnalytics: React.FC = () => {
   });
   const [topFans, setTopFans] = useState<TopFan[]>([]);
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
+  /** Orders in selected date range (for CSV export). */
+  const [rangeOrders, setRangeOrders] = useState<Record<string, unknown>[]>([]);
 
   const loadAnalytics = useCallback(async () => {
     if (!user?.id) return;
@@ -167,6 +183,7 @@ export const FanHubAnalytics: React.FC = () => {
         const orderDate = new Date(o.createdAt);
         return orderDate >= startDate;
       });
+      setRangeOrders(filteredOrders);
 
       // Calculate revenue by type
       let tipsCents = 0;
@@ -397,6 +414,14 @@ export const FanHubAnalytics: React.FC = () => {
             <option value="all">All time</option>
           </select>
           <button
+            type="button"
+            onClick={() => handleExportTransactionsCsv()}
+            className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+            title="Download transactions for the selected period as CSV"
+          >
+            Export CSV
+          </button>
+          <button
             onClick={() => loadAnalytics()}
             className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition"
             title="Refresh"
@@ -435,7 +460,7 @@ export const FanHubAnalytics: React.FC = () => {
             accentColor="purple"
           />
           <StatCard
-            title="Treats Store"
+            title="Store"
             value={formatCents(revenue.treatsCents)}
             icon={<GiftIcon />}
             change={getChangePercentage(revenue.treatsCents, previousRevenue?.treatsCents)}
@@ -573,7 +598,7 @@ export const FanHubAnalytics: React.FC = () => {
                         {tx.type === "tip" ? "Tip" :
                          tx.type === "unlock" ? "Content Unlock" :
                          tx.type === "subscription" ? "Subscription" :
-                         tx.productName || "Treat Purchase"}
+                         tx.productName || "Store purchase"}
                       </p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
                         {formatFanDisplayLabel(
@@ -607,7 +632,7 @@ export const FanHubAnalytics: React.FC = () => {
             <p className="font-medium text-gray-900 dark:text-white mb-1">Top Revenue Source</p>
             <p className="text-gray-600 dark:text-gray-400">
               {revenue.tipsCents >= revenue.unlocksCents && revenue.tipsCents >= revenue.treatsCents ? "Tips" :
-               revenue.unlocksCents >= revenue.treatsCents ? "Content Unlocks" : "Treats Store"}
+               revenue.unlocksCents >= revenue.treatsCents ? "Content Unlocks" : "Store"}
               {" "}is your biggest earner
             </p>
           </div>

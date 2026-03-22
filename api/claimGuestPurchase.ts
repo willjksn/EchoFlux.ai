@@ -5,7 +5,7 @@ import { verifyAuth } from "./verifyAuth.js";
 import { mergeGuestTreatPurchasesIntoUid } from "./_mergeGuestFanPurchases.js";
 
 /**
- * POST: After guest treat checkout, fan signs in with the same email as Stripe → link purchases to uid.
+ * POST: After guest store checkout, fan signs in with the same email as Stripe → link purchases to uid.
  * Body: { sessionId?: string, session_id?: string }
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -35,7 +35,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: "Checkout is not complete" });
     }
     if (session.metadata?.guestCheckout !== "true" || session.metadata?.type !== "product") {
-      return res.status(400).json({ error: "Not a guest treat checkout" });
+      return res.status(400).json({ error: "Not a guest store checkout" });
     }
 
     const creatorId = session.metadata?.creatorId;

@@ -132,7 +132,7 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   const autoReplyAI = !!settings.autoReplyAI;
   const autoReplyChance = Math.max(0, Math.min(100, Number(settings.autoReplyChance) ?? 25));
 
-  // Prioritize fans who tipped or bought treats: always consider replying to them; others use slider chance
+  // Prioritize fans who tipped or bought from the store: always consider replying to them; others use slider chance
   let isTipperOrBuyer = false;
   try {
     const [ordersSnap, grantSnap] = await Promise.all([

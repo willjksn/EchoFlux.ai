@@ -26,7 +26,7 @@ export const Privacy: React.FC = () => {
                     <h4 className="font-semibold mt-4">b. Media Content</h4>
                     <p>
                         We collect images, videos, and audio files that you upload to our platform, including content stored in 
-                        My Vault, profile pictures, Fan Hub posts, and media attached to products (Treats).
+                        My Vault, profile pictures, Fan Hub posts, and media attached to store products.
                     </p>
 
                     <h4 className="font-semibold mt-4">c. Fan Hub Data</h4>

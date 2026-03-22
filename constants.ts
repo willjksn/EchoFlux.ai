@@ -101,7 +101,7 @@ export const STUDIO_TAB_LABELS: Record<StudioTabId, string> = {
 export const FAN_HUB_TAB_LABELS: Record<FanHubTabId, string> = {
   myPage: 'My Page',
   posts: 'Posts',
-  treats: 'Treats Store',
+  treats: 'Store',
   messages: 'Messages',
   sessions: 'Chat Session',
   videoChats: 'Video Chats',
@@ -163,7 +163,7 @@ export const HERO_BG_POSITION_OPTIONS: { value: string; label: string }[] = [
   { value: 'bottom right', label: 'Bottom right' },
 ];
 
-/** Treat product types for Fan Hub Treats store (creator add/edit) */
+/** Product types for Fan Hub store (creator add/edit) */
 export const TREAT_PRODUCT_TYPES = [
   { id: 'tip', label: 'Tip' },
   { id: 'unlock_media', label: 'Unlock media' },
@@ -211,7 +211,7 @@ This policy applies to visitors, registered users, paying members, and anyone wh
 
 INFORMATION WE COLLECT
 • Account and identity: When you sign up or log in, we may collect your email address, display name or username, profile details you choose to provide, and a unique user identifier tied to your account.
-• Membership and purchases: If you subscribe, tip, unlock content, or buy digital products or sessions ("Treats"), we receive transaction-related information (such as amount, product type, and status). We do not receive your full card number or CVV on our servers; payment data is handled by our payment processor as described under Payments below.
+• Membership and purchases: If you subscribe, tip, unlock content, or buy digital products or sessions from the creator's store, we receive transaction-related information (such as amount, product type, and status). We do not receive your full card number or CVV on our servers; payment data is handled by our payment processor as described under Payments below.
 • Content and activity: We collect content you submit (for example posts you comment on, likes, saved items where the feature exists, and direct messages you send or receive through the Service). We may also collect technical data such as device type, browser, approximate location derived from IP address, timestamps, and diagnostic logs needed to operate and secure the Service.
 • Communications: If you contact us by email or through the Service, we retain those communications to respond and improve support.
 • Creator-added tools: If we enable additional features (for example waitlists, forms, or integrations), we will use information you submit through those features only as disclosed when you use them.
@@ -270,7 +270,7 @@ This default policy is a starting template. Creators should review it with quali
 /**
  * Default Terms of Service for creator Fan Hub / storefront pages.
  * Creators may edit or replace this text. Not a substitute for legal advice.
- * Strong content-protection language retained; expanded for subscriptions, tips, treats, platform role, liability.
+ * Strong content-protection language retained; expanded for subscriptions, tips, store purchases, platform role, liability.
  */
 export const DEFAULT_TERMS_OF_SERVICE = `Last updated: [Date — update when you publish or change these terms]
 
@@ -281,7 +281,7 @@ By accessing or using this creator page, Fan Hub, member area, checkout pages, o
 You must be at least 18 years old (or the age of majority where you live, if higher) to use the Service. You must provide accurate registration information and keep your login credentials secure. You are responsible for all activity under your account. Notify us promptly of any unauthorized use. We may refuse service, close accounts, or limit features for violations of these Terms or applicable law.
 
 3. DESCRIPTION OF THE SERVICE
-The Service may include: a public landing page; member subscriptions; paywalled or member-only feed posts, images, or videos; tips; one-time purchases such as digital products, unlocks, or booked experiences ("Treats"); direct messaging; comments or engagement features; and other tools we enable from time to time. We may add, change, or discontinue features with reasonable notice where practicable. The Service is provided "as is" without guarantee of uninterrupted or error-free operation.
+The Service may include: a public landing page; member subscriptions; paywalled or member-only feed posts, images, or videos; tips; one-time purchases such as digital products, unlocks, or booked experiences from the creator's store; direct messaging; comments or engagement features; and other tools we enable from time to time. We may add, change, or discontinue features with reasonable notice where practicable. The Service is provided "as is" without guarantee of uninterrupted or error-free operation.
 
 4. MEMBERSHIPS AND RECURRING SUBSCRIPTIONS
 If you purchase a recurring membership, you authorize us (through our payment processor, Stripe) to charge your payment method on each billing cycle until you cancel. Pricing, billing frequency, and what is included are shown at checkout or on this page. You may cancel before the next billing date as described in checkout receipts, account tools, or Stripe's customer billing portal where available. Cancellation typically stops future charges; it does not always refund the current period unless required by law or expressly stated at purchase.
@@ -289,7 +289,7 @@ If you purchase a recurring membership, you authorize us (through our payment pr
 5. TIPS, ONE-TIME PURCHASES, AND DIGITAL GOODS
 Tips, unlocks, and other one-time charges are final once successfully processed unless otherwise required by law or expressly stated at checkout. Digital content and access are deemed delivered when made available in your account. You waive any statutory right of withdrawal for digital content where the law allows waiver once delivery has begun.
 
-6. SCHEDULED SESSIONS, TREATS, AND THIRD-PARTY TOOLS
+6. SCHEDULED SESSIONS, STORE PURCHASES, AND THIRD-PARTY TOOLS
 If you book live chat, video, or similar sessions, additional rules (including scheduling, no-shows, and rescheduling) may apply as shown at purchase. Sessions may use third-party video or communication tools; your use of those tools may be subject to the third party's terms. We are not responsible for failures of third-party networks or equipment outside our reasonable control.
 
 7. PAYMENTS, TAXES, AND STRIPE
@@ -434,7 +434,7 @@ export const getTourStepsForPlan = (user: User): TourStep[] => {
     }
 
     if (hasFanHubAccess) {
-        steps.push({ elementId: 'tour-step-fanhub-nav', page: 'fanHub', title: 'Fan Hub', content: 'Build your fan community: customize your page, post to the feed, sell treats, and message fans.', position: 'right' });
+        steps.push({ elementId: 'tour-step-fanhub-nav', page: 'fanHub', title: 'Fan Hub', content: 'Build your fan community: customize your page, post to the feed, sell from your store, and message fans.', position: 'right' });
         steps.push({ elementId: 'tour-step-fanhub-mypage', page: 'fanHub', title: 'My Page', content: 'Set your handle (echoflux.ai/you), theme, and landing content. Preview how fans see your page.', position: 'bottom' });
     }
 

@@ -50,7 +50,7 @@ function formatAmount(cents: number): string {
 const DEMO_PURCHASES: Purchase[] = [];
 
 /**
- * Fan Hub → Purchases: treat purchases with scheduling to calendar.
+ * Fan Hub → Purchases: store purchases with scheduling to calendar.
  * Shows pending purchases that need scheduling, and scheduled/completed ones.
  */
 export const FanHubPurchases: React.FC = () => {
@@ -172,7 +172,7 @@ export const FanHubPurchases: React.FC = () => {
         
         await addDoc(collection(db, "users", user.id, "onlyfans_calendar_events"), {
           // Core event fields
-          title: `${calendarTreatType === 'video_call' ? '📹 Video Call' : calendarTreatType === 'chat_session' ? '💬 Chat Session' : '🎁 Treat'}: ${p.fanName || p.email}`,
+          title: `${calendarTreatType === 'video_call' ? '📹 Video Call' : calendarTreatType === 'chat_session' ? '💬 Chat Session' : '🎁 Store'}: ${p.fanName || p.email}`,
           date: scheduledAt.toISOString(),
           reminderType: "treat",
           contentType: "custom",
@@ -238,7 +238,7 @@ export const FanHubPurchases: React.FC = () => {
         <div>
           <h1 className="purchases-title">Purchases</h1>
           <p className="purchases-subtitle">
-            Treat purchases appear here. Set a date and time and click <strong>Schedule</strong> to add it to your{" "}
+            Store purchases appear here. Set a date and time and click <strong>Schedule</strong> to add it to your{" "}
             <a href="/calendar" className="purchases-link">calendar</a> and notify the fan.
           </p>
         </div>
@@ -292,7 +292,7 @@ export const FanHubPurchases: React.FC = () => {
         {filteredPurchases.length === 0 ? (
           <p className="purchases-empty">
             {filterStatus === "all"
-              ? "No purchases yet. When someone buys from your Treats store, it will appear here."
+              ? "No purchases yet. When someone buys from your store, it will appear here."
               : `No ${filterStatus} purchases.`}
           </p>
         ) : (
@@ -422,7 +422,7 @@ export const FanHubPurchases: React.FC = () => {
                       </button>
                     </div>
                     <p className="purchases-schedule-hint">
-                      This will add the treat to your <strong>Calendar</strong> and notify the fan.
+                      This will add the booking to your <strong>Calendar</strong> and notify the fan.
                     </p>
                   </div>
                 )}
@@ -436,7 +436,7 @@ export const FanHubPurchases: React.FC = () => {
       <div className="purchases-calendar-info">
         <h3>How it connects to your Calendar</h3>
         <ul>
-          <li><span className="purchases-dot purchases-dot-treat"></span> Scheduled treats appear on your calendar with a purple badge</li>
+          <li><span className="purchases-dot purchases-dot-treat"></span> Scheduled store purchases appear on your calendar with a purple badge</li>
           <li><span className="purchases-dot purchases-dot-session"></span> Chat sessions are auto-added when scheduled</li>
           <li>Fans receive a notification when you schedule their purchase</li>
           <li>You can reschedule anytime from here or from the calendar</li>

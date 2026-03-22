@@ -49,7 +49,7 @@ export const Terms: React.FC = () => {
                         </li>
                         <li>
                             <strong>Fan Hub:</strong> A customizable storefront where creators can build their brand page, 
-                            post content for members, sell digital products ("Treats"), receive tips, and communicate with fans via direct messages.
+                            post content for members, sell digital products through your store, receive tips, and communicate with fans via direct messages.
                         </li>
                         <li>
                             <strong>Monetization Tools:</strong> Subscription memberships, one-time purchases, tips, 

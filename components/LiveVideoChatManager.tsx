@@ -580,7 +580,7 @@ export const LiveVideoChatManager: React.FC<LiveVideoChatManagerProps> = ({
           <div className="p-8 text-center text-gray-500 dark:text-gray-400">
             <VideoIcon />
             <p className="mt-2">No video chat requests yet</p>
-            <p className="text-sm">Fans can request live video calls from your Treats store.</p>
+            <p className="text-sm">Fans can request live video calls from your store.</p>
           </div>
         ) : (
           filteredSessions.map((session) => (

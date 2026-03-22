@@ -300,12 +300,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onGetSta
                 </p>
               </div>
 
-              {/* Treats Store */}
+              {/* Fan store */}
               <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-shadow">
                 <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/50 rounded-xl flex items-center justify-center mb-4">
                   <SparklesIcon className="w-6 h-6 text-purple-600 dark:text-purple-400" />
                 </div>
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Treats Store</h3>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Fan store</h3>
                 <p className="text-gray-600 dark:text-gray-400">
                   Sell digital products, exclusive content bundles, personalized messages, and more in your own store.
                 </p>
