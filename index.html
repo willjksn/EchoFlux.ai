@@ -6,7 +6,8 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/logo.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="/logo.png" />
     <link rel="apple-touch-icon" href="/logo.png" />
-    <link rel="manifest" href="/manifest.json" />
+    <!-- Inline manifest avoids a separate fetch (Vercel preview protection can 401 /manifest.json). -->
+    <link rel="manifest" href="data:application/json;charset=utf-8,%7B%22name%22%3A%22EchoFlux.ai%22%2C%22short_name%22%3A%22EchoFlux%22%2C%22description%22%3A%22EchoFlux.ai%20-%20Social%20media%20management%22%2C%22start_url%22%3A%22%2F%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23ffffff%22%2C%22theme_color%22%3A%22%232563eb%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22%2Flogo.png%22%2C%22sizes%22%3A%22192x192%22%2C%22type%22%3A%22image%2Fpng%22%2C%22purpose%22%3A%22any%22%7D%2C%7B%22src%22%3A%22%2Flogo.png%22%2C%22sizes%22%3A%22512x512%22%2C%22type%22%3A%22image%2Fpng%22%2C%22purpose%22%3A%22any%22%7D%5D%7D" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EchoFlux.ai</title>
 

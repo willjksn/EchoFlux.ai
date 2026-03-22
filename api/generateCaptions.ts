@@ -30,6 +30,18 @@ async function getGeminiShared() {
 type MediaData = { data: string; mimeType: string };
 type CaptionResult = { caption: string; hashtags: string[] };
 
+/** Remove #hashtag tokens from caption body when AI must not use hashtags (My Page / Facebook / X without enhancement). */
+function stripHashtagTokensFromCaption(text: string): string {
+  if (!text || typeof text !== "string") return text;
+  return text
+    .replace(/#[A-Za-z0-9_]+/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 // Sleep helper
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -273,6 +285,34 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   const sanitizedCreatorPersonality = creatorPersonality ? sanitizeForAI(creatorPersonality, 1000) : undefined;
   const sanitizedFavoriteHashtags = favoriteHashtags ? sanitizeForAI(favoriteHashtags, 500) : undefined;
 
+  const normalizedPlatformsEarly = Array.isArray(platforms)
+    ? platforms.map((p) => String(p).toLowerCase().trim())
+    : [];
+  const isOnlyFansPlatformEarly =
+    Array.isArray(platforms) &&
+    platforms.some((p) => {
+      const platformLower = String(p).toLowerCase().trim();
+      return platformLower === "onlyfans" || platformLower === "fansly" || platformLower === "fanvue";
+    });
+  const isInstagramTargetEarly = normalizedPlatformsEarly.some((p) => p.includes("instagram"));
+  const isHashtagRestrictedPlatformEarly = normalizedPlatformsEarly.some((p) => {
+    return (
+      p === "my page" ||
+      p === "mypage" ||
+      p.includes("fan hub") ||
+      p.includes("fanhub") ||
+      p.includes("facebook") ||
+      p === "x" ||
+      p === "twitter"
+    );
+  });
+  /** My Page / Facebook / X: no AI hashtags unless useFavoriteHashtags. Instagram: always allow hashtags in output. */
+  const includeAiHashtags =
+    !isOnlyFansPlatformEarly &&
+    (!isHashtagRestrictedPlatformEarly ||
+      isInstagramTargetEarly ||
+      Boolean(useFavoriteHashtags));
+
   // Disable caching when randomSeed is provided (for unique results each time)
   const hasRandomSeed = toneSettings?.randomSeed !== undefined;
   const canCache = !hasRandomSeed && !mediaData && !mediaUrl && (!mediaUrls || mediaUrls.length === 0);
@@ -284,6 +324,8 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
         tone: sanitizedTone,
         goal: sanitizedGoal,
         platforms,
+        includeAiHashtags,
+        useFavoriteHashtags: Boolean(useFavoriteHashtags),
         emojiEnabled,
         emojiIntensity,
         spiciness: toneSettings?.spiciness,
@@ -399,12 +441,8 @@ async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   }
 
   // Determine platform for context (if OnlyFans, Fansly, or Fanvue)
-  const isOnlyFansPlatform =
-    Array.isArray(platforms) &&
-    platforms.some((p) => {
-      const platformLower = String(p).toLowerCase().trim();
-      return platformLower === "onlyfans" || platformLower === "fansly" || platformLower === "fanvue";
-    });
+  const isOnlyFansPlatform = isOnlyFansPlatformEarly;
+
   const targetPlatform = isOnlyFansPlatform 
     ? (Array.isArray(platforms) && platforms.find((p) => {
         const platformLower = String(p).toLowerCase().trim();
@@ -589,11 +627,15 @@ ${platforms.map(platform => {
   } else if (platformName.includes('tiktok')) {
     return `- TikTok: Maximum 2,200 characters, but optimal length is 100-300 characters for better engagement. Include 3-5 trending hashtags plus 3-5 niche-specific hashtags. Keep captions concise and engaging. Use 1–5 creative emojis naturally (don’t spam); match emojis to what’s being described.`;
   } else if (platformName.includes('twitter') || platformName === 'x') {
-    return `- X (Twitter): Maximum 280 characters. Keep captions concise and punchy. Use 1-2 highly relevant hashtags maximum. Focus on clarity and impact within character limit. Emojis are optional; if used, keep to 0–2 and make them meaningful.`;
+    return includeAiHashtags
+      ? `- X (Twitter): Maximum 280 characters. Keep captions concise and punchy. Use 1-2 highly relevant hashtags maximum. Focus on clarity and impact within character limit. Emojis are optional; if used, keep to 0–2 and make them meaningful.`
+      : `- X (Twitter): Maximum 280 characters. Keep captions concise and punchy. Do NOT use hashtags — not in the caption text and not in the "hashtags" array (return "hashtags": []). Focus on clarity and impact. Emojis are optional; if used, keep to 0–2 and make them meaningful.`;
   } else if (platformName.includes('linkedin')) {
     return `- LinkedIn: Maximum 3,000 characters. Professional tone recommended. Optimal length: 150-300 characters for best engagement. Include 3-5 professional, industry-relevant hashtags.`;
   } else if (platformName.includes('facebook')) {
-    return `- Facebook: No strict limit (63,206 characters max), but optimal length is 40-80 characters for feed posts. Include 2-5 relevant hashtags. Keep captions conversational and engaging. Use 0–3 emojis to add personality (don’t overdo it).`;
+    return includeAiHashtags
+      ? `- Facebook: No strict limit (63,206 characters max), but optimal length is 40-80 characters for feed posts. Include 2-5 relevant hashtags. Keep captions conversational and engaging. Use 0–3 emojis to add personality (don’t overdo it).`
+      : `- Facebook: No strict limit (63,206 characters max), but optimal length is 40-80 characters for feed posts. Do NOT use hashtags — not in the caption text and not in the "hashtags" array (return "hashtags": []). Keep captions conversational and engaging. Use 0–3 emojis to add personality (don’t overdo it).`;
   } else if (platformName.includes('threads')) {
     return `- Threads: Maximum 500 characters. Similar to Instagram but shorter. Include 5-10 relevant hashtags. Keep captions concise and engaging. Emojis are optional; if used, keep to 0–3 and make them relevant.`;
   } else if (platformName.includes('youtube')) {
@@ -601,11 +643,13 @@ ${platforms.map(platform => {
   } else if (platformName.includes('pinterest')) {
     return `- Pinterest: Optimal caption length is 100-500 characters. Include 5-10 relevant keywords and hashtags. Focus on descriptive, searchable language.`;
   } else {
-    return `- ${platform}: Optimize for platform best practices. Include relevant hashtags.`;
+    return includeAiHashtags
+      ? `- ${platform}: Optimize for platform best practices. Include relevant hashtags.`
+      : `- ${platform}: Optimize for platform best practices. Do NOT use hashtags; return "hashtags": [] and no #tags in the caption.`;
   }
 }).join('\n')}
 
-CRITICAL: Ensure all captions respect the character limits and hashtag counts specified for the target platform(s). If OnlyFans or My Page is selected, hashtags MUST be empty (return "hashtags": []).
+CRITICAL: Ensure all captions respect the character limits and hashtag counts specified for the target platform(s). If OnlyFans or My Page is selected, hashtags MUST be empty (return "hashtags": []). ${!includeAiHashtags ? "For this request: do NOT use hashtags anywhere — return \"hashtags\": [] for every caption and do not put #words in the caption body." : ""}
 
 EMOJI GUIDELINES (ALL SOCIAL PLATFORMS):
 ${getEmojiInstructions({ enabled: emojiEnabled !== false, intensity: emojiIntensity ?? 5 })}${emojiEnabled !== false ? ` Choose emojis that match the tone (examples: ${getEmojiExamplesForTone(tone)}). Emojis should enhance the caption naturally.` : ''}
@@ -655,7 +699,7 @@ CRITICAL - PERSONALITY USAGE (CONSISTENT FOR COMPOSE AND PREMIUM CONTENT STUDIO)
 - For roleplay, messaging, or content that describes the creator, use the personality description as the source of truth. For general captions, use tone and style; reserve physical/details for when relevant.
 ` : ''}
 
-${useFavoriteHashtags && sanitizedFavoriteHashtags ? `
+${useFavoriteHashtags && sanitizedFavoriteHashtags && includeAiHashtags ? `
 🏷️ FAVORITE HASHTAGS (USE WHEN APPROPRIATE):
 ${sanitizedFavoriteHashtags}
 
@@ -786,7 +830,7 @@ ${isExplicitContent ? `
 `}
 Use this visual context to create engaging, relevant captions.
 
-${!Array.isArray(platforms) || platforms.length === 0 ? `
+${(!Array.isArray(platforms) || platforms.length === 0) && includeAiHashtags ? `
 HASHTAG REQUIREMENTS (when no platform specified):
 - Each caption MUST include 5-10 relevant hashtags
 - Hashtags should be relevant to the content, niche, and tone
@@ -794,6 +838,9 @@ HASHTAG REQUIREMENTS (when no platform specified):
 - Vary hashtags across captions - don't use the same ones in every caption
 - Make hashtags specific to what's in the media content
 - Keep hashtags appropriate for general social media platforms
+` : (!Array.isArray(platforms) || platforms.length === 0) && !includeAiHashtags ? `
+HASHTAG REQUIREMENTS (when no platform specified):
+- Do NOT generate hashtags. Return "hashtags": [] for every caption. Do not use #hashtag tokens in the caption text.
 ` : ''}
 ${isExplicitContent ? `
 EXPLICIT CONTENT CAPTION REQUIREMENTS - CAPTION VARIETY:
@@ -845,17 +892,16 @@ ${shouldGenerateOnlyFansHashtags ? `CRITICAL - EXPLICIT HASHTAGS REQUIRED:
 ` : ''}
 
 CRITICAL - HASHTAG REQUIREMENT:
-${isOnlyFansPlatform ? '- OnlyFans does NOT use hashtags. Return empty array: "hashtags": []' : '- Every caption MUST include hashtags in the "hashtags" array (minimum 5 hashtags, unless platform specifies fewer)'}
-- Hashtags must be relevant to the content, niche, and tone
-- Do NOT return empty hashtag arrays unless this is for OnlyFans
-- Hashtags should be formatted as strings in the array (e.g., ["#tag1", "#tag2", "#tag3"])
+${isOnlyFansPlatform ? '- OnlyFans does NOT use hashtags. Return empty array: "hashtags": []' : includeAiHashtags ? '- Every caption MUST include hashtags in the "hashtags" array (minimum 5 hashtags, unless platform specifies fewer)' : '- Do NOT generate hashtags for this request. Return "hashtags": [] for every caption. Do not put #hashtag tokens in the caption body.'}
+${isOnlyFansPlatform || !includeAiHashtags ? '- Do NOT return non-empty hashtag arrays for this request.' : '- Hashtags must be relevant to the content, niche, and tone'}
+${includeAiHashtags && !isOnlyFansPlatform ? '- Hashtags should be formatted as strings in the array (e.g., ["#tag1", "#tag2", "#tag3"])' : ''}
 
 Return ONLY strict JSON like:
 
 [
   {
     "caption": "text",
-    "hashtags": ${isOnlyFansPlatform ? '[]' : '["#one", "#two", "#three", "#four", "#five"]'}
+    "hashtags": ${isOnlyFansPlatform || !includeAiHashtags ? '[]' : '["#one", "#two", "#three", "#four", "#five"]'}
   }
 ]
 
@@ -868,20 +914,25 @@ CAPTION REQUIREMENTS:
 - Additional captions can be a mix of both approaches
 - All captions must be explicit and adult-oriented
 
-${shouldGenerateOnlyFansHashtags ? `HASHTAG REQUIREMENTS:
+${includeAiHashtags
+    ? shouldGenerateOnlyFansHashtags
+      ? `HASHTAG REQUIREMENTS:
 - Each caption MUST include 5-10 explicit hashtags
 - Hashtags must be bold, adult-oriented, and match the explicit content shown
 - Use hashtags like: #intimate #sensual #boudoir #explicit #adultcontent #nsfw #sexy #erotic #seductive #intimatephoto #sensualphotography #boudoirphotography
 - For sales-focused captions, also include: #exclusive #subscriber #premium #customcontent
 - Hashtags should describe what's shown: poses, outfits, mood, setting, explicit/intimate aspects
 - Vary hashtags - don't use the same ones in every caption
-- Make hashtags specific to the media content` : `HASHTAG REQUIREMENTS:
+- Make hashtags specific to the media content`
+      : `HASHTAG REQUIREMENTS:
 - Each caption MUST include 5-10 appropriate hashtags
 - Hashtags must match the content and tone, but be appropriate for general social media
 - DO NOT use OnlyFans-specific hashtags, explicit adult content hashtags, or platform-specific adult content hashtags
 - Use hashtags relevant to the content (e.g., fashion, lifestyle, beauty, style, etc.)
 - Vary hashtags - don't use the same ones in every caption
-- Make hashtags specific to the media content`}
+- Make hashtags specific to the media content`
+    : `HASHTAG REQUIREMENTS:
+- Do NOT generate hashtags for this request. Return "hashtags": [] for every caption. Do not use #hashtag tokens in the caption body.`}
 ` : ''}
 `.trim();
 
@@ -1035,6 +1086,17 @@ ${shouldGenerateOnlyFansHashtags ? `HASHTAG REQUIREMENTS:
     captions = (captions || []).map((c: any) => ({
       ...c,
       hashtags: [],
+    }));
+  }
+
+  // My Page / Facebook / X without "Hashtags" AI enhancement: strip hashtag arrays and #tokens from caption body.
+  if (!includeAiHashtags) {
+    captions = (captions || []).map((c: any) => ({
+      ...c,
+      hashtags: [],
+      caption: stripHashtagTokensFromCaption(
+        typeof c.caption === "string" ? c.caption : String(c.caption ?? "")
+      ),
     }));
   }
 

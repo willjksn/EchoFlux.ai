@@ -963,6 +963,10 @@ ${contextLines || 'None'}
           <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-2">
             AI Enhancements
           </label>
+          <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-2 leading-snug">
+            <strong>Hashtags</strong> below only adds AI hashtags for <strong>My Page</strong>, <strong>Facebook</strong>, and{" "}
+            <strong>X</strong>. Instagram caption generation still uses hashtags when relevant. Leave it off for clean captions on My Page / Facebook / X.
+          </p>
           <div className="flex gap-2">
             <button
               onClick={onTogglePersonality}
@@ -986,7 +990,11 @@ ${contextLines || 'None'}
                   ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-md'
                   : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 hover:border-indigo-300'
               } ${!favoriteHashtags ? 'opacity-40 cursor-not-allowed' : ''}`}
-              title={!favoriteHashtags ? 'Add favorite hashtags in Settings to enable' : 'Include your hashtags in AI generation'}
+              title={
+                !favoriteHashtags
+                  ? 'Add favorite hashtags in Settings to enable'
+                  : 'Turn ON to let AI add hashtags for My Page, Facebook, and X (uses your favorites + generated tags). Instagram always gets hashtags when relevant. OFF = no hashtags for those three platforms.'
+              }
             >
               <span className="w-4 h-4 inline-flex"><HashtagIcon /></span>
               Hashtags
