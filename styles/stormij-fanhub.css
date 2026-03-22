@@ -2709,16 +2709,21 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   padding: 0.65rem 1rem;
   border: none;
   border-radius: 10px;
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 55%, #4338ca 100%);
+  background: linear-gradient(
+    135deg,
+    var(--fan-primary, #6366f1) 0%,
+    var(--fan-accent-hover, #4f46e5) 55%,
+    color-mix(in srgb, var(--fan-accent-hover, #4f46e5) 85%, #1e1b4b) 100%
+  );
   color: #fff;
   font-weight: 600;
   cursor: pointer;
   transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
-  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--fan-primary, #6366f1) 35%, transparent);
 }
 .treats-form-submit:hover:not(:disabled) {
   filter: brightness(1.05);
-  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.4);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--fan-primary, #6366f1) 42%, transparent);
   transform: translateY(-1px);
 }
 .treats-form-submit:disabled {
@@ -2728,10 +2733,10 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   box-shadow: none;
 }
 .dark .treats-form-submit {
-  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.25);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--fan-primary, #6366f1) 28%, transparent);
 }
 .dark .treats-form-submit:hover:not(:disabled) {
-  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.32);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--fan-primary, #6366f1) 36%, transparent);
 }
 
 /* Treats Store — fan Store tab: Stormij-style white panel + two-column cards */
@@ -2740,15 +2745,15 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   margin-bottom: 1.25rem;
 }
 
+/* Fan Hub sets --fan-primary from creators/{uid}.theme (pink for Stormij, indigo default). */
 .treats-fan-shell {
-  /* EchoFlux default accent (indigo) — not Stormij-only pink */
-  --stormij-pink: #4f46e5;
-  --stormij-text: #1a1216;
-  --stormij-muted: #5b6170;
+  --stormij-pink: var(--fan-primary, #6366f1);
+  --stormij-text: var(--fan-text, #1a1216);
+  --stormij-muted: var(--fan-text-muted, #6b5a63);
   margin-top: 0.25rem;
   padding: 0.75rem 0.5rem 1.25rem;
   box-sizing: border-box;
-  background: #eef2ff;
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 9%, #ffffff);
   border-radius: 0;
 }
 
@@ -2759,7 +2764,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 }
 
 .dark .treats-fan-shell {
-  background: rgba(15, 23, 42, 0.45);
+  background: color-mix(in srgb, var(--fan-primary, #6366f1) 12%, var(--fan-bg, #0f172a));
 }
 
 .treats-stormij-panel {
@@ -2768,11 +2773,11 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   padding: 1.75rem 1.25rem 2rem;
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.9) inset,
-    0 8px 48px -12px rgba(99, 102, 241, 0.18),
-    0 20px 56px -24px rgba(79, 70, 229, 0.14),
-    0 4px 24px rgba(99, 102, 241, 0.06),
+    0 8px 48px -12px color-mix(in srgb, var(--fan-primary, #6366f1) 20%, transparent),
+    0 20px 56px -24px color-mix(in srgb, var(--fan-primary, #6366f1) 16%, transparent),
+    0 4px 24px color-mix(in srgb, var(--fan-primary, #6366f1) 8%, transparent),
     inset 0 1px 0 rgba(255, 255, 255, 0.98);
-  border: 1px solid rgba(99, 102, 241, 0.22);
+  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 24%, transparent);
   max-width: 56rem;
   margin: 0 auto;
   box-sizing: border-box;
@@ -2786,7 +2791,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 
 .dark .treats-stormij-panel {
   background: linear-gradient(168deg, #1c2230 0%, #232a3a 100%);
-  border-color: rgba(129, 140, 248, 0.28);
+  border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 30%, #334155);
   box-shadow:
     0 8px 36px rgba(0, 0, 0, 0.35),
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
@@ -2832,8 +2837,8 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(99, 102, 241, 0.55),
-    rgba(79, 70, 229, 0.45),
+    color-mix(in srgb, var(--fan-primary, #6366f1) 52%, transparent),
+    color-mix(in srgb, var(--fan-accent-hover, #4f46e5) 42%, transparent),
     transparent
   );
 }
@@ -2869,27 +2874,32 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  background: linear-gradient(180deg, #fefeff 0%, #f5f7ff 55%, #eef2ff 100%);
+  background: linear-gradient(
+    180deg,
+    #fefeff 0%,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 6%, #ffffff) 55%,
+    color-mix(in srgb, var(--fan-primary, #6366f1) 11%, #ffffff) 100%
+  );
   border-radius: 16px;
-  border: 1px solid rgba(99, 102, 241, 0.28);
+  border: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 30%, transparent);
   padding: 1.2rem 1.3rem 1rem;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.95),
     0 0 0 1px rgba(255, 255, 255, 0.65) inset,
-    0 6px 22px rgba(99, 102, 241, 0.1),
-    0 14px 40px -10px rgba(79, 70, 229, 0.2),
-    0 24px 48px -20px rgba(99, 102, 241, 0.1);
+    0 6px 22px color-mix(in srgb, var(--fan-primary, #6366f1) 11%, transparent),
+    0 14px 40px -10px color-mix(in srgb, var(--fan-primary, #6366f1) 22%, transparent),
+    0 24px 48px -20px color-mix(in srgb, var(--fan-primary, #6366f1) 10%, transparent);
   box-sizing: border-box;
 }
 
 .dark .treats-stormij-card {
   background: linear-gradient(168deg, #2d2430 0%, #252030 45%, #1e1c28 100%);
-  border-color: rgba(129, 140, 248, 0.32);
+  border-color: color-mix(in srgb, var(--fan-primary, #6366f1) 34%, #334155);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
     0 4px 22px rgba(0, 0, 0, 0.28),
-    0 12px 40px -8px rgba(99, 102, 241, 0.18),
-    0 0 36px -6px rgba(79, 70, 229, 0.14);
+    0 12px 40px -8px color-mix(in srgb, var(--fan-primary, #6366f1) 20%, transparent),
+    0 0 36px -6px color-mix(in srgb, var(--fan-primary, #6366f1) 14%, transparent);
 }
 
 .treats-stormij-card-row1 {
@@ -2957,7 +2967,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 .treats-stormij-card-footer {
   margin-top: auto;
   padding-top: 0.65rem;
-  border-top: 1px solid rgba(99, 102, 241, 0.14);
+  border-top: 1px solid color-mix(in srgb, var(--fan-primary, #6366f1) 16%, transparent);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -2965,7 +2975,7 @@ button.treat-card:hover:not(:disabled) .treat-card-cta {
 }
 
 .dark .treats-stormij-card-footer {
-  border-top-color: rgba(129, 140, 248, 0.22);
+  border-top-color: color-mix(in srgb, var(--fan-primary, #6366f1) 24%, #334155);
 }
 
 .treats-stormij-card-stock {
