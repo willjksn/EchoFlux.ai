@@ -23,6 +23,7 @@ import {
   stopMediaRecorderSafe,
 } from "../src/lib/browserMediaRecording";
 import { AudioLevelMeter } from "./AudioLevelMeter";
+import { RecordingDurationLabel } from "./RecordingDurationLabel";
 import { DmAudioPlayer } from "./DmAudioPlayer";
 import { inferIsAudioFromUrl } from "../src/lib/mediaUrlInfer";
 import { usePremiumStudioTab } from "./PremiumStudioLayout";
@@ -174,6 +175,8 @@ export const FanHubMessages: React.FC = () => {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaChunksRef = useRef<Blob[]>([]);
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+  const [voiceMeterStream, setVoiceMeterStream] = useState<MediaStream | null>(null);
+  const [voiceMeterKey, setVoiceMeterKey] = useState(0);
   const [threadRowMenuOpenId, setThreadRowMenuOpenId] = useState<string | null>(null);
   const [inboxActionThreadId, setInboxActionThreadId] = useState<string | null>(null);
 
@@ -475,15 +478,21 @@ export const FanHubMessages: React.FC = () => {
 
   const startVoiceRecording = async () => {
     if (!creatorId || !selectedThread || isRecordingVoice) return;
+    let stream: MediaStream | null = null;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
+      try {
+        const permissionStatus = await navigator.permissions.query({ name: "microphone" as PermissionName });
+        if (permissionStatus.state === "denied") {
+          showToast?.("Microphone access was denied. Enable it in browser settings.", "error");
+          return;
+        }
+      } catch {
+        /* permissions.query unsupported */
+      }
+
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setVoiceMeterStream(stream);
+      setVoiceMeterKey((k) => k + 1);
       const rec = createAudioMediaRecorder(stream);
       const requestedMime = rec.mimeType || undefined;
       mediaChunksRef.current = [];
@@ -528,9 +537,26 @@ export const FanHubMessages: React.FC = () => {
     else void startVoiceRecording();
   };
 
-  const openFanOnFansTab = () => {
+  const openFanOnFansTab = async () => {
     if (!selectedThread) return;
-    premiumTab?.openFanInFansTab(selectedThread.fanId);
+    const fanId = selectedThread.fanId;
+    const displayLabel = selectedThread.otherPartyDisplayName?.trim() || undefined;
+    try {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+      if (token) {
+        await fetch("/api/fanDmSyncFanPreference", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ fanId }),
+        });
+      }
+    } catch {
+      /* still open Fans tab — OnlyFansFans may match by label */
+    }
+    premiumTab?.openFanInFansTab(fanId, displayLabel);
   };
 
   const startConversationWithMember = async (fanId: string) => {
@@ -1013,7 +1039,7 @@ export const FanHubMessages: React.FC = () => {
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"
-                    onClick={openFanOnFansTab}
+                    onClick={() => void openFanOnFansTab()}
                     className="fh-dm-sidebar-icon-btn"
                     title="Open fan card on Fans tab"
                     aria-label="Open full fan card on Fans tab"
@@ -1170,7 +1196,10 @@ export const FanHubMessages: React.FC = () => {
               </div>
               <div className="p-4 border-t border-gray-200 dark:border-gray-700 space-y-2">
                 {isRecordingVoice && voiceMeterStream ? (
-                  <AudioLevelMeter stream={voiceMeterStream} className="w-full max-w-md" />
+                  <div className="space-y-1 w-full max-w-md">
+                    <RecordingDurationLabel active={isRecordingVoice} />
+                    <AudioLevelMeter key={`dm-creator-voice-${voiceMeterKey}`} stream={voiceMeterStream} className="w-full max-w-md" />
+                  </div>
                 ) : null}
                 <div className="flex gap-2 items-end">
                 <input

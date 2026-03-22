@@ -28,6 +28,7 @@ import {
   stopMediaRecorderSafe,
 } from "../src/lib/browserMediaRecording";
 import { AudioLevelMeter } from "./AudioLevelMeter";
+import { RecordingDurationLabel } from "./RecordingDurationLabel";
 import { DmAudioPlayer } from "./DmAudioPlayer";
 import { inferIsAudioFromUrl } from "../src/lib/mediaUrlInfer";
 import { FanHubNotificationBell } from "./FanHubNotificationBell";
@@ -299,6 +300,8 @@ export const FanStorefrontView: React.FC = () => {
   const dmMediaRecorderRef = useRef<MediaRecorder | null>(null);
   const dmMediaChunksRef = useRef<Blob[]>([]);
   const [dmRecordingVoice, setDmRecordingVoice] = useState(false);
+  const [dmVoiceMeterStream, setDmVoiceMeterStream] = useState<MediaStream | null>(null);
+  const [dmVoiceMeterKey, setDmVoiceMeterKey] = useState(0);
   const [fanBanned, setFanBanned] = useState(false);
 
   const unreadMessageTabCount = useUnreadNewMessageNotificationCount(
@@ -664,11 +667,18 @@ export const FanStorefrontView: React.FC = () => {
 
   const startDmVoiceRecording = async () => {
     if (!auth.currentUser || !creator?.creatorId || dmRecordingVoice) return;
+    let stream: MediaStream | null = null;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      });
+      try {
+        const permissionStatus = await navigator.permissions.query({ name: "microphone" as PermissionName });
+        if (permissionStatus.state === "denied") return;
+      } catch {
+        /* permissions.query unsupported */
+      }
+
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setDmVoiceMeterStream(stream);
+      setDmVoiceMeterKey((k) => k + 1);
       const rec = createAudioMediaRecorder(stream);
       const requestedMime = rec.mimeType || undefined;
       dmMediaChunksRef.current = [];
@@ -1190,8 +1200,9 @@ export const FanStorefrontView: React.FC = () => {
                     </div>
                     <div className="fan-member-messages-compose-wrap">
                       {dmRecordingVoice && dmVoiceMeterStream ? (
-                        <div className="w-full">
-                          <AudioLevelMeter stream={dmVoiceMeterStream} barColor={primary} />
+                        <div className="w-full space-y-1">
+                          <RecordingDurationLabel active={dmRecordingVoice} />
+                          <AudioLevelMeter key={`dm-fan-voice-${dmVoiceMeterKey}`} stream={dmVoiceMeterStream} barColor={primary} />
                         </div>
                       ) : null}
                       <div className="fan-member-messages-compose">

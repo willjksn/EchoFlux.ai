@@ -37,13 +37,23 @@ export function normalizePostMediaTypes(
 /** For <source type="..."> so browsers pick the right decoder for DM / vault audio. */
 export function audioMimeTypeHintForUrl(url: string): string {
   try {
-    const path = decodeURIComponent(url.split("?")[0] || url);
+    const raw = url.split("?")[0] || url;
+    const path = decodeURIComponent(raw);
     if (/\.webm$/i.test(path)) return "audio/webm";
     if (/\.m4a$/i.test(path)) return "audio/mp4";
     if (/\.mp4$/i.test(path)) return "audio/mp4";
     if (/\.mp3$/i.test(path)) return "audio/mpeg";
     if (/\.ogg$/i.test(path)) return "audio/ogg";
     if (/\.wav$/i.test(path)) return "audio/wav";
+    // Firebase Storage: .../o/users%2F...%2Fvoice_123.webm — extension is inside encoded segment
+    const m = path.match(/\/o\/([^/]+)$/);
+    if (m) {
+      const objectPath = decodeURIComponent(m[1]);
+      if (/\.webm$/i.test(objectPath)) return "audio/webm";
+      if (/\.m4a$/i.test(objectPath)) return "audio/mp4";
+      if (/\.mp3$/i.test(objectPath)) return "audio/mpeg";
+      if (/\.ogg$/i.test(objectPath)) return "audio/ogg";
+    }
   } catch {
     /* ignore */
   }

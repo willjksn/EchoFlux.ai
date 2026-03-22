@@ -40,36 +40,69 @@ export function pickVideoMimeTypeForRecorder(): string | undefined {
   return undefined;
 }
 
+/**
+ * Prefer codecs that mux **audio** when the stream has a mic track.
+ * Otherwise Chrome often picks `vp8` only → video files with no sound.
+ */
+export function pickVideoMimeTypeForRecorderForStream(stream: MediaStream): string | undefined {
+  if (typeof MediaRecorder === "undefined") return undefined;
+  const hasAudio = stream.getAudioTracks().length > 0;
+  const withAudioPreferred = [
+    "video/webm;codecs=vp8,opus",
+    "video/webm;codecs=vp9,opus",
+    "video/webm;codecs=vp8,vorbis",
+    "video/webm",
+    "video/mp4",
+  ] as const;
+  const videoOnlyFallback = ["video/webm;codecs=vp8", "video/webm;codecs=vp9"] as const;
+  const order = hasAudio
+    ? [...withAudioPreferred, ...videoOnlyFallback]
+    : [...videoOnlyFallback, ...withAudioPreferred];
+  for (const t of order) {
+    if (MediaRecorder.isTypeSupported(t)) return t;
+  }
+  return undefined;
+}
+
 export function createAudioMediaRecorder(stream: MediaStream): MediaRecorder {
   const mimeType = pickAudioMimeTypeForRecorder();
   return mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
 }
 
 export function createVideoMediaRecorder(stream: MediaStream): MediaRecorder {
-  const mimeType = pickVideoMimeTypeForRecorder();
+  const mimeType = pickVideoMimeTypeForRecorderForStream(stream);
   const opts: MediaRecorderOptions = {};
   if (mimeType) opts.mimeType = mimeType;
   if (mimeType?.includes("webm")) {
     opts.videoBitsPerSecond = 2_500_000;
-    opts.audioBitsPerSecond = 128_000;
+    if (stream.getAudioTracks().length > 0) {
+      opts.audioBitsPerSecond = 128_000;
+    }
   }
   return Object.keys(opts).length ? new MediaRecorder(stream, opts) : new MediaRecorder(stream);
 }
 
-/** Wait until camera track is producing frames (reduces black / empty WebM). */
-export function waitUntilVideoTrackLive(stream: MediaStream, timeoutMs = 8000): Promise<void> {
+/**
+ * Wait until camera track is live (polls readyState).
+ * The old unmute-only listener could hang until timeout and feel like a permission failure.
+ */
+export async function waitUntilVideoTrackLive(stream: MediaStream, timeoutMs = 2500): Promise<void> {
   const track = stream.getVideoTracks()[0];
-  if (!track) return Promise.resolve();
-  if (track.readyState === "live") return Promise.resolve();
-  return new Promise((resolve) => {
-    const done = () => {
-      clearTimeout(timer);
-      resolve();
-    };
-    const timer = window.setTimeout(done, timeoutMs);
-    track.addEventListener("unmute", done, { once: true });
-    track.addEventListener("ended", done, { once: true });
-  });
+  if (!track) return;
+  const start = Date.now();
+  while (track.readyState !== "live" && Date.now() - start < timeoutMs) {
+    await new Promise((r) => setTimeout(r, 40));
+  }
+}
+
+export async function waitUntilAudioTrackLive(stream: MediaStream, timeoutMs = 2500): Promise<void> {
+  const track = stream.getAudioTracks()[0];
+  if (!track) return;
+  track.enabled = true;
+  const start = Date.now();
+  while (track.readyState !== "live" && Date.now() - start < timeoutMs) {
+    await new Promise((r) => setTimeout(r, 40));
+  }
 }
 
 /** Prefer recorder-reported type after start (most accurate). */

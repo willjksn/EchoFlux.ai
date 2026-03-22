@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from './AppContext';
-import { usePremiumStudioTab } from './PremiumStudioLayout';
+import { usePremiumStudioTab, type PendingFansTabSelection } from './PremiumStudioLayout';
 import { UserIcon, SearchIcon, StarIcon, SparklesIcon, TrashIcon, EditIcon, PlusIcon, XMarkIcon } from './icons/UIIcons';
 import { auth, db } from '../firebaseConfig';
 import { collection, getDocs, doc, getDoc, setDoc, deleteDoc, updateDoc, query, orderBy, limit, Timestamp, where } from 'firebase/firestore';
@@ -15,6 +15,39 @@ function usernameFromFanDoc(fd: Record<string, unknown>): string | null {
     }
   }
   return null;
+}
+
+function normDisplayLabel(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+/** Match DM thread → Fans grid row by uid first, then display label / email on preferences. */
+function findFanForPendingSelection(fans: Fan[], pending: PendingFansTabSelection): Fan | undefined {
+  const id = pending.fanId.trim();
+  let m = fans.find((f) => f.id === id);
+  if (m) return m;
+  m = fans.find((f) => f.id.toLowerCase() === id.toLowerCase());
+  if (m) return m;
+
+  const label = pending.displayLabel?.trim();
+  if (!label) return undefined;
+  const n = normDisplayLabel(label);
+  const nBare = n.startsWith('@') ? n.slice(1) : n;
+
+  m = fans.find((f) => normDisplayLabel(f.name) === n);
+  if (m) return m;
+  m = fans.find((f) => normDisplayLabel(f.name) === nBare);
+  if (m) return m;
+
+  for (const f of fans) {
+    const pref = f.preferences as { email?: string };
+    const em = typeof pref.email === 'string' ? pref.email.trim() : '';
+    if (em) {
+      const en = normDisplayLabel(em);
+      if (en === n || em.toLowerCase() === label.toLowerCase()) return f;
+    }
+  }
+  return undefined;
 }
 
 type FanActivityType = 'session' | 'rating' | 'content' | 'calendar' | 'media';
@@ -279,11 +312,11 @@ export const OnlyFansFans: React.FC = () => {
 
     // Messages tab → “Fan card”: open the same Fan Details panel as the Fans grid.
     useEffect(() => {
-        const pending = fanHubTab?.pendingFanIdForFansTab;
-        const clearPending = fanHubTab?.clearPendingFanIdForFansTab;
+        const pending = fanHubTab?.pendingFansTabSelection;
+        const clearPending = fanHubTab?.clearPendingFansTabSelection;
         if (!pending || !clearPending) return;
         if (isLoading) return;
-        const match = fans.find((f) => f.id === pending);
+        const match = findFanForPendingSelection(fans, pending);
         if (match) {
             setSelectedFan(match);
             setViewMode('grid');
@@ -294,11 +327,11 @@ export const OnlyFansFans: React.FC = () => {
             return;
         }
         showToast?.(
-            "This member isn’t in your Fans list yet. They’ll appear here once added or after they join.",
+            "Couldn’t open that fan card from this thread. Try refreshing the Fans tab, or confirm this member is linked to your hub.",
             'info'
         );
         clearPending();
-    }, [fanHubTab?.pendingFanIdForFansTab, fanHubTab?.clearPendingFanIdForFansTab, fans, isLoading, showToast]);
+    }, [fanHubTab?.pendingFansTabSelection, fanHubTab?.clearPendingFansTabSelection, fans, isLoading, showToast]);
 
     // Load session history from database
     const loadSessionHistory = async (fanId: string, forceExpand: boolean = false) => {

@@ -10,13 +10,20 @@ import {
   clearNewMessageNotificationBadge,
 } from './useUnreadNewMessageNotifications';
 
+/** Pending selection when jumping from Messages (or elsewhere) to Fans tab. */
+export type PendingFansTabSelection = {
+  fanId: string;
+  /** Thread display name — used if preference doc id ever diverges from uid. */
+  displayLabel?: string;
+};
+
 export type PremiumStudioTabContextValue = {
   tab: string;
   setTab: (tab: string) => void;
   /** Fan Hub: open Fans tab and select this fan (matches Fans page fan card). */
-  pendingFanIdForFansTab: string | null;
-  clearPendingFanIdForFansTab: () => void;
-  openFanInFansTab: (fanId: string) => void;
+  pendingFansTabSelection: PendingFansTabSelection | null;
+  clearPendingFansTabSelection: () => void;
+  openFanInFansTab: (fanId: string, displayLabel?: string) => void;
 };
 
 const PremiumStudioTabContext = createContext<PremiumStudioTabContextValue | null>(null);
@@ -40,12 +47,17 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
   const labels = isFanHub ? FAN_HUB_TAB_LABELS : STUDIO_TAB_LABELS;
 
   const [tab, setTab] = useTabFromUrl(pathPrefix, tabIds, defaultTab);
-  const [pendingFanIdForFansTab, setPendingFanIdForFansTab] = useState<string | null>(null);
-  const clearPendingFanIdForFansTab = useCallback(() => setPendingFanIdForFansTab(null), []);
+  const [pendingFansTabSelection, setPendingFansTabSelection] = useState<PendingFansTabSelection | null>(null);
+  const clearPendingFansTabSelection = useCallback(() => setPendingFansTabSelection(null), []);
   const openFanInFansTab = useCallback(
-    (fanId: string) => {
+    (fanId: string, displayLabel?: string) => {
       if (!isFanHub) return;
-      setPendingFanIdForFansTab(fanId);
+      const id = fanId.trim();
+      if (!id) return;
+      setPendingFansTabSelection({
+        fanId: id,
+        displayLabel: displayLabel?.trim() || undefined,
+      });
       setTab('fans');
     },
     [isFanHub, setTab]
@@ -189,8 +201,8 @@ export const PremiumStudioLayout: React.FC<PremiumStudioLayoutProps> = ({ childr
         value={{
           tab,
           setTab,
-          pendingFanIdForFansTab: isFanHub ? pendingFanIdForFansTab : null,
-          clearPendingFanIdForFansTab: isFanHub ? clearPendingFanIdForFansTab : () => {},
+          pendingFansTabSelection: isFanHub ? pendingFansTabSelection : null,
+          clearPendingFansTabSelection: isFanHub ? clearPendingFansTabSelection : () => {},
           openFanInFansTab,
         }}
       >

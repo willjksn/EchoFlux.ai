@@ -17,6 +17,7 @@ import {
   stopMediaRecorderSafe,
 } from '../src/lib/browserMediaRecording';
 import { AudioLevelMeter } from './AudioLevelMeter';
+import { RecordingDurationLabel } from './RecordingDurationLabel';
 
 const GENERAL_FOLDER_ID = 'general';
 
@@ -42,6 +43,7 @@ export const MediaLibrary: React.FC = () => {
   const [recordingCountdown, setRecordingCountdown] = useState<number | null>(null);
   const [isSavingVoice, setIsSavingVoice] = useState(false);
   const [voiceMeterStream, setVoiceMeterStream] = useState<MediaStream | null>(null);
+  const [voiceMeterKey, setVoiceMeterKey] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
@@ -449,25 +451,27 @@ export const MediaLibrary: React.FC = () => {
   const [isRequestingMic, setIsRequestingMic] = useState(false);
   
   const startRecording = async () => {
+    let stream: MediaStream | null = null;
     try {
-      // Check if microphone permission is already granted
-      const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-      
-      if (permissionStatus.state === 'denied') {
-        showToast('Microphone access was denied. Please enable it in your browser settings.', 'error');
-        return;
+      try {
+        const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+        if (permissionStatus.state === 'denied') {
+          showToast('Microphone access was denied. Please enable it in your browser settings.', 'error');
+          return;
+        }
+        if (permissionStatus.state === 'prompt') {
+          setIsRequestingMic(true);
+          showToast('Please allow microphone access to record voice notes', 'info');
+        }
+      } catch {
+        /* permissions.query unsupported */
       }
-      
-      // Show requesting state if permission hasn't been granted yet
-      if (permissionStatus.state === 'prompt') {
-        setIsRequestingMic(true);
-        showToast('Please allow microphone access to record voice notes', 'info');
-      }
-      
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setIsRequestingMic(false);
-      
-      // Countdown
+      setVoiceMeterStream(stream);
+      setVoiceMeterKey((k) => k + 1);
+
       setRecordingCountdown(3);
       await new Promise((r) => setTimeout(r, 1000));
       setRecordingCountdown(2);
@@ -475,8 +479,7 @@ export const MediaLibrary: React.FC = () => {
       setRecordingCountdown(1);
       await new Promise((r) => setTimeout(r, 1000));
       setRecordingCountdown(null);
-      
-      setVoiceMeterStream(stream);
+
       const mediaRecorder = createAudioMediaRecorder(stream);
       const requestedMime = mediaRecorder.mimeType || undefined;
       mediaRecorderRef.current = mediaRecorder;
@@ -550,6 +553,7 @@ export const MediaLibrary: React.FC = () => {
       setIsRecording(true);
     } catch (error: unknown) {
       console.error('Failed to start recording:', error);
+      stream?.getTracks().forEach((t) => t.stop());
       setIsRequestingMic(false);
       setRecordingCountdown(null);
       setVoiceMeterStream(null);
@@ -674,9 +678,17 @@ export const MediaLibrary: React.FC = () => {
                 className="hidden"
               />
             </div>
-            {isRecording && voiceMeterStream ? (
-              <div className="mt-3 max-w-xl">
-                <AudioLevelMeter stream={voiceMeterStream} />
+            {voiceMeterStream && (recordingCountdown !== null || isRecording) ? (
+              <div className="mt-3 max-w-xl space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <RecordingDurationLabel active={isRecording && recordingCountdown === null} />
+                  {recordingCountdown !== null ? (
+                    <span className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                      Get ready… {recordingCountdown}
+                    </span>
+                  ) : null}
+                </div>
+                <AudioLevelMeter key={`vault-voice-${voiceMeterKey}`} stream={voiceMeterStream} />
               </div>
             ) : null}
           </div>
